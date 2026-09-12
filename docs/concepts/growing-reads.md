@@ -11,7 +11,7 @@ hold, the declaration is `-1` and a sentence beside it saying why. `-1` is not a
 default anybody inherits. It is a person saying out loud that they chose not to
 bound this one.
 
-This page is not a second rule. [`CLAUDE.md`](../../CLAUDE.md) Rule #12 already
+This page is not a second rule. [`CLAUDE.md`](../../CLAUDE.md) Guardrail #12 already
 refuses a cost that rises when nobody wrote any code, and it names review as the
 only control - which is a person remembering to ask. A cover written in
 `config/` or on the line above the code is the same agreement, moved to where a
@@ -46,7 +46,7 @@ available and they are set out below. **Reach for the clock last**, because a
 clock is the shape most often wrong: it is only right when the question itself
 has a time bound.
 
-If no cover is honest, that is a legitimate answer and Rule #12 permits it. Say
+If no cover is honest, that is a legitimate answer and Guardrail #12 permits it. Say
 what the read opens, how the cost grows, and why a bounded input cannot answer
 the question - and have a person agree. What is forbidden is a growing cost
 nobody chose.
@@ -146,7 +146,7 @@ stats each one, so it still costs one `stat` a day, for ever. It says so.
 
 ### 3. Unbounded, on purpose, and it says so
 
-This is Rule #12's escape hatch taken in writing. Each of these reads opens
+This is Guardrail #12's escape hatch taken in writing. Each of these reads opens
 everything it holds, and each carries a line naming what it reads and why a
 bounded input cannot answer the question.
 
@@ -186,7 +186,7 @@ below.
 
 **This table is examples, not the rule.** The rule is the question at the top of
 this page. A table of paths is what the deleted archive guard was, and
-[Rule #12's design rationale](../../CLAUDE.md) records why that failed: it
+[Guardrail #12's design rationale](../../CLAUDE.md) records why that failed: it
 enumerated the hazard instead of the property, so it covered two collections out
 of nineteen and looked finished, and its own upkeep grew with the other
 seventeen. Read the rows below to see the three answers in service. Do not read
@@ -403,7 +403,7 @@ no spread at all:
 Ten more published days, 2,976,190 more bytes on disk, and **the same 195 files
 and the same 53,328,670 bytes read - equal to the byte**. Every count the reads
 return is identical too: 90 dates, 20,550 score rows, 26,135 item-health rows, 90
-manifests, 90 day payloads, 5 telemetry months. That is what Rule #12 asks for,
+manifests, 90 day payloads, 5 telemetry months. That is what Guardrail #12 asks for,
 and it is why the answer is a count of files rather than a stopwatch.
 
 ## The developer loop reads the built tree, 2026-09-10
@@ -478,7 +478,7 @@ on 2026-09-08, on a developer machine: a not-due pass makes **5 directory
 opens and 0 shard stats**, and the 5 does not move when the tree holds forty-six
 times more. **A month partition is a file, not a directory**, so there was no
 partition directory for a dated walk to skip, and the sort the premise objected
-to is a sort of names already in hand. Rule #10 says the design changes when a
+to is a sort of names already in hand. Guardrail #10 says the design changes when a
 measurement contradicts it, so the optimisation was not written. The row shipped
 the defect the measurement uncovered instead: three month-name recognisers
 disagreed, and one was deleting files the other two protected. The rule they now
@@ -543,4 +543,4 @@ them apart.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree) - what bounds each committed collection, and the state-prune measurement.
 - [telemetry.md](telemetry.md#the-committed-traces-briefly) - a store bounded by its prune rather than by a read.
 - [../reference/data-growth-audit.md](../reference/data-growth-audit.md) - the audit these reads were found in, and what each finding cost.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #12, which this page is the address of, and Rule #10 on what a measurement obliges.
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #12, which this page is the address of, and Guardrail #10 on what a measurement obliges.

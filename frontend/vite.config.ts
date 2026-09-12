@@ -26,7 +26,7 @@ export default defineConfig({
 		//
 		// This is `uiConfig()` itself rather than a second merge written here, so
 		// the three layers, the defaults and the build-only keys it strips all stay
-		// in the one module that owns them (Rule #6).
+		// in the one module that owns them (Guardrail #6).
 		__UI_CONFIG__: JSON.stringify(uiConfig()),
 		// Where the encoder comes from when our own origin cannot serve it, and the
 		// SHA-256 of every file the browser will accept.

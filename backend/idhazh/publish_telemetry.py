@@ -7,7 +7,7 @@ fetches at runtime.
 
 The projection's shape is `PublicTelemetryRow`, not a list of names here. This
 module owns *when* a shard is written and *from what*; the contract owns which
-cells may cross and what each one may hold (Rule #3).
+cells may cross and what each one may hold (Guardrail #3).
 
 It owns *where* a shard sits too, through `shard_path`. `retention.prune_telemetry`
 deletes a copy in the same step that folds the ledger it copies, and it asks here

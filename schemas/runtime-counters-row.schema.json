@@ -21,12 +21,12 @@
     {
       "change": "Appended `job_seconds`, the shard job's own clock up to this scrape, and `cpu_model`, the processor the host drew.",
       "version": "2026-08-29",
-      "why": "The truncation cap reverts when the slowest work job passes 110 minutes on two of three scheduled runs, and no committed file carried a job's clock - only the GitHub jobs API did, and it drops a job record when the run ages out. A rollback rule that reads an instrument outside the repository is checked by hand or not at all. The CPU model lands in the same row because this project has measured a 3.1x swing in read throughput between hosts, so a clock without the part it was taken on cannot be compared with the next run's (Rule #10). Both are one fact about one work job, which is exactly this row's grain; the run manifest is one row per run and a run draws up to eight hosts."
+      "why": "The truncation cap reverts when the slowest work job passes 110 minutes on two of three scheduled runs, and no committed file carried a job's clock - only the GitHub jobs API did, and it drops a job record when the run ages out. A rollback rule that reads an instrument outside the repository is checked by hand or not at all. The CPU model lands in the same row because this project has measured a 3.1x swing in read throughput between hosts, so a clock without the part it was taken on cannot be compared with the next run's (Guardrail #10). Both are one fact about one work job, which is exactly this row's grain; the run manifest is one row per run and a run draws up to eight hosts."
     },
     {
       "change": "Initial shape: the shard, and the llamacpp: counters its server reported at job end.",
       "version": "2026-08-27",
-      "why": "The item-health ledger's prefill and decode timings are copied out of the model's own replies, one request at a time, and two published surfaces quote rates derived from them. Nothing committed could check either, because the server's own counters were scraped into a job log that keeps them for two days. A number that cannot be reconciled cannot justify a design (Rule #10), so the second instrument is now a committed row."
+      "why": "The item-health ledger's prefill and decode timings are copied out of the model's own replies, one request at a time, and two published surfaces quote rates derived from them. Nothing committed could check either, because the server's own counters were scraped into a job log that keeps them for two days. A number that cannot be reconciled cannot justify a design (Guardrail #10), so the second instrument is now a committed row."
     }
   ],
   "description": "One job's server, one shard, one run, one row.",

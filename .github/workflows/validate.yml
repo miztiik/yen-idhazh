@@ -23,7 +23,7 @@ on:
     inputs:
       # Every candidate field is empty by default and falls back to the model
       # `config/idhazh.json` names, so no model ref is written in this file
-      # (Rule #6). A dispatch that leaves them empty re-qualifies the incumbent,
+      # (Guardrail #6). A dispatch that leaves them empty re-qualifies the incumbent,
       # which is a coherent run rather than a broken one. Qualifying a NEW model
       # means filling them in; the values for the model under adoption are in
       # docs/reference/measurements.md, which is where a target is declared.
@@ -58,7 +58,7 @@ on:
         description: 'Deterministic repeats per frozen article'
         default: '3'
       job_budget_minutes:
-        description: 'Per-job bound. The budget gate is measured against it (Rule #2).'
+        description: 'Per-job bound. The budget gate is measured against it (Guardrail #2).'
         default: '330'
 
 permissions:
@@ -76,7 +76,7 @@ env:
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
   # The one place this workflow says which port. `server_argv` binds it, every
   # probe below reads it, and `idhazh.llm.server` reads it for the address the
-  # stage posts to - so the three cannot disagree (Rule #6).
+  # stage posts to - so the three cannot disagree (Guardrail #6).
   LLAMA_PORT: '8080'
 
 jobs:
@@ -254,7 +254,7 @@ jobs:
       # Keyed on the candidate bytes, not on its filename: two builds of one
       # model share a name, and a key that cannot tell them apart serves the
       # wrong weights under the right alias. One model per entry, so the cache
-      # never holds two multi-gigabyte GGUFs at once (Rule #2).
+      # never holds two multi-gigabyte GGUFs at once (Guardrail #2).
       - name: Cache the candidate weights and runtime
         id: weights
         uses: actions/cache@v6
@@ -297,7 +297,7 @@ jobs:
       # No `if:`. This runs on a cache hit too, because a restored entry is the
       # one case where nobody watched the bytes arrive. It sits before the
       # server starts, so wrong weights cost one step instead of a whole shard
-      # of measurements filed under a model that never ran (Rule #10).
+      # of measurements filed under a model that never ran (Guardrail #10).
       - name: Verify the candidate bytes
         run: |
           set -euo pipefail

@@ -5,7 +5,7 @@ cannot separate a good summary from the bad one it was written for is a
 constant column - and a constant column is worse than no column, since it looks
 like a measurement.
 
-No mocks and no network (Rule #7). The text here is written for the test.
+No mocks and no network (Guardrail #7). The text here is written for the test.
 """
 
 from __future__ import annotations
@@ -411,7 +411,7 @@ def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -
 
     `hhem` is a model score handed to the scorer, never recomputed from the
     summary, so a loop cannot move it. HHEM's weights are not on the machine
-    that runs this suite and no test may fetch them (Rule #7), so what is proved
+    that runs this suite and no test may fetch them (Guardrail #7), so what is proved
     here is the plumbing: the same faithfulness number goes in for both
     summaries and the same number comes out, while the new column separates
     them.
@@ -830,7 +830,7 @@ def test_a_moved_lead_floor_moves_the_scorer_version() -> None:
 
 def test_the_configured_scorer_revision_is_immutable() -> None:
     """It was the branch name `main` until 2026-08-26. A branch moves, and a
-    faithfulness floor read off a moving instrument measures nothing (Rule #10)."""
+    faithfulness floor read off a moving instrument measures nothing (Guardrail #10)."""
     assert is_pinned(HHEM_REVISION)
 
 
@@ -1029,7 +1029,7 @@ def test_an_archive_is_written_whole_or_not_at_all(tmp_path: Path) -> None:
 # ledger keeps a second, fixed-width record of the same identities and the rows
 # are not read at all.
 #
-# Every fixture here is built in the test (Rule #12, CLAUDE.md section 13). None
+# Every fixture here is built in the test (Guardrail #12, CLAUDE.md section 13). None
 # of it reads `state/scores/`.
 
 
@@ -1040,7 +1040,7 @@ def _opened_bytes(
 
     Measured at the file boundary rather than by timing, so the answer is the
     same on a loaded machine. `Path.open` is where every read in this module
-    goes, so a spy on it counts real I/O and mocks nothing (Rule #7).
+    goes, so a spy on it counts real I/O and mocks nothing (Guardrail #7).
     """
     real = Path.open
     opened: dict[str, int] = {}
@@ -1127,7 +1127,7 @@ def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_pat
 def test_the_writers_read_does_not_grow_with_the_rows_the_shard_holds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Rule #12, as bytes rather than as a clock.
+    """Guardrail #12, as bytes rather than as a clock.
 
     Two trees hold the same 200 measurements. One shard carries each row once,
     the other carries it ten times, so the rows are ten times the bytes and the
@@ -1358,7 +1358,7 @@ def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) 
 # file. The shape under test IS a pair of files that disagree, and a tree a
 # test writes through the writer cannot hold a digest the writer would never
 # mint. It is four files and nothing appends to it, so it is fixed in size
-# (Rule #12).
+# (Guardrail #12).
 
 INDEX_REBUILD: Final = FIXTURES_DIR / "evals" / "index-rebuild"
 REBUILD_MONTHS: Final = ("2026-01", "2026-02")
@@ -1443,7 +1443,7 @@ def test_rebuilding_one_month_opens_and_rewrites_only_that_month(
     """The cover is the months the caller names, and nothing else is read.
 
     A rebuild reads every score row of the months it is given, which is the read
-    the index exists to avoid (Rule #12). That is affordable because a person
+    the index exists to avoid (Guardrail #12). That is affordable because a person
     names the months; it stops being affordable the moment naming one month
     opens the archive.
     """
@@ -1487,7 +1487,7 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
 
     An index that repaired itself on a schedule would hide the drift it exists
     to reveal, and the full pass reads every score row on record - which is a
-    decision somebody takes out loud (Rule #12). So the verb appears in no
+    decision somebody takes out loud (Guardrail #12). So the verb appears in no
     workflow and no shell script, and the mechanism is called from one module.
     """
     state = _drifted_tree(tmp_path)

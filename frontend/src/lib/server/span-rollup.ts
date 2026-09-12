@@ -197,7 +197,7 @@ export function foldRollup(table: CsvTable): SpanRun[] {
  *
  * `months` is the cover, and the caller wants the newest entry: the rollup is
  * sharded by month, so reading the newest few shards answers that and reading
- * every one of them answers it no better (`CLAUDE.md` Rule #12).
+ * every one of them answers it no better (`CLAUDE.md` Guardrail #12).
  */
 export function loadSpanRollup(months: number = LEDGER_WINDOW_MONTHS): SpanRun[] {
 	return foldRollup(readShards(join(STATE_ROOT, 'span-rollup'), months));

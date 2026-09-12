@@ -13,7 +13,7 @@ address later. An empty cell says the older run never looked, which is the only
 honest thing it can say.
 
 One-shot, and committed rather than run by hand, so a fork or a stale branch can
-reproduce the exact rewrite this repository ran (CLAUDE.md Rule #5). It is safe
+reproduce the exact rewrite this repository ran (CLAUDE.md Guardrail #5). It is safe
 to leave here and safe to re-run: a shard that already carries the wide header is
 reported and skipped rather than rewritten a second time. That is what makes it
 the tool for the merge conflict this change is guaranteed to hit - the upstream

@@ -4,7 +4,7 @@ name: Content refresh
 # disposable workers that do, and an assemble step that publishes whatever
 # finished.
 #
-# The shape mirrors the runner's own economics (Rule #2): weights are
+# The shape mirrors the runner's own economics (Guardrail #2): weights are
 # restored once per JOB rather than once per run, so a worker handles a shard of
 # several items to amortize the restore rather than one item per machine.
 
@@ -69,7 +69,7 @@ concurrency:
 # and the `plan` job's `models` step republishes it, so every job below reads one
 # answer. A copy here was a second answer: the alias already came from config
 # while the weights came from this block, so one edit could serve 8B bytes under
-# a 9B alias and file every eval row under a model that never ran (Rule #10).
+# a 9B alias and file every eval row under a model that never ran (Guardrail #10).
 env:
   # The same build the measurement harness pins, so a number measured in
   # measure.yml describes the binary that produces the digest.
@@ -78,7 +78,7 @@ env:
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
   # The one place this workflow says which port. `server_argv` binds it, every
   # probe below reads it, and `idhazh.llm.server` reads it for the address the
-  # stage posts to - so the three cannot disagree (Rule #6).
+  # stage posts to - so the three cannot disagree (Guardrail #6).
   LLAMA_PORT: '8080'
 
 jobs:
@@ -256,7 +256,7 @@ jobs:
       # The day decides the fan-out, so this runs after the plan rather than
       # beside the date. `run.shard_size` is what one worker is sized to carry,
       # so a small day spends fewer jobs and restores the weights fewer times
-      # (Rule #2). The derivation is bounded by `run.max_parallel`, which is
+      # (Guardrail #2). The derivation is bounded by `run.max_parallel`, which is
       # four, so a scheduled run still never asks for more workers than the four
       # it has always had - the eight in the dispatch form above is the ceiling
       # an operator may ask for, and moving the automatic path onto it needs the
@@ -314,7 +314,7 @@ jobs:
       # `--date` is what it settles. This run appended to one feed-health shard,
       # so that shard is the only one a repeat can be in, and naming it is what
       # keeps the pass costing the same on a five-year archive as on a fresh
-      # clone (Rule #12).
+      # clone (Guardrail #12).
       - name: Commit what the plan saw
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
@@ -340,7 +340,7 @@ jobs:
   # 150 minutes is half again the slowest worker ever measured at the current
   # item ceiling - 94.5 minutes on 2026-08-26 - and it still sits above the
   # 117.5-minute slowest worker of 2026-08-24, when a day handed each worker 50
-  # items instead of 40. Raising it is not the fix for a slow worker (Rule #2);
+  # items instead of 40. Raising it is not the fix for a slow worker (Guardrail #2);
   # lowering `run.safety_ceiling_per_run` is, and that is the lever the ceiling
   # was last moved with.
   work:
@@ -355,7 +355,7 @@ jobs:
       # the fan-out is, and the two can disagree - at four it would have queued
       # half of an eight-shard dispatch and handed back the wall-clock the
       # fan-out buys. Eight workers plus the visuals job is nine, well inside
-      # Rule #2's 20 concurrent jobs, and `visuals` waits on `work` rather than
+      # Guardrail #2's 20 concurrent jobs, and `visuals` waits on `work` rather than
       # racing it.
       max-parallel: ${{ fromJSON(needs.plan.outputs.shards) }}
       matrix:
@@ -373,7 +373,7 @@ jobs:
       # The processor rides along for the same reason. `ubuntu-latest` names the
       # image and not the part, this project has measured a 3.1x read-throughput
       # swing between hosts, and a clock that cannot be read against the next
-      # run's clock is not a measurement (Rule #10). `|| true` because a host
+      # run's clock is not a measurement (Guardrail #10). `|| true` because a host
       # with no `model name` line must cost an empty cell, never the shard.
       #
       # And the processor counters, so the counters step can difference them and
@@ -484,7 +484,7 @@ jobs:
       # No `if:`. This runs on a cache hit as well as a miss, because a restored
       # entry is the one case where nobody watched the bytes arrive. It sits
       # before the server starts, so wrong weights cost one step instead of a
-      # shard of summaries filed under a model that never ran (Rule #10).
+      # shard of summaries filed under a model that never ran (Guardrail #10).
       - name: Verify the weights
         run: |
           set -euo pipefail
@@ -535,7 +535,7 @@ jobs:
 
       # A shard's throughput varies with the host it drew, and no run log named
       # the host, the binary or the weights - so no number a shard produced could
-      # say which bytes produced it (Rule #10). These six lines settle all three.
+      # say which bytes produced it (Guardrail #10). These six lines settle all three.
       # `always()`, because the shard that failed is the one whose host is worth
       # naming.
       - name: What this runner is
@@ -550,7 +550,7 @@ jobs:
           sha256sum "backend/models/${{ needs.plan.outputs.summarize_file }}" || true
 
       # Neither of the two runs this shape was read from measured memory at all,
-      # and the runner has 16 GB (Rule #2). `measure.yml` already samples exactly
+      # and the runner has 16 GB (Guardrail #2). `measure.yml` already samples exactly
       # this; the daily path did not.
       #
       # The sampler itself is `.github/scripts/sample-rss.sh`, and it moved there
@@ -613,14 +613,14 @@ jobs:
       # writes is committed by the step below. Until it was committed these
       # numbers reached only this job log, which keeps them for two days - and
       # that is what made the prefill rate the throughput doc and the console
-      # publish impossible to check against anything (Rule #10). See
+      # publish impossible to check against anything (Guardrail #10). See
       # docs/architecture/summarize/throughput.md.
       #
       # `always()`, because the shard that died is the shard whose context high
       # water mark matters most. `continue-on-error` for the reason written above
       # the record step: an unreadable scrape costs one observation row, a failed
       # shard costs the day a worker. The endpoint is llama-server's own loopback
-      # surface inside this job - nothing a reader can reach (Rule #1).
+      # surface inside this job - nothing a reader can reach (Guardrail #1).
       - name: What the server counted
         if: always()
         continue-on-error: true
@@ -699,7 +699,7 @@ jobs:
       # `--date` is what it settles. This run appended to one item-health shard
       # and one score shard, so those are the only files a repeat can be in, and
       # naming them is what keeps the pass costing the same however many months
-      # the archive holds (Rule #12).
+      # the archive holds (Guardrail #12).
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -820,7 +820,7 @@ jobs:
       #
       # Measured 2026-08-29: one run's four shards are 555,842 bytes, so five
       # runs a day held for seven days is 18.6 MB against the 500 MB of artifact
-      # storage Rule #2 allows - 3.7 percent of the budget, for the only copy of
+      # storage Guardrail #2 allows - 3.7 percent of the budget, for the only copy of
       # the text that exists.
       - uses: actions/upload-artifact@v7
         with:
@@ -839,7 +839,7 @@ jobs:
       # so one day is not a window; ninety days would be a promise this project
       # does not make about somebody else's article body. Fourteen days is a
       # deadline a labeller can plan around, and it is what bounds the storage
-      # this costs (Rule #2). See
+      # this costs (Guardrail #2). See
       # docs/how-to/label-the-faithfulness-queue.md.
       #
       # Never committed, and deliberately not named in any commit-and-push.sh
@@ -860,7 +860,7 @@ jobs:
   # This bound is the backstop, not the budget. The stage stops itself at
   # `run.visual_planner_budget_minutes` in config/idhazh.json, which is set below this
   # number with room for the fixed cost and one worst-case item. Raising this
-  # number is not the fix for a slow visual planner (Rule #2); lowering that one
+  # number is not the fix for a slow visual planner (Guardrail #2); lowering that one
   # is.
   visuals:
     needs: [plan, work]
@@ -934,7 +934,7 @@ jobs:
       # No `if:`, for the same reason the work job's check carries none: a
       # restored cache entry is the one case where nobody watched the bytes
       # arrive. This job cannot stop a publication, so a wrong file here costs
-      # every item its picture in silence unless something says so (Rule #10).
+      # every item its picture in silence unless something says so (Guardrail #10).
       - name: Verify the visual planner weights
         run: |
           set -euo pipefail
@@ -1148,7 +1148,7 @@ jobs:
       # Sending the archive cost 6.42 MB of the 6.67 MB parcel and the figure
       # rose with every run that published a day: 6.36, 6.41, 6.47, 6.53, 6.59
       # and 6.66 MB over six consecutive runs on 2026-09-07/08, with nobody
-      # writing any code (Rule #12). Measured 2026-09-08 on an Intel Core
+      # writing any code (Guardrail #12). Measured 2026-09-08 on an Intel Core
       # i7-1265U over 19 committed days: the archive zips to 6,989,142 bytes and
       # one day to 255,447.
       #
@@ -1259,7 +1259,7 @@ jobs:
       # This run wrote one day, so it names that day. Every other committed day
       # is frozen and was validated before it was pushed, and re-opening all of
       # them costs about 0.27 s a day - measured 2026-09-05, 16 days in 6.6 s -
-      # five times a day, forever (Rule #12). `ci.yml` re-reads the whole tree
+      # five times a day, forever (Guardrail #12). `ci.yml` re-reads the whole tree
       # on the change that can actually invalidate it: one that moves a contract.
       - name: The day this run wrote still matches its contracts
         run: python -m idhazh validate-days --day "${{ needs.plan.outputs.date }}"

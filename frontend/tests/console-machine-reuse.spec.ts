@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
  * The Hardware route prepares its run context and its latency curves once a
  * span, and reuses them while the window only resizes.
  *
- * Finding 108 (Rule #12): the route used to rebuild the caption columns, the
+ * Finding 108 (Guardrail #12): the route used to rebuild the caption columns, the
  * boundary set, the plotted domain and every polyline on each preset AND each
  * resize - so a drag that moved pixels re-ran work that only a new span can
  * change. The fix splits the data-only preparation (a function of the runs in

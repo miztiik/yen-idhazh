@@ -182,7 +182,7 @@ The idea the measurement was taken against was that length is the discriminator:
 So the refusal holds at every length. What the count does NOT settle is what to do about the short summaries it stumbled on, and an earlier version of this page said it pointed at "the length floor", which was wrong twice over. A floor the model already missed on 18 percent of items is not a fix, it is the same request repeated louder; and the sample cannot support a length ruling in either direction, being twenty items drawn on one day from a pipeline whose prompt is still being tuned. What landed instead on 2026-09-10 is a tolerance around each band's ask, and a rule that no length except a failed-extraction floor may drop an item
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
 
-**Read the 18.2 percent as a hazard rather than a rate.** It is one draw of 110 items on one day, and the numbers underneath it move whenever the prompt does. It is quoted here because it was the reason the key-points question came up at all, and not as a measurement anything may be tuned against (Rule #10).
+**Read the 18.2 percent as a hazard rather than a rate.** It is one draw of 110 items on one day, and the numbers underneath it move whenever the prompt does. It is quoted here because it was the reason the key-points question came up at all, and not as a measurement anything may be tuned against (Guardrail #10).
 
 **What a reader loses** (guardrails: a veto names the loss). On four items in twenty they lose one fact each, and on one item in twenty they lose three. What they keep is an item they can skim in one pass instead of two, and a summary that is still the only thing on the item claiming to be complete.
 

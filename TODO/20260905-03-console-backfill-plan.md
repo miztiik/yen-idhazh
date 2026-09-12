@@ -17,7 +17,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Why this plan exists | Eight numbers per item have been committed on every run for weeks and the console cannot see one of them. The five sentences a reader is shown about a doubtful summary have **never** been plotted, so nobody can say whether summaries are improving or which defect dominates. Both are fixed by publishing what is already on disk - **and the fix backfills over every past run**, so the answer arrives with history rather than starting from today |
 | Hard scope - in | Widening the published telemetry projection and republishing every month; per-item cost panels; a panel for the five doubt reasons over time; faithfulness and lead-coverage panels; re-recording the console page ceilings this plan grows |
 | Hard scope - out | Any new measurement. Every number here is already committed. No span work (plan 05). No visual-stage metric (plan 19). No change to what the pipeline computes |
-| ESCALATE triggers | 1. A widened column is not an integer or a closed name - `FORBIDDEN_COLUMNS` and Rule #11 bound what may be published and a free-text cell is a stop. 2. Republishing a month does not reproduce the committed shard byte-for-byte on the unwidened columns. 3. `/console/` cannot hold the new panels under its ceiling even after a re-record sized for seven publishes |
+| ESCALATE triggers | 1. A widened column is not an integer or a closed name - `FORBIDDEN_COLUMNS` and Guardrail #11 bound what may be published and a free-text cell is a stop. 2. Republishing a month does not reproduce the committed shard byte-for-byte on the unwidened columns. 3. `/console/` cannot hold the new panels under its ceiling even after a re-record sized for seven publishes |
 | Chosen strategy | Widen the contract, republish from `state/`, then draw. The projection is rewritten whole on every publish already, so a widening is additive and the backfill is a re-run rather than a migration |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
 
@@ -57,7 +57,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- |
 | 1 | **This is a contract change, not a tuple edit.** `PUBLIC_COLUMNS` is `PublicTelemetryRow.csv_columns()`, so it takes a schema stamp, a changelog entry, the fixture round trip and the canary writer | C23, verified 2026-09-05 |
 | 2 | **Append at the end, always.** `parseTelemetryCsv` checks the header by prefix, so appending is safe for a browser on the old bundle and inserting anywhere earlier blanks every console chart | Recorded behaviour, `series.ts` |
-| 3 | Every added cell is an integer, so the forbidden-column guard and Rule #11 do not move | Andre |
+| 3 | Every added cell is an integer, so the forbidden-column guard and Guardrail #11 do not move | Andre |
 | 4 | An instrument that did not run writes an **empty cell, never a zero** | Section 14.4b |
 
 ### Rejected alternatives

@@ -348,7 +348,7 @@ test.describe('the readout is the default', () => {
 	}) => {
 		// The hover is an addition. A reader with a blocked script, a slow network
 		// or an old browser still gets one column's numbers in words, which is
-		// what CLAUDE.md Rule #1 asks of every published page. The check is a raw
+		// what CLAUDE.md Guardrail #1 asks of every published page. The check is a raw
 		// HTTP fetch of the same address, so nothing on the page has run.
 		//
 		// Since 2026-09-09 a chart may be drawn from rows the page fetches rather

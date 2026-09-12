@@ -51,7 +51,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- |
 | 1 | **These are one linguistic artefact seen from two ends.** The sequencing list gates whether the family is attempted; the edge procedure gates whether each arrow is legal. Written apart they get written twice and disagree | 12.15 G46, Andre |
 | 2 | The honest difficulty is stated: natural language asserts sequence at many strengths. "Then" is explicit, "subsequently" is weaker, **paragraph adjacency asserts nothing.** So this is a written rule about which spans count, not a threshold | P.3.4.2, 12.15 G46 |
-| 3 | The lexicons are **versioned config**, so a later change to what counts as a sequence marker is visible in the record and every rate it feeds can be re-based | Rule #6 |
+| 3 | The lexicons are **versioned config**, so a later change to what counts as a sequence marker is visible in the record and every rate it feeds can be re-based | Guardrail #6 |
 | 4 | Authored by hand, not by a model. A model-authored lexicon would put the denominator for every rate inside Deviation A | Andre, O46 |
 
 ### Rejected alternatives
@@ -128,7 +128,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | Sort nodes and links by `element_id` before construction - iteration order changes the result | Section 7.3 |
 | 3 | Never carry coordinates in from a previous run or a cached plan; run exactly N ticks synchronously, N from `config/`; round output to a fixed precision so float drift is not a diff | Section 7.3 |
 | 4 | Exact-pin the layout module and record it in `renderer_version` | Section 7.3, row 24 |
-| 5 | Cost is an **estimate, not a measurement**: roughly 5 to 20 ms per graph on 4 vCPU at a 30-node cap, about a second of build time a day at the current rate. Measure it in this row and replace the estimate | Section 7.3, Rule #10 |
+| 5 | Cost is an **estimate, not a measurement**: roughly 5 to 20 ms per graph on 4 vCPU at a 30-node cap, about a second of build time a day at the current rate. Measure it in this row and replace the estimate | Section 7.3, Guardrail #10 |
 
 ### Rejected alternatives
 

@@ -79,7 +79,7 @@ export type { EvalDay } from '$lib/console/eval-instruments';
  *
  * `windowDays` is the cover. The caller filters what comes back to the widest
  * span the control offers, so a day older than that was opened and thrown away
- * (`CLAUDE.md` Rule #12). Nothing about the read reaches a browser: what ships
+ * (`CLAUDE.md` Guardrail #12). Nothing about the read reaches a browser: what ships
  * is one count per reason per day.
  */
 function doubtReasonDays(windowDays: number): ReasonDay[] {
@@ -121,7 +121,7 @@ export async function load() {
 	const console = consoleConfig();
 	// The widest span the control can reach, worked out before the ledgers are
 	// read rather than after: nothing older than this can be drawn whatever the
-	// operator does, so nothing older is opened either (`CLAUDE.md` Rule #12).
+	// operator does, so nothing older is opened either (`CLAUDE.md` Guardrail #12).
 	const widestDays = Math.max(...console.window_presets);
 	const shards = shardMonths(widestDays);
 	const { rows } = evalRows(shards);
@@ -153,7 +153,7 @@ export async function load() {
 	const widest = [...windows.values()].reduce((a, b) => (a.days >= b.days ? a : b));
 	// The distinct-published counts each day settled, read one record a day for
 	// the days the widest span reaches and no wider - never a walk over the whole
-	// `state/day-metrics/` tree (CLAUDE.md Rule #12). A day the record does not
+	// `state/day-metrics/` tree (CLAUDE.md Guardrail #12). A day the record does not
 	// cover falls back to the ledger row count, exactly as before. This corrects
 	// the scored count on the days a re-score or a dropped item ran it high, and
 	// leaves every measurement distribution reading the same rows it always did.
@@ -303,7 +303,7 @@ export async function load() {
 		matchSvg,
 		leadSvg,
 		// Printed beside the count it governs, so the panel says which share it is
-		// counting against instead of asking a reader to know it (Rule #6).
+		// counting against instead of asking a reader to know it (Guardrail #6).
 		leadFloor,
 		// Not windowed. A swap is a point in time and its two sides are however
 		// many articles ran on each model.

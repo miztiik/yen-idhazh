@@ -203,7 +203,7 @@ test.describe('THE ORACLE: a drawn bar is a figure the article states', () => {
 	 * can be told from a chart that shows THIS article's numbers.
 	 *
 	 * Driven from the canary, never from `frontend/public/digest/` - the cost of
-	 * this file may not rise because a run published more (Rule #12).
+	 * this file may not rise because a run published more (Guardrail #12).
 	 */
 	const FIXTURES = resolve(ROOT, 'tests', 'fixtures', 'visual-validator');
 	const PLAN = JSON.parse(
@@ -408,7 +408,7 @@ test.describe('what may not be drawn, on either side of the move', () => {
 		test(`${name} is never asked for`, () => {
 			// The path is about to be joined onto a directory and read, or onto
 			// `base` and fetched. It came off a committed payload rather than off the
-			// web and it is still matched rather than trusted (Rule #11).
+			// web and it is still matched rather than trusted (Guardrail #11).
 			expect(publishedVisual(path), `${path} was accepted as a published drawing`).toBe(false);
 		});
 	}
@@ -422,7 +422,7 @@ test.describe('what may not be drawn, on either side of the move', () => {
 		['something that is not a drawing at all', '<!doctype html><html><body>hi</body></html>']
 	] as const) {
 		test(`${name} is not drawn`, () => {
-			// Rule #11. A chart's labels are written by a model that read a
+			// Guardrail #11. A chart's labels are written by a model that read a
 			// stranger's page, so the moment the drawing stops being an `img` it is
 			// markup in our own origin and the check is the control, not a promise.
 			const visual = planted(markup);
@@ -512,7 +512,7 @@ test.describe('THE ORACLE: one watcher, however many stories are waiting', () =>
 		// Until 2026-09-06 each waiting story built its own watcher, so this count
 		// was the number of stories: a day that published more drawings held more
 		// watchers, for the life of the page. That is a cost that rises because a
-		// run published more, which CLAUDE.md Rule #12 refuses.
+		// run published more, which CLAUDE.md Guardrail #12 refuses.
 		const drawn: string[] = [];
 		const forget: Array<() => void> = [];
 		const waitFor = (stories: number): void => {

@@ -143,7 +143,7 @@ def test_discovery_finds_the_plans_and_skips_the_note(tree: Path) -> None:
 
 
 def test_a_sixth_plan_appears_with_no_code_change(tree: Path) -> None:
-    """Rule #6: discovery is a glob plus a table shape, never a list of names."""
+    """Guardrail #6: discovery is a glob plus a table shape, never a list of names."""
     before = len(read_plans(tree))
     (tree / "TODO" / "20260202-35-epsilon-plan.md").write_text(
         BETA.replace("Bravo", "Echo"), encoding="utf-8", newline="\n"

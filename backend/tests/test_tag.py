@@ -125,7 +125,7 @@ def test_a_retired_lens_stops_matching_but_keeps_its_tombstone() -> None:
 
 
 def test_the_tagger_can_only_ever_emit_an_id_the_committed_file_carries() -> None:
-    """Rule #11: a hostile page can win a tag we publish, never invent one.
+    """Guardrail #11: a hostile page can win a tag we publish, never invent one.
 
     The ids used to be closed Python enums, so this was true of the type as well
     as of the code. They are open slugs since 2026-09-12 and the type closes

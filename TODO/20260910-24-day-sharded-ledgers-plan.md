@@ -24,7 +24,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 ### 0.1 Standing rules, and they bind every row
 
-**Delivering the intent of this plan matters more than delivering the letter of a row. A structural fix matters more than a small diff. Where a row cannot be done correctly inside its stated scope, expand the scope and say so in the pull request - do not ship a band-aid to stay inside a file list.** [`../CLAUDE.md`](../CLAUDE.md) Rule #5 is the authority; this sentence is here because a row's file list reads like a fence and is meant to read like a start.
+**Delivering the intent of this plan matters more than delivering the letter of a row. A structural fix matters more than a small diff. Where a row cannot be done correctly inside its stated scope, expand the scope and say so in the pull request - do not ship a band-aid to stay inside a file list.** [`../CLAUDE.md`](../CLAUDE.md) Guardrail #5 is the authority; this sentence is here because a row's file list reads like a fence and is meant to read like a start.
 
 **No prisoners.** A row that removes something takes its code, its tests, its fixtures, its config keys, its schema fields and its docs with it, **in the same commit**. Git is the backup. A row that retires a month reader and leaves a doc paragraph describing it has not finished, and its acceptance gate says so.
 
@@ -34,13 +34,13 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 **A row that adds a backend test module classifies it in the same commit.** [`../backend/tests/test_marks.py`](../backend/tests/test_marks.py) fails naming any module that no registered mark selects and that its own exemption set does not name. There is no `unit` mark, so a plain unit-test module goes in the exemption set - and then `test_marks.py` is in the row's file list, because it is a file the row writes.
 
-**No test walks a growing collection** ([`../CLAUDE.md`](../CLAUDE.md) Rule #12, section 13). Every oracle below is driven from a tree the test builds, from `tests/fixtures/`, or from `backend/var/canary/`. A migration is proved on a fixture that carries a case the committed ledgers have never produced; the committed ledgers are then migrated once, by an operator command, and checked by their own read-back.
+**No test walks a growing collection** ([`../CLAUDE.md`](../CLAUDE.md) Guardrail #12, section 13). Every oracle below is driven from a tree the test builds, from `tests/fixtures/`, or from `backend/var/canary/`. A migration is proved on a fixture that carries a case the committed ledgers have never produced; the committed ledgers are then migrated once, by an operator command, and checked by their own read-back.
 
 **The migration is re-run after every merge and every rebase.** `state/*.csv` and `state/**/*.csv` are `merge=union` in [`../.gitattributes`](../.gitattributes). Union merge keeps every line from both sides, which is right for an append and wrong for a file whose every line moved - and it has no conflict state, so `git merge origin/main` over a migrated tree exits 0 and leaves a directory holding both grains. Restore from `origin/main` and re-run the utility; do not resolve by hand. [`../docs/reference/agent-notes/git-and-github.md`](../docs/reference/agent-notes/git-and-github.md) records the 2026-08-27 occurrence.
 
 **A `digest.yml` run in flight rewrites what your row migrated.** The scheduled pipeline appends to `state/` several times a day from a checkout pinned to its start sha, so a run that started before your row merges appends to the **month** shard your row deleted. Check `gh run list --workflow digest.yml --limit 3` before merging and wait it out, then re-run the migration.
 
-**Every number carries its hardware, its date and its spread** ([`../CLAUDE.md`](../CLAUDE.md) Rule #10). Row #1 takes the one measurement this plan is priced against; no other row may quote an unmeasured throughput claim to justify a grain.
+**Every number carries its hardware, its date and its spread** ([`../CLAUDE.md`](../CLAUDE.md) Guardrail #10). Row #1 takes the one measurement this plan is priced against; no other row may quote an unmeasured throughput claim to justify a grain.
 
 ### 0.1a The gate sets, written out once so a row can name one
 
@@ -105,7 +105,7 @@ A `frontend/public/` mirror's grain follows **what a browser fetches**. It is re
 
 **The four unsharded ledgers are not "not yet migrated". They are correctly unsharded, and the burden is on a change that shards them.** The rule is already written down in [`../docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md): a ledger partitions only when its read carries a window, because without a window every shard gets opened anyway - the same bytes through more file handles, plus a directory walk a single `open` does not need. None of the four's read carries a window. `feed-retirements.csv` is read whole and a retirement is permanent. **`fingerprints.csv` is not a live ledger and this plan does not rule on it**: plan 23 row #1a stops it being read at all and **plan 23 row #1b deletes the file, its contract and its schema**, so a grain ruling on it would be a ruling on something that will not be there. `runtime-counters.csv` is read for one run, and [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) already records the ruling that one file handle beats N. `day-validations.csv` is a receipt file read once a run.
 
-**The "otherwise migrated twice" argument does not reach them**, and that is the whole of the answer. It applies to a collection that is going to move anyway; none of the four is. What is true of two of them - `runtime-counters.csv` and `day-validations.csv` grow for ever with no prune - is a Rule #12 question about retention, not a question about grain, and section 11 names it rather than smuggling it into a row here.
+**The "otherwise migrated twice" argument does not reach them**, and that is the whole of the answer. It applies to a collection that is going to move anyway; none of the four is. What is true of two of them - `runtime-counters.csv` and `day-validations.csv` grow for ever with no prune - is a Guardrail #12 question about retention, not a question about grain, and section 11 names it rather than smuggling it into a row here.
 
 ### 0.3 The numbers this plan is priced against
 
@@ -191,7 +191,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 - **Scope:** `backend/idhazh/day_partition.py` becomes the peer of `backend/idhazh/month_partition.py`. It owns what a `<YYYY>/<MM>/<DD>.csv` tree is, which names it refuses, and which days a window of `n` days names. `ledger._day_files`, `ledger._refuse_stray` and `ledger._days_in_window` move into it. **No collection changes grain in this row**, and the one measurement this plan is priced against is taken here.
 - **A fourth responsibility was in this sentence and was dropped on 2026-09-11**: "which day an age in months keeps". It has no caller until rows #5 to #8, which are four singleton groups, so exactly one of them lands first and writes it with its caller in the same commit. Fowler ruled it belongs beside `month_partition.oldest_month_kept` rather than in `day_partition`, because the boundary stays a month and a month-anchored boundary is not what a day tree is.
 - **Files touched:** `backend/idhazh/day_partition.py` (new, created by this row; row #7 later folds `shards_in_window` into it), `backend/idhazh/ledger.py`, `backend/idhazh/publish_telemetry.py`, `backend/tests/test_day_partition.py` (new), `backend/tests/test_ledger.py`, `backend/tests/test_marks.py`, `backend/utilities/measure_day_window.py` (new), `docs/concepts/month-partitions.md` renamed to `docs/concepts/partitions.md`, `docs/reference/benchmarks/2026-09-11-day-window-read.md` (new; this row creates the directory), `docs/architecture/contracts/schemas.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/publishing/telemetry-series.md`, `docs/architecture/publishing/console-payloads.md`, `docs/concepts/growing-reads.md`, `docs/reference/measurements.md`, `TODO/20260906-constant-cost-reads-plan.md`, `TODO/20260907-growing-reads-window-plan.md`, `TODO/20260910-24-day-sharded-ledgers-plan.md`, `TODO/20260911-execution-order.md`
-- **`tests/fixtures/day-partition/` was in this list and was dropped on 2026-09-11.** The oracle's tree is built under `tmp_path` from constants in `backend/tests/test_day_partition.py`, which is exactly what the month twin already does - `test_retention.py` builds its trees from `NOT_MONTHS` and `OTHER_STRAYS`, Arabic-Indic stem included. Rule #7 is satisfied by real directories and a real walk, and no non-ASCII filename is committed ([`../CLAUDE.md`](../CLAUDE.md) section 5). Fowler, 2026-09-11.
+- **`tests/fixtures/day-partition/` was in this list and was dropped on 2026-09-11.** The oracle's tree is built under `tmp_path` from constants in `backend/tests/test_day_partition.py`, which is exactly what the month twin already does - `test_retention.py` builds its trees from `NOT_MONTHS` and `OTHER_STRAYS`, Arabic-Indic stem included. Guardrail #7 is satisfied by real directories and a real walk, and no non-ASCII filename is committed ([`../CLAUDE.md`](../CLAUDE.md) section 5). Fowler, 2026-09-11.
 - **`TODO/20260911-execution-order.md` joined the list on 2026-09-11**, because it names the renamed page twice and carried a wrong link count. `docs/reference/benchmarks/` joined it because [`../docs/reference/measurements.md`](../docs/reference/measurements.md) and [`../docs/reference/documentation-structure.md`](../docs/reference/documentation-structure.md) both refuse a two-arm race as an append to the instrument log; the log carries the figure in force and links to the record.
 - **`backend/idhazh/publish_telemetry.py` and this plan's own doc joined the list on 2026-09-11**, because both name the renamed page and the gate below asks for every mention to move. `publish_telemetry.py` is also row #4's file and the two rows sit in different groups, so the pair holds. **Row #4 is in group B and this row in group A**, so whichever lands second re-reads the module.
 - **Acceptance gates:** `GATE-PY` with `backend/tests/test_day_partition.py` and `backend/tests/test_ledger.py`, `GATE-SUITE`. Plus, in this row:
@@ -213,8 +213,8 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | 1 | `day_partition.py` is a **peer** of `month_partition.py`, not a replacement. `state/telemetry-aggregate/`, `state/score-archive/` and all seven published mirrors stay monthly, so both modules stay live and each owns one question | Section 0.2 |
 | 2 | The page is renamed `docs/concepts/partitions.md`. After this plan **eight collections partition by day and nine by month**, so a page titled for months is the page a reader looking for the day rule does not open - which is the failure `CLAUDE.md` section 5 names. Its opening paragraph already covers both grains, so the title is the only thing that lies | `CLAUDE.md` section 5 |
 | 2a | **Two of the seven files holding links are another plan's doc, and one of those is open work.** [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) carries four of the fourteen links and eleven of the thirty-six mentions, so a worker executing that plan concurrently collides with this row. Read `git worktree list` before staging, and if the other plan has a row in flight this one waits rather than resolving by hand | Section 0.1 |
-| 3 | `ledger._day_files` moves rather than being copied. Two collections read day trees today through that one private helper; five more join them, and a private helper imported from seven places is exactly the shape `month_partition` was created on 2026-09-08 to end | `CLAUDE.md` Rule #5 |
-| 4 | The measurement is taken **before** any ledger moves, because it is what ESCALATE trigger 3 fires on, and a measurement taken after the fourth row has landed cannot stop anything | `CLAUDE.md` Rule #10 |
+| 3 | `ledger._day_files` moves rather than being copied. Two collections read day trees today through that one private helper; five more join them, and a private helper imported from seven places is exactly the shape `month_partition` was created on 2026-09-08 to end | `CLAUDE.md` Guardrail #5 |
+| 4 | The measurement is taken **before** any ledger moves, because it is what ESCALATE trigger 3 fires on, and a measurement taken after the fourth row has landed cannot stop anything | `CLAUDE.md` Guardrail #10 |
 | 5 | The four unsharded ledgers are named in `docs/architecture/contracts/schemas.md` as deliberately unsharded, with the reason, so the next reader does not read them as work left undone | Section 0.2 |
 
 ### Rejected alternatives
@@ -225,7 +225,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | 2 | Split `backend/idhazh/retention.py` as well | Same arithmetic and the same residue. Two large pure-move rows to unpair four rows that are each about a day of work is a net loss with added risk | Fowler |
 | 3 | Keep the page named `month-partitions.md` and extend it | 14 links stay correct and the title stays wrong for eight of seventeen partitioned collections. The link repoint is mechanical and a checker proves it; a title nobody trusts is not repaired by anything | `CLAUDE.md` section 5 |
 | 4 | Fold the day rule into `month_partition.py` and rename that module | A module rename is a different change with its own blast radius, and the two rules are genuinely different - a month stem is a filename, a day is a path of three segments with a walk that refuses what it cannot place | Fowler |
-| 5 | Skip the measurement and take the file count as the answer | The file count is certain to rise and says nothing about what the read costs. The trade is more handles for fewer bytes (section 0.3), and only a measurement settles which side wins | `CLAUDE.md` Rule #10 |
+| 5 | Skip the measurement and take the file count as the answer | The file count is certain to rise and says nothing about what the read costs. The trade is more handles for fewer bytes (section 0.3), and only a measurement settles which side wins | `CLAUDE.md` Guardrail #10 |
 
 ---
 
@@ -270,7 +270,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | One utility with a `--date-column`, driven per ledger by the row that moves it. Four copies of a split is four places for the read-back refusal to stop being exact, and the refusal is the only thing standing between this plan and a silent delete | `CLAUDE.md` Rule #5 |
+| 1 | One utility with a `--date-column`, driven per ledger by the row that moves it. Four copies of a split is four places for the read-back refusal to stop being exact, and the refusal is the only thing standing between this plan and a silent delete | `CLAUDE.md` Guardrail #5 |
 | 2 | `state/seen/` files by `first_seen_run[:10]`, **not** by `first_seen_at[:10]`. `ledger.append_seen` files by the run's digest date, so the run id reproduces the writer's own filing exactly; `first_seen_at` is a wall-clock stamp that crosses midnight independently of the run it belongs to | Verified 2026-09-11 against `ledger.append_seen` and the committed rows |
 | 3 | It writes into a temporary tree and renames, and it unlinks a month shard only after the day tree it wrote reads back equal. Temp-file-plus-rename is the repository's atomic-unit rule | `CLAUDE.md` section 1a |
 | 4 | **`state/score-index/` is not a client of this utility.** Its rows are `version,observation_digest` and carry no date, so nothing in the file says which day a row belongs to. It is regenerated by row #2's rebuild instead | Section 0.4, verified 2026-09-11 |
@@ -299,7 +299,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The read stays unbounded on the `months=None` path. A cover on it would leave a fresh clone unable to rebuild a mirror it never published, and the daily caller already passes the one month it appended to | `docs/concepts/growing-reads.md` |
-| 2 | What bounds it is the **store**, not the read: `observability.item_health_full_grain_months` is 14, so the ledger holds at most fourteen partitions once `retention.dry_run` is `false`. It is `true` today, and the declaration says so rather than implying a bound that is switched off | Section 0.3; `CLAUDE.md` Rule #12 |
+| 2 | What bounds it is the **store**, not the read: `observability.item_health_full_grain_months` is 14, so the ledger holds at most fourteen partitions once `retention.dry_run` is `false`. It is `true` today, and the declaration says so rather than implying a bound that is switched off | Section 0.3; `CLAUDE.md` Guardrail #12 |
 | 3 | This lands before row #5 rather than inside it, so the count that proves row #5's publisher still finds its ledger exists before row #5 is written | `CLAUDE.md` section 13 |
 
 ### Rejected alternatives
@@ -307,7 +307,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Bound the read to the newest `LEDGER_WINDOW_MONTHS` partitions | A fresh clone would then never republish an older mirror, and the mirror is what the console fetches. The bound belongs on the store | Decision 2 |
-| 2 | Add the inventory line and skip the test | The inventory is examples rather than the rule, and a line in it that nothing checks is a claim. The count is three assertions and it is the thing that catches row #5's non-recursive glob | `CLAUDE.md` Rule #12 design rationale |
+| 2 | Add the inventory line and skip the test | The inventory is examples rather than the rule, and a line in it that nothing checks is a claim. The count is three assertions and it is the thing that catches row #5's non-recursive glob | `CLAUDE.md` Guardrail #12 design rationale |
 
 ---
 
@@ -373,7 +373,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Leave feed-health monthly because its window is only 31 days | A 31-day window over month shards opens up to two shards holding up to 62 days of rows. The grain is about what a run writes and what a removal takes, not about how wide the window is | Section 0.2 |
-| 2 | Take the parity oracle over the committed ledger instead of a fixture | The committed ledger holds 19 days and grows every four hours, so the test would cost more each run for an answer it already had, and it could never carry the 40-day case the window needs to exclude anything | `CLAUDE.md` Rule #12 |
+| 2 | Take the parity oracle over the committed ledger instead of a fixture | The committed ledger holds 19 days and grows every four hours, so the test would cost more each run for an answer it already had, and it could never carry the 40-day case the window needs to exclude anything | `CLAUDE.md` Guardrail #12 |
 
 ---
 
@@ -394,7 +394,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | `collect.seen_window_days` keeps its value of 90 and its unit. At day grain that window opens **at most 91 files against at most 4 today**, and reads **exactly 90 days of rows rather than up to 120** - more handles, fewer bytes. Row #1's measurement is what says which side wins, and ESCALATE trigger 3 fires on it | Section 0.3 |
-| 2 | The two window helpers become one. Two functions computing the same set is how a pruner and a reader drift, and drift here deletes a file the next plan wanted | `CLAUDE.md` Rule #5 |
+| 2 | The two window helpers become one. Two functions computing the same set is how a pruner and a reader drift, and drift here deletes a file the next plan wanted | `CLAUDE.md` Guardrail #5 |
 | 3 | `prune_seen` keeps its no-fuse posture. There is no `max_deletes_per_run` here and there should not be: the worst case is that the pipeline re-learns a first-sight date it had already forgotten, which is not the picture pruner's worst case | `backend/idhazh/retention.py` |
 
 ### Rejected alternatives
@@ -402,7 +402,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Leave seen monthly because it is the read that gains the most file handles | It is also the read that drops the most rows, and the trade is unmeasured either way until row #1 measures it. Leaving one of five at month grain also means the repository keeps two answers to the same question, which is the thing the owner's instruction closes | Section 0.2 |
-| 2 | Narrow `collect.seen_window_days` at the same time to blunt the handle count | Two changes in one commit, and the second one changes what the pipeline remembers. A window is a product decision about re-planning an address, not a lever to make a layout look cheaper | `CLAUDE.md` Rule #10 |
+| 2 | Narrow `collect.seen_window_days` at the same time to blunt the handle count | Two changes in one commit, and the second one changes what the pipeline remembers. A window is a product decision about re-planning an address, not a lever to make a layout look cheaper | `CLAUDE.md` Guardrail #10 |
 
 ---
 
@@ -428,7 +428,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | 2 | The index is **regenerated, never split**. Row #2 built the repair path a group earlier so that the change and its check are not one commit | Row #2 decision 3 |
 | 3 | `prune_scores` archives a **month** of day files into one `state/score-archive/<YYYY-MM>.json`. Its input is one month, so it opens at most 31 files, and the archive keeps the boundary of the thing it replaces | Section 0.2 |
 | 4 | `frontend/public/scores/` stays monthly; `publish_scores.publish` folds a month from that month's day files | Section 0.2 |
-| 5 | **The growing read gets worse and this row says so rather than hiding it.** `indexed_observations` opens every index partition, so this row turns 2 opens into about 20, and about 365 a year. It is declared under Rule #12's escape hatch with the count named and the store bound that answers it, because the alternative - a bounded index - is a dedupe that would let a January measurement come back in February | `CLAUDE.md` Rule #12; `docs/concepts/growing-reads.md` |
+| 5 | **The growing read gets worse and this row says so rather than hiding it.** `indexed_observations` opens every index partition, so this row turns 2 opens into about 20, and about 365 a year. It is declared under Guardrail #12's escape hatch with the count named and the store bound that answers it, because the alternative - a bounded index - is a dedupe that would let a January measurement come back in February | `CLAUDE.md` Guardrail #12; `docs/concepts/growing-reads.md` |
 | 6 | `backend/utilities/migrate_score_ledger.py` is deleted in this commit, for the reason rows #5 and #6 delete their siblings | Section 0.1 |
 
 ### Rejected alternatives

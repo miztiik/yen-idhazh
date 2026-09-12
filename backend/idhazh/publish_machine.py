@@ -9,7 +9,7 @@ why in its own module. **Every COLUMN, not every row**: `PUBLISHED_JOB` names
 the one job this series is about, and the reason is beside it.
 
 **The source read is unbounded, on purpose, and this is where it says so**
-(Rule #12, and the third answer in `docs/concepts/growing-reads.md`). The
+(Guardrail #12, and the third answer in `docs/concepts/growing-reads.md`). The
 counters file has no shards and no prune, so a run that wants September's rows
 has to walk every row ever appended to find them - no cover in days, no cover in
 months and no identity set answers "which rows are September's" more cheaply

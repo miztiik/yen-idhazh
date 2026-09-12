@@ -287,7 +287,7 @@ test.describe('the item names the speaker only where the speaker has a stake', (
 		// than by measuring the share of labelled stories in the committed tree.
 		// That share moves when the news moves, so it went red on a day that
 		// arrived rather than on a change that broke, and it read every published
-		// day to say so (`CLAUDE.md` Rule #12).
+		// day to say so (`CLAUDE.md` Guardrail #12).
 		expect([...KIND_WORTH_SAYING].sort()).toEqual([
 			'announcement',
 			'community',

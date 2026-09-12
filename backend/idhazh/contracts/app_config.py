@@ -4,7 +4,7 @@ A knob is something a reasonable operator might want set differently without
 changing a fact. The runner's own ceilings - 4 vCPU, the 6 h job cap, the 10 GB
 cache - are deliberately absent: they are properties of the platform, and making
 them editable would invite raising the budget instead of simplifying the feature
-(Rule #2).
+(Guardrail #2).
 
 The 1 GB published site is the one that is here, and it is here bounded rather
 than trusted. `retention.pages_hard_cap_mb` may name a smaller cap and is
@@ -297,7 +297,7 @@ class RunConfig(Model):
             "over 80 shard rows on 2026-09-02 the worst used 135.4 minutes of the old "
             "150-minute bound and the median used 78.5, and the second model call an "
             "item spends exactly that margin. 200 is 56 percent of the six-hour platform "
-            "ceiling, well inside Rule #2. A slow worker is still answered by lowering "
+            "ceiling, well inside Guardrail #2. A slow worker is still answered by lowering "
             "the ceiling, never by raising this."
         ),
     )
@@ -470,7 +470,7 @@ class CollectConfig(Model):
         description=(
             "Complete days of item-health evidence a per-source yield judgement needs "
             "before it may be made at all. Below it any yield threshold is an estimate "
-            "rather than a measurement (Rule #10), and no source may be demoted on one."
+            "rather than a measurement (Guardrail #10), and no source may be demoted on one."
         ),
     )
     source_yield_alarm_point: float = Field(
@@ -567,7 +567,7 @@ class CollectConfig(Model):
             "parsing to nothing. At least 30, because a feed publishes a few times a "
             "day at most and a shorter window would let one bad afternoon set the "
             "factor. The read is bounded by this window and never the whole ledger "
-            "(Rule #12)."
+            "(Guardrail #12)."
         ),
     )
     reliability_floor: float = Field(
@@ -648,7 +648,7 @@ class CollectConfig(Model):
             "pool. For the promotional page a working news feed syndicates: an affiliate "
             "product review is short declarative prose, so it is trivially entailed and "
             "no faithfulness threshold detects it at any cut. Empty by default - the "
-            "entries are a source list and live in config/ (Rule #6)."
+            "entries are a source list and live in config/ (Guardrail #6)."
         ),
     )
     dedup_similarity_min: float = Field(
@@ -880,7 +880,7 @@ class LengthPolicy(Model):
     it is the model rounding a request - and the two were one pair of global
     integers until 2026-09-09, which could not see which band an item was in.
 
-    Every number is a starting point rather than a measurement (Rule #10). Our
+    Every number is a starting point rather than a measurement (Guardrail #10). Our
     own length figures describe a pipeline mid-repair - the prompt is being
     tuned and a fine-tune is in flight - so none of them was used to pick one.
     """
@@ -1060,7 +1060,7 @@ class SummarizeConfig(Model):
 
     Every band and title number here is substituted into the prompt text at
     render time, so the prompt cannot drift from the bounds the pipeline enforces
-    (Rule #6). `key_point_restatement_ceiling` is the one value that is not asked
+    (Guardrail #6). `key_point_restatement_ceiling` is the one value that is not asked
     for: it is a post-parse check `to_summary` runs on what the model returned,
     and it lives here because the count it protects - the band's key_points_min -
     does too.
@@ -1143,7 +1143,7 @@ class SummarizeConfig(Model):
             "item with the rest. A distinctness floor, not a word ban: only the overlap "
             "ratio counts, never a single shared word, so a key point may reuse the "
             "summary's words and still add a fact. A starting point, not a calibrated "
-            "threshold (Rule #10): measured 2026-09-07 on the one well-formed reply "
+            "threshold (Guardrail #10): measured 2026-09-07 on the one well-formed reply "
             "fixture, its three distinct key points score 0.00, 0.11 and 0.14 while a "
             "verbatim slice of the summary scores 1.00, so 0.5 sits in the wide gap "
             "between a new fact and a copy. The drop never removes the last key point - "
@@ -1239,7 +1239,7 @@ class EvaluationConfig(Model):
         description=(
             "Words of article the faithfulness scorer reads in one window. Attention is "
             "quadratic in the premise, so a whole long article in one pass is the "
-            "expensive shape. The default has never been calibrated (Rule #10): with no "
+            "expensive shape. The default has never been calibrated (Guardrail #10): with no "
             "human labels there is nothing to tune it against, and a sweep would show "
             "only that the number moves. Moving it moves `scorer_version`, which restarts "
             "the run-day count in `evaluation.label_min_run_days`."
@@ -1280,7 +1280,7 @@ class EvaluationConfig(Model):
         description=(
             "Above this share of the summary copied from the source in one unbroken "
             "run, the item is refused rather than published. A starting point and not a "
-            "calibrated threshold (Rule #10): it is the midpoint of the band left open "
+            "calibrated threshold (Guardrail #10): it is the midpoint of the band left open "
             "by one run-day of eight brief items on 2026-08-26, where seven scored at "
             "or below 0.241 and the eighth scored 1.000, and eight items is not a "
             "distribution. It must sit above brief_compression_ceiling, or the brief "
@@ -1325,7 +1325,7 @@ class EvaluationConfig(Model):
             "Rows one pipeline must contribute to a draw before a result read off that "
             "stratum may move a threshold. Below it the stratum is printed and marked "
             "too thin to cut on, because a rate over a handful of rows from one producer "
-            "is noise wearing a decimal point (Rule #10)."
+            "is noise wearing a decimal point (Guardrail #10)."
         ),
     )
     golden_set_size: int = Field(default=20, ge=1)
@@ -1453,7 +1453,7 @@ class DriftConfig(Model):
 #: The platform's own ceiling on a published Pages site, in MB. A property of the
 #: host rather than a preference, so it is the bound `retention.pages_hard_cap_mb`
 #: is validated against and never a value config can reach past: an operator may
-#: make the site gate stricter and may not make it looser (Rule #2).
+#: make the site gate stricter and may not make it looser (Guardrail #2).
 #:
 #: This number is MiB and GitHub's published limit is 1 GB, so the gate is
 #: optimistic by 7.37 percent: `retention.BYTES_PER_MB` is 1024 * 1024, making
@@ -1488,7 +1488,7 @@ class RetentionConfig(Model):
             "whole difference between this knob and site_budget_mb: the other one "
             "warns and this one stops. Bounded on purpose - the 1 GB belongs to "
             "GitHub Pages, so config can lower the cap a run enforces and can never "
-            "raise it (Rule #2). Lowering it buys an earlier and louder failure while "
+            "raise it (Guardrail #2). Lowering it buys an earlier and louder failure while "
             "there is still headroom to act in; no value buys more room. The console's "
             "site band is drawn against the platform's own 1 GB rather than this, "
             "because it reports the ceiling that exists and not the one this run "
@@ -1505,7 +1505,7 @@ class RetentionConfig(Model):
             "the fastest growth this project has measured (a PNG on every item, "
             "8,537 KB/day, 2026-08-23), against a 14-day target. The target is a "
             "judgement about one maintainer acting on one warning, not a measurement "
-            "(Rule #10). The arithmetic and its inputs are in "
+            "(Guardrail #10). The arithmetic and its inputs are in "
             "docs/reference/measurements.md, 'Where the alarm fires, and what it buys'."
         ),
     )
@@ -1624,7 +1624,7 @@ class ObservabilityConfig(Model):
             "invent a total nobody reads. Seven days covers a week of runs. Measured at "
             "about 0.6 MB a run at the run.safety_ceiling_per_run item ceiling over the "
             "five scheduled runs a day (2026-09-06), so the window bounds state/traces/ "
-            "at about 21 MB whatever the project's age - constant (Rule #12), and a "
+            "at about 21 MB whatever the project's age - constant (Guardrail #12), and a "
             "fraction of the 1 GB Pages reference it is not even part of. It does "
             "nothing until observability.tracing_enabled is true: before that no trace "
             "is written and the prune walks an empty tree."
@@ -1653,7 +1653,7 @@ class ObservabilityConfig(Model):
             "means never, and never is the default: the aggregate costs a measured "
             "63.8 bytes a row over four stages - about 93 KB a year against the "
             "shard's 77 MB - and deleting it would make a year-over-year comparison "
-            "unanswerable, which Rule #10 then forbids citing at all. Set, it must sit "
+            "unanswerable, which Guardrail #10 then forbids citing at all. Set, it must sit "
             "ABOVE item_health_full_grain_months, or a month would be deleted before "
             "it was ever folded."
         ),
@@ -1785,7 +1785,7 @@ class ObservabilityConfig(Model):
             "rate would understate a run that wrote a lot and overstate one that read "
             "a lot. This is the operator's number to set: nothing bills us, so the "
             "committed value is a documented starting point rather than a measurement "
-            "(CLAUDE.md Rule #10's one carve-out). The console prints the rate it "
+            "(CLAUDE.md Guardrail #10's one carve-out). The console prints the rate it "
             "used and says whether it came from here or from the operator, and it "
             "labels the result a counterfactual - what the run would have cost "
             "elsewhere - never an amount owed."
@@ -1948,7 +1948,7 @@ class FinetuneConfig(Model):
             "a demand - a session takes the lesser of this and what is left once the "
             "holdout is removed, and prints both numbers. It costs GPU hours rather than "
             "storage: estimated 1.8 h for 1000 rows over 2 epochs on a free T4, and no "
-            "training job has run here yet, so that is an estimate (Rule #10)."
+            "training job has run here yet, so that is an estimate (Guardrail #10)."
         ),
     )
     min_rows: int = Field(
@@ -2037,7 +2037,7 @@ class FinetuneConfig(Model):
             "8,192 this replaced on 2026-09-09 the training set silently lost every "
             "article past about 5,500 words. What it costs is GPU memory on the machine "
             "that trains, quadratically in attention - that machine is not the runner "
-            "(Rule #2 does not reach it), and a card that cannot hold the row lowers "
+            "(Guardrail #2 does not reach it), and a card that cannot hold the row lowers "
             "SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb, which drops the long "
             "rows for that session only and says how many it dropped."
         ),
@@ -2182,7 +2182,7 @@ class VisualsConfig(Model):
         description=(
             "How much of the article's own opening the router reads beside the summary. "
             "This is most of each request's prefill, and prefill is most of the stage's "
-            "wall-clock, so it is a measured lever rather than a literal (Rule #6)."
+            "wall-clock, so it is a measured lever rather than a literal (Guardrail #6)."
         ),
     )
     request_timeout_minutes: float = Field(
@@ -2217,7 +2217,7 @@ class VisualsConfig(Model):
     def _the_valve_names_a_prefix_a_path_can_be_joined_onto(cls, value: str) -> str:
         """Empty, or an absolute `https://` prefix carrying no trailing slash.
 
-        The value comes off our own config and never off the web (Rule #11), and
+        The value comes off our own config and never off the web (Guardrail #11), and
         it is checked all the same, because it is about to become the front half
         of every drawing address and the one origin the page's `connect-src`
         admits. A trailing slash is refused rather than trimmed: the join writes
@@ -2448,7 +2448,7 @@ class ConsoleConfig(Model):
             "is, so this knob decides nothing about the shape of the page - only "
             "whether a wait short enough to be over already gets animated on its "
             "way past. Four hundred is a DECLARED ESTIMATE and not a measurement "
-            "(CLAUDE.md Rule #10), and it stays one: the number it needs is the "
+            "(CLAUDE.md Guardrail #10), and it stays one: the number it needs is the "
             "median time a payload takes to reach a READER, and a reader-facing "
             "timing measurement is scoped out by the same owner ruling that "
             "authorised the fetch (2026-09-08). Everything measurable instead is "
@@ -2692,7 +2692,7 @@ class UiConfig(Model):
         description=(
             "What a qualifying shared subject adds to a story's rank inside the leading "
             "block. It is a step and not a ramp: no measurement supports a shape, and a "
-            "shape nobody measured may not justify a design (Rule #10). It must stay "
+            "shape nobody measured may not justify a design (Guardrail #10). It must stay "
             "below what one more trade-press carrier is worth, which is "
             "collect.tier_weights.trade_press times collect.repetition_weight - 0.6 on "
             "the committed config - so a recurring subject cannot outrank a story two "
@@ -2979,7 +2979,7 @@ class PageWeightConfig(Model):
     would be a second copy of what the file already holds, free to drift from
     the one the gate enforces. The default is empty for that reason: the
     committed config is the single source, and this model owns only the shape
-    and the validation (Rule #6).
+    and the validation (Guardrail #6).
 
     **A number may live here only if it does not have to move when a run
     publishes.** That is the test, and on 2026-09-10 four of the six keys failed
@@ -3037,7 +3037,7 @@ class PageWeightConfig(Model):
             "Route class -> the largest gzip -5 size that route's prerendered HTML may "
             "reach. The committed values live in config/idhazh.json, which the gate "
             "reads; this default is empty so the numbers are not duplicated here where "
-            "they could drift from the file the gate enforces (Rule #6). A route the "
+            "they could drift from the file the gate enforces (Guardrail #6). A route the "
             "object does not name is measured and reported by the gate but not failed. "
             "**A route may be named here only if its weight does not move when a run "
             "publishes** - /archive/ and the three /console/ routes were deleted on "
@@ -3112,7 +3112,7 @@ class PageWeightConfig(Model):
 class AssistConfig(Model):
     """On-device archive search: what the encoder reads, where it comes from, what shows.
 
-    Every value here was a literal with no override path (Rule #6). The first two
+    Every value here was a literal with no override path (Guardrail #6). The first two
     describe how much of an item the encoder is allowed to read; the five `model_`
     keys describe where a browser may fetch the encoder and how it proves the bytes
     are ours; the rest describe what the reader's list keeps. All of them are set
@@ -3169,7 +3169,7 @@ class AssistConfig(Model):
             "frontend/asset-base.js takes only the ORIGIN into connect-src. A GitHub "
             "Release asset was measured on 2026-09-09 and cannot serve this: it "
             "carries no Access-Control-Allow-Origin on any hop, so a browser refused "
-            "all 15 attempts. Nothing here reaches the encoder as text (Rule #11), "
+            "all 15 attempts. Nothing here reaches the encoder as text (Guardrail #11), "
             "and no payload field, model output or fetched string builds this URL."
         ),
     )
@@ -3195,7 +3195,7 @@ class AssistConfig(Model):
             "The upstream commit the committed weights are the bytes of, as a full "
             "40-hex SHA-1. A branch name is refused by the pattern, because a branch "
             "hands back whatever was uploaded last and a fetch built on one describes "
-            "bytes nobody can fetch again (Rule #10). Verified two ways on 2026-09-09: "
+            "bytes nobody can fetch again (Guardrail #10). Verified two ways on 2026-09-09: "
             "the file tree at this commit returns a git blob SHA-1 for each small file "
             "and an LFS SHA-256 for the model, all five equal to model_digests below, "
             "and every response at this revision returns it as X-Repo-Commit. It does "
@@ -3589,7 +3589,7 @@ class AppConfig(Contract):
                 "source past 4,000 arrives with much the same evidence. None of these "
                 "numbers came from state/scores/: the prompt is being tuned and a "
                 "fine-tune is in flight, so our own length figures describe a pipeline "
-                "mid-repair (Rule #10)."
+                "mid-repair (Guardrail #10)."
             ),
         ),
         ChangelogEntry(
@@ -3617,8 +3617,8 @@ class AppConfig(Contract):
                 "covers both, and test_the_training_window_covers_the_longest_row_the_cap_"
                 "allows fails on any later pair that does not fit. The cost is GPU memory "
                 "on the machine that trains, quadratically in attention. That machine is "
-                "not the runner, so Rule #2's budget does not price it, and no number "
-                "here is a measurement of a card - nothing has trained yet (Rule #10). "
+                "not the runner, so Guardrail #2's budget does not price it, and no number "
+                "here is a measurement of a card - nothing has trained yet (Guardrail #10). "
                 "The escape hatch is per-session and already existed: "
                 "SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb lowers it for a "
                 "card that cannot hold the row, and prints how many rows that dropped."
@@ -3640,9 +3640,9 @@ class AppConfig(Contract):
                 "flicker, so the shimmer waits and a fetch that lands first never "
                 "animates at all. It is a knob rather than a literal because the right "
                 "value is a property of the payloads and the network, not of the "
-                "stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a "
+                "stylesheet (Guardrail #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a "
                 "measurement: no median payload arrival has been taken since the "
-                "fetches landed, and Rule #10 refuses an unmeasured number the right "
+                "fetches landed, and Guardrail #10 refuses an unmeasured number the right "
                 "to justify a design, so this one justifies nothing - it is the value "
                 "the surface ships on until somebody re-derives it from the measured "
                 "median a payload takes to reach a reader. The shell-and-fetch "
@@ -3707,7 +3707,7 @@ class AppConfig(Contract):
                 "where it was 1.9x. The cap is fingerprint-digested, so every stamp "
                 "moves and no summary written before today is comparable with one "
                 "written after; that is correct, because the text the model read is not "
-                "the same text. Rule #11 is untouched: extract sanitizes before it "
+                "the same text. Guardrail #11 is untouched: extract sanitizes before it "
                 "truncates, so a longer article is more untrusted text handled on "
                 "exactly the terms the short one was."
             ),
@@ -3736,7 +3736,7 @@ class AppConfig(Contract):
                 "comparability. Pinning still earns its place: auto is a runtime "
                 "autodetect that may resolve differently on other silicon, and a run "
                 "that cannot say which kernel it used cannot be compared with one that "
-                "can (Rule #10)."
+                "can (Guardrail #10)."
             ),
         ),
         ChangelogEntry(
@@ -3751,13 +3751,13 @@ class AppConfig(Contract):
                 "it prints twelve lines, and no line among them names flash attention, "
                 "the KV buffer or the compute buffer - so every claim about what the "
                 "runtime did with those settings was a claim about the flag we passed "
-                "rather than about what happened (Rule #10). At 4 the model-loader block "
+                "rather than about what happened (Guardrail #10). At 4 the model-loader block "
                 "comes back and the log states the attention decision three ways: a "
                 "named state, a compute buffer 5.1 times larger without fusion, and a "
                 "graph 180 nodes longer. Measured 2026-09-09 on a 12th Gen Intel Core "
                 "i7-1265U against llama.cpp b10444, eleven server starts, three runs an "
                 "arm, zero spread. It is a knob rather than a literal because an "
-                "operator debugging a start wants 9 and a daily run does not (Rule #6), "
+                "operator debugging a start wants 9 and a daily run does not (Guardrail #6), "
                 "and it is set on both roles because both write a log nobody can read "
                 "otherwise. What it costs is one job artifact growing from 1,085 bytes "
                 "to about 16,011 - kept two days, committed never."
@@ -3777,7 +3777,7 @@ class AppConfig(Contract):
             why=(
                 "The console is moving from inlining six committed ledgers into its "
                 "document to fetching them, and a payload the pipeline appends to every "
-                "run with no age is a directory that grows for ever (Rule #12). Every "
+                "run with no age is a directory that grows for ever (Guardrail #12). Every "
                 "one is minted with a NON-NULL default in the same commit as its "
                 "contract, because item_health_aggregate_keep_months and "
                 "score_archive_keep_months are null today and a null that spreads stops "
@@ -3879,8 +3879,8 @@ class AppConfig(Contract):
                 "The candidate pass keeps every quantity the number pattern matched, "
                 "where the visual planner's own reader stops at 16, dedupes and drops. "
                 "A pass with no bound at all is an unbounded table over fetched bytes "
-                "(Rule #11), and a bound written into code is a tunable with no home "
-                "(Rule #6). 256 is measured rather than guessed: it is above the "
+                "(Guardrail #11), and a bound written into code is a tunable with no home "
+                "(Guardrail #6). 256 is measured rather than guessed: it is above the "
                 "densest committed page fixture extrapolated to an article at the "
                 "truncation cap."
             ),
@@ -4046,7 +4046,7 @@ class AppConfig(Contract):
                 "rather than hand-tuned, it only ever reduces (the clamp caps it at "
                 "1.0), and a feed with no evidence in the window scores 1.0 so an "
                 "untested or politely-refused feed is never punished. The window bounds "
-                "the read (Rule #12) and the floor bounds the cut at two-to-one."
+                "the read (Guardrail #12) and the floor bounds the cut at two-to-one."
             ),
         ),
         ChangelogEntry(
@@ -4063,7 +4063,7 @@ class AppConfig(Contract):
                 "and the committed rollup are worth their runner cost, which Carmack "
                 "measured negligible. It is safe to run in CI because the sink is the "
                 "committed file and nothing else - no host, no key - and the closed "
-                "attribute vocabulary keeps article text out of every span (Rule #11). "
+                "attribute vocabulary keeps article text out of every span (Guardrail #11). "
                 "The move is additive: the committed config sets the value explicitly, "
                 "so no persisted config changes meaning and no read-side migration is "
                 "needed."
@@ -4084,7 +4084,7 @@ class AppConfig(Contract):
                 "lookup an operator opens, so it is deleted rather than folded - a fold "
                 "would invent a total nobody reads. Seven days is measured at about "
                 "0.6 MB a run over five runs a day, which bounds the tree at about "
-                "21 MB whatever the project's age (Rule #12)."
+                "21 MB whatever the project's age (Guardrail #12)."
             ),
         ),
         ChangelogEntry(
@@ -4175,7 +4175,7 @@ class AppConfig(Contract):
                 "The cap was a module constant in backend/idhazh/retention.py, so the one "
                 "number that stops a deploy could not be read out of config or tightened "
                 "without a source edit. The bound is what makes exposing it safe: config "
-                "can only ever lower the cap, which is Rule #2's 'the budget is the "
+                "can only ever lower the cap, which is Guardrail #2's 'the budget is the "
                 "platform, not a preference' held by the schema rather than by trusting "
                 "nobody to edit a constant. Additive and backwards-compatible, so no "
                 "read-side migration is owed - a config written before this loads on the "
@@ -4349,7 +4349,7 @@ class AppConfig(Contract):
                 "could: the committed config carries 5 under both collect names and "
                 "the tuned fixture carries 3 under both, so every reader reads the "
                 "number it read yesterday. Refusing beats ignoring, because a knob an "
-                "operator edits and nothing reads is a value they believe (Rule #6). "
+                "operator edits and nothing reads is a value they believe (Guardrail #6). "
                 "The payload read migration for VerticalPlan.live_feeds stays, because "
                 "a committed payload cannot be rewritten (section 11)."
             ),
@@ -4417,7 +4417,7 @@ class AppConfig(Contract):
                 "worker unregisters itself and deletes every cache it owns. "
                 "`offline_days_kept` bounds what the worker keeps, because a cache that "
                 "grows with the archive is the failure that argued against caching days "
-                "at all (Rule #6, docs/concepts/ui-shell.md)."
+                "at all (Guardrail #6, docs/concepts/ui-shell.md)."
             ),
         ),
         ChangelogEntry(
@@ -4432,7 +4432,7 @@ class AppConfig(Contract):
                 "A desk now publishes why it ran what it ran, and one sentence under "
                 "every desk would be a column of absences rather than information. This "
                 "is the line between a desk that explains itself and a desk that says "
-                "nothing, and a component may not spell it (Rule #6). Twelve is one "
+                "nothing, and a component may not spell it (Guardrail #6). Twelve is one "
                 "page of the stream, so a desk under it is one a reader sees the whole "
                 "of at once. Measured 2026-09-02 over the 12 committed days and 56 "
                 "desk-days: 7 sit at or below it, 12.5 percent, and nothing in the "
@@ -4451,7 +4451,7 @@ class AppConfig(Contract):
                 "The day's stories now run newest first down a time rail, and the rail "
                 "draws one marker per group of stories rather than one per story. How "
                 "coarse a group is decides how many times a reader is told the time, "
-                "and a page may not spell that (Rule #6). Measured 2026-09-02 on Intel "
+                "and a page may not spell that (Guardrail #6). Measured 2026-09-02 on Intel "
                 "Core i7-1265U / Windows 11 / Python 3.14.2 over the 12 committed days "
                 "and 4,713 stories, at the 60-minute default: 907 markers rather than "
                 "4,713, so the rail leaves out 80.8 percent of the labels a "
@@ -4474,7 +4474,7 @@ class AppConfig(Contract):
                 "It is now the newest few days as rows over one disclosure a month "
                 "and one a year before this one, so the list a reader SEES grows "
                 "twelve rows a year instead of 365. How many days stay out is a "
-                "choice a page may not spell (Rule #6), and the ceiling is what makes "
+                "choice a page may not spell (Guardrail #6), and the ceiling is what makes "
                 "the knob safe: set to 400 it is the wall again. Read by the build "
                 "alone, so it never rides to a reader. What the DOCUMENT costs did not "
                 "fall to nothing and is not claimed to: measured 2026-09-01 on Intel "
@@ -4522,7 +4522,7 @@ class AppConfig(Contract):
                 "The day page's filter and the archive's topic pills became one panel, "
                 "and the archive's field now narrows the loaded list as a reader types "
                 "- so the same rule governs two surfaces and may not be spelled in "
-                "either of them (Rule #6). Two rather than one because one letter "
+                "either of them (Guardrail #6). Two rather than one because one letter "
                 "narrows nothing: measured 2026-09-01 over the 12 committed days and "
                 "4,203 story titles, the median single letter matches 80.2 percent of "
                 "them and `e` matches 99.8 percent, against a median 0.8 percent for a "
@@ -4543,7 +4543,7 @@ class AppConfig(Contract):
                 "nobody reads to the end: measured 2026-09-01 over the committed "
                 "score ledger, a thirty-day window holds 112 sources with a doubted "
                 "summary. The cap is a knob rather than a literal for the same reason "
-                "`source_rows` and `feed_rows` are (Rule #6), and it takes their "
+                "`source_rows` and `feed_rows` are (Guardrail #6), and it takes their "
                 "default so three ranked lists on one console do not each end at a "
                 "different depth."
             ),
@@ -4561,7 +4561,7 @@ class AppConfig(Contract):
             ),
             why=(
                 "The day gets a leading block, and every number that decides it is "
-                "a knob rather than a literal in a stage (Rule #6). The block "
+                "a knob rather than a literal in a stage (Guardrail #6). The block "
                 "replaces the three-per-topic headings, which on the 431-story day "
                 "of 2026-08-30 drew 15 stories and put 416 behind five links - so "
                 "items_per_topic lost its only reader. The field stays so a config "
@@ -4597,11 +4597,12 @@ class AppConfig(Contract):
             why=(
                 "The published day now groups its own items on the vectors it already "
                 "carries, so a reader is not shown the same story eight times, and the "
-                "cosine that decides it is a tuning knob rather than a literal (Rule "
-                "#6). Its own group because `AppearanceConfig` imports `AssistConfig` "
-                "whole: filing a build-time threshold there would publish it to a "
-                "config the browser reads, where nothing can act on it. Additive with "
-                "a default, so a config written before today still loads (section 11)."
+                "cosine that decides it is a tuning knob rather than a literal "
+                "(Guardrail #6). Its own group because `AppearanceConfig` imports "
+                "`AssistConfig` whole: filing a build-time threshold there would "
+                "publish it to a config the browser reads, where nothing can act on "
+                "it. Additive with a default, so a config written before today still "
+                "loads (section 11)."
             ),
         ),
         ChangelogEntry(
@@ -4613,7 +4614,7 @@ class AppConfig(Contract):
             ),
             why=(
                 "Two console lists gained a cap on the same day, and a cap a "
-                "component hardcodes is one an operator cannot move (Rule #6). The "
+                "component hardcodes is one an operator cannot move (Guardrail #6). The "
                 "failure section now ranks sources by the articles their failures "
                 "cost the digest; measured 2026-09-01 over the committed "
                 "projection, a thirty-day window holds 60 sources with a loss, so "
@@ -4657,7 +4658,7 @@ class AppConfig(Contract):
                 "reader-facing surface carries one. The row wraps now, and the topics "
                 "past this number sit inside a `+N more` disclosure so a day with "
                 "many topics does not turn the row into the page. A cap a component "
-                "spells is a cap an operator cannot move (Rule #6)."
+                "spells is a cap an operator cannot move (Guardrail #6)."
             ),
         ),
         ChangelogEntry(
@@ -4744,10 +4745,10 @@ class AppConfig(Contract):
                 "observability plan describe, one of which prices a run's tokens at a "
                 "hosted provider's rate. That figure is a counterfactual and never a "
                 "bill - nothing bills us, because Actions minutes are free on a public "
-                "repository - and CLAUDE.md Rule #10 carries the owner's carve-out for "
+                "repository - and CLAUDE.md Guardrail #10 carries the owner's carve-out for "
                 "it on the condition that the rate and its source are printed beside "
                 "it. So the rate is a config knob and not a literal in a component "
-                "(Rule #6), input and output are priced apart because a provider "
+                "(Guardrail #6), input and output are priced apart because a provider "
                 "prices them apart, and the currency is named rather than assumed. "
                 "The committed values are a documented starting point the owner has "
                 "not yet set; docs/concepts/config.md says so. The ceiling moved "
@@ -4795,7 +4796,7 @@ class AppConfig(Contract):
                 "The chart arm is the only console section with a written decision rule "
                 "in its own prose, and all three numbers in that rule were constants in "
                 "a TypeScript module - so the one section that states a threshold was "
-                "the one section an operator could not move a threshold on (Rule #6). "
+                "the one section an operator could not move a threshold on (Guardrail #6). "
                 "The two limits are now markers on bars and the span is what decides "
                 "whether a median is printed at all. Additive with defaults, so a "
                 "config written before today still validates (section 11)."
@@ -4864,7 +4865,7 @@ class AppConfig(Contract):
             why=(
                 "The pipeline had no way to turn a measurement off or to thin one, so "
                 "every instrument was all-or-nothing at the command line and nothing at "
-                "all in config (Rule #6). Three switches rather than one, because "
+                "all in config (Guardrail #6). Three switches rather than one, because "
                 "collection, scoring and publishing fail differently: state/scores.csv "
                 "empties when the scorer will not load, the published telemetry file "
                 "stops when a run does not publish, and state/runtime-counters.csv is "
@@ -4889,7 +4890,7 @@ class AppConfig(Contract):
                 "week and the only automated watchman for slow extraction failure "
                 "reports all clear every day, under a green check. The floor that "
                 "separates 'nothing to compare' from 'no drift' is a tunable, not a "
-                "literal (Rule #6). Additive with a default, so an older config "
+                "literal (Guardrail #6). Additive with a default, so an older config "
                 "still validates (section 11)."
             ),
         ),
@@ -4994,7 +4995,7 @@ class AppConfig(Contract):
             ),
             why=(
                 "The training corpus needs its sizes and its two schedules in config "
-                "before anything writes a row (Rule #6), and the window and the sample "
+                "before anything writes a row (Guardrail #6), and the window and the sample "
                 "are two knobs rather than one because they price differently: the "
                 "window costs 2.9 KB of compressed history per row and the sample costs "
                 "GPU hours. The prune is two knobs for the same reason - how often it "
@@ -5047,7 +5048,7 @@ class AppConfig(Contract):
                 "over 731, 724 and 621 scored items, measured 2026-08-29 on an Intel "
                 "Core i7-1265U, Windows, node 24.12.0. So the headroom is three days of "
                 "the heaviest of those, not the year /archive/ carries, and the number "
-                "is meant to expire (Rule #10)."
+                "is meant to expire (Guardrail #10)."
             ),
         ),
         ChangelogEntry(
@@ -5067,7 +5068,7 @@ class AppConfig(Contract):
                 "2026-08-28 over all 2,683 committed rows of state/scores.csv, the gap "
                 "on the 22 genuinely cut rows runs -0.1235 to +0.0381 against this "
                 "knob's 0.100 default - no value in that range separates a cut from "
-                "chunk-boundary noise (Rule #10). "
+                "chunk-boundary noise (Guardrail #10). "
                 "BREAKING: EvaluationConfig forbids unknown keys, so a config file that "
                 "still names this key fails to load with a message naming it. The "
                 "read-side migration is the deletion of the key from config/idhazh.json "
@@ -5086,12 +5087,12 @@ class AppConfig(Contract):
             ),
             why=(
                 "The faithfulness scorer's window size decides what premise every score "
-                "was measured over, so it is a tunable and belongs in config (Rule #6), "
+                "was measured over, so it is a tunable and belongs in config (Guardrail #6), "
                 "and scorer_version now spells it as window=900/150/anchored so a ledger "
                 "row records the geometry that produced it. Neither default moves today: "
                 "with 0 of 60 human labels drawn there is no ground truth to tune "
                 "against, and a sweep would show only that the number moves, not which "
-                "value is right (Rule #10). The guard exists because the chunker steps "
+                "value is right (Guardrail #10). The guard exists because the chunker steps "
                 "chunk_words - chunk_overlap_words and clamps that step to one word, so "
                 "an overlap at or above the window walks a long article one word at a "
                 "time - a job that never finishes rather than one that fails. Additive; "
@@ -5139,7 +5140,7 @@ class AppConfig(Contract):
                 "hashed whole into the pipeline fingerprint, and a rule that refuses a "
                 "reply moves not one word the model writes. 0.75 is the midpoint of the "
                 "empty band those eight brief items left - seven at or below 0.241, one "
-                "at 1.000 - and it is a starting point, not a calibration (Rule #10). "
+                "at 1.000 - and it is a starting point, not a calibration (Guardrail #10). "
                 "The invariant is the control: without it an operator editing one line "
                 "silences the gate instead of tightening it. Additive with a default, so "
                 "an older config still validates and no read-side migration is needed "
@@ -5193,7 +5194,7 @@ class AppConfig(Contract):
                 "Archive search used to rank over every committed day, because the page "
                 "carried every committed day. It now reads month shards, so how many "
                 "months it reads is a real choice and it was about to become a literal "
-                "in the ranking module (Rule #6). One month, because the reader waits on "
+                "in the ranking module (Guardrail #6). One month, because the reader waits on "
                 "the download and not on the arithmetic: measured 2026-08-26, a month of "
                 "vectors is 518 KB and about 2.1 seconds on a 10 Mbit line at the rate "
                 "the committed days ran, against 74 to 159 milliseconds of ranking, and "
@@ -5208,7 +5209,7 @@ class AppConfig(Contract):
             why=(
                 "The archive now lists every published story instead of a row per day, "
                 "and a list of thousands needs a first screen. The number belongs in "
-                "config rather than in the page (Rule #6). Additive with a default, so "
+                "config rather than in the page (Guardrail #6). Additive with a default, so "
                 "an older config still validates and no read-side migration is needed "
                 "(section 11)."
             ),
@@ -5243,7 +5244,7 @@ class AppConfig(Contract):
             why=(
                 "The default duplicated the four numbers the gate reads from "
                 "config/idhazh.json, so raising a ceiling meant editing two files a test "
-                "then forced to agree - config is the single source now (Rule #6). "
+                "then forced to agree - config is the single source now (Guardrail #6). "
                 "/archive/ grows with every committed day and /console/ with the ledger "
                 "its charts read, so their fixed ceilings failed on ordinary publishes "
                 "rather than catching regressions; the gate now reports an unnamed route "
@@ -5259,7 +5260,7 @@ class AppConfig(Contract):
                 "`resolve/main`, which is a branch. Upstream re-uploads a GGUF and the "
                 "bytes change under a config that still records the old sha256, so a run "
                 "either dies at the checksum or - where no checksum runs - measures a "
-                "model nobody named (Rule #10). This field was rejected once as "
+                "model nobody named (Guardrail #10). This field was rejected once as "
                 "speculative because nothing read it; validate.yml now pins a revision "
                 "and the adoption target names one, so it has readers. Optional with a "
                 "null default, so the published run manifests that carry no revision "
@@ -5314,7 +5315,7 @@ class AppConfig(Contract):
             why=(
                 "Archive search had no measurement at all, and its two behavioural "
                 "constants were literals in the ranking module with no override path "
-                "(Rule #6). The floor was 0.20 and is now 0.35, which is a measured "
+                "(Guardrail #6). The floor was 0.20 and is now 0.35, which is a measured "
                 "change rather than a preference: at 0.20 every one of eight off-domain "
                 "probe queries returned results - one of them eighteen - so 'Nothing in "
                 "the archive is close to that' was a promise the selector could not keep. "
@@ -5331,7 +5332,7 @@ class AppConfig(Contract):
             change="Added the assist block: max_tokens and min_readable_letter_share.",
             why=(
                 "The encoder's token cap was a literal in embed.py, which is exactly the "
-                "kind of tunable Rule #6 puts in config. The second knob is new "
+                "kind of tunable Guardrail #6 puts in config. The second knob is new "
                 "behaviour: an item the encoder cannot read used to get a confident "
                 "vector no query could retrieve, and now gets no vector and a logged "
                 "reason. Both defaults are measured, not chosen - see the field "
@@ -5348,7 +5349,7 @@ class AppConfig(Contract):
                 "where no day is rendered; it cannot see /archive/, which inlines every "
                 "day on purpose, and it cannot see growth that carries no marker. A "
                 "ceiling per route catches both. It is a knob rather than a literal in "
-                "the gate script (Rule #6). Additive with a default, so an older config "
+                "the gate script (Guardrail #6). Additive with a default, so an older config "
                 "still validates and no read-side migration is needed (section 11)."
             ),
         ),
@@ -5365,7 +5366,7 @@ class AppConfig(Contract):
                 "the ceiling a worker draws 50 items across the four workers a scheduled "
                 "run gets. Against the Qwen3.5-9B candidate that is 318 derived minutes "
                 "by length interpolation and 345 by decode ratio, over a 330-minute work "
-                "timeout that nobody may raise (Rule #2); at 160 the same arithmetic "
+                "timeout that nobody may raise (Guardrail #2); at 160 the same arithmetic "
                 "gives 40 items, 254 and 276 minutes. The route stage says the same "
                 "thing from the other side: its measured slow-host ceiling is 166 items "
                 "at a 50-minute budget (2026-08-25, six runs, 703 items), so 200 and the "
@@ -5386,9 +5387,9 @@ class AppConfig(Contract):
                 "A run could not say how close it came to the context wall, and no "
                 "number said whether more than one slot was ever busy. llama-server "
                 "counts both already and only publishes them under --metrics. The flag "
-                "is a knob rather than a workflow literal (Rule #6), and the endpoint "
+                "is a knob rather than a workflow literal (Guardrail #6), and the endpoint "
                 "it opens is llama-server's own loopback surface inside a CI job, so no "
-                "reader is served by it and Rule #1 is untouched. Additive with a "
+                "reader is served by it and Guardrail #1 is untouched. Additive with a "
                 "default, so an older config still validates and no read-side migration "
                 "is needed (section 11)."
             ),
@@ -5438,7 +5439,7 @@ class AppConfig(Contract):
                 "The faithfulness cuts are a reader-facing promise with no measured error "
                 "rate behind them, and the missing instrument was labels rather than more "
                 "rows. The draw size and the collection floor are tuning decisions, not "
-                "literals (Rule #6). `labellers` is empty by default, so a fresh clone can "
+                "literals (Guardrail #6). `labellers` is empty by default, so a fresh clone can "
                 "draw the queue and read it but cannot record a verdict - and because the "
                 "row has no author field a model could fill, that list is a structural "
                 "control rather than a discouragement. Additive with defaults."
@@ -5470,7 +5471,7 @@ class AppConfig(Contract):
                 "row it holds. 586 items in one queue gave the day page a first screen "
                 "chosen by whichever topic id sorts first, and 800 failed rows measured "
                 "7824 pixels and pushed the compression chart off the operator's reach. "
-                "How many to show first is a tuning decision, not a literal (Rule #6). "
+                "How many to show first is a tuning decision, not a literal (Guardrail #6). "
                 "Both are additive with defaults, so an older config still validates."
             ),
         ),
@@ -5483,7 +5484,7 @@ class AppConfig(Contract):
                 "were faithful - that is the point. Short declarative marketing prose is "
                 "trivially entailed, so no faithfulness threshold detects it at any cut "
                 "and raising the bar rewards it. The control has to sit where the item is "
-                "collected, before anything is spent on it (Rule #2)."
+                "collected, before anything is spent on it (Guardrail #2)."
             ),
         ),
         ChangelogEntry(
@@ -5505,7 +5506,7 @@ class AppConfig(Contract):
             why=(
                 "The console now lets the operator pan and zoom over the published "
                 "item-health projection, so the default window, pan step, zoom factor, "
-                "minimum denominator and chart size are tunable config values (Rule #6)."
+                "minimum denominator and chart size are tunable config values (Guardrail #6)."
             ),
         ),
         ChangelogEntry(
@@ -5527,7 +5528,7 @@ class AppConfig(Contract):
             why=(
                 "Extraction now records short or list-shaped pages instead of dropping "
                 "them by length, while publisher-declared paywalls still stop publication. "
-                "The new thresholds and switches are tunable config values (Rule #6)."
+                "The new thresholds and switches are tunable config values (Guardrail #6)."
             ),
         ),
         ChangelogEntry(
@@ -5547,7 +5548,7 @@ class AppConfig(Contract):
             why=(
                 "Lead coverage now caps a high confidence band at medium. The threshold "
                 "is a tunable band input, so it belongs in config rather than in score.py "
-                "(Rule #6). Additive - an older config still validates through the "
+                "(Guardrail #6). Additive - an older config still validates through the "
                 "schema default."
             ),
         ),
@@ -5571,7 +5572,7 @@ class AppConfig(Contract):
                 "The digest published the source's own headline, which is written to "
                 "win a click rather than to say what happened. The summarizer now "
                 "writes the title too, and the range it is asked for is a knob like "
-                "every other length in this block (Rule #6). Additive - an older "
+                "every other length in this block (Guardrail #6). Additive - an older "
                 "config still validates, and an item whose title misses the range "
                 "falls back to the source's."
             ),
@@ -5582,7 +5583,7 @@ class AppConfig(Contract):
             why=(
                 "The lengths the prompt asks for were literals inside the prompt text, "
                 "where no schema could see them and nothing checked them against the "
-                "range the pipeline accepts (Rule #6). They are bands rather than "
+                "range the pipeline accepts (Guardrail #6). They are bands rather than "
                 "one range because a release note and a long read asked for the same "
                 "number of words gives a padded summary of the first and a thin one of "
                 "the second. Moving them here also puts them inside the prompt string "

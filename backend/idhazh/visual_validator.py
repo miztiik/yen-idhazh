@@ -30,7 +30,7 @@ carries that ruling and why it is the exception.
 ## What is in code here, and what is in `config/`
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and
-`visuals.histogram_bins` are knobs and are read from `config/` (Rule #6).
+`visuals.histogram_bins` are knobs and are read from `config/` (Guardrail #6).
 
 The tables the checks read are neither knobs nor this module's:
 `idhazh.visual_vocabulary` holds which roles a type may fill, which kinds may
@@ -98,7 +98,7 @@ class Rejection(NamedTuple):
     `detail` is built out of element ids, role names, type names, units and
     digits, and never out of an element's own characters. Those characters came
     off a stranger's page, and a detail is destined for a log line and later for
-    a ledger cell (Rule #11).
+    a ledger cell (Guardrail #11).
     """
 
     check: ValidatorCheck
@@ -238,7 +238,7 @@ def _enough_data(
     """Are there enough marks to be a comparison, and few enough to read?
 
     Both bounds are `config/` knobs and neither is a number chosen here
-    (Rule #6). Below the floor a chart says less than the sentence it sits
+    (Guardrail #6). Below the floor a chart says less than the sentence it sits
     under; above the ceiling it is a table drawn badly.
 
     **A histogram is the one type whose channel does not hold its marks.** Its
@@ -397,7 +397,7 @@ def validate_plan(
     a refusal degrades one item and never fails a run (`CLAUDE.md` section 1a).
 
     Constant cost in the size of one plan and one article's table, both of which
-    are capped by the contract and by `elements.max_per_article` (Rule #12).
+    are capped by the contract and by `elements.max_per_article` (Guardrail #12).
     """
     rejections: list[Rejection] = []
     if plan.decision is PlanDecision.VISUAL:

@@ -108,7 +108,7 @@ reads one committed file two ways across the interpreter range
 first matching rule, Python 3.14 merges repeated groups and applies
 longest-match. See
 [the trust boundary](../architecture/sources/trust-boundary.md). This is what
-that dependency costs (Rule #8, Rule #10).
+that dependency costs (Guardrail #8, Guardrail #10).
 
 ### On the runner (authoritative)
 
@@ -128,7 +128,7 @@ read.
 Sample 1 includes the wheel download and samples 2 and 3 read pip's local
 cache, which is what the 0.212 s spread on a 0.521 s mean is. Half a second
 against the 15 minutes the `gates` job is allowed is not a number any design
-turns on; it is here because Rule #8 asks what a dependency costs.
+turns on; it is here because Guardrail #8 asks what a dependency costs.
 
 ### Against the figure the plan recorded
 
@@ -154,7 +154,7 @@ what the runner actually holds by 5.18 times, and would let a package grow five
 fold before anything read as a change.
 
 **Beneficiary:** one reading of `robots.txt` on every interpreter the project
-supports. That is the control Rule #11 rests on, and it may not have an answer
+supports. That is the control Guardrail #11 rests on, and it may not have an answer
 that depends on which runner picked up the job.
 
 ### On a developer machine (kept for the contrast)
@@ -235,4 +235,4 @@ movement count.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - the feed ledger and the quarantine rule these figures feed.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - the robots rule the parser enforces.
 - [../concepts/config.md](../concepts/config.md) - the source list and its floors.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #8 (a dependency names its cost) and Rule #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #8 (a dependency names its cost) and Guardrail #10 (measured, not estimated).

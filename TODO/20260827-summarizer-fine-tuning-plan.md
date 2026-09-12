@@ -74,7 +74,7 @@ make re-fetching safe are in
 months from it. That number was measured on 2026-08-28 and 2026-08-29 - the only
 two recent ONE-RUN days, where a run is the whole day.** It was the least
 representative pair in the set. The conclusion survives, the arithmetic did not,
-and the table above replaces it (Rule #10).
+and the table above replaces it (Guardrail #10).
 
 Two changes, both landed:
 
@@ -85,7 +85,7 @@ Two changes, both landed:
    read.
 2. **`items-*` artifact retention went from 1 day to 7.** That is what bounds the
    reach. Measured 2026-08-29, one run's four shards are 555,842 bytes, so five
-   runs a day for seven days is 18.6 MB against the 500 MB Rule #2 allows: 3.7
+   runs a day for seven days is 18.6 MB against the 500 MB Guardrail #2 allows: 3.7
    percent of the budget, for the only copy of the article text that exists.
 
 **So the honest division of labour is: the backfill is the bulk loader, and the
@@ -281,7 +281,7 @@ authoring pass was asked to report one. What turned up instead: a model-release
 post quoting `AGENTS.md` prompt blocks, a tutorial with a system prompt inside a
 YAML sample, a robot-navigation post whose subject is prompts written for a
 reader's own coding agent, and a great deal of ordinary marketing. All of it was
-read as data (Rule #11).
+read as data (Guardrail #11).
 
 ### What from after the training can be pulled forward into the repository
 
@@ -446,7 +446,7 @@ That last line settles portability: repeating the prompt on every row costs 98 K
 
 So **window 2000, sample 1000** is strictly better than window 1000: the same training time, twice the pool, at 154 MB of history per year instead of 77 MB. The `vertical` quota in row 6 then has twice as much to choose from.
 
-**Where the 1000 came from, plainly.** It is derived, not measured, and it is derived from one constraint only: a free T4 session has to finish. Estimated 1.8 h for 1000 rows over 2 epochs. Nobody has run a training job here yet, so no one was consulted and nothing was measured - row 6 records the real figure and this number gets corrected (Rule #10). The 2500 in the earlier draft had exactly the same status and did not fit a free session, which is the only reason it went.
+**Where the 1000 came from, plainly.** It is derived, not measured, and it is derived from one constraint only: a free T4 session has to finish. Estimated 1.8 h for 1000 rows over 2 epochs. Nobody has run a training job here yet, so no one was consulted and nothing was measured - row 6 records the real figure and this number gets corrected (Guardrail #10). The 2500 in the earlier draft had exactly the same status and did not fit a free session, which is the only reason it went.
 
 ### 3.7 History, and pruning it
 
@@ -510,7 +510,7 @@ A training corpus is that same text, committed, on purpose. Two consequences:
 | If input #1 is | What it costs |
 | --- | --- |
 | **(b) private repo** | Nothing. A private repo is not publication, so section 0a is not engaged. The cost is one deploy key |
-| (a) this repo | **This repository is public** (Rule #2 says so, as the reason Actions minutes are free). Committing article bodies here is publishing source text. That needs the section 0a non-goal amended, and a section 8 amendment for the force-push, in the same commit as the code |
+| (a) this repo | **This repository is public** (Guardrail #2 says so, as the reason Actions minutes are free). Committing article bodies here is publishing source text. That needs the section 0a non-goal amended, and a section 8 amendment for the force-push, in the same commit as the code |
 
 So option (a) is not "the same plan with an extra rule exception". It is a plan that amends a non-goal about what we publish to readers. **Recommendation stands and is now stronger: take (b).**
 
@@ -625,7 +625,7 @@ One scheduled commit adds the due training rows with no human touching anything.
 | --- | --- | --- | --- |
 | 1 | refactor | Extract `harvest_rows(scores, evidence, summaries) -> list[CorpusRow]`, pure, no I/O | Testable against fixtures with no workflow, no disk, no network |
 | 2 | refactor | Extract `roll(existing, incoming, window) -> list[CorpusRow]`, pure | The eviction rule is the part that can silently lose data. Isolate it before it can |
-| 3 | behaviour | Add `CorpusRow` and the `finetune` config block, `harvest_every_days` included. Nothing writes yet | Rule #3, contracts before logic |
+| 3 | behaviour | Add `CorpusRow` and the `finetune` config block, `harvest_every_days` included. Nothing writes yet | Guardrail #3, contracts before logic |
 | 4 | behaviour | Add `python -m idhazh harvest --date <d> --corpus-dir <d>`, local only | A stage must run alone with a file in and a file out (contract section 4) |
 | 5 | behaviour | Add the daily-waking job: the due check, that command, then `commit-and-push.sh corpus` | Automation last, so every part of it was already green |
 
@@ -841,7 +841,7 @@ The first two plot the number against itself. The third labels two different val
 
 **3. "Same thing" is enforced as string equality on one regex-captured word.** `same_unit_bars` groups bars by `unit`. The prompt asks for quantities that "measure the same thing"; the code checks that they share a unit. So a market-share percentage, an inflation percentage and a tariff percentage become one chart with an axis labelled `%`. Across all 345 published bars the units are: `%` 127, no unit 61, dollar 49, `gw` 17, `mw` 16, pound 13, rupee 12, and a tail including `apiece`, `time` and `x`. `%` alone is 37 percent of every bar we publish, and `%` is the unit that says least about what is being measured.
 
-**4. There is one chart shape, and it is hardcoded.** `chart_spec` sets `"mark": {"type": "bar"}` as a literal. Every visual this pipeline has ever published is a horizontal bar chart, because a bar chart is the only thing it can build. That is also a Rule #6 hardcode: the shape of a published surface is a tunable, and it is not in `config/`.
+**4. There is one chart shape, and it is hardcoded.** `chart_spec` sets `"mark": {"type": "bar"}` as a literal. Every visual this pipeline has ever published is a horizontal bar chart, because a bar chart is the only thing it can build. That is also a Guardrail #6 hardcode: the shape of a published surface is a tunable, and it is not in `config/`.
 
 **5. Nothing on the chart says what is being measured.** In the same function the category axis is `"axis": {"title": None}` and the value axis is `"title": unit` - the raw regex-captured unit string. So the only words a published chart can carry are the bar labels and the caption. 54 percent of the labels are numbers and 78 percent of the captions are absent, because `caption = draft.caption if len(bars) == kept_from else ""` discards the caption whenever any bar is dropped. That intent is right - a caption written about five bars is a false statement about three - but the remedy publishes a chart with no words on it at all.
 
@@ -874,7 +874,7 @@ The module's thesis is that the model never emits a number. Extend it: **the mod
 
 `spread = (max - min) / max` over the chart's own values. It is arithmetic on numbers already extracted, so it needs nothing new and cannot be influenced by the article's text.
 
-The last row is the interest-rate case: 6.50 against 6.25 as two bars is a lie told with ink, because the eye compares bar lengths and the bars are 96 percent identical. On a dot plot with a non-zero axis the same two numbers show the move. `enabled_marks` goes in `config/idhazh.json` beside `enabled_kinds`, so a mark can be switched off without a code change (Rule #6, and cause 4).
+The last row is the interest-rate case: 6.50 against 6.25 as two bars is a lie told with ink, because the eye compares bar lengths and the bars are 96 percent identical. On a dot plot with a non-zero axis the same two numbers show the move. `enabled_marks` goes in `config/idhazh.json` beside `enabled_kinds`, so a mark can be switched off without a code change (Guardrail #6, and cause 4).
 
 ### The refusals
 
@@ -992,7 +992,7 @@ Four deviations, each found by reading the code rather than the plan.
 | # | Plan said | Built instead | Why |
 | --- | --- | --- | --- |
 | 1 | The harvest reads `EvidenceItem.premise`, and `EvidenceItem` gains three optional fields (`source_form`, `word_count`, `brief`) so the length band can be rebuilt | The harvest reads `backend/var/run/<date>/items/*.article.json`. `EvidenceItem` is untouched | `Article` already carries all three fields and more, and it is in the `items-*` artifact `assemble` already downloads - the evidence artifact is not. So no schema moved, no migration was owed, and row 3 decision 6's own rule against a second copy is honoured more strictly, not less |
-| 2 | The oracle is a token diff between a rebuilt row and `build_request`, run locally as `verify --tokens` because tokenizing needs the network | The row's first two turns ARE `summarize.system_prompt(...)` and `summarize.user_turn(...)`, the functions `build_request` itself calls. A test asserts equality against `build_request(...)["messages"]` | Identity by construction beats identity by comparison, and it runs offline in CI (Rule #7). `verify --tokens` still exists and now answers a question nothing else could: do these rows fit `finetune.sequence_length`? |
+| 2 | The oracle is a token diff between a rebuilt row and `build_request`, run locally as `verify --tokens` because tokenizing needs the network | The row's first two turns ARE `summarize.system_prompt(...)` and `summarize.user_turn(...)`, the functions `build_request` itself calls. A test asserts equality against `build_request(...)["messages"]` | Identity by construction beats identity by comparison, and it runs offline in CI (Guardrail #7). `verify --tokens` still exists and now answers a question nothing else could: do these rows fit `finetune.sequence_length`? |
 | 3 | A separate commit step for the corpus, carrying no `REGENERATE_COMMAND` | `corpus` is staged by the existing "Commit the day" step, and deliberately left out of `REFRESH_PATHS` | Same guarantee, one fewer push. The window is never rebuilt on a race; it is replayed onto the new base, which is the branch of the script the plan wanted |
 | 4 | `ensure_ascii=False`, for the byte count | `compact_json`, which is `ensure_ascii=True` | It is the serialization every other persisted payload here uses, so the corpus diffs and round-trips under one rule. The byte difference survives gzip almost entirely |
 
@@ -1004,7 +1004,7 @@ Two things the plan did not name and the code needed:
   step and takes the day's ledgers with it.
 - **`CorpusMeta` is a second contract**, not a loose JSON file. It is committed,
   it crosses a process boundary, and `prune.yml` reads it - which is what makes a
-  shape a payload under Rule #3.
+  shape a payload under Guardrail #3.
 
 ---
 
@@ -1019,7 +1019,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 | 3 | **`commit-and-push.sh` cannot reach a second repo.** It stages paths in its own checkout and pushes to that checkout's remote. Row 3's "reuse the house pattern" breaks under the recommended input #1(b) | High | Section 4, row 3 decision 2. Sibling checkout plus `cd`, script unmodified |
 | 4 | **`hf_base_repo` in the `finetune` block is a drift hazard.** Two strings name the same weights. Swap the model, forget the other string, and the notebook trains an adapter against a different base - LoRA loads onto a mismatched base without raising | High | Section 7, row 2 decision 10. It moves onto the `models` entry |
 | 5 | **`train_rows` could exceed the corpus.** `min_rows` 500 and `train_rows` 1000 are both satisfiable by a 600-row corpus, and nothing said what happens | Medium | Row 2 decision 9. It is a ceiling, and both numbers get printed |
-| 6 | **The token-identity oracle needed the network.** Tokenizing needs a tokenizer; Rule #7 forbids a test that fetches one, and committing a ~10 MB tokenizer into a 39 MB repo is worse | Medium | Row 3 decision 12, row 4 decision 8. It is a local `verify --tokens` |
+| 6 | **The token-identity oracle needed the network.** Tokenizing needs a tokenizer; Guardrail #7 forbids a test that fetches one, and committing a ~10 MB tokenizer into a 39 MB repo is worse | Medium | Row 3 decision 12, row 4 decision 8. It is a local `verify --tokens` |
 | 7 | The plan had no phase C. It ended at "decide", leaving the config swap, the qualify run, the fingerprint slug and the measurements record unowned | Medium | Section 2 phases, new row 10 |
 | 8 | Row 5's human cost was written as "once" | ~~Medium~~ **Settled** | It was "once", and it cost less than the 12-hour estimate: 43 parallel authoring passes over a queue the harness had already checked. The estimate assumed one person working in series |
 | 9 | The holdout and the roll interact, and it happens to be safe | Low - confirmed sound | Row 4 decision 7, with the test that keeps it true |
@@ -1058,7 +1058,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 
   | # | Decision | Why |
   | --- | --- | --- |
-  | 1 | Pydantic model first, schema generated, and **not** a section 11 migration surface. | Rule #3 for the shape. The exemption follows `EvidenceItem`, merged 2026-08-27 for the same reason: a rolling window regenerable from the ledger, read only by a notebook you re-run. |
+  | 1 | Pydantic model first, schema generated, and **not** a section 11 migration surface. | Guardrail #3 for the shape. The exemption follows `EvidenceItem`, merged 2026-08-27 for the same reason: a rolling window regenerable from the ledger, read only by a notebook you re-run. |
   | 2 | JSONL with `messages` in OpenAI chat format. **Five columns.** | The conversational SFT standard. Four trainers read it with no converter, so the corpus is portable to another stack without rework. |
   | 3 | The system prompt is written inline on every row. | Measured cost of that portability: +98 KB compressed per 500 rows. |
   | 4 | Three columns removed as redundant: `prompt_fingerprint`, `source_words`, `written_by`. | The first two are derivable from `messages`. The third is stated by which file the row lives in (section 4). A stored copy of a derivable value is a second thing that can disagree with the first. |
@@ -1092,7 +1092,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
   | 9 | Drop any row where `Summary.title` is null. | A null title means the drafted title missed its range and was thrown away. That row is a target where the model failed the ask. |
   | 10 | Filter on the deterministic counterweights in `state/scores.csv`: `hedge_dropped` false, `unsupported_numbers` zero, `lead_coverage` >= 0.30, copying measures under their bars. **Never filter on HHEM.** | Rejection sampling for free. And HHEM must stay the alarm - shape the training data with it and row 8's faithfulness gate measures a model tuned against its own alarm. |
   | 11 | `roll()` is a pure function, extracted and unit-tested before anything calls it, and it opens only `corpus/corpus.jsonl`. | It is the part that can silently lose data, and file separation is what keeps it away from the reference set (section 4). |
-  | 12 | **The token-identity oracle is a local `verify --tokens` command, not a CI test.** | **Found by review 2026-08-28.** Tokenizing needs the tokenizer, and Rule #7 forbids a test touching the network. The alternatives are committing a ~10 MB tokenizer into a 39 MB repo, or running the check where the model already is. It is run before a training session, which is the only moment its answer matters. |
+  | 12 | **The token-identity oracle is a local `verify --tokens` command, not a CI test.** | **Found by review 2026-08-28.** Tokenizing needs the tokenizer, and Guardrail #7 forbids a test touching the network. The alternatives are committing a ~10 MB tokenizer into a 39 MB repo, or running the check where the model already is. It is run before a training session, which is the only moment its answer matters. |
   | 13 | A separate `prune.yml`, wired to nothing, per input #7: `prune_every_days` 30 and `prune_keep_days` 60. | 3.7. It reads the committed `corpus/corpus.meta.json`, so it needs neither the harvest nor the evidence. Keeping a force-pushing job out of the digest pipeline is the point. |
   | 14 | Under input #1(b) nothing about this row touches section 0a or section 8. Under (a) both must be amended in the same commit. | 3.7a. The corpus commits article text, and this repo is public. |
 
@@ -1116,7 +1116,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
   | 5 | Atomic write: temp file in the same directory, then rename. | An interrupted write can never leave half a training set that still looks loadable. |
   | 6 | `remove` refuses to take the corpus below `min_rows` and says how many short it would land. | A repair that quietly empties the training set is the failure this prevents. |
   | 7 | **The holdout is date-trailing and the roll evicts oldest-first, so a holdout row can never be evicted while it is still in the holdout.** A unit test asserts it. | **Checked by review 2026-08-28.** It holds only because of that pairing. A random holdout, or one cut from the oldest rows, would let the roll quietly shrink the test set every week - and row 8 would run on fewer articles each month with nothing anywhere saying so. |
-  | 8 | `verify --tokens` carries row 3's token-identity oracle. Local only. | Row 3 decision 12. Tokenizing needs the tokenizer, and Rule #7 forbids a test touching the network, so the check lives where the model already is. |
+  | 8 | `verify --tokens` carries row 3's token-identity oracle. Local only. | Row 3 decision 12. Tokenizing needs the tokenizer, and Guardrail #7 forbids a test touching the network, so the check lives where the model already is. |
 
 - **Rejected:** a database (a few thousand JSON lines - a file is the right size of tool); in-place editing (a crash leaves a file that still parses for the first N lines); running it in CI (unattended deletion of training data is how you lose it).
 
@@ -1138,7 +1138,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
   | 6 | Every target must validate through the same narrowed `draft_model()` the production decoder is held to. | A reference the decoder would reject teaches the model to be rejected. |
   | 7 | Lives in `tests/fixtures/reference/`, never in `corpus/`. | That file separation is what makes the roll structurally unable to evict a reference row (section 4). |
   | 8 | Named limitation: scoring against hand-written summaries measures "how close to these", not "how good". | Fine for comparing base against tuned, since both are measured the same way. Not an absolute quality claim. |
-  | 9 | **Budget about 12 hours of human time, split across sessions. This is an estimate, not a measurement.** | **Named by review 2026-08-28.** Roughly 200 rows drafted with an expert model at ~2 min each, plus ~60 rows read line by line at ~5 min each. Section 2 said "once", which reads as an afternoon. It is the largest single human cost in the plan and it gates rows 6 and 9, so it belongs on the page with a number next to it (Rule #10). |
+  | 9 | **Budget about 12 hours of human time, split across sessions. This is an estimate, not a measurement.** | **Named by review 2026-08-28.** Roughly 200 rows drafted with an expert model at ~2 min each, plus ~60 rows read line by line at ~5 min each. Section 2 said "once", which reads as an afternoon. It is the largest single human cost in the plan and it gates rows 6 and 9, so it belongs on the page with a number next to it (Guardrail #10). |
   | 10 | The set can be built in slices, and row 6 can start on the first 100. | Twelve hours is a wall if it has to be paid in one go. Nothing about the format requires the whole set to exist before any of it is usable. |
 
 - **Rejected:** generating references from inside the pipeline (hosted inference); using them for training and testing both (ESCALATE trigger 2); having a model score our summaries (LLM-as-judge); CNN/DailyMail or XSum (contamination, and not our bands or format).
@@ -1147,7 +1147,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 
 - **Scope:** A committed notebook that reads the model from config, trains a LoRA adapter, checkpoints to Drive. Then a local merge and quantise.
 - **Files:** `notebooks/finetune.ipynb`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/measurements.md`
-- **Gates:** the corpus holds at least `min_rows`; **the first cell resolves `hf_base_repo` from the model entry and stops loudly if that repo does not exist or its architecture does not match the GGUF's base**; **no sampled `url_key` appears in `corpus/holdout.txt`, and the loader raises rather than warns**; the notebook runs top to bottom on the tier from input #6; every hyperparameter is in one cell at the top; **no model name appears in the notebook** - it resolves `finetune.teacher` against `config/idhazh.json`; the output is a Q4_K_M GGUF with its SHA-256 and byte count printed; actual GPU, wall-clock and cost recorded (Rule #10).
+- **Gates:** the corpus holds at least `min_rows`; **the first cell resolves `hf_base_repo` from the model entry and stops loudly if that repo does not exist or its architecture does not match the GGUF's base**; **no sampled `url_key` appears in `corpus/holdout.txt`, and the loader raises rather than warns**; the notebook runs top to bottom on the tier from input #6; every hyperparameter is in one cell at the top; **no model name appears in the notebook** - it resolves `finetune.teacher` against `config/idhazh.json`; the output is a Q4_K_M GGUF with its SHA-256 and byte count printed; actual GPU, wall-clock and cost recorded (Guardrail #10).
 - **Oracle:** **The loss mask, asserted on a real batch before training starts.** Decode the positions where `labels != -100` for one example. If it is not the assistant turn's JSON, stop. Measured 2026-08-27: median article seen 599 words against a median summary of 99 - about **six input words per output word**. Without the mask, roughly 86 percent of the training signal goes into learning to write other people's news articles.
 - **Decisions:**
 
@@ -1239,7 +1239,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 
 - **Scope:** Point production at the tuned weights, or record why we did not. This is the only row in the plan that changes what a reader receives.
 - **Files:** `config/idhazh.json`, `docs/reference/measurements.md`, `docs/how-to/fine-tune-a-model.md`. A new fingerprint row appears under `state/` on the next run, written by the pipeline, not by hand.
-- **Gates:** the diff in `config/` is the four lines and nothing else; `python -m idhazh qualify` passes with **no gate threshold edited**; the new `model_id` slug appears nowhere in `state/fingerprints`; production decode measured in a real shard and recorded with hardware, date and spread (Rule #10).
+- **Gates:** the diff in `config/` is the four lines and nothing else; `python -m idhazh qualify` passes with **no gate threshold edited**; the new `model_id` slug appears nowhere in `state/fingerprints`; production decode measured in a real shard and recorded with hardware, date and spread (Guardrail #10).
 - **Oracle:** A clean checkout runs the pipeline end to end on the new model with no code change and no new secret. If anything but `config/idhazh.json` had to move, rows 6 and 7 were not finished.
 - **Decisions:**
 

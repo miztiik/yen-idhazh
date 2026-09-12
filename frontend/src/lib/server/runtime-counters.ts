@@ -74,7 +74,7 @@ export interface Reading<T> {
  *
  * A counter without its ceiling is not a measurement: 4,925 says nothing until
  * 8,192 sits beside it. Both arrive as arguments rather than being read inside
- * a derivation, so a test drives them and Rule #6 keeps them out of the code.
+ * a derivation, so a test drives them and Guardrail #6 keeps them out of the code.
  */
 export interface MachineLimits {
 	/** `models.summarize.inference.n_ctx` - what `n_tokens_max` is a share of. */
@@ -592,7 +592,7 @@ function oneRun(
  * its own rows. The join used to run the other way round - every accepted run
  * walked the whole item-health ledger - so four runs over sixteen item rows
  * cost 64 checks and sixteen runs over sixty-four cost 1,024. It is now one
- * check a row whatever the run count is (Rule #12).
+ * check a row whatever the run count is (Guardrail #12).
  */
 export function machineCounters(
 	counters: Record<string, string>[],
@@ -639,7 +639,7 @@ export function runtimeCounterRows(): CsvTable {
 
 /** The two ceilings, read from `config/idhazh.json` through the one config reader.
  *
- * `models.summarize.inference.n_ctx` and `run.shard_timeout_minutes` (Rule #6). Both have
+ * `models.summarize.inference.n_ctx` and `run.shard_timeout_minutes` (Guardrail #6). Both have
  * a default there, so a fresh clone with no config file still draws a ceiling
  * rather than none.
  */

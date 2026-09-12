@@ -17,7 +17,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Why this plan exists | The published site has a 1 GB hard cap and **nobody knows how fast it is filling.** The two available readings differ by 18 times - 172 days of headroom, or 9.6. Every plan after this one adds drawings to the site. If the pessimistic reading holds and nothing changes, the deploy fails and the digest stops publishing entirely |
 | Hard scope - in | Measuring the real growth rate and the repository's own growth; moving the hard cap into config bounded so it can only be lowered; a config-driven asset base URL as the release valve; making the cleanup report the backlog it did not clear |
 | Hard scope - out | **Switching deletion on.** `retention.dry_run` stays `true` and `image_months` stays `-1` until plan 13, which lands after the new renderer. Flipping the delete fuse while the old drawings are the only assets on disk deletes a year of visuals with a 200-item cap the only bound |
-| ESCALATE triggers | 1. The measured rate says the 800 MB alarm is under 30 published days away - that is a live incident, not a plan row. 2. Serving assets off the bundle needs a runtime call to anything that executes our logic (Rule #1). 3. `PAGES_HARD_CAP_MB` cannot be bounded in config such that a config edit can lower it and never raise it |
+| ESCALATE triggers | 1. The measured rate says the 800 MB alarm is under 30 published days away - that is a live incident, not a plan row. 2. Serving assets off the bundle needs a runtime call to anything that executes our logic (Guardrail #1). 3. `PAGES_HARD_CAP_MB` cannot be bounded in config such that a config edit can lower it and never raise it |
 | Chosen strategy | Measure first, then build the valve, then leave the fuse alone. Age-based retention is an archive policy and not a cap defence; the defences that act on the right timescale are the coverage rate, the per-visual byte cap and moving bytes off the bundle | 
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
 
@@ -79,7 +79,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Bounded `le=1024` so config can lower it and never raise it. Rule #2's "the budget is the platform, not a preference" stays enforceable through the config file rather than by hoping nobody edits a constant | O7, rows 60 |
+| 1 | Bounded `le=1024` so config can lower it and never raise it. Guardrail #2's "the budget is the platform, not a preference" stays enforceable through the config file rather than by hoping nobody edits a constant | O7, rows 60 |
 | 2 | The 800 MB alarm and the 1024 MB cap are different instruments and stay apart. One reports, one stops the deploy | Section 9.2 |
 
 ### Rejected alternatives
@@ -87,7 +87,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Leave it a `Final` in code | A knob every operator wants to read should not need a source read, and the bound is what makes exposing it safe | Fowler |
-| 2 | Make it a plain config number with no bound | Then the first tight release raises the cap, which is the failure Rule #2 names | Carmack |
+| 2 | Make it a plain config number with no bound | Then the first tight release raises the cap, which is the failure Guardrail #2 names | Carmack |
 
 ---
 

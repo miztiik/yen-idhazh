@@ -1,7 +1,7 @@
 """Contract-tier tests: the generated schemas against the models that produced
 them, and the models against real committed payloads.
 
-No mocks and no network (Rule #7): every input here is a file in
+No mocks and no network (Guardrail #7): every input here is a file in
 `tests/fixtures/` or `config/`.
 """
 
@@ -143,7 +143,7 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 LONG_HEX = re.compile(r"[0-9a-f]{16,}")
 #: Four real `GET /metrics` bodies, one per work shard of run `2026-08-26-5`,
 #: pulled from that run's `runtime-log-*` artifacts before they expired. Real
-#: captures rather than hand-written text (Rule #7): the upstream README at tag
+#: captures rather than hand-written text (Guardrail #7): the upstream README at tag
 #: b10598 lists neither `prompt_tokens_cached_total` nor the wording that says
 #: what `prompt_tokens_total` counts, so only the binary's own output settles it.
 METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
@@ -162,7 +162,7 @@ SERVER_LOG_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard
 PROC_STAT_AT_START = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-start.txt"
 PROC_STAT_AT_END = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-end.txt"
 #: What the probe slept for, what the runner reported to `nproc`, and the
-#: kernel's tick rate. Rule #2 fixes the second at 4.
+#: kernel's tick rate. Guardrail #2 fixes the second at 4.
 PROBE_SECONDS = 20
 PROBE_PROCESSORS = 4
 USER_HZ = 100
@@ -223,10 +223,11 @@ def test_every_contract_has_at_least_one_fixture() -> None:
 #
 # Row 21 ships the shape, not the producer or the reader. The generic oracle
 # above already round-trips the committed fixture; these build a record in code
-# instead of walking committed days (Rule #13), so they can carry the awkward
-# case a real archive may never produce - a timed-nothing stage beside timed
-# ones, an empty instrument beside a populated one - and prove the two halves of
-# Andre's additive/non-additive split read back the way a later reducer needs.
+# instead of walking committed days (`CLAUDE.md` section 13), so they can carry
+# the awkward case a real archive may never produce - a timed-nothing stage
+# beside timed ones, an empty instrument beside a populated one - and prove the
+# two halves of Andre's additive/non-additive split read back the way a later
+# reducer needs.
 
 
 def _day_metrics_sample() -> DayMetrics:
@@ -331,7 +332,7 @@ def test_day_metrics_bands_and_reasons_mirror_the_eval_vocabulary() -> None:
 
 # --- The Oracle: the span rollup restates no ledger ------------------------
 #
-# Rule #12 and the telemetry doctrine: the committed span rollup holds a count
+# Guardrail #12 and the telemetry doctrine: the committed span rollup holds a count
 # and a duration that no ledger already holds. The check is on column names,
 # outside the key, against every committed ledger a span could restate. Item-
 # health alone is not enough - the timing a span most resembles is `decision_ms`
@@ -614,7 +615,7 @@ def test_a_same_width_excerpt_passes_the_shape_and_fails_the_re_slice() -> None:
 
 
 def test_a_text_that_moved_by_one_character_names_the_first_span_that_moved() -> None:
-    """The reason is a log line, so it carries no fetched bytes (Rule #11) - the
+    """The reason is a log line, so it carries no fetched bytes (Guardrail #11) - the
     element's own address and the two lengths, which say what moved and by how
     much without quoting a stranger's page back at an operator."""
     payload = _element_table_payload()
@@ -643,7 +644,7 @@ def test_the_re_slice_added_no_field_to_the_persisted_shape() -> None:
 #
 # One combined test passes while three of the four are unenforced, so each gets
 # its own arm and each arm names the thing it refuses. Every payload here is a
-# committed fixture with one field changed (Rule #7, Rule #12) - nothing walks a
+# committed fixture with one field changed (Guardrail #7, Guardrail #12) - nothing walks a
 # collection a run appends to.
 
 
@@ -779,7 +780,7 @@ def test_required_but_empty_roles_cost_what_the_module_says_they_cost() -> None:
     Characters are the half a test can hold, and they are exact. The token
     figure beside them in the module docstring came from `llama-tokenize` against
     the Qwen3 vocabulary, which needs weights this repository does not commit
-    (Rule #2), so it is recorded there with its hardware and date instead.
+    (Guardrail #2), so it is recorded there with its hardware and date instead.
     """
     cost = {}
     for stem in ("bar-chart", "declined"):
@@ -983,7 +984,7 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
 def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:
     """The direction the bound exists for. A cap config can raise is not a cap.
 
-    Rule #2 says the budget is the platform and not a preference. That held while
+    Guardrail #2 says the budget is the platform and not a preference. That held while
     the 1024 was a module constant only because nobody edited it, which is not a
     control. It is a control now: the schema refuses the edit, and the message
     names the number it refused, so an operator reading it learns the bound
@@ -1068,7 +1069,7 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
 
     Attention is pinned in the same file. `auto` is a runtime autodetect that
     may resolve differently on other silicon, and a run that cannot name the
-    kernel it used cannot be compared with one that can (Rule #10).
+    kernel it used cannot be compared with one that can (Guardrail #10).
     """
     models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
 
@@ -1105,7 +1106,7 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     """The cap and the window are one decision, and this is where they meet.
 
-    Both sides are read from `config/` (Rule #6), so the assertion survives the
+    Both sides are read from `config/` (Guardrail #6), so the assertion survives the
     next move of either. It is the guard that was missing on 2026-09-09: the cap
     went from 5,000 to 10,000 tokens that day and could not have, at the 8,192
     window committed the day before - 14,089 tokens against 8,192 is 172 percent
@@ -3326,7 +3327,7 @@ def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_name
     """The Oracle for the widening: every old row re-reads, and the bytes account for themselves.
 
     Three rows built here rather than the 293 in `state/runtime-counters.csv`,
-    which gains one per job per shard per run (Rule #12). What is under test is
+    which gains one per job per shard per run (Guardrail #12). What is under test is
     the arithmetic of an appended column, and three rows prove it exactly as 293
     do.
 
@@ -3825,7 +3826,7 @@ def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:
     retired on 2026-08-30. Measured 2026-09-12 over the 22 committed days and
     8,922 items: 12 on 2026-08-27, 3 on 2026-08-28 and 3 on 2026-08-29. It is a
     fixture rather than a walk of the archive because a test may not pay for
-    what the pipeline has piled up (Rule #12), and because the fixture outlives
+    what the pipeline has piled up (Guardrail #12), and because the fixture outlives
     the day those three days age out of retention.
 
     It also carries a live lens beside the tombstone, so the case it proves is
@@ -4062,7 +4063,7 @@ def test_the_gate_defaults_to_the_one_committed_tree(tmp_path: Path) -> None:
     wrong in a workflow.
 
     One day is named, so this costs one day rather than every day the archive
-    has piled up (Rule #12). The receipts go to a directory this test owns: the
+    has piled up (Guardrail #12). The receipts go to a directory this test owns: the
     state root defaults to the committed one, and a test that appended to it
     would leave the repository dirty for whoever ran it.
     """
@@ -4393,7 +4394,7 @@ def without_description(shape: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_the_projector_writes_exactly_the_shape_the_contract_names() -> None:
-    """Rule #3, across a language boundary.
+    """Guardrail #3, across a language boundary.
 
     The file a browser fetches is written by node and described by a Pydantic
     model. Nothing else connects them, so a name added on one side and not the
@@ -4671,7 +4672,7 @@ def test_a_forbidden_cell_is_on_the_ledger_and_off_the_projection(
     real address column crossed under another name. A name present on the
     projection is the leak itself, and the contract module already refuses that
     at import - this says so a second time where a reader looking for the trust
-    boundary will find it (Rule #11).
+    boundary will find it (Guardrail #11).
     """
     entry = payloads_by_stem()[projection.__schema_stem__]
     assert entry.forbidden == expected
@@ -4703,7 +4704,7 @@ def test_the_band_refuses_a_link_that_could_leave_the_site() -> None:
     """The one cell on the band a browser follows.
 
     A protocol-relative href is an origin wearing a path's clothes, and a site
-    that never calls home (Rule #1) must not be able to grow one. The grammar is
+    that never calls home (Guardrail #1) must not be able to grow one. The grammar is
     what refuses it, so a producer cannot compose a link out of fetched text.
     """
     for bad in ("//evil.example/", "https://evil.example/", "/console", "/Console/"):
@@ -4754,7 +4755,7 @@ def test_every_published_month_payload_has_a_non_null_retention_knob() -> None:
     `item_health_aggregate_keep_months` and `score_archive_keep_months` are null
     today and each says in its own description why. Nothing minted for the
     console may join them: a null default that spreads stops reading as a
-    decision (CLAUDE.md Rule #12, and row 8's decision 3).
+    decision (CLAUDE.md Guardrail #12, and row 8's decision 3).
     """
     observability = ObservabilityConfig()
     monthly = {

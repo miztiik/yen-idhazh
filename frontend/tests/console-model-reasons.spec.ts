@@ -27,7 +27,7 @@ import {
  * three days look clean.
  *
  * The arithmetic is driven from days written here rather than from the committed
- * archive, which Rule #12 refuses and which would cost more every day the
+ * archive, which Guardrail #12 refuses and which would cost more every day the
  * pipeline publishes. It is also the stronger arm: these days carry an unknown
  * reason and a day of pure absence, neither of which the archive has ever
  * produced. The browser half then re-derives the drawn numbers from the tree the
@@ -249,7 +249,7 @@ test.describe('the arithmetic', () => {
 	test('the panel draws every reason the contract can publish, and no other', () => {
 		// A sixth reason has to fail here rather than go unnoticed. The set is read
 		// off the generated schema, so this is the contract and not a second copy
-		// of it (`CLAUDE.md` Rule #3).
+		// of it (`CLAUDE.md` Guardrail #3).
 		const schema = JSON.parse(readFileSync(SCHEMA, 'utf8')) as {
 			$defs?: { BandReason?: { enum?: string[] } };
 		};

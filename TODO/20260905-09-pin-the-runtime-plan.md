@@ -407,7 +407,7 @@ to clear.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Every llama-server setting quoted anywhere carries the model entry, the runner and the date it was derived against. A bare `n_ctx: 16384` in a doc is an unmeasured number justifying a design | O38, Rule #10 |
+| 1 | Every llama-server setting quoted anywhere carries the model entry, the runner and the date it was derived against. A bare `n_ctx: 16384` in a doc is an unmeasured number justifying a design | O38, Guardrail #10 |
 | 2 | The design's neutrality is preserved: the fix binds settings to an entry, it does not put a model's identity into a name | O38, section 15.4a |
 | 3 | `flash_attention` **already exists** as a key set to `null`. O22 is a value change, not a new knob | C19, verified 2026-09-05 |
 
@@ -529,7 +529,7 @@ decision 3 already refused that claim for a different reason.
 | `pipeline_fingerprint` | `state/fingerprints.csv` | it MUST have moved. `n_ctx` and `truncation_cap_tokens` are both digested, so a stamp that did not move means the config change did not reach the run |
 
 Every number written from this run carries the model entry, the runner, the date
-and the spread (Rule #10), and lands in `docs/reference/measurements.md`.
+and the spread (Guardrail #10), and lands in `docs/reference/measurements.md`.
 
 ### The six readings, against the six predictions above (2026-09-09)
 

@@ -18,12 +18,12 @@ readme = "README.md"
 requires-python = ">=3.12,<3.15.0a0"
 license = "MIT"
 dependencies = [
-    # The single source of truth for every persisted shape (Rule #3). Also
+    # The single source of truth for every persisted shape (Guardrail #3). Also
     # the JSON Schema emitter that schemas/ is generated from.
     "pydantic>=2.12",
     # Feed parsing for the Collect stage. Mature, tolerant of the malformed RSS
     # the open web actually serves, and parses a string without any network of
-    # its own - so a test drives it from a committed fixture (Rule #8).
+    # its own - so a test drives it from a committed fixture (Guardrail #8).
     "feedparser>=6.0",
     # Boilerplate removal for the Extract stage. A custom HTML extractor is a
     # maintenance surface with no beneficiary feature.
@@ -51,7 +51,7 @@ dependencies = [
     # 3.14 merges repeated groups and applies longest-match with `*` and `$`.
     # One committed file can therefore be read as allowed on one runner and
     # refused on another, which makes our own crawling unreproducible - and
-    # this is the control Rule #11 rests on, so it may not be version-dependent.
+    # this is the control Guardrail #11 rests on, so it may not be version-dependent.
     #
     # Pinned exactly, not floored, for the same reason `onnxruntime` is: the
     # answer is a permission, and a patch release that changed one precedence
@@ -161,7 +161,7 @@ faithfulness = [
 #
 # 32.7 MB is 45x PyYAML's 728,341 bytes and 94 percent of shellcheck-py's
 # 34,782,285, for a viewer no gate reads and no page renders. Which is the whole
-# argument for an extra rather than a dev dependency (Rule #8): a contributor
+# argument for an extra rather than a dev dependency (Guardrail #8): a contributor
 # running `pip install -e ".[dev]"` pays none of it.
 #
 # Beneficiary: the nested span view - a robots read inside a fetch, and a prompt

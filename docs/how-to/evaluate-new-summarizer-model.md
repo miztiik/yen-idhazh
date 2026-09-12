@@ -363,7 +363,7 @@ rewrite the measurement to make the approval look automatic.
 Qwen3.5-9B-Q4_K_M became the configured summarizer on 2026-08-27 by owner
 decision ([../../CLAUDE.md](../../CLAUDE.md) section 0), over two failing hard
 gates. **It did not qualify.** Nine of eleven registered gates passed; the
-injection canaries scored 4 of 5 against a Rule #11 threshold of all five, and
+injection canaries scored 4 of 5 against a Guardrail #11 threshold of all five, and
 one brief-band item came back word for word at a verbatim run of 1.000 against a
 ceiling of 0.5. No comparison against the retired model was run, so nothing about
 that adoption says the new summaries are better.

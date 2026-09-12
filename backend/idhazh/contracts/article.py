@@ -2,7 +2,7 @@
 
 The Extract stage is the trust boundary, crossed exactly once. Everything on
 this payload that originated on someone else's server - `title`, `text`,
-`source_url` - is data and never instruction (Rule #11). Nothing here may
+`source_url` - is data and never instruction (Guardrail #11). Nothing here may
 become a system prompt, a shell argument, a file path or an outbound URL.
 
 A failure is a state of this payload, not an absence of it: a dead link, a
@@ -83,7 +83,7 @@ class Article(Contract):
                 "code change, a schema regeneration and a release. The vocabulary is "
                 "config/taxonomy.json and nothing else, and the tagger can only ever "
                 "emit a key of the mapping that file builds - so the type can widen "
-                "without letting anything invent a label (Rule #11). Read-compatible: "
+                "without letting anything invent a label (Guardrail #11). Read-compatible: "
                 "every id any payload on disk carries is a well-formed slug, so this "
                 "build reads every one of them, and a re-run of a stage against a "
                 "payload an older build wrote produces the same tags. The break is on "

@@ -9,7 +9,7 @@ Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): o
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Rule #12 refuses a cost that rises when nobody wrote any code, and names review as the only control. Review is a person remembering to ask. This plan makes the question mechanical: a read over a growing collection declares what it covers, and `-1` is how a person says out loud that they chose not to bound it. |
+| Why this plan exists | Guardrail #12 refuses a cost that rises when nobody wrote any code, and names review as the only control. Review is a person remembering to ask. This plan makes the question mechanical: a read over a growing collection declares what it covers, and `-1` is how a person says out loud that they chose not to bound it. |
 | Hard scope - in | The rule, its inventory of 21 reads, and every row below. `state/published.csv` becomes a day tree and is the worked example. |
 | Hard scope - out | The two reads [the constant-cost plan](20260906-constant-cost-reads-plan.md) owns - telemetry publication (its row 19) and source health (its row 20). Every frontend and browser read, which is that plan's ranks 1 and 10. Content fingerprints and semantic dedup. Deleting any committed row from any ledger. |
 | ESCALATE triggers | (a) Any row that would delete a committed row. (b) Any row that would ship a finite window - **every window here ships at `-1` or is bounded by construction**. (c) Row 7 running while a scheduled digest is in flight. (d) Any row that cannot hold its Oracle without weakening a guarantee. (e) A finite window less than or equal to `collect.seen_window_days`. |
@@ -20,7 +20,7 @@ Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): o
 
 **A read over a collection a run appends to declares what it covers. `-1` means unbounded, and it is how a person says out loud that they chose not to bound this one.**
 
-This is not a second Rule #12. It is Rule #12's escape hatch made mechanical. Rule #12 already permits a growing read where a person agrees and says why; today that agreement is a paragraph in a docstring, invisible to everything except a reviewer's memory. A `-1` in `config/` is the same agreement written where a diff can see it, a schema can bound it, and a test can name it.
+This is not a second Guardrail #12. It is Guardrail #12's escape hatch made mechanical. Guardrail #12 already permits a growing read where a person agrees and says why; today that agreement is a paragraph in a docstring, invisible to everything except a reviewer's memory. A `-1` in `config/` is the same agreement written where a diff can see it, a schema can bound it, and a test can name it.
 
 **A declared cover is not always a clock.** It can be a span of days, the files this run staged, one run, or one payload. The smallest honest one wins. Where a clock would be semantically wrong - row 8 is the worked case - the answer is a cheaper representation, not a shorter memory.
 
@@ -155,9 +155,9 @@ Every row has landed, so this plan is the record of how the window rule was buil
 
 Two rows did not land what this plan asked for, and the reason is recorded rather than smoothed over.
 
-**Row 13 shipped the retraction half only.** Three separate jobs write `frontend/public/digest/`, so a running total one of them kept would silently miss the other two, and carrying one between them needs a new persisted contract. The three remaining walks now state in the code what they read, how the cost grows, and why a bounded input cannot answer it - Rule #12's escape hatch taken in the open rather than by omission.
+**Row 13 shipped the retraction half only.** Three separate jobs write `frontend/public/digest/`, so a running total one of them kept would silently miss the other two, and carrying one between them needs a new persisted contract. The three remaining walks now state in the code what they read, how the cost grows, and why a bounded input cannot answer it - Guardrail #12's escape hatch taken in the open rather than by omission.
 
-**Row 15's premise was false.** Measured 2026-09-07 on an Intel Core i7-1265U, a not-due maintenance pass opens 5 directories and 0 shard files, and that count does not move when the tree holds forty-six times more - a month partition is a file, not a directory, so there was no partition directory for a dated walk to skip. Rule #10 says the design changes, so no optimisation was written. The row shipped the deletion bug the measurement uncovered instead: three month-name recognisers disagreed, and `prune_scores` was deleting files the other two protected.
+**Row 15's premise was false.** Measured 2026-09-07 on an Intel Core i7-1265U, a not-due maintenance pass opens 5 directories and 0 shard files, and that count does not move when the tree holds forty-six times more - a month partition is a file, not a directory, so there was no partition directory for a dated walk to skip. Guardrail #10 says the design changes, so no optimisation was written. The row shipped the deletion bug the measurement uncovered instead: three month-name recognisers disagreed, and `prune_scores` was deleting files the other two protected.
 
 **Inventory item 15 is wrong, and row 17 found it.** There is no windowed trace read in `stage_assemble`. `observability.trace_window_days` drives `retention.prune_traces`, which deletes whole files - so the bound sits on the store, not on a read, and a read of a store already pruned needs no cover of its own. [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) teaches that as its own mechanism.
 
@@ -180,7 +180,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | --- | --- | --- |
 | 1 | Additive and optional, so a plan payload an earlier run wrote still validates. Section 11: date-stamped `version`, a `changelog` entry, no read-side migration needed | Fowler |
 | 2 | Record the **age distribution**, not only the count. A count says the guard fired; the distribution says whether a 120-day horizon would have let any through. That is the number Editor named as the one that would change his ruling | Editor |
-| 3 | The corrected docstring quotes 2026-09-07 on an Intel Core i7-1265U with hardware, date and spread | Rule #10 |
+| 3 | The corrected docstring quotes 2026-09-07 on an Intel Core i7-1265U with hardware, date and spread | Guardrail #10 |
 
 ## 3 - Row #2 - The read stops materialising the file
 
@@ -193,7 +193,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | --- | --- | --- |
 | 1 | Lands before any layout change and is independently valuable. Level 1, no contract, and if it takes peak far enough down the case for a horizon weakens rather than strengthens - which must be reported, not buried | Carmack, condition 1 |
 | 2 | A threshold in bytes a row would pass for the wrong reason, because what a reduction legitimately keeps is its mapping. The property is asserted directly instead | this plan |
-| 3 | Both fixtures are built in the test. Rule #12 and section 13: a test's cost belongs to the code it checks | CLAUDE.md section 13 |
+| 3 | Both fixtures are built in the test. Guardrail #12 and section 13: a test's cost belongs to the code it checks | CLAUDE.md section 13 |
 
 ## 4 - Row #3 - The cover setting, and the value it refuses
 
@@ -261,7 +261,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | 1 | **`-1` enumerates; a finite cover names days.** The unbounded path walks the tree validating every stem; the bounded path asks for the dates in range and opens only those. Two paths, two tests, neither one a glob | Owner, 2026-09-07 |
 | 2 | `freshness.md` currently argues at length that this file must not shard, and lists the shard as a rejected alternative. That section is **rewritten to say what changed and why**, not deleted. A reversed decision whose reasoning vanishes is how the same argument gets had twice | CLAUDE.md section 4 |
 | 3 | `partitions.md` moves the published row into the partition table and states the coupling to `seen_window_days` next to it. It also gains the day grain as a second partition unit, which the digest tree already uses | Carmack |
-| 4 | `measurements.md` gains the 2026-09-07 figures, including the two that went **against** the design - day files take twice the wall clock of month files, and after packing they are the largest in git. A measurement that contradicts the design is recorded, not dropped | Rule #10 |
+| 4 | `measurements.md` gains the 2026-09-07 figures, including the two that went **against** the design - day files take twice the wall clock of month files, and after packing they are the largest in git. A measurement that contradicts the design is recorded, not dropped | Guardrail #10 |
 | 5 | `docs/archive/measurements-2026-08.md` is history and is **not** edited | Fowler |
 
 ## 9 - Row #8 - The eval writer reads a digest index
@@ -377,17 +377,17 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 ## 18 - Row #17 - The rule gets its concept doc
 
-- **Scope:** `docs/concepts/growing-reads.md` - the rule, the inventory, the three tiers, and how `-1` relates to Rule #12's escape hatch. Written last so it describes what shipped.
+- **Scope:** `docs/concepts/growing-reads.md` - the rule, the inventory, the three tiers, and how `-1` relates to Guardrail #12's escape hatch. Written last so it describes what shipped.
 - **Files:** `docs/concepts/growing-reads.md` (new), `docs/architecture/contracts/schemas.md`, `docs/concepts/partitions.md`, `CLAUDE.md`, `docs/reference/documentation-structure.md`
 - **Gates:** doc checks only; this row changes no application code. CI - full suite.
 - **Oracle:** every read in the inventory appears with its declared cover or its stated bound, and the count in the doc matches the count in the code. A person reading only that page can answer "does this read need a cover" for a collection invented tomorrow.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **A property, not a list.** The doc states the question - does this read cost more when a run appended more - and the inventory is a dated example table underneath it. The archive guard deleted on 2026-09-06 failed precisely because it was a list of paths pretending to be a rule | [CLAUDE.md](../CLAUDE.md) Rule #12 design rationale |
+| 1 | **A property, not a list.** The doc states the question - does this read cost more when a run appended more - and the inventory is a dated example table underneath it. The archive guard deleted on 2026-09-06 failed precisely because it was a list of paths pretending to be a rule | [CLAUDE.md](../CLAUDE.md) Guardrail #12 design rationale |
 | 2 | It names the three shapes a cover can take - a span of days, the files a run staged, one run or one payload - so the next reader does not reach for a clock by reflex. Rows 8, 9 and 10 are the worked examples of each | this plan |
 | 3 | `docs/concepts/`, beside [partitions.md](../docs/concepts/partitions.md): that page says what a layout obliges a writer to do, this says what a growing collection obliges a reader to declare | [documentation-structure.md](../docs/reference/documentation-structure.md) |
-| 4 | CLAUDE.md gains a paragraph rather than a new rule. Rule #12 already forbids the growing cost nobody chose; this only says where the choosing is now written down | Owner, 2026-09-07 |
+| 4 | CLAUDE.md gains a paragraph rather than a new rule. Guardrail #12 already forbids the growing cost nobody chose; this only says where the choosing is now written down | Owner, 2026-09-07 |
 
 ## What this plan does not fix
 

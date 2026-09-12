@@ -1,6 +1,6 @@
 """The harvest, the roll and the two due checks.
 
-No mocks and no network (Rule #7). Every article, summary and eval row here is a
+No mocks and no network (Guardrail #7). Every article, summary and eval row here is a
 committed fixture, and the prompt comes from the shipped prompt builder rather
 than from a copy of it.
 """

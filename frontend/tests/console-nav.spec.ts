@@ -235,7 +235,7 @@ for (const view of STRIP_WIDTHS) {
 		// rule, so a basis, a gap or a font change that breaks it fails here.
 		const rows = new Set(boxes.map((box) => box.top));
 		// Printed on every run, because a geometry figure without the width the
-		// page really had is an assertion rather than a measurement (Rule #10),
+		// page really had is an assertion rather than a measurement (Guardrail #10),
 		// and a passing oracle otherwise says nothing about the margin it passed by.
 		console.log(
 			`[strip] asked ${view.width} -> innerWidth ${innerWidth}, clientWidth ${clientWidth}, ` +

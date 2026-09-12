@@ -35,14 +35,12 @@ committed file.
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
-| [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 6 | 5 | 1 | 0 |
 
-## In flight - 2
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #3b | 11 | C2 | Every call reports its own cost | p11-3b |
-| #5 | 27 | F | Repository-wide sweep, schemas, relapse proof | `../yen-idhazh.worktrees/p27-r5` |
 
 ## Ready now - 28
 
@@ -162,9 +160,9 @@ section 3 is where it is answered.
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #4 | 26 | B | The ruling, written where the next person arrives | 1 is PENDING |
 
-## Finished - 13 plans with no live row
+## Finished - 14 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260912-27-adaptive-guardrails-plan.md
 
 ## See also
 

@@ -22,7 +22,7 @@ if (!webServer) throw new Error('Whole-day checks require the verified preview s
  * introduce.
  *
  * The timeout is its own, and it is sized from the worst case rather than the
- * average (Rule #10). Drawing a six-hundred-story day and walking it down one
+ * average (Guardrail #10). Drawing a six-hundred-story day and walking it down one
  * screen at a time measured 68 seconds an arm on an Intel Core i7-1265U on
  * 2026-09-05, spread 9 seconds over four arms on a machine shared with other
  * agents. Ten minutes is that worst case with room for a box under load, and it

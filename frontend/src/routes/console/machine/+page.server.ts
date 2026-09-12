@@ -126,8 +126,8 @@ export async function load() {
 	const console_ = consoleConfig();
 	// The widest span the control can reach, in the months the ledgers shard by.
 	// Nothing older can be drawn whatever the operator does, so nothing older is
-	// read (`CLAUDE.md` Rule #12), and the cover follows `console.window_presets`
-	// rather than a literal so raising a preset widens it (Rule #6).
+	// read (`CLAUDE.md` Guardrail #12), and the cover follows `console.window_presets`
+	// rather than a literal so raising a preset widens it (Guardrail #6).
 	const shards = shardMonths(Math.max(...console_.window_presets));
 	const chart = chartConfig();
 	const limits = machineLimits();
@@ -306,7 +306,7 @@ export async function load() {
 		// time is the model call itself. Derived per chart it would be derived twice
 		// off two different day lists, and the two would eventually disagree. The
 		// rows stop at the widest preset, which is as far back as either chart draws
-		// (`CLAUDE.md` Rule #12).
+		// (`CLAUDE.md` Guardrail #12).
 		modelChanges: pipelineChanges(evalRows(shards).rows),
 		board,
 		spanBreakdown: spanView,

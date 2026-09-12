@@ -7,7 +7,7 @@ import type { DayExtraction } from '../src/lib/server/payload';
  * A pure reduction over built day blocks, so this runs in Node with no browser
  * and no canary. The blocks are built rather than read off `state/day-metrics/`:
  * a run appends another record every four hours, and a test whose cost rises
- * with the archive is the thing Rule #12 forbids. Building them is also the only
+ * with the archive is the thing Guardrail #12 forbids. Building them is also the only
  * way to reach the cases the archive has never produced - a day where a span
  * stopped holding, and a window that measured nothing at all.
  */

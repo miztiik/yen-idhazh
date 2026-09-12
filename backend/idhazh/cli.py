@@ -203,7 +203,7 @@ Fetcher = Callable[[str], fetch.FetchResult]
 Every stage that reads the open web takes one of these. In a run it is
 `live_fetcher`; in a test it is a function that reads `tests/fixtures/feeds/`.
 That is not a mock - it is the same signature reading a real captured file, so
-no test needs the network (Rule #7) and every fetch outcome, including the
+no test needs the network (Guardrail #7) and every fetch outcome, including the
 ones a live run cannot be made to produce on demand, is reachable.
 """
 
@@ -286,7 +286,7 @@ def live_fetcher(
     socket is the one thing here a fixture cannot stand in for. The order - the
     host's rules first, the target only if they allow it - is the policy this
     function exists for, and policy is what a test has to be able to get wrong
-    (Rule #7).
+    (Guardrail #7).
 
     `tracer` is what makes the robots read visible, and it is the sub-step no
     ledger column can hold. `fetch_ms` is one number covering both reads, so the
@@ -739,7 +739,7 @@ def _health_row(
 
     `detail` is our own sentence about the failure - a status name or an
     exception class - and never the response body. A feed is a stranger's text
-    and this row lands on a published page (Rule #11).
+    and this row lands on a published page (Guardrail #11).
 
     `endpoint_key` is what makes a later retirement possible at all: `feed_id`
     names a line of curated config, so an address that changed and an address
@@ -942,7 +942,7 @@ def shard_count(items: int, *, run: RunConfig) -> int:
 
     `run.shard_size` is what one worker is sized to carry, so a day that needs
     fewer workers gets fewer. Every extra job restores the weights again, and
-    that restore is the largest fixed cost in the pipeline (Rule #2). The count
+    that restore is the largest fixed cost in the pipeline (Guardrail #2). The count
     never passes `run.max_parallel` and never falls below one, so an empty day
     still runs a worker that exits cleanly rather than an empty matrix.
 
@@ -1208,7 +1208,7 @@ def _fetch_one(
     The timings are separated because a slow item is either a slow host or a
     slow extractor, and only one of those is ours to fix. The untruncated body
     travels beside the payload rather than inside it: the scorer needs it, and
-    nothing persists it (Rule #1).
+    nothing persists it (Guardrail #1).
 
     The two spans carry the same split and one thing the columns do not: the
     tagger nests inside the extract span, so a taxonomy that grew a hundred
@@ -1427,7 +1427,7 @@ def stage_visual_planner(
     had bought. Measured on `ubuntu-latest`: five of the eight runs since the
     daily size moved to 200 items were cancelled that way, and each one published
     a full day with zero visuals. Stopping early is the difference between
-    publishing the charts the run made and publishing none of them (Rule #2 -
+    publishing the charts the run made and publishing none of them (Guardrail #2 -
     the feature fits the runner, the runner is not raised to fit the feature).
 
     **It also skips what the day already published**, because the assembler keeps
@@ -1505,7 +1505,7 @@ def stage_visual_planner(
     # The job's own wall-clock is in the run log; this is what the stage inside
     # it spent. The gap between the two is the fixed cost - checkout, weights,
     # install, model start - and separating them is the whole point of the
-    # measurement (Rule #10).
+    # measurement (Guardrail #10).
     tracer.flush()
     total_ms = sum(spent)
     # `drafted` minus `kept` is what the post-model checks refused. Without both
@@ -1732,7 +1732,7 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
     Config states an expectation and the file states a fact. The identity gate
     exists because those two can disagree - a mirror can serve a same-named file
     with different bytes - so the digest here is taken from the file the runtime
-    will open (Rule #10).
+    will open (Guardrail #10).
     """
     model = settings.app.models.summarize
     weights = args.weights or (config.REPO_ROOT / "backend" / "models" / model.file)
@@ -1929,7 +1929,7 @@ def _canary_article(
 
     The raw text is handed on unsanitized on purpose: `user_turn` fences and
     sanitizes what it is given, so this exercises the boundary instead of
-    stepping around it (Rule #11). Every count is taken from the sanitized body
+    stepping around it (Guardrail #11). Every count is taken from the sanitized body
     all the same, because those are the words the model is shown, and because a
     count of the raw text can exceed the count of the body it survives into -
     which the payload refuses. The earlier version counted the raw text and
@@ -2490,7 +2490,7 @@ def _extraction_health(
     recorded.
 
     One article in, three cells out, so the cost is the item and not the archive
-    (Rule #12).
+    (Guardrail #12).
     """
     if article is None:
         return None
@@ -2581,7 +2581,7 @@ def stage_counters(
     out of one model reply. The server's own counters are the second instrument,
     and until now they reached only a job log that keeps them for two days - so
     the rates two published surfaces quote could not be reconciled with anything
-    (Rule #10).
+    (Guardrail #10).
 
     Both counters are cumulative for the server process and a shard runs one
     server for its whole job, so this one read covers the shard entirely.
@@ -2735,7 +2735,7 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
     every item-health shard and every score shard, which charged each run for
     every month the pipeline had ever recorded and found nothing, because a
     finished month was settled when it was written and cannot change again
-    (Rule #12).
+    (Guardrail #12).
 
     **`date=None` is the operator's full pass, and it is the one that pays for
     the history.** What the bounded pass gives up is an earlier run whose settle
@@ -2798,7 +2798,7 @@ def stage_rebuild_score_index(
 
     **Never a step of a run, and that is the design rather than an oversight.**
     Rebuilding reads every score row of every month it is given, which is the
-    read the index exists to avoid (Rule #12), and an index that repaired itself
+    read the index exists to avoid (Guardrail #12), and an index that repaired itself
     on a schedule would hide the drift this exists to reveal. So a person types
     it, and the cover is stated: `--month` names the months to rebuild and
     `--every-shard` is the full pass over the archive. Neither is the default,
@@ -3309,7 +3309,7 @@ def stage_assemble(
     # The console's own payloads, in dependency order and never before it. Each
     # writes the one month this run appended to and prunes its directory to its
     # own `observability.public_*_keep_months`, so none of them grows with the
-    # archive (Rule #12). The band is last because it reads the run-day shards
+    # archive (Guardrail #12). The band is last because it reads the run-day shards
     # the line above it wrote - deriving it from the day payloads instead would
     # be the walk those shards exist to remove.
     month = assemble.month_of(plan.date)
@@ -3753,13 +3753,13 @@ def _picture_faults(public_root: Path, day: DigestDay) -> list[str]:
 
     Three disagreements, three different faults. Two stories on one path means
     one of them shows the other's chart. A path with no file is a broken image.
-    A file no story names is weight against the 1 GB Pages cap (Rule #2) that
+    A file no story names is weight against the 1 GB Pages cap (Guardrail #2) that
     renders nowhere, and it is what a repaired collision leaves behind.
 
     It is checked here rather than by a test per committed day because the day
     that can still be wrong is the one being written. A day already published is
     frozen, and re-checking every one of them costs more every day the pipeline
-    runs (Rule #12).
+    runs (Guardrail #12).
     """
     declared = [
         item.visual.path
@@ -3989,7 +3989,7 @@ def stage_validate_days(
     Measured 2026-09-08 on an Intel Core i7-1265U: 18 committed days,
     19,867,266 bytes, 0.45 s median over three runs against 0.02 s with every
     receipt current, and one day more every day nobody writes any code
-    (Rule #12).
+    (Guardrail #12).
 
     An empty tree fails, and so does a named day that is not there. A validator
     that checked nothing prints the same line as one that checked every day,
@@ -4509,7 +4509,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         #
         # The cover is stated, never defaulted. `--date` is what a commit step
         # passes and it settles that run's shards; `--every-shard` walks the
-        # archive and is a person's decision (Rule #12). A step that named
+        # archive and is a person's decision (Guardrail #12). A step that named
         # neither would get the unbounded pass by accident, which is exactly the
         # cost this stage stopped paying.
         if (args.date is None) == (not args.every_shard):
@@ -4525,7 +4525,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         #
         # The cover is stated, never defaulted. `--month` names what to rewrite;
         # `--every-shard` reads every score row on record, which is the read the
-        # index exists to avoid, so it is a person's decision (Rule #12).
+        # index exists to avoid, so it is a person's decision (Guardrail #12).
         if bool(args.month) == args.every_shard:
             parser.error(
                 "rebuild-score-index needs --month (the months to rewrite) "

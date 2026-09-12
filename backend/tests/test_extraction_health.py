@@ -13,7 +13,7 @@ them.
 
 Every article here is built from one paragraph through the real extractor, so
 the cost is the run this file writes and never the archive behind it
-(`CLAUDE.md` Rule #12). Nothing reads a committed day.
+(`CLAUDE.md` Guardrail #12). Nothing reads a committed day.
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ def _planned(item_id: str, url: str) -> PlannedItem:
 
 
 def _article(body: str, *, item_id: str) -> Article:
-    """One paragraph through the real extractor and the real sanitizer (Rule #7)."""
+    """One paragraph through the real extractor and the real sanitizer (Guardrail #7)."""
     page = (
         "<!DOCTYPE html><html><head><title>probe</title></head>"
         f"<body><article><p>{html.escape(body)}</p></article></body></html>"
@@ -335,7 +335,7 @@ def test_the_block_counts_the_run_the_way_the_bodies_were_written() -> None:
 
 
 def test_a_day_whose_rows_never_ran_the_pass_carries_no_block() -> None:
-    """A block of zeros would report an extractor that found nothing (Rule #10)."""
+    """A block of zeros would report an extractor that found nothing (Guardrail #10)."""
     blank = [
         {**row.csv_row(), "span_integrity": "", "elements_found": "", "element_class": ""}
         for row in _health_rows()

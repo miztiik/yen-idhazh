@@ -427,4 +427,4 @@ Three consequences, stated plainly:
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - decision O43, which section 2 amends.
 - [`../docs/reference/measurements.md`](../docs/reference/measurements.md) - the instrument log section 3 cites rather than restates.
 - [`../docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md) - the page the determinism decision rewrites.
-- [`../CLAUDE.md`](../CLAUDE.md) - section 0 (owner approval), section 0a (the judge ban), Rule #10 (a number carries its hardware, date and spread).
+- [`../CLAUDE.md`](../CLAUDE.md) - section 0 (owner approval), section 0a (the judge ban), Guardrail #10 (a number carries its hardware, date and spread).

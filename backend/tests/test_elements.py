@@ -3,7 +3,7 @@
 The oracle is one comparison and it is asserted over every element the pass
 emits: `article.text[span_start:span_end] == span_excerpt`. It runs over the
 five committed injection canaries and the four captured pages - nine bounded
-fixtures, none of which a run appends to (Rule #12) - because a span that only
+fixtures, none of which a run appends to (Guardrail #12) - because a span that only
 holds on a hand-written string proves the string, not the pass.
 
 The second half of the oracle is that the candidate table is not the
@@ -21,7 +21,7 @@ Row 4 asks the oracle the other way round. The nine fixtures prove a span holds
 against the text it was cut from; the run at the end proves what happens when it
 does not - one item degrades with a recorded reason and its four siblings still
 publish. That run is built rather than read off a committed day, because a run
-whose size grows every four hours is not a fixture (Rule #12).
+whose size grows every four hours is not a fixture (Guardrail #12).
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ RUN_BODIES: Final = (
 
 
 def article_of(page: bytes, url: str, *, item_id: str = "probe-01") -> Article:
-    """A real page through the real extractor and the real sanitizer (Rule #7)."""
+    """A real page through the real extractor and the real sanitizer (Guardrail #7)."""
     item = PlannedItem(
         item_id=item_id,
         url_key=derive_url_key(url),
@@ -119,7 +119,7 @@ def prose_run(*bodies: str) -> list[Article]:
     """One built run: several articles, each at its own address.
 
     Built rather than read off a committed day, because the oracle needs a run
-    whose size does not change when a pipeline run appends one (Rule #12).
+    whose size does not change when a pipeline run appends one (Guardrail #12).
     """
     return [
         prose_article(body, at=f"prose/{index:02d}", item_id=f"probe-{index:02d}")
@@ -205,7 +205,7 @@ def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
     """Every pair of spans on the nine bounded fixtures, checked for overlap.
 
     Pairwise is quadratic in one article's elements and bounded by
-    `elements.max_per_article`, so it cannot grow with the archive (Rule #12).
+    `elements.max_per_article`, so it cannot grow with the archive (Guardrail #12).
     The densest of these fixtures carries seven elements, which is 21 pairs.
     """
     for name, table in bounded_tables():
@@ -531,7 +531,7 @@ def test_sentence_index_counts_from_the_start_of_the_article(
 
 
 def test_a_six_hundred_character_word_is_not_a_unit() -> None:
-    """Rule #11. The element lands with its span; only the unit reading is refused."""
+    """Guardrail #11. The element lands with its span; only the unit reading is refused."""
     element = one("It measured 12 " + "a" * 400 + " across.")
     assert (element.span_excerpt, element.unit) == ("12", None)
 
@@ -581,7 +581,7 @@ def test_a_table_round_trips_through_its_own_contract() -> None:
 
 
 def test_every_bounded_fixture_re_slices_against_the_text_it_was_built_from() -> None:
-    """The invariant at rest, on the nine fixtures no run appends to (Rule #12)."""
+    """The invariant at rest, on the nine fixtures no run appends to (Guardrail #12)."""
     for name, article in bounded_articles():
         table = element_table(article, config=ELEMENTS)
         assert table.span_drift(article.text or "") is None, name

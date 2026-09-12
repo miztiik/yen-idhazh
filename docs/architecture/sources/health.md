@@ -354,7 +354,7 @@ the run cannot both be the one that is right.
 `url_key`, an `endpoint_key`, a ledger `detail` cell or a robots body, and an
 import guard in the contract fails where such a field would be written. A
 projection spelled as a dict of names gains a cell by a one-word edit and
-nothing refuses it (Rule #11).
+nothing refuses it (Guardrail #11).
 
 ### The publishing record counts addresses, not rows
 
@@ -441,7 +441,7 @@ different question: days of record, not decisions a source made. Do not retire
 or demote a source by item-yield rule before that window exists. **Publishing
 the counts is what makes the wait honest rather than silent** - the page prints
 what has been offered and what was published and says in the same sentence that
-the record is too short to read as a rate, which is the shape Rule #10 asks for.
+the record is too short to read as a rate, which is the shape Guardrail #10 asks for.
 
 **And a yield number still reaches no decision.** It is not a rank input, not a
 weight, and not a lifecycle input. The alarm raises a flag and moves nothing: it
@@ -545,7 +545,7 @@ cannot disagree about what a failure is. Three facts it settles:
  because two spans in one section is the defect the shared window exists to
  remove. Until 2026-09-09 the sentence said the feeds "have never failed",
  which claims every run there has been over a read that opens a bounded set of
- files - a growing read in different clothes (`CLAUDE.md` Rule #12, owner
+ files - a growing read in different clothes (`CLAUDE.md` Guardrail #12, owner
  decision 2026-09-08). It now names the run count the record holds.
 
 **A refusal used to count as an ask, and that put a source we have never read
@@ -602,7 +602,7 @@ The self-lifting rest is there because the alternative was tested by imagination
 | Settling repeats only before the write | The write reads a checkout frozen at the commit the run was triggered at, so it cannot see what a sibling attempt pushed afterwards. That is precisely the case that makes the repeats. |
 | One credibility score across permission, availability, yield and editorial value | Four different questions with four different remedies. A single number tells an operator something is wrong and nothing about what to do. |
 | Shipping the raw ledgers to the browser so the page can derive the four itself | The page needs derived states and counts, not private addresses, keys and diagnostics - and a second reducer over one record is a second answer. |
-| Hiding the publishing record until thirty complete days exist | A record nobody can see is one nobody notices is short. Printing the counts and saying they are not a rate is the honest shape, and it is the shape Rule #10 asks for. |
+| Hiding the publishing record until thirty complete days exist | A record nobody can see is one nobody notices is short. Printing the counts and saying they are not a rate is the honest shape, and it is the shape Guardrail #10 asks for. |
 | Fetching the source-health view at read time | It is small, the console needs it on first paint, and every other panel on that page is already prerendered. Nothing fetches it, so nothing stages it into the served bundle. |
 | Treating a zero-item `200` as success | The most common way a feed dies would be invisible, and the ledger would only catch the failures that were already obvious. |
 | A separate knob for "skips before retry" | Two numbers answering one question. When they drift apart nobody remembers which was meant. |
@@ -615,7 +615,7 @@ The self-lifting rest is there because the alternative was tested by imagination
 | Backfilling an endpoint key so a retirement could rest on older rows | The address may have moved since, so the retirement would be filed against one that never failed. Waiting five runs costs a day and buys a decision that is true. |
 | Persisting a mutable status per feed instead of deriving it | A flag is a read-modify-write over the whole history, and two runs racing on it lose rows. Every state here but the retirement is derived from immutable events, and the retirement is the one that is permanent. |
 | Writing no health row for a retired address | The ledger means one row per feed per run, and the console's denominator reads it. A desk with a silent feed would look like a desk with fewer feeds. |
-| Logging feed results instead of committing them | A log is gone with the run. The next run needs to read what the last four did (Rule #1). |
+| Logging feed results instead of committing them | A log is gone with the run. The next run needs to read what the last four did (Guardrail #1). |
 | Recording only failures | You cannot tell "failed five times out of five" from "failed five times out of two hundred" without the successes. |
 
 ## See also

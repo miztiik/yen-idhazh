@@ -195,7 +195,7 @@ class DigestLead(Model):
         description=(
             "One sentence a reader can check against the story, built from our own "
             "published title and our own closed registry and never from fetched text "
-            "(Rule #11). A lead that cannot say something true is not a lead."
+            "(Guardrail #11). A lead that cannot say something true is not a lead."
         ),
     )
 
@@ -431,7 +431,7 @@ class DigestDay(Contract):
                 "Adding or retiring a lens was a code change and a release rather than a "
                 "config edit. The vocabulary is config/taxonomy.json, and the tagger can "
                 "only emit a key of the mapping that file builds, so widening the type "
-                "lets nothing invent a label (Rule #11). Read-compatible, which is the "
+                "lets nothing invent a label (Guardrail #11). Read-compatible, which is the "
                 "half that matters for a frozen day: every id the 22 committed days "
                 "carry is a well-formed slug, so this build reads all 8,922 of their "
                 "items unchanged (measured 2026-09-12). It is also what lets a day keep "

@@ -72,7 +72,7 @@ function shardRows(root: string): TelemetryRow[] {
  * reason to read the archive: the awkward shape is a thing to BUILD, and a
  * built one also carries cases the archive has never produced - a source
  * sitting exactly on the cap, an article that failed twice in one day - at one
- * parse instead of one per published month (`CLAUDE.md` Rule #12). It also
+ * parse instead of one per published month (`CLAUDE.md` Guardrail #12). It also
  * removed the guard that used to ask whether the corpus still held enough
  * failures to prove anything, which was a question about the news.
  *

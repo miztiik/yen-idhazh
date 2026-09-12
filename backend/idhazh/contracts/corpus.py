@@ -20,7 +20,7 @@ holds source text as training samples, nothing renders it, and no reader-facing
 page may read it. `EvidenceItem` holds the same text and is gitignored, because
 it exists to be shown to a person rather than to train anything.
 
-**A contract under Rule #3 and not a migration surface under section 11**, on
+**A contract under Guardrail #3 and not a migration surface under section 11**, on
 the precedent `EvidenceItem` set on 2026-08-27. The window is regenerable from
 the run's own payloads, it is read by a notebook a person re-runs rather than by
 a build, and the prune rewrites its history every `finetune.prune_every_days`.
@@ -87,7 +87,7 @@ class CorpusRow(Contract):
             why=(
                 "The pipeline scores 600-730 articles a day and throws the pairs away. "
                 "They are training data for the exact job we run, so the window that "
-                "keeps them needs a shape before anything writes one (Rule #3). Five "
+                "keeps them needs a shape before anything writes one (Guardrail #3). Five "
                 "fields and no more: prompt_fingerprint is sha256 of messages[0], "
                 "source_words is a word count of messages[1], and which file a row lives "
                 "in already says whether a human wrote it - a stored copy of a derivable "

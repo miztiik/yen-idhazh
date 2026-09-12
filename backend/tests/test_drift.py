@@ -553,7 +553,7 @@ def enough() -> int:
 
 
 def test_the_review_reads_its_floor_from_config() -> None:
-    """Rule #6. The shipped program asks config, and carries no number of its own."""
+    """Guardrail #6. The shipped program asks config, and carries no number of its own."""
     program = review_program()
 
     assert "config = load().app.drift" in program

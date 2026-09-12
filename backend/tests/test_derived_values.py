@@ -12,7 +12,7 @@ No model runs here and none can: every input is a committed file under
 reads the derived-value module's own imports to keep it that way (`CLAUDE.md`
 section 0a).
 
-Constant cost in the size of one plan and one article's table (Rule #12). No
+Constant cost in the size of one plan and one article's table (Guardrail #12). No
 test here reads a collection a run appends to.
 """
 
@@ -56,7 +56,7 @@ DERIVED_MODULE: Final = Path(__file__).resolve().parents[1] / "idhazh" / "derive
 
 
 def committed_visuals() -> VisualsConfig:
-    """The knobs the pipeline actually ships, never a number typed here (Rule #6)."""
+    """The knobs the pipeline actually ships, never a number typed here (Guardrail #6)."""
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
 
 

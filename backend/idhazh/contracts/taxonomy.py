@@ -3,7 +3,7 @@
 Every id here is an open slug, so adding or retiring a word is a config edit.
 The closed vocabulary is this file, not the Python type: nothing may invent a
 label, because `tag.tags` can only ever return a key of the mapping this file
-builds, and no fetched text reaches that mapping (Rule #11). What the open type
+builds, and no fetched text reaches that mapping (Guardrail #11). What the open type
 buys is that a day written before the vocabulary moved still reads - a closed
 type would reject a payload whose word this file has since stopped carrying.
 
@@ -83,7 +83,7 @@ roughly twice that: room to sharpen a sentence, not room for a paragraph.
 
 Empty is legal and means the entry is offered to no prompt. A proposed entry
 arrives with no definition, because the words that would go in it came off the
-open web and a person writes the real one when they promote it (Rule #11).
+open web and a person writes the real one when they promote it (Guardrail #11).
 `Taxonomy` is what refuses an empty definition on an entry it does offer.
 """
 
@@ -382,7 +382,7 @@ class Taxonomy(Contract):
         This mapping is the closed vocabulary the tagger works from, which is
         what keeps an open id type safe: `tag.tags` can only return a key of
         what it is handed, so a hostile page can win itself a word we already
-        publish and can never invent one (Rule #11).
+        publish and can never invent one (Guardrail #11).
         """
         return {
             lens.id: lens.keywords

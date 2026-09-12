@@ -11,7 +11,7 @@ CI does not use this runbook. CI downloads the same artifacts into the Actions c
 - The weights are multi-gigabyte. GitHub refuses any single file over 100 MB, and the quantisations this project uses are far past that.
 - The binaries are platform-specific third-party builds, reproducible from an upstream release.
 
-Both are inputs the pipeline consumes, not work this project authored, so committing them would put tens of gigabytes of somebody else's bytes in history forever to save a one-time download (Rule #8, and `CLAUDE.md` section 10 - never commit a model weight or a downloaded binary).
+Both are inputs the pipeline consumes, not work this project authored, so committing them would put tens of gigabytes of somebody else's bytes in history forever to save a one-time download (Guardrail #8, and `CLAUDE.md` section 10 - never commit a model weight or a downloaded binary).
 
 ## What you need
 
@@ -24,7 +24,7 @@ Both directories are created by you, are gitignored, and are safe to delete and 
 
 ## Steps
 
-1. **Read the model references from `config/`.** The model reference and quantisation are configuration, never hardcoded (Rule #6).
+1. **Read the model references from `config/`.** The model reference and quantisation are configuration, never hardcoded (Guardrail #6).
 2. **Download the runtime build for your platform** into `backend/bin/`. Prefer a prebuilt release over compiling from source: building the runtime costs minutes and produces the same thing as a download. The measurement workflow pins its benchmark build; production workflows still resolve the newest compatible release. Record the executable SHA-256 and the `build_number` / `build_commit` fields from `llama-bench` JSON with every local measurement. The binary has no `--version` flag.
 3. **Download the weight files** into `backend/models/`. These are large; expect the first fetch to take a while and to be the slowest part of setup.
 4. **Verify the runtime starts** and the benchmark JSON reports the expected build.
@@ -39,7 +39,7 @@ The weights dominate both. Budget several gigabytes of disk per model and plan t
 
 A local run differs from CI in three ways that matter, and each has bitten someone:
 
-- **Different hardware.** A laptop measurement is a laptop measurement. Never quote one as a runner figure (Rule #10); label it as an order-of-magnitude check.
+- **Different hardware.** A laptop measurement is a laptop measurement. Never quote one as a runner figure (Guardrail #10); label it as an order-of-magnitude check.
 - **Different thread count.** CI runs with the runner's core count. Match it locally when comparing throughput, or the numbers are not comparable.
 - **Thermal behaviour.** A laptop throttles under sustained load in a way a runner may not, which shows up as a large spread rather than a shifted mean. Report the spread.
 
@@ -63,4 +63,4 @@ Extremely low-bit quantisations (1-2 bit) have been published for several open-w
 - [`test-models-locally.md`](test-models-locally.md) - compare two GGUF files and sweep thread counts.
 - [../concepts/config.md](../concepts/config.md) - where model references, quantisation and inference knobs live.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what the Summarize stage does with the model.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture), Rule #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture), Guardrail #10 (measured, not estimated).

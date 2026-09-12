@@ -6,7 +6,7 @@ bounded it, and monthly sharding bounds one file rather than the tree.
 
 Deleting an old month outright would answer the bytes and cost two things that
 cannot be bought back. Every published quality claim about a past month would
-lose the rows behind it, which Rule #10 then forbids citing at all. And every
+lose the rows behind it, which Guardrail #10 then forbids citing at all. And every
 measurement in that month would become re-scoreable: `evals.writer` refuses a
 repeat by comparing against every row the ledger holds, so a deleted row is a
 row the next run has never seen.
@@ -98,7 +98,7 @@ class Moment(Model):
         ge=0.0,
         description=(
             "Every value squared, added together. With n and sum this gives the "
-            "variance and so the spread, which Rule #10 asks for beside any number "
+            "variance and so the spread, which Guardrail #10 asks for beside any number "
             "read off this archive."
         ),
     )

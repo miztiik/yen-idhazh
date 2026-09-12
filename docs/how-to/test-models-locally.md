@@ -315,7 +315,7 @@ comparable, but one model's prompt count is not the other's.
 **879 is the retired incumbent's tokenizer count, so pass it only to reproduce
 that model's figures.** Nobody has rendered this prompt through the configured
 summarizer's tokenizer, so a derived seconds-per-article figure for it would be
-an estimate dressed as arithmetic (Rule #10). Omit the flag and read the raw
+an estimate dressed as arithmetic (Guardrail #10). Omit the flag and read the raw
 rates until that count is measured.
 
 On the runner, 2026-08-23, the configured summarizer decodes at 6.01 tok/s.
@@ -371,7 +371,7 @@ lscpu -e=CPU,CORE,SOCKET,NODE,ONLINE
 
 A local optimum is only a local result. Production changes only after the same
 sweep runs on `ubuntu-latest` with three repeats and the spread recorded
-(Rule #10).
+(Guardrail #10).
 
 Run the hosted sweep after this workflow version is on the default branch:
 

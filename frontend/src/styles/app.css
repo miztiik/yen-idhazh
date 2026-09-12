@@ -98,7 +98,7 @@
 
 /* The display face carries headings only. The body keeps the system stack: it
    renders on the first frame at zero bytes, and the body is what the reader
-   came for. Self-hosted rather than fetched - Rule #1 permits a third-party
+   came for. Self-hosted rather than fetched - Guardrail #1 permits a third-party
    static asset, but the HTTP cache is partitioned per site so the shared-cache
    argument is dead, and script-src is 'self' only.
 

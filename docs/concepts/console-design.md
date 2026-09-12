@@ -68,14 +68,14 @@ three different states on one day.
 
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
-which Rule #10 forbids. And **no string names a config key as if it were a
+which Guardrail #10 forbids. And **no string names a config key as if it were a
 word**: it is `Measurement is off`, never `runtime_counters_scrape is false`,
 because a term from a subsystem is not a term for a user (section 0b).
 
 ### A figure in currency prints its rate, its source and the word for what it is
 
 There is exactly one money figure on this site: the counterfactual cost on
-`/console/machine/`. CLAUDE.md Rule #10 forbids the rest, and carries the
+`/console/machine/`. CLAUDE.md Guardrail #10 forbids the rest, and carries the
 owner's carve-out for that one on conditions this section holds:
 
 - **Never a currency symbol.** `0.48 USD`, never `$0.48`. A symbol in front of a
@@ -86,7 +86,7 @@ owner's carve-out for that one on conditions this section holds:
  would understate a run that wrote a lot.
 - **Where the rate came from is printed too** - `Using your rate` or `Using the
  configured rate`. A money figure whose basis is invisible is the exact thing
- Rule #10 exists to prevent.
+ Guardrail #10 exists to prevent.
 - **The word for what it is sits in the panel, not in a tooltip**: what the run
  would have cost somewhere else, never an amount owed.
 - **Digits are grouped by hand, never by `toLocaleString`.** The server draws
@@ -630,7 +630,7 @@ Authority: Susan and Fowler, plan row #12.
 ## Design rationale
 
 **`console.shimmer_after_ms` ships at 400 and 400 is a declared estimate, not a
-measurement.** Rule #10 refuses an unmeasured number the right to justify a
+measurement.** Guardrail #10 refuses an unmeasured number the right to justify a
 design, so this one justifies nothing: nothing about the shape of the console
 depends on it, and the knob decides only whether a wait short enough to be over
 already gets animated on its way past. The console started fetching its months
@@ -678,4 +678,4 @@ out.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - the published projection and the grain of every figure.
 - [config.md](config.md) - the knobs these rules read.
 - [../reference/measurements.md](../reference/measurements.md) - the instrument log the console never quotes from.
-- [../../CLAUDE.md](../../CLAUDE.md) - section 0b (voice) and Rule #10 (every number carries its conditions).
+- [../../CLAUDE.md](../../CLAUDE.md) - section 0b (voice) and Guardrail #10 (every number carries its conditions).

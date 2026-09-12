@@ -120,7 +120,7 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
         why=(
             "Articles a day published, the denominator of the per-article cost. It "
             "rides on the run-day row because the alternative is opening a "
-            "hundred-kilobyte day payload to read one integer (Rule #12)."
+            "hundred-kilobyte day payload to read one integer (Guardrail #12)."
         ),
     ),
     ConsolePayload(

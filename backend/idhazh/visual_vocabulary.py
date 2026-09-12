@@ -233,7 +233,7 @@ _TERA: Final = Decimal(1_000_000_000_000)
 #: what `idhazh.derived_values.convert` reads.
 #:
 #: **It is a closed allow-list and the omissions are the safety.** A unit comes
-#: off a stranger's page (Rule #11), so one this table does not name is compared
+#: off a stranger's page (Guardrail #11), so one this table does not name is compared
 #: by identity and is never assumed compatible with anything. `m` is absent
 #: because it is metres or millions and a guess there is a one-million-fold
 #: error on a published bar - the same reason `MAGNITUDE` in `idhazh.elements`

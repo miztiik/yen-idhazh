@@ -15,7 +15,7 @@
  * row turned green: run it against the pre-row code and the flat assertion fails.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
- * more every published day (Rule #12), and both shapes are reachable from a
+ * more every published day (Guardrail #12), and both shapes are reachable from a
  * built fixture.
  */
 

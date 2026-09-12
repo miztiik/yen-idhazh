@@ -12,7 +12,7 @@ pytestmark = pytest.mark.contract
 
 
 def test_every_measured_number_says_what_it_is_of_and_what_to_do() -> None:
-    """A value with no method is an estimate, and Rule #10 refuses one a design leans on."""
+    """A value with no method is an estimate, and Guardrail #10 refuses one a design leans on."""
     for record in EVERY_MEASURED:
         assert record.measures.strip(), f"{record} does not say what it measures"
         assert record.method.strip(), f"{record.measures} does not say how it was taken"

@@ -37,7 +37,7 @@ the record itself, so a rate longer than that is unsupported by it whatever the
 table says.
 
 The report carries no clock and no host, so the same tree always prints the same
-bytes and a re-run is a check rather than a new reading. Rule #10's hardware and
+bytes and a re-run is a check rather than a new reading. Guardrail #10's hardware and
 date belong beside the figure in `docs/reference/measurements.md`, where a reader
 looks the number up.
 

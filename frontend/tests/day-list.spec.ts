@@ -19,7 +19,7 @@
  * draws" are numbers here rather than claims about the shape of the code.
  *
  * Nothing here reads a committed day. A test that walks the archive costs more
- * every published day (Rule #12), and every shape this row is about - a lead
+ * every published day (Guardrail #12), and every shape this row is about - a lead
  * sitting past the first page, an address deep in the stream, a story hidden by
  * a read mark - is reachable from a day built in this file.
  */

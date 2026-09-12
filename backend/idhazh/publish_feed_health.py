@@ -8,7 +8,7 @@ console fetches.
 The shape is `PublicFeedRow`. It keeps `detail`, which is our own one-line reason
 and never the response body, because a failing feed a reader can see but not
 read is a bar with no label; it refuses `endpoint_key`, because an address
-hashed is still an address (Rule #11).
+hashed is still an address (Guardrail #11).
 """
 
 from __future__ import annotations

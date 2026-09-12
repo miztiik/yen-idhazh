@@ -145,7 +145,7 @@ python -m idhazh.publish_telemetry
 
 Before merging anything that rewrites `frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run in flight and wait it out.
 
-**A test that reads the newest committed day is racing the pipeline**, so it goes red in the morning and green by evening. The digest publishes several times a day and appends to the same payload, so the newest date on disk is always the one still being written - measured 2026-09-06, 78 stories at 09:00 against 374 to 582 on a finished day. Take the newest day that is **not** the newest date on disk, or better, use a bounded fixture (`CLAUDE.md` Rule #12).
+**A test that reads the newest committed day is racing the pipeline**, so it goes red in the morning and green by evening. The digest publishes several times a day and appends to the same payload, so the newest date on disk is always the one still being written - measured 2026-09-06, 78 stories at 09:00 against 374 to 582 on a finished day. Take the newest day that is **not** the newest date on disk, or better, use a bounded fixture (`CLAUDE.md` Guardrail #12).
 
 ## Line endings
 

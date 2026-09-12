@@ -49,7 +49,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **Full vocabulary, located in config.** Rule #6 puts the list in `config/`; it does not shorten it. Read as "limited to types with templates", the neighbour-downgrade is unreachable, `wasted_decode_rate` is identically zero, and the build order stops being derivable | 12.8 X1 |
+| 1 | **Full vocabulary, located in config.** Guardrail #6 puts the list in `config/`; it does not shorten it. Read as "limited to types with templates", the neighbour-downgrade is unreachable, `wasted_decode_rate` is identically zero, and the build order stops being derivable | 12.8 X1 |
 | 2 | This does not cross the non-goal about types arriving without rules. **That governs what may render; this governs what may be named.** An unbuilt type never reaches a reader | 12.8 X1 |
 | 3 | Template order follows **observed frequency**, not a fixed wave order. Guessing the order is an unmeasured number justifying a design | Row 48 |
 | 4 | `planned_type` and `rendered_type` are both recorded, always | Row 48, P.D2 |
@@ -60,7 +60,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Restrict the enum to built types | Makes the downgrade unreachable and the metric identically zero, and refutes the rule that derives the build order | 12.8 X1 |
-| 2 | Hardcode the list in Python | Rule #6 | Fowler |
+| 2 | Hardcode the list in Python | Guardrail #6 | Fowler |
 
 ---
 

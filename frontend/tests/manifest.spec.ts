@@ -112,7 +112,7 @@ test.describe('what installability may not become', () => {
 
 	test('the worker fetches nothing that is not our own origin', () => {
 		const source = readFileSync(resolve(process.cwd(), 'src', 'service-worker.ts'), 'utf8');
-		// Rule #1: a worker runs on the reader's device over files we already
+		// Guardrail #1: a worker runs on the reader's device over files we already
 		// serve. An absolute URL in it would be the one way that stops being true,
 		// and the guard that keeps it true is read back here rather than trusted.
 		expect(source.match(/https?:\/\/[^\s'"`]+/g) ?? [], 'the worker names an origin').toEqual([]);

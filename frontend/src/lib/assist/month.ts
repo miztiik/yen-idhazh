@@ -102,7 +102,7 @@ export function windowStart(anchor: string, days: number): string {
  * when it lies between the window's start month and the anchor's, inclusive;
  * every month older than that is out of reach and is never fetched, which is
  * what keeps the walk bounded by the window rather than by the archive
- * (`CLAUDE.md` Rule #12).
+ * (`CLAUDE.md` Guardrail #12).
  *
  * `months` is the set that exists on disk (`indexMonths()`, newest first), so a
  * month the window reaches but nobody published is simply absent from the

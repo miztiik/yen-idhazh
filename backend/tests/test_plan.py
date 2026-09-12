@@ -6,7 +6,7 @@ so it keeps a safety net around all of them.
 
 The three seams `cli` exposes are what make this possible. The fetcher is a
 callable, so a test drives it from `tests/fixtures/feeds/` - a real function
-reading a real captured file, not a mock (Rule #7). The clock is a callable,
+reading a real captured file, not a mock (Guardrail #7). The clock is a callable,
 so a rule about how old an article is has a fixed `now` and cannot change its
 answer at midnight. The state directory is a path, so a test appends its sight
 ledgers to a temp directory rather than to the repository's own.
@@ -339,7 +339,7 @@ def test_the_plan_stage_reads_the_feed_list_and_nothing_else() -> None:
     """Every outbound address comes from committed config, never from fetched text.
 
     `fetcher_over` refuses an uncovered address, so a feed body that talked the
-    stage into a request would fail this test by name (Rule #11).
+    stage into a request would fail this test by name (Guardrail #11).
     """
     built = plan([LAB, TRADE, COMMUNITY], salience=[FRONT_PAGE])
     assert built.feeds_read == 3
@@ -644,7 +644,7 @@ def test_a_story_older_than_the_window_is_not_planned_at_all() -> None:
 
 
 def test_the_window_is_a_knob_and_a_wider_one_takes_the_same_day() -> None:
-    """Rule #6: what counts as too old is config, never a literal."""
+    """Guardrail #6: what counts as too old is config, never a literal."""
     late = "2026-08-24T06:00:00Z"
     inside_a_day = plan([LAB, TRADE, COMMUNITY], now=late)
     inside_a_week = plan([LAB, TRADE, COMMUNITY], now=late, max_age_hours=24.0 * 7)
@@ -805,7 +805,7 @@ def test_a_plan_records_what_the_published_guard_refused_and_how_old_it_was() ->
     Both addresses are built here rather than read off the committed ledger. That
     ledger spans 16 days, so it can never carry the case the question is actually
     about - an address old enough that a finite cover would have forgotten it
-    (Rule #12, section 13).
+    (Guardrail #12, section 13).
     """
     state = Path(tempfile.mkdtemp())
     first = plan([LAB, TRADE, COMMUNITY], state=state)
@@ -1060,7 +1060,7 @@ def test_a_working_feed_records_what_it_yielded() -> None:
 
 
 def test_the_record_never_carries_the_response_body() -> None:
-    """A feed is a stranger's text and this row lands on a published page (Rule #11)."""
+    """A feed is a stranger's text and this row lands on a published page (Guardrail #11)."""
     state = Path(tempfile.mkdtemp())
     hostile = "<script>alert(1)</script>" * 40
     plan(

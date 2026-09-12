@@ -1,6 +1,6 @@
 """The operator's six verbs, run against a real corpus in a temp directory.
 
-No mocks and no network (Rule #7). `refill` and `verify --tokens` are the two
+No mocks and no network (Guardrail #7). `refill` and `verify --tokens` are the two
 paths that reach the network: `refill` takes its fetcher as an argument, so a
 test drives it with real captured bytes, and the test for `verify --tokens` is
 that it cannot run without the flag.
@@ -160,7 +160,7 @@ def test_a_training_row_and_a_holdout_row_are_never_the_same_row(window: Path) -
 
 
 def test_split_defaults_to_the_configured_holdout_days(window: Path) -> None:
-    """A knob with no reader is not a knob (Rule #6).
+    """A knob with no reader is not a knob (Guardrail #6).
 
     Asked two ways and compared, so this holds for any value the knob takes. An
     earlier version asserted the value itself was above 3, which made a config

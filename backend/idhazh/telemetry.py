@@ -114,7 +114,7 @@ def event(
 
 #: The longest a span attribute value may be. One SHA-256 digest is 64
 #: characters, and nothing an attribute carries is wider - a value that needs
-#: more room is prose, and prose does not leave the process (Rule #11,
+#: more room is prose, and prose does not leave the process (Guardrail #11,
 #: CLAUDE.md section 0a).
 MAX_ATTRIBUTE_CHARS: Final = 64
 
@@ -393,7 +393,7 @@ class Tracer:
 
     Not a global and not ambient to the process. A tracer is an argument, the
     way the fetcher and the clock are arguments, so a test drives it with no
-    network and no process state to reset between cases (Rule #7).
+    network and no process state to reset between cases (Guardrail #7).
 
     It carries the open stack because the nesting a span buys has to survive a
     seam. The robots read is four call frames below `stage_work`, behind the
@@ -569,7 +569,7 @@ class _LangfuseSink:
     **`input` and `output` are passed explicitly as `None`.** They are the SDK's
     free-text fields, they are what its own decorator fills with the prompt and
     the completion, and this repository is public - so they are named here and
-    set to nothing rather than left to a default (Rule #11, CLAUDE.md section
+    set to nothing rather than left to a default (Guardrail #11, CLAUDE.md section
     0a). Everything we do send rides in `metadata`, which holds the same
     validated attribute bag the file sink writes and the guard reads.
 

@@ -212,7 +212,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Leave the docs and rename only the code | The docs are the memory. Code and docs disagreeing about a name is worse than either name alone | CLAUDE.md Rule #4 |
+| 1 | Leave the docs and rename only the code | The docs are the memory. Code and docs disagreeing about a name is worse than either name alone | CLAUDE.md Guardrail #4 |
 
 ---
 

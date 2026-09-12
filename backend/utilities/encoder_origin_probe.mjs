@@ -3,7 +3,7 @@
  * Can a reader's browser fetch the encoder weights from somewhere that is not us?
  *
  * Run by hand, against the deployed site, when the answer might have changed.
- * It is NOT a test and it joins no suite: Rule #7 forbids a test that touches
+ * It is NOT a test and it joins no suite: Guardrail #7 forbids a test that touches
  * the network, and every request below leaves the machine. pytest does not
  * collect a `.mjs`, the frontend selector globs `frontend/tests/`, and
  * `test-scope.ts` widens only for `gate_lock.py`, so nothing here runs on a push.
@@ -27,7 +27,7 @@
  * change a later row would ship - so a refusal is then the other origin talking.
  * Run both. One arm alone cannot tell the two gates apart.
  *
- * Every response is data (Rule #11). Nothing read from a response becomes a
+ * Every response is data (Guardrail #11). Nothing read from a response becomes a
  * shell argument, a file path or a fetched URL: the one value taken from a
  * response and put back into a URL is a release asset id, and it is refused
  * unless it is digits.

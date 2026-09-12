@@ -54,7 +54,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Size the dedup from the design and skip the measurement | Rule #10. And the number decides whether row 3 is worth its risk at all | Carmack |
+| 1 | Size the dedup from the design and skip the measurement | Guardrail #10. And the number decides whether row 3 is worth its risk at all | Carmack |
 
 ---
 

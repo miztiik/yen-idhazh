@@ -1,7 +1,7 @@
 name: Measurements
 
 # Measures real prefill/decode throughput on a stock GitHub-hosted runner so the
-# pipeline design rests on numbers rather than estimates (CLAUDE.md Rule #10).
+# pipeline design rests on numbers rather than estimates (CLAUDE.md Guardrail #10).
 # Every figure it emits carries the hardware it ran on and the date.
 
 on:
@@ -64,7 +64,7 @@ env:
   # python block rather than through `.github/scripts/start-llama-server.sh`,
   # because it sweeps a setting and needs the process handle - but it reads the
   # port from here, so no arm of this repository spells the number twice
-  # (Rule #6).
+  # (Guardrail #6).
   LLAMA_PORT: '8080'
 
 jobs:
@@ -79,7 +79,7 @@ jobs:
   #
   # A target may still measure a model config does not name - that is what this
   # harness is for. The `models` input carries the candidates and wins whenever
-  # it is set; only the DEFAULT comes from here (Rule #6).
+  # it is set; only the DEFAULT comes from here (Guardrail #6).
   models:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -254,7 +254,7 @@ jobs:
     if: ${{ inputs.target == 'corpus' }}
     # The length buckets every per-article cost figure multiplies by are invented
     # until this job runs. It reaches the open web, which is why it lives here and
-    # never in a test (Rule #7).
+    # never in a test (Guardrail #7).
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -360,7 +360,7 @@ jobs:
             "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
 
       # A throughput number is about a model only if it names the bytes that
-      # produced it (Rule #10).
+      # produced it (Guardrail #10).
       - name: Verify the weights
         run: |
           set -euo pipefail
@@ -854,7 +854,7 @@ jobs:
       - name: Read the production inference settings
         # The bench has to run the shape production runs, so the four context
         # and threading knobs come from config rather than from a literal
-        # copied into this file (CLAUDE.md Rule #6). Change config and the next
+        # copied into this file (CLAUDE.md Guardrail #6). Change config and the next
         # reading follows it.
         run: |
           set -euo pipefail
@@ -886,7 +886,7 @@ jobs:
           } | tee -a backend/var/batched-bench/hardware.txt
 
       # The ratio this job publishes is a claim about one model. Checking the
-      # digest before the bench runs is what lets the number name it (Rule #10).
+      # digest before the bench runs is what lets the number name it (Guardrail #10).
       # `python3`, because this job installs no interpreter of its own.
       - name: Verify the weights
         run: |

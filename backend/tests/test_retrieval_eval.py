@@ -10,7 +10,7 @@ The measurement runs the real encoder over the committed archive and reports a
 number with its spread. It is a gate on the ranking - `assist.recall_min` - and
 a report on everything else. Nothing here touches the network: the encoder is
 committed under `frontend/static/` and the archive is committed under
-`frontend/public/` (Rule #7).
+`frontend/public/` (Guardrail #7).
 """
 
 from __future__ import annotations

@@ -18,7 +18,7 @@ owns it, never re-derived from a wider one:
 
 - the runs, the site size and the day's article count come from the run-day
   shards this run just wrote, because re-reducing five months of day payloads is
-  exactly the walk those shards exist to remove (Rule #12);
+  exactly the walk those shards exist to remove (Guardrail #12);
 - the feed trouble comes from `state/feed-health/` through `discover.settled`,
   `discover.streak` and `discover.resting`, because those are the reducers the
   pipeline itself rested a feed by, and a page that ran its own would contradict
@@ -31,7 +31,7 @@ owns it, never re-derived from a wider one:
 Every read is covered by the widest span `console.window_presets` offers, which
 is the furthest back any panel on any route can draw. The span comes from
 config rather than a literal, so raising the widest preset widens the read with
-it (Rule #6).
+it (Guardrail #6).
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import month_files
 
-#: The 1 GB Pages ceiling (`CLAUDE.md` Rule #2). A constant and not a knob, for
+#: The 1 GB Pages ceiling (`CLAUDE.md` Guardrail #2). A constant and not a knob, for
 #: the reason `retention.py` gives for its own copy: it is a property of the
 #: host, and a knob would invite raising it instead of shrinking the site.
 PAGES_CAP_BYTES: Final = 1024 * 1024 * 1024
@@ -108,7 +108,7 @@ EDITORIAL_CAP: Final = WORTH_A_LOOK
 #: The two ends a gating kind's decline rate may not sit at.
 #:
 #: Row #12 of the placement plan moves these to `console.decline_rate_floor`
-#: and `console.decline_rate_ceiling`, where a person owns them (Rule #6); the
+#: and `console.decline_rate_ceiling`, where a person owns them (Guardrail #6); the
 #: rule is written here first because the band is derived once and this is the
 #: file that derives it. They are keyword arguments rather than literals in a
 #: branch, so that row passes the config values in and changes nothing else.
@@ -222,7 +222,7 @@ def roughly(value: float) -> str:
     The rate under the runway is a median whose spread is near a fifth of
     itself, so the trailing digits of a six-figure answer are noise. Three
     significant figures leaves a small answer exact and stops a large one
-    claiming a hundred articles of accuracy nothing measured (Rule #10).
+    claiming a hundred articles of accuracy nothing measured (Guardrail #10).
     """
     if value <= 0:
         return "0"
@@ -256,7 +256,7 @@ def site_cost(days: Sequence[PublicRunDay]) -> tuple[float | None, int]:
     its articles were free, and there were none.
 
     Returns the median and the number of days it was measured over, which is
-    what the band prints beside it (Rule #10).
+    what the band prints beside it (Guardrail #10).
     """
     ordered = sorted(days, key=lambda row: row.date)
     measured: list[float] = []
@@ -1201,7 +1201,7 @@ def publish(
     `sources` is the run's own source-health view, handed over by the caller
     that already built it rather than read again here - it is one row per
     address in `config/sources.json`, so it grows at review speed and opens no
-    file (Rule #12). Unnamed, the Voices route carries no worst state.
+    file (Guardrail #12). Unnamed, the Voices route carries no worst state.
 
     `widest` is the largest of `console.window_presets`, which is the furthest
     back any panel on any route can draw. Nothing here opens a day payload.
@@ -1296,7 +1296,7 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
 
     Seven directory listings and no file opened, and each directory is bounded
     by its own retention knob, so this costs the same on any size of archive
-    (`CLAUDE.md` Rule #12).
+    (`CLAUDE.md` Guardrail #12).
     """
     found: set[str] = set()
     for dirname, suffix in FETCHED_SERIES:

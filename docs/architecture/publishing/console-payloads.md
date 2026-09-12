@@ -4,7 +4,7 @@
 
 The operator console reads twelve datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
-needs a contract (Rule #11). This page is the list. The machine-readable copy is
+needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
 `backend/idhazh/contracts/console_payloads.py`, and it is the one a build reads.
 
 Every one of them has a producer now. **Nothing reads them yet** - the console
@@ -94,7 +94,7 @@ month nobody published and leave the published one behind.
 
 **One month per run.** The run knows which month it appended to, so the daily
 caller names that one and every other month is skipped without being read
-(Rule #12). A month whose published file is **missing** is read anyway, which is
+(Guardrail #12). A month whose published file is **missing** is read anyway, which is
 what makes a fresh clone, a deleted file and a first backfill all land.
 
 **Only on a byte difference.** A re-derived month whose bytes match what is on
@@ -160,7 +160,7 @@ the payload is.
 ## Retention
 
 Seven of the twelve file by month, and a payload a run appends to with no age is
-a directory that grows for ever (Rule #12). Each has a knob under
+a directory that grows for ever (Guardrail #12). Each has a knob under
 `observability` in `config/idhazh.json`, and every one of them has a **non-null**
 default:
 
@@ -287,7 +287,7 @@ per-payload pass and named `console/band.json` at 2,000 in
 the whole hazard: the spec's own century model produced 3,247 bytes, a case that
 passed the number the spec asserted and failed the number the gate applied, and
 the two disagreed fourfold with no test able to say so. On 2026-09-10 the spec's
-constant was deleted and the spec now reads the config key (Rule #6), and its
+constant was deleted and the spec now reads the config key (Guardrail #6), and its
 century model was replaced by the retention bound above, because a century of
 months was never reachable. The gate's number did not move: at 2.47 times the
 bounded payload it was already a guardrail under the ruling of that day
@@ -344,7 +344,7 @@ over a wider span than its run-days. Measured on the canary the day it was
 found, run-days held `2026-08` where the union holds `2026-07`, `2026-08` and
 `2026-09` - two months of the page that would never have filled. Seven
 directory listings and no file opened, each directory bounded by its own knob,
-so it costs the same on any size of archive (Rule #12).
+so it costs the same on any size of archive (Guardrail #12).
 
 **The canary writes these payloads too, and it has to write them late.**
 `build_canary_day.py --console-payloads-only` runs the same six producers
@@ -408,5 +408,5 @@ decision 2's cold-load ceiling. Measured 2026-09-09.
  closes a month, and what a late arrival does to a closed one.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - the
  property behind every window on this page.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #11 for the trust boundary,
- Rule #12 for the ages, section 11 for the stamps.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #11 for the trust boundary,
+ Guardrail #12 for the ages, section 11 for the stamps.

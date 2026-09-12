@@ -17,7 +17,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Why this plan exists | Ten span call sites are already instrumented and every one is thrown away, because tracing is off in CI. The question nobody can answer is whether the model is idle for most of a shard - and if it is, more shards is the wrong lever and the whole two-call design is being sized against a fiction |
 | Hard scope - in | A per-shard rollup that becomes the committed record; raw traces on a short rolling window so an operator can drill into a recent run; the reconciliation that makes the timing self-checking; switching tracing on; one console panel |
 | Hard scope - out | Any new span for a stage that does not exist yet (plans 08 and 11 add their own). Any third-party host - the file sink stays the only sink CI runs. Any change to what a stage computes |
-| ESCALATE triggers | 1. The committed rollup would restate a column an existing ledger already holds - that is the fourth-record objection and it is a stop. 2. A span attribute would carry free text, which `telemetry.attribute` and Rule #11 refuse. 3. Turning tracing on costs a shard more than 1 percent of its wall clock |
+| ESCALATE triggers | 1. The committed rollup would restate a column an existing ledger already holds - that is the fourth-record objection and it is a stop. 2. A span attribute would carry free text, which `telemetry.attribute` and Guardrail #11 refuse. 3. Turning tracing on costs a shard more than 1 percent of its wall clock |
 | Chosen strategy | Build the fold first and flip the switch last. The file sink writes into gitignored `backend/var/`, so tracing on before the fold exists is runner seconds spent writing a file nobody opens |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
 
@@ -55,7 +55,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Commit the raw spans as the record | A fourth record of one run, free to disagree with the other three | Fowler, `docs/concepts/telemetry.md` |
-| 2 | Send spans to a hosted collector | Rule #1, and it collects nothing we do not already hold - the client sends our own span unchanged | Section 14.4 |
+| 2 | Send spans to a hosted collector | Guardrail #1, and it collects nothing we do not already hold - the client sends our own span unchanged | Section 14.4 |
 
 ---
 
@@ -116,7 +116,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The flip lands **after** rows 1 to 3, not before. The file sink writes into gitignored `backend/var/`, which dies with the checkout | Section 14.4a |
-| 2 | The attribute vocabulary stays closed and the sentinel test keeps running, so turning tracing on makes the Rule #11 guard run in every CI job instead of on a developer's box | Section 14.4 |
+| 2 | The attribute vocabulary stays closed and the sentinel test keeps running, so turning tracing on makes the Guardrail #11 guard run in every CI job instead of on a developer's box | Section 14.4 |
 | 3 | The flip date is a discontinuity every new panel must name, or a sub-step series starting that day reads as a sudden slowdown | Section 14.4b |
 
 ### Rejected alternatives

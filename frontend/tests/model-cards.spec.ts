@@ -15,7 +15,7 @@
  * and driven here from a window built to move each column its own way.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
- * more every published day (Rule #12); this window is three rows, written down.
+ * more every published day (Guardrail #12); this window is three rows, written down.
  */
 
 import { expect, test } from '@playwright/test';
