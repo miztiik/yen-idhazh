@@ -1,5 +1,65 @@
 {
   "$defs": {
+    "CallCost": {
+      "additionalProperties": false,
+      "description": "One model call's own five numbers.\n\nNested rather than flattened because the same five have to be described once\nand checked once. The two CSV ledgers cannot nest, so they spell these names\nwith a `call_1_`/`call_2_` prefix and `idhazh.telemetry` is the one place\nthat flattens - one translator, against one copy of this validator per\ncontract that would otherwise carry it.",
+      "properties": {
+        "cached_tokens": {
+          "default": 0,
+          "description": "Prompt tokens the runtime reused instead of reading. Zero is a real answer and means the slot was cold; `input_tokens` minus this is what `prefill_ms` paid for.",
+          "minimum": 0,
+          "title": "Cached Tokens",
+          "type": "integer"
+        },
+        "decode_ms": {
+          "default": 0,
+          "description": "Milliseconds this call spent writing its reply.",
+          "minimum": 0,
+          "title": "Decode Ms",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "default": 0,
+          "description": "Prompt tokens, cached part included.",
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/CallKind"
+        },
+        "output_tokens": {
+          "default": 0,
+          "description": "Tokens this call wrote.",
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "prefill_ms": {
+          "default": 0,
+          "description": "Milliseconds this call spent reading its prompt. A duration and never a rate: a prompt token costs more the deeper into the context it sits, so dividing this by the tokens the call evaluated gives a figure that cannot be compared with another call's.",
+          "minimum": 0,
+          "title": "Prefill Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "CallCost",
+      "type": "object"
+    },
+    "CallKind": {
+      "description": "Which model call these numbers came from.\n\nFour members and not two, because the call structure moves under this\nvocabulary rather than beside it. `summarize` and `visual_plan` are what the\npipeline dispatches today, on two different models in two different jobs.\n`label` and `summarize_and_plan` are the pair `idhazh.classify.calls` builds,\nwhich plan 11 row #5b wires in behind a flag and row #6 then makes the only\npair. A reading that spans the flip needs all four names, or the step change\nin every series reads as a regression rather than as the design change it is.",
+      "enum": [
+        "summarize",
+        "visual_plan",
+        "label",
+        "summarize_and_plan"
+      ],
+      "title": "CallKind",
+      "type": "string"
+    },
     "FailureCode": {
       "description": "Stable failure vocabulary for item-health rows.",
       "enum": [
@@ -54,6 +114,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added optional call_1 and call_2, each a CallCost; the five flat cost fields are now the item's total across the calls recorded there.",
+      "version": "2026-09-12T16:20",
+      "why": "An item is read by more than one model call and this payload kept one call's five numbers without saying which. Folded, they stop being readable: measured on the one two-call run, cached_tokens of 0 and 1,493 fold to 1,493 against 3,886 prompt tokens - 38 percent, which is neither call's 0 nor its 62. Both slots default to null, so a payload an earlier run wrote still validates and its flat five stand alone. Where a slot is filled the flat five must equal the sum over the filled slots, which is what keeps every aggregate that reads them - publish_day_metrics, publish_console_band, reconcile_prefill - correct the day a second call starts being recorded, with no edit of their own. No read-side migration is owed: this payload is written under backend/var/, which is gitignored and read only inside the run that wrote it."
+    },
     {
       "change": "length_action added, optional and defaulting to null.",
       "version": "2026-09-10T00:30",
@@ -111,14 +176,38 @@
     },
     "cached_tokens": {
       "default": 0,
-      "description": "Prompt tokens the runtime reused instead of reading. input_tokens minus this is what prefill_ms actually paid for.",
+      "description": "Prompt tokens the runtime reused instead of reading, added over every call recorded below. input_tokens minus this is what prefill_ms actually paid for. Read it per call rather than here when the question is whether the cache answered: a second call that reuses the first call's prompt makes this figure non-zero on every item.",
       "minimum": 0,
       "title": "Cached Tokens",
       "type": "integer"
     },
+    "call_1": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallCost"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the stage's first model call cost, and which call it was. Null on a payload written before 2026-09-12, which recorded a total and no split."
+    },
+    "call_2": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallCost"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The same for the second call, or null where the stage made only one."
+    },
     "decode_ms": {
       "default": 0,
-      "description": "Writing the summary. One token at a time, so about half the prefill rate.",
+      "description": "Writing the reply, added over every call recorded below. One token at a time, so about half the prefill rate.",
       "minimum": 0,
       "title": "Decode Ms",
       "type": "integer"
@@ -177,6 +266,7 @@
     },
     "input_tokens": {
       "default": 0,
+      "description": "Prompt tokens, added over every call recorded below.",
       "minimum": 0,
       "title": "Input Tokens",
       "type": "integer"
@@ -219,6 +309,7 @@
     },
     "output_tokens": {
       "default": 0,
+      "description": "Tokens written, added over every call recorded below.",
       "minimum": 0,
       "title": "Output Tokens",
       "type": "integer"
@@ -231,7 +322,7 @@
     },
     "prefill_ms": {
       "default": 0,
-      "description": "Reading the prompt. Scales with article length, minus what the cache kept.",
+      "description": "Reading the prompt, added over every call recorded below. Scales with article length, minus what the cache kept.",
       "minimum": 0,
       "title": "Prefill Ms",
       "type": "integer"
@@ -246,7 +337,7 @@
     },
     "summarize_ms": {
       "default": 0,
-      "description": "The model. The only one of the three that a model swap moves.",
+      "description": "The model, on the stage clock. The only one of the three that a model swap moves, and the one cost below that stays a stage figure: it is the wall clock around every call the stage made, including the HTTP overhead no call reports.",
       "minimum": 0,
       "title": "Summarize Ms",
       "type": "integer"
@@ -284,7 +375,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-10T00:30",
+      "default": "2026-09-12T16:20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -301,5 +392,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-09-10T00:30"
+  "version": "2026-09-12T16:20"
 }

@@ -63,6 +63,60 @@ Read is about 2.2x write. That ratio is a property of how the two phases work,
 not of this model, and it is why `summarize_ms` was split: one blended number
 cannot say whether a slow day was long articles or long summaries.
 
+## Each call is charged on its own, and the item is their sum
+
+An item is read by more than one model call, so from 2026-09-12 `Summary`,
+`state/item-health/` and the published projection record the five cost numbers
+per call as well as for the item. **The five flat cells are the sum over the
+calls the row records**, which is what keeps every reader that pools them -
+`publish_day_metrics`, `publish_console_band`, `backend/utilities/reconcile_prefill.py`
+and the console's own rates - correct with no edit of its own on the day a
+second call starts being recorded. The contract refuses a row where they are
+not, so the property is enforced rather than described.
+
+Why the split exists is one number. Measured 2026-09-12 on a developer laptop,
+one run and no spread, `Qwen3-8B-Q4_K_M.gguf` on llama-server with
+`--threads 4 --ctx-size 16384 --batch-size 512 -np 1 -fa on` - an
+order-of-magnitude check and not a runner reading:
+
+| Quantity | Call 1 (label) | Call 2 (summarize and plan) | Folded |
+| --- | --- | --- | --- |
+| `input_tokens` | 1,497 | 2,389 | 3,886 |
+| `cached_tokens` | 0 | 1,493 | 1,493 |
+| Share of its own prompt reused | 0 percent | 62 percent | 38 percent |
+| `prefill_ms` | 214,122 | 186,750 | 400,872 |
+| `output_tokens` | 205 | 567 | 772 |
+| `decode_ms` | 88,795 | 292,626 | 381,421 |
+
+The folded column is the whole argument: 38 percent is neither call's answer,
+and it is the number the console printed as the item's. The first call reads the
+article on a cold slot and reuses nothing; the second replays it and is answered
+for almost all of it.
+
+**A per-call `prefill_ms` is a duration and never a rate.** Call 2 read at 4.80
+tok/s against call 1's 6.99 in the same second on the same machine, 31 percent
+apart, because call 2's tokens sit at context positions 1,493 to 2,389 and
+attend to everything before them - a prompt token costs more the deeper into the
+context it sits. The 31 percent is measured; that attribution is an estimate,
+and a sweep of new-turn length against `prefill_ms` at a fixed prefix length
+would settle it. The item's blended rate, summed over summed, is the only read
+rate that composes, and it is the one this page and the console mean.
+
+**The projection publishes the first call and the item total, not both calls.**
+The second is the remainder, exactly, because the totals are the sum and the
+arithmetic is integers; `model_calls` says how many calls that remainder covers,
+so a third could not be absorbed in silence. Publishing both would have cost
+more than the split is worth to a file a browser fetches: measured 2026-09-12 on
+the two committed shards with every timed row populated, twelve cells cost
+**72.9 and 80.1 percent more gzipped** against **35.3 and 40.8 percent** for the
+seven that ship.
+
+**The small model's visual-planner call is not in any of this.** It runs in the
+`visuals` job, hours after the census row for that item was committed, so no
+per-item cell can reach it; what that job costs per run is in
+`state/runtime-counters.csv`. The gap closes on its own when plan 11 row #5b
+puts both calls in `stage_work`.
+
 **The split accounts for all but 0.066 percent of the call.** `summarize_ms` is
 our stopwatch around the HTTP request; `prefill_ms + decode_ms` is what the
 server said the same request cost. Over the 2,317 committed rows that carry all

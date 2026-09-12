@@ -122,6 +122,56 @@ test.describe('what one item cost, as arithmetic', () => {
 		expect(cost.msPerReadToken, '1000 ms over the 100 it actually read').toBe(10);
 	});
 
+	test('whether the cache answered is a question about one call, not about the item', () => {
+		// An item read by two calls always has a non-zero total, because the second
+		// call replays the first call's prompt and is answered for it. Read off the
+		// total, "items whose prompt was read whole" counts nothing for ever - a
+		// live figure that becomes a constant with no code change, which is the one
+		// failure a chart cannot show. The numbers are the two-call measurement of
+		// 2026-09-12: a first call that read 1,497 tokens cold, and a second that
+		// asked for 2,389 and was given 1,493 of them.
+		const twoCalls = row({
+			prefill_ms: '400872',
+			input_tokens: '3886',
+			cached_tokens: '1493',
+			model_calls: '2',
+			call_1_kind: 'label',
+			call_1_prefill_ms: '214122',
+			call_1_decode_ms: '88795',
+			call_1_input_tokens: '1497',
+			call_1_output_tokens: '205',
+			call_1_cached_tokens: '0'
+		});
+		const oneCall = row({ item_id: 'a-02', input_tokens: '1000', cached_tokens: '0' });
+
+		const cost = itemCost([twoCalls, oneCall], WINDOW);
+
+		expect(cost.perCall, 'one of the two rows published a split').toBe(1);
+		expect(cost.readWhole, 'both first calls read their prompt whole').toBe(2);
+		expect(cost.reusedMedian, 'the middle of the two first calls, not of the totals').toBe(0);
+		expect(cost.itemReusedPct, 'neither first call reused anything').toBe(0);
+		// The pooled figures still read the totals, and they are meant to: a sum
+		// over both calls is what the item cost, and every rate here is pooled.
+		expect(cost.reusedTokens).toBe(1493);
+		expect(cost.readTokens, '2,393 the split item read, plus the 1,000 the other did').toBe(3393);
+	});
+
+	test('a row with no split still answers from the item total', () => {
+		// Every row published before 2026-09-12, and every row a one-call run
+		// writes. An empty cell is absent, so the older reading stands rather than
+		// dropping out of the denominator.
+		const cost = itemCost(
+			[
+				row({ input_tokens: '1000', cached_tokens: '0', call_1_cached_tokens: '' }),
+				row({ item_id: 'a-02', input_tokens: '1000', cached_tokens: '400' })
+			],
+			WINDOW
+		);
+		expect(cost.perCall).toBe(0);
+		expect(cost.readWhole).toBe(1);
+		expect(cost.reusedMedian).toBe(200);
+	});
+
 	test('a middle taken over an even number of items is still a whole number', () => {
 		// The canary holds an odd number of timed items, so no browser arm can reach
 		// this. The committed projection holds 6,104 and reached it on the first
@@ -386,13 +436,24 @@ test.describe('the section on the built console', () => {
 				const cached = value(line, 'cached_tokens');
 				const prefill = value(line, 'prefill_ms');
 				const decode = value(line, 'decode_ms');
+				// The cache figures are about the FIRST call where the projection
+				// publishes one, and about the item where it does not. Derived here a
+				// second time rather than read off the reducer: an item read by two
+				// calls always reuses something, because the second replays the first
+				// call's prompt, so these three taken off the totals would count a
+				// cold slot as a warm one.
+				const firstCached = value(line, 'call_1_cached_tokens');
+				const firstInput = value(line, 'call_1_input_tokens');
+				const split = firstCached !== null && firstInput !== null;
+				const cacheOf = split ? firstCached : cached;
+				const promptOf = split ? firstInput : input;
 				if (input !== null) {
 					prompts.push(input);
 					read = read + input - (cached ?? 0);
-					if (cached !== null) {
-						reused = reused + cached;
-						if (cached === 0) whole = whole + 1;
-						shares.push(Math.round((cached / input) * 100));
+					if (cached !== null) reused = reused + cached;
+					if (cacheOf !== null && promptOf !== null) {
+						if (cacheOf === 0) whole = whole + 1;
+						shares.push(Math.round((cacheOf / promptOf) * 100));
 					}
 					if (prefill !== null) readMs = readMs + prefill;
 				}

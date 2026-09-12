@@ -27,6 +27,29 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | CLOSED 2026-08-27 |
 | 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
 | 18 | The truncation flag still cannot fire, now for a different reason | 5 | **OPEN - not measurable without the scorer weights** |
+| 19 | A summarize call that failed on its reply reports no cost at all | 2 | **OPEN - found 2026-09-12 by plan 11 row #3b (PR #636)** |
+
+## 19 - A summarize call that failed on its reply reports no cost at all (OPEN)
+
+`summarize._failed` never receives the `Completion`, so every typed reply
+failure - `bad_shape`, `length_out_of_range`, `copied_source`,
+`leaked_address`, `output_truncated` - writes a `Summary` whose five cost cells
+are the model's defaults of zero. The server had already read the prompt and
+written the reply by then, so the prefill and the decode were really spent and
+the ledger says they were free.
+
+**It is a cost question rather than a quality one, which is why it is worth a
+row.** A day that failed many replies reads as a cheap day, and
+`backend/utilities/reconcile_prefill.py` pools this ledger against the model
+server's own job totals inside 5 percent - the server counted those calls and
+the ledger did not, so the audit absorbs the difference as drift rather than
+naming it.
+
+Pre-existing and not caused by the per-call split, which is why plan 11 row #3b
+filed it rather than widening to take it. The fix is a signature change: hand
+`_failed` the `Completion` it already has in scope at every call site, record a
+`CallCost` from it, and let the same validator that binds an ok row bind a
+failed one. Level 2 - one file, one explicit behaviour change, and its tests.
 
 ## 18 - The truncation flag still cannot fire, now for a different reason (OPEN)
 

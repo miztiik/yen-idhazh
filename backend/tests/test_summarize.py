@@ -43,6 +43,7 @@ from idhazh.contracts.app_config import (
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
+from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
@@ -1178,6 +1179,28 @@ def test_the_cost_the_runtime_reported_reaches_the_payload() -> None:
     assert result.cached_tokens == 900
     # What prefill actually paid for: the cache carried the rest.
     assert result.input_tokens - result.cached_tokens == 75
+
+
+def test_the_stage_records_which_call_its_numbers_came_from() -> None:
+    """The stage makes one call, and it says which one rather than leaving it open.
+
+    The flat cells are the item's total across the calls in the slots, so with
+    one call recorded the two readings are equal by construction. That is the
+    property worth pinning: a second call added to the slots and left out of the
+    total is refused rather than published, which is what keeps every pooled
+    reader of this ledger correct without an edit of its own.
+    """
+    result = summarised("timed")
+    assert result.call_1 is not None
+    assert result.call_1.kind is CallKind.SUMMARIZE
+    assert result.call_2 is None
+    for field in ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens"):
+        assert getattr(result.call_1, field) == getattr(result, field)
+
+    with pytest.raises(ValidationError, match="sum over the recorded calls"):
+        Summary.model_validate(
+            result.model_dump(mode="json") | {"call_2": result.call_1.model_dump(mode="json")}
+        )
 
 
 def test_a_runtime_that_reports_no_timings_costs_the_item_nothing() -> None:
