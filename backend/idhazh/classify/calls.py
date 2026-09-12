@@ -20,6 +20,15 @@ built here and `idhazh.cli.stage_work` dispatches them, adjacently per item,
 when `run.two_calls_per_item` is on; the gate in front of them and the picture
 they lead to are wired at that same call site.
 
+**Each call's output budget is derived from its own grammar.** Neither is the
+summariser role's `max_output_tokens`, which is sized for a summary and knows
+nothing about either shape - and which cost one ordinary 346-word article its
+whole item on 2026-09-12, because call 1's reply passed 900 tokens and was cut
+mid-string. Call 1's reply is one flat object, so there is no half to recover
+from a cut; what it has instead is that a cut is reported as one
+(`FailureCode.LABELS_TRUNCATED`) rather than raised as a JSON error several
+frames from the cause.
+
 **Every instruction sits in front of the article and the question behind it is
 three lines.** Both jobs are described in the one system turn, which is the same
 bytes on every item and is therefore read once per shard rather than once per
@@ -44,6 +53,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from functools import lru_cache
+from math import ceil
 from pathlib import Path
 from string import Template
 from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
@@ -125,8 +135,8 @@ LABEL_PASS_VERSION: Final = "2026-09-09"
 #: picking by address. It is not the size of the table - a dense article can
 #: hold 256 candidates and the labels are for choosing between them, not for
 #: covering them, so twice a full chart's width is enough to choose with. What
-#: a maximal reply costs in output tokens, and what budget it needs, is derived
-#: with call 2's own bounds in the row that adds the second call.
+#: a maximal reply costs in output tokens, and what budget it needs, is
+#: `call_one_output_tokens` below - so moving one of these is moving the budget.
 LABELS_MAX: Final = 16
 PROPOSED_MAX: Final = 4
 RANGES_MAX: Final = 8
@@ -318,6 +328,84 @@ def call_one_schema() -> dict[str, Any]:
     return CallOneReply.model_json_schema()
 
 
+#: The one reading of how densely a real call-1 reply tokenises, kept as the two
+#: numbers it was read from rather than as a decimal, so nobody takes 3.12 for a
+#: tuned value. The reply that made this budget necessary decoded exactly 900
+#: tokens and `parse_call_one` failed at character 2,805 of it - measured
+#: 2026-09-12 on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding, one
+#: reply, no spread
+#: (`docs/reference/benchmarks/2026-09-12-instructions-in-front.md`).
+MEASURED_REPLY_CHARACTERS: Final = 2805
+MEASURED_REPLY_TOKENS: Final = 900
+#: **An estimate, and it is labelled one** (Guardrail #10). It is taken from a
+#: reply that was filling its lists, which is the composition the character
+#: ceiling below describes, so it is the right sample to extrapolate a ceiling
+#: from even at one reading. What overturns it: decode twenty corpus articles
+#: through call 1 at a budget no reply reaches, record characters and tokens per
+#: reply, and take the LOWEST ratio. Under this figure the constant moves; under
+#: about 1.55 the design moves, because that is where the derived budget stops
+#: fitting the window the two calls share.
+CHARS_PER_OUTPUT_TOKEN: Final = MEASURED_REPLY_CHARACTERS / MEASURED_REPLY_TOKENS
+
+
+def call_one_output_tokens() -> int:
+    """Call 1's output budget, derived from the reply shape's own bounds.
+
+    **Not picked, and not the summariser role's number.** Every array in
+    `CallOneReply` carries a `maxItems` and every decoded string a `maxLength`,
+    so the longest reply the grammar admits is arithmetic over the bounds, and
+    the arithmetic runs again on every import - move a bound and this number
+    moves with it, without anybody remembering to. Until 2026-09-13 the budget
+    was `models.summarize.inference.max_output_tokens`, sized for a summary and
+    knowing nothing about this shape, and one ordinary 346-word article lost its
+    whole item to it.
+
+    **It is not call 2's rule, and the reason is arithmetic rather than taste.**
+    `call_two_output_tokens` spends its prose as words and counts everything
+    else one token a character, because a token spans at least one character and
+    that makes the structural half a true ceiling. Call 1 has no word rails to
+    spend - every bound on this shape is a character bound - so the same rule
+    reads the whole reply as structure and returns 20,229 tokens. Call 1's reply
+    is paid twice, once as its own decode and once inside call 2's prompt, so
+    that budget puts the pair at 39,927 tokens against a window of 16,384 today
+    and 32,768 authorised. A ceiling that fits no window is not a ceiling; it is
+    a refusal to answer.
+
+    **So the ceiling is converted at the one measured density instead**, which
+    is what `CHARS_PER_OUTPUT_TOKEN` holds and what makes this a sizing rather
+    than a guarantee - the same thing call 2's prose half is, and for the same
+    stated reason: the budget is the brake, and a budget large enough to be an
+    unbreakable ceiling would leave no window for the article it is reading.
+    Call 2's seatbelt is `recovered_completion`; call 1's is that a cut is
+    reported as a cut, typed, rather than raised as a JSON error several frames
+    from the cause (`FailureCode.LABELS_TRUNCATED`).
+
+    Measured against the committed bounds on 2026-09-13, the widest reply this
+    shape admits is 20,229 characters: 8,160 of them are 136 free-text slots at
+    `PHRASE_MAX`, 5,664 are 118 address slots at `ADDRESS_MAX`, and 6,405 are
+    keys, punctuation and closed vocabularies. Both of those bounds are
+    anti-abuse rather than expected lengths, which is why counting them as
+    tokens one for one overstates so heavily.
+    """
+    return ceil(widest_json_characters(call_one_schema()) / CHARS_PER_OUTPUT_TOKEN)
+
+
+#: The budget the committed bounds produce, written down as well as computed.
+#: `CALL_TWO_BUDGET_TOKENS` is the precedent and the reason is the same: a
+#: number that only exists inside a function is a number nobody re-derives, and
+#: a bound can then move without anybody seeing what it cost. It is 7.2 times
+#: the reply that was lost and 68 times an ordinary one, which was measured at
+#: 96 tokens on 2026-09-12.
+CALL_ONE_BUDGET_TOKENS: Final = 6491
+
+if call_one_output_tokens() != CALL_ONE_BUDGET_TOKENS:
+    raise TypeError(
+        "a bound moved and call 1's output budget did not follow it - the reply shape "
+        f"now needs {call_one_output_tokens()} tokens against a recorded "
+        f"{CALL_ONE_BUDGET_TOKENS}; re-derive it in `call_one_output_tokens`"
+    )
+
+
 def call_one_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
     """Both jobs, in one turn, in front of the article.
 
@@ -445,8 +533,9 @@ def build_call_one_request(
 
     The prompt bytes are rendered here rather than by the model's chat
     template, which is what lets call 2 open with them unchanged. The output
-    budget is the role's own and is not narrowed here; call 2's is derived from
-    both replies' bounds together.
+    budget is derived from this call's own grammar, as call 2's is from both
+    replies' bounds together; the role's `max_output_tokens` sizes the single
+    call and is not this shape's number.
 
     `prompt_config` reaches call 1 because the system turn carries both jobs
     now. Every number it spends is a config-level one, the same on every item,
@@ -458,6 +547,7 @@ def build_call_one_request(
         user=call_one_user_turn(article, table),
         output_schema=call_one_schema(),
         inference=inference,
+        max_output_tokens=call_one_output_tokens(),
     )
 
 

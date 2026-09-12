@@ -11,7 +11,7 @@
       "type": "string"
     },
     "FailureCode": {
-      "description": "Stable failure vocabulary for item-health rows.",
+      "description": "Stable failure vocabulary for item-health rows.\n\n**Membership is one member per knob an operator turns, not one per gate.**\nFour HTTP members answer to one fetch, because the fix for a 404 is not the\nfix for a rate limit. `output_truncated` and `labels_truncated` are the two\noutput budgets, derived from two different grammars, for the same reason.",
       "enum": [
         "not_attempted",
         "robots_denied",
@@ -30,6 +30,7 @@
         "model_unreachable",
         "context_exceeded",
         "output_truncated",
+        "labels_truncated",
         "bad_shape",
         "length_out_of_range",
         "copied_source",

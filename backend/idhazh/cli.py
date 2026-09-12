@@ -1569,10 +1569,14 @@ def _two_calls_one_item(
     reply verbatim, and the reason that is safe is that the reply has already
     been held to a closed schema. A reply that did not parse has not been, so
     sending it would put unchecked model text into a prompt on the argument that
-    it is probably fine. Plan 11 row #3g is the row that makes this recoverable,
-    by deriving call 1's output budget from its own grammar; until it lands the
-    loss is loud - a failed summary with `bad_shape` in the census - rather than
-    silent.
+    it is probably fine.
+
+    **The two ways that happens are two codes, because they are two fixes.** A
+    reply the output budget cut is read off `finish_reason` before anything
+    tries to parse it and lands as `labels_truncated`; the budget it met is
+    derived from call 1's own grammar. A reply that answered inside its budget
+    and still could not be read lands as `bad_shape`. Both lose the item, and
+    both are a cell in the census rather than a silence.
     """
     trace = tracer if tracer is not None else silent_tracer()
     model = settings.app.models.summarize
@@ -1637,6 +1641,13 @@ def _two_calls_one_item(
         )
         if one is None:
             return failed(no_reply)
+        if one.hit_the_budget:
+            LOG.warning(
+                "the labelling reply ran out of its output budget id=%s tokens=%s",
+                article.item_id,
+                one.completion_tokens,
+            )
+            return failed(FailureCode.LABELS_TRUNCATED)
 
         text = article.text or ""
         try:
@@ -1650,9 +1661,8 @@ def _two_calls_one_item(
             )
         except (ValidationError, ValueError, json.JSONDecodeError) as error:
             LOG.warning(
-                "the labelling reply did not hold its shape id=%s cut=%s reason=%s",
+                "the labelling reply did not hold its shape id=%s reason=%s",
                 article.item_id,
-                one.hit_the_budget,
                 type(error).__name__,
             )
             return failed(FailureCode.BAD_SHAPE)

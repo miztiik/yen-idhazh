@@ -619,6 +619,9 @@ def _widest(node: dict[str, Any], defs: dict[str, Any]) -> int:
     kind = node.get("type")
     if kind == "null":
         return len("null")
+    if kind == "boolean":
+        # `false` is the longer of the two literals a decoder may write here.
+        return len("false")
     if kind in {"number", "integer"}:
         return _NUMBER_MAX_CHARACTERS
     if kind == "string":
@@ -647,11 +650,10 @@ def _widest(node: dict[str, Any], defs: dict[str, Any]) -> int:
 def widest_json_characters(schema: dict[str, Any]) -> int:
     """The longest JSON text a generated schema can hold, in characters.
 
-    Public because call 2 decodes this plan **and** a summary through one output
-    budget, and that budget is derived from the bounds of the reply shape as a
-    whole. Written once here rather than copied there: two implementations of
-    one piece of arithmetic disagree the first time a bound moves, and the one
-    that is wrong is the one nobody reads.
+    Public because both model calls derive their output budget from the bounds
+    of the shape they will be held to, and this is that arithmetic. Written once
+    here rather than copied there: two implementations of one piece disagree the
+    first time a bound moves, and the one that is wrong is the one nobody reads.
 
     It counts every declared property, not only the required ones, because a
     grammar-constrained decoder emits them all. The two fields code stamps are

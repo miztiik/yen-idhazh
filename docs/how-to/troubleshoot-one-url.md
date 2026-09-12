@@ -288,6 +288,7 @@ Interpret them in this order:
 | Summary `model_unreachable` | Nothing is listening at `127.0.0.1:8080`, or the local server died. |
 | Summary `context_exceeded` | The server answered HTTP 400: the prompt plus the reply budget did not fit `--ctx-size`. Shorten the source, not the server. |
 | Summary `output_truncated` | The model exhausted the configured output budget before closing its JSON. |
+| Summary `labels_truncated` | Under `run.two_calls_per_item`, the labelling call exhausted ITS output budget, so the call that writes the summary was never sent. That budget is derived from the labelling grammar in `classify.calls.call_one_output_tokens`, not from `models.summarize.inference.max_output_tokens`. |
 | Summary `bad_shape` | The constrained reply or reasoning channel violated the summary contract. |
 | Summary `length_out_of_range` | The reply parsed, but it holds fewer words than `summarize.length_policy.absolute_floor_words` and the source was longer than `floor_applies_above_source_words`. That combination reads as a failed extraction, not a short summary. Missing the band's ask is not this - it publishes. |
 | Summary `copied_source` | The summary's longest unbroken run copied from the source ran past `evaluation.verbatim_reject_ceiling`. Republishing an article body is a non-goal. |

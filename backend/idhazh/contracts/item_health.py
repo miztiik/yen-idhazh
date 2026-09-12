@@ -79,7 +79,13 @@ class ElementClass(StrEnum):
 
 
 class FailureCode(StrEnum):
-    """Stable failure vocabulary for item-health rows."""
+    """Stable failure vocabulary for item-health rows.
+
+    **Membership is one member per knob an operator turns, not one per gate.**
+    Four HTTP members answer to one fetch, because the fix for a 404 is not the
+    fix for a rate limit. `output_truncated` and `labels_truncated` are the two
+    output budgets, derived from two different grammars, for the same reason.
+    """
 
     NOT_ATTEMPTED = "not_attempted"
     ROBOTS_DENIED = "robots_denied"
@@ -98,6 +104,12 @@ class FailureCode(StrEnum):
     MODEL_UNREACHABLE = "model_unreachable"
     CONTEXT_EXCEEDED = "context_exceeded"
     OUTPUT_TRUNCATED = "output_truncated"
+    #: The two-call path's labelling reply ran out of its own output budget, so
+    #: the call that writes the summary was never sent and the item is lost
+    #: whole. `output_truncated` is the summary-writing call meeting its budget,
+    #: which is a different derivation over a different grammar and a different
+    #: number to move.
+    LABELS_TRUNCATED = "labels_truncated"
     BAD_SHAPE = "bad_shape"
     LENGTH_OUT_OF_RANGE = "length_out_of_range"
     COPIED_SOURCE = "copied_source"
@@ -124,6 +136,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.MODEL_UNREACHABLE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.CONTEXT_EXCEEDED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.OUTPUT_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
+        FailureCode.LABELS_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.BAD_SHAPE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LENGTH_OUT_OF_RANGE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.COPIED_SOURCE: frozenset({ItemStage.SUMMARIZE}),
@@ -145,6 +158,7 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.NOT_PROSE,
         FailureCode.BOILERPLATE,
         FailureCode.OUTPUT_TRUNCATED,
+        FailureCode.LABELS_TRUNCATED,
         FailureCode.BAD_SHAPE,
         FailureCode.LENGTH_OUT_OF_RANGE,
         FailureCode.COPIED_SOURCE,
@@ -158,6 +172,32 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "Added the labels_truncated summarize failure code, source-neutral like "
+                "every other code the model owns."
+            ),
+            why=(
+                "The two-call path's labelling reply can run out of its output budget on "
+                "an ordinary article - measured 2026-09-12, one article of three, 346 "
+                "words, 900 tokens decoded and the JSON cut mid-string - and the item is "
+                "then lost whole, because the call that writes the summary replays that "
+                "reply and is never sent. It was recorded as bad_shape, which is also "
+                "what a reply that held valid JSON and violated the schema records, and "
+                "also what a stray reasoning channel records; the only thing separating "
+                "them was a sentence in a log line. The same commit derives that budget "
+                "from the labelling grammar instead of from the summariser's knob, and "
+                "this counter is how anyone sees whether that worked - folded into "
+                "output_truncated it would move with call 2's cuts and answer nothing. "
+                "It is a separate member rather than a second reading of output_truncated "
+                "because the two are two derivations over two grammars: two numbers to "
+                "move, so two counts to read. No read-side migration is owed - the code "
+                "is additive and no run has written it - but a reader trending bad_shape "
+                "across 2026-09-13 sees a step down that nothing else in the CSV "
+                "explains, and this entry is where that is written."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T18:40",
             change=(
