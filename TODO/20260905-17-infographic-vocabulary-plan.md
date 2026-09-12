@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md) | next [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - rows 40, 41, 42, section 4.F, 12.11 G18, 12.13 G33, 14.3, P.L28, P.L33, P.R20.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | Diagrams. Any change to `key_points`, which is a summary field and a different thing from the `keyfacts` infographic. Any model rewriting of text - the compiler shortens, the model never re-words |
 | ESCALATE triggers | 1. Truncation is proposed as "let the model tidy the wording slightly" - it will sound reasonable every single time and it is the thing this row exists to refuse. 2. `callout` fires on a figure whose significance rests on our own sort order. 3. `keyfacts` cannot compute its per-item gate on committed data, which would make its kill criterion unfireable |
 | Chosen strategy | Build the pressure valve first, then the three types, each with a gate that can fire without a model call and without human labels |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
 

@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md) | next [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O13, rows 38, 39, 41, 48, 49, sections 7.2, 12.8 X1, 12.12 G26.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | `pie`, `bubble`, `histogram` and derived-value producers (plan 16). `callout`, `whowhat`, `keyfacts` (plan 17). Diagrams (plan 18). Any change to the validator's universal checks |
 | ESCALATE triggers | 1. A type is proposed for the config list without both a validator rule set and a compiler template - it may be **named** but it may not **render**. 2. `wasted_decode_rate` cannot be computed, meaning the downgrade path is not recording what it did. 3. A non-magnitude question is being answered with a bar by fallback |
 | Chosen strategy | Declare the whole vocabulary, build the families in order of what the planner actually chooses, and make a day that would otherwise be one shape impossible |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 **The rule that stops a grey wall.** An article whose question is not a magnitude comparison gets `none`, **never a bar by fallback**. Row 49 records a single-shape day as a defect rather than gating on it, so a bar-only day is legal - and it is also a wall of grey on 80 items. Two things prevent it: the refusal rule, and shipping `comparison` and `quotecard` here rather than two plans later.
 

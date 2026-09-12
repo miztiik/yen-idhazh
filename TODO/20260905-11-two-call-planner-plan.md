@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) | next [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O3, O17, O37, O43, rows 4, 5, 9, 10, 11, 17, 50, sections 10.1, 10.1a, 10.1b, 10.2, 10.3, 10.3a, 10.6, 11.3, 11.4, 14.5, E5, 12.6 G1 G2 G4, 12.7 G8.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | The renderer swap (plan 12). Any new visual type. Any human review surface. **A third call** - splitting call 2 into two requests needs a measured timeout rate first, and until that measurement exists it is out of scope, not open |
 | ESCALATE triggers | 1. `cached_tokens` on call 2 is below call 1's prompt token count - the prompt was built in the wrong order and the whole cost model is wrong. 2. The worst shard passes 180 minutes against the 200-minute timeout. 3. A retry is proposed that perturbs nothing. 4. Any design that lets the model emit a character a reader sees |
 | Chosen strategy | Behind a flag, off, until the whole path works - then one commit flips it, deletes the job and retires the role together. The small model may not retire before call 2 works, because call 2 is what replaces it |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 **Exactly two model calls per item. Always.** Call 1 labels; call 2 writes the summary **and** the plan. Call 2 runs for every item that publishes, because it is the call that writes the summary - a gate may suppress the plan fields inside it and may never skip it. The deterministic pass before call 1 is **the candidate pass**, never "call 0"; a document that spells three things "call" cannot say "two calls" and be counted.
 
@@ -33,7 +33,7 @@ Added 2026-09-11. The three merged rows did not have these written down; the fou
 
 **Verify every fact this plan hands you against the tree before acting on it.** Plans have been wrong. A count, a line number or an "exists today" answer in any row below is a reading of the day it was written, and this tree moves several times an hour. Re-run the grep. **A row that discovers a wrong fact fixes the plan in the same pull request**, in the row that carried it, and says so in the body.
 
-**A widened file list is re-checked before the pull request opens.** `parallel N = 1` here, so no two rows of this plan run at once - but four rows of this plan share files with plans 23, 24 and 25, which do run beside it. [`20260911-execution-order.md`](20260911-execution-order.md) section 3 carries the cross-plan intersection; a row that widens its list re-checks it there.
+**A widened file list is re-checked before the pull request opens.** `parallel N = 4` here, so rows of this plan run beside each other as well as beside plans 23, 24 and 25 - and four rows of this plan share files with those. A row is dispatched only when its `Files touched` list is disjoint from every row already in flight, so a list that widens mid-row invalidates that check after it was made. [`20260911-execution-order.md`](20260911-execution-order.md) section 3 carries the cross-plan intersection; a row that widens its list re-checks it there.
 
 **Additive contract fields are stamped in the commit that adds them.** Every row that adds a field to a persisted model names its `version` date-stamp and its `changelog` entry in its own acceptance gate, per `CLAUDE.md` section 11. Row #3b already carries this as its decision 2.
 
@@ -116,7 +116,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 5b | Call 1 and call 2 run in the pipeline | 5, 3b, 3e | E2 | PENDING | - | - | - |
 | 6 | The small model, its job and its cache go | 5b | F | BLOCKED | - | - | - |
 
-**Six rows are live and five are merged.** Rows 1, 2, 3, 3b and 4 shipped. **`parallel N = 1`, so no two rows of this plan run at the same time.**
+**Six rows are live and five are merged.** Rows 1, 2, 3, 3b and 4 shipped. **`parallel N = 4`, so up to four rows of this plan run at once; a ready row is held only when its `Files touched` list overlaps one already in flight.**
 
 **Row #3f was added on 2026-09-12 by row #3d's worker, and it is BLOCKED on an owner decision.** Row #3d measured both prompts on the configured weights and found that **at the configured truncation cap the two calls do not fit the window**: call 2's prompt plus the reply budget its grammar may write is 20,098 tokens against an `n_ctx` of 16,384, over by 3,714 - 23 percent more than the window holds. `test_the_longest_article_the_cap_allows_still_fits_the_window` sizes the single call and passes; nothing sizes the two-call sequence. Nothing is wrong today, because the longest article the corpus holds is half the cap's length. It blocks neither #3c nor #3e, and every fix for it changes a contract, so it is a Level-5 decision rather than a widening of any row here. Ruled by Andre, 2026-09-12, on row #3d's reading.
 
@@ -493,7 +493,7 @@ Adding call 1's 140-token label budget and call 2's 176-token plan half, plus th
 ## See also
 
 - [`20260911-handover.md`](20260911-handover.md) - how to pick this queue up with no context: the queue reader, the reading order, and the standing traps.
-- [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **Rows #4 and #5 here are the fifth and sixth heaviest constraints in the project**, and section 3 there carries the cross-plan file collisions this plan's `parallel N = 1` cannot see.
+- [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **Rows #4 and #5 here are the fifth and sixth heaviest constraints in the project**, and section 3 there carries the cross-plan file collisions one plan's own dispatch check cannot see.
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) - the previous plan.
 - [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - the next plan.

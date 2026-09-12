@@ -4,7 +4,7 @@
 
 **Level**: 3, except rows 8 and 9, which are Level 5 if they end in adoption.
 
-Execute per docs/how-to/execute-a-plan.md: one worktree-isolated worker per row, AUTO-merge on green gates, parallel N = 2. AUTHOR-AND-STOP until the owner authorizes a row.
+Execute per docs/how-to/execute-a-plan.md: one worktree-isolated worker per row, AUTO-merge on green gates, parallel N = 4. AUTHOR-AND-STOP until the owner authorizes a row.
 
 **No step in this plan asks a human to download, upload or copy anything on a schedule.** The one recurring human action is running a notebook, because training is not allowed on the runner.
 
