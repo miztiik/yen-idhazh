@@ -12,6 +12,12 @@ on:
   pull_request:
   push:
     branches: [main]
+    # The loop guard for the `status-page` job below. That job pushes one
+    # commit holding this file and nothing else, so a push matching this filter
+    # starts no run at all and there is no second generation. It is the only
+    # push that can match it: a pull request may not carry the file (the `gates`
+    # job refuses one that does) and nothing else writes it.
+    paths-ignore: ['TODO/STATUS.md']
   workflow_dispatch:
 
 permissions:
@@ -72,7 +78,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Two commits rather than one, for the plan-queue check below. A pull
+      # request is checked out as a merge commit whose first parent is the base
+      # branch, so `HEAD^1..HEAD` is what this branch changes - and reading it
+      # costs one more commit rather than a fetch over the network.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
 
       - uses: actions/setup-node@v7
         with:
@@ -114,17 +126,32 @@ jobs:
           python -m idhazh.contracts.export
           git diff --exit-code -- schemas/
 
-      # The same trade as the gate above, for the same reason. Five Status
-      # Reckoners are the source of what is done; TODO/STATUS.md is the one
-      # place all five can be read at once, and a summary nobody regenerates is
-      # worse than no summary because it looks current. The generator reads the
-      # committed plan-docs and nothing else - no clock, no network, no
-      # worktree - so this gate cannot go red for a reason the pull request did
-      # not cause.
-      - name: The plan queue matches its Reckoners
+      # The same trade as the gate above, and it used to be the same shape: the
+      # Status Reckoners are the source of what is done, TODO/STATUS.md is the
+      # one place they can be read at once, and a summary nobody regenerates is
+      # worse than no summary because it looks current. What changed is WHO
+      # regenerates it. The page is derived from every plan-doc, so a gate that
+      # made each branch carry a fresh copy gave the file one writer per branch
+      # and every branch conflicted with every other on the lines that moved -
+      # four of the six rows of plan 27 on 2026-09-12, twice on one of them,
+      # each time settled by regenerating, which is a band-aid (Guardrail #5).
+      # It has one writer now, the `status-page` job below, and a branch never
+      # carries the file at all.
+      #
+      # No network and no clock, so this cannot go red for a reason the pull
+      # request did not cause.
+      - name: A pull request never edits the plan queue
+        if: github.event_name == 'pull_request'
         run: |
-          python backend/utilities/plan_status.py --write
-          git diff --exit-code -- TODO/STATUS.md
+          set -euo pipefail
+          if ! git diff --quiet HEAD^1 HEAD -- TODO/STATUS.md; then
+            echo "This branch edits TODO/STATUS.md. That page has one writer -" >&2
+            echo "the status-page job, which regenerates it after a merge lands" >&2
+            echo "on main - so a branch never edits it. Drop it from the branch:" >&2
+            echo "  git checkout origin/main -- TODO/STATUS.md" >&2
+            exit 1
+          fi
+          echo "the plan queue is untouched by this branch."
 
       # What prerendering used to give free. Until the reading routes were split
       # on 2026-09-01 every story was serialised into a document at build time,
@@ -147,6 +174,60 @@ jobs:
       - name: Every committed day still matches its contracts
         if: needs.scope.outputs.validate_all == 'true'
         run: python -m idhazh validate-days
+
+  # The plan queue's one writer. After a merge there is exactly one tree to
+  # derive the page from, so the conflict a per-branch copy guarantees cannot
+  # arise. The generator reads the committed plan-docs and nothing else - no
+  # clock, no network, no worktree - so what this job writes is a pure function
+  # of the commit it checked out.
+  #
+  # It does not wait on `gates`. The page is derived from the plan-docs alone,
+  # so a gate that is red about something else would only hold a correct page
+  # back.
+  status-page:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The one job in this workflow that writes to the repository, so the token
+    # is widened here rather than at the top of the file.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # No install step: the generator imports nothing from `idhazh` and reads
+      # no configuration, which is what lets this job be a checkout and a script.
+      - name: Regenerate the plan queue from the Reckoners
+        run: python backend/utilities/plan_status.py --write
+
+      # This step is idempotent, and that is the termination argument rather
+      # than the `paths-ignore` filter at the top of the file: regenerating a
+      # tree this job has already written produces no diff, so it commits
+      # nothing and pushes nothing. The filter stops the useless run; the
+      # idempotence is what bounds the loop at two pushes whatever the filter
+      # does.
+      - name: Commit the plan queue, when a Reckoner moved
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- TODO/STATUS.md; then
+            echo "no Reckoner moved; the plan queue is already current."
+            exit 0
+          fi
+          git config user.name "yen-idhazh pipeline"
+          git config user.email "pipeline@yen-idhazh.invalid"
+          git add TODO/STATUS.md
+          git commit -m "Regenerate the plan queue from the Status Reckoners"
+          # Straight at the tip, with no rebase and no lease. The concurrency
+          # group above cancels an older `main` run when a newer merge starts,
+          # so this job never races another copy of itself, and nothing else
+          # writes this file. If the tip does move underneath - the scheduled
+          # prune is the one other pusher - the push is rejected and this job
+          # goes red, which is the honest failure. The next merge regenerates.
+          git push origin HEAD:main
 
   # The one gate `gates` cannot be: it runs on ONE interpreter, and the thing
   # under test here is whether two of them agree. `robots.txt` is a permission,
