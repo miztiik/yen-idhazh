@@ -172,7 +172,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Three docstrings defend a requirement the page retired | - | A | PENDING | - | - | - |
-| 5 | The rail goes and the time lands under the heading | - | A | DONE #PR_NUMBER | p25-r5 | #PR_NUMBER | worker |
+| 5 | The rail goes and the time lands under the heading | - | A | DONE #625 | p25-r5 | #625 | worker |
 | 2 | One order over the whole day, inside a frame a person set | 1 | B | PENDING | - | - | - |
 | 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | PENDING | - | - | - |
 | 6 | The topic pills order by what is running | 2 | C | PENDING | - | - | - |
