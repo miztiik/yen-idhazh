@@ -886,18 +886,22 @@ This also closed a hole: `summary_words_min` and `summary_words_max` decide whic
 summaries are publishable and were absent from the fingerprint, so a cached
 summary survived a change to the rule it was written under.
 
-**The two-call path opens a hole of its own, and it is row #5b's to close.**
-Since the prompt bytes became ours, the turn markers are a determinism input,
-and nothing digests them: `build_inputs` hashes the chat template off `/props`,
-which no longer renders those two prompts, and `prompt_inputs`, which is the
-single-call template. So a change to `turn_markers.json` would move every output
-while the stamp said `unchanged` - which is the event `Observation.
-DETERMINISM_VIOLATION` exists to make visible. It cannot bite today, because
-no stage dispatches either call. It bites on the first run after the wiring
-lands, so the wiring row passes call 1's rendered prompt to `build_inputs` as
-`prompt`: one argument at one call site, and it covers the markers, both prompt
-files and the turn order together. Recorded here 2026-09-12 by plan 11 row #3c;
-the row that owns it is #5b.
+**The two-call path opened a hole of its own, and row #5b closed it on
+2026-09-12.** Since the prompt bytes became ours, the turn markers are a
+determinism input, and nothing digested them: `build_inputs` hashes the chat
+template off `/props`, which no longer renders those two prompts, and
+`prompt_inputs`, which is the single-call template. So a change to
+`turn_markers.json` would have moved every output while the stamp said
+`unchanged` - which is the event `Observation.DETERMINISM_VIOLATION` exists to
+make visible. It could not bite while no stage dispatched either call, and it
+bites on the first run under `run.two_calls_per_item`. **Under that flag
+`build_inputs` is handed `classify.calls.prompt_inputs` instead**: one argument
+at one call site, and it covers the markers, all four prompt files and the turn
+order together. It is not one item's rendered prompt - a stamp that moved per
+item could not answer the question the stamp exists to answer - so the article
+and call 1's reply render as empty strings and every number `summarize` can
+substitute is appended, exactly as the single call's own `prompt_inputs` does.
+Recorded here 2026-09-12 by plan 11 row #3c; closed by row #5b the same day.
 
 ## The changes are not retroactive
 

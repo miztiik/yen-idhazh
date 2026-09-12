@@ -91,6 +91,13 @@ _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
     FailureCode.CONTEXT_EXCEEDED: (
         "the prompt did not fit the served context window, so the server refused it"
     ),
+    # The two-call path's own way of having no reply to parse: the labelling
+    # call answered and this build could not read what it said, so the second
+    # call - whose prompt replays that reply verbatim - was never sent.
+    FailureCode.BAD_SHAPE: (
+        "the labelling reply did not hold its shape, so the call that writes the "
+        "summary was never sent"
+    ),
 }
 
 

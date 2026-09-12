@@ -223,6 +223,48 @@ tokens of pointer stay behind, which is what the row's floor exists to say.
 them are this page's own measured rate rather than the laptop the counts came
 from.
 
+## Which stage sends the two calls, and the knob that decides
+
+Until 2026-09-12 nothing sent them. The two calls, the gate in front of them,
+the ladder below them and the renderer at the end were all built and none of
+them was reachable from a stage: `work` made one summarizer call an item and the
+separate `visuals` job drew the pictures on the small model.
+
+**`run.two_calls_per_item` is the switch, and it is false in the committed
+config.** False is exactly today's pipeline. True makes `work` send call 1 and
+then call 2 **adjacently, per item**, and that adjacency is a correctness rule
+rather than a layout taste: `models.summarize.inference` pins `n_parallel` to 1,
+so the server holds one cache slot, and every call 1 first with every call 2
+afterwards would evict the prefix before it was reused - on every item, with
+nothing in any log to say so. With the flag on, `visuals` decides nothing,
+because `work` has already decided every item it could.
+
+**The flag is the first of two commits.** Plan 11 row #6 is the second: it
+deletes the flag, the small model, the `visuals` job and the old path together.
+Until then the flag off has to leave the pipeline where it was, which is what
+`backend/tests/test_pipeline.py::TestTheFlagOffLeavesTodaysPipelineWhereItWas`
+holds.
+
+**The pipeline stamp digests a different prompt under the flag.** The stamp
+hashes the chat template read off `/props`, and the two calls render their own
+bytes, so that template no longer reaches what the model reads and
+`backend/idhazh/prompts/turn_markers.json` does. `classify.calls.prompt_inputs`
+is what the stamp hashes instead: both turns rendered through the same helpers
+the live requests use, with the article and call 1's reply empty, plus every
+number `summarize` can substitute into them. Editing a marker moves the stamp,
+which is the state `Observation.DETERMINISM_VIOLATION` exists to make visible.
+
+**Three prices nobody can read off a token count, and each can fail the design
+on its own.** The first is the prompt cache: if call 2's `cached_tokens` is
+below call 1's prompt token count, the slot is not answering for the article and
+every figure above is wrong - `state/item-health/<month>.csv` carries
+`call_1_input_tokens` and `call_2_cached_tokens` side by side from 2026-09-12,
+so the reading is one comparison over that ledger. The second is call 2's
+decode: its output budget is 4,694 tokens and the one reply ever measured was
+327, and a reply at half the budget is 143 minutes of call 2 alone on a 20-item
+shard. The third is the worst `work` shard against the 180-minute bar in
+`state/runtime-counters.csv`. All three need a run with the flag on.
+
 ## The write rate still falls through a run, and the cause is the ordering
 
 Measured on run `32742672105`, all four workers, first half of each job against
