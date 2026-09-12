@@ -49,7 +49,7 @@ EXPECTED_WORKFLOWS: Final = {
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "pages.yml": (
         "Pages publication",
-        frozenset({"push", "workflow_run", "workflow_dispatch"}),
+        frozenset({"workflow_run", "workflow_dispatch"}),
     ),
     "prune.yml": ("Corpus prune", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
@@ -2118,7 +2118,7 @@ def test_the_site_gate_measures_the_tree_the_deploy_uploads(filename: str, job_n
     assert built < index, "the tree does not exist until the site is built"
 
 
-def test_ci_and_pages_keep_their_push_boundaries() -> None:
+def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None:
     workflows = _load_workflows()
 
     ci_push = cast(dict[str, object], _triggers(workflows["ci.yml"])["push"])
@@ -2129,17 +2129,38 @@ def test_ci_and_pages_keep_their_push_boundaries() -> None:
     # this file starts no run at all, whoever pushed it, and every other gate on
     # that commit still runs.
     assert ci_push["paths-ignore"] == [STATUS_PAGE]
+
     pages = _triggers(workflows["pages.yml"])
-    pages_push = cast(dict[str, object], pages["push"])
-    assert set(pages_push) == {"branches", "paths"}
-    assert pages_push["branches"] == ["main"]
-    assert frozenset(cast(list[str], pages_push["paths"])) == frozenset(
-        {"frontend/**", "config/idhazh.json", "state/**"}
+    assert "push" not in pages, (
+        "a push reaches this workflow at the same moment it reaches CI, so "
+        "publishing on one publishes before anything has judged the commit"
     )
     assert pages["workflow_run"] == {
-        "workflows": ["Content refresh"],
+        "workflows": ["CI", "Content refresh"],
         "types": ["completed"],
     }
+
+    jobs = _mapping(workflows["pages.yml"]["jobs"], "pages.yml jobs")
+    decide = _mapping(jobs["decide"], "pages.yml decide job")
+    condition = str(decide["if"])
+    assert "conclusion == 'success'" in condition, (
+        "a workflow_run trigger cannot be filtered by conclusion, so a CI run "
+        "that failed has to be refused by the job that reads it"
+    )
+    assert "!= 'CI'" in condition, (
+        "the daily path is deliberately not gated on conclusion: the job that "
+        "writes a day validates it before committing, so a sibling job failing "
+        "afterwards must not hold a good day back"
+    )
+    checkout = next(
+        step
+        for step in _steps(workflows["pages.yml"], "build")
+        if str(step.get("uses", "")).startswith("actions/checkout@")
+    )
+    pinned = str(_mapping(checkout["with"], "pages.yml build checkout").get("ref"))
+    assert "needs.decide.outputs.ref" in pinned, (
+        "what deploys is the commit that was verified, not the tip minutes later"
+    )
 
 
 def test_the_plan_queue_has_exactly_one_writer() -> None:
