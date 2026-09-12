@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
 
@@ -24,10 +24,20 @@ Every table in every answer is lettered in the order it appears - `Table A`, `Ta
 
 [`CLAUDE.md`](CLAUDE.md) section 0c is canonical.
 
+## Intent, contract, code (CLAUDE.md section 0d)
+
+Intent is the top of the chain. The contract follows intent. Code follows the contract. Intent is what the user wants to be true when the work is done. When intent and the contract disagree, the contract is what changes, in the same commit. When the contract and the code disagree, the code is what changes.
+
+Compliance is to the intent, not to the current shape of the system. An existing limitation - a guardrail, a budget, a schema, a dependency, a design already shipped - is a cost to price, never an answer on its own. "We cannot, because X" is not a finished sentence.
+
+Three moves are legitimate when intent meets a limitation. Do it, and say what it moved. Price it - what the limitation costs to move, what moving it buys, and a recommendation. Or say what would settle it when the price cannot be measured today - name the measurement, what it costs to take, and the smallest step that makes progress while the answer is unknown, with the guess labelled an estimate. Naming the limitation and stopping is not one of them: **a limitation named with no next move is an unfinished answer.**
+
+This does not license routing around a person's ruling, the runner budget or the trust boundary; those are surfaced, not overruled. It does not license a larger change than the intent needs either. [`CLAUDE.md`](CLAUDE.md) section 0d is canonical.
+
 Before any non-trivial work:
 
 1. Read [`CLAUDE.md`](CLAUDE.md) - the engineering contract.
-2. Run the ritual in [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md); honour [`docs/agents/guardrails.md`](docs/agents/guardrails.md).
+2. Run the ritual in [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md); honour the guardrails in [`docs/agents/guardrails.md`](docs/agents/guardrails.md).
 3. Route new docs by [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md). **A page answers one question and has no maximum length; a split names a question, never a sequence, so `-part2.md` is never the answer. A benchmark run gets its own record under `docs/reference/benchmarks/`, named for what it measured and the date, and the instrument log links to it rather than absorbing it. Before and after a docs pass, run `python backend/utilities/doc_load.py` - it prints the bootstrap load and one row per page, and every column feeds a test on that page rather than a threshold.**
 4. For plan execution, follow [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md).
 5. Before claiming a change is done, read [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md). **Use `npm --prefix frontend run test:changed -- --list`, then run the selected local checks. CI runs the full suite. Do not repeat a worker's unchanged check or launch a second copy while its first run is active.** A documentation-only closure needs no local application suite.

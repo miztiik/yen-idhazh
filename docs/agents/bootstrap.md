@@ -1,6 +1,6 @@
 # Agent Bootstrap
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-12
 
 What to load before answering. The companion doc [`guardrails.md`](guardrails.md)
 is what not to do.
@@ -12,7 +12,9 @@ Code Copilot Chat (`.github/agents/*.agent.md`). ASCII only in agent markdown:
 ## The ritual
 
 1. **[`CLAUDE.md`](../../CLAUDE.md), end to end.** The contract. Know which of
- Rules #1-#11 are load-bearing here and cite them by number.
+ Rules #1-#11 are load-bearing here and cite them by number. Section 0d
+ (intent above the contract, the contract above code) and the section 1
+ preamble are read first, every session.
 2. **[`guardrails.md`](guardrails.md).** Non-goals, git hygiene, stop
  conditions, escalation.
 3. **The subsystem doc for the surface you are touching**, under
@@ -24,6 +26,9 @@ Code Copilot Chat (`.github/agents/*.agent.md`). ASCII only in agent markdown:
 6. **`git log --oneline -20`**, for in-flight work that overlaps.
 7. **Say which Rules and which docs are load-bearing**, in your first paragraph.
  That makes the load explicit and easy to challenge.
+8. **An answer that would decline on a limitation is not finished until it
+ names a next move** - do it, price it, or say what would settle it
+ (`CLAUDE.md` section 0d).
 
 ## When it is mandatory
 
