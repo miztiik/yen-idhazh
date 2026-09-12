@@ -35,14 +35,14 @@ committed file.
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
-| [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 5 | 1 | 4 | 0 |
+| [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 5 | 2 | 3 | 0 |
 
 ## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #7a | 23 | E | The classification code gets its own package | p23-7a |
-| #2 | 27 | B | Rewrite all twelve guardrails | `../yen-idhazh.worktrees/p27-r2` |
+| #3 | 27 | C | Eight collateral sections | `../yen-idhazh.worktrees/p27-r3` |
 
 ## Ready now - 30
 
@@ -83,7 +83,7 @@ section 3 is where it is answered.
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 | #1 | 26 | A | What prerendering actually weighs, both arms | - |
 
-## Waiting on another row - 77
+## Waiting on another row - 76
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -161,8 +161,7 @@ section 3 is where it is answered.
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #4 | 26 | B | The ruling, written where the next person arrives | 1 is PENDING |
-| #3 | 27 | C | Eight collateral sections | 2 is IN-FLIGHT |
-| #4 | 27 | D | Restate in the three derived agent surfaces | 3 is PENDING |
+| #4 | 27 | D | Restate in the three derived agent surfaces | 3 is IN-FLIGHT |
 | #5 | 27 | E | Repository-wide sweep, schemas, relapse proof | 4 is PENDING |
 
 ## Finished - 13 plans with no live row
