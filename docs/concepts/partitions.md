@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-13
 
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
@@ -100,6 +100,47 @@ as `test_the_month_readers_all_agree_on_what_a_month_is` does one grain over.
 
 Authority: Guardrail #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
 rather than a replacement: both grains are live, so both modules are.
+
+## How a collection changes grain
+
+**One utility moves a store from month files to day files, and it refuses to write a
+tree it cannot read back.** `backend/utilities/migrate_to_day_shards.py` takes
+`--directory`, the store, and `--date-column`, the cell that says which day a row
+belongs to. Each ledger's own change runs it once on its own directory; committing the
+utility migrates nothing.
+
+It builds the whole day tree in a temporary directory beside the store, walks it with
+`day_partition.day_files` - the pipeline's own reader rather than a second opinion - and
+compares it row for row against what came out of the month shards. Only then does it
+rename the year directories into place and unlink the month shards. **A migration that
+writes an empty tree and unlinks its source is a delete with exit 0**, so the read-back
+is the point and the ordering is the guarantee.
+
+**A row it cannot place stops the run before a byte is written.** An empty date cell and
+a date cell that is not a date are what a real ledger eventually holds - a run
+interrupted mid-append, a header migration half applied - and a skipped row is a
+measurement that stops having happened.
+
+**A store holding a month shard and anything else is refused**, and that is not
+tidiness. `day_files` refuses a name it cannot place, so a month shard sitting beside a
+year directory stops every read of that store: a half-migrated store is already
+unreadable by the pipeline. The repair is a restore from the trunk rather than a second
+pass, because a second pass cannot know which rows the first one had already moved.
+
+**Which cell names the day, and why `state/seen/` files by `first_seen_run`.** The day
+is the cell's first ten characters, and the cell is either exactly those ten or
+continues with `-`. A run id is `<date>-<n>`, so filing by `first_seen_run` reproduces
+`ledger.append_seen`'s own filing exactly. A wall-clock stamp is `<date>T<time>Z`, and
+the `T` is refused - `first_seen_at` crosses midnight independently of the run its row
+belongs to, so a tree filed by it would disagree with the writer that built it. One
+clause makes that choice mechanical instead of leaving it to a comment.
+
+Changing grain is a different operation from [a correction](#a-correction-to-a-closed-month),
+which rewrites one partition and leaves the layout alone. Both ship as a committed
+one-shot utility under `backend/utilities/` for the same reason: a fork or a stale
+branch can then reproduce the exact cutover this repository ran.
+
+Authority: Guardrail #5, 2026-09-13.
 
 ## The freeze rule
 
