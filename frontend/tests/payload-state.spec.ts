@@ -13,6 +13,7 @@ import {
 	type Loader,
 	type LoadedDay
 } from './support/day-loader';
+import { dayReady } from './support/day-ready';
 import { assistConfig } from '../src/lib/server/config';
 
 /**
@@ -577,9 +578,9 @@ test.describe('the fragment', () => {
 	});
 
 	test('the shell honours a deep link on a real page', async ({ page }) => {
-		// The half that works today, on a route that still carries every story in
-		// its document. It is what proves the layout wired the restore at all -
-		// a browser scrolls to a fragment on its own, but it never focuses one.
+		// The half that works today, on a real route rather than a stub. It is
+		// what proves the layout wired the restore at all - a browser scrolls to
+		// a fragment on its own, but it never focuses one.
 		await page.goto('/archive/');
 		const dates = await page
 			.locator('[data-day-row] a')
@@ -592,6 +593,7 @@ test.describe('the fragment', () => {
 		const date = dates.sort()[dates.length - 1]!;
 
 		await page.goto(`/${date}/`);
+		await dayReady(page, 'the day page never finished loading its stories');
 		const ids = await page
 			.locator('article[id]')
 			.evaluateAll((items) => items.map((item) => item.id));
