@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 6 | 3 | 3 | 3 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 12 | 7 | 5 | 1 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 12 | 7 | 5 | 0 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 0 | 3 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -38,12 +38,13 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
 
-## In flight - 0
+## In flight - 1
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #3c | 11 | C4 | Own the prompt bytes | p11-3c |
 
-## Ready now - 30
+## Ready now - 29
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -55,7 +56,6 @@ section 3 is where it is answered.
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #19 | 20260823-known-defects-plan | - | A summarize call that failed on its reply reports no cost at all | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
-| #3c | 11 | C4 | Own the prompt bytes | 3d |
 | #1 | 12 | A | A new engine behind the same seam | - |
 | #1 | 13 | A | The rules, and which rule governs every file this project writes | - |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
@@ -91,7 +91,7 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #3e | 11 | C5 | The instructions move in front of the article | 3c is PENDING |
+| #3e | 11 | C5 | The instructions move in front of the article | 3c is IN-FLIGHT |
 | #3f | 11 | C6 | The window is sized for two calls | - |
 | #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 3e is PENDING |
 | #6 | 11 | F | The small model, its job and its cache go | 5b is PENDING |
