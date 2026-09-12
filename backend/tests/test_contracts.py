@@ -100,7 +100,7 @@ from idhazh.contracts.run_plan import (
     TimeSource,
     VerticalPlan,
 )
-from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
+from idhazh.contracts.runtime_counters import SERIES, WORK_JOB, RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.span_rollup import SpanRollupRow
@@ -2932,6 +2932,7 @@ def test_the_runtime_counters_columns_are_defined_once() -> None:
         "n_ctx_configured",
         "python_peak_rss_bytes",
         "cgroup_peak_bytes",
+        "job",
     )
 
 
@@ -3324,16 +3325,19 @@ def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_wri
 def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_names() -> None:
     """The Oracle for the widening: every old row re-reads, and the bytes account for themselves.
 
-    Three rows built here rather than the 225 in `state/runtime-counters.csv`,
-    which gains one per shard per run (Rule #12). What is under test is the
-    arithmetic of an appended column, and three rows prove it exactly as 225 do.
+    Three rows built here rather than the 293 in `state/runtime-counters.csv`,
+    which gains one per job per shard per run (Rule #12). What is under test is
+    the arithmetic of an appended column, and three rows prove it exactly as 293
+    do.
 
     A widening that MOVED a cell instead of appending one still parses, and every
     number would then be filed under the wrong name. The byte count is what
-    catches that: an appended column costs one comma on every line and its own
-    name once, and nothing else.
+    catches that: an appended column costs one comma on every line, its own name
+    once, and whatever each row writes into it - nothing at all for a cell a
+    metrics body cannot fill, and four characters for `job`, which is defaulted
+    rather than left empty.
     """
-    added = ("n_ctx_configured", "python_peak_rss_bytes", "cgroup_peak_bytes")
+    added = ("n_ctx_configured", "python_peak_rss_bytes", "cgroup_peak_bytes", "job")
     columns = RuntimeCountersRow.csv_columns()
     assert columns[-len(added) :] == added, "a new column is appended, never inserted"
     narrow_columns = columns[: -len(added)]
@@ -3362,7 +3366,11 @@ def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_name
         for line in [columns, *([row[name] for name in columns] for row in cells)]
     )
 
-    expected_delta = len(added) * len(narrow.splitlines()) + sum(len(name) for name in added)
+    expected_delta = (
+        len(added) * len(narrow.splitlines())
+        + sum(len(name) for name in added)
+        + sum(len(row[name]) for row in cells for name in added)
+    )
     assert len(wide.encode()) - len(narrow.encode()) == expected_delta
 
     for row, line in zip(rows, wide.splitlines()[1:], strict=True):
@@ -3371,6 +3379,7 @@ def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_name
         assert widened.n_ctx_configured is None
         assert widened.python_peak_rss_bytes is None
         assert widened.cgroup_peak_bytes is None
+        assert widened.job == WORK_JOB
 
 
 def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() -> None:

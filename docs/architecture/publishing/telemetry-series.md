@@ -433,12 +433,19 @@ above.
 ## What the machine did - read at build time, never published
 
 The same arrangement as the model section above, over a third private ledger:
-`state/runtime-counters.csv`, one row per work shard per run, holding what
-llama-server itself counted. The reader is
+`state/runtime-counters.csv`, one row per model-server job per shard per run,
+holding what llama-server itself counted. The reader is
 [frontend/src/lib/server/runtime-counters.ts](../../../frontend/src/lib/server/runtime-counters.ts),
 under `$lib/server/` for the same reason `model-work.ts` is. Nothing is served
 and no column is published: `state/` is not part of the site, and the figures
 below reach a page as numbers, never as rows.
+
+**This page is the `work` series, and the ledger has held two since
+2026-09-12.** The `visuals` job files a row of its own for the visual planner it
+serves, and `publish_machine.PUBLISHED_JOB` keeps it out of the published
+mirror: the figures below pool a run's tokens over a run's seconds, and the two
+jobs serve different weights, so one pooled rate over both would describe no
+model. The planner's own row is read from `state/` by hand, not drawn here.
 
 Since 2026-08-31 `/console/machine/` draws them
 ([console.md](console.md#what-the-hardware-route-draws)). Before that the

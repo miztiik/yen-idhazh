@@ -433,7 +433,7 @@ function writeRuntimeCountersCanary() {
 		'tokens_predicted_total', 'tokens_predicted_seconds_total', 'n_decode_total',
 		'n_tokens_max', 'n_busy_slots_per_decode', 'job_seconds', 'cpu_model',
 		'cpu_busy_pct', 'peak_rss_bytes', 'model_load_ms', 'n_ctx_configured',
-		'python_peak_rss_bytes', 'cgroup_peak_bytes'
+		'python_peak_rss_bytes', 'cgroup_peak_bytes', 'job'
 	];
 	const row = (cells) => COUNTER_COLUMNS.map((name) => cells[name] ?? '').join(',');
 	const shard = (rowDate, run, index, cells) => ({
@@ -444,6 +444,11 @@ function writeRuntimeCountersCanary() {
 		shards: 2,
 		scraped_at: `${rowDate}T2${run}:0${index}:00Z`,
 		n_busy_slots_per_decode: '1.0',
+		// This page is the `work` series and only that series. The visuals job
+		// writes counters rows of its own from 2026-09-12 and `publish_machine`
+		// keeps them out of the published mirror, so a canary carrying one would
+		// build a state the real site cannot reach.
+		job: 'work',
 		...cells
 	});
 

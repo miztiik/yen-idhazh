@@ -45,9 +45,12 @@ row per planned item per run - the fastest-growing of the four. The console
 reads it a month at a time through the published projection, so it shards.
 
 `state/runtime-counters.csv` answers "what did the model server itself count?"
-One row per work shard per run, read one run at a time by an audit that carries
-no time window - so it is one file. It is also the slowest-growing: eight shards
-times five runs a day is 40 rows, and a year is 14,600.
+One row per model-server job per shard per run - the `work` job files one for
+each of its shards and the `visuals` job files one for the planner it served,
+and the `job` cell is what tells them apart. Read one run at a time by an audit
+that carries no time window, so it is one file. It is also the slowest-growing:
+eight shards times five runs a day, plus one visuals row a run, is 45 rows, and
+a year is about 16,400.
 
 `state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health
 month once `observability.item_health_full_grain_months` has passed: one row per
@@ -132,13 +135,18 @@ FEED_HEALTH_KEY: Final = ("run_id", "feed_id")
 #: under the same run and the second one has nothing new to say.
 ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 
-#: What makes two runtime-counter rows the same record. One work shard, one run.
-#: The counters are cumulative for a server process, so a re-run of a failed job
-#: would append a second row for the same shard and a run-level sum would count
-#: that shard twice. The first row wins, which matches `ITEM_HEALTH_KEY`: a
-#: re-run's items are skipped there too, so the two files stay describing the
-#: same attempt.
-RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "shard")
+#: What makes two runtime-counter rows the same record. One job's server, one
+#: shard, one run. The counters are cumulative for a server process, so a re-run
+#: of a failed job would append a second row for the same shard and a run-level
+#: sum would count that shard twice. The first row wins, which matches
+#: `ITEM_HEALTH_KEY`: a re-run's items are skipped there too, so the two files
+#: stay describing the same attempt.
+#:
+#: `job` is in the key because two jobs write this file from 2026-09-12, and both
+#: spell shard 0 of the same run - the `visuals` job runs one server rather than
+#: a fan-out. Without it the visual planner's row is dropped as a repeat of the
+#: summarizer's, which is silent: the append filter returns a count, not a fault.
+RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "job", "shard")
 
 #: What makes two span-rollup rows the same record. One shard's fold of one span
 #: name, in one run. The row is derived from the shard's spans, so a re-run of a
@@ -647,7 +655,7 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
 
 
 def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:
-    """Append what each work shard's model server counted. Never windowed.
+    """Append what each job's model server counted. Never windowed.
 
     Filters against `RUNTIME_COUNTERS_KEY` because the cells are cumulative
     totals rather than events: a second row for a shard is not a second fact, it
@@ -966,7 +974,7 @@ def load_runtime_counters(state_dir: Path, *, run_id: str) -> list[RuntimeCounte
         for row in _stream_rows(runtime_counters_path(state_dir))
         if row["run_id"] == run_id
     ]
-    return sorted(rows, key=lambda row: row.shard)
+    return sorted(rows, key=lambda row: (row.job, row.shard))
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
