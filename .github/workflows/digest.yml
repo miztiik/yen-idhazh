@@ -551,113 +551,19 @@ jobs:
 
       # Neither of the two runs this shape was read from measured memory at all,
       # and the runner has 16 GB (Rule #2). `measure.yml` already samples exactly
-      # this; the daily path did not. VmHWM is the high-water mark a process
-      # reached and VmRSS is what it holds right now, and the cgroup peak is what
-      # the runner counted against the limit.
+      # this; the daily path did not.
       #
-      # Both marks are taken for python as well as for llama-server, because
-      # llama-server is not the whole job. Reading only VmRSS there made the
-      # recorded python figure a LOWER bound - a 15-second sampler misses a spike
-      # between two samples - and a lower bound is the unsafe direction for a
-      # headroom decision.
-      #
-      # `python_vmhwm_kb` is appended at the END of the row rather than beside its
-      # VmRSS sibling. A file written before it existed then still parses, and
-      # nothing that reads `python_procs` by position moves.
-      #
-      # `python-procs.tsv` names them, one row per process per sample. A count
-      # and a sum cannot say what was counted, and that is not a small gap: the
-      # four captures under `tests/fixtures/runtime/` record three python
-      # processes at every peak, and two of the three are already running before
-      # this job's own python starts. Those two hold 63,432 to 69,780 kB across
-      # 1,261 samples, so about 4 percent of the recorded python figure belongs
-      # to something the job did not start - and nothing on the row says what.
-      # A roll-call turns the next run into the answer.
-      #
-      # The executable and three argv fields, not the whole command line. `comm`
-      # is `python3` for every one of them, which names nothing; the executable
-      # path plus argv 1 to 3 separates a hosted-tool-cache `python -m idhazh`
-      # from a distribution `/usr/bin/python3 -u /usr/sbin/...` and stops there,
-      # so a secret further along a command line is never copied into an
-      # artifact (`CLAUDE.md` section 1b).
-      #
-      # `mem_total_kb`, `mem_available_kb`, `committed_as_kb` and
-      # `cgroup_current_bytes` are the machine's own account of itself, taken
-      # beside the two process marks from 2026-09-09. Everything above this line
-      # measures processes, and adding two process marks together does not give
-      # the memory the machine committed: no `-lm` flag is passed, so llama.cpp
-      # maps the weights and their resident pages count in every RSS figure as
-      # file-backed and evictable, and pages two processes share are counted
-      # twice. `MemAvailable` is the kernel's own estimate of what a new
-      # allocation could get, which is the question a headroom decision actually
-      # asks; `Committed_AS` is what has been promised; `MemTotal` is what the
-      # machine has, which this repository has never once read. Until it does,
-      # `docs/reference/measurements.md` can say how large the marks were and
-      # cannot say how near the edge they came.
-      #
-      # `absent` is written in full wherever a file does not exist. An empty
-      # cell reads as zero, and zero available memory is a very different claim
-      # from no reading - which is the confusion `cgroup_peak_bytes` already
-      # walked into, being blank on all 225 committed rows. The four columns are
-      # appended to the RIGHT for the reason `python_vmhwm_kb` was: a capture
-      # written before they existed still parses, the reader finds its column by
-      # name off the file's own header, and the operator print reads fields 2 to
-      # 6 by position and does not move.
+      # The sampler itself is `.github/scripts/sample-rss.sh`, and it moved there
+      # on 2026-09-12 when the visuals job started taking the same reading. Two
+      # jobs running one script is what that directory is for (`CLAUDE.md`
+      # section 3), it puts the sampler under `shellcheck`, and it means a test
+      # can execute it rather than grep a `run:` body. Every column it writes,
+      # and why each one is there, is in the script's own header.
       - name: Sample memory
         run: |
           set -euo pipefail
-          cat > sample-rss.sh <<'SAMPLER'
-          set -u
-          pid="$1"
-          meminfo_kb() {
-            [ -r /proc/meminfo ] || { printf 'absent\n'; return; }
-            awk -v key="$1:" \
-              '$1 == key { print $2; seen = 1; exit } END { if (!seen) print "absent" }' \
-              /proc/meminfo
-          }
-          cgroup_current() {
-            for file in /sys/fs/cgroup/memory.current \
-                        /sys/fs/cgroup/memory/memory.usage_in_bytes; do
-              if [ -r "$file" ]; then cat "$file"; return; fi
-            done
-            printf 'absent\n'
-          }
-          printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\tpython_vmhwm_kb' > rss-samples.tsv
-          printf '\tmem_total_kb\tmem_available_kb\tcommitted_as_kb\tcgroup_current_bytes\n' >> rss-samples.tsv
-          printf 'ts\tpid\tcomm\tvmrss_kb\tvmhwm_kb\texe\targs\n' > python-procs.tsv
-          while kill -0 "$pid" 2>/dev/null; do
-            now=$(date -u +%FT%TZ)
-            rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
-            hwm=$(awk '/^VmHWM:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
-            python_kb=0
-            python_hwm_kb=0
-            python_n=0
-            for proc in /proc/[0-9]*; do
-              comm=$(cat "$proc/comm" 2>/dev/null || true)
-              case "$comm" in
-                python*) ;;
-                *) continue ;;
-              esac
-              kb=$(awk '/^VmRSS:/ {print $2}' "$proc/status" 2>/dev/null || true)
-              [ -n "$kb" ] || continue
-              proc_hwm=$(awk '/^VmHWM:/ {print $2}' "$proc/status" 2>/dev/null || true)
-              python_kb=$((python_kb + kb))
-              python_hwm_kb=$((python_hwm_kb + ${proc_hwm:-$kb}))
-              python_n=$((python_n + 1))
-              exe=$(readlink "$proc/exe" 2>/dev/null || true)
-              args=$(tr '\0\t\n' '   ' < "$proc/cmdline" 2>/dev/null | cut -d' ' -f2-4 || true)
-              printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-                "$now" "${proc##*/}" "$comm" "$kb" "${proc_hwm:-}" "${exe:-}" "${args:-}" \
-                >> python-procs.tsv
-            done
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-              "$now" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" "$python_hwm_kb" \
-              "$(meminfo_kb MemTotal)" "$(meminfo_kb MemAvailable)" \
-              "$(meminfo_kb Committed_AS)" "$(cgroup_current)" >> rss-samples.tsv
-            sleep 15
-          done
-          SAMPLER
-          nohup bash sample-rss.sh "$(cat llama-server.pid)" > sample-rss.log 2>&1 &
+          nohup bash .github/scripts/sample-rss.sh "$(cat llama-server.pid)" \
+            > sample-rss.log 2>&1 &
           echo "$!" > sample-rss.pid
 
       - name: Work the shard
@@ -759,6 +665,7 @@ jobs:
           CPU_STAT_AT_END=$(awk '/^cpu / { print }' /proc/stat || true)
           python -m idhazh counters \
             --date "${{ needs.plan.outputs.date }}" \
+            --job work \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
             --counters-file llama-metrics.prom \
@@ -962,6 +869,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
+      # First, before the checkout, for the reason the work job's copy gives: the
+      # number then covers the cache restore and the weight load as well as the
+      # model time. This job took none of these three readings until 2026-09-12,
+      # so every live-path figure on record belonged to the summarizer and none
+      # to the visual planner.
+      - name: Stamp the visuals clock and the host
+        run: |
+          set -euo pipefail
+          echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+          echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)" >> "$GITHUB_ENV"
+          echo "CPU_STAT_AT_START=$(awk '/^cpu / { print }' /proc/stat || true)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
@@ -1072,12 +991,110 @@ jobs:
           sha256sum backend/bin/llama-server || true
           sha256sum "backend/models/${{ needs.plan.outputs.visual_planner_file }}" || true
 
+      # The same reading the work job takes, from the same script, so the
+      # planner's memory high-water mark can be read against the summarizer's.
+      - name: Sample visuals memory
+        run: |
+          set -euo pipefail
+          nohup bash .github/scripts/sample-rss.sh "$(cat visual-planner.pid)" \
+            > sample-rss.log 2>&1 &
+          echo "$!" > sample-rss.pid
+
       - name: Plan the visuals and render them
         run: python -m idhazh visuals --date "${{ needs.plan.outputs.date }}"
 
       - name: Visual planner log on failure
         if: failure()
         run: tail -50 visual-planner.log || true
+
+      # The planner's own live-path figures, which nothing committed carried
+      # until 2026-09-12: what its prompts cost to read, what the cache saved,
+      # the window one sequence got and what the server held. `llama-bench`
+      # produces none of the four. The two plan-11 row-6 estimates in
+      # `TODO/20260910-23-article-classification-plan.md` section 0.3 scale this
+      # stage's measured 21.0 s an item by a ratio of decode rates, which
+      # assumes the whole 21.0 s is decode; these cells are what tests that.
+      #
+      # `--job visuals` is the whole point of the step: the ledger already holds
+      # a row for shard 0 of this run, written by a work shard against different
+      # weights, and without this cell the two are one record.
+      #
+      # `always()` and `continue-on-error` for the reason the work job's copy
+      # gives - a broken scrape costs one observation row, never the run. This
+      # job cannot stop a publication at all.
+      - name: What the visual planner counted
+        if: always()
+        continue-on-error: true
+        run: |
+          curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
+          if [ -s llama-metrics.prom ]; then
+            grep -E '^llamacpp:' llama-metrics.prom || true
+            for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max; do
+              grep -m1 "^${series} " llama-metrics.prom \
+                || echo "${series}: this build does not publish it"
+            done
+          else
+            echo "no metrics: the visual planner was already gone, or the role's inference.metrics is off"
+          fi
+          if [ -f /sys/fs/cgroup/memory.peak ]; then
+            echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
+          else
+            echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
+          fi
+          CPU_STAT_AT_END=$(awk '/^cpu / { print }' /proc/stat || true)
+          python -m idhazh counters \
+            --date "${{ needs.plan.outputs.date }}" \
+            --job visuals \
+            --shard 0 \
+            --shards 1 \
+            --counters-file llama-metrics.prom \
+            --job-started-at "${JOB_STARTED_AT:-}" \
+            --cpu-model "${CPU_MODEL:-}" \
+            --cpu-stat-at-start "${CPU_STAT_AT_START:-}" \
+            --cpu-stat-at-end "${CPU_STAT_AT_END:-}" \
+            --rss-samples-file rss-samples.tsv \
+            --server-log visual-planner.log \
+            --memory-peak-file memory-peak.txt
+
+      # One file, one row. The work shards have finished committing by the time
+      # this job runs - it waits on `work` - so this is never racing eight
+      # siblings the way their own commit is, and `merge=union` on the path
+      # settles it against assemble either way. It may not fail the job: a row
+      # that will not push costs one reading and a failed visuals job costs the
+      # day every picture.
+      - name: Commit what the visual planner counted
+        if: always()
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: "visuals: ${{ needs.plan.outputs.date }} runtime counters"
+          NOTHING_STAGED_MESSAGE: "nothing counted to record"
+          PUSH_FAILED_MESSAGE: "could not push what the visual planner counted after three attempts"
+          DROP_REPEATED_ROWS_COMMAND: >-
+            python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          state/runtime-counters.csv
+
+      # The operator's read of the same two files the row above read, in the job
+      # log where a person looking at a slow visuals job will find it.
+      - name: What memory the visual planner used
+        if: always()
+        run: |
+          cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
+          if [ -f rss-samples.tsv ]; then
+            awk -F'\t' '
+              NR > 1 {
+                if ($3 + 0 > llama) llama = $3 + 0
+                if ($6 + 0 > py) py = $6 + 0
+                if ($2 + $4 > together) together = $2 + $4
+              }
+              END {
+                printf "peak llama VmHWM %d kB, peak python VmHWM %d kB, most the two held at once %d kB, n=%d samples\n", llama, py, together, NR - 1
+              }
+            ' rss-samples.tsv
+          else
+            echo "rss-samples.tsv not found"
+          fi
 
       - name: Visual planner cache log summary
         if: always()
@@ -1104,7 +1121,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: visual-planner-log
-          path: visual-planner.log
+          path: |
+            visual-planner.log
+            rss-samples.tsv
+            python-procs.tsv
+            memory-peak.txt
+            llama-metrics.prom
           retention-days: 2
           if-no-files-found: ignore
 
