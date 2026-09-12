@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 Traps in Playwright, the integrated browser, the service worker, and the Svelte
 components a spec drives. Index and scope:
@@ -47,7 +47,7 @@ await expect(locator, 'why').toHaveCount(n); // retries
 expect(await locator.count).toBe(n); // does not
 ```
 
-The helper exists because seven specs already waited longhand and the eighth, written without it, was the one that broke.
+The helper exists because seven specs already waited longhand and the eighth, written without it, was the one that broke. The ninth was `payload-state.spec.ts` on 2026-09-12: red on `ubuntu-latest` with `Expected: > 0, Received: 0`, green on a re-run with no edit. It is a fragment-focus test, so the day it had to wait for was never what it was about - which is how a spec comes to read a dated route with no wait at all. Ask what the page fetches, not what the test is called.
 
 **A negated `toHaveAttribute` passes when the element is absent**, so it is the wrong shape for "the page is not in state X" - it reports a state the page never reached. Playwright special-cases only `toHaveCount`, `toBeVisible`, `toBeHidden`, `toBeAttached`, `toBeDetached` and `toBeInViewport` for a locator resolving to nothing; everything else falls through to `matches = options.isNot`. Assert the positive form of the state you do want. It is strictly stronger and fails with "element(s) not found" rather than passing.
 
