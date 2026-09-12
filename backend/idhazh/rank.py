@@ -21,7 +21,7 @@ cannot disagree about the order.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, NamedTuple
@@ -352,6 +352,37 @@ def _take(
         chosen.add(item.candidate.url_key)
 
     return [item for item in ordered if item.candidate.url_key in chosen]
+
+
+def desks_below_floor(verticals: Iterable[VerticalPlan]) -> frozenset[str]:
+    """The ids this run collected but will not render, off its own plan.
+
+    Read from the plan rather than from the taxonomy so it says what THIS run
+    found. A vertical is under its floor because of how many of its addresses
+    were lawfully askable today, and that is a fact about a run.
+    """
+    return frozenset(plan.id for plan in verticals if plan.below_feed_floor)
+
+
+def desk_of(vertical: str, desk: str | None, *, below_floor: Container[str]) -> str | None:
+    """Where a story publishes, or None where nothing has said.
+
+    Null is not a quiet way of writing the vertical. Nothing reads an article
+    yet, so almost every item takes this branch, and writing the feed's word
+    into `desk` would make each of them claim a reading of itself that never
+    happened. A page falls back to the vertical; the payload does not.
+
+    Where something HAS said, the answer is a decided fact and the field carries
+    it - including when the answer is the feed's own word after the floor
+    refused the label. The feed floor is a statement about supply, and supply is
+    collected per feed. Without that fallback an above-floor vertical's stories
+    would land in a desk that renders while the same day's payload flags it as
+    having planned nothing - the page and the operator surface saying opposite
+    things about one name.
+    """
+    if desk is None:
+        return None
+    return vertical if desk in below_floor else desk
 
 
 def plan_vertical(

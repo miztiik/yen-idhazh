@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { orderByTime } from '../src/lib/day-shape';
+import { deskOf, orderByTime } from '../src/lib/day-shape';
 import type { DigestItem } from '../src/lib/payload/types';
 import { publishedDates, topicsOf } from './support/published';
 import { dayReady } from './support/day-ready';
@@ -81,7 +81,7 @@ function topicRoutes(): TopicRoute[] {
 		const day = committedDay(date);
 		if (day === null) continue;
 		for (const vertical of topicsOf(date, CANARY)) {
-			const own = day.items.filter((item) => item.vertical === vertical);
+			const own = day.items.filter((item) => deskOf(item) === vertical);
 			found.push({
 				date,
 				vertical,

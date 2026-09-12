@@ -8,6 +8,7 @@
       "band": "high",
       "band_reason": null,
       "carried_by": null,
+      "desk": null,
       "entities": [
         "example-lab"
       ],
@@ -54,6 +55,7 @@
       "band": "medium",
       "band_reason": null,
       "carried_by": null,
+      "desk": null,
       "entities": [],
       "events": [
         "capex",
@@ -94,6 +96,7 @@
       "band": "high",
       "band_reason": null,
       "carried_by": null,
+      "desk": null,
       "entities": [
         "example-lab"
       ],
@@ -156,6 +159,7 @@
       "below_feed_floor": false,
       "considered": 9,
       "count": 2,
+      "desk_count": null,
       "display_name": "AI",
       "id": "ai",
       "too_old": 6
@@ -164,6 +168,7 @@
       "below_feed_floor": null,
       "considered": null,
       "count": 1,
+      "desk_count": null,
       "display_name": "Energy",
       "id": "energy",
       "too_old": null

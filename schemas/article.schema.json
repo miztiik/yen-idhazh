@@ -63,6 +63,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added desk: where the digest publishes the story, beside vertical, which keeps carrying the word the feed declares about itself.",
+      "version": "2026-09-12T06:56",
+      "why": "One word was doing two jobs. A feed declares a vertical and the digest needs to know what the article is about, and those are different questions the moment an energy feed carries an AI story. Repointing vertical was refused instead of taken: _identity_is_rebuilt_not_trusted asserts item_id.startswith(f'{self.vertical}-'), so repointing it rejects, at read time, every item whose desk moved. Additive and optional: null is nothing having said, the digest falls back to vertical, and every payload written before today still reads (section 11). Nothing fills it yet - the model that will is a later row."
+    },
+    {
       "change": "lenses and events are lists of Slug rather than of the closed LensId and EventType enums, which are deleted. The schema gates the slug pattern and no longer enumerates the members.",
       "version": "2026-09-12T03:55",
       "why": "A lens id was a Python enum member, so adding or retiring a word was a code change, a schema regeneration and a release. The vocabulary is config/taxonomy.json and nothing else, and the tagger can only ever emit a key of the mapping that file builds - so the type can widen without letting anything invent a label (Rule #11). Read-compatible: every id any payload on disk carries is a well-formed slug, so this build reads every one of them, and a re-run of a stage against a payload an older build wrote produces the same tags. The break is on the write side, where the schema stops refusing a word the vocabulary has gained (section 11)."
@@ -114,6 +119,20 @@
       "minimum": 1,
       "title": "Carried By",
       "type": "integer"
+    },
+    "desk": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Where the digest publishes this story, read off the whole article rather than off the feed that carried it. Null is nothing having said, and the digest falls back to `vertical`; a null is never read as a desk.",
+      "title": "Desk"
     },
     "entities": {
       "items": {
@@ -299,12 +318,13 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-12T03:55",
+      "default": "2026-09-12T06:56",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
     },
     "vertical": {
+      "description": "The vertical the carrying feed declares about itself, copied from the source config and never read out of the article. `item_id` is addressed from it, so it may not be repointed - see `_identity_is_rebuilt_not_trusted` below.",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "title": "Vertical",
       "type": "string"
@@ -333,5 +353,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-09-12T03:55"
+  "version": "2026-09-12T06:56"
 }

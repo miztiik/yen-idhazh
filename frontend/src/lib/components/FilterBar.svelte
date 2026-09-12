@@ -34,7 +34,7 @@
 	 * so it is read once and then scrolls away.
 	 */
 	import { base } from '$app/paths';
-	import { deskShortfall, splitPills } from '$lib/day-shape';
+	import { deskCount, deskShortfall, splitPills } from '$lib/day-shape';
 	import Icon from '$lib/icons/Icon.svelte';
 	import { ICONS, type IconId } from '$lib/icons/generated';
 	import { dayRoot, verticalHref } from '$lib/links';
@@ -141,7 +141,7 @@
 		<Icon id={mark(vertical.id) as IconId} size={14} />
 	{/if}
 	{vertical.display_name}
-	{vertical.count}
+	{deskCount(vertical)}
 {/snippet}
 
 {#snippet pill(vertical: DigestVerticalRef)}

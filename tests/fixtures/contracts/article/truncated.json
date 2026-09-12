@@ -2,6 +2,7 @@
   "brief": false,
   "canonical_url": "https://newsroom.example-grid.com/2026/08/reactor-order",
   "carried_by": 2,
+  "desk": null,
   "entities": [],
   "events": [
     "capex",

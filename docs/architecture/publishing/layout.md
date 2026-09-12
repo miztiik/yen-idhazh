@@ -169,45 +169,82 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 **What is not yet a rule.** Nothing forbids a lead being an item the grouping collapsed, or two members of one group both leading - the source cap does not catch that, because a group is always across sources. Neither costs a reader anything while `same_story_as` is recorded and not drawn. Both become rules to write on the day the collapse is drawn, which is row 24's reachability question above.
 
-## A desk says why it ran what it ran
+## A topic says why it ran what it ran
 
 Each entry of `verticals` on the committed day carries three more fields since
 2026-09-02. The planning step already computed all three, wrote them into the
 run plan and published none of them, so the reading page could not say why a
-desk was thin.
+topic was thin.
 
 | Field | What it says | What it is not |
 | --- | --- | --- |
-| `considered` | Distinct addresses our feeds offered that desk, less what the day had already published or already failed on. | **Not an upper bound on `count`.** Each run counts its own pool and the day's stories accumulate across runs, so a five-run day can publish more than any one run considered. |
+| `considered` | Distinct addresses our feeds offered that vertical, less what the day had already published or already failed on. | **Not an upper bound on `count`.** Each run counts its own pool and the day's stories accumulate across runs, so a five-run day can publish more than any one run considered. |
 | `too_old` | How many of those were past `collect.max_age_hours`. | Not a failure. The age gate working is what this counts. |
-| `below_feed_floor` | Some run today found fewer feeds it was allowed to ask than the desk's floor, so that run planned nothing for it. | Not a reader-facing fact. It is published for the operator surfaces and no reading page draws a sentence from it. |
+| `below_feed_floor` | Some run today found fewer feeds it was allowed to ask than the vertical's floor, so that run planned nothing for it. | Not a reader-facing fact. It is published for the operator surfaces and no reading page draws a sentence from it. |
 
-**The three arrive together or not at all**, and the contract refuses a desk
+**The three arrive together or not at all**, and the contract refuses an entry
 holding two of them. A day published before 2026-09-02 carries none, and absent
 reads as unknown rather than zero - a `0` for `considered` would say the feeds
-offered a desk nothing on a day that published 216 stories from it.
+offered a topic nothing on a day that published 216 stories from it.
 
 **Each field is the strongest any run of the day recorded, never the sum.**
 `assemble.desk_ref` owns that rule. A later run drops what the day has already
 published before it counts anything, so it sees a smaller pool of the same
 back-catalogue stories - and adding the runs would print a number the feeds
-never offered. A desk this run did not plan keeps what an earlier run said about
-it, which is how a desk retired from `config/taxonomy.json` mid-day keeps the
+never offered. A vertical this run did not plan keeps what an earlier run said
+about it, which is how one retired from `config/taxonomy.json` mid-day keeps the
 explanation under stories it already published.
 
-**`count` is the payload's own number.** It counts every story the desk
-published, including one the duplicate pass grouped behind another - that pass
-unpublishes nothing, so the count is not what the default view happens to draw.
+**All three are vertical facts, and that is why they sit beside `count`.**
+Collection is per feed and a feed declares a vertical, so the only number they
+can honestly be weighed against is the vertical's own.
+
+### Two words, and a count for each
+
+Since 2026-09-12 the payload separates where a story came from and where it is
+read. `DigestItem.vertical` is the word the carrying feed declares about itself
+and is what `item_id` is addressed from; `DigestItem.desk` is where the day
+published the story. Both take an id out of the same `verticals` list in
+`config/taxonomy.json`, and `desk` is null until something reads the article - a
+page falls back to the vertical, and a null is never read as a desk of its own.
+Nothing fills it today.
+
+| Number | Counts | Read it when |
+| --- | --- | --- |
+| `count` | Stories whose carrying feed declares this vertical. | Weighing against another vertical fact - `considered` or `too_old`. |
+| `desk_count` | Stories the day publishes under this name. | Anything a reader sees: a pill, a heading, a total, whether the topic route is here at all. |
+
+`frontend/src/lib/day-shape.ts` holds the one reader for each - `deskOf(item)`
+and `deskCount(ref)` - so the filter, the heading and the pill cannot come to
+disagree. Every day published before 2026-09-12 carries neither field, which is
+exactly the fallback case: 22 days, 106 topic entries and 8,922 items, measured
+2026-09-12.
+
+**A day lists every name either word uses.** A relabelled story owes two
+entries: the vertical needs one because `count` is a statement about its feeds,
+and the desk needs one because the page draws a heading, a pill and a route from
+it. The entry a reader draws nothing under carries `desk_count` of 0, and
+`DigestList.svelte` does not draw a pill for it - a pill is a way in, and one
+leading to an empty room is a dead end.
+
+**Both counts include a story the duplicate pass grouped behind another** - that
+pass unpublishes nothing, so neither number is what the default view happens to
+draw.
+
+**A story is never moved onto a topic that will not render.** A vertical below
+its feed floor plans nothing, so `rank.desk_of` sends a story relabelled onto
+that name back to the word its feed declared. Without it the page would draw a
+heading the same day's payload flags as having planned nothing.
 
 **The sentence lives under the topic panel and outside it.** `FilterBar.svelte`
-draws it, for the active desk only, as a sibling of the panel rather than a
+draws it, for the active topic only, as a sibling of the panel rather than a
 third child. At 1024px and up that panel is one nowrap band so it is cheap
 enough to stick; a third child would be squeezed in beside the pills. It belongs
-under the panel anyway - a fact about the desk rather than a control, read once
+under the panel anyway - a fact about the topic rather than a control, read once
 and then scrolled away. The rule that decides whether it draws at all is
 `deskShortfall` in `frontend/src/lib/day-shape.ts`, which is pure and is tested
-in Node, because the canary day has one desk and a rule about a healthy desk
-needs a second one.
+in Node, because the canary day has one busy topic and a rule about a healthy
+one needs a second.
 
 The copy, its three clauses and where the threshold lives are in
 [../../concepts/digest.md](../../concepts/digest.md#a-thin-desk-says-what-did-not-run).

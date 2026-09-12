@@ -174,6 +174,18 @@ SEEN_TOKEN_CAP: Final = round(SEEN_WORD_CAP * 1.3)
 #: sentences no browser could read back.
 ABSTRACT_AT: Final = 6
 
+#: The one published item the day puts on a topic its own feed never declared.
+#:
+#: Its `item_id` and its `vertical` stay `ai`, because both are the carrying
+#: feed's word and neither moves - that is the whole point. Without this the
+#: browser suite renders eight stories whose desk and vertical agree, which
+#: proves the fallback and never the case the fallback exists beside.
+#:
+#: Index 7 because it is the plainest story on the day: no drawing, no lens, an
+#: ordinary clock time. A case is easiest to read on an item carrying nothing
+#: else.
+RELABELLED_AT: Final = 7
+
 #: The places `EvalRow` rounds `hhem_delta` to before it re-checks it on read.
 _DELTA_PLACES: Final = 6
 
@@ -407,6 +419,7 @@ def to_item(
     return DigestItem(
         item_id=source.item_id,
         vertical="ai",
+        desk=desk_for(index),
         title=str(canary["raw_title"]),
         source_url=str(canary["source_url"]),
         source_id="canary",
@@ -424,6 +437,26 @@ def to_item(
         lenses=lenses_for(index),
         introduced_by_run=run_n,
     )
+
+
+def desk_for(index: int) -> str | None:
+    """One story published under a topic its own feed never declared.
+
+    `item_id` is addressed `ai-` and `vertical` says `ai`, because both are the
+    carrying feed's word and neither moves. The day publishes this one under
+    Energy, which is the case the whole of row #6 exists for - and without it
+    the browser suite renders eight stories whose desk and vertical agree, which
+    proves the fallback and nothing else.
+
+    Planted on an existing item rather than added as a ninth, for the reason
+    `lenses_for` gives: the canary suite counts what is on the page. Index 7 is
+    the plainest item on the day - no visual, no lens, an ordinary clock time -
+    so this case is the only thing it carries.
+
+    Null on every other item, because nothing has read them. Null is unknown,
+    and a page falls back to the vertical.
+    """
+    return "energy" if index == RELABELLED_AT else None
 
 
 def lenses_for(index: int) -> list[str]:
@@ -529,15 +562,28 @@ def build(target: Path, evaluation: EvaluationConfig) -> DigestDay:
         # sentence to read. Eight published against forty offered, thirty-one of
         # them a back catalogue: the proportions a real AI desk showed on
         # 2026-08-30, when a one-day age gate kept 32.4 percent of it.
+        #
+        # Two refs, because one story publishes under a topic its own feed never
+        # declared. `count` answers for the feed's word, so AI keeps all eight of
+        # them and Energy has none; `desk_count` answers for what the page draws,
+        # so AI shows seven and Energy shows one. The shortfall numbers stay on
+        # AI, where the feeds are.
         verticals=[
             DigestVerticalRef(
                 id="ai",
                 display_name="AI",
                 count=len(items),
+                desk_count=sum(1 for item in items if (item.desk or item.vertical) == "ai"),
                 considered=40,
                 too_old=31,
                 below_feed_floor=False,
-            )
+            ),
+            DigestVerticalRef(
+                id="energy",
+                display_name="Energy",
+                count=0,
+                desk_count=sum(1 for item in items if (item.desk or item.vertical) == "energy"),
+            ),
         ],
         items=items,
         embeddings=embeddings,
