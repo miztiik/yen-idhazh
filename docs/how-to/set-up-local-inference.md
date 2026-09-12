@@ -55,7 +55,7 @@ A local run differs from CI in three ways that matter, and each has bitten someo
 
 ## Open research
 
-Extremely low-bit quantisations (1-2 bit) have been published for several open-weights model families, and would change the fit calculation substantially: a model that currently does not fit the cache budget might. This has **not** been evaluated here. Treating it as a candidate requires the same two tests as any other model - Andre on whether quality survives the quantisation on our own corpus, Carmack on whether it fits and how fast it runs, both measured rather than assumed ([../agents/guardrails.md](../agents/guardrails.md), authority table).
+Extremely low-bit quantisations (1-2 bit) have been published for several open-weights model families, and would change the fit calculation substantially: a model that currently does not fit the cache budget might. This has **not** been evaluated here. Treating it as a candidate requires the same two tests as any other model - Andre on whether quality survives the quantisation on our own corpus, Carmack on whether it fits and how fast it runs, both measured rather than assumed ([../../CLAUDE.md](../../CLAUDE.md) section 14, the authority assignment).
 
 ## See also
 

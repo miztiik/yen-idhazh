@@ -18,7 +18,7 @@ from pathlib import Path
 STANDARD = "docs/reference/documentation-structure.md"
 
 #: Loaded on every task before a line of code is read (docs/agents/bootstrap.md).
-ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "docs/agents/bootstrap.md", "docs/agents/guardrails.md")
+ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "docs/agents/bootstrap.md")
 
 #: The bootstrap also pulls one of each of these. The worst case is the heaviest.
 PICKED_ONE_OF = {
