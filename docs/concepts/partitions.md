@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
@@ -140,7 +140,7 @@ which rewrites one partition and leaves the layout alone. Both ship as a committ
 one-shot utility under `backend/utilities/` for the same reason: a fork or a stale
 branch can then reproduce the exact cutover this repository ran.
 
-Authority: Guardrail #5, 2026-09-12.
+Authority: Guardrail #5, 2026-09-13.
 
 ## The freeze rule
 

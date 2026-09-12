@@ -280,6 +280,8 @@ class Report:
     """
 
     rows_in: int
+    #: Counted off the installed day tree, so it is a second reading rather than
+    #: `rows_in` printed twice.
     rows_out: int
     #: The `<YYYY-MM>.csv` names that were removed, oldest first.
     shards: list[str]
@@ -303,6 +305,7 @@ def run(directory: Path, date_column: str) -> Report:
 
     expected = shards.rows
     installed: list[str] = []
+    found: Counter[str] = Counter()
     staged = Path(tempfile.mkdtemp(prefix=f".{directory.name}-day-shards-", dir=directory.parent))
     try:
         _stage(staged, shards)
@@ -311,7 +314,8 @@ def run(directory: Path, date_column: str) -> Report:
             installed = _install(staged, directory)
             for name in shards.texts:
                 (directory / name).unlink()
-            _refuse_unequal(_read_day_tree(directory, shards.header), expected, "the day tree")
+            found = _read_day_tree(directory, shards.header)
+            _refuse_unequal(found, expected, "the day tree")
         except BaseException:
             _restore(directory, shards, installed)
             raise
@@ -320,7 +324,7 @@ def run(directory: Path, date_column: str) -> Report:
 
     return Report(
         rows_in=shards.rows_in,
-        rows_out=sum(expected.values()),
+        rows_out=sum(found.values()),
         shards=sorted(shards.texts),
         paths=[day_relpath(day) for day in sorted(shards.lines)],
     )
