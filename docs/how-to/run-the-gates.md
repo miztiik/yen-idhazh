@@ -744,9 +744,18 @@ not the dev server:
 
 ```powershell
 npm run build
-npx vite preview --outDir build --port 4174 --strictPort --host 127.0.0.1
+npm run preview -- --port 4174 --strictPort --host 127.0.0.1
 ```
 
+- **Do not hand-start `vite preview --outDir build`.** This page prescribed that
+ until 2026-09-12 and it serves the wrong tree: `--outDir` names a directory
+ `vite preview` does not read, so it serves whatever the last build left in
+ `.svelte-kit/output/`. Measured 2026-09-05, a document 262,022 bytes on disk
+ was served at 216,280, so two different builds of one tree read as identical.
+ A hand-started server also bypasses SvelteKit's preview middleware and cannot
+ tell a real hydration failure from its own.
+ [`gates-and-builds.md`](../reference/agent-notes/gates-and-builds.md) carries
+ the measurement. To serve a specific tree, build that tree.
 - **The dev server cannot be used for this.** On `vite dev` a `script-src` CSP
  violation blocks SvelteKit's bootstrap, so the page never hydrates and every
  control - the theme toggle, `Show N more` - is dead. It is a Vite artifact
@@ -756,7 +765,11 @@ npx vite preview --outDir build --port 4174 --strictPort --host 127.0.0.1
  answer "does this URL exist"; the dev server and GitHub Pages both render the
  real 404 page.
 - Confirm the page still renders with its data file absent or empty. A page that
- white-screens on missing data is a failure (section 12, step 5).
+ white-screens on missing data is a failure (section 12, step 5). **Hiding the
+ file under `build/` is not enough** - `.svelte-kit/output/client/` and
+ `static/` hold their own copies, and a service worker can serve a deleted file
+ at 200 from cache. All three copies go, on an origin the worker has not
+ claimed.
 
 ## Dependencies
 
