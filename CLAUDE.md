@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -104,6 +104,10 @@ A message with no options is a status update, not a decision request, and does n
 **Rule #1 draws the line at "a service", not at "an origin" (amended 2026-08-23).** Banning any third-party origin forbade a webfont, which costs a reader nothing a self-hosted copy does not, while the real hazard - logic executing off the reader's device, and anything reporting a reader's behaviour - was only implied. Practical consequence: an interactive chart may fetch our own committed CSV and may use a third-party charting library. A third-party script that phones home still cannot.
 
 **Rule #10 took its one exception on 2026-08-30, and that is section 0 working rather than a rule bending.** Actions minutes are free, so wall clock is the only budget the site can show, and wall clock cannot say whether four hours was a good trade. Priced at a hosted rate, the same run gets a second unit. The exception is narrow because the hazard is narrow: a money figure reads as a fact about a bank account, so this one prints the rate it used and is labelled a counterfactual. **We are not billed, and presenting it as a bill is the one way to make it a lie.** Authority: owner, 2026-08-30.
+
+**What "carries the hardware" means was settled on 2026-09-12, and it is not a second exception.** The rule's intent is that a reader can tell what produced a number and therefore what would move it. **So a figure names what could have moved it, and naming anything else is noise that invites a reader to discount a good number.** A duration and a memory figure belong to the machine that took them, so they name it - a runner where a runner took them, a developer box where one did, with a developer-machine duration labelled an order-of-magnitude check. A byte count, a token count, a pixel and a row count do not move between machines, so what they name is the runtime and its version: node's zlib and python's `gzip` differ by about 2 percent at one level, and an interpreter change moved a `tracemalloc` figure by 30 percent, which a processor model would not have predicted either way. Date and spread are unconditional in every case.
+
+This resolves a contradiction rather than creating room. [`docs/reference/measurements.md`](docs/reference/measurements.md) carried a house rule saying no figure names its machine unless that machine is a runner, and a worker with a developer-machine duration could not tell which page governed. **The contract governs; a page under `docs/` may say how a rule's intent is met and may not contradict it.** Authority: owner, 2026-09-12, under section 0, which requires the conflicting rule to be amended in the same commit.
 
 ## 1a. Architecture Principles
 
