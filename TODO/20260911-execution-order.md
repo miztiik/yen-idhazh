@@ -1,6 +1,6 @@
 # Execution order across the five open plans
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 **What this is.** One schedule over the five plan-docs that are open at once. Each of them proves its own rows do not collide; **nothing proved they do not collide with each other**, and nothing said what an orchestrator may dispatch on any given morning. This document is that answer and nothing else.
 
@@ -95,6 +95,8 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 **The longest pole is plan 23 row #P1, and it is three prose files.** It blocked 18 of the 58 live rows and it writes `CLAUDE.md`, `AGENTS.md` and `docs/agents/guardrails.md` - no code, no contract, no schema. **It was the cheapest row on this page and the most expensive one to leave alone.** Second is plan 24 row #1 at 17, and third is plan 23 row #2 at 17, which waits only on #P1. **The first two of those landed on 2026-09-11, as #608 and #609**, which puts plan 23 row #2 and the four plan 23 rows waiting on `day_partition.py` at the head of the queue.
 
 **Two of the top five belong to plan 11, which is four live rows.** `11 #4` blocks 15 rows and `11 #5` blocks 14, because plan 11 row 6 is what plan 23 row #7b waits on and eleven rows wait on that. **Plan 11 is the smallest open plan and the second-heaviest constraint in the project.**
+
+**One number on this page moved on 2026-09-12, and it moved the wrong way.** Plan 11 gained a row - **#5b, "Call 1 and call 2 run in the pipeline"** - sitting between `11 #5` and `11 #6`, and `11 #6` now waits on it. The worker dispatched on `11 #6` found that no stage dispatches call 1 or call 2, so the row's own precondition was unmet and the flag its scope opens by flipping was never built. So plan 11 is **five live rows, not four**, and the chain that gates plan 23 row #7b is **one wave longer**: every row that waited on `11 #6` now waits on `11 #5b` as well, and `11 #5b` waits on `11 #3b`, which was outside the chain until today. The derived counts above are left as derived, per this page's own rule; what is corrected is the shape of the chain, which is what a schedule is for. Nothing else on this page moves - no file list changed, so section 3's collision arithmetic stands.
 
 ---
 
