@@ -17,7 +17,7 @@ committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 5 | 3 | 2 | 2 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 6 | 3 | 3 | 3 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 9 | 6 | 2 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
@@ -41,7 +41,7 @@ committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 29
+## Ready now - 30
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -51,6 +51,7 @@ section 3 is where it is answered.
 | --- | --- | --- | --- | --- |
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
+| #19 | 20260823-known-defects-plan | - | A summarize call that failed on its reply reports no cost at all | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 5, 3b |
 | #1 | 12 | A | A new engine behind the same seam | - |
