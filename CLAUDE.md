@@ -12,6 +12,8 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 
 ## 0a. Non-Goals
 
+**A non-goal is a dated decision with an owner, not a law of physics.** Three of the clauses below have already been narrowed by owner decisions - the fine-tuning clause on 2026-08-27, the article-bodies clause on 2026-08-28, and the LLM-as-judge clause on 2026-09-07 and again on 2026-09-11 - which is the proof. So naming a non-goal is not a finished answer: when intent meets one, price what narrowing it would cost and what it would buy, and hand the decision back (section 0d, section 0c). What a non-goal does mean is that the default answer is no and the burden is on the change. **No agent narrows or widens one for itself** (section 0).
+
 - **Production backend.** See Rule #1. `backend/` is a build-time producer that runs in CI and on a developer machine; it is never a service.
 - **Hosted inference, anywhere.** No API call to a model provider from the pipeline, the published site, or the reader's browser. Inference running wholly on the reader's device over weights we committed and serve from our own origin is not hosted inference, and is governed by Rule #1.
 - **On-device inference on the digest's critical path.** The reading experience never waits on a model. Every on-device feature is secondary, reader-initiated, and removable without changing a single digest assertion. **The bundle must render complete with the model directory deleted - which is a test anybody can run, not a description of what ships.** The weights are committed and served from our own origin, and a plan to delete them was descoped on 2026-09-09. Since 2026-09-10 there is a second origin, so the test has a second half: with the committed weights gone **and** the hub blocked, every digest assertion still renders and search says it cannot run.
@@ -66,9 +68,13 @@ When you need the user to choose, ask in one message, in this order, and put not
 2. **Problem.** What is wrong or undecided, in one or two sentences.
 3. **Impact.** What it touches and what it costs to leave alone - the files, the subsystems, the published surfaces, the runs.
 4. **Options.** Every option worth taking, each with its cost and what it gives up. An option with no cost named is not an option.
-5. **Recommendation.** One option, named by its row id, and the reason in one sentence.
+5. **Recommendation.** One option per table, marked `**Recommended**` in the row itself and named again at the end with the reason in one sentence.
 
 **Every table in every answer is lettered, and every row carries an id.** Tables are `Table A`, `Table B` and so on, in the order they appear. A row's id is that letter plus its number - `A1`, `A2`, `B1` - and it is the first column. No id repeats in one message, so the user answers `A3`, or `A2 and B1`, and quotes nothing back.
+
+**A message may carry more than one table when one decision genuinely depends on another**, and then each table gets its own recommended row. What it may not do is bundle unrelated decisions to save a round trip: a table the user did not need to see is a table they have to read. When several tables appear, the five-part shape is written once for the whole message, not repeated per table.
+
+**The recommendation is marked where the choice is made.** A recommendation stated only in a closing paragraph makes the reader hold a row id in their head while they scan back up the table, so it is marked in the row AND restated at the end. The restatement carries the reason; the marker carries the position.
 
 A message with no options is a status update, not a decision request, and does not use the five-part shape.
 
@@ -173,7 +179,7 @@ Logging is local by construction. There is no log sink, no log service, and no r
 - **Every log record is the event payload.** A stage logs the same structured envelope it emits (section 1a), so a log line and a persisted payload never disagree about what happened.
 - **Secrets never reach a log record.** Not a token, not a signed URL, not a request header.
 
-## 2. Path Rules
+## 2. Path Conventions
 
 For anything leaving the process (JSON, logs, manifests, agent memory, error messages, doc cross-links):
 
@@ -181,7 +187,9 @@ For anything leaving the process (JSON, logs, manifests, agent memory, error mes
 - POSIX separators only (`/`). Never `\`.
 - Minimal reconstructable form.
 
-In-memory `Path` objects for local I/O may stay platform-native. Rule applies at the moment a path leaves the process.
+In-memory `Path` objects for local I/O may stay platform-native. This applies at the moment a path leaves the process.
+
+These are conventions rather than guardrails because a serialization invariant has one correct answer, so there is nothing here to adapt.
 
 ## 3. Repository Topology
 
@@ -211,7 +219,7 @@ In-memory `Path` objects for local I/O may stay platform-native. Rule applies at
 
 Folders are created only when real code is about to land. Do not pre-create empty modules.
 
-## 4. Layer and Dependency Rules
+## 4. Layer and Dependency Boundaries
 
 - `frontend/src/` MUST NOT depend on a runtime backend service - there is none in production. It reads committed files under `frontend/public/` and nothing else.
 - `backend/` is the only writer of pipeline output under `frontend/public/`. The site reads only that output.
@@ -219,6 +227,8 @@ Folders are created only when real code is about to land. Do not pre-create empt
 - `backend/idhazh/contracts/` MUST NOT import any other subpackage of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them.
 - Every stage is invocable on its own with a file in and a file out. A stage that can only run as part of the whole pipeline cannot be tested and is a design error.
 - Anything fetched from the open web crosses the trust boundary exactly once, at the extraction stage, and is sanitized there (Rule #11).
+
+These are boundaries rather than guardrails because each is a structural invariant with one correct side, so there is nothing here to adapt.
 
 ## 5. Documentation Discipline
 
@@ -233,7 +243,7 @@ Folders are created only when real code is about to land. Do not pre-create empt
 - **`docs/` is the memory.** `AGENTS.md`, `/memories/`, and any other private agent note store are derived caches, not authoritative; if one disagrees with `docs/`, docs win. A note store can be cleared at any moment and is invisible to a person reading the repository, so a durable fact learned during a session is written into `docs/` in that same session. That includes execution craft - a tool quirk, an environment trap, a command whose result cannot be trusted at face value - which lives in [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md).
 - Architecture decisions are recorded IN the living doc they impact, never as standalone records under a `decisions/` directory. Git history is the immutable record of when it changed.
 - Open questions live in the active plan-doc under `TODO/`, not in this file.
-- Docs-only PRs are a code smell - unless the change **is** to the documentation system itself (this section, the placement reference, or a page that exists only to be read).
+- **The smell is docs describing code that did not change, not a docs-only PR as such.** A PR that changes only docs is correct whenever the docs ARE the artefact - the contract, a process doc, a concept page, a benchmark record, this section, the placement reference, or a page that exists only to be read. What is a smell is a docs change that describes behaviour nobody altered, because that is documentation drifting away from the code rather than tracking it.
 
 ## 6. Correction Levels
 
@@ -245,6 +255,8 @@ Folders are created only when real code is about to land. Do not pre-create empt
 |   3   | 2-3 files, cross-cutting                                      | Plan -> phased execution              |
 |   4   | 4+ files, structural                                          | Propose breakdown first               |
 |   5   | Core design / a persisted contract / the model pick / the trust boundary | Design consultation only - pause work |
+
+**The level is chosen against the intent, not against the smallest change that would pass** (section 0d).
 
 When in doubt, choose the higher level.
 
@@ -299,9 +311,10 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 10. Anti-Patterns (Do NOT)
 
-- Reinterpret, downgrade, substitute, or scope-narrow a source or instruction the user named explicitly, without surfacing it as a scope change for sign-off (STOP-AND-SURFACE).
+- Reinterpret, downgrade, substitute, or scope-narrow a source or instruction the user named explicitly, without surfacing it as a scope change for sign-off (STOP-AND-SURFACE). **Declining on a limitation without pricing it is the same thing** - it is scope-narrowing to zero, and section 0d names what is owed instead: do it, price it, or name the measurement that would settle it.
 - Assume a backend exists in production.
 - Hardcode tunables, source lists, model refs, thresholds, or magic strings. They live in `config/`.
+- Ship a surface that is still under development without a config flag, default off, carrying its removal condition on the line that declares it (Rule #6).
 - Hand-edit a generated artifact (`schemas/*.schema.json`, `frontend/src/contracts/*`). Edit the Pydantic model and regenerate.
 - Store absolute / backslash paths in any persisted artifact.
 - Let fetched text reach a system prompt, a shell argument, a file path, or an outbound URL (Rule #11).
@@ -315,7 +328,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - Quote a throughput, cost or quality number without saying what measured it and when (Rule #10). The operator console's counterfactual cost is the one carve-out, and printing it as a bill breaks it.
 - Justify a design with an estimate when a measurement is cheap to take.
 - Mint a new persisted field without stamping the schema `version` date, appending a `changelog` entry, and writing the read-side migration in the same commit.
-- Raise the runner budget to fit a feature. The budget is the platform, not a preference - if the feature cannot run inside it, the feature is simplified.
+- Raise the runner budget to fit a feature. The limits are GitHub's rather than ours, so an agent cannot move them and is not asked to (Rule #2) - the required next move is to name the design that does fit and what it traded: fewer items, a smaller model, a shorter context, a shard that splits.
 - Let `TODO/`, chat logs, `AGENTS.md`, or a private agent note store become the source of truth for anything. They are caches of `docs/`.
 - Make a domain-neutral process doc project-specific (section 5).
 - Pre-create empty modules "for later".
@@ -399,7 +412,7 @@ Seven persona advisors live under `.github/agents/`, each at a distinct altitude
 | Fowler (Architecture & Engineering) | `fowler.agent.md`  | architecture + contracts + commits + tests                                    |
 | Carmack (Engine & Runtime)          | `carmack.agent.md` | inference runtime, runner budget, throughput, cache and shard economics       |
 
-Rule: adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
+Adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
 
 Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
 
