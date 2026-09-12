@@ -262,11 +262,13 @@
       "type": "string"
     },
     "RouteId": {
-      "description": "The three console routes. The id is the address; the label is the words.",
+      "description": "The five console routes. The id is the address; the label is the words.\n\n`JUDGEMENT` and `VOICES` joined on 2026-09-12. They are declared here before\neither page draws a panel, because the strip is the console's only\nnavigation and a tab naming a route the band does not carry is a tab the\nband's own validator refuses.",
       "enum": [
         "pipelines",
         "model",
-        "machine"
+        "machine",
+        "judgement",
+        "voices"
       ],
       "title": "RouteId",
       "type": "string"
@@ -276,6 +278,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "RouteId gains the route ids judgement and voices, so the strip and the worst-thing link carry five routes rather than three.",
+      "version": "2026-09-12",
+      "why": "Additive: an older payload names three of the five and validates unchanged, and the reader keeps a route the payload omits on the strip with no worst state. The ids are minted here rather than with the panels because the band's own validator refuses a worst route the strip does not carry, so a tab cannot be drawn before its id exists on this shape."
+    },
     {
       "change": "Initial shape: the verdict, the worst thing, the size, the route strip, and the months list the console pans over.",
       "version": "2026-09-09",
@@ -313,7 +320,7 @@
       "$ref": "#/$defs/BandVerdict"
     },
     "version": {
-      "default": "2026-09-09",
+      "default": "2026-09-12",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -338,5 +345,5 @@
   ],
   "title": "ConsoleBand",
   "type": "object",
-  "version": "2026-09-09"
+  "version": "2026-09-12"
 }

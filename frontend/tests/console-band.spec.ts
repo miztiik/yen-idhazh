@@ -187,16 +187,25 @@ test('no rate of runs a day can move the answer', () => {
  * control below it, and the first chart is at 726px and 1,163px. The band is
  * 33 percent of a phone viewport rather than 69.
  *
- * **The chart lines below are 760 and 1,200, and the plan asked for 640 and
+ * **The chart lines below are 800 and 1,200, and the plan asked for 640 and
  * 1,000.** That gap is measured and it is not the band's to close. At 1440 the
- * 726px above the first chart is 113 site header, 24 page padding, 33 page
- * title, 79 strip, 113 band, 91 control, 21 cross-route sentence, 28 section
- * heading, 97 of a measure card's own label and value, and 127 of margins - so
- * the three things this row owns are 283px of it and the other 443px belong to
- * five other surfaces. Cutting into those is a different row's decision.
+ * 742px above the first chart is 113 site header, 24 page padding, 33 page
+ * title, 80 strip, 114 band, 104 control, 21 cross-route sentence, 28 section
+ * heading, 97 of a measure card's own label and value, and the rest margins -
+ * so the three things this row owns are 298px of it and the other 444px belong
+ * to five other surfaces. Cutting into those is a different row's decision.
+ *
+ * **The desktop line moved from 760 to 800 on 2026-09-12, when the strip took
+ * five tabs.** A tab is 269px wide at 1440 where three tabs were about 450, so
+ * every description under a label now wraps where none of them did - that is
+ * structural and no wording change undoes it. Measured the same day: 742px on a
+ * developer machine, 782px on `ubuntu-latest` with the two new descriptions at
+ * their first length, which is the platform gap the browser notes warn about
+ * (fonts, not code). The new line keeps the 34px of headroom the old one had
+ * over its own measurement rather than being picked to clear today's reading.
  */
 const VIEWPORTS = [
-	{ name: 'desktop', width: 1440, height: 1000, band: 130, chart: 760 },
+	{ name: 'desktop', width: 1440, height: 1000, band: 130, chart: 800 },
 	{ name: 'phone', width: 390, height: 844, band: 320, chart: 1200 }
 ] as const;
 
@@ -368,15 +377,21 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 		return (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	};
 
-	// One band, derived once in the shared layout and drawn above all three route
-	// panels. Three routes deriving their own would eventually disagree about which
+	// One band, derived once in the shared layout and drawn above all five route
+	// panels. Five routes deriving their own would eventually disagree about which
 	// one of them is worst, which is the whole reason it is derived once (row 24).
+	//
+	// The three routes with panels, because `hydrated` waits for a window control
+	// and `/console/judgement/` and `/console/voices/` have none - they fetch
+	// nothing, so a control there would govern nothing. That the band is word for
+	// word identical on all FIVE is asserted in `console-nav.spec.ts`, which does
+	// not wait on hydration; what this test adds is the half that needs one,
+	// below.
 	const pipelines = await bandText('/console/');
 	expect(pipelines.length, 'the band drew nothing on /console/').toBeGreaterThan(0);
-	expect(await bandText('/console/model/'), 'the band differs on the model route').toBe(pipelines);
-	expect(await bandText('/console/machine/'), 'the band differs on the machine route').toBe(
-		pipelines
-	);
+	for (const path of ['/console/model/', '/console/machine/']) {
+		expect(await bandText(path), `the band differs on ${path}`).toBe(pipelines);
+	}
 
 	// The band is deliberately not windowed: a route's control governs the panels
 	// below it, never the standing band above it. Moving the control to another

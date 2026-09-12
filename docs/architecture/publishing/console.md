@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
@@ -36,16 +36,18 @@ GitHub Pages cannot serve a SvelteKit server redirect, so the redirect must be
 static HTML. A reader with JavaScript disabled still receives a page and can use
 the link.
 
-## The console is three routes, and the strip is real anchors
+## The console is five routes, and the strip is real anchors
 
-Since 2026-08-30 the operator surface is three prerendered routes, drawn as a
-tab strip:
+Since 2026-08-30 the operator surface is prerendered routes drawn as a tab
+strip. It was three; it took a fourth and a fifth on 2026-09-12:
 
 | Path | Label | What it answers |
 | --- | --- | --- |
 | `/console/` | **Pipelines** | Did the runs work, which feeds broke, and what each stage cost. |
 | `/console/model/` | **Summaries** | What the model wrote, how long it took, and what it got wrong. |
 | `/console/machine/` | **Hardware** | The hardware the model ran on, and how much it varied between runs. |
+| `/console/judgement/` | **Judgement** | What the model made of each article, and where we disagreed. |
+| `/console/voices/` | **Voices** | Who supplied the day, and how far each feed is discounted. |
 
 `/console/` keeps its path. It is the one an operator types and the one every
 existing bookmark points at, so moving it to `/console/pipelines/` would have
@@ -60,12 +62,27 @@ a context window; `Runner` was refused because it is a term the build system
 uses on itself rather than a term for a reader (`CLAUDE.md` section 0b), and
 `Model` was refused for the middle route because it would put that word on the
 page about the box rather than the page about the output. The route ids stay
-`pipelines` / `model` / `machine`, every `href` is unchanged, and the three
-`page_weight.ceilings_bytes` keys are unchanged - a label is not an address.
+`pipelines` / `model` / `machine`, and every `href` is unchanged - a label is not
+an address. There are no per-route page ceilings to move: `page_weight.ceilings_bytes`
+named the three console routes until 2026-09-10 and now names only `/404` and
+`/evals/`, because a route whose weight grows every time the pipeline publishes
+cannot be held to a byte count somebody wrote down once.
 [../../../frontend/tests/console-title.spec.ts](../../../frontend/tests/console-title.spec.ts)
 asserts both halves in one file. Authority: owner, 2026-08-31.
 
-**Every panel title on the three routes is a noun phrase**, and that rule is
+**The fourth and fifth labels were chosen on 2026-09-11 and both routes opened
+empty on 2026-09-12.** `Judgement` is singular: the other three name a place and
+this one names an act, so `Judgements` would be a count of things and the tab is
+not a list (Susan). `Voices` is the owner's word over Susan's `Sources` - her
+case was that `Voices` appears nowhere else in this repository while `source_id`,
+`config/sources.json` and `source-health.json` all do, and the owner overruled it
+(`CLAUDE.md` section 0). Both routes carry a heading and a named absence and draw
+no panel: a tab in a strip whose page does not exist is a strip that lies, and
+the pages that fill them are specified by rows #12 and #13 of the placement plan
+and row #15 of the classification plan. Each empty route names those rows on the
+page, so a reader of the strip can find the specification.
+
+**Every panel title on the five routes is a noun phrase**, and that rule is
 mechanical so it can be checked: no trailing question mark, and no opening
 auxiliary verb. `Did the runs finish?` became `Runs that finished`, `Do the two
 clocks agree` became `The two clocks, compared`, `Is the tail growing` became
@@ -85,9 +102,49 @@ holds all eleven of its labels byte for byte.
 **Routes, not tabs, and the JavaScript-disabled gate is why.** A tab strip that
 switches with script shows one panel set and no way to reach the others when the
 script does not run, and every panel it hides still ships inside the one
-document. Three routes with real anchors pass both, and each one can be weighed
-on its own. Tabs keyed on a query string cannot prerender at all; tabs keyed on
-a hash stop find-in-page at the hidden panels.
+document. Real anchors pass both, and each route can be weighed on its own. Tabs
+keyed on a query string cannot prerender at all; tabs keyed on a hash stop
+find-in-page at the hidden panels. Nothing about a fourth or a fifth route
+changes that argument.
+
+**The strip has to fit, and the basis is what moved to make it.** `.tab-slot`
+was `flex: 1 1 14rem` - 224px at a 16px root - which put one tab on a row of a
+360px phone, so five tabs would have stood five deep directly above the band. It
+is `8rem` now, 128px, so two fit the 288px content box of a 320px phone and five
+fit one row of a desktop. The per-tab description is hidden by default and shown
+from `1024px`, the breakpoint three other components already use.
+
+Measured 2026-09-12 off the built page in headless Chromium, `window.innerWidth`
+read inside the page beside every figure:
+
+| Width | Rows | Tab | Strip | Description |
+| ---: | ---: | ---: | ---: | --- |
+| 320 | 3 | 140px | 215px | hidden |
+| 360 | 3 | 160px | 199px | hidden |
+| 414 | 3 | 186px | 199px | hidden |
+| 480 | 2 | 142px | 162px | hidden |
+| 640 | 2 | 141px | 138px | hidden |
+| 768 | 1 | 135px | 86px | hidden |
+| 900 | 1 | 161px | 86px | hidden |
+| 1024 | 1 | 186px | 136px | shown |
+| 1440 | 1 | 269px | 80px | shown |
+
+**Two numbers were taken from that sweep rather than from the rule.** `9rem`
+cleared 360px and still stacked five deep at 320px, which is the same defect one
+screen narrower, so the basis went to `8rem`. And the description at the narrower
+`48rem` breakpoint made the strip 168px at 800px against 86px at 768px - so
+widening the window made the chrome taller, which is a discontinuity a reader
+notices and cannot explain. At 1024px each tab is 186px and the line costs 50px
+once, then falls back as the tabs widen.
+
+The description is not lost below the breakpoint: it is still the anchor's
+`title` and the page it opens prints it in full, so what a hidden line costs is
+the one-line summary a reader gets before choosing - which is why every label is
+one word.
+[../../../frontend/tests/console-nav.spec.ts](../../../frontend/tests/console-nav.spec.ts)
+measures the tab boxes off the built page at 1440, 360 and 320, prints the width
+the page really had beside every figure, and fails on a row too many or on any
+two boxes that overlap.
 
 **Every label carries its own worst state**, computed at build time from the
 committed ledger - `Machine - shards read 4.31x apart`, not `Machine`.
@@ -98,6 +155,43 @@ The spread is reported at the lowest rank on purpose: nobody has agreed how far
 apart two shards of one run may read before it is a problem, so ranking it any
 higher would publish a threshold this project has not taken.
 
+**An editorial fault caps at `WORTH_A_LOOK`, and there is one exception.** The
+band prints the one worst thing across every route, so a loud rule on Judgement
+or Voices would take the band away from a failed run - and then a skewed day and
+a failed run print the same sentence, which is the band's whole job undone. A
+skewed day still published; a failed run did not. `publish_console_band.editorial`
+is where the cap is applied, because the band is derived once and read
+everywhere. Authority: Carmack, 2026-09-11.
+
+**The exception is a gate that has stopped reading, and it is two-sided.** A
+gating kind whose decline rate sits at either end ranks `BROKEN`: at the floor it
+declines nothing, so it is stamping every article it is shown, and at the ceiling
+it declines everything, which is the same instrument dead from the other side.
+Either way every other figure on the route is fiction, including the figures a
+reader would use to decide the day was fine. The rule is two-sided because the
+failure is - it carried only the floor end until 2026-09-11, and a classifier
+that had stopped answering would have printed a reassuring tab. The two bounds
+are arguments and not literals (Rule #6); row #12 of the placement plan moves
+them to `console.decline_rate_floor` and `console.decline_rate_ceiling`. The
+fraction itself is null until the classifier lands, so the rule fires on nothing
+today and costs nothing to carry.
+
+**Voices has two worst-state candidates and they are ranked.** A feed sitting at
+`collect.reliability_floor` is `WORTH_A_LOOK`: it is the one state where the
+ranker is actively discounting a feed as far as the multiplier goes, and until
+this route no page said so. A live source that has decided fewer than
+`collect.source_yield_alarm_min_decisions` addresses is `WORTH_KNOWING`, because
+every quality figure about it prints a dash and a dash is invisible at a glance -
+ranked lower on purpose, since too little evidence is not the same as bad
+evidence and ranking it higher would publish a judgement the record cannot carry.
+The fragment carries its denominator - `68 of 151 sources too thin to judge`, not
+`68` - for the same reason every quality figure on this console sits beside its
+item count: a bare count is a number with no scale. A third candidate, the count
+of feeds that answered nothing in the window, was named in the row and dropped on
+measurement: a feed that answered nothing scores zero, which clamps to the floor,
+so it is a strict subset of the at-floor set and could never have reached the
+label. That count becomes a figure row #13 draws. Authority: Susan, 2026-09-12.
+
 **The strip never takes the health ramp.** The one thing that differs between
 routes is a 3px rule under the active label, from the categorical ramp. Green,
 amber and red on a label would say a route is failing, and a route is a noun.
@@ -105,7 +199,7 @@ amber and red on a label would say a route is failing, and a route is a noun.
 reads the computed style of every tab and fails on any of the six verdict
 tokens.
 
-**Identity is otherwise identical across the three** - type scale, space scale,
+**Identity is otherwise identical across the five** - type scale, space scale,
 radius, elevation, frame width, both ramps. The shapes they share live in
 [../../../frontend/src/styles/app.css](../../../frontend/src/styles/app.css)
 rather than in three scoped `<style>` blocks, because three copies are three
@@ -128,14 +222,14 @@ and publishes it as `console/band.json`; the console fetches it once in
 [../../../frontend/src/routes/console/+layout.ts](../../../frontend/src/routes/console/+layout.ts)
 and draws it once in
 [../../../frontend/src/routes/console/+layout.svelte](../../../frontend/src/routes/console/+layout.svelte),
-above all three route panels, so they cannot disagree about which route is
+above all five route panels, so they cannot disagree about which route is
 worst. It was derived in the browser build until 2026-09-09; see
 [console-payloads.md](console-payloads.md).
 
 **The band was 340px on a desktop and 586px on a phone - 69 percent of an 844px
 viewport - measured 2026-09-01 at bf37eeef.** Three changes pay for that: the
 control moved out, the site-size fact dropped from about sixty words to one
-line, and the page subtitle went from all three routes. The subtitle repeated
+line, and the page subtitle went from every route. The subtitle repeated
 what the active tab's own description says 150px lower and cost 25px on every
 route.
 
@@ -1563,9 +1657,30 @@ is what the per-article chart now answers directly.
 
 ### Design rationale
 
-**The plan that ordered this row asked for a runway and assumed the console
-could measure the tree the cap measures. It cannot, and that was found by
-measuring rather than by reading.** The row's stated basis was 24,378 bytes an
+**`/console/judgement/` and `/console/voices/` fail the "does it use the screen
+it is on" sufficiency check, and they ship anyway.** Each is a heading, two
+sentences and one bordered panel; at 1440px most of the frame is empty. The
+other three checks pass and are inherited rather than invented - figure
+separates from ground through the shared `.console-panel` border, surface and
+shadow; the panel is the only block in the route's own content, so there is one
+thing the eye lands on; and the route takes the page title, the five-tab strip
+and the standing band from the layout before it draws anything of its own.
+
+The check cannot be passed. The only way to fill the frame of a page with no
+data is to put something on it that is not a measurement, on the one surface
+whose doctrine is that it takes no ornament and spends no reader attention. The
+alternative considered was a list of the figures each page will carry, drawn
+empty - refused because it is a promise the page cannot keep: the moment rows
+#12 and #13 change a panel the list is a lie and nothing fails. What the
+operator gets instead is the row id, which stays true and costs no maintenance.
+
+The alternative to shipping empty was landing the strip and both tab rows
+together, which would have put three rows on `ConsoleNav.svelte` in one parallel
+group - and a strip that names a page nobody can reach is worse than three tabs.
+**This entry is deleted when rows #12 and #13 land**, which is why it names them.
+Authority: Susan, 2026-09-12.
+
+
 article, spread 23,066 to 26,538, which is the built bundle's cumulative average
 from `idhazh site-weight`. The console reads run manifests, and the same
 arithmetic over those gives 2,478 to 4,541 bytes an article - a different tree,

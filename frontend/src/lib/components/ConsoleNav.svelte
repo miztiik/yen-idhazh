@@ -13,6 +13,10 @@
 	 * Every label carries its own worst state, computed at build time. Without
 	 * it a route is where a metric goes to die - nobody opens a page to find out
 	 * whether it was worth opening.
+	 *
+	 * **It took a fourth and a fifth route on 2026-09-12, and the basis is what
+	 * moved.** At `14rem` one tab filled a 360px phone, so five would have stood
+	 * five deep directly above the band.
 	 */
 	import { base } from '$app/paths';
 	import type { ConsoleRoute, RouteId } from '$lib/console/band';
@@ -62,14 +66,20 @@
 		list-style: none;
 	}
 
+	/* 8rem is 128px at a 16px root, so two tabs and the gap between them fit the
+	   288px content box of a 320px phone - the narrowest screen still in use -
+	   and five stand three deep rather than five. It was 14rem, 224px, one tab to
+	   a row, while the strip held three. Measured 2026-09-12 off the built page:
+	   9rem cleared 360 and still stacked five deep at 320, which is the same
+	   defect one screen narrower. */
 	.tab-slot {
-		flex: 1 1 14rem;
+		flex: 1 1 8rem;
 		min-inline-size: 0;
 	}
 
 	/* The whole block is the target, not the word at the top of it. The touch
 	   target is the 2.75rem floor, so the padding pays for looks and not for
-	   reach - and three stacked tabs above the band on a phone is where every
+	   reach - and the three rows of tabs above the band on a phone is where every
 	   pixel of it is charged three times. */
 	.tab {
 		display: flex;
@@ -116,9 +126,26 @@
 		color: var(--color-text-secondary);
 	}
 
+	/* Hidden by default and shown from the wide breakpoint, which is the one
+	   three other components already use. Below it a tab is too narrow to carry
+	   a sentence: measured 2026-09-12 off the built page, at 800px each tab is
+	   141px and the description wraps to six lines, so the strip is 168px where
+	   the same strip without it is 86px - widening the window made the chrome
+	   taller, which is the discontinuity a reader notices and cannot explain.
+	   The line is not lost below: it is still the anchor's `title`, and the page
+	   it opens prints it in full. What a hidden line costs is the one-line
+	   summary a reader gets before choosing, which is why every label is one
+	   word. */
 	.tab-line {
+		display: none;
 		font-size: var(--text-xs);
 		line-height: var(--leading-xs);
 		color: var(--color-text-tertiary);
+	}
+
+	@media (min-width: 1024px) {
+		.tab-line {
+			display: block;
+		}
 	}
 </style>

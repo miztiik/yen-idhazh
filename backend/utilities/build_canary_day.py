@@ -69,6 +69,7 @@ from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.run_plan import TimeSource
+from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind
@@ -914,14 +915,15 @@ def _census_rows() -> list[ItemHealthRow]:
     return rows
 
 
-def source_health(target: Path) -> int:
-    """Write the canary's source-health view through the fold the pipeline uses.
+def source_health_view() -> SourceHealthView:
+    """The canary's source-health view, folded but not written.
 
-    Seven sources cover every state a page has to draw: permission allowed,
-    refused and unrecorded; answering, failing, resting and never read; one
-    retired address; and a publishing record too short to read as a rate.
+    Two callers want it and neither should fold it twice: `source_health`
+    writes it beside the digest, and `console_payloads` hands its rows to the
+    band so the Voices label carries a worst state on the canary as it does on
+    the real tree.
     """
-    view = publish_source_health.build(
+    return publish_source_health.build(
         feeds=_feed_defs(),
         collect=config.load().app.collect,
         health=_health_rows(),
@@ -933,6 +935,16 @@ def source_health(target: Path) -> int:
         run_id=f"{DATE}-1",
         generated_at=f"{DATE}T06:20:00Z",
     )
+
+
+def source_health(target: Path) -> int:
+    """Write the canary's source-health view through the fold the pipeline uses.
+
+    Seven sources cover every state a page has to draw: permission allowed,
+    refused and unrecorded; answering, failing, resting and never read; one
+    retired address; and a publishing record too short to read as a rate.
+    """
+    view = source_health_view()
     path = target / publish_source_health.PUBLIC_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(view.to_json(), encoding="utf-8", newline="\n")
@@ -1015,6 +1027,7 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
         console=settings.appearance.console,
         run=settings.app.run,
         collect=settings.app.collect,
+        sources=source_health_view().sources,
         telemetry_root=telemetry_root,
     )
     return written + (1 if band is not None else 0)

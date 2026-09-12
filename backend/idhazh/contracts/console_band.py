@@ -61,11 +61,19 @@ class Health(StrEnum):
 
 
 class RouteId(StrEnum):
-    """The three console routes. The id is the address; the label is the words."""
+    """The five console routes. The id is the address; the label is the words.
+
+    `JUDGEMENT` and `VOICES` joined on 2026-09-12. They are declared here before
+    either page draws a panel, because the strip is the console's only
+    navigation and a tab naming a route the band does not carry is a tab the
+    band's own validator refuses.
+    """
 
     PIPELINES = "pipelines"
     MODEL = "model"
     MACHINE = "machine"
+    JUDGEMENT = "judgement"
+    VOICES = "voices"
 
 
 class BandRun(Model):
@@ -171,6 +179,21 @@ class ConsoleBand(Contract):
 
     __schema_stem__: ClassVar[str] = "console-band"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12",
+            change=(
+                "RouteId gains the route ids judgement and voices, so the strip and "
+                "the worst-thing link carry five routes rather than three."
+            ),
+            why=(
+                "Additive: an older payload names three of the five and validates "
+                "unchanged, and the reader keeps a route the payload omits on the "
+                "strip with no worst state. The ids are minted here rather than with "
+                "the panels because the band's own validator refuses a worst route "
+                "the strip does not carry, so a tab cannot be drawn before its id "
+                "exists on this shape."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09",
             change=(

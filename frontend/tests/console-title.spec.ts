@@ -25,11 +25,20 @@ import { expect, test, type Page } from '@playwright/test';
  * `Machine` became `Hardware` - and the whole risk of a rename is that a word
  * a reader reads and a word a browser resolves turn out to be one string. Every
  * id, every path and every route marker is asserted unmoved. The fuller address
- * check, including the ceiling keys config holds the three routes to, is in
- * `console-nav.spec.ts`.
+ * check, including the geometric oracle the strip took when it grew to five
+ * tabs on 2026-09-12, is in `console-nav.spec.ts`.
  */
 
 const ROUTES = ['/console/', '/console/model/', '/console/machine/'] as const;
+
+/** The two routes opened with no panel of their own on 2026-09-12.
+ *
+ * They are not in `ROUTES` because the rule above counts panel titles and
+ * demands more than two - a route with no panels would fail it for being empty
+ * rather than for being ungrammatical. The grammar still binds their one
+ * heading, which is what this list is for.
+ */
+const EMPTY_ROUTES = ['/console/judgement/', '/console/voices/'] as const;
 
 /** An opening that turns the rest of the line into a question. */
 const AUXILIARY =
@@ -58,6 +67,20 @@ for (const route of ROUTES) {
 			expect(title, `"${title}" on ${route} opens with an auxiliary verb`).not.toMatch(AUXILIARY);
 			expect(title, `"${title}" on ${route} is a sentence, not a title`).not.toMatch(/\.\s+\S/);
 		}
+	});
+}
+
+for (const route of EMPTY_ROUTES) {
+	test(`the one heading on ${route} is a noun phrase too`, async ({ page }) => {
+		await page.goto(route);
+		const titles = await titlesOn(page);
+		expect(titles, `${route} draws no heading of its own`).toHaveLength(1);
+
+		const [title] = titles;
+		expect(title.length, `${route} carries an empty title`).toBeGreaterThan(2);
+		expect(title, `"${title}" on ${route} is a question`).not.toMatch(/\?\s*$/);
+		expect(title, `"${title}" on ${route} opens with an auxiliary verb`).not.toMatch(AUXILIARY);
+		expect(title, `"${title}" on ${route} is a sentence, not a title`).not.toMatch(/\.\s+\S/);
 	});
 }
 
@@ -120,15 +143,15 @@ test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) 
 	// The labels changed.
 	expect(
 		drawn.map((tab) => tab.label),
-		'the strip does not carry the three labels'
-	).toEqual(['Pipelines', 'Summaries', 'Hardware']);
+		'the strip does not carry the five labels'
+	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices']);
 
 	// The ids did not, and neither did what they point at.
 	expect(
 		drawn.map((tab) => tab.id),
 		'a tab id moved with a label, which is an address and not a label'
-	).toEqual(['pipelines', 'model', 'machine']);
-	for (const [index, path] of ROUTES.entries()) {
+	).toEqual(['pipelines', 'model', 'machine', 'judgement', 'voices']);
+	for (const [index, path] of [...ROUTES, ...EMPTY_ROUTES].entries()) {
 		expect(drawn[index].href, `${drawn[index].id} stopped pointing at ${path}`).toContain(path);
 	}
 });
