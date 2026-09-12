@@ -109,7 +109,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3b | Every call reports its own cost | 3 | C2 | PENDING | - | - | - |
 | 3c | Own the prompt bytes | 6 | - | DEFERRED | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
-| 5 | One chart, drawn end to end | 4 | E | DONE #_pending_ | p11-r5 | #_pending_ | worker |
+| 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
 | 6 | The small model, its job and its cache go | 5 | F | PENDING | - | - | - |
 
 **Three rows are live and four are merged.** Rows 1, 2, 3 and 4 shipped; row 3c is deferred until the first daily run after row 6. **`parallel N = 1`, so no two rows of this plan run at the same time** - rows 4, 5 and 6 are one chain and row 3b is the only row that could have run beside one of them.
