@@ -1,15 +1,14 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
 [ship-a-pr.md](ship-a-pr.md).
 
-Counts and file numbers below were taken on 2026-08-24 and move as the repo
-grows. Treat them as a "did the command do roughly what I expected" check, not
-as a target.
+A count printed by a command below shows the shape of its output, not a target.
+It moves as the repository grows.
 
 ## Select local checks and let CI run the full suite
 
@@ -106,9 +105,9 @@ because the workflow tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
 
 **A pull request runs the operator console's specs only when the change is the
-console's own, or the harness that chooses.** They are 584 of the browser
-suite's 997 tests, measured 2026-09-05, and the console is a page one operator
-opens rather than anything a reader is served. What that costs, stated rather
+console's own, or the harness that chooses.** They are most of the browser
+suite, and the console is a page one operator opens rather than anything a
+reader is served. What that costs, stated rather
 than implied: a shared component or a token edit that breaks the console is
 found on the merge push to `main` instead of on the pull request. A `main` push
 carrying code runs every group, which is what the deferral leans on - there is
@@ -134,9 +133,7 @@ older run, because a newer commit supersedes it. A push does not, and the two
 rules are linked: `scope` answers from each push's own changed paths, so a
 documentation push that cancelled a code push would leave that code with no
 verdict on the trunk - the surviving run checks nothing, correctly, because
-nothing in its own range needed checking. Measured 2026-09-12, before this was
-fixed: two pushes carrying 14 code files between them were cancelled by a third
-that changed one plan-doc. The cost, stated rather than implied: several pushes
+nothing in its own range needed checking. The cost, stated rather than implied: several pushes
 landing together now run several suites at once instead of one, against the
 account's twenty concurrent jobs (`CLAUDE.md` Guardrail #2).
 
@@ -205,7 +202,7 @@ records the symptom, and the escape when the machine has
 nothing else.
 
 **`uv pip install` does not work here.** It fails with a `HandshakeFailure`
-against `files.pythonhosted.org` (observed 2026-08-21). `ensurepip` then `pip`
+against `files.pythonhosted.org`. `ensurepip` then `pip`
 is the path that works. If `uv` starts working, nothing in the repo depends on
 which installer produced the environment.
 
@@ -276,19 +273,18 @@ Four marks are declared in `pyproject.toml`. Each is a module-level
 `pytestmark`, so a module that gets renamed or moved keeps its mark and no list
 anywhere has to be repointed.
 
-| Selector | What it holds | Tests | `-n auto` | `-n 0` |
-| --- | --- | --- | --- | --- |
-| `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree | 564 | 20.9 s (n=2, spread 2.5) | 17.3 s |
-| `-m visual` | The visual planner, its validator, the spec compiler, both renderers, and the planted attacks aimed at the planner | 161 | 19.9 s (n=2, spread 3.3) | 14.3 s |
-| `-m workflow` | The workflow YAML and the shell scripts under `.github/` | 134 | 80.9 s (n=1) | - |
-| `-m slow` | Every module whose average test runs over a second | 335 | 131.8 s (n=1) | - |
-| `-m "not slow"` | Everything else, which is 84 percent of the tests | 1,807 | 39.3 s (n=1) | - |
-| nothing | The whole suite, which is what CI runs | 2,142 | 155.4 s (n=2, spread 45.9) | - |
+| Selector | What it holds |
+| --- | --- |
+| `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree |
+| `-m visual` | The visual planner, its validator, the spec compiler, both renderers, and the planted attacks aimed at the planner |
+| `-m workflow` | The workflow YAML and the shell scripts under `.github/` |
+| `-m slow` | Every module whose average test runs over a second |
+| `-m "not slow"` | Everything else, which is most of the tests |
+| nothing | The whole suite, which is what CI runs |
 
-**Python 3.14.2, pytest 9.1.1, 2026-09-05**, every
-arm through `gate_lock.py` so no sibling gate could land inside a timing.
-`-n 0` is the faster arm for a small subset, because twelve workers cost about
-seven seconds to start and that is most of what a 161-test run pays.
+**`-n 0` is the faster arm for a small subset**, because the worker pool costs
+several seconds to start and that is most of what a small run pays. Time every
+arm through `gate_lock.py`, so no sibling gate can land inside a timing.
 
 **Read the ratio rather than the seconds.** The whole-suite spread is 45.9 s on
 a 155.4 s mean - 30 percent of itself, and that is the shared box rather than
@@ -345,7 +341,7 @@ Run all five from the repository root. Each must be clean.
 git diff --exit-code -- schemas/
 ```
 
-On 2026-08-25 that is 858 tests and 88 files type-checked. The last two lines
+The last two lines
 are the contract drift gate: the export regenerates `schemas/` from the Pydantic
 models, and a non-empty diff means a generated artifact was hand-edited or a
 model changed without regenerating ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
@@ -363,7 +359,7 @@ written inline in a workflow `run:` body is held by the contract tests in
 ([../reference/github-actions.md](../reference/github-actions.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
 
 **`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
-it would rewrite - 14 on 2026-08-24 and 38 on 2026-08-29 - all of them
+it would rewrite, all of them
 pre-existing. That count is deliberately written as a magnitude rather than a
 figure: it tracks how much Python the repository holds, so an exact number here
 is wrong within days and the fact worth carrying is that the diff is large and
@@ -386,8 +382,8 @@ python -m idhazh site-weight --site-tree build
 every route and prerenders six of them, so one of those six that cannot render
 fails the build rather than the page. **The two dated reading routes are not
 among the six.** They render in the browser, so a failure to render there
-reaches a reader rather than the build. **It stopped answering for every story
-on 2026-09-01.** A reading document carries `ui.shell_seed_items` stories and
+reaches a reader rather than the build. **The build does not answer for every
+story.** A reading document carries `ui.shell_seed_items` stories and
 the browser fetches the rest, so the build never opens the stories past the
 seed. `python -m idhazh validate-days` opens all of them, against the committed
 shape the build reads and the served shape a browser fetches, and it runs in
@@ -403,10 +399,10 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 
 Naming no day checks every committed day, which is what a push to `main` does.
 **A named day that is not there exits non-zero** rather than reporting a clean
-run over nothing - a workflow typo must not read as a pass. Measured 2026-09-06
-on a developer machine: 0.27 s per published day, so the 16 committed days
-cost 6.6 to 7.1 s and a year of them would cost about 100 s a run. That is the
-reason the scope step decides.
+run over nothing - a workflow typo must not read as a pass. Opening a published
+day costs a fraction of a second, so a year of them is about a hundred seconds a
+run, which is the reason the scope step decides
+([../reference/measurements.md](../reference/measurements.md)).
 
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages
@@ -531,20 +527,18 @@ npm run build:canary
 npm run test:browser
 ```
 
-995 tests in 74 files (2026-09-05): 984 passed and 11 skipped, in 13.4 minutes
-on an a developer machine. The same suite measured 954 tests and 19.2 minutes on
-2026-09-02, so read the minutes as the machine rather than the suite - the test
-count is what grew.
+**Read the ratio rather than the seconds**, because a developer box shares its
+cores with whatever else is running. The readings are in
+[../reference/measurements.md](../reference/measurements.md).
 
 **`PLAYWRIGHT_WORKERS` sets how many run at once: one locally, four in CI, and
 the two machines disagree about which is right.** A runner is 4 vCPU with
-nothing else on it (Guardrail #2) and four workers took the browser step from 344 s
-to 207 s, 40 percent faster, measured 2026-09-05. The same change on an a developer machine
-with six other checkouts building measured 233.7 s against 135.5 s - **72 percent
-slower**, because two performance cores shared with six sibling agents have no
-spare capacity to hand a second worker. Both arms passed all 268 tests, so the
-local result reads as a clean win and is not one. Raise it locally only on an
-idle box, and never read a local worker figure as a runner figure.
+nothing else on it (Guardrail #2), so extra workers cut the browser step
+substantially. A developer box sharing two performance cores with sibling
+checkouts has no spare capacity to hand a second worker, so the same change runs
+slower there - and both arms pass, so the local result reads as a clean win and
+is not one. Raise it locally only on an idle box, and never read a local worker
+figure as a runner figure.
 
 Every skip reads a fact the fixture owns rather than a locator
 count - the canary day is eight stories on one desk, so it cannot fill a leading
@@ -602,35 +596,27 @@ npm run build
 npm run test:whole-day
 ```
 
-**Between 2.8 and 3.7 minutes end to end** on a developer machine,
-2026-09-05, over two full runs on a machine several agents share: the build took
-72.2 and 117.5 seconds, and the spec 97.3 and 102.1. The spec is 7 tests - three
-that read the day off disk in under 25 ms each, and four browser arms that
-spanned 13.7 to 28.4 seconds across the two runs. That spread is the shared box
-rather than the widths, which is also why the build figure nearly doubles
-between two runs of one tree. Which day it looks at is derived and never written
-down: the committed day staging the most drawings, which on 2026-09-05 is
-2026-08-31 with 43 drawings across 601 stories. Take this arm before
-`build:canary`, which overwrites the same `build/` directory.
+**A few minutes end to end**, dominated by the build rather than the spec. The
+spec is 7 tests: three read the day off disk in milliseconds, and four are
+browser arms. The spread between two runs of one tree is the shared box rather
+than the widths, which is why the build figure can nearly double. Which day it
+looks at is derived and never written down: the committed day staging the most
+drawings. Take this arm before `build:canary`, which overwrites the same
+`build/` directory.
 
 **It runs in CI, in a job of its own, and the numbers say why it is not part of
-the `browser` job.** Measured on `ubuntu-latest`, 2026-09-05: `npm run build`
-takes 24 seconds there and `npm run test:whole-day` 85 seconds for its 7 tests,
-and the whole job - checkout, `npm ci`, the Chromium install, the build and the
-spec - is 183 seconds. The developer-box figures above are three to five times
-those, which is the usual shape and is why a local number may not stand in for a
-runner one (Guardrail #10).
+the `browser` job.** Developer-box figures run three to five times the runner's,
+which is the usual shape and is why a local number may not stand in for a runner
+one (Guardrail #10).
 
-Appending the build and the spec to the `browser` job would cost 109 seconds.
-The `browser` job measured 460, 482, 494, 514, 542 and 554 seconds over its last
-six green runs on `main`, read 2026-09-05, against a 25-minute timeout - so its
-worst run uses 37 percent of what it is allowed, and 109 more seconds would take
-that to 44 percent. The timeout is not the problem. The wall clock is: those 109
-seconds land on the critical path of every pull request that buys the browser
-half, because nothing else in the run is waiting.
+Appending the build and the spec to the `browser` job would not threaten its
+timeout - that job uses well under half of what it is allowed, even on its worst
+run. **The wall clock is the problem, not the timeout**: those seconds land on
+the critical path of every pull request that buys the browser half, because
+nothing else in the run is waiting.
 
-A separate job costs nothing there. It is 183 seconds against a `browser` job
-that is 460 seconds at its fastest, it runs at the same time, and the workflow
+A separate job costs nothing there. It is far shorter than the `browser` job,
+it runs at the same time, and the workflow
 finishes at the moment it finished before. Actions minutes are free and
 unmetered on a public repository (Guardrail #2), so the 183 seconds are spent rather
 than paid, and 20 concurrent jobs are available against the six this workflow
@@ -669,11 +655,10 @@ moment the attribute it counts is renamed: nothing matches, the count is zero,
 the skip fires, and the suite reports green. Read the skip against a fact the
 fixture owns instead - the window the console publishes in an attribute, the
 number of days the corpus carries - and then assert the selector matched, with
-`await expect(locator, 'why this must exist').toHaveCount(n)`. Measured on
-2026-08-27 by renaming the attribute the failure panels carried then -
-`data-panel`, gone since the three panels became one chart: the count guard
-reported `1 skipped` and exit 0, and the same test with the assertion reported
-`1 failed` and exit 1, naming the attribute and the count it expected. A skip is
+`await expect(locator, 'why this must exist').toHaveCount(n)`. A count guard on
+a selector that matches nothing reports `1 skipped` and exit 0; the same test
+with the assertion reports `1 failed` and exit 1, naming the attribute and the
+count it expected. A skip is
 right only when the environment genuinely varies. It is never right for a
 selector this repository controls, and the same mistake had already switched off
 an injection canary in `canaries.spec.ts`
@@ -698,8 +683,7 @@ base32 symbols - so 76 of the 87 canary rows would be refused by `ItemHealthRow`
 if anything validated them. Nothing does: the browser suite reads the CSV
 directly, and the published projection carries `item_id` as an opaque key on
 purpose, because a committed shard has no writer left to re-mint an id if that
-grammar moves. Found independently while shipping two rows on 2026-09-02 and
-2026-09-03, and left alone both times. It bites the day something validates the
+grammar moves. It bites the day something validates the
 canary rows through the contract. Fixing it means padding the index in the two
 id builders and re-running the builder; nothing else reads those ids.
 
