@@ -99,7 +99,8 @@ that shared and unknown paths select broader coverage. New dependencies between
 areas need a selector regression test, not only a new group label. The selector
 lives in `frontend/scripts/test-scope.ts`; the group inventory lives beside it
 in `test-groups.ts`. CI uses that same selector for its browser/console choice,
-keeps the full backend suite, and runs all frontend groups on `main`.
+keeps the full backend suite, and runs all frontend groups on a `main` push that
+carries code.
 The selector job and the backend test job declare the same Node version,
 because the workflow tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
@@ -109,17 +110,24 @@ console's own, or the harness that chooses.** They are 584 of the browser
 suite's 997 tests, measured 2026-09-05, and the console is a page one operator
 opens rather than anything a reader is served. What that costs, stated rather
 than implied: a shared component or a token edit that breaks the console is
-found on the merge push to `main` instead of on the pull request. `main` runs
-every group, which is what the deferral leans on - there is no separate nightly
-job, because a second copy of the browser job would be a second thing to keep
-correct. `ciAnswer` in `test-scope.ts` is the one place that decides, and the
-truth table is in `frontend/scripts/tests/test-scope.test.mjs`.
+found on the merge push to `main` instead of on the pull request. A `main` push
+carrying code runs every group, which is what the deferral leans on - there is
+no separate nightly job, because a second copy of the browser job would be a
+second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
+that decides, and the truth table is in
+`frontend/scripts/tests/test-scope.test.mjs`.
 
-`ciAnswer` returns three answers, not two. The third is `validate_all`, which
-decides whether the `gates` job opens every committed day or none of them: a
-push to `main` and any change to the contracts, the tooling or a committed
-payload under `frontend/public/` open all of them, and every other pull request
-opens none.
+`ciAnswer` returns four answers. **`code` says whether the change carries
+anything but documentation, and `gates`, `robots` and `site` skip when it does
+not** - a changed sentence cannot break an application check, on a branch or on
+a merge. That branch is a closed list of prefixes rather than a guess, so a path
+nobody classified falls to full coverage instead; and a document that a test
+reads is that test's input rather than documentation, which is why an edit to
+`docs/concepts/console-design.md` buys the console specs. `validate_all` decides
+whether the `gates` job opens every committed day or none of them: a `main` push
+carrying code, and any change to the contracts, the tooling or a committed
+payload under `frontend/public/`, open all of them; every other change opens
+none.
 
 For a local contract change, the launcher compares schema files before and
 after export. Correct uncommitted generated files can pass; an exporter that
