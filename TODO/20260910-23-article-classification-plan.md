@@ -251,7 +251,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | 2 | Every label vocabulary becomes config | P1 | D | DONE #618 | p23-r2 | #618 | worker |
 | P3 | A person labels the dev split and the test split | P2 | D | PENDING | - | - | human |
 | 3 | Lens and event ids become slugs, and a retired id keeps its tombstone | 2 | E | DONE #619 | p23-r3 | #619 | worker |
-| 7a | The classification code gets its own package | - | E | DONE #_pending_ | p23-7a | #_pending_ | worker |
+| 7a | The classification code gets its own package | - | E | DONE #629 | p23-7a | #629 | worker |
 | 4 | An event gets a lifecycle | 3 | F | PENDING | - | - | - |
 | 13 | The encoder alarm | 3 | F | PENDING | - | - | - |
 | 6 | The desk is a new field, and the feed's word stays where it is | 3 | G | DONE #620 | p23-r6 | #620 | worker |
