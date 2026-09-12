@@ -21,6 +21,33 @@ names a machine - what they name instead is the runtime, because node's zlib and
 python's `gzip` disagree by about 2 percent on the same file and that difference
 is real.
 
+## What prerendering weighs, on and off, 2026-09-12
+
+Toolchain: node 24.12.0. Date: 2026-09-12, tree `e1eae979`.
+Method: one tree built three times each way at a pinned `BUILD_VERSION`,
+interleaved - once as it stands, once with the seven
+`export const prerender = true` declarations deleted and nothing else changed.
+Zero spread: every figure below repeated to the byte on all three builds of both
+arms.
+
+**Prerendering costs 1,635,702 bytes, 1.54 percent of the published site** -
+106,316,899 B with it against 104,681,197 B without. In the unit the Pages cap
+is spent in that is 1.6 MB of 1,024 MB, or **18 published days of the 1,047 the
+runway has left**. The whole of it is 8 `index.html` documents and their 5
+`__data.json` twins; the two builds differ by exactly those 13 files.
+
+**The bytes are not the finding.** With the declarations gone the build writes
+no `frontend/build/index.html` at all, so `adapter-static`'s one fallback
+answers every address including `/`, at HTTP 404. Two gates go with it:
+`npm run bundle-gate` fails because `/evals/` has a 6,600 B ceiling and no
+document to weigh, and `npm run build` itself exits 1 because
+`frontend/scripts/build-state.ts` will not certify a build whose root document
+is missing.
+
+The full record - conditions, method, both arms, the spread and what it does not
+settle - is
+[benchmarks/2026-09-12-prerender-on-and-off.md](benchmarks/2026-09-12-prerender-on-and-off.md).
+
 ## What compression level the reader actually pays, 2026-09-10
 
 Toolchain: node 24.12.0. Date: 2026-09-10.
