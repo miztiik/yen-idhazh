@@ -54,7 +54,7 @@ This is the canonical writing rule. It binds every agent, every persona under `.
 - **A third-party product name is not a design vocabulary.** Name the artefact and the property - "a reliability scorecard", "a tinted status card", "a target marker on a bar" - never the vendor whose screenshot it came from. This binds a design doc, a plan-doc, a code comment, a commit message, a branch name and a filename equally. Naming the artefact is also the more useful sentence: it says what to look at, where the product name only said where somebody once saw it.
 - Use ASD-STE100.
 
-Everywhere else restates this section rather than inventing its own style rule (Guardrail #4): [`docs/agents/guardrails.md`](docs/agents/guardrails.md) carries it for the personas that run the bootstrap ritual, and [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
+Everywhere else restates this section rather than inventing its own style rule (Guardrail #4): [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
 
 ### Design rationale
 
@@ -82,7 +82,7 @@ When you need the user to choose, ask in one message, in this order, and put not
 
 A message with no options is a status update, not a decision request, and does not use the five-part shape.
 
-[`docs/agents/guardrails.md`](docs/agents/guardrails.md) and [`AGENTS.md`](AGENTS.md) restate this section; they do not extend it (Guardrail #4).
+[`AGENTS.md`](AGENTS.md) restates this section; it does not extend it (Guardrail #4).
 
 ## 0d. Intent, Contract, Code
 
@@ -345,23 +345,31 @@ Per tier:
 
 ## 14. Agent Roster
 
-Seven persona advisors live under `.github/agents/`, each at a distinct altitude:
+Seven persona advisors live under `.github/agents/`, each at a distinct altitude. **This table is the authority assignment, and it is what resolves a stalled debate**: the decision class names who rules.
 
-| Agent                               | File               | Altitude                                                                      |
+| Agent                               | File               | Altitude, and the decisions it rules                                          |
 | ----------------------------------- | ------------------ | ----------------------------------------------------------------------------- |
-| Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes?                 |
-| Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall, what to trade when a budget binds |
-| Jony (UI/UX)                        | `jony.agent.md`    | the published surface: page, typography, chart-vs-diagram, the dashboard      |
-| Susan (Craft & Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the demand side of design review   |
-| Andre (AI / LLM)                    | `andre.agent.md`   | model pick, prompt strategy, eval design, the injection surface               |
-| Fowler (Architecture & Engineering) | `fowler.agent.md`  | architecture + contracts + commits + tests                                    |
-| Carmack (Engine & Runtime)          | `carmack.agent.md` | inference runtime, runner budget, throughput, cache and shard economics       |
+| Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes? is the language plain? does the page work on a slow connection and a small screen? |
+| Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall by kind of writing, which themes to trade when a budget binds, whether a source earns its slot |
+| Jony (UI/UX)                        | `jony.agent.md`    | the published surface - page and typography, chart vs diagram vs nothing, the eval dashboard, what a visual must earn |
+| Susan (Craft & Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the sufficiency checks, elevation and colour systems, icon and chart craft, both themes, empty and degraded states |
+| Andre (AI / LLM)                    | `andre.agent.md`   | model pick on quality grounds, prompt strategy, constrained decoding, eval design and metric choice, the prompt-injection surface |
+| Fowler (Architecture & Engineering) | `fowler.agent.md`  | architecture, persisted contracts (stage payloads, eval ledger, run manifest, config, published payloads), schema versioning, test tiers, refactor safety, module structure, when to delete |
+| Carmack (Engine & Runtime)          | `carmack.agent.md` | inference runtime, model quantisation and fit, the runner budget, throughput, cache and shard economics, job timeouts |
 
 Adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
 
-Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
+**A veto must name what the reader loses.** A ruling that removes states what is removed *and* what the reader gives up by not having it; a ruling that states only the first is not a ruling and does not bind. This is not a courtesy - it is the price of the design rationale below.
 
-Where Jony and Susan both touch the page: **Jony rules what survives on the page, Susan rules whether what survived is good enough to ship.** They are the two halves of one review and neither is sufficient alone.
+Five pairs share an edge, and each one has a written split.
+
+- Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
+- Where Jony and Susan both touch the page: **Jony rules what survives on the page, Susan rules whether what survived is good enough to ship.** They are the two halves of one review and neither is sufficient alone. Susan never overrules Carmack on bytes, Reader on plain language, or Editor on what runs.
+- Where Carmack and Andre both touch the model: **Andre owns whether a model is good enough, Carmack owns whether it fits.** A model that fails either test is not the pick.
+- Where Andre and Carmack both touch injection: **Andre owns the prompt and schema shape, Carmack owns the process boundary** - no model output becomes a shell argument, a file path, or a URL to fetch.
+- Where Editor and Andre both touch quality: **Editor names the content failure, Andre chooses the instrument that measures it.**
+
+A persona's own worldview shapes what it says, never how plainly it says it (section 0b).
 
 ### Design rationale
 
@@ -371,7 +379,6 @@ Where Jony and Susan both touch the page: **Jony rules what survives on the page
 
 - [`README.md`](README.md) - what yen-idhazh is.
 - [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md) - the load ritual every persona runs before answering.
-- [`docs/agents/guardrails.md`](docs/agents/guardrails.md) - the guardrails-only digest of this contract.
 - [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md) - the environment and the commands behind sections 9 and 12.
 - [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) - environment and tool quirks that make a command lie.
 - [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md) - where each kind of doc lives.
