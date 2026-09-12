@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md) | next [`20260905-19-visual-telemetry-plan.md`](20260905-19-visual-telemetry-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O46, rows 46, 47, sections 7.2, 7.3, 12.4 Q6, 12.11 G16, 12.12 G24, 12.15 G46, P.R10.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | Any new element kind. Any change to the validator's universal checks. Migrating the console. Any edge whose anchor is "the paragraphs are adjacent" |
 | ESCALATE triggers | 1. An edge is proposed with no span. **There is no exception to this** and a proposal for one is a Level-5 stop. 2. The layout is not reproducible across processes. 3. The sequencing lexicon cannot be authored without a model, which would put the denominator inside Deviation A |
 | Chosen strategy | Author the language artefact once and use it at both ends - the gate that decides whether a diagram is attempted at all, and the rule that decides whether each arrow is legal. Writing them apart gets them written twice and disagreeing |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 **Why the word-lists are here and not in plan 08.** They are needed by exactly one thing: the gate that keeps the diagram family from costing every non-process article a model call. Measured 2026-08-25 with diagrams enabled, **145 of 145 items reached the model and the stage spent its whole budget on 10 of 11 runs.** The gate is not a refinement; it is what makes the family affordable.
 

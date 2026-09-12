@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-19-visual-telemetry-plan.md`](20260905-19-visual-telemetry-plan.md) | next [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O11, O34, rows 49, 56, 70, sections 12.6 G3, 12.7 G9, 12.9 G14, G15, 12.12 G23, 12.13 G30, G39, 12.14 G43, 14.5.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | Any human review surface (plan 21). Any new metric - every number here is written by plan 19 or earlier. Any alarm threshold set from a guess |
 | ESCALATE triggers | 1. A composite quality index is proposed as a **gate** rather than a diagnostic. 2. A panel pools chart, diagram and infographic types into one distribution. 3. A target is set from a figure quoted from outside this repository |
 | Chosen strategy | Panels first so the numbers are visible, then the rules that constrain how they may be read, then the criteria that let a feature be retired without a fresh argument |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 **The ban that has to be stated rather than assumed.** The quality index is a **diagnostic and never a gate** - not until the correlation between the machine components and human keep rate has been measured. A composite of unvalidated components is a number that looks like a judgement. This was stated twice in the source document and carried into the plan-doc set only as the word "accepted", which reads as an oversight to fix rather than a rule to keep.
 
