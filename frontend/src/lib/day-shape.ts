@@ -6,11 +6,10 @@
  * in - and a decision is worth testing without a browser.
  *
  * Nothing here removes or hides an item. `orderByTime` re-orders and the set it
- * returns is the set it was given, which `frontend/tests/time-rail.spec.ts`
- * asserts over every committed day.
+ * returns is the set it was given, which `frontend/tests/item-time.spec.ts`
+ * asserts.
  */
 
-import { railTime, type RailTime } from './format';
 import type { DigestItem, DigestLead, DigestVerticalRef, SeededVisual } from './payload/types';
 
 /** The arrived stories, with the seeded ones keeping the drawing they came with.
@@ -370,41 +369,5 @@ export function orderByTime(items: DigestItem[]): DigestItem[] {
 			return a < b ? 1 : -1;
 		}
 		return left.item_id < right.item_id ? -1 : left.item_id > right.item_id ? 1 : 0;
-	});
-}
-
-/** One row of the day's stream: the story, and the marker above it if it opens
- * a group. */
-export interface RailRow {
-	item: DigestItem;
-	/** Null on every story but the first of its group. */
-	mark: RailTime | null;
-}
-
-/** The stream with its rail markers, one per time group rather than one per
- * story.
- *
- * A day of 359 stories over four groups is 355 duplicate labels, and a label
- * repeated ninety times is texture rather than information. So the marker is
- * drawn on the first story of each run of stories sharing a group, and the
- * stories under it carry none. Measured 2026-09-02 over the 12 committed days
- * and 4,713 stories at the 60-minute default: 907 markers rather than 4,713.
- *
- * The marker is the first story's own time to the minute, not a rounded one.
- * The stream runs newest first, so a marker is an upper bound on everything
- * below it until the next one - which is how a reader already reads a rail.
- *
- * `items` must already be in the order the page draws them (`orderByTime`), or
- * a group that the order split reopens further down. That is the honest
- * behaviour rather than a bug: a rail over an order it did not sort would print
- * numbers that jump up and down as the reader scrolls.
- */
-export function railRows(items: DigestItem[], onDate: string, groupMinutes: number): RailRow[] {
-	let previous: string | null = null;
-	return items.map((item) => {
-		const time = railTime(item.published_at, item.time_source, onDate, groupMinutes);
-		const opens = time.group !== previous;
-		previous = time.group;
-		return { item, mark: opens ? time : null };
 	});
 }

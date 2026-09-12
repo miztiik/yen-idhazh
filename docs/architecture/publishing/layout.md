@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -94,26 +94,30 @@ The planning step scores every story before a single model loads ([../sources/di
 
 `time_source` earns its place because the fallback it names is silent. `published_at` is the feed's own date where the feed gave a usable one, and our first sight of the address where it did not ([../sources/freshness.md](../sources/freshness.md)). Both are the same kind of string, so a page printing the time cannot say whose it is without this field. Measured 2026-08-31 on the committed 2026-08-30 payload - the newest day that had finished publishing - 431 items: 305 distinct `HH:mm` values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. **That last figure is an upper bound on the fallback and not a count of it**, because until this field shipped nothing committed recorded the choice, and a feed's own stamp can land near a run by chance. The fallback is rare either way, which is exactly why it needs naming: a reader has no way to spot the 1 percent.
 
-### The rail is what reads it, and what it can and cannot say (2026-09-02)
+### The item's own stamp is what reads it, and what it can and cannot say (2026-09-12)
 
-The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides how a story's stamp is drawn ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on a developer machine / / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
+The day's stream orders by `published_at`, newest first, and every story prints its own stamp beside its heading. So `time_source` stopped being a field with no reader and became the thing that decides how a story's stamp is drawn ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Re-counted 2026-09-12 on a developer machine / Python 3.14.2 over every committed day - 22 days, 8,922 stories:
 
-| `time_source` | Stories | Share | What the rail prints |
+| `time_source` | Stories | Share | What the item prints |
 | --- | --- | --- | --- |
-| `feed` | 970 | 20.6 percent | the clock, unmarked |
-| `first_seen` | 10 | 0.2 percent | the clock, with a mark |
+| `feed` | 5,171 | 58.0 percent | the clock, unmarked |
+| `first_seen` | 18 | 0.2 percent | the clock, with a mark |
 | `unknown` | 0 | 0 | nothing - there is no number to print |
-| absent | 3,733 | 79.2 percent | the clock, unattributed and unmarked |
+| absent | 3,733 | 41.8 percent | the clock, unattributed and unmarked |
 
-The rail prints digits only, from 2026-09-06: a clock, and a date in front of it when the stamp is not from the day being read. The mark is what carries the `first_seen` case now that no word does.
+**Two of those four numbers moved and the third did not, and the difference is the point.** The absent count is **frozen at 3,733** - every day published since the field landed carries it, so that column cannot grow - while its *share* falls with every run: 79.2 percent when this table was first written on 2026-09-02, 41.8 percent now. A share read off this table more than a few days old is a reading of that morning.
+
+The item prints digits only, from 2026-09-06: a clock, and a date in front of it when the stamp is not from the day being read. The mark is what carries the `first_seen` case now that no word does.
+
+**Where the stamp is drawn, from 2026-09-12.** It was on a shared rail down the stream's leading edge from 2026-09-02; the rail is deleted. It grouped stories into hour-wide runs and drew one marker per run, so 86.3 percent of stories carried no time at all - 1,218 markers over these 8,922 stories at the 60-minute default. The stamp is now the **fourth and last child of the item's eyebrow**, in the eyebrow's own type, and on a dated page it takes the slot the day link held. A search result keeps the day link there and draws no clock: that list spans days, and two dates on a line capped at four things is a duplicate.
 
 Three things follow from that table and each one moved the design.
 
-**The absent case is the archive, not an edge case.** Four fifths of everything published predates the field. A story there carries a stamp `rank.appeared_at` chose the same way it chooses one today - only the label was thrown away - so the honest render is the stamp with no claim attached. Printing it as a feed time would be a claim the run never recorded; refusing to print it would delete a fact from 3,733 stories and leave the rail blank on ten of twelve committed days.
+**The absent case is the archive, not an edge case.** Two items in five predate the field. A story there carries a stamp `rank.appeared_at` chose the same way it chooses one today - only the label was thrown away - so the honest render is the stamp with no claim attached. Printing it as a feed time would be a claim the run never recorded; refusing to print it would delete a fact from 3,733 stories and leave ten of the first twelve committed days with no time on them at all.
 
-**`unknown` has never happened**, so the branch is carried by the canary day, which plants one story of every state on purpose. A branch no fixture reaches ships with no test at all, and this one decides whether a story with no time still renders.
+**`unknown` has never happened** - 0 of 8,922 - so the branch is carried by the canary day, which plants one story of every state on purpose. A branch no fixture reaches ships with no test at all, and this one decides whether a story with no time still renders.
 
-**"The feed gave a date and no clock" is not expressible, and no heuristic was invented for it.** `discover._published_at` reads `feedparser`'s parsed struct, which fills 00:00:00 for a date-only feed date - and a story genuinely published at midnight parses to the same thing. 47 of the 4,713 committed stories are stamped exactly `T00:00:00Z`, 1.0 percent, and the payload cannot say which of the two each one is. Reading midnight as "no clock given" would mislabel a real midnight story, which is the invented-label failure the rail exists to avoid. The string stays in the vocabulary for the day a feed's own granularity is recorded; until then it prints only where the payload says there is no time at all.
+**"The feed gave a date and no clock" is not expressible, and no heuristic was invented for it.** `discover._published_at` reads `feedparser`'s parsed struct, which fills 00:00:00 for a date-only feed date - and a story genuinely published at midnight parses to the same thing. 47 of the 4,713 stories committed by 2026-09-02 are stamped exactly `T00:00:00Z`, 1.0 percent, and the payload cannot say which of the two each one is. Reading midnight as "no clock given" would mislabel a real midnight story, which is the invented-label failure this whole rule exists to avoid. The string stays in the vocabulary for the day a feed's own granularity is recorded; until then it prints only where the payload says there is no time at all.
 
 ## The same story from several sources says so
 
@@ -368,7 +372,7 @@ The staged file is now [../../../schemas/digest-view.schema.json](../../../schem
 | Added | What draws it | Cost |
 | --- | --- | ---: |
 | `carried_by`, `watchlist_hit`, `on_front_page`, `rank_score` | the lead block, which needs a comparable score across the whole day | +0.94, +1.12, +1.11, +1.16 B an item |
-| `published_at`, `time_source` | the time rail, and the item's eyebrow today | +8.29, +0.99 B an item |
+| `published_at`, `time_source` | the time beside every story's heading | +8.29, +0.99 B an item |
 | `introduced_by_run` | nothing, since the run divider was deleted on 2026-09-01. It stays because taking a field off this list is a contract change | +1.16 B an item |
 | `lenses` | the topic chips | +1.11 B an item |
 | `key_points` | the in-page filter, which reads them today | +93.54 B an item |

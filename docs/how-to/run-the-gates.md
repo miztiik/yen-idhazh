@@ -553,9 +553,9 @@ their feature group. Both configurations use the existing Playwright runner.
 
 **One spec asks a question the canary day cannot answer, and says so.**
 `reading-page.spec.ts` reads the reading surface whole - every reader route at
-360, 801 and 1536 CSS px in both themes, the time rail against the item's
-eyebrow, the aside against the sticky filter panel, and a day whose stories are
-broken at the network. Four of its arms need a day longer than
+360, 801 and 1536 CSS px in both themes, the story's own time against the day's
+zone caption, the aside against the sticky filter panel, and a day whose stories
+are broken at the network. Four of its arms need a day longer than
 `ui.shell_seed_items`, because a document that already carries its whole day
 never fetches, and the canary is eight stories against a seed of fifteen. They
 skip here on a fact the served payload owns and run against the real digest:
