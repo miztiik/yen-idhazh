@@ -865,7 +865,9 @@ Verified 2026-08-20.
 - **A cache entry unread for 7 days is deleted**, and a restore is paid once per
  *job* rather than once per run. That is why `digest.yml` gives a worker a
  shard of several items instead of fanning out one job per item: the weights
- restore is the largest fixed cost, and every extra job pays it again.
+ restore is the largest fixed cost, and every extra job pays it again. Which
+ entry each workflow fills, and the bar a new one clears against the shared
+ 10 GB ceiling, is in [ci-caches.md](ci-caches.md).
 - **`GITHUB_TOKEN` allows 1,000 API requests per hour per repository**, shared
  across every job of every concurrently running workflow. A step that polls in
  a loop spends a budget the scheduled pipeline also needs.
@@ -913,6 +915,7 @@ Verified 2026-08-20.
 
 ## See also
 
+- [ci-caches.md](ci-caches.md) - every cache these workflows keep, what it costs against the 10 GB ceiling, and when a new job earns one.
 - [../architecture/overview.md](../architecture/overview.md) - how CI, committed payloads, and the static site fit together.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each pipeline stage owns.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - how to run the same stages locally.
