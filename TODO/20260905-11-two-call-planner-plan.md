@@ -107,13 +107,17 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 2 | The four kinds only a model can find | 1 | B | DONE #562 | yi-t11r2 | #562 | worker |
 | 3 | Call 2 summarises and plans, and the article is read once | 2 | C | DONE #570 | yi-t11r3 | #570 | worker |
 | 3b | Every call reports its own cost | 3 | C2 | DONE #636 | p11-3b | #636 | worker |
-| 3c | Own the prompt bytes | 6 | - | DEFERRED | - | - | - |
+| 3d | The instrument says where every re-read token went | 3b | C3 | IN-FLIGHT | p11-3d | - | worker |
+| 3c | Own the prompt bytes | 3d | C4 | PENDING | - | - | - |
+| 3e | The instructions move in front of the article | 3c | C5 | PENDING | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
-| 5b | Call 1 and call 2 run in the pipeline | 5, 3b | E2 | PENDING | - | - | - |
+| 5b | Call 1 and call 2 run in the pipeline | 5, 3b, 3e | E2 | PENDING | - | - | - |
 | 6 | The small model, its job and its cache go | 5b | F | BLOCKED | - | - | - |
 
-**Four rows are live and four are merged.** Rows 1, 2, 3 and 4 shipped; row 3c is deferred until the first daily run after row 6. **`parallel N = 1`, so no two rows of this plan run at the same time** - rows 4, 5, 5b and 6 are one chain, and row 3b is now inside that chain rather than beside it, because row #5b cannot read its own acceptance number without the per-call cost row 3b records.
+**Six rows are live and five are merged.** Rows 1, 2, 3, 3b and 4 shipped. **`parallel N = 1`, so no two rows of this plan run at the same time.**
+
+**The chain was re-ordered on 2026-09-12 and it is now one line: 3b -> 3d -> 3c -> 3e -> 5b -> 6.** Row #3b's first per-call reading showed that the two-call design's whole extra cost over a single call is prompt layout - about 896 tokens an item that call 2 reads and nobody asked for. Wiring the calls into the pipeline first would mean reading that decision through an instrument that cannot see three quarters of what it costs. So the layout is fixed before the wiring: row #3d makes the instrument report where every re-read token went, row #3c removes 209 tokens an item by owning the prompt bytes, row #3e removes about 670 more by moving the instructions in front of the article, and only then does row #5b wire it up. **Together those two rows take the overhead from 896 tokens an item to under 100** - about 10 seconds against 91 today, at the measured 9.85 tokens a second. Owner decision, 2026-09-12, on Andre's ruling; the full argument is in each row.
 
 **Row #5b was added on 2026-09-12 by row #6's worker, and row #6 is BLOCKED behind it.** Row #6 was dispatched, and its first act was to check its own precondition - decision 1, "the small model may not retire before call 2 works". **Call 2 does not run.** No module under `backend/idhazh/` imports `classify.calls`; the only importers are three test modules and `backend/utilities/measure_two_calls.py`, and `calls.py`'s own docstring still says "no stage dispatches either yet". The flag this plan's strategy turns on, and row #6's scope opens by flipping, was never built - `config/idhazh.json` carries no such knob. Rows 1 to 5 built the two calls, the gate, the ladder and one renderer; **nobody built the stage that calls them**, and that missing work is row #5b. Retiring the small model before it lands would take the digest from 17 charts a day to none, which is row #6's own rejected alternative 1. Ruled independently by Carmack and Fowler, 2026-09-12; neither would take the widening.
 
@@ -226,27 +230,90 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 
 ---
 
-## 4b. Row #3c - Own the prompt bytes
+## 4b. Row #3d - The instrument says where every re-read token went
+
+**Added 2026-09-12, and it is the reason rows #3c and #3e come before the wiring.** Row #3b's first reading printed `FLOOR BROKEN - 4 tokens` while 670 tokens an item burned with no reading at all. That is not a floor set four too high. **It is an instrument carrying one yes-or-no answer where it needs three numbers, and the alarm fires on the good case, which teaches its reader to discount it on the bad one.** Ruled by Andre, 2026-09-12.
+
+- **Scope:** `backend/utilities/measure_two_calls.py` stops reporting a pass or a fail and starts reporting a decomposition. Per item, the tokens call 2 had to read again, split by cause: because the article changed, which is irreducible; because the chat template broke the prefix, which is row #3c's target; because the trailing turn sits behind the article, which is row #3e's target. It runs **two items rather than one**, because one item cannot show the steady state and a shard is the steady state. And it refuses to run when the weights file does not hash to `inference.declared_for`.
+- **Files touched:** `backend/utilities/measure_two_calls.py`, `backend/tests/test_marks.py` if a new test module arrives, a benchmark record under `docs/reference/benchmarks/`, and `docs/architecture/summarize/throughput.md` to link it.
+- **Acceptance gates:** `GATE-PY` over any test module the row adds; `GATE-SCHEMA`, which must produce an empty diff because this row edits no contract. The run itself is the deliverable rather than a gate.
+- **Oracle:** **The three causes sum to the re-read total, on both items, and the harness refuses a weights file it was not configured for.** A decomposition whose parts do not add up is a guess with three decimal places. The refusal half is checked by pointing it at the wrong file on purpose.
+- **This row takes the reading, and the reading is the baseline. It is not a separate step.** Real article near the truncation cap, from the committed corpus; the configured weights; `--decode-cap` about 16, because every number this row is for is a prefill fact that lands before a token is decoded. One extra uncapped item gives call 1's real reply length, which is what sizes row #3c's saving. **No runner time: every number here is a token count, and a token count names the runtime rather than the processor** (Guardrail #10, as clarified 2026-09-12). The seconds are already measured at 9.85 tokens a second.
+- **What this row does not do:** it changes no prompt, no call, no contract and no published surface. It changes what one developer-machine utility prints.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **The reading row #3b produced was taken on the wrong model and cannot settle anything on its own.** It used `Qwen3-8B-Q4_K_M`, passed on the command line; `config/idhazh.json` sets `models.summarize` to `Qwen3.5-9B-Q4_K_M`. The four-token gap is a property of **Qwen3's** template under `enable_thinking: false`, and Qwen3.5's may render it differently or not at all. **If the gap is absent on the model that actually runs, row #3c's throughput argument disappears and only its oracle argument survives** | Andre, 2026-09-12 |
+| 2 | The harness already reads the inference block and the prompts from config but takes the weights from `--weights`, and prints nothing when the two disagree. That is how the wrong-model reading happened without anybody noticing. Hash the file and compare | Andre, 2026-09-12 |
+| 3 | **Two items, not one.** Item 2's call 1 should reuse the system prefix and should destroy the previous item's copy of call 2's question. **Nobody has seen either happen**, and if the system prefix does not reuse, every figure in rows #3c and #3e is wrong and the problem is larger than either row | Andre, 2026-09-12 |
+| 4 | The rate to price everything against is a reading: **9.85 tokens a second, median**, slowest timed item 8.25, fastest 44.71, measured 2026-09-09 over 2026-09-01 to 2026-09-09 on GitHub-hosted `ubuntu-latest`, 4 vCPU, no GPU. The earlier arithmetic in this plan used the retired 8B's 10.95 and understated every cost by about 11 percent | `docs/architecture/summarize/throughput.md` |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Keep the floor check and just subtract the template's four tokens | It leaves one boolean where three numbers are needed, and the four would live as a bare number inside a printed sentence (Guardrail #6). The bigger objection is that the boolean was never the problem: it was watching the smaller of two wastes | Andre, 2026-09-12 |
+| 2 | Skip this row and read the wiring row's first shard instead | The first real run would then be read through the instrument that already missed three quarters of the cost. That is the specific outcome this ordering exists to avoid | Andre, 2026-09-12 |
+
+---
+
+## 4c. Row #3c - Own the prompt bytes
+
+**Un-deferred 2026-09-12, and its oracle is stronger than the one it carried.** The deferral said this row waits for a daily run after row 6 to price it on the runner. **That reason was half wrong: this row needs no runner.** Every number that argues for it is a token count, and row #3d takes those on a developer machine in an afternoon. Ruled by Andre, 2026-09-12.
 
 - **Scope:** Send a rendered completion instead of a chat completion, so cache reuse is true by construction and the oracle becomes an offline byte assertion rather than a live-server measurement.
-- **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/prompts/summarize_and_plan_visual.txt`, `backend/idhazh/prompts/label_article_elements.txt`, `backend/tests/test_visual_planner.py`, `backend/tests/test_summarize.py`, `docs/architecture/summarize/prompt.md`. **Named rather than globbed on 2026-09-11**; `backend/idhazh/prompts/**` is four files today and this row writes two of them.
-- **Acceptance gates:** `GATE-PY` over `test_visual_planner.py` and `test_summarize.py`; `GATE-SCHEMA`, which must produce an empty diff because this row edits no contract.
-- **Oracle:** Call 2's rendered prompt starts with call 1's rendered prompt, byte for byte. That is a string comparison over two files and needs no server, where today's oracle needs a running model and a warm cache slot. **The fixture is the two rendered prompts, written to `tests/fixtures/prompts/` by the row and compared offline.**
+- **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/prompts/summarize_and_plan_visual.txt`, `backend/idhazh/prompts/label_article_elements.txt`, `backend/tests/test_classify.py`, `backend/tests/test_summarize.py`, `docs/architecture/summarize/prompt.md`. **Named rather than globbed on 2026-09-11**; `backend/idhazh/prompts/**` is five files today and this row writes two of them. **`visual_planner.py` stood here until 2026-09-12**, when plan 23 row #7a moved both call builders to `classify/calls.py` in PR #629.
+- **Acceptance gates:** `GATE-PY` over `test_classify.py` and `test_summarize.py`; `GATE-SCHEMA`, which must produce an empty diff because this row edits no contract.
+- **Oracle:** **Call 2's rendered prompt starts with call 1's rendered prompt PLUS call 1's returned completion, byte for byte.** That is a string comparison over two files and needs no server, where today's oracle needs a running model and a warm cache slot. **The fixture is the two rendered prompts, written to `tests/fixtures/prompts/` by the row and compared offline.**
+- **The oracle was strengthened on 2026-09-12 and the stronger form costs no more work.** It used to assert only that call 2's prompt starts with call 1's prompt. Once this row renders the bytes itself, call 2's prompt can be built as literally call 1's bytes, plus call 1's returned text, plus the suffix - so **the 209 re-prefilled tokens go to zero rather than to "four minus whatever the template did", and it stops being a per-template question for ever.** Andre, 2026-09-12.
+- **What it saves, priced at the measured rate:** 209 tokens an item is **21 seconds an item, about 7 minutes of a 20-item shard**, at 9.85 tokens a second. The 209 is 4 tokens of empty think block plus roughly 205 tokens of call 1's reply sitting behind the break - **a four-token divergence does not cost four tokens, it costs everything behind it.**
 - **What this row does not do:** it changes no reply shape, no contract and no schema, and it does not remove the chat-completion path for any other caller. It changes how one call site renders its prompt.
-- **Deferred until:** the first daily run after row 6 prices the 209 re-prefilled tokens on the runner. The figure that argues for this row was taken on a developer laptop against the retired weights, one run and no spread, so it cannot yet say the work is worth doing.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The four-token gap is `<think>\n\n</think>\n\n` from Qwen3's chat template. It writes an empty think block into the generation prompt under `enable_thinking: false` and drops it when the same turn is replayed as history, so the two renderings diverge there. Nothing in this repository renders it | Owner, 2026-09-10 |
-| 2 | Deferred, not refused. A prefix cache reuses a prefix, so those four tokens end the reuse and 209 tokens re-prefill per item. Whether that is worth owning the prompt bytes is a runner measurement nobody has taken | Owner, 2026-09-10 |
+| 2 | Confirmed against the measurement 2026-09-12, three ways rather than one: the break sits at 1,493 of call 1's 1,497 tokens, which is where the generation prompt lives; the four tokens are `<think>`, `\n\n`, `</think>`, `\n\n`, each one token in Qwen3's vocabulary; and call 2's 896 uncached tokens only reconcile if the break is there | Andre, 2026-09-12 |
+| 3 | **This row goes before the instruction move, although it saves a third as much**, because it changes no prompt text. Land it and the instrument is clean; the instruction move is then measured against a floor that is not already off by 209 tokens | Andre, 2026-09-12 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Write the empty think block into call 1's history ourselves, so the two renderings agree | A band-aid on one template's private behaviour. It patches a symptom of a template we do not control, and the next model ships a different template | Owner, 2026-09-10; CLAUDE.md Guardrail #5 |
+| 2 | Turn on llama.cpp's `n_cache_reuse` instead, which rescues cached runs after a divergence | **It attacks the same 209 tokens this row does and loses on every axis.** The reuse is not exact: rotating a stored key to a new position is exact, but the hidden state behind it was computed with the dropped tokens still in front, so output can move with nothing in any log to say so - which breaks the determinism contract row #3 rejected temperature jitter to protect. It forces a fingerprint decision, because a knob that can move an output has to be digested, and digesting it moves every earlier work identity. And its threshold is a length gate on a length that varies: the value people copy from the documentation is 256, call 1's reply is about 205, so at the default it rescues nothing and reports no error. **This row gives the same saving exactly, with no flag and no unpinned build** | Andre, 2026-09-12 |
+
+---
+
+## 4d. Row #3e - The instructions move in front of the article
+
+**Added 2026-09-12. This is the largest single waste in the two-call design and no plan named it until today.** Call 2's question is about 670 tokens and sits in a user turn **after** the article. It is byte-identical on every item - it names no article and quotes no sentence, by design - but the text in front of it differs per item, so a prefix cache cannot reach it and **all 670 tokens are read again on every single item, for ever.** A single-call design puts its instructions in the system turn, in front of the article, where they are read once per shard. This design converted that into a per-item cost. Found by Andre, 2026-09-12.
+
+- **Scope:** Move the byte-identical bulk of call 2's question into the shared system turn, in front of the article, and reduce the trailing user turn to a short pointer.
+- **What it saves, priced at the measured rate:** 670 tokens an item is **68 seconds an item, about 23 minutes of a 20-item shard**, at 9.85 tokens a second - **three times what the template gap costs.**
+- **Files touched:** `backend/idhazh/classify/calls.py`, `backend/idhazh/prompts/summarize_and_plan_visual.txt`, `backend/idhazh/prompts/plan_visual.txt`, `backend/idhazh/prompts/label_article_elements.txt`, `backend/tests/test_classify.py`, `backend/tests/test_summarize.py`, `docs/architecture/summarize/prompt.md`, and a benchmark record under `docs/reference/benchmarks/`.
+- **Acceptance gates:** `GATE-PY` over `test_classify.py` and `test_summarize.py`; `GATE-SCHEMA`, which must produce an empty diff because this row edits no contract.
+- **Oracle:** **Two numbers, and the second is what makes this row safe.** First, row #3d's harness reports the "trailing turn behind the article" cause at under 100 tokens an item, down from about 670. Second, over a fixed set of real articles run through both layouts, **the per-kind element counts and the anchoring survival rate hold** - how many elements call 1 proposes, of each kind, and how many of them clear span validation. Those are deterministic counts over a model's output, not a model grading a model.
+- **The risk is real and it is the only one of these rows that can change what the model says.** Call 1 would carry summariser instructions it does not need. Paid once per shard, that is cheap; the objection is not cost but **context dilution on the call least able to absorb it**, because call 1's entire output is addresses into the article. The oracle's second number is what settles it. Andre, 2026-09-12.
+- **What this row does not do:** it moves text between turns and adds no instruction, removes none, and changes no contract, no reply shape and no published surface.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **Not all 670 tokens move.** Part of call 2's turn is already per-item: `call_two_user_turn` substitutes `target_words_min/max` and `key_points_min/max` from `article.band_source_words`. Move the byte-identical bulk in front of the article and leave the band numbers in the trailing turn, where they belong | Andre, 2026-09-12 |
+| 2 | The dilution risk is checked offline and deterministically. Anchoring is already validated by span equality under row #2's oracle, so an invalid element stays impossible by construction; what can move is **which** elements call 1 proposes. If the counts and the survival rate hold, this row is free. If they move, the question is bounded and `information_delta` is the downstream signal row #3 decision 4 already names as the first suspect | Andre, 2026-09-12 |
+| 3 | This row goes after row #3c, not before. Row #3c changes no prompt text, so it lands the instrument clean; this row changes prompt text and needs a floor that is not already off by 209 tokens | Andre, 2026-09-12 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Replace the two-call design rather than tune its layout | **The shape is right; the layout was wrong.** A single call reads the article once and writes about 532 tokens. Two calls cost the same, plus call 2's unread prompt - 896 tokens an item on the first reading, of which rows #3c and #3e remove 879. What is left is chat-template headers, a short pointer and the band numbers: **under 100 tokens an item, about 10 seconds, against 91 seconds today.** A design whose overhead is one percent of a single call's prompt is not one to replace | Andre, 2026-09-12 |
+| 2 | Move the instructions and skip the element-count check | It is the only check standing between this row and a quiet regression in what call 1 points at, and it costs one scripted run over a fixed article set | Andre, 2026-09-12 |
 
 ---
 
