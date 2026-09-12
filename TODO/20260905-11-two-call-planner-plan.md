@@ -109,12 +109,12 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3b | Every call reports its own cost | 3 | C2 | PENDING | - | - | - |
 | 3c | Own the prompt bytes | 6 | - | DEFERRED | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
-| 5 | One chart, drawn end to end | 4 | E | PENDING | - | - | - |
+| 5 | One chart, drawn end to end | 4 | E | DONE #_pending_ | p11-r5 | #_pending_ | worker |
 | 6 | The small model, its job and its cache go | 5 | F | PENDING | - | - | - |
 
-**Four rows are live and three are merged.** Rows 1, 2 and 3 shipped; row 3c is deferred until the first daily run after row 6. **`parallel N = 1`, so no two rows of this plan run at the same time** - rows 4, 5 and 6 are one chain and row 3b is the only row that could have run beside one of them.
+**Three rows are live and four are merged.** Rows 1, 2, 3 and 4 shipped; row 3c is deferred until the first daily run after row 6. **`parallel N = 1`, so no two rows of this plan run at the same time** - rows 4, 5 and 6 are one chain and row 3b is the only row that could have run beside one of them.
 
-**This plan is four live rows and the second-heaviest constraint in the project.** Row #4 blocks 15 of the 58 live rows across the five open plans and row #5 blocks 14, because row #6 is what [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #7b waits on, and eleven rows wait on that. Measured 2026-09-11 over the five plans' own Reckoners; the working is in [`20260911-execution-order.md`](20260911-execution-order.md) section 2. **Row #4 is ready today and nothing is waiting on anybody to start it.**
+**This plan is three live rows and the second-heaviest constraint in the project.** Row #5 blocks 14 of the 58 live rows across the five open plans, because row #6 is what [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #7b waits on, and eleven rows wait on that. Measured 2026-09-11 over the five plans' own Reckoners; the working is in [`20260911-execution-order.md`](20260911-execution-order.md) section 2. **Row #6 is what row #5 unblocks, and nothing else in this plan is waiting on anybody to start it.**
 
 ---
 
@@ -277,7 +277,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 ## 6. Row #5 - One chart, drawn end to end
 
 - **Scope:** One `bar` rendered from a compiled plan through an inline SVG path, so this plan ends with something visible rather than a contract nobody can see.
-- **Files touched:** `backend/idhazh/render/chart.py`, `backend/idhazh/render/write.py`, `backend/idhazh/render/__init__.py`, `frontend/src/lib/components/ItemVisual.svelte`, `backend/tests/test_render.py`, `frontend/tests/item-visual.spec.ts`, `frontend/tests/charts.spec.ts`, `docs/architecture/publishing/visuals.md`. **Named rather than globbed on 2026-09-11**; `backend/idhazh/render/**` is three modules today and `frontend/tests/**` is the whole browser suite.
+- **Files touched:** `backend/idhazh/render/chart.py`, `backend/idhazh/render/write.py`, `backend/idhazh/render/__init__.py`, `backend/utilities/build_canary_day.py`, `backend/tests/test_render.py`, `frontend/tests/item-visual.spec.ts`, `frontend/tests/canaries.spec.ts`, `docs/architecture/publishing/visuals.md`. **Corrected on 2026-09-12, in execution.** The list named `frontend/src/lib/components/ItemVisual.svelte` and `frontend/tests/charts.spec.ts` and neither needed a line: the compiled spec renders to the same SVG class vocabulary the hand-written one does, so the inline carrier plan 01 built already repaints it, and `charts.spec.ts` holds the console's prerendered flow rather than an item's drawing. Two files it did not name were needed instead - `build_canary_day.py`, because the oracle is driven from the canary day and the canary's first chart had to become a compiled one, and `canaries.spec.ts`, which asserts a figure out of that chart's alt text.
 - **Acceptance gates:** `GATE-PY` over `test_render.py`; `GATE-WEB`; `GATE-BROWSER`; and the whole-day check from plan 01. **`CLAUDE.md` section 12 applies in full** - this row changes the published site, so it is smoke-tested in a real browser and the page is confirmed to render with its data file absent.
 - **Oracle:** A published item's drawn bar heights are re-derived in the test from the committed element table and compared to the drawn attributes - so the chart is proved to be showing the article's numbers rather than merely showing numbers. **Driven from the canary day built by `backend/utilities/build_canary_day.py`**, never from the committed archive, per `CLAUDE.md` Rule #12.
 - **What this row does not do:** it draws one `bar` and no second type, it adds no new visual vocabulary, and it changes no planner decision. The renderer swap and the rest of the chart types are plan 12.

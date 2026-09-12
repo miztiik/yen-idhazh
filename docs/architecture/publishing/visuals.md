@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 How an item gets a chart or - most of the time - nothing at all.
 
@@ -863,6 +863,60 @@ began. Deleted 2026-09-05 on the same scan: zero committed items carry a diagram
 The renderer writes SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, beside the
 payload that references it. A render failure records why and the item publishes without a
 picture. No failure path raises.
+
+### One plan becomes one picture, and `compile_bar` is the only thing that draws it
+
+`backend/idhazh/render/chart.py` holds the compiler the plan contract was written for. It takes one
+validated `VisualPlan` and one article's `ElementTable`, resolves every mark through
+`resolve_displayed_values`, and returns the Vega-Lite spec and the alt text together.
+
+**Every number in that spec came out of the article, by construction.** The plan carries element
+references and no figure at all - the shape refuses one - so a bar can only be as long as an element
+the extractor cut out of the article's own characters, or as long as a derived value with a chain
+back to several of them. Nothing in the compiler can reach a number from anywhere else.
+
+**Category `i` names quantity `i`.** The resolver returns each channel in the plan's own order, so
+the pairing is the plan's rather than a rule invented in the compiler, and the bars are drawn in
+that order - `"sort": null`. Re-ranking them here would be the compiler deciding what the comparison
+says.
+
+**One type, and a second is refused by name.** `bar` is what this build draws. Drawing a `line` plan
+as bars because bars are what we have would publish a picture nobody planned, so every other member
+of the vocabulary raises `CompileError` naming itself. The rest of the types are plan 12's.
+
+**The alt text is assembled from the same figures the spec carries**, so the sentence and the
+picture cannot disagree. That is the reason `alt_text` is not a field the model may write.
+
+**The drawn title is `plan.title`, and `caption` is not drawn.** Two prose fields and one slot: the
+field called `title` goes in the slot called `title`, because the alternative is a second spelling
+somebody later has to remember.
+
+**A plan this build cannot draw leaves the item decided to nothing, and that is the contract's
+ruling rather than a shortcut.** `render_failed` means a spec was drawn and the drawing failed, and
+`VisualDecision` refuses a `render_failed` that carries no spec - so a plan that never became a spec
+has nothing to record there. `render_planned_visual` in `render/write.py` is the whole path in one
+call for exactly that reason: the decision arrives as the `none` it is, a successful compile
+promotes it to a `chart` through the contract's own validation, and a caller never has to remember a
+`try`.
+
+**The oracle is the drawn geometry, not the spec.** `backend/tests/test_render.py` renders the
+committed `bar` plan, reads the bar widths out of the SVG's own path data, and divides each one by
+the figure the element table states for that bar - every bar has to return the same number. A spec
+holding the right figures proves the compiler agreed with itself; this proves the picture did. A
+second arm doubles one element's figure in the table and requires that one bar to be drawn twice as
+long with the other three untouched, which is what proportionality alone cannot say.
+
+**The canary day carries one compiled drawing**, built by `backend/utilities/build_canary_day.py`
+from the same committed plan and table, so `frontend/tests/item-visual.spec.ts` re-derives the same
+ratio off the live page. Driven from the canary and never from `frontend/public/digest/`, because a
+test may not cost more as the archive grows (Rule #12). The day's other two drawings stay
+hand-written: they carry a chart with no unit on its axis and a spec the toolchain refuses, and a
+compiled plan produces neither.
+
+**The page needed no change to draw it.** Measured 2026-09-12: the compiled spec renders to the same
+SVG class vocabulary the hand-written one does - `mark-rect`, `mark-text`, `mark-rule`,
+`role-axis-*`, `role-title-text` - and `ItemVisual.svelte` already repaints every one of those from
+the page's own tokens. The inline carrier plan 01 built is the carrier this row uses.
 
 **The name is the item's own id, so a path is a function of the item and of nothing else.**
 `energy-4821903756.svg` - the same `<vertical>-<ten digits>` a reader already lands on as an anchor
