@@ -281,6 +281,7 @@
     "shard_size": 3,
     "shard_timeout_minutes": 90,
     "success_floor_pct": 80,
+    "two_calls_per_item": true,
     "visual_planner_budget_minutes": 25
   },
   "summarize": {
