@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 One question, asked of every read:
 
@@ -489,6 +489,30 @@ and the full working is
 Both are worth more on this page than a clean sweep would have been. A rule whose
 inventory only records the reads that bent to it teaches nothing about the ones
 that will not.
+
+## What a walk over the archive costs a test
+
+`CLAUDE.md` section 13 says a test's cost belongs to the code it checks, never
+to what the pipeline has piled up. This is the measurement behind that
+sentence, and it is the reason the rule is worded as a refusal rather than as
+advice.
+
+Measured 2026-09-05 on an Intel Core i7-1265U, over 16 published days and 6,539
+stories: reading and parsing the whole archive cost 0.15 s, and running the
+function under test on every story cost a further 0.02 s. The two frontend
+checks that assert once per published story cost 270 s and 93 s. So the work
+was never the archive - it was the same handful of cases re-checked tens of
+thousands of times. Those 6,539 stories carried six distinct cases between
+them, which means the corpus stopped teaching anything on about day one while
+the bill went on arriving every four hours.
+
+Two consequences follow, and both are rules in section 13 rather than advice
+here. A per-item rule is driven from a bounded fixture, because a bounded
+fixture can also carry the case the archive has never produced - eleven failure
+causes with a 529-to-1 spread, or a source sitting exactly on a display cap.
+And where the question really is about the whole tree, it is asked once and
+asserted on the total, because the producer already validated every payload at
+write time and a frozen day cannot grow a fault later.
 
 ## Design rationale
 
