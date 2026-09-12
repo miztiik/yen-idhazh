@@ -31,10 +31,10 @@ orchestrator (main thread) worker subagent (when delegated) persona custom agent
 ### The orchestrator (main thread) does exactly this, and only this
 1. Read the queue before adding to it: what is already half-done, and what the tables say is done. Adopt or close it first (below).
 2. Read the plan-doc Section 0 (operating contract) + Section 1 (Status Reckoner).
-3. Select the next dispatchable row(s): every `Depends-on` is `DONE`; rows sharing a `Parallel-group` dispatch together, up to `Parallel N`. Waiting for checks is not a dependency.
+3. Keep `Parallel N` rows in flight, and refill a slot the moment one returns. A row is ready when every `Depends-on` is `DONE` and it shares no `Files touched` entry with a row already running. Dispatch the next ready row straight away - do not wait for the rest of a group, for a sibling's checks, or for a merge. None of those is a dependency.
 4. For a row you are delegating, or one that will run beside another, create an isolated git worktree off `origin/main` and a named branch. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's change). Fill the Status Reckoner `Worktree`. A row you carry yourself, with nothing running beside it, needs no second checkout.
 5. Dispatch a worker subagent (`runSubagent`, default agent) with a self-contained brief (below) for each row delegation buys. Fill `Subagent`; mark `Status = IN-FLIGHT` under the condition below.
-6. Receive the worker's report. Verify its test records and the merge candidate's CI checks against the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md). Do not repeat an unchanged worker check. If a merge changes the tested inputs, select checks for those changed inputs. On green gates, remove the row's worktree and then AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
+6. Receive the worker's report. Verify its test records and the merge candidate's CI checks against the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md). Do not repeat an unchanged worker check. If a merge changes the tested inputs, select checks for those changed inputs. On green gates, remove the row's worktree and then AUTO-merge (`gh pr merge --squash --delete-branch`). **Merging is a step of a row, never a gate on the pool**: the slot freed when the worker returned, so the next ready row is already running while this one's checks, merge and deploy finish.
 7. Confirm the merged diff carried the row's own Reckoner line (below); unblock dependents.
 8. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
@@ -103,7 +103,7 @@ If the harness does not permit a worker to dispatch a nested subagent, the worke
 Every plan-doc carries exactly one execution stamp (author-a-plan.md step 5). It is the line that makes "implement it" sufficient: the executing agent reads it, loads this doc, and follows the contract with no further instruction.
 
 ```
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; parallel N = <n>; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 ```
 
 Drop the `AUTHOR-AND-STOP...` clause once the user authorizes execution.
@@ -112,13 +112,21 @@ A plan-doc carrying an earlier wording of this stamp is run under this doc as it
 
 ## Parallel fan-out
 
-Rows in the same `Parallel-group` are mutually independent and dispatched concurrently, up to `Parallel N` workers, each in its own worktree. A ready row dispatches as soon as its `Depends-on` entries are `DONE`; it does not wait for sibling checks, nor for a long publish or deploy gate on another PR. The orchestrator parallelizes the WORK but serializes the MERGE - one PR at a time, re-checking the next worker's branch against the advanced `main` before its merge - so a green worker never lands on a stale base.
+**`Parallel N` is a running pool, not a wave.** Four slots means four rows in flight, and a slot refills the moment its worker returns - not four dispatched, then a wait for the slowest, then four more. A wave idles every finished slot until the last one lands, and that idle time is the whole of the difference. **The default is 4.**
 
-**A plan claiming its parallel rows touch different files is a claim, not a fact.** Compose every wave by diffing the rows' own `Files touched` lists, never by trusting a sentence that asserts they are disjoint. A 33-row plan stated the rule outright and was wrong on its first wave: three rows shared one stylesheet and three components, two more shared one config file, and a sixth row needed a component a row in a later group had not created yet. The evidence was in the plan the whole time - the file lists disagreed with the sentence above them. Where two ready rows do share a file, serialise them and write the new `Depends-on` into the Status Reckoner, so the next wave reads it instead of re-deriving it.
+**A slot frees when the worker returns its report, not when the row merges.** The writing is finished at that point; the merge is bookkeeping the owner does between dispatches. An owner sitting on a pull request is an owner that should be dispatching.
+
+**Readiness is computed, not read off a letter.** A row is ready when every `Depends-on` is `DONE` and it shares no `Files touched` entry with a row already in flight. `Parallel-group` records which rows the author believed were independent; it is a hint, and the file lists are the fact (below).
+
+Merging stays serialized - one at a time, re-checking the next branch against the advanced `main` - so a green branch never lands on a stale base. **A merge that conflicts or goes red returns that row to its owner, and the pool keeps running.** Reconcile it at the next dependency boundary rather than stopping the line for it.
+
+Measured on this project on 2026-09-12: twelve of the seventeen live plans declared `Parallel N = 1` and the other five declared 2, so there was no pool to refill.
+
+**A plan claiming its parallel rows touch different files is a claim, not a fact.** Check every dispatch against the rows already in flight by diffing their own `Files touched` lists, never by trusting a sentence that asserts they are disjoint. A 33-row plan stated the rule outright and was wrong on its first wave: three rows shared one stylesheet and three components, two more shared one config file, and a sixth row needed a component a row in a later group had not created yet. The evidence was in the plan the whole time - the file lists disagreed with the sentence above them. Where a ready row shares a file with one in flight, hold it and write the new `Depends-on` into the Status Reckoner, so the next dispatch reads it instead of re-deriving it.
 
 ### The workers are parallel; the machine is not
 
-`Parallel N` bounds how many workers WRITE at once. It does not bound what they RUN. Each worker starts its own test suite, its own build and its own browser run the moment it is ready, and on one developer machine those all land on the same cores. Serialise the expensive gates instead - one heavy gate at a time across every worktree, through a lock the project's gate doc names - and leave `Parallel N` where it is, because the writing was never what saturates a box. A gate that finishes in seconds stays unwrapped; serialising a cheap gate only adds waiting.
+`Parallel N` bounds how many workers WRITE at once. It does not bound what they RUN. Each worker starts its own test suite, its own build and its own browser run the moment it is ready, and on one developer machine those all land on the same cores. Serialise the expensive gates instead - one heavy gate at a time across every worktree, through a lock the project's gate doc names - and leave `Parallel N` at its default, because the writing was never what saturates a box. A gate that finishes in seconds stays unwrapped; serialising a cheap gate only adds waiting.
 
 **A gate that fails only under fan-out is a false red.** A suite that times out while siblings hold the cores has measured the box, not the branch. The tell is that the failing test is byte-identical to the base branch and that the project's CI passed the same commit. Re-run it alone before diagnosing it, and never buy the pass with a raised timeout, an added retry or a relaxed assertion - that hides the contention, and the false red returns at the next fan-out.
 

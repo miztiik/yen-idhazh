@@ -36,7 +36,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
  | Hard scope - out | bullets |
  | ESCALATE triggers | enumerated |
  | Chosen strategy | one line + the persona that ruled it |
- | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = <n>.` |
+ | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` Four is the default; a lower number carries its reason on the same line. |
 
 - **Section 1 - Status Reckoner** (the authoritative parallelization + agent-tracking table):
 
@@ -44,7 +44,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
 
  - `#` integer ordinal.
  - `Depends-on` lists `#` values that must be DONE before this row can start; `-` means no predecessor.
- - `Parallel-group` is a letter; rows sharing a letter are mutually independent and dispatched together.
+ - `Parallel-group` is a letter recording which rows the author believed were independent. It is a hint, not the dispatcher's input: a row is ready when its `Depends-on` are `DONE` and its `Files touched` list is disjoint from every row in flight ([execute-a-plan.md](execute-a-plan.md#parallel-fan-out)).
  - `Status` starts `PENDING`, flips through `IN-FLIGHT` to `DONE` or `COLLAPSED` (with cited rationale). Write `DONE #<pr>` when the row shipped on a pull request of its own.
  - `Worktree` is the isolated absolute path the row was carried on, or `-` when it was carried in its owner's own checkout.
  - `Subagent` names the agent the row was delegated to, or `-` when its owner carried it directly.

@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md) | next [`20260905-22-distil-and-close-plan.md`](20260905-22-distil-and-close-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O12, O16, O41, rows 64, 65, 66, 67, 68, sections 12.10, 12.13 G34, G38, 12.14 G41, G42, G44, E1, M6.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | Any label feeding a publish decision. Pooling machine verdicts with human ones. Summary faithfulness labelling by a model - that stays human-only. Shipping `review/` with the site |
 | ESCALATE triggers | 1. A label reaches a publish gate. 2. Machine and human verdicts land in one ledger. 3. Weight fitting is proposed without all four guardrails - **a fitter without them is a number that moves every month with no way to separate improvement from noise.** 4. `components_version` and `weight_version` would move in the same release |
 | Chosen strategy | Build the surface, then the contract that keeps machine and human apart, then the modes, then the fitting - each with the guardrail that makes it honest rather than merely present |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 **The risk this plan carries and does not hide.** As of the source document's own measurement, **0 of 60 drawn rows carried a human label.** Two advisors proposed deferring the fitter, the pairwise page and the timed arm on exactly that ground and were overruled on scope. The labelling capacity is therefore the standing risk, and the four-phase manual in row 6 is what makes it visible rather than discovered late.
 

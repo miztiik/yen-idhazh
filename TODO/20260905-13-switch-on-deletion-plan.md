@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) | next [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O8, O9, section 9 whole, rows 59, 61, 62, E3, E4.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | Any change to what is drawn. Any ledger fold beyond what already exists. Deleting anything that is not a rendered visual - the day payload, the eval ledger and the labels are never deleted by age |
 | ESCALATE triggers | 1. A dry run's candidate list contains any path that is not a rendered visual. 2. The candidate count on the first real run exceeds `max_deletes_per_run`, meaning the backlog is larger than one run can clear and the window needs re-deriving before the fuse comes out. 3. The measured rate says the alarm is under 30 published days away - that is an incident, and deletion by age is the wrong instrument for it |
 | Chosen strategy | Write the doc against behaviour that runs, set the window, then flip the fuse and watch one real run. **The new renderer must already have shipped**, or flipping the fuse deletes a year of drawings from an engine that has been replaced, with a 200-item cap the only bound |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 **Age-based deletion is an archive policy, not a cap defence, and this plan does not pretend otherwise.** The defences that act on the cap's timescale are the coverage rate, the per-visual byte cap in plan 14, and the off-bundle base URL plan 04 built. Thirteen months of retention is about published day 395; the console page crosses its own ceiling on published day 16. The two problems only look related.
 
