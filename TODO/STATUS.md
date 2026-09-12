@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 6 | 3 | 3 | 3 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 12 | 7 | 5 | 0 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 12 | 8 | 4 | 0 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 0 | 3 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -42,7 +42,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #3c | 11 | C4 | Own the prompt bytes | p11-3c |
+| #3e | 11 | C5 | The instructions move in front of the article | p11-3e |
 
 ## Ready now - 29
 
@@ -82,7 +82,7 @@ section 3 is where it is answered.
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 | #1 | 26 | A | What prerendering actually weighs, both arms | - |
 
-## Waiting on another row - 78
+## Waiting on another row - 77
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -91,9 +91,8 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #3e | 11 | C5 | The instructions move in front of the article | 3c is IN-FLIGHT |
 | #3f | 11 | C6 | The window is sized for two calls | - |
-| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 3e is PENDING |
+| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 3e is IN-FLIGHT |
 | #6 | 11 | F | The small model, its job and its cache go | 5b is PENDING |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
