@@ -4,18 +4,19 @@ name: Pages publication
 # fetches, and nothing here runs a model (Guardrail #1).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - 'config/idhazh.json'
-      - 'state/**'
-  # The daily run commits the day with GITHUB_TOKEN, and GitHub deliberately does
-  # not let one workflow's push trigger another. Without this the digest would
-  # land in the repository every morning and never reach a reader - the failure
-  # mode where everything is green and the site is yesterday's.
+  # Publication follows a verdict, never a push. A push reaches this workflow at
+  # the same moment it reaches CI, so it publishes before anything has said the
+  # commit is sound - and since `scope` answers from each push's own paths, the
+  # run that would have caught it may not even be the next one.
+  #
+  # Two workflows can produce that verdict. CI verifies one commit, and this
+  # publishes that same commit. The daily run validates the day it built before
+  # committing it, and its own pushes start no CI at all - GitHub deliberately
+  # does not let one workflow's push trigger another - so it reports here
+  # directly, which is what stops the digest landing every morning and never
+  # reaching a reader.
   workflow_run:
-    workflows: [Content refresh]
+    workflows: [CI, Content refresh]
     types: [completed]
   workflow_dispatch:
 
@@ -31,11 +32,73 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Which commit to publish, and whether it is worth publishing at all. GitHub
+  # cannot filter a `workflow_run` trigger by conclusion, so the filter lives
+  # here - and it applies to CI only. A failed CI run has judged the commit and
+  # said no. A failed daily run has not: the job that writes a day runs
+  # `validate-days` before its own commit, so the day is verified by its
+  # producer, and a sibling job failing afterwards does not unvalidate it.
+  # Holding it back would leave a good day unpublished for up to four hours
+  # (`docs/reference/data-growth-audit.md`).
+  decide:
+    if: >-
+      github.event_name != 'workflow_run'
+      || github.event.workflow_run.name != 'CI'
+      || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ref: ${{ steps.pick.outputs.ref }}
+      publish: ${{ steps.relevant.outputs.publish }}
+    steps:
+      # CI verified one commit, so that commit is what publishes - not whatever
+      # the tip happens to be by the time this runs. The daily run is the other
+      # way round: its `head_sha` is the commit it STARTED from, and the day it
+      # wants published is the commit it made afterwards, so that path takes the
+      # branch tip.
+      - id: pick
+        env:
+          TRIGGER: ${{ github.event.workflow_run.name }}
+          VERIFIED: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "${TRIGGER:-}" = "CI" ]; then
+            echo "ref=$VERIFIED" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.pick.outputs.ref }}
+          fetch-depth: 2
+
+      # New data is the whole reason the daily path exists, so it always
+      # publishes. A verified commit publishes only when it can move what a
+      # reader is served - the same three paths the push trigger used to filter
+      # on, asked after the verdict now rather than before it.
+      - id: relevant
+        env:
+          TRIGGER: ${{ github.event.workflow_run.name }}
+        run: |
+          set -euo pipefail
+          if [ "${TRIGGER:-}" != "CI" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet HEAD^1 HEAD -- frontend config/idhazh.json state; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: decide
+    if: needs.decide.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.decide.outputs.ref }}
 
       - uses: actions/setup-node@v7
         with:

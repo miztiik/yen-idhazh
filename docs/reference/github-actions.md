@@ -11,14 +11,26 @@ times are UTC.
 | --- | --- | --- | --- |
 | `ci.yml` | `CI` | Pull request; push to `main` | yes |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | yes |
-| `pages.yml` | `Pages publication` | Push to `main` when `frontend/**`, `config/idhazh.json`, or `state/**` changes; completed `Content refresh` run | yes |
+| `pages.yml` | `Pages publication` | Completed `CI` run that succeeded; completed `Content refresh` run | yes |
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
 
-An ordinary pull request starts CI only. A merge or direct push to `main`
-starts CI, and starts Pages publication only when its path filter matches.
+An ordinary pull request starts CI only. A merge or direct push to `main` starts
+CI, and **publication follows CI's verdict rather than the push**: a push reaches
+both workflows at the same moment, so publishing on the push would publish
+before anything had judged the commit. When CI succeeds, `pages.yml` publishes
+the exact commit CI verified - not the branch tip, which may have moved - and
+only when that commit touches `frontend/**`, `config/idhazh.json` or `state/**`.
+
+The daily path is not gated on a conclusion, and that is deliberate. The job
+that writes a day runs `validate-days` before its own commit, so the day is
+verified by its producer; a sibling job failing afterwards does not unvalidate
+it, and refusing to publish would leave a good day unread for up to four hours.
+That path publishes the branch tip rather than the triggering commit, because a
+run's `head_sha` is the commit it started from and the day it wants published is
+the commit it made afterwards.
 
 `measure-migrated-tree.yml` was on this list and it is gone. It ran once, on
 2026-09-08, to answer what the site would weigh once the prerendered dated
@@ -103,9 +115,11 @@ how many runs happen, and this page is where that is written down.
 flowchart LR
  PR["ordinary pull request"] --> CI["CI<br/>ci.yml"]
  PUSH["merge or push to main"] --> CI
- PUSH --> FILTER{"Pages path changed?"}
+ CI --> VERDICT{"CI succeeded?"}
+ VERDICT -->|"no"| NO_PAGES["no Pages run"]
+ VERDICT -->|"yes"| FILTER{"Pages path changed?"}
  FILTER -->|"yes"| PAGES["Pages publication<br/>pages.yml"]
- FILTER -->|"no"| NO_PAGES["no Pages run"]
+ FILTER -->|"no"| NO_PAGES
  REFRESH_DONE["Content refresh completed"] --> PAGES
  PAGES --> STATIC["static GitHub Pages bundle"]
 ```
