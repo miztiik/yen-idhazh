@@ -122,7 +122,12 @@ FRONT_PAGE = SalienceFeedDef(
     url=FRONT_PAGE_URL,
 )
 
-AI = VerticalDef(id="ai", display_name="AI", min_feeds=3)
+#: Every entry a vocabulary offers carries its definition, so a taxonomy built
+#: from these is one `config.load` can read back off disk
+#: (`docs/concepts/taxonomy.md`).
+DEFINITION = "A fixture desk, defined so the vocabulary it sits in still validates."
+
+AI = VerticalDef(id="ai", display_name="AI", min_feeds=3, definition=DEFINITION)
 
 #: A fixed morning. Every date in the fixtures is placed relative to it.
 NOW = "2026-08-22T06:00:00Z"
@@ -398,7 +403,7 @@ def test_a_vertical_below_its_feed_floor_is_counted_but_renders_nothing() -> Non
 
 def test_a_second_vertical_with_no_feeds_still_appears_in_the_plan() -> None:
     """A desk that planned nothing is a fact about the day, not an absence."""
-    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=3)
+    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=3, definition=DEFINITION)
     built = plan([LAB, TRADE, COMMUNITY], verticals=[AI, energy])
     assert [vertical.id for vertical in built.verticals] == ["ai", "energy"]
     assert built.verticals[1].eligible_feeds == 0
@@ -442,7 +447,7 @@ def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
 
 def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(caplog: pytest.LogCaptureFixture) -> None:
     """One address may arrive through two desks. It still gets one planned item."""
-    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=1)
+    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=1, definition=DEFINITION)
     caplog.set_level("INFO", logger="idhazh")
 
     built = plan(
@@ -600,7 +605,7 @@ def test_a_date_too_far_in_the_future_is_not_a_date() -> None:
     and it is replaced rather than dropped - a bad date is not a reason to lose
     a story. `max_per_source` is 2, so the oldest of the three does not land.
     """
-    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2)
+    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2, definition=DEFINITION)
     built = plan([FORWARD, TRADE], verticals=[pair])
     dated = {item.title: item.published_at for item in built.items}
     assert dated["Datacentre build announced for the northern corridor"] == NOW, (
@@ -725,7 +730,7 @@ def test_a_date_too_far_ahead_is_labelled_as_our_clock_not_the_feeds() -> None:
     the reader sees is `NOW`, and without the label nothing on the payload says
     it is ours rather than the publisher's.
     """
-    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2)
+    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2, definition=DEFINITION)
     built = plan([FORWARD, TRADE], verticals=[pair])
     labelled = {item.title: item.time_source for item in built.items}
     assert (
