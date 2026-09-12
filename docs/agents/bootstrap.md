@@ -2,61 +2,48 @@
 
 **Last Updated**: 2026-09-12
 
-What to load before answering. The guardrails - what not to do - are section 1
-of [`CLAUDE.md`](../../CLAUDE.md), so the contract is the whole of the load.
+What to read before answering. Not a ritual - a routing table. Read the page
+that owns what you are about to change, and stop.
 
-Every persona runs this - through Claude Code (`.claude/skills/bootstrap`) or VS
-Code Copilot Chat (`.github/agents/*.agent.md`). ASCII only in agent markdown:
-`-`, `->`, `>=`, "section".
+ASCII only in agent markdown: `-`, `->`, `>=`, "section".
 
-## The ritual
+## Start at the change
 
-1. **[`CLAUDE.md`](../../CLAUDE.md), end to end.** The contract, and the only
- file that carries a guardrail. Know which of Guardrails #1-#12 are
- load-bearing here and cite them by number. Section 0d (intent above the
- contract, the contract above code) and the section 1 preamble are read
- first, every session. Section 0a is the non-goals, section 6 the escalation
- levels, section 8 the git hygiene.
-2. **The subsystem doc for the surface you are touching**, under
- `docs/architecture/<area>/`. Do not critique what you have not read.
-3. **The concept doc that owns the idea**, under `docs/concepts/`. Design
- rationale and rejected alternatives live on those pages, not in a decisions
- folder.
-4. **The active plan-doc under `TODO/`**, if the task touches it.
-5. **`git log --oneline -20`**, for in-flight work that overlaps.
-6. **Say which guardrails and which docs are load-bearing**, in your first paragraph.
- That makes the load explicit and easy to challenge.
-7. **An answer that would decline on a limitation is not finished until it
- names a next move** - do it, price it, or say what would settle it
- (`CLAUDE.md` section 0d).
+Start at the file, the behaviour, or the failing check you were given. Material
+already in front of you counts as read; re-reading it to prove you did costs the
+user the answer they asked for.
 
-## When it is mandatory
+Then read the one page that owns the thing you are changing.
 
-Any persona invocation. Any task crossing two or more of `backend/`,
-`frontend/`, `config/`, `schemas/`, `state/`. Anything at Correction Level 2 or
-higher (`CLAUDE.md` section 6).
+| What you are changing | What owns it |
+| --- | --- |
+| A persisted shape - a payload, a ledger, a config, a schema | `CLAUDE.md` section 11, then the model under `backend/idhazh/contracts/` |
+| A published page | [`../concepts/design-system.md`](../concepts/design-system.md), and the surface's own code |
+| A prompt, a model, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |
+| A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
+| Anything whose cost grows as the repository grows | [`../concepts/growing-reads.md`](../concepts/growing-reads.md) |
+| Anything you cannot place | [`../reference/documentation-structure.md`](../reference/documentation-structure.md) says who owns what |
 
-Skip it for a Level-0 or Level-1 change inside one file, and for a read-only
-question that proposes nothing.
+[`CLAUDE.md`](../../CLAUDE.md) is the contract. Read the section that bears on
+the change. The whole file is not a prerequisite for a one-line fix, and
+treating it as one is how a small change costs an hour.
 
-## Autonomous execution - AUTO is the default
+## What every answer owes
 
-When a user authorises autonomous execution of a plan-doc:
+- Plain language, the answer first (`CLAUDE.md` section 0b).
+- A decision request carries options, each with its cost, and one recommendation
+ (section 0c).
+- A limitation named with no next move is unfinished: do it, price it, or say
+ what would settle it (section 0d).
+- Cite a rule where it changed the decision. A list of rules you honoured is not
+ an answer, and writing one is how an answer gets longer without getting
+ better.
 
-- **AUTO every row.** Do the work, run the Definition of Done (`CLAUDE.md`
- section 9), `gh pr merge --squash --delete-branch`, take the next row. No
- draft-and-wait, no mid-row pause for approval.
-- **Do not idle on checks.** A ready independent row dispatches while sibling
- checks are still running. Merges stay green-gated and one at a time.
-- **Personas gather facts.** Their verdicts inform the action; they are not an
- approval surface.
-- **ESCALATE only** for a contract-changing design proposal, an unresolved
- persona conflict, a Level-5 trigger, or a 3x cost overrun.
-- **If the user goes quiet**, stay in scope. Do not invent scope and do not
- quietly shrink it.
+## When a specialist is worth calling
 
-This is the autonomy policy. The orchestration mechanics - worktrees, fan-out,
-closure - are in [`../how-to/execute-a-plan.md`](../how-to/execute-a-plan.md).
+When two defensible answers would lead to different code and the difference
+matters. Not as a gate, not for coverage, and not one per surface touched. The
+seven and what each one rules are in `CLAUDE.md` section 14.
 
 ## See also
 
