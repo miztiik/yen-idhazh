@@ -148,7 +148,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | What prerendering actually weighs, both arms | - | A | IN-FLIGHT | p26-1 | - | worker |
+| 1 | What prerendering actually weighs, both arms | - | A | DONE #645 | p26-1 | #645 | worker |
 | 2 | The guard retires, and nothing a reader sees moves | - | A | DONE #613 | p26-r2 | #613 | worker |
 | 3 | The three surfaces that say every route is prerendered | - | B | DONE #614 | p26-r3 | #614 | worker |
 | 4 | The ruling, written where the next person arrives | 1, 2 | B | PENDING | - | - | - |
