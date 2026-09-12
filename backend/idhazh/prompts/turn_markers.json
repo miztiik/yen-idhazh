@@ -1,0 +1,6 @@
+{
+  "reply_opening": "<|im_start|>assistant\n<think>\n\n</think>\n\n",
+  "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
+  "turn_closing": "<|im_end|>\n",
+  "turn_opening": "<|im_start|>$role\n"
+}

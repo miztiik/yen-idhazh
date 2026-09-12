@@ -1112,8 +1112,8 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         """The cached prefix a gated item reuses is the one an ungated item reuses.
 
         Every difference sits after the system turn, the article and call 1's
-        reply, so the floor row #3 measured - call 2 caching at least call 1's
-        whole prompt - is the same floor for both.
+        reply, so both prompts open with call 1's prompt and its reply and only
+        the trailing turn differs.
         """
         first = call_one_payload(article_ok)
         reply = read_text(FIXTURES_DIR / "completions" / "call-one" / "labelled.json")
@@ -1123,10 +1123,12 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         suppressed = build_call_two_request(
             first, reply, source_words=article_ok.band_source_words, plan=False
         )
+        shared = first["prompt"] + reply
 
-        assert whole["messages"][:-1] == suppressed["messages"][:-1]
-        assert whole["messages"][-1] != suppressed["messages"][-1]
-        assert suppressed["max_tokens"] == SUPPRESSED_BUDGET_TOKENS
+        assert whole["prompt"].startswith(shared)
+        assert suppressed["prompt"].startswith(shared)
+        assert whole["prompt"][len(shared) :] != suppressed["prompt"][len(shared) :]
+        assert suppressed["n_predict"] == SUPPRESSED_BUDGET_TOKENS
 
     def test_the_summary_half_of_the_turn_is_the_same_bytes_either_way(self) -> None:
         """One template, substituted in or out, so the two halves cannot drift."""

@@ -1,0 +1,15 @@
+{
+  "note": "The model's own chat template, applied by the server that would answer the request, recorded so an offline test can check our turn markers against it. One run, one build, one weights file - the fields below say which.",
+  "recorded_on": "2026-09-12",
+  "runtime_build": "b10444-5f754ea0e",
+  "weights_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+  "chat_template_sha256": "7f0e529032c25183bcd66c7f238da2d377f43be754a94e2725a58c4e16d2ed67",
+  "chat_template_characters": 7816,
+  "system": "You label what one item says. Answer with JSON and nothing else.",
+  "user": "Title: A note\n\nThe item, one sentence per line:\n[s0] It rained.",
+  "reply": "{\"labels\": [], \"keyphrases\": [\"rain\"]}",
+  "question": "Now write the summary.",
+  "generation_prompt": "<|im_start|>system\nYou label what one item says. Answer with JSON and nothing else.<|im_end|>\n<|im_start|>user\nTitle: A note\n\nThe item, one sentence per line:\n[s0] It rained.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+  "generation_prompt_thinking": "<|im_start|>system\nYou label what one item says. Answer with JSON and nothing else.<|im_end|>\n<|im_start|>user\nTitle: A note\n\nThe item, one sentence per line:\n[s0] It rained.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+  "continued_prompt": "<|im_start|>system\nYou label what one item says. Answer with JSON and nothing else.<|im_end|>\n<|im_start|>user\nTitle: A note\n\nThe item, one sentence per line:\n[s0] It rained.<|im_end|>\n<|im_start|>assistant\n{\"labels\": [], \"keyphrases\": [\"rain\"]}<|im_end|>\n<|im_start|>user\nNow write the summary.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+}

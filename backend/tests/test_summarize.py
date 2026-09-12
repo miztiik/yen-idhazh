@@ -77,6 +77,8 @@ from idhazh.summarize import (
 
 COMPLETIONS = FIXTURES_DIR / "completions"
 LLM_ERRORS = COMPLETIONS / "errors"
+#: One reply off the rendered-completion route, which names its fields its own way.
+RENDERED_REPLY = COMPLETIONS / "rendered" / "call-one.json"
 FINGERPRINT = "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
 GENERATED_AT = "2026-08-21T06:12:53Z"
 
@@ -252,13 +254,22 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
 
 
 def test_server_argv_names_the_port_it_was_given() -> None:
-    """One declaration reaches the flag, the client address and the probes.
+    """One declaration reaches the flag, both client addresses and the probes.
 
     `DEFAULT_PORT` is what `LLAMA_PORT` sets, so the test reads it rather than
-    restating 8080 - a second literal here is the defect this row removed.
+    restating 8080 - a second literal here is the defect this row removed. Both
+    routes are checked: one server answers the chat shape and the rendered shape
+    on the same port, and an address that drifted would fail every item as
+    "model unreachable".
     """
     from idhazh.contracts.app_config import ModelRef
-    from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
+    from idhazh.llm.server import (
+        DEFAULT_COMPLETION_ENDPOINT,
+        DEFAULT_ENDPOINT,
+        DEFAULT_PORT,
+        completion_url,
+        props_url,
+    )
 
     argv = server_argv(
         binary=Path("bin/llama-server"),
@@ -270,6 +281,50 @@ def test_server_argv_names_the_port_it_was_given() -> None:
 
     assert argv[argv.index("--port") + 1] == "8181"
     assert f":{DEFAULT_PORT}/" in DEFAULT_ENDPOINT
+    assert f":{DEFAULT_PORT}/" in DEFAULT_COMPLETION_ENDPOINT
+    assert completion_url(DEFAULT_ENDPOINT) == DEFAULT_COMPLETION_ENDPOINT
+    assert completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"
+    assert props_url(DEFAULT_COMPLETION_ENDPOINT) == props_url(DEFAULT_ENDPOINT)
+
+
+class TestTheRenderedCompletionEnvelope:
+    """The second shape `parse_completion` reads, from a reply a server really sent.
+
+    Recorded 2026-09-12 by posting the committed call-one prompt to llama-server
+    build b10444-5f754ea0e on the weights `models.summarize` declares, over its
+    rendered-completion route. Nothing is hand-written: the route names its
+    fields differently from the chat route, and a fake would agree with whatever
+    the reader happened to expect (Guardrail #7).
+    """
+
+    def test_the_counts_come_off_the_fields_this_route_names(self) -> None:
+        completion = parse_completion(read_text(RENDERED_REPLY))
+
+        assert completion.content.startswith('{\n  "labels"')
+        assert completion.prompt_tokens == 1551
+        assert completion.completion_tokens == 96
+        assert completion.cached_tokens == 0
+        assert completion.decode_ms == 39370
+
+    def test_the_routes_budget_word_becomes_the_one_the_ledger_carries(self) -> None:
+        """`limit` here, `length` on the chat route, one meaning.
+
+        `Summary` and `recovered_completion` both key on `hit_the_budget`, so a
+        route whose word went unmapped would publish a cut reply as a finished
+        one.
+        """
+        completion = parse_completion(read_text(RENDERED_REPLY))
+
+        assert completion.finish_reason == "length"
+        assert completion.hit_the_budget
+
+    def test_this_route_never_splits_a_reasoning_channel_out(self) -> None:
+        """A property rather than a gap: there is no template here to split one."""
+        assert not parse_completion(read_text(RENDERED_REPLY)).reasoned
+
+    def test_an_envelope_that_is_neither_shape_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="neither a choice nor a completion"):
+            parse_completion('{"timings": {}}')
 
 
 def test_exactly_one_function_spells_a_llama_server_flag() -> None:
