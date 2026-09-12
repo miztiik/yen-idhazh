@@ -110,7 +110,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3d | The instrument says where every re-read token went | 3b | C3 | DONE #639 | p11-3d | #639 | worker |
 | 3c | Own the prompt bytes | 3d | C4 | DONE #640 | p11-3c | #640 | worker |
 | 3e | The instructions move in front of the article | 3c | C5 | DONE #644 | p11-3e | #644 | worker |
-| 3f | The window is sized for two calls | 3d | C6 | BLOCKED | - | - | - |
+| 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | PENDING | - | - | - |
 | 3g | Call 1's reply does not fit its own budget | - | C7 | PENDING | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
@@ -330,7 +330,9 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 
 ## 4e. Row #3f - The window is sized for two calls
 
-**Added 2026-09-12 by row #3d's worker, and BLOCKED on an owner decision.** Row #3d rendered both prompts on the configured weights through the configured server and found that **at the configured truncation cap the two calls do not fit the window.** Nothing is wrong today: the longest article the committed corpus holds is 3,846 words, half the cap's length, so no real item has reached the wall. It bites the first time a long article arrives, and it bites silently.
+**Added 2026-09-12 by row #3d's worker. UNBLOCKED the same day: the owner authorised `n_ctx = 32768` - "if needed increase to 32k n_ctx not a problem - approved" - under `CLAUDE.md` section 0.** That answers the person this row was waiting on and settles which of the options below it takes. **Two things the authorisation did not do, and the row still owes both.** It did not measure memory: raising the window on a 16 GB runner is still a Guardrail #2 question, so this row takes a KV-cache reading at 32,768 before it changes a byte, and reports what the run would use. And it did not retire the window's place in the digest, so this row waits on plan 23 row #1a - once writers stop setting `pipeline_fingerprint`, an `n_ctx` change no longer stamps every summary before it apart from every summary after, which was half of why alternative 2 was refused.
+
+Row #3d rendered both prompts on the configured weights through the configured server and found that **at the configured truncation cap the two calls do not fit the window.** Nothing is wrong today: the longest article the committed corpus holds is 3,846 words, half the cap's length, so no real item has reached the wall. It bites the first time a long article arrives, and it bites silently.
 
 | Term | Tokens | Where it comes from |
 | --- | --- | --- |
@@ -344,7 +346,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 - **Scope:** An assertion that sizes the **two-call** sequence from `config/` on both sides, and a named reason for the refusal when it does not fit.
 - **Two things are wrong and the second is the one that matters.** `backend/tests/test_contracts.py::test_the_longest_article_the_cap_allows_still_fits_the_window` sizes 997 + 12,191 + 900 = 14,088 and passes, and `qualify.py` refuses on `prompt_tokens + max_output_tokens > n_ctx`; both size the single call this plan is replacing. And with `--no-context-shift` the overflow is not an error: the decode stops at the wall, `recovered_completion` salvages the summary, the item publishes with `decision = none`, and **no counter says the window was the reason.** Row #4 built the `none_reason` enum on exactly that argument - a refusal indistinguishable from another's explains nothing - and the window has no member in it.
 - **The only shape that fits at the cap is the one with the picture already suppressed.** `SUPPRESSED_BUDGET_TOKENS` is 905, so 15,404 + 905 = 16,309 of 16,384 - **75 tokens of margin, 0.46 percent.** The reachability gate is doing the window's job by accident, and 75 tokens is luck rather than a margin. It goes the first time any bound moves.
-- **What this row does not do:** it does not raise `n_ctx`, lower the cap or narrow the reply. Those are the owner's options below and every one of them changes a contract.
+- **What this row does not do:** it does not lower the cap or narrow the reply. **It does raise `n_ctx` to 32,768**, which the owner authorised on 2026-09-12, and the other two remain out of scope.
 
 ### Decisions
 
@@ -359,7 +361,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Wire the calls up behind the flag and find out on the first real run | A shard of wall clock spent discovering what a token count already said, and a known defect carried into a run | Andre, 2026-09-12 |
-| 2 | Raise `n_ctx` from 16,384 to 24,576 inside this row | Memory on a 16 GB runner that nobody has measured, and the window is fingerprint-digested, so every summary written before it is stamped apart from every summary after. Guardrail #2 is surfaced and never adapted by an agent | Andre, 2026-09-12; `CLAUDE.md` Guardrail #2 |
+| 2 | Raise `n_ctx` from 16,384 to 24,576 inside this row | **Overturned by the owner on 2026-09-12, at 32,768 rather than 24,576.** The two objections stood on their own terms: memory on a 16 GB runner that nobody has measured, and a window that is fingerprint-digested, so every summary written before it is stamped apart from every summary after. **Neither was an argument against the raise; both were work the raise had to carry**, and the owner has now bought it. So this row takes the memory reading itself and waits on plan 23 row #1a for the stamp. Guardrail #2 is still surfaced and never adapted by an agent - it was surfaced, and a person answered | Andre, 2026-09-12; overturned by the owner, 2026-09-12, `CLAUDE.md` sections 0 and 0d |
 
 ---
 
