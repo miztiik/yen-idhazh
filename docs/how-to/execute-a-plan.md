@@ -2,9 +2,9 @@
 
 **Last Updated**: 2026-09-12
 
-The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
+The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
-Run the `bootstrap` skill first. When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "section".
+When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "section".
 
 ## The model: an orchestrator that never codes, and disposable workers that do
 
@@ -69,8 +69,8 @@ closure uses documentation checks and CI, not a fresh local application suite.
 The cost of leaving it until afterwards is that nothing carries the update - it belongs to a step that runs after the only artefact anybody reviews has already merged, so an orchestrator that dies, is interrupted, or simply moves on leaves a row that is finished and a table that says it is not. Measured 2026-09-11: the first row executed under this contract merged in a pull request that touched no Reckoner line, and hours later that row still read `PENDING` with an empty `PR` column while the work was on the trunk. The instruction to flip it was written down and read by the agent that failed to do it, which is the finding worth keeping - **wording alone did not hold, so the update moved inside the diff that is reviewed.** Step 7 above verifies rather than performs it, and the project's plan-queue reader fails when a merged pull request names a row that never learned it landed.
 
 ### The worker subagent (one per row) does the actual work
-Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected alternatives) plus the standing instruction: run bootstrap, honor CLAUDE.md, stay in scope, consult personas on ambiguity, return a report. The worker:
-1. Runs bootstrap; reads the row + the docs its surface touches.
+Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected alternatives) plus the standing instruction: read the page that owns the surface, honor CLAUDE.md, stay in scope, consult personas on ambiguity, return a report. The worker:
+1. Reads the row, and the page that owns each surface it touches ([../agents/bootstrap.md](../agents/bootstrap.md) routes).
 2. Implements the row end-to-end: code + tests at the tier that matches the surface (CLAUDE.md section 13) + the docs update.
 3. Resolves ambiguity by consulting personas (below), baking the ruling into the code.
 4. Runs the row's Oracle and the local checks selected by the project's gate guide. Leaves full-suite checks assigned to CI there; a list of acceptance gates is not an instruction to repeat every CI job locally. Records the tested inputs, selection, result and test counts. An active check is followed to completion, never launched again because its output is quiet.
@@ -120,6 +120,8 @@ Rows in the same `Parallel-group` are mutually independent and dispatched concur
 
 AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md section 6), a new `## Design rationale` that would change a persisted contract, an unresolved persona conflict, a scope change (-> [handle-scope-change.md](handle-scope-change.md)), or a 3x cost overrun. Otherwise the orchestrator advances without asking.
 
+**If the user goes quiet, stay in scope.** Do not invent scope, and do not quietly shrink it. Silence is not a new instruction.
+
 ## Closure
 
 When every row is `DONE` / `COLLAPSED`: run [distill-a-plan.md](distill-a-plan.md) for each closed row, confirm the Status Reckoner is fully resolved, and delete the plan-doc once fully distilled (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)).
@@ -131,7 +133,7 @@ Remove the checkout and keep the branch whenever the branch still holds a commit
 ## See also
 
 - [author-a-plan.md](author-a-plan.md) - authoring the plan this doc runs; the plan-doc structure + Status Reckoner columns (`Worktree`, `Subagent`) this contract fills.
-- [../agents/bootstrap.md](../agents/bootstrap.md) - the autonomy POLICY (AUTO default, escalation) this doc mechanizes.
+- [../agents/bootstrap.md](../agents/bootstrap.md) - what to read before answering, and what every answer owes.
 - [distill-a-plan.md](distill-a-plan.md) - lifting findings into canonical docs after a row merges.
 - [handle-scope-change.md](handle-scope-change.md) - STOP-AND-SURFACE when scope shifts mid-row.
 - [ship-a-pr.md](ship-a-pr.md) - the PR lifecycle the orchestrator runs at merge.
