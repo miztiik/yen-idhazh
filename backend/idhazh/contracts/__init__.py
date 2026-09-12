@@ -54,9 +54,7 @@ from idhazh.contracts.sources import FeedDef, SalienceFeedDef, SourceForm, Sourc
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import (
     EventDef,
-    EventType,
     LensDef,
-    LensId,
     Lifecycled,
     LifecycleStatus,
     SourceTier,
@@ -91,13 +89,11 @@ __all__ = [
     "EvalRow",
     "EvaluationConfig",
     "EventDef",
-    "EventType",
     "ExtractConfig",
     "FeedDef",
     "FingerprintRow",
     "InferenceConfig",
     "LensDef",
-    "LensId",
     "LifecycleStatus",
     "Lifecycled",
     "LogLevel",

@@ -29,7 +29,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import EventType, LensId, SourceTier
+from idhazh.contracts.taxonomy import SourceTier
 
 # Structural bounds on untrusted text that reaches a page or a log line. Not a
 # tunable: the extraction caps a reasonable operator would move live in config.
@@ -53,6 +53,26 @@ class Article(Contract):
 
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T03:55",
+            change=(
+                "lenses and events are lists of Slug rather than of the closed LensId "
+                "and EventType enums, which are deleted. The schema gates the slug "
+                "pattern and no longer enumerates the members."
+            ),
+            why=(
+                "A lens id was a Python enum member, so adding or retiring a word was a "
+                "code change, a schema regeneration and a release. The vocabulary is "
+                "config/taxonomy.json and nothing else, and the tagger can only ever "
+                "emit a key of the mapping that file builds - so the type can widen "
+                "without letting anything invent a label (Rule #11). Read-compatible: "
+                "every id any payload on disk carries is a well-formed slug, so this "
+                "build reads every one of them, and a re-run of a stage against a "
+                "payload an older build wrote produces the same tags. The break is on "
+                "the write side, where the schema stops refusing a word the vocabulary "
+                "has gained (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27",
             change="failure_code may now carry copied_source or leaked_address.",
@@ -118,8 +138,8 @@ class Article(Contract):
     )
 
     vertical: Slug
-    lenses: list[LensId] = Field(default_factory=list)
-    events: list[EventType] = Field(default_factory=list)
+    lenses: list[Slug] = Field(default_factory=list)
+    events: list[Slug] = Field(default_factory=list)
     entities: list[Slug] = Field(default_factory=list)
     carried_by: int = Field(
         default=1, ge=1, description="Independent sources that carried this story today."

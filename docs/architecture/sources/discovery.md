@@ -38,7 +38,7 @@ The count changed on 2026-09-02 and the earlier figures are not comparable: unti
 
 **There is no per-vertical daily cap and no daily item ceiling.** How many items a vertical publishes is decided by supply, by the score, and by `max_per_source`. What one feed may hold of the whole day is `max_source_share_per_day`. See [freshness.md](freshness.md).
 
-**Lenses** are a closed vocabulary of cross-cutting tags. **Events** are a closed vocabulary of what happened to an item - a release, a deal, an acquisition, a funding round, a capital commitment, results, a regulatory action, research, an incident. Both are enums in the contract, not free-text strings, so a new value is a schema change with a changelog entry rather than a typo waiting to happen ([../contracts/schemas.md](../contracts/schemas.md)).
+**Lenses** are a closed vocabulary of cross-cutting tags. **Events** are a closed vocabulary of what happened to an item - a release, a deal, an acquisition, a funding round, a capital commitment, results, a regulatory action, research, an incident. **What closes them is [`../../../config/taxonomy.json`](../../../config/taxonomy.json), not the Python type**: both ids are open slugs since 2026-09-12, and the matcher can only ever emit a word that file carries, so adding one is a config edit and nothing can invent one ([../../concepts/taxonomy.md](../../concepts/taxonomy.md), [../contracts/schemas.md](../contracts/schemas.md)). They were closed Python enums until then, which charged a code change, four regenerated schemas and a release for a word.
 
 ## Lenses, events and entities are declared and never assigned
 

@@ -71,7 +71,7 @@ from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunR
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
+from idhazh.contracts.taxonomy import SourceKind, SourceTier
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
@@ -426,18 +426,24 @@ def to_item(
     )
 
 
-def lenses_for(index: int) -> list[LensId]:
+def lenses_for(index: int) -> list[str]:
     """Enough lens states for the page to be tested, planted on existing items.
 
-    Three states and no fourth: none, one, and more than the page will show. The
-    third is what proves the cap, and it has to exceed it rather than meet it.
-    A new item would have been the obvious way to carry these and is the wrong
-    one - the canary suite counts what is on the page.
+    Five states and no sixth: none, one, more than the page will show, a retired
+    id, and an id `config/taxonomy.json` does not name at all. The third is what
+    proves the cap, and it has to exceed it rather than meet it. The last two are
+    what a day outliving its vocabulary looks like - `ai-roi` is really retired
+    and really carried by 18 committed items, and `supply-chain` stands for the
+    id somebody deletes rather than tombstones. A new item would have been the
+    obvious way to carry these and is the wrong one - the canary suite counts
+    what is on the page.
     """
     if index == 1:
-        return [LensId.WAR]
+        return ["war"]
     if index == 2:
-        return [LensId.CHINA, LensId.TRADE, LensId.CHIPS]
+        return ["china", "trade", "chips"]
+    if index == 3:
+        return ["ai-roi", "supply-chain"]
     return []
 
 

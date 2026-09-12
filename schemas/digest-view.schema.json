@@ -210,7 +210,8 @@
         },
         "lenses": {
           "items": {
-            "$ref": "#/$defs/LensId"
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
           },
           "title": "Lenses",
           "type": "array"
@@ -405,20 +406,6 @@
       "title": "DigestViewVisual",
       "type": "object"
     },
-    "LensId": {
-      "description": "A question asked of items already collected. Costs no extra request.",
-      "enum": [
-        "china",
-        "ai-roi",
-        "markets",
-        "cyber",
-        "war",
-        "trade",
-        "chips"
-      ],
-      "title": "LensId",
-      "type": "string"
-    },
     "SourceKind": {
       "description": "What kind of speaker this is - the thing a reader uses to decide belief.\n\n\"A company said its product is faster\" and \"a reporter measured it\" are not\nthe same claim, and without this they arrive looking identical. The\ndangerous case is `announcement`: forwarding a vendor's own copy without\nknowing it was the vendor is how a reader ends up carrying an ad.",
       "enum": [
@@ -457,6 +444,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "lenses on a served item is a list of Slug rather than of the closed LensId enum, which is deleted. The schema gates the slug pattern and no longer enumerates the members.",
+      "version": "2026-09-12T03:55",
+      "why": "This is the payload a browser fetches, so the enum was a second copy of the vocabulary that had to be regenerated and redeployed before a config edit could take effect. Read-compatible, and here that is a promise to a device rather than to a job: a service worker keeps days, so a shell holding a payload written weeks ago reads every id it carries unchanged. The reading side takes the other half of the same change - it renders an id the committed vocabulary cannot name rather than dropping the chip, so a day cannot quietly stop saying what it said (section 11)."
+    },
     {
       "change": "Added the day's own facts to a served day: date, generated_at, partial, items_planned, items_failed, retention_window_months, runs, verticals and leads. Every one of them is optional.",
       "version": "2026-09-09",
@@ -596,7 +588,7 @@
       "title": "Runs"
     },
     "version": {
-      "default": "2026-09-09",
+      "default": "2026-09-12T03:55",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -623,5 +615,5 @@
   ],
   "title": "DigestView",
   "type": "object",
-  "version": "2026-09-09"
+  "version": "2026-09-12T03:55"
 }
