@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 One question, asked of every file this project writes:
 
@@ -49,10 +49,18 @@ before anything is unlinked. A fold that wrote a summary nobody re-read would
 trade an unreadable month for an unread one.
 
 **4. A fuse bounds one run.** `retention.max_deletes_per_run` is 200, against the
-488 rendered visuals committed on 2026-09-12 - so a policy that selected every
+491 rendered visuals committed on 2026-09-13 - so a policy that selected every
 picture on disk would still take three runs to finish. An off-by-one in a date
 parse cannot eat the archive in one pass. It can only leave a backlog the next
 run continues, which is the fuse working rather than failing.
+
+**In steady state the fuse is nowhere near the bound, and the one case that
+would reach it is a window somebody narrows.** 25.5 visuals arrive a published
+day, so 25.5 age out a day once a window reaches back that far, against five
+runs a day at 200 files each - 1,000 deletes a day of capacity, and the heaviest
+single day on record is 43. Narrowing a window is the move that drops a whole
+span in at once rather than a day at a time: taking `retention.image_months`
+from 13 to 6 would open about 5,400 candidates, which is six days of draining.
 
 **5. Every pass leaves a row, including the pass that deleted nothing.** The
 visual prune appends to `state/visual-prunes/` on every run, and the row carries
@@ -131,11 +139,14 @@ That command prints what is committed today. Five rows below have no committed
 instance yet, because the run that writes each has not written one. **A row with
 no file is not a mistake; a file with no row is.**
 
-**Every full-grain window below is 14 months today, and every aggregate age is
-null, meaning never.** The knob is what governs rather than that sentence, and
+**Every full-grain window in the `state/` table below is 14 months today, and
+every aggregate age is null, meaning never.** The knob is what governs rather
+than that sentence, and
 [config.md](config.md#every-store-names-its-own-cleanup-age) is where each number
 is set and argued. It is stated once here so that reading a row does not cost a
-second page.
+second page. **`retention.image_months` is 13 and is not one of them** - 14 there
+is the count of month shards a console read opens, and no read opens a visual
+([why 13 and not 14](#why-13-and-why-the-bytes-did-not-choose-it)).
 
 ### `state/` - what one run leaves for the next
 
@@ -178,7 +189,7 @@ project and what it costs is stated there.
 | Artefact | Policy | Age | Why that policy |
 | --- | --- | --- | --- |
 | `frontend/public/digest/<Y>/<M>/<D>/digest.json`, `run.json` | **Keep, always** | never | the record that a day happened. The archive is the product, so age is not a reason to remove any of it |
-| `frontend/public/digest/<Y>/<M>/<D>/*.svg` | Delete (asset) | `retention.image_months` | the item survives without its picture, which is what makes a visual the one published thing safe to remove. Not because it is the bigger half - it is not: 488 visuals weighing 6,213,480 bytes against 24,348,280 bytes of day payload in the same tree on 2026-09-12 |
+| `frontend/public/digest/<Y>/<M>/<D>/*.svg` | Delete (asset) | `retention.image_months`, **13** | the item survives without its picture, which is what makes a visual the one published thing safe to remove. Not because it is the bigger half - it is not: 491 visuals weighing 6,244,624 bytes against 24,543,254 bytes of day payload in the same tree on 2026-09-13 |
 | `frontend/public/telemetry/` | Delete (projection) | `observability.public_telemetry_keep_months` | the browser's copy of `state/item-health/`, refused at any value but its source's |
 | `frontend/public/scores/` | Delete (projection) | `observability.public_scores_keep_months` | the browser's copy of `state/scores/`, refused at any value but its source's |
 | `frontend/public/feed-health/` | Delete (projection) | `observability.public_feed_health_keep_months` | the browser's copy of `state/feed-health/`, refused at any value but its source's |
@@ -212,6 +223,54 @@ because deleting a record is a decision for whoever owns model qualification, no
 a tidy-up.
 
 ## Design rationale
+
+### Why 13, and why the bytes did not choose it
+
+`retention.image_months` was `-1` until 2026-09-13 - no age window at all - so
+this is the first age this project has put on a published asset rather than a
+tightening of one. `retention.dry_run` stays `true`, so the window names days
+and removes none of them; the deletion is a separate commit, and it lands that
+way round so that the first evidence of what the window selects arrives before
+the deletion rather than after it.
+
+**The window is an archive policy and not a cap defence, and the measurement is
+what says so.** Rendered visuals arrive at 324,580 bytes a published day, which
+is 10.7 percent of what the whole site adds in a day. At that rate 390 days of
+them stand at 120.7 MiB for ever - 11.8 percent of the 1 GiB ceiling - and with
+no window at all they would take 3,308 published days, about nine years, to fill
+the cap on their own. The reading, its spread and the two-hop argument that lets
+a payload-tree rate be spent against a built-site cap are
+[measurements-site.md](../reference/measurements-site.md#what-a-published-day-adds-in-rendered-visuals-2026-09-13).
+
+**Between 12, 13 and 14 months the byte budget does not choose.** They stand
+111.4, 120.7 and 130.0 MiB apart-to-end, so the whole range is 18.6 MiB, 1.8
+percent of the cap. One spread on the daily rate carried across the same window
+is 47.6 MiB, which is 5.1 months of window - the instrument is five times too
+blunt to resolve a two-month difference, so no number here can separate them.
+That leaves the owner's 13 (O8 and C20 of
+[../../TODO/20260902-visual-planner-pseudo-plan.md](../../TODO/20260902-visual-planner-pseudo-plan.md)),
+now derived rather than asserted. Carmack, 2026-09-13.
+
+**14 was available and was refused, because its reason does not travel.**
+Fourteen is the count of month shards a console read can open
+([config.md](config.md#why-14-and-not-13)), and no console read opens a visual -
+so copying it here would be the number with its reason left behind. There is no
+read cover on a visual at all: every published day is kept for ever and a reader
+can open any of them, which is why this row's licence comes from the other
+clause - the item survives without its picture.
+
+**A month is 30 days to this knob.** `retention.cutoff` is
+`today - timedelta(days=months * 30)`, so 13 is 390 days and not thirteen
+calendar months - 5.7 days short. The error runs in the safe direction: the
+window holds slightly less than the table above would suggest, never more. It is
+recorded rather than fixed, because changing what a month means moves what every
+window selects and that is a decision of its own.
+
+**Re-take the rate when it would change something, not on a date.** The read is
+one bounded pass over the dated directories and costs seconds, so the trigger is
+a threshold: visuals a day or bytes a visual moving more than one spread, or the
+first visual that is not an SVG - 12,716 bytes a visual is an all-SVG figure, and
+a raster family would move every row of the arithmetic above at once.
 
 **The module keeps the name `retention.py` and the concept is documented as
 adaptive pruning.** "Intelligent" claims a property that code reading a date does
@@ -255,8 +314,8 @@ measurement, and evidence does not expire.
   ignored ([config.md](config.md#every-store-names-its-own-cleanup-age)).
 - **Deleting a day payload to defend the Pages ceiling.** Rejected because the
   payload is the archive, not because it is small - and the measurement says it
-  is not small. On this checkout, 2026-09-12: 24,348,280 bytes of day payload
-  against 6,213,480 bytes of rendered visual, so the text is about four times the
+  is not small. On this checkout, 2026-09-13: 24,543,254 bytes of day payload
+  against 6,244,624 bytes of rendered visual, so the text is about four times the
   pictures in the committed tree. What makes the built site the larger problem is
   everything the build adds on top of the payload - 7,027,075 bytes of payload
   tree against a 128,064,853-byte built site on 2026-08-27, eighteen times larger

@@ -78,8 +78,9 @@ class VisualPruneRow(Contract):
     policy_months: int = Field(
         ge=-1,
         description=(
-            "`retention.image_months` in force. -1 is what ships and means the cleanup "
-            "is switched off, so the row reports and nothing is ever a candidate."
+            "`retention.image_months` in force. -1 means no age window at all, so the "
+            "row reports and nothing is ever a candidate; it is the model default and "
+            "was what shipped until 2026-09-13, when config/idhazh.json took 13."
         ),
     )
     max_deletes_per_run: int = Field(
