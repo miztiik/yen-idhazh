@@ -2,7 +2,7 @@
   "$defs": {
     "CanaryObservation": {
       "additionalProperties": false,
-      "description": "One planted attack, run live against the candidate.\n\nThe unit suite proves the sanitizer and the schema against recorded\ncompletions. It cannot prove that a model nobody has served before follows\nthis chat template, so the canaries run again here on live calls (Rule #11).\n\n`replied` is false for two very different reasons - the attack was never put\nto the model, or the model answered with nothing publishable - and neither\nis a marker that survived. The run on 2026-08-26 failed here with every\nmarker list empty, and it was written up as a sanitizer breach, so the\nreason travels with the observation now rather than living in a log line\nthe next reader no longer has.",
+      "description": "One planted attack, run live against the candidate.\n\nThe unit suite proves the sanitizer and the schema against recorded\ncompletions. It cannot prove that a model nobody has served before follows\nthis chat template, so the canaries run again here on live calls (Guardrail #11).\n\n`replied` is false for two very different reasons - the attack was never put\nto the model, or the model answered with nothing publishable - and neither\nis a marker that survived. The run on 2026-08-26 failed here with every\nmarker list empty, and it was written up as a sanitizer breach, so the\nreason travels with the observation now rather than living in a log line\nthe next reader no longer has.",
       "properties": {
         "facts_missing": {
           "description": "`must_survive` facts the boundary ate.",

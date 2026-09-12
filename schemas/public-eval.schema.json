@@ -18,7 +18,7 @@
     {
       "change": "Initial shape: the score ledger's own measurements, typed, with url_key, source_url and title refused at import.",
       "version": "2026-09-09",
-      "why": "The console reads state/scores/ at build time and serialises the result into its document, so the ledger's shape crossed to a reader as inlined JSON with no contract, no version stamp and no changelog while the telemetry projection beside it has all three (Rule #3). Naming the shape before a producer exists is what stops the producer, the consumer and the gates each inventing their own list. item_id is carried as an opaque key on the same terms PublicTelemetryRow carries it: identity is minted by the ledger writer, and a published shard has no writer left to re-mint it if that grammar moves."
+      "why": "The console reads state/scores/ at build time and serialises the result into its document, so the ledger's shape crossed to a reader as inlined JSON with no contract, no version stamp and no changelog while the telemetry projection beside it has all three (Guardrail #3). Naming the shape before a producer exists is what stops the producer, the consumer and the gates each inventing their own list. item_id is carried as an opaque key on the same terms PublicTelemetryRow carries it: identity is minted by the ledger writer, and a published shard has no writer left to re-mint it if that grammar moves."
     }
   ],
   "description": "One scored attempt, as the console is allowed to read it.",

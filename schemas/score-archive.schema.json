@@ -52,7 +52,7 @@
           "type": "number"
         },
         "sum_squares": {
-          "description": "Every value squared, added together. With n and sum this gives the variance and so the spread, which Rule #10 asks for beside any number read off this archive.",
+          "description": "Every value squared, added together. With n and sum this gives the variance and so the spread, which Guardrail #10 asks for beside any number read off this archive.",
           "minimum": 0.0,
           "title": "Sum Squares",
           "type": "number"
