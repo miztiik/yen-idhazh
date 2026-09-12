@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
@@ -226,6 +226,18 @@ section 5).
 ### Process docs are domain-neutral
 
 Everything under `docs/how-to/` that describes *how work is done* - authoring a plan, executing a plan, distilling a plan, handling a scope change, shipping a PR, deploying - plus this reference, is written to be copied between projects unchanged. Such a doc cites `CLAUDE.md` by section number rather than restating a project-specific rule, and it uses neutral examples. Where a project binding is genuinely needed (a build command, a live URL, a gate command), it goes in a clearly marked "Project bindings" section at the end rather than being scattered through the prose. A process doc that cannot be stated neutrally says so explicitly and names why.
+
+### A docs-only change is normal; docs describing code nobody changed is the smell
+
+A change that touches only documentation is correct whenever the documentation
+IS the artefact - the engineering contract, a process doc, a concept page, a
+benchmark record, this reference, or any page that exists only to be read.
+Treating a docs-only diff as suspect on its own punishes exactly the work that
+keeps the rest honest.
+
+What is a smell is a documentation change that describes behaviour nobody
+altered. That is documentation drifting away from the code rather than tracking
+it, and it reads as authoritative to the next person either way.
 
 ### Cross-doc consistency mechanism
 
