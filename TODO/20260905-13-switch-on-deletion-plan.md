@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The rules, and which rule governs every file this project writes | - | A | IN-FLIGHT | p13-1 | - | worker |
+| 1 | The rules, and which rule governs every file this project writes | - | A | DONE #643 | p13-1 | #643 | worker |
 | 2 | The window takes a value, and nothing is deleted yet | 1 | B | PENDING | - | - | - |
 | 3 | The fuse comes out, and one run is watched | 2 | C | PENDING | - | - | - |
 
@@ -40,7 +40,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - **Scope:** `docs/concepts/adaptive-pruning.md`: the five properties, the four policies, the rule that decides which applies, and the register naming every artefact this project writes.
 - **Files touched:** `docs/concepts/adaptive-pruning.md` (new), `docs/reference/documentation-structure.md`, `docs/concepts/config.md`, `backend/idhazh/retention.py` (docstrings only)
 - **Acceptance gates:** the full suite; a docs cross-link check on every page this one links to.
-- **Oracle:** Every directory under `state/`, `corpus/` and `frontend/public/` that this project writes appears in the register exactly once with a named policy - asserted by a test that walks the tree and compares it to the register, so a new store added later fails rather than being forgotten.
+- **Oracle:** Every artefact the register names carries exactly one of the four policies, and the page prints the one command that lists what the register does not name - so the gap between the table and the tree is a line to run rather than an act of memory.
+- **Oracle, corrected 2026-09-12:** it used to say "asserted by a test that walks the tree and compares it to the register". That shape can assert a name appears and never that `fold` is still right beside it, so it is green on exactly the column that rots; `CLAUDE.md` section 13 gained an owner ruling on 2026-09-06, the day after this plan was written, giving such a check three fates of which a pytest module is not one. Fowler ruled the replacement above. Rows #2 and #3 inherit the corrected line, not the old one.
 
 ### Decisions
 
