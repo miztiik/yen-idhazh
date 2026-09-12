@@ -177,7 +177,7 @@ project and what it costs is stated there.
 
 | Artefact | Policy | Age | Why that policy |
 | --- | --- | --- | --- |
-| `frontend/public/digest/<Y>/<M>/<D>/digest.json`, `run.json` | **Keep, always** | never | the record that a day happened. Deleting text to save bytes trades the archive for a rounding error |
+| `frontend/public/digest/<Y>/<M>/<D>/digest.json`, `run.json` | **Keep, always** | never | the record that a day happened. The archive is the product, so age is not a reason to remove any of it |
 | `frontend/public/digest/<Y>/<M>/<D>/*.svg` | Delete (asset) | `retention.image_months` | the item survives without its picture, which is what makes a visual the one published thing safe to remove. Not because it is the bigger half - it is not: 488 visuals weighing 6,213,480 bytes against 24,348,280 bytes of day payload in the same tree on 2026-09-12 |
 | `frontend/public/telemetry/` | Delete (projection) | `observability.public_telemetry_keep_months` | the browser's copy of `state/item-health/`, refused at any value but its source's |
 | `frontend/public/scores/` | Delete (projection) | `observability.public_scores_keep_months` | the browser's copy of `state/scores/`, refused at any value but its source's |
