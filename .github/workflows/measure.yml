@@ -259,9 +259,15 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+      # The same interpreter and the same dependency file the daily jobs name,
+      # so this reads the entry they already keep warm rather than filling one
+      # of its own. A cache on a dispatch nobody runs for a fortnight is bytes
+      # that expire unread; a shared key costs nothing and hits on run one.
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Record runner hardware
         run: |
