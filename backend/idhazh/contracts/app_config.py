@@ -311,6 +311,22 @@ class RunConfig(Model):
             "decisions are lost rather than the tail it could not reach."
         ),
     )
+    two_calls_per_item: bool = Field(
+        default=False,
+        description=(
+            "REMOVED BY plan 11 row #6, which deletes this knob, the small model and the "
+            "visuals job together - this line is the removal condition Guardrail #6 asks "
+            "for. False is today's pipeline exactly: the work stage makes one summarizer "
+            "call an item and the separate visuals job draws the pictures on the 4B. True "
+            "makes the work stage dispatch the two calls in idhazh.classify.calls "
+            "adjacently per item on the summarizer weights - call 1 labels what the "
+            "candidate pass found, call 2 writes the summary and then the plan - and the "
+            "visuals stage then decides nothing, because the item already carries a "
+            "decision. It is a flag rather than a swap because turning it on changes what "
+            "every item does, and there is no rollback that keeps charts if the wiring is "
+            "wrong."
+        ),
+    )
     success_floor_pct: int = Field(
         default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
     )
@@ -3387,6 +3403,23 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T12:00",
+            change=(
+                "Added run.two_calls_per_item, a boolean defaulting to false. Additive "
+                "and defaulted, so config/idhazh.json written before this still loads "
+                "and needs no read-side migration; the committed file sets it false "
+                "explicitly, which is what makes the knob visible to an operator "
+                "reading it."
+            ),
+            why=(
+                "Plan 11 rows 1 to 5 built two model calls, the reachability gate, the "
+                "downgrade ladder and one renderer, and no stage dispatched any of "
+                "them. This is the switch the plan's own strategy named - behind a "
+                "flag, off, until the whole path works. Row #6 then deletes the flag, "
+                "the small model and the visuals job in one commit."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12",
             change=(

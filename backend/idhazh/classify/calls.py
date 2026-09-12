@@ -16,8 +16,9 @@ everything behind the break is read again - 100 tokens an item, measured on the
 configured weights 2026-09-12. Call 2's reply carries the summary first and the
 plan second, and that order is the recovery: a decode the output budget cuts is
 cut in the plan, and the summary behind it is already closed. Both calls are
-built here and no stage dispatches either yet; the gate in front of them, and
-the picture they lead to, are later rows.
+built here and `idhazh.cli.stage_work` dispatches them, adjacently per item,
+when `run.two_calls_per_item` is on; the gate in front of them and the picture
+they lead to are wired at that same call site.
 
 **Every instruction sits in front of the article and the question behind it is
 three lines.** Both jobs are described in the one system turn, which is the same
@@ -53,7 +54,7 @@ from idhazh import summarize
 from idhazh.contracts.app_config import ElementsConfig, InferenceConfig, SummarizeConfig
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
 from idhazh.contracts.base import Model as ContractModel
-from idhazh.contracts.base import derive_text_digest
+from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.element import (
     Element,
     ElementKind,
@@ -64,7 +65,13 @@ from idhazh.contracts.element import (
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
 from idhazh.elements import NUMBER, SpanDriftError, read_quantity, sentence_starts, settle
 from idhazh.extract import approx_tokens
-from idhazh.llm.server import Completion, completion_payload, continued_completion_payload
+from idhazh.llm.server import (
+    Completion,
+    completion_payload,
+    continued_completion_payload,
+    continued_prompt,
+    render_prompt,
+)
 from idhazh.sanitize import untrusted_block
 from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 
@@ -1271,6 +1278,40 @@ def build_call_two_request(
         ),
         max_output_tokens=call_two_output_tokens(prompt_config, plan=plan),
     )
+
+
+def prompt_inputs(
+    prompt_config: SummarizeConfig | None = None, *, inference: InferenceConfig | None = None
+) -> str:
+    """What the fingerprint hashes to stand for these two prompts.
+
+    `summarize.prompt_inputs` is the single call's answer to the same question
+    and this is the two calls', for the same reason and with the same shape: the
+    bytes that do not vary with the article, plus every number that can be
+    substituted into them. A stamp that moved per item could not answer the
+    question the stamp exists to answer.
+
+    **The rendering is what makes the turn markers a digested input.** Since the
+    prompt bytes became ours, `backend/idhazh/prompts/turn_markers.json`
+    decides where every turn opens and closes, and nothing else in the stamp
+    reaches it: the chat template hashed off `/props` no longer renders these
+    prompts. Editing a marker would move every reply while the fingerprint
+    ledger said `unchanged`, which is the state `Observation.DETERMINISM_VIOLATION`
+    exists to make visible. Rendering both turns through the same helpers the
+    live requests use covers the markers, all four prompt files and the turn
+    order together.
+
+    The article and call 1's reply are rendered as empty strings, which is what
+    leaves the result the same on every item.
+    """
+    ask = prompt_config or SummarizeConfig()
+    first = render_prompt(
+        system=call_one_system_prompt(ask),
+        user="",
+        thinking=(inference or InferenceConfig()).thinking,
+    )
+    rendered = continued_prompt(first, reply="", user=call_two_user_turn(ask))
+    return rendered + canonical_json(ask.model_dump(mode="json"))
 
 
 def parse_call_two(
