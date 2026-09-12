@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-12
 
 How a summary is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -1161,6 +1161,62 @@ The current pipeline fingerprint also lacks article-input identity, so it cannot
 establish that a publisher left the source bytes unchanged
 ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
 
+### The dedupe is answered by an index, and an index can be wrong
+
+The writer does not read the score rows to answer *do we already hold this
+measurement*. It reads `state/score-index/<YYYY-MM>.csv`, which keeps one
+fixed-width digest a measurement beside the shard it describes - a read an order
+of magnitude smaller than the rows, exact, with nothing forgotten
+([growing-reads.md](growing-reads.md)).
+
+**Nothing compares an index that exists against the rows beside it.** Comparing
+means reading those rows, which is the bill the index removes, so the writer
+fills a month that has **no** index and leaves every other month alone. That is
+a deliberate trade and it leaves one hole: an index that drifted stands for
+ever, and the next dedupe admits a measurement the ledger already holds - which
+turns a count of measurements back into a count of times the pipeline looked,
+and that is the one thing this ledger promises it is not.
+
+Three things put an index out of step and all three are real. A fill a crash cut
+short leaves a file that exists and is short, which every later run skips. A
+shard grown behind the index's back - rows appended by a branch that merged a
+`main` older than the index - leaves digests missing. And an index left at a
+grain the ledger no longer uses is not read at all, because a partition name the
+rule does not recognise is ignored rather than refused
+([partitions.md](partitions.md)).
+
+**The repair is `idhazh rebuild-score-index`, and it checks its own result.** It
+drops the index for each month it is named, writes it again from the rows beside
+it, then reads the new file back and compares it against the rows in **both
+directions**. A rebuilt index holding a digest the rows cannot produce fails as
+loudly as one missing a digest they do: a one-directional check passes on an
+index that only ever grows, and an index that only grows is what a repeated
+dedupe over a re-scored item looks like. It reports what each month had wrong
+before it rewrote it, so drift is named rather than quietly absorbed.
+
+It writes the file the partition rule names today and removes no other, so the
+third case above is the one it cannot repair on its own: a file at a grain no
+reader recognises is invisible to the comparison as well, and a change of grain
+has to take its own old files away.
+
+**It is never a step of a run**, for two reasons rather than one. It reads every
+score row of every month it is given, which is the read the index exists to
+avoid ([`../../CLAUDE.md`](../../CLAUDE.md) Rule #12) - so the cover is stated,
+never defaulted: `--month` names the months and `--every-shard` is the full pass
+over the archive, and the command refuses to run with neither, which is the
+shape `idhazh dedupe-ledgers` already uses for the same question. And an index
+that repaired itself on a schedule would hide the drift it exists to reveal -
+the dedupe would go on being right while nobody learned that something had made
+it wrong. Authority: Fowler, 2026-09-12.
+
+A month with no committed shard exits non-zero rather than reporting a clean
+pass over nothing, and the refusal comes before any file is touched, so the
+months named beside a typo keep the index they had.
+
+**`state/score-archive/` is not a source for a rebuild.** A month past
+`observability.scores_full_grain_months` has no rows left to derive anything
+from, which is precisely why the archive keeps those digests itself.
+
 ### A month past fourteen becomes a summary, and the dedupe survives it
 
 `state/scores/` is the largest store under `state/` - measured 2026-09-03, 5,335
@@ -1412,6 +1468,8 @@ not a trend.
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
 - [digest.md](digest.md) - how a confidence band reaches a reader.
 - [config.md](config.md) - the band thresholds and retry budget.
+- [growing-reads.md](growing-reads.md) - what the observation index costs, and the cover every read over a growing collection declares.
+- [partitions.md](partitions.md) - what a partition file is called, and what a name the rule does not recognise does.
 - [principles.md](principles.md) - principle 6, the belief this page implements.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the prompt asks for, including the hedges these metrics check.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the eval-row contract.
