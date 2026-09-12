@@ -193,31 +193,9 @@ These are conventions rather than guardrails because a serialization invariant h
 
 ## 3. Repository Topology
 
-| Directory            | Status     | Purpose                                                                                                     |
-| -------------------- | ---------- | ----------------------------------------------------------------------------------------------------------- |
-| `CLAUDE.md`          | created    | This file - the engineering contract.                                                                        |
-| `README.md`          | created    | Entry point.                                                                                                 |
-| `docs/`              | created    | Canonical knowledge (Diataxis tiers, 3-level depth).                                                         |
-| `.claude/skills/`    | created    | Claude Code skill wrappers (bootstrap, prepare-plan) that point at `docs/`.                                  |
-| `.github/agents/`    | created    | Persona advisors (Andre, Carmack, Fowler, Jony, Reader).                                                     |
-| `.github/scripts/`   | created    | A shell step two or more workflow jobs run. Written once so a test can execute it; never imported by `backend/`. |
-| `.github/workflows/` | created    | CI, the measurement harness, the daily pipeline, and the GitHub Pages deploy.                                |
-| `config/`            | planned    | Human-edited tunable knobs, schema-validated. Read by `backend/` and shipped to `frontend/` where a reader-facing surface needs one. |
-| `corpus/`            | planned    | The rolling training window: source text as training samples, plus its meta and holdout files. Committed, never rendered, never served to a reader (section 0a). Rewritten by `prune.yml` (section 8). |
-| `schemas/`           | planned    | Generated JSON Schema, one file per contract model. Never hand-edited (Guardrail #3, section 1a).             |
-| `backend/`           | partial    | The build-time producer (Python). `backend/idhazh/` is the package; `backend/idhazh/contracts/` holds the Pydantic models; `backend/utilities/` holds operator tooling; `backend/tests/` holds its tests. NOT a runtime server (Guardrail #1). |
-| `backend/bin/`       | gitignored | Local llama.cpp binaries - downloaded, not authored.                                                         |
-| `backend/models/`    | gitignored | Local GGUF weights - multi-gigabyte, downloaded from Hugging Face.                                           |
-| `backend/var/`       | gitignored | Reproducible run output, caches and benchmark artifacts. Never the committed record of a run.                |
-| `frontend/`          | planned    | The published static site: the digest pages and the eval dashboard. `frontend/public/` holds the committed payloads the site renders; `frontend/src/contracts/` holds the generated types. |
-| `frontend/dist/`     | gitignored | Built bundle for GitHub Pages.                                                                               |
-| `notebooks/`         | created    | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Guardrail #2). |
-| `evals/`             | folded     | Merged into `state/`. The published dashboard keeps the `/evals/` route; the folder is gone.                 |
-| `state/`             | created    | Everything one run commits for a later run to read: the eval ledger, fingerprints, seen URLs, feed health. Appended by CI, never recomputed at runtime, never served to a reader. |
-| `tests/`             | planned    | Cross-cutting fixtures: captured pages, golden summaries, injection canaries.                                |
-| `TODO/`              | created    | Active plan-docs. Non-authoritative working material.                                                        |
+`backend/` is a build-time producer that runs in CI and on a developer machine and is never a service. `frontend/` is the published static site. The two meet only through committed data and the contracts generated from `backend/idhazh/contracts/` (section 4).
 
-Folders are created only when real code is about to land. Do not pre-create empty modules.
+Which directory holds what, who writes it, whether it is committed and whether a reader ever sees it is [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md). A directory is created when real code is about to land in it, never ahead of one (section 10).
 
 ## 4. Layer and Dependency Boundaries
 
