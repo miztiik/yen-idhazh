@@ -35,6 +35,7 @@ committed file.
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
+| [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 5 | 1 | 4 | 1 |
 
 ## In flight - 1
 
@@ -42,7 +43,7 @@ committed file.
 | --- | --- | --- | --- | --- |
 | #7a | 23 | E | The classification code gets its own package | p23-7a |
 
-## Ready now - 30
+## Ready now - 31
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -80,8 +81,9 @@ section 3 is where it is answered.
 | #1 | 25 | A | Three docstrings defend a requirement the page retired | - |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 | #1 | 26 | A | What prerendering actually weighs, both arms | - |
+| #2 | 27 | B | Rewrite all twelve guardrails | 1 |
 
-## Waiting on another row - 74
+## Waiting on another row - 77
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -159,6 +161,9 @@ section 3 is where it is answered.
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #4 | 26 | B | The ruling, written where the next person arrives | 1 is PENDING |
+| #3 | 27 | C | Eight collateral sections | 2 is PENDING |
+| #4 | 27 | D | Restate in the three derived agent surfaces | 3 is PENDING |
+| #5 | 27 | E | Repository-wide sweep, schemas, relapse proof | 4 is PENDING |
 
 ## Finished - 13 plans with no live row
 
