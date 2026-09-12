@@ -145,6 +145,14 @@ python -m idhazh.publish_telemetry
 
 Before merging anything that rewrites `frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run in flight and wait it out.
 
+**Waiting it out does not converge when the pipeline appends faster than CI finishes, and that is the usual case rather than the exception.** Measured 2026-09-12 on pull request #636, which widened `state/item-health` from 29 columns to 42 and rebuilt the projection from it: a full CI cycle takes about eight minutes, with the browser job the pole at 5m12s, and the pipeline appended to `state/item-health/2026-09.csv` three times inside one such window. Each append re-conflicted the branch, so the branch reached green and mergeable at different moments and never both at once. Three repair cycles produced three identical repairs. **The way out is to stop treating the data rows as part of the change under test.** Repair, push, and merge on `MERGEABLE/UNSTABLE` rather than waiting for a fourth cycle: the code was already green on an earlier head, and everything added since came from `main` itself plus a re-derivation a committed utility performs deterministically. Then census the trunk immediately, because the squash merge itself runs the union driver on GitHub's side and can concatenate one last time:
+
+```powershell
+python -c "import csv,pathlib,collections;w=collections.Counter();[w.update([len(r)]) for p in pathlib.Path('state/item-health').glob('*.csv') for r in csv.reader(p.open(encoding='utf-8',newline=''))];print(dict(w))"
+```
+
+One width for every row and one header per shard, or repair on the trunk. What this costs, stated rather than hidden: a merge on `UNSTABLE` is a merge whose final check set nobody read, so it is right only when the delta since the last green head is data the trunk wrote and a deterministic re-derivation of it. A code change in that delta makes it the wrong call.
+
 **A test that reads the newest committed day is racing the pipeline**, so it goes red in the morning and green by evening. The digest publishes several times a day and appends to the same payload, so the newest date on disk is always the one still being written - measured 2026-09-06, 78 stories at 09:00 against 374 to 582 on a finished day. Take the newest day that is **not** the newest date on disk, or better, use a bounded fixture (`CLAUDE.md` Guardrail #12).
 
 ## Line endings
