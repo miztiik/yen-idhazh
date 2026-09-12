@@ -7,11 +7,15 @@ about without an index.
 
 from __future__ import annotations
 
+import json
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
+from idhazh.contracts.app_config import VisualsConfig
+from idhazh.contracts.element import ElementTable
+from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -19,7 +23,7 @@ from idhazh.contracts.visual_decision import (
     VisualState,
 )
 from idhazh.render.chart import RenderError as ChartError
-from idhazh.render.chart import render_chart
+from idhazh.render.chart import compile_bar, render_chart
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 SUFFIX: Final = ".svg"
@@ -153,3 +157,50 @@ def render_visual(
         )
 
     return decision.model_copy(update={"visual_state": VisualState.RENDERED, "asset_path": relpath})
+
+
+def render_planned_visual(
+    decision: VisualDecision,
+    plan: VisualPlan,
+    table: ElementTable,
+    *,
+    public_root: Path,
+    relpath: str,
+    visuals: VisualsConfig,
+) -> VisualDecision:
+    """A validated plan becomes a drawing on disk, or the item stays decided to nothing.
+
+    The whole path in one call: compile the plan over the article's elements,
+    draw the spec, write the file, and hand back the decision carrying the spec,
+    the alt text and where the picture landed. It exists so the one place a plan
+    turns into a published picture is one place rather than three call sites
+    that can each get the order wrong, and so no caller has to remember a `try`
+    around the compile.
+
+    **`decision` arrives as the `none` it is.** `VisualDecision` refuses a
+    `chart` that carries no spec, and the spec is what this function makes - so
+    the item is decided to nothing until a plan compiles into a picture, and it
+    is promoted through the contract's own validation rather than around it.
+
+    **A plan this build cannot draw stays `none`, and that is the contract's
+    ruling rather than a shortcut.** `render_failed` means a spec was drawn and
+    the drawing failed; a plan that never became a spec has no spec to record,
+    and the shape will not hold one. Which gate refused it is `none_reason`'s to
+    say, and the caller sets it.
+    """
+    if decision.kind is not VisualKind.NONE:
+        raise ValueError("a planned visual starts as an item decided to nothing")
+    try:
+        drawn = compile_bar(plan, table, visuals=visuals)
+    except ChartError:
+        return decision
+    planned = VisualDecision.model_validate(
+        decision.model_dump(mode="json")
+        | {
+            "kind": VisualKind.CHART.value,
+            "none_reason": None,
+            "spec": json.dumps(drawn.spec, separators=(",", ":"), sort_keys=True),
+            "alt_text": drawn.alt_text,
+        }
+    )
+    return render_visual(planned, public_root=public_root, relpath=relpath)
