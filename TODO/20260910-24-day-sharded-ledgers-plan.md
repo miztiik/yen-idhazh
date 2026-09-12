@@ -156,7 +156,7 @@ Four facts decide it, and all four were checked on 2026-09-11 rather than assume
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | One answer to what a day file is, and what a day window costs | - | A | DONE #609 | p24-r1 | #609 | worker |
 | 2 | The score index can be rebuilt from the ledger it indexes | - | A | DONE #615 | p24-r2 | #615 | worker |
-| 3 | The migration utility, and it refuses to write a tree it cannot read back | 1 | B | IN-FLIGHT | p24-3 | - | worker |
+| 3 | The migration utility, and it refuses to write a tree it cannot read back | 1 | B | DONE #648 | p24-3 | #648 | worker |
 | 4 | The telemetry publisher declares the cover it already has | - | B | DONE #641 | p24-4 | #641 | worker |
 | 5 | `state/item-health/` files by day | 1, 3, 4 | C | PENDING | - | - | - |
 | 6 | `state/feed-health/` files by day | 1, 3 | D | PENDING | - | - | - |
