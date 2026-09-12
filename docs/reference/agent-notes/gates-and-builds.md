@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
@@ -195,6 +195,13 @@ A throwaway spec under `frontend/tests/` would be swept up by the shared selecto
 **The dangerous half is often the part git calls clean**, and it need not be a name. Two rows that both auto-merged one route page on 2026-09-01 - one narrowing bars to a window, one adding a strip above them - produced a file drawing windowed bars over a strip that still read the whole ledger. Every symbol resolved and the suite passed. The cheap early warning before merging: `git grep` the names your branch deletes, from `git diff --name-only main...HEAD`. It exits 1 when it finds nothing, which a `&&` chain reads as failure.
 
 **Read the failure before blaming your own change.** A whole file of failures sharing one identical `AttributeError` or `ImportError`, on a surface your row never touched, is a rename that crossed a branch.
+
+**A red `gates` check reading `git diff --exit-code` is often another agent's Reckoner stamp rather than your change.** `TODO/STATUS.md` is generated from every plan-doc's Status Reckoner and CI regenerates it on the MERGE CANDIDATE, so any row anybody marks `IN-FLIGHT` or `DONE` on `main` while your pull request is open makes your committed copy stale - and the diff it prints names plan rows you never opened, which reads as a contaminated branch. Merge `origin/main` and regenerate. **The second round conflicts, and the conflict is the easy part**: take the trunk's copy and re-derive rather than resolving by hand, because the counts in its section headings are computed and a textual merge can produce a file that is internally inconsistent and still merges cleanly. Seen twice in one row on 2026-09-12.
+
+```powershell
+git checkout origin/main -- TODO/STATUS.md
+python backend/utilities/plan_status.py --write
+```
 
 **GitHub can produce a red `main` when nobody ran a merge.** On 2026-08-27 #186 deleted a function with no remaining caller and #166 landed a test importing it; neither touched a line the other did, both were green, both merged, and an ImportError at collection meant zero of 1,288 tests ran. A green check on a pull request is not a statement about `main`, because GitHub does not re-run checks when the base moves. The check that closes the gap is merging `origin/main` locally and running the gate on the result; the narrow version is `git log --oneline -S '<name>' origin/main` for each symbol the branch newly imports. A local red against a green CI on the same commit is usually a stale base - 47 backend tests red locally on 2026-09-09, all cascading from one defect the next commit on `main` had already fixed.
 

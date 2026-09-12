@@ -402,7 +402,7 @@ def settle(candidates: Iterable[Element]) -> list[Element]:
     `KIND_PRECEDENCE` names the two it ranks, so a model-pointed kind reaching
     here raises rather than being ranked by accident - and it must not be ranked
     at all, because a quote carrying a quantity inside it is the shape those
-    kinds need and this rule would drop one of the two. `visual_planner.anchored`
+    kinds need and this rule would drop one of the two. `classify.calls.anchored`
     merges them after this has run.
 
     Quadratic in one article's candidates and bounded by the cap the caller
