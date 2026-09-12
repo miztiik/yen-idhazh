@@ -13,9 +13,11 @@ can act on**, so this reports three numbers that sum to the total instead.
 - **The chat template broke the prefix.** It used to: call 2 replayed call 1's
   turns as history, the template rendered them differently, and everything
   behind the divergence prefilled again. Row #3c renders the prompt bytes
-  itself, so this cause is zero by construction. **The row stays on the page
-  reading zero** - a cause that is printed is a cause a build change or a prompt
-  edit cannot reintroduce quietly, and a deleted row catches nothing.
+  itself, so what is left here is a token seam rather than a layout - measured
+  at 1 token an item against the 100 the template cost. **The row stays on the
+  page reading about zero** - a cause that is printed is a cause a build change
+  or a prompt edit cannot reintroduce quietly, and a deleted row catches
+  nothing.
 - **The trailing turn sits behind the article.** Call 2's question is the same
   bytes on every item, but the article in front of it is not, so a prefix cache
   cannot reach it and every token of it is read again, for ever.
@@ -409,33 +411,36 @@ class Checks:
 
     #: The renderer and the live request agree on how long call 1's prompt is.
     #: False means the diagnostic is describing a prompt the server was not
-    #: sent - a wrong thinking flag does exactly that.
+    #: sent - a wrong reply opening does exactly that.
     prompt_renders_the_same: bool
-    #: The cache stopped exactly where the two rendered prompts diverge. False
-    #: means the runtime is doing something this split does not model, and every
-    #: share below it is then unexplained rather than wrong.
-    cache_reached_the_divergence: bool
+    #: The two prompts do not diverge before the end of call 1's. **This is row
+    #: #3c's oracle taken live**, and it is the exact statement rather than a
+    #: tolerant one: call 2's prompt IS call 1's extended, so they cannot
+    #: disagree anywhere inside it. Under the chat template this came out 1,493
+    #: against 1,497 and was the whole reason for the row.
+    prompts_agree_to_the_end_of_call_one: bool
+    #: The cache reached at least as far as the two prompts agree. Reaching
+    #: FURTHER is the good news - it means the slot also answered for the reply -
+    #: so this is a floor and not an equality. False means the runtime is doing
+    #: something this split does not model, and every share below it is then
+    #: unexplained rather than wrong.
+    cache_reached_the_shared_prefix: bool
     #: Call 2 carries at least everything call 1 left in the slot. False makes
     #: `trailing_turn` negative, which is not a share of anything.
     trailing_turn_is_positive: bool
-    #: What was replayed is what was generated. False means the runtime split a
-    #: reasoning channel out of `content`, so the assistant turn call 2 sends is
-    #: shorter than the reply call 1 wrote, and `boundary` overstates the depth.
+    #: What was replayed is what was generated. False means the runtime returned
+    #: less than it decoded, so the assistant turn call 2 sends is shorter than
+    #: the reply call 1 wrote, and `boundary` overstates the depth.
     replay_is_the_whole_reply: bool
-    #: Everything call 1 left in the slot survived into call 2's prompt, so the
-    #: template cause is zero. This is row #3c's own oracle taken live: the
-    #: offline byte assertion says call 2's prompt opens with call 1's, and this
-    #: says the server agreed once it tokenised them.
-    the_whole_of_call_one_was_reused: bool
 
     @property
     def hold(self) -> bool:
         return (
             self.prompt_renders_the_same
-            and self.cache_reached_the_divergence
+            and self.prompts_agree_to_the_end_of_call_one
+            and self.cache_reached_the_shared_prefix
             and self.trailing_turn_is_positive
             and self.replay_is_the_whole_reply
-            and self.the_whole_of_call_one_was_reused
         )
 
     def failures(self) -> list[str]:
@@ -443,17 +448,17 @@ class Checks:
             "call 1's rendered prompt is not the length the server charged for": (
                 self.prompt_renders_the_same
             ),
-            "the cache did not stop where the rendered prompts diverge": (
-                self.cache_reached_the_divergence
+            "the two prompts diverge before the end of call 1's": (
+                self.prompts_agree_to_the_end_of_call_one
+            ),
+            "the cache stopped short of where the two prompts still agree": (
+                self.cache_reached_the_shared_prefix
             ),
             "call 2 carries fewer tokens than call 1 left in the slot": (
                 self.trailing_turn_is_positive
             ),
             "call 1's replayed turn is shorter than the reply it generated": (
                 self.replay_is_the_whole_reply
-            ),
-            "call 2 re-read part of what call 1 already put in the slot": (
-                self.the_whole_of_call_one_was_reused
             ),
         }
         return [what for what, held in named.items() if not held]
@@ -591,20 +596,30 @@ def prefix_break(
 
 
 def check(one: Completion, two: Completion, spend: Spend, broke: Break) -> Checks:
-    """The four statements that can come out false. A missing reading is not one.
+    """The five statements that can come out false. A missing reading is not one.
 
     An unread diagnostic is reported as unread rather than as a failure
     (`CLAUDE.md` section 1a), so a check whose evidence the server would not
     give holds by default and the run says the evidence is missing.
+
+    **The template cause is reported and never failed on**, even though row #3c
+    drives it to zero. Measured 2026-09-12 on the configured weights it came out
+    at 1 token an item rather than 0: the reply's own text re-tokenises one
+    token shorter when it is read back as part of a prompt than it was when it
+    was decoded, which is a property of the vocabulary and not of the prompt
+    layout. The statement that IS exact is that the two prompts do not diverge
+    inside call 1's, and that is the check above.
     """
     return Checks(
         prompt_renders_the_same=broke.rendered_one in (None, one.prompt_tokens),
-        cache_reached_the_divergence=broke.at is None or broke.at == two.cached_tokens,
+        prompts_agree_to_the_end_of_call_one=(
+            broke.at is None or broke.at == broke.rendered_one
+        ),
+        cache_reached_the_shared_prefix=broke.at is None or two.cached_tokens >= broke.at,
         trailing_turn_is_positive=spend.trailing_turn >= 0,
         replay_is_the_whole_reply=(
             broke.replay_tokens is None or broke.replay_tokens >= one.completion_tokens - 1
         ),
-        the_whole_of_call_one_was_reused=spend.template_broke == 0,
     )
 
 
