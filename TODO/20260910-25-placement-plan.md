@@ -182,7 +182,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 9a | The placement terms on the counterfactual ledger plan 23 creates | 3, plan 23 row #21 | E | PENDING | - | - | - |
 | 9b | RETIRED - plan 23 row #17 is the weights loop | - | - | RETIRED | - | - | - |
 | 10 | The `assemble` consolidation | 2, 5, 7, 8 | F | PENDING | - | - | - |
-| 11 | The console strip takes five tabs | - | G | PENDING | - | - | - |
+| 11 | The console strip takes five tabs | - | G | DONE #616 | p25-r11 | #616 | worker |
 | 14 | A target distribution, and the day's distance from it | 7 | G | PENDING | - | - | - |
 | 12 | `Judgement` - what the model made of each article | 11, plan 23 row #14 | H | PENDING | - | - | - |
 | 13 | `Voices` - who supplied the day, and what it is worth | 11 | I | PENDING | - | - | - |
