@@ -156,7 +156,7 @@ Four facts decide it, and all four were checked on 2026-09-11 rather than assume
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | One answer to what a day file is, and what a day window costs | - | A | DONE #609 | p24-r1 | #609 | worker |
 | 2 | The score index can be rebuilt from the ledger it indexes | - | A | DONE #615 | p24-r2 | #615 | worker |
-| 3 | The migration utility, and it refuses to write a tree it cannot read back | 1 | B | PENDING | - | - | - |
+| 3 | The migration utility, and it refuses to write a tree it cannot read back | 1 | B | IN-FLIGHT | p24-3 | - | worker |
 | 4 | The telemetry publisher declares the cover it already has | - | B | DONE #641 | p24-4 | #641 | worker |
 | 5 | `state/item-health/` files by day | 1, 3, 4 | C | PENDING | - | - | - |
 | 6 | `state/feed-health/` files by day | 1, 3 | D | PENDING | - | - | - |
@@ -280,7 +280,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | A dual read side that understands both grains, and leave the committed months in place | A permanent shape, kept and tested for ever, bought to avoid rewriting 19.64 MB once. Section 0.4 carries the four facts that make the rewrite cheap. It is also not merely inert: `_day_files` refuses a name it cannot place, so a month shard sitting in a day tree would **stop every read** rather than be ignored | Section 0.4 |
+| 1 | A dual read side that understands both grains, and leave the committed months in place | A permanent shape, kept and tested for ever, bought to avoid rewriting 19.64 MB once. Section 0.4 carries the four facts that make the rewrite cheap. It is also not merely inert: `day_partition.day_files` refuses a name it cannot place, so a month shard sitting in a day tree would **stop every read** rather than be ignored (the helper is `day_files` in `backend/idhazh/day_partition.py`, not `_day_files`; corrected 2026-09-12 before dispatch) | Section 0.4 |
 | 2 | Migrate all five ledgers in one commit | Then one row holds four behaviour changes and the readers of four ledgers, and a revert takes all four back. Each ledger's readers, prune, publisher and docs are one reviewable unit | `CLAUDE.md` section 6 |
 | 3 | Write the day tree and keep the month shards as a backup | Git is the backup (section 0.1), and a backup inside the directory the reader walks is not a backup | `CLAUDE.md` section 0.1 |
 
