@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-30
 
-The small set of beliefs that shape every yen-idhazh decision, stated once as vocabulary. These operationalize the engineering contract for a build-time digest pipeline; the authoritative guardrails live in [../../CLAUDE.md](../../CLAUDE.md) and the guardrails-only digest in [../agents/guardrails.md](../agents/guardrails.md). This page explains the *why* a reader needs before those guardrails make sense - it does not restate them.
+The small set of beliefs that shape every yen-idhazh decision, stated once as vocabulary. These operationalize the engineering contract for a build-time digest pipeline; the authoritative guardrails live in [../../CLAUDE.md](../../CLAUDE.md) section 1. This page explains the *why* a reader needs before those guardrails make sense - it does not restate them.
 
 ## 1. Static-first, or there is no project
 
@@ -61,5 +61,4 @@ These eleven are not new law - they are the concept-tier restatement of the guar
 - [evaluation.md](evaluation.md) - principle 6 in concrete form.
 - [config.md](config.md) - principle 8 in concrete form.
 - [telemetry.md](telemetry.md) - principle 9 in concrete form.
-- [../agents/guardrails.md](../agents/guardrails.md) - the guardrails-only digest.
-- [../../CLAUDE.md](../../CLAUDE.md) - the authoritative contract.
+- [../../CLAUDE.md](../../CLAUDE.md) - the authoritative contract; section 1 is the guardrails.

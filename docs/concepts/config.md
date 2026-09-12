@@ -1174,5 +1174,4 @@ Excluding the runner's ceilings is the less obvious half. They look exactly like
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - what `console.*` tunes.
 - [evaluation.md](evaluation.md) - the bands and thresholds.
 - [telemetry.md](telemetry.md) - the logging knobs.
-- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the schema every config file conforms to.
-- [../agents/guardrails.md](../agents/guardrails.md) - the identifier-and-config discipline.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the schema every config file conforms to, and which word a new key takes.

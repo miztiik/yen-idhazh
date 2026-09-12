@@ -15,7 +15,7 @@ To validate this document, check three things:
 
 1. **Section 12** claims full coverage of the proposal. Verify every `P.D*`, `P.L*`, `P.R*`, `P.Q*` and every section of the proposal appears there with a disposition.
 2. **Section 2** claims the proposal's description of the current code is wrong in named places. Verify each row against the file and line cited.
-3. **Section 4** claims seven persona advisors ruled. Verify each ruling names what the reader loses (`docs/agents/guardrails.md`).
+3. **Section 4** claims seven persona advisors ruled. Verify each ruling names what the reader loses (`CLAUDE.md` section 14).
 
 ---
 
@@ -2032,6 +2032,5 @@ What the measurement must record, so it cannot be misread later:
 
 
 - [`20260902-yen-idhazh-visual-planning-architecture.md`](20260902-yen-idhazh-visual-planning-architecture.md) - the proposal this record disposes of, section by section.
-- [`../CLAUDE.md`](../CLAUDE.md) - the engineering contract. Sections 0a, 0b, 6, 9, 11, 13 and 14 are load-bearing throughout.
-- [`../docs/agents/guardrails.md`](../docs/agents/guardrails.md) - the authority table behind every ruling in section 4.
+- [`../CLAUDE.md`](../CLAUDE.md) - the engineering contract. Sections 0a, 0b, 6, 9, 11, 13 and 14 are load-bearing throughout; section 14 is the authority assignment behind every ruling in section 4.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - what section 15's plan-docs must become before they can be executed.

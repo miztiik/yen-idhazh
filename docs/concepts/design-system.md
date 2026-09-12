@@ -86,8 +86,8 @@ recomputes them from the live document.
 **This reverses a rule that never bound.** The item carried "hairline rules
 rather than cards: seventeen boxes of chrome on a page whose product is prose is
 chrome winning" from the day it was written. It named what was removed and never
-what the reader gave up, so under
-[../agents/guardrails.md](../agents/guardrails.md) it was not a ruling. It cost
+what the reader gave up, so under [../../CLAUDE.md](../../CLAUDE.md) section 14
+it was not a ruling. It cost
 four things: figure and ground on the whole reading surface, the container an
 item's chart needed, an anchor a top-of-page list could point at, and any hover
 or focus feedback at all. Authority: Susan, 2026-08-31.
@@ -435,7 +435,7 @@ The checks, applied to any reader-facing surface:
 
 A surface that fails one of these ships only with a `## Design rationale` entry saying why. `CLAUDE.md` section 9 carries the Definition-of-Done line; Susan ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)) rules them.
 
-**And a veto costs something.** A ruling that removes must name what the reader loses. "Remove before adding" is a good instinct and a bad rule when it is free: a removal that states only what was removed is not a ruling and does not bind ([../agents/guardrails.md](../agents/guardrails.md)).
+**And a veto costs something.** A ruling that removes must name what the reader loses. "Remove before adding" is a good instinct and a bad rule when it is free: a removal that states only what was removed is not a ruling and does not bind ([../../CLAUDE.md](../../CLAUDE.md) section 14).
 
 ### Height is not the target; the page somebody lands on is
 
@@ -742,7 +742,7 @@ leftover. It is a fixed string, so it moves no bytes on any later run.
 - [console-design.md](console-design.md) - the operator half: how a console figure is worded, ranked, tinted and drawn.
 - [ui-shell.md](ui-shell.md) - the chrome that consumes these tokens.
 - [../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md) - who rules the sufficiency checks, and why the roster needed a demand side.
-- [../agents/guardrails.md](../agents/guardrails.md) - the authority table, and the rule that a veto must name what the reader loses.
+- [../../CLAUDE.md](../../CLAUDE.md) - section 14 carries the authority assignment, and the rule that a veto must name what the reader loses.
 - [digest.md](digest.md) - the item shape this vocabulary dresses.
 - [evaluation.md](evaluation.md) - where the confidence bands come from.
 - [principles.md](principles.md) - the beliefs behind the restraint.
