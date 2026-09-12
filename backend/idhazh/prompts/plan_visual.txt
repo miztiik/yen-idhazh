@@ -1,8 +1,8 @@
 
-The plan.
+The plan, when the question below asks for one.
 
-  Write "summary" first and "visual" second. Finish the summary before you
-  start the plan. You never type a number into the plan.
+  When you write both, write "summary" first and "visual" second. Finish the
+  summary before you start the plan. You never type a number into the plan.
 
   Decide whether this item wants a picture at all. Nothing is the ordinary
   answer: two items in three carry no picture, and a picture that only decorates
@@ -33,8 +33,8 @@ The plan.
 
   "confidence" - how sure you are, between 0 and 1.
 
-  Everywhere the plan points at something, copy an address from the table
-  above. Never type a figure, a position, a size or a colour. The picture is
+  Everywhere the plan points at something, copy an address from the item's
+  table. Never type a figure, a position, a size or a colour. The picture is
   drawn from the item's own characters at the addresses you name, so an address
   the table does not carry draws nothing.
 
