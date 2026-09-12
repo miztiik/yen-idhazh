@@ -21,9 +21,9 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 3 | 4 | 4 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 10 | 3 | 1 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 11 | 2 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 1 | 2 | 0 |
+| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
@@ -34,22 +34,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 7 | 21 | 6 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 3 | 5 | 0 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 1 |
-| [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 3 | 1 | 0 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 4 | 4 | 4 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 3 | 11 | 2 |
 
-## In flight - 6
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #3g | 11 | C7 | Call 1's reply does not fit its own budget | p11-3g |
-| #2 | 13 | B | The window takes a value, and nothing is deleted yet | p13-2 |
 | #1a | 23 | C | The fingerprint stops gating and stops being read | p23-1a |
-| #3 | 24 | B | The migration utility, and it refuses to write a tree it cannot read back | p24-3 |
-| #1 | 25 | A | Two docstrings defend a requirement the page retired | p25-1 |
-| #4 | 26 | B | The ruling, written where the next person arrives | p26-4 |
 
-## Ready now - 24
+## Ready now - 30
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -64,6 +58,7 @@ section 3 is where it is answered.
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #6 | 11 | F | The small model, its job and its cache go | 5b |
 | #1 | 12 | A | A new engine behind the same seam | - |
+| #3 | 13 | C | The fuse comes out, and one run is watched | 2 |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
@@ -80,9 +75,14 @@ section 3 is where it is answered.
 | #4 | 23 | F | An event gets a lifecycle | 3 |
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
+| #5 | 24 | C | `state/item-health/` files by day | 1, 3, 4 |
+| #6 | 24 | D | `state/feed-health/` files by day | 1, 3 |
+| #7 | 24 | E | `state/seen/` files by day | 1, 3 |
+| #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 1, 2, 3 |
+| #2 | 25 | B | One order over the whole day, inside a frame a person set | 1 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
-## Waiting on another row - 73
+## Waiting on another row - 67
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -97,7 +97,6 @@ section 3 is where it is answered.
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | D | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | E | A whole day, again | 5 is PENDING |
-| #3 | 13 | C | The fuse comes out, and one run is watched | 2 is IN-FLIGHT |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
@@ -145,11 +144,6 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING; 20 is PENDING |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a is IN-FLIGHT |
-| #5 | 24 | C | `state/item-health/` files by day | 3 is IN-FLIGHT |
-| #6 | 24 | D | `state/feed-health/` files by day | 3 is IN-FLIGHT |
-| #7 | 24 | E | `state/seen/` files by day | 3 is IN-FLIGHT |
-| #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 3 is IN-FLIGHT |
-| #2 | 25 | B | One order over the whole day, inside a frame a person set | 1 is IN-FLIGHT |
 | #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | 2 is PENDING |
 | #6 | 25 | C | The topic pills order by what is running | 2 is PENDING |
 | #4 | 25 | D | Carriage becomes a tie-break | 3 is PENDING |
@@ -160,9 +154,9 @@ section 3 is where it is answered.
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 
-## Finished - 14 plans with no live row
+## Finished - 15 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260912-27-adaptive-guardrails-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md
 
 ## See also
 
