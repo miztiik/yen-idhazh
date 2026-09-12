@@ -7,7 +7,7 @@ day anyway, on every scheduled publication and on every CI run, parsed it and
 put it through both contracts a reader holds. Measured on this repository on
 2026-09-08, on an Intel Core i7-1265U: 18 committed days, 19,867,266 bytes,
 0.45 s median over three runs (best 0.45 s, worst 0.96 s), and one more day
-every day nobody writes any code. That is the cost Rule #12 refuses.
+every day nobody writes any code. That is the cost Guardrail #12 refuses.
 
 So the answer is a receipt rather than a clock. A frozen artefact does not
 become suspect with age; it becomes suspect when the rules move. A row here
@@ -70,7 +70,7 @@ class DayValidationReceipt(Contract):
             why=(
                 "`validate-days` re-read every committed day on every publication and "
                 "every CI run - 18 days and 19,867,266 bytes on 2026-09-08, 0.45 s "
-                "median, and one day more every day nobody writes any code (Rule #12). "
+                "median, and one day more every day nobody writes any code (Guardrail #12). "
                 "A published day is frozen, so re-reading it can only find a fault the "
                 "day it was written already refused. What can change is the contract it "
                 "is read through, so the receipt keys on the validator's identity as "

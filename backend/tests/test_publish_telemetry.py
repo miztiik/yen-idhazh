@@ -248,7 +248,7 @@ def test_every_committed_shard_reads_back_through_the_contract() -> None:
 
     The newest shard, not every one. An older shard is frozen: if it parsed when
     it was written it parses now, and the only thing that can change that is the
-    contract - which `ci.yml` re-reads the whole tree for (Rule #12).
+    contract - which `ci.yml` re-reads the whole tree for (Guardrail #12).
     """
     assert COMMITTED_SHARDS, "the committed projection has no shards to migrate"
     path = COMMITTED_SHARDS[-1]

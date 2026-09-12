@@ -48,7 +48,7 @@ what each one may hold; the module above owns only when a shard is written and
 from what. Before that the whole boundary was a tuple of eleven strings and a set
 of three more, both readable code and neither a contract - so the one payload a
 reader's browser downloads had no schema, no version stamp and no changelog while
-every other persisted surface had all three (Rule #3). `FORBIDDEN_COLUMNS` is
+every other persisted surface had all three (Guardrail #3). `FORBIDDEN_COLUMNS` is
 checked at **import**, so a forbidden field on the model stops the process rather
 than reaching the published tree.
 
@@ -99,7 +99,7 @@ and gzipped from 74,791 and 51,312 to 143,098 and 100,918. That is 117,913 more
 gzipped bytes across both months, roughly double. It is not a first-load cost:
 the console fetches a month shard on demand as the viewport reaches it, and the
 prerendered seed carries only the rows the default window needs. The 1 GB Pages
-cap (Rule #2) is three orders of magnitude away.
+cap (Guardrail #2) is three orders of magnitude away.
 
 **The prerendered seed does not carry them, and that is a measurement rather
 than a preference.** `publicTelemetry` in
@@ -296,7 +296,7 @@ instants they name, so `2026-08-27T20:30` comes before `2026-08-28` and
 `2026-08-28T09:00` comes after it. A row carrying no stamp reads as older, which
 is the safe direction.
 
-Reading the column any other way is a Rule #10 breach on a published page, and
+Reading the column any other way is a Guardrail #10 breach on a published page, and
 the ledger says how big. Measured 2026-08-28 over all 2,683 committed rows of
 `state/scores.csv`: 22 rows are genuinely cut - their post-cap word count is
 below their pre-cap one - and `truncation_flagged` is true on **0 of those 22**.
@@ -467,7 +467,7 @@ ledger had been committed for four days with no page reading a cell of it.
 
 Both ceilings come from `config/idhazh.json` through
 [frontend/src/lib/server/config.ts](../../../frontend/src/lib/server/config.ts)
-(Rule #6). A counter without its ceiling is not a measurement: 4,925 says
+(Guardrail #6). A counter without its ceiling is not a measurement: 4,925 says
 nothing until the configured 16,384 sits beside it.
 
 **What counts as a read prompt token is defined once**, in `itemRead` in
@@ -605,7 +605,7 @@ the empty span, and `coverageSentence` writes the one line under the title.
  nothing an operator would tune sits behind it.
 - **The sentence names both numbers.** `We timed 8 of these 30 days` - days
  drawn and days measured, so a reader can count the columns and check it
- (`CLAUDE.md` Rule #10). A share would not be checkable against anything on
+ (`CLAUDE.md` Guardrail #10). A share would not be checkable against anything on
  the screen.
 - **Each chart brings its own subject and verb**, because the three measure
  three different things: one timed a day, one wrote summaries on it, one
@@ -642,4 +642,4 @@ asserts that no mark falls inside a tinted span -
 - [../sources/item-health.md](../sources/item-health.md) - the private item-grain ledger.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - how a console figure is worded and printed.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - ledgers as records, logs as evidence.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #1 and Rule #11.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #1 and Guardrail #11.

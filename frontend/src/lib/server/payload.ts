@@ -87,7 +87,7 @@ const DAY_MS = 86_400_000;
  * 90 is the widest span the window control offers - `console.window_presets`
  * ends there in `config/appearance.json` - so a panel cannot draw a day older
  * than this whatever the operator does. Reading further back buys a number
- * nothing can display (`CLAUDE.md` Rule #12).
+ * nothing can display (`CLAUDE.md` Guardrail #12).
  *
  * It is a constant here and not a config read because `config.ts` imports
  * `REPO_ROOT` from this module, so importing the config reader back would close
@@ -134,7 +134,7 @@ function unbounded(cover: number): boolean {
  * The walk descends newest first and stops at the cutoff, so it opens the year,
  * month and day directories the window reaches and no others. Adding another
  * published day adds another directory this call never lists once the window has
- * been filled (`CLAUDE.md` Rule #12). Pass `-1` to read the whole tree, and say
+ * been filled (`CLAUDE.md` Guardrail #12). Pass `-1` to read the whole tree, and say
  * beside the call why (`docs/concepts/growing-reads.md`).
  *
  * **The window is anchored on the newest day found, never on today.** Anchored
@@ -353,7 +353,7 @@ export function dayShell(
 /** The day the home page carries: a seed with the day's leads anchored in it.
  *
  * A route `load` can only read the committed tree, so a seed decision made
- * inside one is reachable by a test only through the archive - which Rule #12
+ * inside one is reachable by a test only through the archive - which Guardrail #12
  * forbids and the canary cannot stand in for, because its biggest day holds 8
  * stories against a 15-story seed and no leads at all. So the decision is here,
  * with a root a fixture can point at.
@@ -469,7 +469,7 @@ export function evalRows(months: number = LEDGER_WINDOW_MONTHS): CsvTable {
  * **This is where the bound has to sit.** It is exported, so bounding only
  * `evalRows` and `itemHealthRows` would leave the next caller reading every
  * month a run ever wrote. Adding another month adds a file this call does not
- * open once the cover is filled (`CLAUDE.md` Rule #12); pass `-1` to open all of
+ * open once the cover is filled (`CLAUDE.md` Guardrail #12); pass `-1` to open all of
  * them.
  *
  * The listing itself still names every shard, and that is the honest residue:
@@ -502,7 +502,7 @@ export function itemHealthRows(months: number = LEDGER_WINDOW_MONTHS): CsvTable 
  *
  * Opens only `state/item-health/<YYYY-MM>.csv` for the one date handed in -
  * never a listing of the directory, never an older month - so the cost is one
- * file whatever the archive holds behind it (`CLAUDE.md` Rule #12). The console
+ * file whatever the archive holds behind it (`CLAUDE.md` Guardrail #12). The console
  * band reads the newest published day this way instead of walking every month
  * shard through `readShards` to keep only that one day. A month with no shard
  * yet returns no rows, and the caller shows the day no health fact rather than
@@ -603,7 +603,7 @@ function extractionOf(parsed: Record<string, unknown>): DayExtraction | null {
  *
  * Opens only `state/day-metrics/<YYYY>/<MM>/<DD>.json` for the dates handed in -
  * never a listing of the tree - so the cost is the window the caller asked for
- * and not the archive it sits in (`CLAUDE.md` Rule #12). Adding another
+ * and not the archive it sits in (`CLAUDE.md` Guardrail #12). Adding another
  * published day writes another file this call never opens unless the window
  * reaches it. A date with no record, or a record that cannot be read, is left
  * out of the map: the caller falls back to the raw ledger for that day, which is
@@ -910,7 +910,7 @@ export interface RunSummary {
  * thing measured once per run, not a new thing each run.
  *
  * One manifest open a day inside `windowDays`, and none outside it - so another
- * published day costs this call nothing (`CLAUDE.md` Rule #12).
+ * published day costs this call nothing (`CLAUDE.md` Guardrail #12).
  */
 export function loadManifests(
 	root: string = DIGEST_ROOT,
@@ -974,7 +974,7 @@ export function loadManifests(
  * One day payload open a day inside `windowDays`, and none outside it. This is
  * the most expensive of the archive reads - a day payload is hundreds of
  * kilobytes where a manifest is two - so it is the one the cover buys the most
- * on (`CLAUDE.md` Rule #12).
+ * on (`CLAUDE.md` Guardrail #12).
  */
 export function publishedItems(
 	root: string = DIGEST_ROOT,
@@ -1009,7 +1009,7 @@ export interface DayVisuals {
  * already open here.
  *
  * Bounded the same way `publishedItems` is, and for the same reason: no console
- * panel can draw a day older than the widest preset (`CLAUDE.md` Rule #12).
+ * panel can draw a day older than the widest preset (`CLAUDE.md` Guardrail #12).
  */
 export function publishedCharts(
 	root: string = DIGEST_ROOT,

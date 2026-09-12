@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-30
 
-The small set of beliefs that shape every yen-idhazh decision, stated once as vocabulary. These operationalize the engineering contract for a build-time digest pipeline; the authoritative rules live in [../../CLAUDE.md](../../CLAUDE.md) and the rules-only digest in [../agents/guardrails.md](../agents/guardrails.md). This page explains the *why* a reader needs before those rules make sense - it does not restate them.
+The small set of beliefs that shape every yen-idhazh decision, stated once as vocabulary. These operationalize the engineering contract for a build-time digest pipeline; the authoritative guardrails live in [../../CLAUDE.md](../../CLAUDE.md) and the guardrails-only digest in [../agents/guardrails.md](../agents/guardrails.md). This page explains the *why* a reader needs before those guardrails make sense - it does not restate them.
 
 ## 1. Static-first, or there is no project
 
@@ -14,7 +14,7 @@ A stock 4 vCPU runner with no GPU, a 6 h job cap and a 10 GB cache is the machin
 
 ## 3. Measured, not estimated
 
-An unmeasured number may not justify a design. Every throughput, cost, size and quality claim carries the hardware it came from, the date and the spread; a laptop figure is labelled a laptop figure. When a measurement contradicts the design, the design changes. This has already happened here, which is the point of measuring at all. The one exception is a counterfactual: the operator console prices a run at a rate the operator sets, to answer whether the self-hosted design is worth its wall clock, and it is labelled a counterfactual rather than a bill ([../../CLAUDE.md](../../CLAUDE.md) Rule #10).
+An unmeasured number may not justify a design. Every throughput, cost, size and quality claim carries the hardware it came from, the date and the spread; a laptop figure is labelled a laptop figure. When a measurement contradicts the design, the design changes. This has already happened here, which is the point of measuring at all. The one exception is a counterfactual: the operator console prices a run at a rate the operator sets, to answer whether the self-hosted design is worth its wall clock, and it is labelled a counterfactual rather than a bill ([../../CLAUDE.md](../../CLAUDE.md) Guardrail #10).
 
 ## 4. Contracts before logic
 
@@ -52,7 +52,7 @@ The second clause is not a softening, it is the other failure. **A surface nobod
 
 ## Design rationale
 
-These eleven are not new law - they are the concept-tier restatement of the Rules in the vocabulary a digest pipeline needs, so a contributor learns the *why* from the concept tier and the *rule* from the contract. The rejected alternative was to let each concept doc re-derive the ethos in passing; that duplicates the contract and drifts (Rule #4, one definition). Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
+These eleven are not new law - they are the concept-tier restatement of the guardrails in the vocabulary a digest pipeline needs, so a contributor learns the *why* from the concept tier and the *guardrail* from the contract. The rejected alternative was to let each concept doc re-derive the ethos in passing; that duplicates the contract and drifts (Guardrail #4, one definition). Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
 
 ## See also
 
@@ -61,5 +61,5 @@ These eleven are not new law - they are the concept-tier restatement of the Rule
 - [evaluation.md](evaluation.md) - principle 6 in concrete form.
 - [config.md](config.md) - principle 8 in concrete form.
 - [telemetry.md](telemetry.md) - principle 9 in concrete form.
-- [../agents/guardrails.md](../agents/guardrails.md) - the rules-only digest.
+- [../agents/guardrails.md](../agents/guardrails.md) - the guardrails-only digest.
 - [../../CLAUDE.md](../../CLAUDE.md) - the authoritative contract.

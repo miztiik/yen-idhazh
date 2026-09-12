@@ -1,12 +1,12 @@
 """The evidence package: what it writes, and every way it refuses to be read.
 
 The label queue exists to measure the faithfulness bands against a human
-(`CLAUDE.md` Rule #10). That measurement is worth nothing if the person and the
+(`CLAUDE.md` Guardrail #10). That measurement is worth nothing if the person and the
 scorer read different text, so most of what is asserted here is refusal: a row
 with no recorded premise, a row the package does not hold, a file whose text was
 edited, and a file that names a premise the ledger row was not scored on.
 
-No mocks and no network (Rule #7). The premise, the summary and the identity
+No mocks and no network (Guardrail #7). The premise, the summary and the identity
 come from committed fixtures that other contract tests already read, and the
 "a row with no premise digest" case runs over the real committed ledger.
 """

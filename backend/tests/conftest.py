@@ -79,7 +79,7 @@ def no_tracing_host(monkeypatch: pytest.MonkeyPatch) -> None:
     are all set. A developer who has those exported, has the optional extra
     installed and runs the suite with `observability.tracing_enabled` true would
     otherwise post every span of every fixture run to a third party - which is a
-    test touching the network (Rule #7) and article-adjacent data leaving the
+    test touching the network (Guardrail #7) and article-adjacent data leaving the
     machine without anybody asking for it.
 
     Autouse, because the tests that would do it are not the tests that know
@@ -212,7 +212,7 @@ class RecordedEndpoint:
 
     Nothing is mocked: the caller makes its ordinary POST over a loopback
     socket, and the bytes it reads back are the ones a llama-server wrote
-    (Rule #7). The stdlib server owns the framing, so the test is about the
+    (Guardrail #7). The stdlib server owns the framing, so the test is about the
     body and not about HTTP.
     """
 

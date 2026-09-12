@@ -218,7 +218,7 @@ python backend/utilities/gate_lock.py -- npm run test:browser
 serialising a gate that finishes in seconds only adds waiting. The tool reads no
 configuration and imports nothing from `idhazh`, so any supported Python runs it
 from a fresh clone. **CI never takes it** - a runner is one job alone on its own
-machine (Rule #2), so nothing about a CI run moves. A caller that has to wait
+machine (Guardrail #2), so nothing about a CI run moves. A caller that has to wait
 prints who holds the lock, from which worktree, running what, and for how long,
 every 30 seconds. And it cannot fail your gate: a lock whose holder died is
 reclaimed, and a caller that waits out `--timeout` runs the gate unlocked rather
@@ -298,7 +298,7 @@ is the runner's, and it is in
 [../reference/measurements.md](../reference/measurements.md).
 
 **A test may not walk a collection a run appends to**, because its cost then
-grows with every published day rather than with the code it checks (Rule #12 and
+grows with every published day rather than with the code it checks (Guardrail #12 and
 `CLAUDE.md` section 13). That covers the committed days, the telemetry and state
 shards, the search index, the corpus, and anything added later. Drive a per-item
 rule from the canary day instead; ask a whole-tree question once and assert on
@@ -502,7 +502,7 @@ are worth telling apart:
 **Before adding a key here, ask the one question.** Does this number have to move
 when nobody wrote any code, because a run appended more? Yes means the route does
 not take a number - find the property it would have stood in for and assert that.
-That is Rule #12's own test with one noun changed, and it is why `MAX_HOPS = 4`
+That is Guardrail #12's own test with one noun changed, and it is why `MAX_HOPS = 4`
 in the cold-load spec is fine while a page ceiling was not: a hop is a month, so
 it moves when somebody widens the window and never when we publish.
 
@@ -530,7 +530,7 @@ count is what grew.
 
 **`PLAYWRIGHT_WORKERS` sets how many run at once: one locally, four in CI, and
 the two machines disagree about which is right.** A runner is 4 vCPU with
-nothing else on it (Rule #2) and four workers took the browser step from 344 s
+nothing else on it (Guardrail #2) and four workers took the browser step from 344 s
 to 207 s, 40 percent faster, measured 2026-09-05. The same change on an a developer machine
 with six other checkouts building measured 233.7 s against 135.5 s - **72 percent
 slower**, because two performance cores shared with six sibling agents have no
@@ -611,7 +611,7 @@ takes 24 seconds there and `npm run test:whole-day` 85 seconds for its 7 tests,
 and the whole job - checkout, `npm ci`, the Chromium install, the build and the
 spec - is 183 seconds. The developer-box figures above are three to five times
 those, which is the usual shape and is why a local number may not stand in for a
-runner one (Rule #10).
+runner one (Guardrail #10).
 
 Appending the build and the spec to the `browser` job would cost 109 seconds.
 The `browser` job measured 460, 482, 494, 514, 542 and 554 seconds over its last
@@ -624,7 +624,7 @@ half, because nothing else in the run is waiting.
 A separate job costs nothing there. It is 183 seconds against a `browser` job
 that is 460 seconds at its fastest, it runs at the same time, and the workflow
 finishes at the moment it finished before. Actions minutes are free and
-unmetered on a public repository (Rule #2), so the 183 seconds are spent rather
+unmetered on a public repository (Guardrail #2), so the 183 seconds are spent rather
 than paid, and 20 concurrent jobs are available against the six this workflow
 already starts.
 
@@ -845,9 +845,9 @@ is the whole of it.
 
 **The gate never had a requirement behind it.** Its own docstring said so: every
 route is prerendered, so first-load JavaScript is hydration cost rather than
-time-to-read, nobody had measured what that cost a reader, and Rule #1 forbids
+time-to-read, nobody had measured what that cost a reader, and Guardrail #1 forbids
 the telemetry that would settle it. Having no number to defend, it defined bad
-as *different*. That is a change-detector, and Rule #10 says an unmeasured
+as *different*. That is a change-detector, and Guardrail #10 says an unmeasured
 number may not justify a design.
 
 **What it cost is measured.** A local Windows build does not reproduce a Linux
@@ -875,7 +875,7 @@ instead of bytes, which is the same number whatever the published history holds.
 | --- | --- |
 | Keep the ratchet and widen the tolerance | The tolerance was never the problem. A wider one still needs a per-route record in one shared file, which is what serialised the branches. |
 | Keep the ratchet and generate the record | A file the build rewrites is a log, and a gate whose own tooling updates its baseline cannot fail. |
-| Replace it with a transfer-time budget | Two invented constants instead of one, and Rule #1 forbids the telemetry that would settle either. It also models a cost a reader of a prerendered page does not pay. |
+| Replace it with a transfer-time budget | Two invented constants instead of one, and Guardrail #1 forbids the telemetry that would settle either. It also models a cost a reader of a prerendered page does not pay. |
 | Delete the page ceilings too | `/archive/` shipped at 873.1 KB of gzipped HTML and nobody noticed until somebody measured. A guardrail is a priced limit, not a change-detector, and it costs nothing to hold. |
 
 Authority: owner, 2026-08-30. The ratchet was Carmack's, 2026-08-25, on the
@@ -926,7 +926,7 @@ is not a byte decision at all: it changes what the chart is a measurement of, an
 a scatter that quietly stopped drawing some of its rows is worse than one that
 got heavy.
 
-**Two limits are untouched and neither is ours to choose.** Rule #2's 1 GB Pages
+**Two limits are untouched and neither is ours to choose.** Guardrail #2's 1 GB Pages
 cap is GitHub's, and `retention.pages_hard_cap_mb` is bounded `le=1024` in the
 schema so a config edit can only ever make it stricter - which is the property
 the six page numbers never had. The 200,000-byte lazy chart chunk stands too,

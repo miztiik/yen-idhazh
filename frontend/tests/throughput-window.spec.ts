@@ -1,5 +1,5 @@
 /** The throughput candles are bounded to the window before they are built, so
- * the shipped array never grows with the archive (Rule #12).
+ * the shipped array never grows with the archive (Guardrail #12).
  *
  * Row 18 windowed the DRAWING of the chart, but the server still built a candle
  * for every timed day in history and inlined the lot into every prerendered
@@ -9,7 +9,7 @@
  * on the shipped array is the preset's days whatever the archive holds.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
- * more every published day (Rule #12), and the one thing this proves - which
+ * more every published day (Guardrail #12), and the one thing this proves - which
  * days survive the bound, and that a kept day is unchanged - is reachable from a
  * built Map.
  */

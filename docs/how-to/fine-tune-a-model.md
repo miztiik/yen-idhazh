@@ -262,7 +262,7 @@ only way they differ:
 
  **How far back it reaches is set by `items-*` artifact retention, which is
  seven days.** Measured 2026-08-29: one run's four shards are 555,842 bytes, so
- a week of five runs a day is 18.6 MB against the 500 MB Rule #2 allows.
+ a week of five runs a day is 18.6 MB against the 500 MB Guardrail #2 allows.
 - **`refill`** reaches everything older than that, because the committed ledger
  and the committed digest hold between them every half of a training row except
  the article body - and the body has an address. `state/scores.csv` names the
@@ -340,7 +340,7 @@ only way they differ:
  `finetune.sequence_length`, using the tokenizer named by
  `models.<role>.hf_base_repo`. With `refill` it is one of the **two commands
  here that reach the network**, which is why both are operator tools and not
- tests (Rule #7).
+ tests (Guardrail #7).
 - **`remove`** prints what it would delete and stops. `--yes` does it, and it
  refuses either way to take the window below `finetune.min_rows`, saying how far
  below it would land.
@@ -434,7 +434,7 @@ job. Dropping stays the right refusal; what changed is that nothing now has to
 be refused.
 
 **Nobody has measured what 16,384 costs a card, because nothing has trained
-yet** (Rule #10). If a session runs out of memory, `SEQUENCE_LENGTH_OVERRIDE` in
+yet** (Guardrail #10). If a session runs out of memory, `SEQUENCE_LENGTH_OVERRIDE` in
 the notebook lowers the window for that session and prints how many rows the
 lower value dropped. That is a session's choice and not a config edit, because
 the config states how long the work really is.
@@ -442,7 +442,7 @@ the config states how long the work really is.
 **Where 1000 came from, plainly.** It is derived, not measured, and from one
 constraint only: a free T4 session has to finish. Estimated 1.8 h for 1000 rows
 over 2 epochs. No training job has run here yet, so the figure gets corrected the
-first time one does (Rule #10).
+first time one does (Guardrail #10).
 
 `hf_base_repo` sits on the `models` entry and not in `finetune`, because training
 reads the safetensors repository while the pipeline reads the GGUF one. Held in

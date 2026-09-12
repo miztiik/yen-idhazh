@@ -199,7 +199,7 @@ test('the standing band carries the level, the track and the runway', async ({ p
 	// The size moved off a card and into the band on 2026-08-30, because the band
 	// stands on all three console routes and one page may not state one figure
 	// twice. What it owes is unchanged: a level, the share of the one limit that
-	// cannot move (Rule #2), and a runway.
+	// cannot move (Guardrail #2), and a runway.
 	const band = page.locator('[data-console-band] [data-band-fact="size"]');
 	await expect(band).toHaveCount(1);
 	const sentence = page.locator('[data-band-size]');

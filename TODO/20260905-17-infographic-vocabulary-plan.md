@@ -71,7 +71,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- |
 | 1 | The gate: primary class is `singular`; the figure is carried by our own title or standfirst; **and either** a span-anchored significance qualifier from a versioned list within one sentence, **or** the figure is the only quantity in the article | Row 40, Editor |
 | 2 | **"Only" is admitted where "biggest" is refused.** Biggest is a fact about our sort order, not about the world | Row 40 |
-| 3 | The qualifier list is versioned config, so a later change to what counts as significant is visible in the record | Rule #6 |
+| 3 | The qualifier list is versioned config, so a later change to what counts as significant is visible in the record | Guardrail #6 |
 
 ### Rejected alternatives
 

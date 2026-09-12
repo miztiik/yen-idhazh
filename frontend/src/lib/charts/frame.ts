@@ -662,7 +662,7 @@ export interface CoverageItems {
  * sentence that only ever says "all of it" is noise, and one printed under a
  * chart with two days missing of thirty is a caveat nobody reads. Both numbers
  * are named rather than a share, so a reader can check the claim against the
- * columns he can see (CLAUDE.md Rule #10).
+ * columns he can see (CLAUDE.md Guardrail #10).
  *
  * `lead` is the subject and the verb, because the three charts that draw this
  * window measure three different things and no one verb is true of all of them:

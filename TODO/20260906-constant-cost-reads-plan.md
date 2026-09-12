@@ -110,7 +110,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
   | 1 | Lower `max_window_days` to 90 or 180. | It is a retention floor, not a viewport clamp. Lowering it authorises shard deletion, and the audit shows no UI path past 90 days today. | Owner, 2026-09-06 |
-  | 2 | Add 180 to the presets. | A wider preset pulls more month files, which works against the goal of this plan. Reconsidered 2026-09-08 and deferred again: 180 is a fixed constant so it would not break Rule #12, but it raises the fixed read from three month files to six and shows the same as 90 until more than 90 days accumulate. | Owner, 2026-09-06; reaffirmed 2026-09-08 |
+  | 2 | Add 180 to the presets. | A wider preset pulls more month files, which works against the goal of this plan. Reconsidered 2026-09-08 and deferred again: 180 is a fixed constant so it would not break Guardrail #12, but it raises the fixed read from three month files to six and shows the same as 90 until more than 90 days accumulate. | Owner, 2026-09-06; reaffirmed 2026-09-08 |
   | 3 | Let each row edit the contract it needs. | Six rows would contend for one file. | execute-a-plan.md |
 
 ## 3 - Row #2 - One-pass build reductions
@@ -486,7 +486,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | A raw-history reader is deleted only once its replacement produces the identical figure, or the intended corrected figure named in decision 4. | Fowler |
-  | 2 | Private state files are never served to a reader for drilldown. | CLAUDE.md Rule #1 |
+  | 2 | Private state files are never served to a reader for drilldown. | CLAUDE.md Guardrail #1 |
   | 3 | Dropping vectors after parsing saves nothing; the read and the parse already happened. | Carmack |
   | 4 | The record counts distinct published items, so the cutover shows the record's authoritative count for the summaries-scored count and the determinism and extraction-suspect flags wherever the console over-counted raw score-ledger rows - re-scores and scores for never-published articles. In the 2026-09-08 snapshot four days over-counted: 2026-08-29 (399 to 366), 2026-09-02 (598 to 536), 2026-09-05 (456 to 374), 2026-09-07 (283 to 209). By the time row 23 landed, 2026-09-07 had been republished and no longer over-counts (record and raw both read 357), so the visible correction on the committed data is three days. The record is authoritative for whatever the day currently is; the number is not frozen. | Owner, 2026-09-08 |
 

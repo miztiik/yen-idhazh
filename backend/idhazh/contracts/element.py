@@ -117,7 +117,7 @@ DateOrYear = Annotated[str, StringConstraints(pattern=DATE_OR_YEAR_PATTERN)]
 #: The two bounds a producer needs as numbers rather than as annotations. A
 #: pattern over fetched bytes can match a 200-digit serial number or a
 #: 600-character hyphenated word, and a producer that cannot read the bound has
-#: no way to refuse one except by letting the shape raise mid-article (Rule #11).
+#: no way to refuse one except by letting the shape raise mid-article (Guardrail #11).
 VALUE_MAX_LENGTH: Final = 40
 UNIT_MAX_LENGTH: Final = 32
 #: The machine-readable reading of what the span says. Bounded because an
@@ -237,7 +237,7 @@ class Element(Model):
     span_excerpt: UntrustedLine = Field(
         description=(
             "The verbatim slice Article.text[span_start:span_end]. Untrusted text: "
-            "data and never instruction (Rule #11), and never republished to a reader."
+            "data and never instruction (Guardrail #11), and never republished to a reader."
         )
     )
     value: ElementValue | None = Field(
@@ -400,7 +400,7 @@ class ElementTable(Contract):
             ),
             why=(
                 "Contracts before logic - the two pattern producers are written against a "
-                "fixed payload (Rule #3). Six kinds land in one entry rather than four "
+                "fixed payload (Guardrail #3). Six kinds land in one entry rather than four "
                 "later widenings of a persisted shape. `span_excerpt` is the one name for "
                 "the verbatim slice, because `raw` is whitespace-cleaned and `surface` is "
                 "already this project's word for a place something is shown."
@@ -528,7 +528,7 @@ class ElementTable(Contract):
         unit are all unchanged there, and only `sentence_index` could be stale.
 
         Bounded by `elements.max_per_article`, so it cannot grow with the
-        archive (Rule #12).
+        archive (Guardrail #12).
         """
         for element in self.elements:
             if text[element.span_start : element.span_end] != element.span_excerpt:

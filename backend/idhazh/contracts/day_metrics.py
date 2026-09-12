@@ -12,7 +12,7 @@ the day as of the run that wrote it, and a later correction rewrites it whole.
 The console today rebuilds these figures by walking every committed score row,
 item-health row, feed-health row and published day (research findings 61, 62,
 63, 67, 68, 70, 73, 74, 75). That walk gets slower every published day for an
-answer that never changes once the day is frozen (CLAUDE.md Rule #12). This
+answer that never changes once the day is frozen (CLAUDE.md Guardrail #12). This
 record is the answer, written once by the producer that already holds the data.
 
 **Additive against non-additive is the spine of this shape (Andre).** A figure a
@@ -334,7 +334,7 @@ class DayMetrics(Contract):
                 "the planner stopped choosing them or the extractor stopped finding "
                 "numbers. The block is the day's join of the item-health census, which "
                 "carries the class, against the published day, which carries the chart - "
-                "both bounded by the day and neither by the archive (Rule #12). Nullable, "
+                "both bounded by the day and neither by the archive (Guardrail #12). Nullable, "
                 "because a record an earlier run wrote carries no such block and the "
                 "console reads it leniently rather than dropping the whole day."
             ),
@@ -346,7 +346,7 @@ class DayMetrics(Contract):
                 "The console rebuilt every per-day figure by walking the whole committed "
                 "history on every build (research findings 61-75), a cost that rose with "
                 "each published day for an answer that never changed once the day was "
-                "frozen (Rule #12). This record carries those figures, written once by the "
+                "frozen (Guardrail #12). This record carries those figures, written once by the "
                 "producer that already holds the data. It stores a total only where a "
                 "reader may add it across days and never as a running counter, because a "
                 "correction to a counter needs a decrement path and a missed decrement is "

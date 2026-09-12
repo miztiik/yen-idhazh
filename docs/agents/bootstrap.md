@@ -12,7 +12,7 @@ Code Copilot Chat (`.github/agents/*.agent.md`). ASCII only in agent markdown:
 ## The ritual
 
 1. **[`CLAUDE.md`](../../CLAUDE.md), end to end.** The contract. Know which of
- Rules #1-#12 are load-bearing here and cite them by number. Section 0d
+ Guardrails #1-#12 are load-bearing here and cite them by number. Section 0d
  (intent above the contract, the contract above code) and the section 1
  preamble are read first, every session.
 2. **[`guardrails.md`](guardrails.md).** Non-goals, git hygiene, stop
@@ -24,7 +24,7 @@ Code Copilot Chat (`.github/agents/*.agent.md`). ASCII only in agent markdown:
  folder.
 5. **The active plan-doc under `TODO/`**, if the task touches it.
 6. **`git log --oneline -20`**, for in-flight work that overlaps.
-7. **Say which Rules and which docs are load-bearing**, in your first paragraph.
+7. **Say which guardrails and which docs are load-bearing**, in your first paragraph.
  That makes the load explicit and easy to challenge.
 8. **An answer that would decline on a limitation is not finished until it
  names a next move** - do it, price it, or say what would settle it
@@ -60,7 +60,7 @@ closure - are in [`../how-to/execute-a-plan.md`](../how-to/execute-a-plan.md).
 
 ## See also
 
-- [`guardrails.md`](guardrails.md) - the rules every persona must honour.
+- [`guardrails.md`](guardrails.md) - the guardrails every persona must honour.
 - [`../how-to/author-a-plan.md`](../how-to/author-a-plan.md) - authoring a plan-doc.
 - [`../how-to/execute-a-plan.md`](../how-to/execute-a-plan.md) - the execution contract.
 - [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) - what to run locally and what to leave to CI.

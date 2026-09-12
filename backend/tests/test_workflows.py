@@ -120,14 +120,14 @@ UNPUBLISHABLE_DATES: Final = (
 # instead.
 SHELLCHECK_STEP: Final = "Lint the shell"
 SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
-# The ceiling, not the dispatch rule. Rule #2 allows 20 concurrent jobs; a regex
+# The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
 # that is what every scheduled run gets and no eight-shard run is measured yet.
 CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4", "5", "6", "7", "8"})
 CONTENT_REFRESH_SHARD_DEFAULT: Final = "4"
 # How long a worker may run and how many run at once. Both were literals in the
 # work job while `config/idhazh.json` declared different numbers that nothing
-# read, so config was a wrong answer with a schema behind it (Rule #6).
+# read, so config was a wrong answer with a schema behind it (Guardrail #6).
 WORK_BOUND_KEYS: Final = frozenset({"timeout-minutes", "max-parallel"})
 
 # Every major below was read from its own `action.yml` on 2026-08-24 and declares
@@ -232,7 +232,7 @@ WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "visuals": "visual_planner"}
 # entry nobody can attribute.
 WEIGHTS_CACHE_SUFFIX: Final = "v4"
 # Where Playwright unpacks a browser, and so the one path a job caching one may
-# name. Two paths would be two entries against the 10 GB ceiling in Rule #2,
+# name. Two paths would be two entries against the 10 GB ceiling in Guardrail #2,
 # which the two weights entries already use most of.
 BROWSER_CACHE_PATH: Final = "~/.cache/ms-playwright"
 # Who reads the pinned browser build: workflow, job, step id, output name. One
@@ -242,7 +242,7 @@ MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime", "ba
 # Every job that stands up llama-server, and the log that job writes. Both must
 # name the host, the binary and the weights: a shard's throughput is decided by
 # the host it drew, and a number that cannot name the bytes that produced it is
-# not a measurement (Rule #10).
+# not a measurement (Guardrail #10).
 RUNTIME_IDENTITY_JOBS: Final = {
     "work": ("llama-server.log", "summarize_file"),
     "visuals": ("visual-planner.log", "visual_planner_file"),
@@ -251,7 +251,7 @@ RUNTIME_IDENTITY_STEP: Final = "What this runner is"
 # One loopback port per workflow, declared once. `server_argv` binds it, every
 # probe reads it, and `idhazh.llm.server` reads it for the address the stage
 # posts to - so a moved port cannot leave a server on one and a client on
-# another (Rule #6).
+# another (Guardrail #6).
 LLAMA_PORT_ENV: Final = "LLAMA_PORT"
 LLAMA_PORT_VALUE: Final = "8080"
 LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
@@ -301,7 +301,7 @@ RUNTIME_LOG_LINES: Final = (
 # The head of llama-server's own log, one per work shard of run `2026-08-29-3`.
 # The pattern below is checked against these rather than against the four
 # strings above, because a pattern nobody ran against a real line is how the
-# `^(srv|slot) ` anchor survived review (Rule #7).
+# `^(srv|slot) ` anchor survived review (Guardrail #7).
 RUNTIME_LOG_CAPTURES: Final = sorted(
     (FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt")
 )
@@ -480,7 +480,7 @@ RECORD_COMMAND: Final = "python -m idhazh record"
 # The pass that runs after the merge, and the flag that says what it covers. A
 # run appends only to the shard its own date routes to, so the date is the whole
 # cover - without it the pass reads every feed-health, item-health and score
-# shard the archive holds and costs more every month (Rule #12).
+# shard the archive holds and costs more every month (Guardrail #12).
 SETTLE_COMMAND: Final = ("python", "-m", "idhazh", "dedupe-ledgers")
 SETTLE_COVER_FLAG: Final = "--date"
 # The step that adds this run's accepted pairs to the training window. It runs
@@ -523,7 +523,7 @@ COUNTERS_JOB_FLAG: Final = "--job"
 COUNTERS_JOBS: Final = {"work": "work", "visuals": "visuals"}
 # The two-row fixture the reader is driven over: one `work` row and one
 # `visuals` row, sharing a date, a run and a shard index. Fixed in size, and it
-# carries a case the committed ledger has never held (Rule #12).
+# carries a case the committed ledger has never held (Guardrail #12).
 COUNTERS_FIXTURE: Final = FIXTURES_DIR / "runtime-counters" / "visuals-job-row.csv"
 # Deliberately not `--metrics`: that is llama-server's own flag, and
 # `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` forbids any
@@ -1510,7 +1510,7 @@ def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
     )
     env = _mapping(step.get("env"), "the lateness step's env")
     assert env.get("SLOT") == "${{ github.event.schedule }}", (
-        "the slot arrives through env, never pasted into the script (Rule #11)"
+        "the slot arrives through env, never pasted into the script (Guardrail #11)"
     )
     body = str(step.get("run", ""))
     assert "::warning title=Late run::" in body, "it annotates the run summary"
@@ -1813,7 +1813,7 @@ def test_the_daily_publish_validates_the_day_it_wrote_and_not_every_other_one() 
     about 0.27 s a day on top of a fixed start. The pipeline publishes five
     times a day, so a year of days would spend roughly eight minutes a day
     re-deriving an answer settled when each of those days was written
-    (`CLAUDE.md` Rule #12).
+    (`CLAUDE.md` Guardrail #12).
 
     `backfill.yml` is deliberately not here: it repairs days it chooses, so the
     day it has to check is not one this file can name.
@@ -2293,7 +2293,7 @@ def test_the_visuals_artifact_collects_the_file_the_stage_writes() -> None:
     first, because the two failures are opposite and both are silent.
     `render.write.asset_relpath` files every chart under the day that names it,
     so a line naming the whole tree sends every committed day back to Actions on
-    every run - a parcel that grows when nobody writes any code (Rule #12), and
+    every run - a parcel that grows when nobody writes any code (Guardrail #12), and
     it grew 6.36 to 6.66 MB over six runs on 2026-09-07/08. A line that narrows
     past the day loses the charts instead, and the day publishes with none.
     """
@@ -2428,7 +2428,7 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
 
 
 def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
-    """The bound, mirrored where a workflow that drops it reds (Rule #12).
+    """The bound, mirrored where a workflow that drops it reds (Guardrail #12).
 
     A run appends only to the shard its own date routes to, so a repeat the union
     merge left can only be in a file that run wrote, and the date names it. Drop
@@ -3154,7 +3154,7 @@ def test_assemble_hands_back_the_published_ledger_it_appends_to() -> None:
 
     The path is read from the writer's own helper rather than spelled here, so
     moving the ledger again fails this instead of leaving a refresh set naming a
-    directory nothing writes (Rule #6).
+    directory nothing writes (Guardrail #6).
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
     day = ledger.published_relpath(SUBSTITUTED_DATE)
@@ -3689,7 +3689,7 @@ def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
     `digest.yml` used to carry the repo and the filename as workflow `env` while
     the alias came from config. Two answers to one question drift the moment
     either is edited: llama-server then serves the old bytes under the new alias
-    and every eval row names a model that never ran (Rule #6, Rule #10).
+    and every eval row names a model that never ran (Guardrail #6, Guardrail #10).
     """
     text = read_text(WORKFLOWS_DIR / "digest.yml")
     assert ".gguf" not in text, "a weights filename is written in config, not here"
@@ -3708,11 +3708,11 @@ def test_no_workflow_that_loads_weights_writes_a_model_ref_or_a_moving_one() -> 
     production refs as job `env` and a third copy as a dispatch default, and
     `validate.yml` carried a candidate's repo and filename as defaults. Each was
     a second answer to a question config already answers, and each one drifts
-    silently the day config moves (Rule #6).
+    silently the day config moves (Guardrail #6).
 
     Every download also names an immutable commit. A branch hands back whatever
     was uploaded last, so a measurement taken from one describes bytes nobody
-    can fetch again (Rule #10).
+    can fetch again (Guardrail #10).
 
     A dispatch INPUT is not a hardcode and is deliberately left alone: it is how
     an operator points the measurement harness at a model config does not name.
@@ -3819,7 +3819,7 @@ def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
     """Production, the validation arm and the harness run one binary.
 
     A throughput number is only about the pipeline if the pipeline runs the
-    build the number was measured on (Rule #10).
+    build the number was measured on (Guardrail #10).
     """
     workflows = _load_workflows()
 
@@ -4230,7 +4230,7 @@ def test_the_cache_log_summary_matches_the_lines_the_runtime_actually_prints() -
     reuse went unprinted on every shard of every run.
 
     Driven from real captures rather than from hand-written text, because a
-    pattern nobody ran against a real line is how this got here (Rule #7). The
+    pattern nobody ran against a real line is how this got here (Guardrail #7). The
     four strings in `RUNTIME_LOG_LINES` are checked as well, for the two field
     spellings no capture carries.
     """
@@ -4425,7 +4425,7 @@ def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
     them reports a rate that belongs to no model.
 
     Driven from a two-row fixture rather than from `state/runtime-counters.csv`,
-    which a run appends to five times a day (Rule #12). The fixture also carries
+    which a run appends to five times a day (Guardrail #12). The fixture also carries
     a case the committed ledger cannot: until this lands, every row in it came
     from `work`.
 
@@ -4563,7 +4563,7 @@ def _uncommented(text: str) -> str:
     )
 def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:
     """Wrong weights must cost one step, not a whole shard of measurements filed
-    under a model that never ran (Rule #10)."""
+    under a model that never ran (Guardrail #10)."""
     workflow = _load_workflows()["validate.yml"]
     names = [step.get("name") for step in _steps(workflow, "qualify")]
     verify = names.index("Verify the candidate bytes")
@@ -4655,7 +4655,7 @@ def test_every_job_that_installs_a_browser_restores_it_from_one_shared_key() -> 
     hold - so the install step stays, and stays unconditional.
 
     Two keys would be the quiet failure rather than a loud one. The repository
-    cache ceiling is 10 GB (Rule #2) and the two weights entries held 7.5 GB of
+    cache ceiling is 10 GB (Guardrail #2) and the two weights entries held 7.5 GB of
     it on 2026-09-12, so a second browser entry is not headroom this has. One
     key is also the only way either job can hit: they start together, so
     neither can ever warm the other.

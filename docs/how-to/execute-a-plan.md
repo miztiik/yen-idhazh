@@ -50,7 +50,7 @@ A plan-doc is written before the work and read after the tree has moved under it
 
 2. **The row's oracle has to be able to fail against the base tree.** Run it before the worker starts. It must fail. An oracle that already passes is measuring something other than the row, and the worker will report a green that proves nothing - so the row closes, the plan records it as settled, and nothing was checked. A row that retires a name is where this bites most often: an oracle phrased as a search for that name matches every place the name still is, so it answers the same before the work and after it, for two different reasons.
 
-Neither check makes a row correct. They establish only that the row can be acted on, and that its result can be told apart from its starting position - which is the same standard `CLAUDE.md` Rule #10 sets for any other measurement.
+Neither check makes a row correct. They establish only that the row can be acted on, and that its result can be told apart from its starting position - which is the same standard `CLAUDE.md` Guardrail #10 sets for any other measurement.
 
 The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. Its own edits are limited to the plan-doc and the merge: correcting a row before dispatch, filling `Worktree` and `Subagent`, and marking `IN-FLIGHT`. The row's completed line is stamped by the worker, in the row's own pull request.
 
@@ -114,7 +114,7 @@ Rows in the same `Parallel-group` are mutually independent and dispatched concur
 
 **A gate that fails only under fan-out is a false red.** A suite that times out while siblings hold the cores has measured the box, not the branch. The tell is that the failing test is byte-identical to the base branch and that the project's CI passed the same commit. Re-run it alone before diagnosing it, and never buy the pass with a raised timeout, an added retry or a relaxed assertion - that hides the contention, and the false red returns at the next fan-out.
 
-**A row that MEASURES runs alone.** Any figure a plan produces - wall clock, throughput, bytes, memory - is a claim about the machine as much as about the change, and a neighbour moves it. Give a measuring row a `Parallel-group` of its own, or hold its arms behind the same lock the gates take. Interleave the arms - base, head, base, head - rather than running one arm and then the other, because box load drifts over the minutes between them and an unpaired comparison then reports the drift. Record what else was running beside the number: CLAUDE.md Rule #10 asks for hardware, date and spread, and on a shared machine the load belongs there too.
+**A row that MEASURES runs alone.** Any figure a plan produces - wall clock, throughput, bytes, memory - is a claim about the machine as much as about the change, and a neighbour moves it. Give a measuring row a `Parallel-group` of its own, or hold its arms behind the same lock the gates take. Interleave the arms - base, head, base, head - rather than running one arm and then the other, because box load drifts over the minutes between them and an unpaired comparison then reports the drift. Record what else was running beside the number: CLAUDE.md Guardrail #10 asks for hardware, date and spread, and on a shared machine the load belongs there too.
 
 ## Escalation (when to pause for the user)
 

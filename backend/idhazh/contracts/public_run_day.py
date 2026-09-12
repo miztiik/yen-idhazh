@@ -16,7 +16,7 @@ dataset with no file, or two files for one shape.
 **Counts only, and that is the trust boundary.** A day payload holds article
 titles, addresses and summaries. Nothing on this row can hold any of them: every
 cell here is an integer, a date, a run id or a model slug, so there is no field
-a fetched string could arrive in (Rule #11).
+a fetched string could arrive in (Guardrail #11).
 """
 
 from __future__ import annotations
@@ -102,9 +102,9 @@ class PublicRunDay(Contract):
                 "The console derived all of this at build time by opening every day's "
                 "run.json and every day's digest.json, then inlined the result - so "
                 "three of its ten reads had no contract, no version stamp and no "
-                "changelog (Rule #3). One row a day, fetched a month at a time, also "
+                "changelog (Guardrail #3). One row a day, fetched a month at a time, also "
                 "removes the read that costs the most: a day payload is hundreds of "
-                "kilobytes and the console wanted two integers out of it (Rule #12)."
+                "kilobytes and the console wanted two integers out of it (Guardrail #12)."
             ),
         ),
     )

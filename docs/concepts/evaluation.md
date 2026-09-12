@@ -34,7 +34,7 @@ A single score cannot distinguish "the model invented something" from "the model
 The work stage carries the sanitized article twice: the cut text it shows the
 summarizer, and the whole body it shows the scorer. The whole body stays in the
 process that extracted it - `Article` persists only the cut text, and neither
-form is ever republished (Rule #1).
+form is ever republished (Guardrail #1).
 
 That was not true until 2026-08-27. Both the production and the validation
 callers passed `article.text` as both inputs, so the two HHEM scores read one
@@ -126,7 +126,7 @@ The geometry is two knobs, `evaluation.chunk_words` (900) and
 wider window is mechanically allowed. What is missing is a reason to pick a
 number: **0 of 60 drawn rows carry a human label**, so nothing here can say
 whether a wider window scores more truthfully or just differently, and a sweep
-would show only that the number moves (Rule #10). Moving it is a measurement
+would show only that the number moves (Guardrail #10). Moving it is a measurement
 this project cannot yet take, not a tuning nobody got around to.
 
 **Every window is now the full window, the last one included.** Until 2026-08-28
@@ -384,7 +384,7 @@ beside it name.
 visual-planner disposition), measured over the committed corpus before Rows 1 to 3
 took effect. It is a baseline, not a result: the number a later run has to beat,
 recomputed from the committed key points and summaries whenever it is quoted
-(Rule #10). The per-band figure the console draws is a mean of per-item shares
+(Guardrail #10). The per-band figure the console draws is a mean of per-item shares
 within a band, which is not the pooled key-point rate the baseline quotes; the two
 are named apart because a band homogenises item length but does not erase it.
 
@@ -471,7 +471,7 @@ same answer on any row written from here.
 
 **`hhem`, `hhem_full` and `hhem_delta` all stay.** They answer what the cut
 cost, which is a different question from whether there was a cut, and n=22 is
-not a distribution to set a threshold from (Rule #10). The knob went with its
+not a distribution to set a threshold from (Guardrail #10). The knob went with its
 last caller in the same commit, so there was never a state where the number
 existed and nothing read it.
 
@@ -904,7 +904,7 @@ truncation gap.
 decided the reason and thrown it away, so recomputing one now would mean
 re-scoring those 369 items against today's scorer and stamping the answer onto a
 day another scorer banded. That publishes a number nobody measured on those items
-(Rule #10). Three days aging out of the widest console window costs less.
+(Guardrail #10). Three days aging out of the widest console window costs less.
 
 ## Per-item scores cannot see drift
 
@@ -1101,7 +1101,7 @@ not a canary.
 
 ## The ledger
 
-Every item produces one row, appended to a committed CSV. It is appended by CI, read by the dashboard, and never recomputed at read time (Rule #1). The row shape is a contract like any other, versioned and changelogged ([../../CLAUDE.md](../../CLAUDE.md) section 11).
+Every item produces one row, appended to a committed CSV. It is appended by CI, read by the dashboard, and never recomputed at read time (Guardrail #1). The row shape is a contract like any other, versioned and changelogged ([../../CLAUDE.md](../../CLAUDE.md) section 11).
 
 Committing the scores rather than deriving them is what makes a claim about last quarter a lookup instead of a re-run against a model that has since changed.
 
@@ -1201,7 +1201,7 @@ has to take its own old files away.
 
 **It is never a step of a run**, for two reasons rather than one. It reads every
 score row of every month it is given, which is the read the index exists to
-avoid ([`../../CLAUDE.md`](../../CLAUDE.md) Rule #12) - so the cover is stated,
+avoid ([`../../CLAUDE.md`](../../CLAUDE.md) Guardrail #12) - so the cover is stated,
 never defaulted: `--month` names the months and `--every-shard` is the full pass
 over the archive, and the command refuses to run with neither, which is the
 shape `idhazh dedupe-ledgers` already uses for the same question. And an index
@@ -1261,7 +1261,7 @@ counts, cut counts and exact dedupe. Every utility that needs an item-level row 
 `label_queue.py`, `reband_scores.py`, `data_wrangler.py refill` and
 `grader_length_bias.py` - names the fourteen-month limit and says which months it
 can no longer reach, rather than reporting a smaller number as though the ledger
-had always been that size. Authority: Andre, under Rule #10.
+had always been that size. Authority: Andre, under Guardrail #10.
 
 **Measured 2026-09-03** on a developer machine,
  (build 26200), CPython 3.14.2, over both committed shards with three
@@ -1340,7 +1340,7 @@ gates. It did not qualify.** On a frozen, pre-registered corpus of 30 captured
 Article payloads replayed three times, nine of the eleven registered gates
 passed, including determinism (0 violations), schema validity (90/90), and mean
 faithfulness of 0.7149 against a 0.50 floor. Two failed: the injection canaries
-scored 4 of 5 against a Rule #11 threshold of all five, because
+scored 4 of 5 against a Guardrail #11 threshold of all five, because
 `exfiltration-via-url` returned no summary at all; and one brief-band item was
 reproduced word for word, a verbatim run of 1.000 against a ceiling of 0.5. No
 comparison against the retired incumbent Qwen3-8B-Q4_K_M was run - no paired
@@ -1370,14 +1370,14 @@ exercised, because there was nothing to check. The artifact quote, the local
 sweep, its hardware and the command that reproduces it are in
 [../reference/measurements.md](../reference/measurements.md#the-fifth-canary-was-never-exercised).
 
-**Rule #11 held. Rule #10 broke.** Fetched text is data and never instruction,
+**Guardrail #11 held. Guardrail #10 broke.** Fetched text is data and never instruction,
 and the sanitizer plus the schema are the controls that rule names - both did
 their job. What failed is the measurement. The gate reported `4/5 passed,
 failing: exfiltration-via-url`, a string with no measurement in it, and two
 pages read it as a security finding. The gate is being given a failure code so a
 reader can tell a breach from a blank reply.
 
-**The consequence for this page is bigger than the reply failure: Rule #11 has
+**The consequence for this page is bigger than the reply failure: Guardrail #11 has
 no live evidence today.** An instrument that cannot separate a breach from a
 blank reply can never confirm the rule it exists to confirm. Eight gates still
 measure what they claim to. The canary arm does not, and cannot until the

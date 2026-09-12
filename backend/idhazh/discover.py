@@ -5,7 +5,7 @@ rank, and it loads no weights - the plan job finishes in seconds, which is what
 lets the expensive work be sharded across disposable machines afterwards.
 
 Everything that arrives here came from someone else's server, so a title is
-data and never instruction (Rule #11). Titles are sanitized on arrival and
+data and never instruction (Guardrail #11). Titles are sanitized on arrival and
 bounded, because they reach a log line and a page.
 """
 
@@ -98,7 +98,7 @@ def clean_title(raw: str | None) -> str | None:
 def clean_lead(raw: str | None) -> str | None:
     """A feed's lead is a stranger's HTML, kept only to tell two stories apart.
 
-    It is never rendered and never handed to a model as instruction (Rule #11):
+    It is never rendered and never handed to a model as instruction (Guardrail #11):
     it becomes one vector at plan time and, at most, a log line. Tags are
     stripped first because the lead is HTML and `<p>` in the text embeds as noise
     two unrelated stories would share.

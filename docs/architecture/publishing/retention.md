@@ -12,7 +12,7 @@ reaches. This page owns what happens to all of it afterwards. A person arrives
 holding one question or the other: how is a day published, or what happens to it
 when it is old.
 
-The rule underneath every section here is `CLAUDE.md` Rule #12 - nothing costs
+The rule underneath every section here is `CLAUDE.md` Guardrail #12 - nothing costs
 more as the repository grows - and the reason retention has a page at all is that
 a deletion promise is a promise to a reader
 ([../../concepts/digest.md](../../concepts/digest.md)).
@@ -96,7 +96,7 @@ running on a schedule.
 the dates an operator names and nothing else - no "older than", no "down to N
 megabytes", no day count written into the code. Every bound this repository
 honours is already a key in `config/` with a contract behind it
-([../../../CLAUDE.md](../../../CLAUDE.md) Rule #6): `retention.image_months`,
+([../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #6): `retention.image_months`,
 `retention.max_deletes_per_run`, `retention.site_budget_mb`, and the
 `observability.*_keep_months` family that bounds the ledgers a day writes into,
 all at 14 months today. A number in the source that decides what to delete is
@@ -129,7 +129,7 @@ Name an absolute `https://` prefix and `frontend/scripts/copy-visuals.mjs` stops
 
 **Say the small number first: 4.3 percent is not the answer to the cap.** The prerendered dated routes are 39.5 percent and they are what the cap date is a function of. This valve is worth having because it is one config edit and it costs nothing shut, not because it is the lever that saves the site. Anyone reaching for it as the fix has read the wrong number.
 
-**What it costs open, also measured.** The candidate host caches for five minutes, so a repeat reader refetches a drawing the bundle would have served from cache - real on a slow connection, and the reason the reading experience never waits on it: a drawing arrives after the sentence that repeats its numbers, and the page is complete without it. `connect-src` gains that one origin, computed at build time from our own config; no payload field, no model output and no fetched text can reach it (Rule #11), and the path is still matched by `publishedVisual` before either half is joined.
+**What it costs open, also measured.** The candidate host caches for five minutes, so a repeat reader refetches a drawing the bundle would have served from cache - real on a slow connection, and the reason the reading experience never waits on it: a drawing arrives after the sentence that repeats its numbers, and the page is complete without it. `connect-src` gains that one origin, computed at build time from our own config; no payload field, no model output and no fetched text can reach it (Guardrail #11), and the path is still matched by `publishedVisual` before either half is joined.
 
 **The carrier does not move, only the URL.** The drawing is fetched as text and inlined, exactly as it is today. An `img` would be the obvious way to point at another host and it is refused: an SVG inside an `img` is a separate document, reads none of the page's custom properties, and comes back with the colours the renderer baked in - black axis type on a near-black card in the dark theme. That was removed on 2026-09-05 and moving bytes is not a reason to bring it back. Cross-origin `fetch` returns text, and text inlined into our document is themed by our stylesheet whichever host sent it.
 
@@ -233,7 +233,7 @@ The aggregate is kept forever by default. `observability.item_health_aggregate_k
 | Correlating two columns against each other | Exact dedupe, through the sorted observation digests |
 | Any slice the cohort key does not name | The shard's own SHA-256 and row count |
 
-Authority: Andre, under Rule #10 - a claim about an archived month has to be one the archive can still support.
+Authority: Andre, under Guardrail #10 - a claim about an archived month has to be one the archive can still support.
 
 ## `state/scores/` shards by month, and that bounds nothing on its own (2026-08-31)
 
@@ -332,7 +332,7 @@ Two smaller narrowings, also measured and also not taken:
  `hhem_delta`, `compression`, `extraction_suspect`, `determinism_violation`,
  `scored_at`, `evidential_density`, `speculative_density`, `self_repetition` -
  are 379,095 bytes, 13.9 percent. **"No reader" is not "delete" here.** This
- ledger is evidence, unlike `state/seen/`, which is a lookup: Rule #10 turns on
+ ledger is evidence, unlike `state/seen/`, which is a lookup: Guardrail #10 turns on
  being able to re-read a measurement to defend a design, and four of these got
  written descriptions on 2026-08-30. Deleting evidence a day after documenting
  it is churn.
@@ -352,7 +352,7 @@ somebody wants them.
 
 - [layout.md](layout.md) - what a run writes, and the addresses a reader reaches.
 - [../../concepts/config.md](../../concepts/config.md) - the retention knobs and their defaults.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - Rule #12's escape hatch, and what a growing read has to declare.
+- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - Guardrail #12's escape hatch, and what a growing read has to declare.
 - [../../reference/measurements-site.md](../../reference/measurements-site.md) - the site's weight, its growth rate and the alarm point.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings and what to do when one fires.
-- [../../CLAUDE.md](../../../CLAUDE.md) - Rule #2 (the runner is the architecture) and Rule #12 (nothing costs more as the repository grows).
+- [../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and Guardrail #12 (nothing costs more as the repository grows).

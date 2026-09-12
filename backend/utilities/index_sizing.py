@@ -6,7 +6,7 @@ whole corpus, and that page is now 1.68 MB gzipped
 numbers that were estimates: how well the committed int8 vectors compress, how
 many items a month actually carries, what a browse entry costs, and what the
 ranking loop costs at a scope a reader would wait for. This tool measures all
-four over the committed archive, so the shape decision is made on Rule #10
+four over the committed archive, so the shape decision is made on Guardrail #10
 numbers rather than on arithmetic somebody did in their head.
 
 Three traps, all found by running it:
@@ -318,7 +318,7 @@ def run_node(node: str, job: dict[str, Any]) -> dict[str, Any]:
 
 
 def hardware() -> dict[str, Any]:
-    """Rule #10: a number without its hardware and date is not a measurement."""
+    """Guardrail #10: a number without its hardware and date is not a measurement."""
     return {
         "measured_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "platform": platform.platform(),

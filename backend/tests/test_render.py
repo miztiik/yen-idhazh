@@ -63,7 +63,7 @@ def _decision(kind: VisualKind, spec: str) -> VisualDecision:
 
 
 def committed_visuals() -> VisualsConfig:
-    """The knobs the pipeline ships, never a number typed here (Rule #6)."""
+    """The knobs the pipeline ships, never a number typed here (Guardrail #6)."""
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
 
 

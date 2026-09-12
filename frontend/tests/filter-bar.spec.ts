@@ -244,7 +244,7 @@ class Watched {
 	 * own origin has failed a reader. That must never happen here: this build
 	 * serves the weights, so a request leaving the origin means the local load
 	 * broke and the failover covered for it - and a browser test that quietly
-	 * downloads 50 MB from a third party is a network test (Rule #7), which is
+	 * downloads 50 MB from a third party is a network test (Guardrail #7), which is
 	 * exactly what a passing count would hide. */
 	readonly offOrigin: string[] = [];
 
@@ -343,7 +343,7 @@ test('typing filters the archive and downloads nothing; the button downloads onc
 	// so the second origin added on 2026-09-10 must never be reached here - and
 	// the two counts above cannot tell the difference on their own, because a
 	// failover that worked would satisfy both while quietly making this a network
-	// test (Rule #7). This is the assertion that says which origin answered.
+	// test (Guardrail #7). This is the assertion that says which origin answered.
 	expect(asked.strangers(page), 'the page fetched from an origin that is not this site').toEqual(
 		[]
 	);

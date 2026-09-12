@@ -323,7 +323,7 @@ def test_the_injected_figure_is_the_only_unsupported_number_across_the_set() -> 
 # summary that are absent from the source, computed a different way - canonical
 # numeric identity through float(), not the metric's string-set subtraction - over
 # a bounded, committed set of pairs. It tests the checker, never the archive
-# (Rule #12).
+# (Guardrail #12).
 
 _INT_OR_DECIMAL = re.compile(r"\d[\d,]*(?:\.\d+)?")
 

@@ -25,7 +25,7 @@ temp-file-plus-rename discipline CLAUDE.md section 1a already asks of every
 written unit, applied to the lock itself. The record carries the winner's pid,
 its worktree and the second it took the lock, so a caller that loses says who
 holds the lock, from where and for how long instead of just hanging. Standard
-library only, no new dependency (Rule #8).
+library only, no new dependency (Guardrail #8).
 
 Taking a lock away from a dead holder is the one step no single file operation
 can decide, because deleting a file is unconditional: a caller that judged a
@@ -44,7 +44,7 @@ than failing it. This is a scheduling aid; it may not turn contention into a red
 gate, because a red gate under contention is the defect it exists to remove.
 
 Inside CI it does nothing at all. A GitHub runner is one job alone on its own
-machine (Rule #2), and CI's `gates` job at 62.68 s is not the problem this
+machine (Guardrail #2), and CI's `gates` job at 62.68 s is not the problem this
 solves.
 
 It reads no configuration and imports nothing from `idhazh`, so it runs from a

@@ -27,7 +27,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 Added 2026-09-11. The three merged rows did not have these written down; the four that remain do.
 
-**Deliver the intent of this plan, not the letter of a row.** A structural fix matters more than a small diff. Where a row cannot be done correctly inside its stated scope, **expand the scope and say so in the pull request** - do not ship a band-aid to stay inside a file list somebody wrote before the code was read. `CLAUDE.md` Rule #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
+**Deliver the intent of this plan, not the letter of a row.** A structural fix matters more than a small diff. Where a row cannot be done correctly inside its stated scope, **expand the scope and say so in the pull request** - do not ship a band-aid to stay inside a file list somebody wrote before the code was read. `CLAUDE.md` Guardrail #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
 
 **No prisoners.** Every removed feature takes its code, its tests, its fixtures, its config keys, its schema fields, its docs and its `state/` writers with it, **in the same commit**. Git is the backup. A row that removes something and leaves a dead test, an orphan config key or a doc paragraph describing the removed thing has not finished, and its acceptance gate says so. **Row #6 is the removal row this plan was written around**, and its decision 2 has said "no half job" since the first draft.
 
@@ -242,7 +242,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Write the empty think block into call 1's history ourselves, so the two renderings agree | A band-aid on one template's private behaviour. It patches a symptom of a template we do not control, and the next model ships a different template | Owner, 2026-09-10; CLAUDE.md Rule #5 |
+| 1 | Write the empty think block into call 1's history ourselves, so the two renderings agree | A band-aid on one template's private behaviour. It patches a symptom of a template we do not control, and the next model ships a different template | Owner, 2026-09-10; CLAUDE.md Guardrail #5 |
 
 ---
 
@@ -282,7 +282,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 - **Scope:** One `bar` rendered from a compiled plan through an inline SVG path, so this plan ends with something visible rather than a contract nobody can see.
 - **Files touched:** `backend/idhazh/render/chart.py`, `backend/idhazh/render/write.py`, `backend/idhazh/render/__init__.py`, `backend/utilities/build_canary_day.py`, `backend/tests/test_render.py`, `frontend/tests/item-visual.spec.ts`, `frontend/tests/canaries.spec.ts`, `docs/architecture/publishing/visuals.md`. **Corrected on 2026-09-12, in execution.** The list named `frontend/src/lib/components/ItemVisual.svelte` and `frontend/tests/charts.spec.ts` and neither needed a line: the compiled spec renders to the same SVG class vocabulary the hand-written one does, so the inline carrier plan 01 built already repaints it, and `charts.spec.ts` holds the console's prerendered flow rather than an item's drawing. Two files it did not name were needed instead - `build_canary_day.py`, because the oracle is driven from the canary day and the canary's first chart had to become a compiled one, and `canaries.spec.ts`, which asserts a figure out of that chart's alt text.
 - **Acceptance gates:** `GATE-PY` over `test_render.py`; `GATE-WEB`; `GATE-BROWSER`; and the whole-day check from plan 01. **`CLAUDE.md` section 12 applies in full** - this row changes the published site, so it is smoke-tested in a real browser and the page is confirmed to render with its data file absent.
-- **Oracle:** A published item's drawn bar heights are re-derived in the test from the committed element table and compared to the drawn attributes - so the chart is proved to be showing the article's numbers rather than merely showing numbers. **Driven from the canary day built by `backend/utilities/build_canary_day.py`**, never from the committed archive, per `CLAUDE.md` Rule #12.
+- **Oracle:** A published item's drawn bar heights are re-derived in the test from the committed element table and compared to the drawn attributes - so the chart is proved to be showing the article's numbers rather than merely showing numbers. **Driven from the canary day built by `backend/utilities/build_canary_day.py`**, never from the committed archive, per `CLAUDE.md` Guardrail #12.
 - **What this row does not do:** it draws one `bar` and no second type, it adds no new visual vocabulary, and it changes no planner decision. The renderer swap and the rest of the chart types are plan 12.
 
 ### Decisions

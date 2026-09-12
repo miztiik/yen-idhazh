@@ -51,7 +51,7 @@ COMPLETE: Final = "stop"
 _CONFIG: Final = "config/idhazh.json"
 _TARGET: Final = "docs/reference/measurements.md - adoption target"
 _DISPATCH: Final = "workflow dispatch input"
-_RULE_11: Final = "CLAUDE.md Rule #11"
+_RULE_11: Final = "CLAUDE.md Guardrail #11"
 _ANDRE: Final = "Andre, 2026-08-26"
 
 
@@ -296,7 +296,7 @@ def injection_canaries(canaries: Sequence[CanaryObservation], *, required: int) 
     never answered was never exercised. The last of those is a control test that
     did not run, which is not a control test that passed - so it fails the gate
     exactly as before, and now says so in words nobody has to re-run the job to
-    read (Rule #10).
+    read (Guardrail #10).
     """
     flagged = [(c, _canary_conditions(c)) for c in canaries]
     flagged = sorted(((c, why) for c, why in flagged if why), key=lambda row: row[0].name)
@@ -462,7 +462,7 @@ def budget(budget_: Budget) -> GateOutcome:
             f"slowest item {budget_.slowest_item_seconds:.0f} s"
         ),
         threshold=f"{budget_.job_budget_minutes:.0f} min per job",
-        source=f"{_DISPATCH} job_budget_minutes, Rule #2",
+        source=f"{_DISPATCH} job_budget_minutes, Guardrail #2",
         detail=f"margin {margin:.1f} min",
     )
 
@@ -507,7 +507,7 @@ def faithfulness_floor(
     The precondition is the whole gate. HHEM was pinned to the mutable string
     `main` until 2026-08-26, and the derived `scorer_version` hashed that name
     rather than the loaded weights, so a floor measured before this pin measured
-    an unknown instrument (Rule #10).
+    an unknown instrument (Guardrail #10).
     """
     scores = [score.hhem for score in corpus.scores]
     mean = statistics.fmean(scores) if scores else 0.0

@@ -295,7 +295,7 @@ construction.
  and 52px is 8 percent of a 640px phone screen spent before the first story.
 - **Weight 300, and no second face.** The committed variable face covers 100 to
  900, so the weight axis is free. A display face bought for ten characters on
- one string is a second woff2 on every route (`CLAUDE.md` Rule #2).
+ one string is a second woff2 on every route (`CLAUDE.md` Guardrail #2).
 - **No animation.** A cycling `background-position` is a loop rather than a
  response to anything the reader did, and `prefers-reduced-motion` is a hard
  kill-switch, so the effect would have to be designed twice. **What is lost is
@@ -497,7 +497,7 @@ Three rules hold under them:
 
 - **The cost is named before the click, never after it.** Whether the download
  has already been paid for is read out of the browser's own cache storage. That
- is this device's disk, so nothing is reported anywhere and Rule #1 is intact.
+ is this device's disk, so nothing is reported anywhere and Guardrail #1 is intact.
  When it cannot be read the whole size is printed, because overstating a cost
  is honest and understating one is not.
 - **Every wait offers a stop, and stopping leaves the page as it was.** Nothing
@@ -634,7 +634,7 @@ choice on this project; it falls out of the architecture", [ui-shell.md](ui-shel
 and [vision.md](vision.md) said the operator surfaces "earn no design budget",
 and the reading measure was written as a property of the shell. All three are
 defensible sentences and all three are the same error: an architectural
-constraint restated as a design value. Rule #1 constrains what may *execute* at
+constraint restated as a design value. Guardrail #1 constrains what may *execute* at
 read time and says nothing about what may be *drawn* - a gradient, an elevation
 scale and a self-hosted face cost a reader nothing at read time and the runner
 nothing at build time. But a constraint stated as a value stops needing a
