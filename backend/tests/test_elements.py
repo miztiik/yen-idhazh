@@ -500,7 +500,7 @@ def test_the_settle_rule_takes_the_two_pattern_kinds_and_no_other() -> None:
     one, so applied to those kinds it would delete one of the two. It ranks by
     `KIND_PRECEDENCE`, which names the two pattern passes and nothing else, so a
     model-pointed kind raises here rather than being ranked by accident.
-    `visual_planner.anchored` merges them after this has run.
+    `classify.calls.anchored` merges them after this has run.
     """
     quote = Element(
         element_id="quote-0-11",
