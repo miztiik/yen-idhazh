@@ -171,7 +171,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Two docstrings defend a requirement the page retired | - | A | DONE | p25-1 | - | worker |
+| 1 | Two docstrings defend a requirement the page retired | - | A | DONE #650 | p25-1 | #650 | worker |
 | 5 | The rail goes and the time lands under the heading | - | A | DONE #625 | p25-r5 | #625 | worker |
 | 2 | One order over the whole day, inside a frame a person set | 1 | B | PENDING | - | - | - |
 | 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | PENDING | - | - | - |
