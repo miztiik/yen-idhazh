@@ -13,13 +13,14 @@ Guardrail #12 and the section 13 test policy).
 from __future__ import annotations
 
 import logging
+import re
 
 import pytest
 
 from idhazh import cli
 from idhazh.config import REPO_ROOT
 from idhazh.contracts.app_config import AssistConfig, CollectConfig
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.run_plan import PlannedItem, VerticalPlan
 from idhazh.contracts.sources import SourceForm
@@ -28,11 +29,15 @@ from idhazh.discover import Candidate
 from idhazh.embed import Embedder
 from idhazh.ledger import feed_reliability
 from idhazh.rank import (
+    CROCKFORD_ALPHABET,
+    ITEM_ID_BYTES,
+    ITEM_ID_SYMBOLS,
     authority,
     dedup_text,
     desk_of,
     desks_below_floor,
     duplicates_within_plan,
+    item_id,
     score,
     tier_weight,
 )
@@ -260,6 +265,42 @@ def _planned(
         title=title,
         rank_score=rank_score,
     )
+
+
+def test_the_alphabet_is_crockford_base32() -> None:
+    """Thirty-two distinct symbols, and the four that can be misread are not among them."""
+    assert len(CROCKFORD_ALPHABET) == len(set(CROCKFORD_ALPHABET)) == 32
+    assert not set(CROCKFORD_ALPHABET) & set("ilou")
+    assert set(CROCKFORD_ALPHABET) <= set("abcdefghijklmnopqrstuvwxyz0123456789")
+
+
+def test_an_item_id_carries_the_address_bytes_with_nothing_padded() -> None:
+    """Sixteen symbols hold exactly eighty bits, so the id is the ten bytes and not a lossy print.
+
+    That is the whole reason for those two numbers together. A width that did not
+    divide would pad, and padding is a character that says nothing - which is how
+    an id gets longer without getting harder to collide.
+    """
+    key = derive_url_key("https://lab.example.org/a-story")
+    address = item_id("ai", key)
+    symbols = address.removeprefix("ai-")
+
+    assert len(symbols) == ITEM_ID_SYMBOLS == 16
+    assert re.fullmatch(ITEM_ID_PATTERN, address)
+    read_back = 0
+    for symbol in symbols:
+        read_back = read_back * 32 + CROCKFORD_ALPHABET.index(symbol)
+    assert read_back.to_bytes(ITEM_ID_BYTES, "big") == bytes.fromhex(key)[:ITEM_ID_BYTES]
+
+
+def test_an_item_id_is_a_function_of_the_address_and_the_desk() -> None:
+    """Same address twice is one id; a different address is a different id."""
+    one = derive_url_key("https://lab.example.org/one")
+    two = derive_url_key("https://lab.example.org/two")
+    assert item_id("ai", one) == item_id("ai", one)
+    assert item_id("ai", one) != item_id("ai", two)
+    assert item_id("energy", one) != item_id("ai", one)
+    assert item_id("business-economy", one).startswith("business-economy-")
 
 
 def test_dedup_text_joins_the_headline_and_the_lead() -> None:

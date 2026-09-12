@@ -1,0 +1,35 @@
+{
+  "why": "Two addresses that land on the same ten-digit item id, and the two pools that used to give the same article two different ids. The old id was ten decimal digits of the address hash - about 33 bits - so a collision was rare but reachable, and the only way to resolve one was to look at the other addresses in the pool and step the loser forward. That made a collided id a function of the pool rather than of the address, which is the single property an item id exists to guarantee against. The base32 id is 80 bits and resolves nothing, so both pools answer the same.",
+  "found_by": "Birthday search over 107,569 addresses of the form https://lab.example-collide.org/notes/<n>, 2026-09-12. These two are the first pair that collided.",
+  "vertical": "ai",
+  "now": "2026-08-21T12:00:00Z",
+  "collided_on": "ai-9458667462",
+  "probe": "https://lab.example-collide.org/notes/3002",
+  "articles": [
+    {
+      "canonical_url": "https://lab.example-collide.org/notes/3002",
+      "url_key": "e3fdeb78b986ebc675a336c7d03f7a3b96dc3b8aeef5fc1cea6ded84f93f8b1c",
+      "source_id": "lab-blog",
+      "tier": 1,
+      "source_form": "article",
+      "title": "A note the probe asks for in both pools",
+      "published_at": "2026-08-21T08:00:00Z"
+    },
+    {
+      "canonical_url": "https://lab.example-collide.org/notes/107569",
+      "url_key": "74e4a07ec73d27c6c9532ea4c41e8a8450907598c7d248449b79a031332b0310",
+      "source_id": "trade-press",
+      "tier": 1,
+      "source_form": "article",
+      "title": "The sibling whose presence used to move the probe",
+      "published_at": "2026-08-21T08:00:00Z"
+    }
+  ],
+  "pools": {
+    "alone": ["https://lab.example-collide.org/notes/3002"],
+    "crowded": [
+      "https://lab.example-collide.org/notes/3002",
+      "https://lab.example-collide.org/notes/107569"
+    ]
+  }
+}

@@ -52,7 +52,7 @@ from idhazh.contracts.app_config import (
 )
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import Contract, StalePayloadError
+from idhazh.contracts.base import ITEM_ID_PATTERN, Contract, StalePayloadError
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
@@ -141,7 +141,13 @@ CONFIG_FILES: dict[str, type[Contract]] = {
     "taxonomy.json": Taxonomy,
     "watchlist.json": Watchlist,
 }
-LONG_HEX = re.compile(r"[0-9a-f]{16,}")
+#: A digest, at the two widths this project ever writes one: a sha256 is 64 hex
+#: characters and a truncated one is 32. The guard used to read `[0-9a-f]{16,}`,
+#: which an item id can satisfy by accident - sixteen Crockford base32 symbols
+#: all landing inside `[0-9a-f]` is about one item in 65,536, so a width-agnostic
+#: guard goes red on a day nobody touched the code and there is nothing to
+#: bisect. Matching the width says what the rule always meant.
+HEX_DIGEST = re.compile(r"(?<![0-9a-z])(?:[0-9a-f]{64}|[0-9a-f]{32})(?![0-9a-z])")
 #: Four real `GET /metrics` bodies, one per work shard of run `2026-08-26-5`,
 #: pulled from that run's `runtime-log-*` artifacts before they expired. Real
 #: captures rather than hand-written text (Guardrail #7): the upstream README at tag
@@ -2436,15 +2442,42 @@ def test_repo_text_is_ascii_and_lf(path: Path) -> None:
 
 
 def test_no_hash_appears_in_any_published_path() -> None:
-    """Decision 2: an item is addressed <vertical>-<NN>, never by a digest."""
+    """Decision 2: an item is addressed <vertical>-<id>, never by a digest."""
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     for item in day.items:
-        assert not LONG_HEX.search(item.item_id)
+        assert not HEX_DIGEST.search(item.item_id)
         if item.visual is not None and item.visual.path is not None:
-            assert not LONG_HEX.search(item.visual.path)
+            assert not HEX_DIGEST.search(item.visual.path)
     decision = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
     assert decision.asset_path is not None
-    assert not LONG_HEX.search(decision.asset_path)
+    assert not HEX_DIGEST.search(decision.asset_path)
+
+
+def test_an_item_id_reads_in_both_shapes_and_the_pattern_never_contracts() -> None:
+    """The read-side migration this widening owes, proved on payloads rather than asserted.
+
+    Every day published before 2026-09-12 addressed its items with ten decimal
+    digits, and a published day is frozen. So the decimal branch is not a
+    transitional arm that ages out - it stays for as long as one of those days
+    survives, and this asserts the branch is still literally in the pattern.
+    Driven from two committed fixtures rather than from the archive, because a
+    test may not cost more as the archive grows (Guardrail #12).
+    """
+    assert "[0-9]{2,}" in ITEM_ID_PATTERN, "the decimal branch is never removed"
+
+    day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    assert [item.item_id for item in day.items][:2] == ["ai-01", "energy-01"]
+
+    payload = json.loads(read_text(FIXTURES_DIR / "digest" / "desk-differs-from-vertical.json"))
+    old = DigestItem.model_validate(payload)
+    assert old.item_id == "energy-9435555854", "a real ten-digit address, read under today's contract"
+
+    new = DigestItem.model_validate({**payload, "item_id": "energy-wfyypy5sgvnwcxd3"})
+    assert new.item_id == "energy-wfyypy5sgvnwcxd3"
+
+    for excluded in "ilou":
+        with pytest.raises(ValidationError):
+            DigestItem.model_validate({**payload, "item_id": f"energy-{excluded}fyypy5sgvnwcxd3"})
 
 
 def test_the_eval_ledger_columns_are_defined_once() -> None:
