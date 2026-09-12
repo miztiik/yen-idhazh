@@ -1,46 +1,55 @@
 {
   "events": [
     {
+      "definition": "Something was made available to use or buy for the first time, or a new version of it was.",
       "display_name": "Release",
       "id": "release",
       "keywords": []
     },
     {
+      "definition": "Two or more organisations agreed to work together, with neither buying the other.",
       "display_name": "Deal",
       "id": "deal",
       "keywords": []
     },
     {
+      "definition": "One organisation bought another, or a controlling share of it.",
       "display_name": "Acquisition",
       "id": "acquisition",
       "keywords": []
     },
     {
+      "definition": "An organisation raised money from investors, or was valued in the course of doing so.",
       "display_name": "Funding",
       "id": "funding",
       "keywords": []
     },
     {
+      "definition": "An organisation committed money to build or expand physical capacity - a plant, a data centre, a power connection or the land for one.",
       "display_name": "Capital spending",
       "id": "capex",
       "keywords": []
     },
     {
+      "definition": "An organisation reported its results for a trading period, or told the market what to expect from the next one.",
       "display_name": "Earnings",
       "id": "earnings",
       "keywords": []
     },
     {
+      "definition": "A government, a regulator or a court acted on what an organisation may do, or moved to.",
       "display_name": "Regulation",
       "id": "regulation",
       "keywords": []
     },
     {
+      "definition": "A study, a paper or a benchmark was published, stating a method and a result a reader could check.",
       "display_name": "Research",
       "id": "research",
       "keywords": []
     },
     {
+      "definition": "Something broke, leaked or stopped working, and somebody outside the organisation was affected.",
       "display_name": "Incident",
       "id": "incident",
       "keywords": []
@@ -48,24 +57,30 @@
   ],
   "lenses": [
     {
+      "definition": "The story turns on what the money spent on artificial intelligence bought.",
       "display_name": "Return on AI investment",
       "id": "ai-roi",
+      "is_auto_discovered": false,
       "keywords": [],
       "retired_on": null,
       "status": "active",
       "weight": 0.0
     },
     {
+      "definition": "The story turns on China - its government, its companies, or a decision another country has taken about it.",
       "display_name": "China",
       "id": "china",
+      "is_auto_discovered": false,
       "keywords": [],
       "retired_on": null,
       "status": "active",
       "weight": 0.0
     },
     {
+      "definition": "The story turns on semiconductors - who designs them, who makes them, the plants and machines that produce them, or who is allowed to buy them.",
       "display_name": "Chips",
       "id": "chips",
+      "is_auto_discovered": false,
       "keywords": [
         "semiconductor"
       ],
@@ -74,24 +89,30 @@
       "weight": 0.3
     },
     {
+      "definition": "",
       "display_name": "Cyber",
       "id": "cyber",
+      "is_auto_discovered": false,
       "keywords": [],
       "retired_on": "2026-06-01",
       "status": "retired",
       "weight": 0.0
     },
     {
+      "definition": "The story turns on what investors and traders did - a share price, an index, a bond yield, a valuation, or a market's reaction to something.",
       "display_name": "Markets",
       "id": "markets",
+      "is_auto_discovered": false,
       "keywords": [],
       "retired_on": null,
       "status": "active",
       "weight": 0.0
     },
     {
+      "definition": "The story turns on goods or technology crossing a border, and on the tariffs, quotas, export controls or bans that meet them there.",
       "display_name": "Trade and tariffs",
       "id": "trade",
+      "is_auto_discovered": false,
       "keywords": [
         "tariff"
       ],
@@ -100,8 +121,10 @@
       "weight": 0.3
     },
     {
+      "definition": "The story turns on armed conflict - the fighting, the weapons, the people it displaces, or the talks to stop it.",
       "display_name": "War",
       "id": "war",
+      "is_auto_discovered": false,
       "keywords": [
         "ceasefire"
       ],
@@ -113,22 +136,28 @@
   "version": "2026-08-21",
   "verticals": [
     {
+      "definition": "The story is mainly about artificial intelligence - the models, the people and companies building or selling them, the machines and data centres they run on, or the rules being written for them.",
       "display_name": "AI",
       "id": "ai",
+      "is_auto_discovered": false,
       "min_feeds": 25,
       "retired_on": null,
       "status": "active"
     },
     {
+      "definition": "",
       "display_name": "Energy",
       "id": "energy",
+      "is_auto_discovered": false,
       "min_feeds": 25,
       "retired_on": null,
       "status": "draft"
     },
     {
+      "definition": "",
       "display_name": "Legacy desk",
       "id": "legacy-desk",
+      "is_auto_discovered": false,
       "min_feeds": 25,
       "retired_on": "2026-04-12",
       "status": "retired"
