@@ -33,14 +33,14 @@ from dataclasses import asdict
 from pathlib import Path
 
 from idhazh import config
-from idhazh.contracts.article import Article
-from idhazh.elements import element_table
-from idhazh.llm.server import Completion, post, server_argv
-from idhazh.visual_planner import (
+from idhazh.classify.calls import (
     build_call_one_request,
     build_call_two_request,
     call_two_output_tokens,
 )
+from idhazh.contracts.article import Article
+from idhazh.elements import element_table
+from idhazh.llm.server import Completion, post, server_argv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ARTICLE = REPO_ROOT / "tests" / "fixtures" / "contracts" / "article" / "ok.json"

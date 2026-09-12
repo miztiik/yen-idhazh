@@ -302,7 +302,7 @@ both. `span_excerpt` still holds whichever of the two the article wrote.
 The candidate pass says where every figure is. It cannot say what any of them
 means, because meaning is not in the bytes. Call 1 is the pass that asks, and it
 lives in
-[`backend/idhazh/visual_planner.py`](../../../backend/idhazh/visual_planner.py).
+[`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py).
 
 One sentence governs it: **code finds and cuts every character a reader will
 see, and the model points at where to cut and says what the cut means.**
@@ -407,7 +407,7 @@ which is what keeps it able to say the cap bit and by how much.
 
 No pattern reaches an organisation, a place, a quotation or an assertion. Call 1
 points at all four, and code cuts every character. The producers are in
-[`backend/idhazh/visual_planner.py`](../../../backend/idhazh/visual_planner.py)
+[`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py)
 beside `proposed`, because they read the same reply.
 
 **The anchoring rule is different for each pair, and that is the point.**

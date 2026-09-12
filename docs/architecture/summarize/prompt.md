@@ -402,7 +402,7 @@ already derives `input_tokens - cached_tokens`, which is the count of tokens the
 server actually read again. What is missing is a call 2 to read it from. No daily
 run produces a call-2 row yet, because nothing dispatches either call:
 `build_call_one_request`, `parse_call_one`, `build_call_two_request` and
-`parse_call_two` are referenced only inside `visual_planner.py` and its tests,
+`parse_call_two` are referenced only inside `classify/calls.py` and its tests,
 and `cli.py` never calls them. The wiring is row 6 of
 [`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md),
 so **the trigger is the first daily run after row 6 lands** - not the next
@@ -436,7 +436,7 @@ plan is started. Two things follow and neither is cosmetic.
 **A reply the output budget cuts is cut in the plan.** The bytes come back on an
 ordinary HTTP 200 and a grammar-constrained decoder closes each sub-object as it
 finishes it, so the summary in front of the cut is closed, balanced and
-independently parseable. `visual_planner.recovered_completion` reads it out with
+independently parseable. `classify.calls.recovered_completion` reads it out with
 `json.JSONDecoder().raw_decode` and hands back something shaped exactly like a
 single-call reply - so the length verdict, the copied-source reject, the address
 reject and the restatement drop above all still run on it, unchanged. The item
@@ -462,7 +462,7 @@ arithmetic over the two shapes' own bounds. Every array in them carries a
 decoded string in the reply with no upper end and a derivation with an unbounded
 term in it is not a derivation.
 
-`visual_planner.call_two_output_tokens` runs the arithmetic on every import and
+`classify.calls.call_two_output_tokens` runs the arithmetic on every import and
 raises when the recorded number no longer matches, so a bound cannot move
 without the budget moving with it. The two halves convert differently, because
 one rule would be wrong about one of them:

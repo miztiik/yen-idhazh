@@ -136,7 +136,7 @@ validator's rule.
 `visuals.max_output_tokens` is 400 and it is the single-call planner's budget, not
 this shape's. Call 2 decodes a summary and this plan through one budget derived
 from both shapes' bounds, which is the planner's work and not this contract's -
-`visual_planner.call_two_output_tokens` does the arithmetic and
+`classify.calls.call_two_output_tokens` does the arithmetic and
 `widest_json_characters` below is the half of it this module owns.
 """
 
