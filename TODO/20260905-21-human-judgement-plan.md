@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | A place to look at a visual, that never ships with the site | - | A | PENDING | - | - | - |
+| 1 | A place to look at a visual, that never ships with the site | - | A | IN-FLIGHT | p21-1 | - | worker |
 | 2 | A machine verdict and a human one, never in the same column | 1 | B | PENDING | - | - | - |
 | 3 | Two ways to ask, and the question locked before the verdict | 2 | C | PENDING | - | - | - |
 | 4 | Weights that cannot quietly get worse | 3 | D | PENDING | - | - | - |

@@ -158,7 +158,7 @@ Four facts decide it, and all four were checked on 2026-09-11 rather than assume
 | 2 | The score index can be rebuilt from the ledger it indexes | - | A | DONE #615 | p24-r2 | #615 | worker |
 | 3 | The migration utility, and it refuses to write a tree it cannot read back | 1 | B | DONE #648 | p24-3 | #648 | worker |
 | 4 | The telemetry publisher declares the cover it already has | - | B | DONE #641 | p24-4 | #641 | worker |
-| 5 | `state/item-health/` files by day | 1, 3, 4 | C | PENDING | - | - | - |
+| 5 | `state/item-health/` files by day | 1, 3, 4 | C | IN-FLIGHT | p24-5 | - | worker |
 | 6 | `state/feed-health/` files by day | 1, 3 | D | PENDING | - | - | - |
 | 7 | `state/seen/` files by day | 1, 3 | E | PENDING | - | - | - |
 | 8 | `state/scores/` and `state/score-index/` file by day | 1, 2, 3 | F | PENDING | - | - | - |
