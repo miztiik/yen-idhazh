@@ -1,17 +1,19 @@
 # The plan queue
 
-**Generated. Do not hand-edit - the drift gate regenerates it and fails on any
-diff.** The Status Reckoner in each plan-doc is the source; this page is the
-single place to read all of them at once. Regenerate with:
+**Generated, and written by one job after a merge lands on `main`. Do not
+hand-edit, and do not regenerate it on a branch - a pull request that carries
+this file is refused.** The Status Reckoner in each plan-doc is the source;
+this page is the single place to read all of them at once. To see what it
+would say about the tree in front of you:
 
 ```
-python backend/utilities/plan_status.py --write
+python backend/utilities/plan_status.py
 ```
 
-Nothing here comes from the network, a clock or a worktree, so the same tree
-always gives the same bytes. For what is on this box right now, and for drift
-against merged pull requests, run `--in-flight` instead; neither belongs in a
-committed file.
+That prints the same answer and writes nothing. Nothing here comes from the
+network, a clock or a worktree, so the same tree always gives the same bytes.
+For what is on this box right now, and for drift against merged pull requests,
+run `--in-flight` instead; neither belongs in a committed file.
 
 ## Where each plan stands
 
