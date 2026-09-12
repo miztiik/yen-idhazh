@@ -92,7 +92,7 @@
       "type": "integer"
     },
     "policy_months": {
-      "description": "`retention.image_months` in force. -1 is what ships and means the cleanup is switched off, so the row reports and nothing is ever a candidate.",
+      "description": "`retention.image_months` in force. -1 means no age window at all, so the row reports and nothing is ever a candidate; it is the model default and was what shipped until 2026-09-13, when config/idhazh.json took 13.",
       "minimum": -1,
       "title": "Policy Months",
       "type": "integer"

@@ -3298,9 +3298,12 @@ def stage_prune_state(
 
     **The visuals are the seventh thing here and they do not share that property.**
     Deleting a picture costs a reader the picture. They are in this step because
-    it is the step that runs after the commit and because the pass is switched
-    off - `retention.image_months` is -1 and the flag makes it report-only - so
-    what runs today is a measurement of the backlog and nothing else. Switching
+    it is the step that runs after the commit and because the pass still removes
+    nothing - `retention.dry_run` is true and the flag makes it report-only - so
+    what runs today is a measurement of the backlog and nothing else.
+    `retention.image_months` took its first value on 2026-09-13, so the pass now
+    names a cutoff rather than declining to draw one; nothing published is old
+    enough to sit behind it. Switching
     the deletion on is a separate change, and it needs two more things this step
     does not have: the commit call below it has to stage
     `frontend/public/digest` as well, because `git add` records a removal only

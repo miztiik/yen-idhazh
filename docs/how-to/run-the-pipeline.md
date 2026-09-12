@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-13
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -116,10 +116,11 @@ Turning live deletion on is a separate one-line commit, and this is the order:
 
 **Dropping that flag does not switch the picture cleanup on**, and it is worth
 knowing why before step 5. The same step also cleans the rendered visuals and
-appends a row to `state/visual-prunes.csv` saying what it found. That pass has
-two more guards of its own: `retention.dry_run` is `true` and
-`retention.image_months` is `-1`, so with the flag gone it still reports and
-still deletes nothing. Switching it on is a separate change with its own
+appends a row to `state/visual-prunes.csv` saying what it found. That pass has a
+guard of its own: `retention.dry_run` is `true`, so with the flag gone it still
+reports and still deletes nothing. `retention.image_months` is `13` from
+2026-09-13, so the pass does name a cutoff - and nothing published is old enough
+to sit behind it. Switching it on is a separate change with its own
 conditions
 ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#the-cleanup-says-what-it-did-not-clear-2026-09-06)).
 
