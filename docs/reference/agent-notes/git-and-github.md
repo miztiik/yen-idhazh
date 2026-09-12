@@ -239,6 +239,12 @@ if ($checks.Count -gt 0 -and $pending.Count -eq 0) {... }
 
 **A cache key that does not name what it holds freezes that thing silently.** `digest.yml` once cached `backend/models` and `backend/bin` together under a key naming only the weights, while the step that fetched the llama.cpp release was skipped on a cache hit - so the server that started was whatever binary happened to be saved first, and nothing in the run said which one. The symptom is a step that reads as live code and has not executed for days. Closed 2026-08-25 by putting the build id in the key; kept because the shape generalises to any cache key that omits an input the cached bytes depend on.
 
+## The plan queue
+
+**A status an agent is told to write is a status that does not get written.** Measured 2026-09-12: thirteen rows had been dispatched and merged and no cell anywhere read `IN-FLIGHT`, so for a whole session the only record of what was being worked was a chat log no later agent can read. Measured 2026-09-11, the same failure at the other end: the first row executed under the execution contract merged in a pull request that touched no Reckoner line, and hours later the row still read `PENDING` with an empty `PR` column while the work was on the trunk. **The instruction to flip it had been written down and read by the agent that did not do it** - which is the finding worth keeping. Wording alone does not hold, so the update moved inside the diff that is reviewed, and the plan-queue reader fails when a merged pull request names a row that never learned it landed.
+
+**A plan asserting its parallel rows touch different files is making a claim, not stating a fact.** A 33-row plan stated the rule outright and was wrong on its first wave: three rows shared one stylesheet and three components, two more shared one config file, and a sixth needed a component that a row in a later group had not created yet. The evidence was in the plan the whole time, because the rows' own `Files touched` lists disagreed with the sentence above them. Diff the lists; never trust the sentence.
+
 ## See also
 
 - [../agent-notes.md](../agent-notes.md) - the index and what belongs on these pages.
