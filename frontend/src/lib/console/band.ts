@@ -1,8 +1,8 @@
 /** What every console route carries above its own panels, as the producer wrote it.
  *
- * The console is three routes, and a route is where a metric goes to die unless
+ * The console is five routes, and a route is where a metric goes to die unless
  * something outside it says a metric is there. So two things stand identically
- * on all three: a band that answers "did it work, what is worst, how much room
+ * on all five: a band that answers "did it work, what is worst, how much room
  * is left", and a navigation strip whose every label carries its own worst
  * state.
  *
@@ -21,13 +21,13 @@
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
 
-export type RouteId = 'pipelines' | 'model' | 'machine';
+export type RouteId = 'pipelines' | 'model' | 'machine' | 'judgement' | 'voices';
 
 /** How loud a route's worst state is.
  *
  * Ranked rather than coloured. The strip never takes the health ramp - green,
  * amber and red on a label would say a route is failing, and a route is a noun -
- * so this ordering exists to pick the one worst thing across three routes, and
+ * so this ordering exists to pick the one worst thing across five routes, and
  * never to paint anything. The producer writes the same four numbers.
  */
 export const BROKEN = 3;
@@ -39,7 +39,8 @@ export interface ConsoleRoute {
 	id: RouteId;
 	/** The strip's word for the route. `Pipelines` is the owner's own, taken
 	 * verbatim on 2026-08-30; `Summaries` and `Hardware` replaced `Model` and
-	 * `Machine` on 2026-08-31. The id and the href did not move with them. */
+	 * `Machine` on 2026-08-31. The id and the href did not move with them.
+	 * `Judgement` and `Voices` joined on 2026-09-12. */
 	label: string;
 	/** Route-relative and trailing-slashed. A component prefixes `base`. */
 	href: string;
@@ -103,14 +104,58 @@ export interface ConsoleShell {
 	read: boolean;
 }
 
-const ROUTE_IDS: RouteId[] = ['pipelines', 'model', 'machine'];
+const ROUTE_IDS: RouteId[] = ['pipelines', 'model', 'machine', 'judgement', 'voices'];
 const HEALTHS: Health[] = ['green', 'amber', 'red'];
+
+/** The label, the address and the line under each, in strip order.
+ *
+ * The same words `publish_console_band.ROUTES` writes, so the fallback strip
+ * and the published one cannot say different things about the same route.
+ * `console-nav.spec.ts` types them out a third time on purpose - that copy is
+ * what the owner chose and reading it from here would only prove the page
+ * agrees with itself.
+ */
+const ROUTE_WORDS: Record<RouteId, { label: string; href: string; description: string }> = {
+	pipelines: {
+		label: 'Pipelines',
+		href: '/console/',
+		description: 'Did the runs work, which feeds broke, and what each stage cost.'
+	},
+	model: {
+		label: 'Summaries',
+		href: '/console/model/',
+		description: 'What the model wrote, how long it took, and what it got wrong.'
+	},
+	machine: {
+		label: 'Hardware',
+		href: '/console/machine/',
+		description: 'The hardware the model ran on, and how much it varied between runs.'
+	},
+	judgement: {
+		label: 'Judgement',
+		href: '/console/judgement/',
+		description:
+			'What the model made of each article, how sure it was, and where it disagreed with us.'
+	},
+	voices: {
+		label: 'Voices',
+		href: '/console/voices/',
+		description: 'Who supplied the day, how far each feed is discounted, and what it published.'
+	}
+};
+
+/** Said once per route when the band is unread, rather than five times. */
+const NO_CARRY = 'The band could not be read, so this route carries no figure from another.';
+
+function blankCarries(): Record<RouteId, string> {
+	return Object.fromEntries(ROUTE_IDS.map((id) => [id, NO_CARRY])) as Record<RouteId, string>;
+}
 
 /** What the console draws when no band payload could be read.
  *
  * A named absence, not a blank: an operator who sees no band has to be told
  * whether the day was clean or whether nothing answered. The strip keeps its
- * three routes with no worst state, so the console is still navigable when the
+ * five routes with no worst state, so the console is still navigable when the
  * one file it needs first is the one that failed (`CLAUDE.md` section 1a,
  * degrade rather than fail).
  */
@@ -135,21 +180,13 @@ export const BAND_UNREAD: ConsoleShell = {
 	},
 	routes: ROUTE_IDS.map((id) => ({
 		id,
-		label: { pipelines: 'Pipelines', model: 'Summaries', machine: 'Hardware' }[id],
-		href: { pipelines: '/console/', model: '/console/model/', machine: '/console/machine/' }[id],
-		description: {
-			pipelines: 'Did the runs work, which feeds broke, and what each stage cost.',
-			model: 'What the model wrote, how long it took, and what it got wrong.',
-			machine: 'The hardware the model ran on, and how much it varied between runs.'
-		}[id],
+		label: ROUTE_WORDS[id].label,
+		href: ROUTE_WORDS[id].href,
+		description: ROUTE_WORDS[id].description,
 		worst: null,
 		severity: CLEAR
 	})),
-	carries: {
-		pipelines: 'The band could not be read, so this route carries no figure from another.',
-		model: 'The band could not be read, so this route carries no figure from another.',
-		machine: 'The band could not be read, so this route carries no figure from another.'
-	},
+	carries: blankCarries(),
 	months: [],
 	read: false
 };
@@ -232,11 +269,9 @@ export function readBand(payload: unknown): ConsoleShell {
 			}
 		},
 		routes,
-		carries: {
-			pipelines: text(byId.get('pipelines')?.carries, BAND_UNREAD.carries.pipelines),
-			model: text(byId.get('model')?.carries, BAND_UNREAD.carries.model),
-			machine: text(byId.get('machine')?.carries, BAND_UNREAD.carries.machine)
-		},
+		carries: Object.fromEntries(
+			ROUTE_IDS.map((id) => [id, text(byId.get(id)?.carries, NO_CARRY)])
+		) as Record<RouteId, string>,
 		months: Array.isArray(raw.months) ? raw.months.filter((m): m is string => typeof m === 'string') : [],
 		read: true
 	};

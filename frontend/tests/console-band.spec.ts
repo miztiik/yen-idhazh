@@ -368,15 +368,19 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 		return (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	};
 
-	// One band, derived once in the shared layout and drawn above all three route
-	// panels. Three routes deriving their own would eventually disagree about which
+	// One band, derived once in the shared layout and drawn above all five route
+	// panels. Five routes deriving their own would eventually disagree about which
 	// one of them is worst, which is the whole reason it is derived once (row 24).
 	const pipelines = await bandText('/console/');
 	expect(pipelines.length, 'the band drew nothing on /console/').toBeGreaterThan(0);
-	expect(await bandText('/console/model/'), 'the band differs on the model route').toBe(pipelines);
-	expect(await bandText('/console/machine/'), 'the band differs on the machine route').toBe(
-		pipelines
-	);
+	for (const path of [
+		'/console/model/',
+		'/console/machine/',
+		'/console/judgement/',
+		'/console/voices/'
+	]) {
+		expect(await bandText(path), `the band differs on ${path}`).toBe(pipelines);
+	}
 
 	// The band is deliberately not windowed: a route's control governs the panels
 	// below it, never the standing band above it. Moving the control to another

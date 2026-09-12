@@ -76,6 +76,7 @@ from idhazh.contracts.console_band import (
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
+from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import month_files
 
 #: The 1 GB Pages ceiling (`CLAUDE.md` Rule #2). A constant and not a knob, for
@@ -95,6 +96,24 @@ BROKEN: Final = 3
 WORTH_A_LOOK: Final = 2
 WORTH_KNOWING: Final = 1
 CLEAR: Final = 0
+
+#: What a fault on Judgement or Voices may cost the band.
+#:
+#: The band prints the one worst thing across every route, so a loud editorial
+#: rule would take the band away from a run that failed. A skewed day still
+#: published; a failed run did not. `editorial` is where it is applied, and
+#: `dead_gate_candidates` is the one thing that goes round it.
+EDITORIAL_CAP: Final = WORTH_A_LOOK
+
+#: The two ends a gating kind's decline rate may not sit at.
+#:
+#: Row #12 of the placement plan moves these to `console.decline_rate_floor`
+#: and `console.decline_rate_ceiling`, where a person owns them (Rule #6); the
+#: rule is written here first because the band is derived once and this is the
+#: file that derives it. They are keyword arguments rather than literals in a
+#: branch, so that row passes the config values in and changes nothing else.
+DECLINE_RATE_FLOOR: Final = 0.0
+DECLINE_RATE_CEILING: Final = 1.0
 
 #: The same three words the run strip 800 px below prints.
 VERDICT_WORD: Final[dict[Health, str]] = {
@@ -124,6 +143,18 @@ ROUTES: Final[tuple[tuple[RouteId, str, str, str], ...]] = (
         "Hardware",
         "/console/machine/",
         "The hardware the model ran on, and how much it varied between runs.",
+    ),
+    (
+        RouteId.JUDGEMENT,
+        "Judgement",
+        "/console/judgement/",
+        "What the model made of each article, how sure it was, and where it disagreed with us.",
+    ),
+    (
+        RouteId.VOICES,
+        "Voices",
+        "/console/voices/",
+        "Who supplied the day, how far each feed is discounted, and what it published.",
     ),
 )
 
@@ -696,6 +727,139 @@ def machine_candidates(facts: MachineFacts) -> list[Candidate]:
     return found
 
 
+def editorial(candidates: Sequence[Candidate]) -> list[Candidate]:
+    """An editorial fault, held to `EDITORIAL_CAP`.
+
+    Judgement and Voices report on what the day looked like; Pipelines,
+    Summaries and Hardware report on whether it happened. The band prints the
+    one worst thing across all five, so an editorial rule at BROKEN would take
+    the band away from a failed run - and then a skewed day and a failed run
+    print the same sentence, which is the band's whole job undone.
+
+    `dead_gate_candidates` is built at BROKEN and is deliberately not passed
+    through here. A clamp over everything would demote the one rule on either
+    route that has to be loud, silently, on the day it first fired.
+    """
+    return [
+        candidate
+        if candidate.severity <= EDITORIAL_CAP
+        else Candidate(
+            text=candidate.text, sentence=candidate.sentence, severity=EDITORIAL_CAP
+        )
+        for candidate in candidates
+    ]
+
+
+def dead_gate_candidates(
+    decline_rates: Mapping[str, float | None],
+    *,
+    floor: float = DECLINE_RATE_FLOOR,
+    ceiling: float = DECLINE_RATE_CEILING,
+) -> list[Candidate]:
+    """The one editorial state that ranks BROKEN: a gate that has stopped reading.
+
+    **The rule is two-sided because the failure is.** At the floor a gating kind
+    declines nothing, so it is stamping every article it is shown. At the
+    ceiling it declines everything, which is the same instrument dead from the
+    other side. Either way every other figure on the route is fiction -
+    including the figures a reader would use to decide the day was fine - so
+    neither end is a skew and neither is capped.
+
+    The fractions are null until the classifier lands, so this returns nothing
+    today and costs nothing to carry.
+    """
+    found: list[Candidate] = []
+    for kind in sorted(decline_rates):
+        rate = decline_rates[kind]
+        if rate is None:
+            continue
+        if rate <= floor:
+            found.append(
+                Candidate(
+                    text=f"{kind} declines nothing",
+                    sentence=(
+                        f"The {kind} gate declined none of what it was shown, so it is "
+                        "stamping every article and no other figure on this route counts."
+                    ),
+                    severity=BROKEN,
+                )
+            )
+        elif rate >= ceiling:
+            found.append(
+                Candidate(
+                    text=f"{kind} declines everything",
+                    sentence=(
+                        f"The {kind} gate declined all of what it was shown, so nothing "
+                        "reached a verdict and no other figure on this route counts."
+                    ),
+                    severity=BROKEN,
+                )
+            )
+    return found
+
+
+def voices_candidates(
+    feeds: Sequence[FeedHealthRow],
+    sources: Sequence[SourceHealthRow],
+    *,
+    reliability_floor: float,
+    min_decisions: int,
+) -> list[Candidate]:
+    """What the Voices route's own panels would make an operator look at.
+
+    Two states, and both are about a feed nothing else on the console names.
+
+    The first is a feed the ranker is actively discounting: `feed_reliability`
+    clamps at `collect.reliability_floor`, so a feed sitting exactly there is as
+    far down as the multiplier goes and no page says so. It reduces the rows the
+    band already holds rather than re-reading the ledger.
+
+    The second is a feed with too little record to judge - under
+    `collect.source_yield_alarm_min_decisions` addresses it decided - because
+    the quality figures row #13 draws print a dash for it, and a dash is
+    invisible at a glance. It is ranked lower on purpose: too little evidence is
+    not the same as bad evidence, and ranking it higher would publish a
+    judgement the record cannot carry. The denominator rides on the fragment,
+    because a bare count is a number with no scale.
+    """
+    by_feed: dict[str, list[FeedHealthRow]] = defaultdict(list)
+    for row in feeds:
+        by_feed[row.feed_id].append(row)
+    discounted = sum(
+        1
+        for rows in by_feed.values()
+        if ledger.feed_reliability(rows, floor=reliability_floor) <= reliability_floor
+    )
+    found: list[Candidate] = []
+    if discounted > 0:
+        found.append(
+            Candidate(
+                text=f"{plural(discounted, 'feed', 'feeds')} discounted to the floor",
+                sentence=(
+                    f"{plural(discounted, 'feed', 'feeds')} scored at the "
+                    f"{reliability_floor:.0%} floor, so the ranker discounts everything "
+                    f"{'it carries' if discounted == 1 else 'they carry'} as far as it can."
+                ),
+                severity=WORTH_A_LOOK,
+            )
+        )
+    live = [row for row in sources if not row.retired]
+    thin = sum(1 for row in live if row.decisions < min_decisions)
+    if thin > 0:
+        found.append(
+            Candidate(
+                text=f"{thin} of {len(live)} sources too thin to judge",
+                sentence=(
+                    f"{thin} of {len(live)} live sources decided fewer than "
+                    f"{min_decisions} addresses, so every quality figure about "
+                    f"{'it' if thin == 1 else 'them'} prints a dash rather than a rate."
+                ),
+                severity=WORTH_KNOWING,
+            )
+        )
+    return found
+
+
 @dataclass(frozen=True)
 class ReadSpread:
     """How far apart one day's runs read, fastest over slowest."""
@@ -773,6 +937,8 @@ def build(
     months: Sequence[str],
     run: RunConfig,
     collect: CollectConfig,
+    sources: Sequence[SourceHealthRow] = (),
+    decline_rates: Mapping[str, float | None] | None = None,
 ) -> ConsoleBand:
     """The whole band, from rows a caller read. Pure, so a fixture drives it.
 
@@ -796,12 +962,27 @@ def build(
     )
     worst_model = worst_of(model_candidates(newest_model))
     worst_machine = worst_of(machine_candidates(machine_facts(counters)))
+    # The cap and its one exception, side by side so neither can be read without
+    # the other. A skewed day is capped; a gate that has stopped reading is not.
+    worst_judgement = worst_of(dead_gate_candidates(decline_rates or {}))
+    worst_voices = worst_of(
+        editorial(
+            voices_candidates(
+                feeds,
+                sources,
+                reliability_floor=collect.reliability_floor,
+                min_decisions=collect.source_yield_alarm_min_decisions,
+            )
+        )
+    )
     found = {
         RouteId.PIPELINES: worst_pipelines,
         RouteId.MODEL: worst_model,
         RouteId.MACHINE: worst_machine,
+        RouteId.JUDGEMENT: worst_judgement,
+        RouteId.VOICES: worst_voices,
     }
-    carries = _carries(newest, newest_model, health_rows)
+    carries = _carries(newest, newest_model, health_rows, trouble)
     routes: list[ConsoleRoute] = []
     for route_id, label, href, description in ROUTES:
         candidate = found[route_id]
@@ -942,6 +1123,7 @@ def _carries(
     newest: PublicRunDay | None,
     model: BandModel | None,
     health_rows: Sequence[Mapping[str, str]],
+    feeds: FeedTrouble,
 ) -> dict[RouteId, str]:
     """One sentence per route pointing at the panel another route owns.
 
@@ -971,6 +1153,24 @@ def _carries(
             if newest is None
             else f"{plural(newest.published_items, 'article', 'articles')} on this day."
         ),
+        RouteId.JUDGEMENT: (
+            "Nothing on this day recorded how sure the model was."
+            if model is None or model.not_sure is None
+            else (
+                f"{model.not_sure} {'summary was' if model.not_sure == 1 else 'summaries were'} "
+                'marked "not sure" on this day.'
+            )
+        ),
+        RouteId.VOICES: (
+            f"{plural(feeds.rested, 'feed', 'feeds')} rested over these "
+            f"{plural(feeds.runs, 'run', 'runs')}."
+            if feeds.rested > 0
+            else (
+                f"{plural(feeds.failed, 'feed', 'feeds')} failed on the last ask."
+                if feeds.failed > 0
+                else f"No feed failed or rested over these {plural(feeds.runs, 'run', 'runs')}."
+            )
+        ),
     }
 
 
@@ -983,6 +1183,7 @@ def publish(
     console: ConsoleConfig,
     run: RunConfig,
     collect: CollectConfig,
+    sources: Sequence[SourceHealthRow] = (),
     telemetry_root: Path | None = None,
 ) -> Path | None:
     """Read the covered span, derive the band and write it if its bytes moved.
@@ -996,6 +1197,11 @@ def publish(
     - the newest day's item-health shard and its day-metrics record, one file
       each;
     - the counters for the months the widest span reaches.
+
+    `sources` is the run's own source-health view, handed over by the caller
+    that already built it rather than read again here - it is one row per
+    address in `config/sources.json`, so it grows at review speed and opens no
+    file (Rule #12). Unnamed, the Voices route carries no worst state.
 
     `widest` is the largest of `console.window_presets`, which is the furthest
     back any panel on any route can draw. Nothing here opens a day payload.
@@ -1037,6 +1243,11 @@ def publish(
         months=fetchable_months(digest_root, telemetry_root),
         run=run,
         collect=collect,
+        sources=sources,
+        # Plan 23 row #10 is what produces a decline rate. Until it lands there
+        # is no gating kind to read, so the two-sided rule in
+        # `dead_gate_candidates` costs nothing and fires on nothing.
+        decline_rates={},
     )
     target = band_path(digest_root)
     payload = band.to_json().encode("utf-8")
