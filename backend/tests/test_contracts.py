@@ -4147,6 +4147,137 @@ def test_a_desk_cannot_drop_more_stories_than_it_considered() -> None:
         )
 
 
+# --- The desk is a field, and the feed's word stays where it is -------------
+#
+# The oracle of row #6 of TODO/20260910-23-article-classification-plan.md: an
+# item whose desk differs from its vertical validates, publishes and renders
+# under the desk, with its `item_id` still addressed `<vertical>-`. That
+# combination is exactly what repointing `Article.vertical` makes impossible, so
+# these prove the choice rather than the code - and they go red the day somebody
+# repoints the field.
+
+
+def _desk_differs_payload() -> dict[str, Any]:
+    payload = json.loads(read_text(FIXTURES_DIR / "digest" / "desk-differs-from-vertical.json"))
+    assert isinstance(payload, dict)
+    return payload
+
+
+def test_an_item_whose_desk_differs_from_its_vertical_still_carries_its_address() -> None:
+    """The whole row in one assertion, on the fixture the row is driven from.
+
+    `energy-9435555854` is an energy feed's story about compute. It publishes
+    under the AI desk and keeps the address a reader may already have shared,
+    because `item_id` is addressed from the carrying feed's word and that word
+    did not move.
+    """
+    item = DigestItem.model_validate(_desk_differs_payload())
+    assert item.vertical == "energy"
+    assert item.desk == "ai"
+    assert item.item_id.startswith("energy-"), "the published address is the feed's word"
+
+
+def test_repointing_the_vertical_to_the_desk_is_rejected_at_read_time() -> None:
+    """Rejected alternative 1, run rather than described.
+
+    Repointing `vertical` was the earlier draft's plan. The contract's own
+    identity rule refuses it on every item whose desk moved - which is why the
+    desk is a second field and never a new meaning for the first.
+    """
+    payload = _desk_differs_payload()
+    repointed = {**payload, "vertical": "ai"}
+    with pytest.raises(ValueError, match="item_id must be addressed"):
+        DigestItem.model_validate(repointed)
+
+    article = json.loads(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    assert article["item_id"].startswith(f"{article['vertical']}-")
+    with pytest.raises(ValueError, match="item_id must be addressed"):
+        Article.model_validate({**article, "vertical": "energy"})
+
+
+def test_an_item_published_before_the_desk_existed_reads_as_its_vertical() -> None:
+    """The read-side migration, proved by removing the key rather than by waiting.
+
+    Every one of the 22 committed days was written without `desk`. A test that
+    counted how many of them still lack it would be timed to go red on the day
+    the last one aged out; removing the key from a payload cannot age out.
+    """
+    payload = _desk_differs_payload()
+    del payload["desk"]
+    item = DigestItem.model_validate(payload)
+    assert item.desk is None, "absent is unknown, never a desk of its own"
+
+
+def test_a_day_must_list_the_desk_it_published_a_story_under() -> None:
+    """A rendered story under a name the payload does not carry is an unnamed page.
+
+    The desk decides the heading, the pill and the topic route, so a day that
+    publishes a story under a name its own `verticals` list has never heard of
+    draws a page with no display name and no count.
+    """
+    day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    listed = {ref["id"] for ref in day["verticals"]}
+    unlisted = next(name for name in ("world", "india", "business-economy") if name not in listed)
+    day["items"][0]["desk"] = unlisted
+    with pytest.raises(ValueError, match="names an unlisted desk"):
+        DigestDay.model_validate(day)
+
+
+def test_the_two_counts_answer_two_questions() -> None:
+    """`count` is the feed's word and `desk_count` is what the page draws.
+
+    Decision 5: `count` keeps its meaning because 22 frozen published days
+    already carry it and a published day is never rewritten. So a relabelled
+    story is counted under its vertical by one number and under its desk by the
+    other, and neither is allowed to disagree with the items beside it.
+    """
+    day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    moved = day["items"][0]
+    other = next(ref for ref in day["verticals"] if ref["id"] != moved["vertical"])
+    home = next(ref for ref in day["verticals"] if ref["id"] == moved["vertical"])
+    moved["desk"] = other["id"]
+
+    for ref in day["verticals"]:
+        ref["desk_count"] = ref["count"]
+    with pytest.raises(ValueError, match="desk_count disagrees"):
+        DigestDay.model_validate(day)
+
+    home["desk_count"] = home["count"] - 1
+    other["desk_count"] = other["count"] + 1
+    settled = DigestDay.model_validate(day)
+    by_id = {ref.id: ref for ref in settled.verticals}
+    assert by_id[home["id"]].count == home["count"], "the feed's word still counts the story"
+    assert by_id[home["id"]].desk_count == home["count"] - 1, "the page no longer draws it here"
+    assert by_id[other["id"]].desk_count == other["count"] + 1
+
+
+def test_a_day_written_before_desk_count_existed_still_reads() -> None:
+    """Additive, so the 22 frozen days validate with the key absent everywhere."""
+    day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    for ref in day["verticals"]:
+        ref.pop("desk_count", None)
+    for item in day["items"]:
+        item.pop("desk", None)
+    settled = DigestDay.model_validate(day)
+    assert all(ref.desk_count is None for ref in settled.verticals)
+    assert all(item.desk is None for item in settled.items)
+
+
+def test_the_served_day_carries_the_desk_a_page_groups_by() -> None:
+    """The browser is what groups stories, so the projection may not drop the desk.
+
+    `DigestView` is the copy a reader's browser fetches. A desk the committed
+    day knows and this file drops is a grouping the page cannot make.
+    """
+    day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    moved = day["items"][0]
+    other = next(ref for ref in day["verticals"] if ref["id"] != moved["vertical"])
+    moved["desk"] = other["id"]
+    view = DigestView.project(day)
+    assert view.items[0].desk == other["id"]
+    assert view.items[0].vertical == moved["vertical"]
+
+
 def test_the_thin_desk_floor_is_a_knob_the_frontend_agrees_with() -> None:
     """The two-copies problem again, on the knob that decides whether a desk speaks.
 

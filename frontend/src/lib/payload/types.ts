@@ -88,6 +88,12 @@ export interface DigestItem {
 	 * A collapsed item is still in the payload, still has its anchor and still has
 	 * its archive entry - it is not drawn, not removed. */
 	same_story_as?: string | null;
+	/** The topic the day publishes this story under, absent on every day published
+	 * before 2026-09-12. `vertical` is the word the carrying feed declares about
+	 * itself and is what `item_id` is addressed from; this is where the story is
+	 * read. Absent and null both mean nothing relabelled it, and a page falls back
+	 * to `vertical` - never to a topic of its own. Use `deskOf`. */
+	desk?: string | null;
 }
 
 export interface DigestRunRef {
@@ -99,20 +105,29 @@ export interface DigestRunRef {
 export interface DigestVerticalRef {
 	id: string;
 	display_name: string;
-	/** Every story the desk published, a duplicate the day grouped behind another
-	 * included - that pass unpublishes nothing, so this is the payload's own count
-	 * and not what the default view draws. */
+	/** Every story whose carrying feed declares this vertical, a duplicate the day
+	 * grouped behind another included - that pass unpublishes nothing, so this is
+	 * the payload's own count and not what the default view draws.
+	 *
+	 * It is NOT what the page shows where a story was relabelled onto another
+	 * topic. `desk_count` is. Read it through `deskCount`, never directly. */
 	count: number;
-	// Why the desk ran what it ran. Absent on every day published before
+	/** Every story the day publishes under this topic, which is the number a reader
+	 * sees. Absent on every day published before 2026-09-12, and equal to `count`
+	 * on a day nothing relabelled. Absent means unknown and falls back to `count`. */
+	desk_count?: number | null;
+	// Why this vertical ran what it ran. Absent on every day published before
 	// 2026-09-02, and the three are absent or present together. Absent means
-	// unknown, never 0, which would claim the sources offered the desk nothing.
-	/** Distinct addresses the sources offered this desk, less what the day had
+	// unknown, never 0, which would claim the sources offered it nothing. All
+	// three are vertical facts and sit beside `count`, because a feed declares a
+	// vertical and never a desk.
+	/** Distinct addresses the sources offered this vertical, less what the day had
 	 * already published or already failed on. Not an upper bound on `count`: each
 	 * run counts its own pool and the stories accumulate across runs. */
 	considered?: number | null;
 	/** Of those, how many were older than the pipeline's age gate. */
 	too_old?: number | null;
-	/** Some run today found fewer live sources than this desk's floor. Published
+	/** Some run today found fewer live sources than this vertical's floor. Published
 	 * for the operator surfaces; no reading page draws a sentence from it, because
 	 * how many of our feeds answered is a fact about our pipeline. */
 	below_feed_floor?: boolean | null;
@@ -178,6 +193,7 @@ export type DigestViewItem = Pick<
 	DigestItem,
 	| 'item_id'
 	| 'vertical'
+	| 'desk'
 	| 'title'
 	| 'summary'
 	| 'reader_note'

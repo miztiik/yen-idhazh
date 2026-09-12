@@ -14,6 +14,8 @@
 	import TimeRail from '$lib/components/TimeRail.svelte';
 	import { restoreAnchor } from '$lib/assist/day';
 	import {
+		deskCount,
+		deskOf,
 		filterNeedle,
 		indexDay,
 		leadingStories,
@@ -87,24 +89,31 @@
 	// idempotent, so a document whose seed the build already ordered pays for it
 	// once and a fetched day is ordered the same way when it lands.
 	const scoped = $derived(
-		orderByTime(vertical ? day.items.filter((item) => item.vertical === vertical) : day.items)
+		orderByTime(vertical ? day.items.filter((item) => deskOf(item) === vertical) : day.items)
 	);
-	// The desks the day published, or none when the payload does not say. A day
-	// fetched by a shell older than the facts carries no desk list, and an empty
+	// The topics the day published, or none when the payload does not say. A day
+	// fetched by a shell older than the facts carries no topic list, and an empty
 	// list is what draws no topic row - never an invented one.
-	const desks = $derived(day.verticals ?? []);
+	//
+	// A topic the day drew nothing under is not one of them. It is listed on the
+	// payload because its feeds carried a story the day then published elsewhere,
+	// and `count` is owed that answer - but a pill is a way in, and one leading
+	// to an empty room is a dead end.
+	const desks = $derived((day.verticals ?? []).filter((ref) => deskCount(ref) > 0));
 	// What the day published, not what is in hand. A reading route's document
 	// carries a seed and fetches the rest, so counting the list here would print
 	// a number that ticks up while the reader watches - and the topic pill beside
-	// it already shows the day's own count for its own desk. Both halves read a
-	// bounded fact off the payload instead: one desk's count, or every desk's.
-	const total = $derived(
-		vertical
-			? (desks.find((ref) => ref.id === vertical)?.count ?? scoped.length)
-			: desks.length > 0
-				? desks.reduce((sum, ref) => sum + ref.count, 0)
-				: scoped.length
-	);
+	// it already shows the day's own count for its own topic. Both halves read a
+	// bounded fact off the payload instead: one topic's count, or every topic's.
+	// `deskCount` and not `count`, because this is the number beside the stories
+	// the page is actually drawing.
+	const total = $derived.by(() => {
+		if (vertical) {
+			const ref = desks.find((entry) => entry.id === vertical);
+			return ref ? deskCount(ref) : scoped.length;
+		}
+		return desks.length > 0 ? desks.reduce((sum, ref) => sum + deskCount(ref), 0) : scoped.length;
+	});
 	const needle = $derived(filterNeedle(query, ui.filter_min_chars));
 	// The day's searchable text, lowercased, and every story's place in it.
 	// Derived from `scoped` rather than captured, so when a reading route's fetch
@@ -263,7 +272,7 @@
 					{#snippet story(item: DigestItem)}
 						<DigestItemView
 							{item}
-							verticalName={verticalNames[item.vertical] ?? item.vertical}
+							verticalName={verticalNames[deskOf(item)] ?? deskOf(item)}
 							showMark={ui.source_mark}
 							read={read.has(item.item_id)}
 							onRead={() => (read = markRead(item.item_id, read, day.date))}

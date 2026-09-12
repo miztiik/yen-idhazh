@@ -17,6 +17,7 @@
 	import DigestList from '$lib/components/DigestList.svelte';
 	import NotHere from '$lib/components/NotHere.svelte';
 	import PayloadState from '$lib/components/PayloadState.svelte';
+	import { deskCount } from '$lib/day-shape';
 	import { longDate } from '$lib/format';
 	import { daysHeldOffline } from '$lib/offline';
 	import type { DayForPage } from '$lib/payload/types';
@@ -31,11 +32,17 @@
 
 	const day = $derived(arrived === null ? null : { ...arrived, date: data.date });
 	const desks = $derived(arrived?.verticals ?? null);
-	/** Whether the day says it published this desk. Null until the day is in
-	 * hand, and null again for a payload that names no desk at all - absent is
+	/** Whether the day says it published this topic. Null until the day is in
+	 * hand, and null again for a payload that names no topic at all - absent is
 	 * unknown, and refusing a topic on a payload that did not say is a screen
-	 * that hides stories the reader can see the pills for. */
-	const ran = $derived(desks === null ? null : desks.some((ref) => ref.id === data.vertical));
+	 * that hides stories the reader can see the pills for.
+	 *
+	 * Named and counted, not just named. A topic can be listed because its feeds
+	 * carried stories that were then published under another name, and a page
+	 * that took the listing alone would draw an empty room with a heading on it. */
+	const ran = $derived(
+		desks === null ? null : desks.some((ref) => ref.id === data.vertical && deskCount(ref) > 0)
+	);
 	const name = $derived(
 		desks?.find((ref) => ref.id === data.vertical)?.display_name ?? data.vertical
 	);

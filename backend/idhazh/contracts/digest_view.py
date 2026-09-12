@@ -18,7 +18,7 @@ older shell does (section 11). That address cannot move afterwards either.
 reader may never fill either with a default.** Every plausible default is a
 false claim - `0` for `carried_by` says no feed carried the story, `false` for
 `on_front_page` denies a vote nobody counted, `0.0` for `rank_score` puts the
-story at the bottom of its desk. The projector writes an explicit null for a
+story at the bottom of its vertical. The projector writes an explicit null for a
 key the committed day does not hold, so an older shell sees a key it knows with
 a value it can read; a newer shell reading an older file sees the key missing.
 Both are the same fact and neither is a value.
@@ -32,7 +32,7 @@ upgraded together and a reader can hold a shell for as long as their cache does.
 **Since 2026-09-09 it carries the day's own facts as well as the day's stories**,
 and every one of them is optional. A dated URL is served by one shell that no
 build wrote a day into, so the browser has no other source for the date, the
-desks, the leading block, the run list or the day notice. A service worker keeps
+topics, the leading block, the run list or the day notice. A service worker keeps
 a day, so a shell built after that change can be handed a payload written before
 it - which is why absent has to be readable, and why absent reads as unknown and
 never as a value.
@@ -105,6 +105,14 @@ class DigestViewItem(Model):
 
     item_id: ItemId
     vertical: Slug
+    desk: Slug | None = Field(
+        default=None,
+        description=(
+            "Where the day publishes this story, which is the topic a reader finds it "
+            "under. Null says nothing relabelled it and the page falls back to "
+            "`vertical`. Null is never read as a desk of its own."
+        ),
+    )
     title: UntrustedLine
     summary: str = Field(min_length=1)
     reader_note: str | None = Field(
@@ -191,6 +199,25 @@ class DigestView(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T06:56",
+            change=(
+                "Added DigestViewItem.desk, so a served item says which topic the day "
+                "publishes it under. DigestVerticalRef, which this file reuses, gained "
+                "desk_count beside count; count keeps meaning the vertical count."
+            ),
+            why=(
+                "This is the copy a browser fetches, and the reading page is what groups "
+                "stories under a topic - so a desk the committed day knows and this file "
+                "drops is a grouping the page cannot make. Additive and optional: an "
+                "older shell ignores a key it does not know, and a newer shell reading a "
+                "payload written before today sees null and falls back to `vertical`, "
+                "which is what every one of those days meant. So nothing else is owed on "
+                "the read side (section 11). Costs one name on the item list, which is "
+                "the per-item half of the wire; the day-level desk_count rides on "
+                "`verticals`, which was already carried."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T03:55",
             change=(
@@ -400,6 +427,13 @@ class DigestView(Contract):
             for vertical_id, count in counted.items():
                 if drawn[vertical_id] != count:
                     raise ValueError(f"vertical {vertical_id} count disagrees with its items")
+            published = Counter(item.desk or item.vertical for item in self.items)
+            unlisted = sorted(set(published) - set(counted))
+            if unlisted:
+                raise ValueError(f"items name an unlisted desk: {', '.join(unlisted)}")
+            for ref in self.verticals:
+                if ref.desk_count is not None and published[ref.id] != ref.desk_count:
+                    raise ValueError(f"desk {ref.id} desk_count disagrees with its items")
         if self.leads is not None:
             led = [lead.item_id for lead in self.leads]
             if len(set(led)) != len(led):

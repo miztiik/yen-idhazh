@@ -65,11 +65,21 @@ export function payloadOf(date: string, root: string = CANARY): Record<string, u
 	return JSON.parse(readFileSync(join(root, year, month, day, 'digest.json'), 'utf8'));
 }
 
-/** The topics that day published, in the payload's own order. */
+/** The topics that day published stories under, in the payload's own order.
+ *
+ * Read through `desk_count`, so a topic listed only because its feeds carried a
+ * story the day then published elsewhere is not in here. A route for one of
+ * those answers `Not here`, which is what the page does on purpose - a pill
+ * leading to an empty room is a dead end rather than a way in. */
 export function topicsOf(date: string, root: string = CANARY): string[] {
 	const verticals = payloadOf(date, root).verticals;
 	if (!Array.isArray(verticals)) return [];
-	return verticals.map((ref) => String((ref as { id: unknown }).id));
+	return verticals
+		.filter((ref) => {
+			const entry = ref as { count: number; desk_count?: number | null };
+			return (entry.desk_count ?? entry.count) > 0;
+		})
+		.map((ref) => String((ref as { id: unknown }).id));
 }
 
 /** One topic of that day. Which one is the fixture's business. */

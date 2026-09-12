@@ -41,7 +41,7 @@ type Json = Record<string, unknown>;
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-09-12T03:55';
+export const VIEW_VERSION = '2026-09-12T06:56';
 
 // The fields a page renders, and no others. Traced along the render path rather
 // than guessed: `DigestList` scopes and filters the list, and `DigestItem` with
@@ -93,11 +93,18 @@ export const VIEW_VERSION = '2026-09-12T03:55';
 // No page draws a group as one item yet, and a field without a reader does not
 // earn the wire.
 //
+// One more joined on 2026-09-12: `desk` is the topic the day publishes a story
+// under, where `vertical` is the word its carrying feed declares about itself.
+// The reading page groups by it, so a desk this file dropped would be a grouping
+// the browser cannot make - and a slug beside a slug is the cheapest name on the
+// list. Absent reads as unknown and falls back to `vertical`.
+//
 // The order is the order the staged file writes its keys in, so a name moved
 // here rewrites every staged day.
 export const ITEM_FIELDS: readonly string[] = [
 	'item_id',
 	'vertical',
+	'desk',
 	'title',
 	'summary',
 	'reader_note',
