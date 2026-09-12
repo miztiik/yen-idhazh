@@ -74,7 +74,41 @@ A message with no options is a status update, not a decision request, and does n
 
 [`docs/agents/guardrails.md`](docs/agents/guardrails.md) and [`AGENTS.md`](AGENTS.md) restate this section; they do not extend it (Rule #4).
 
-## 1. Rules (Read First, Every Session)
+## 0d. Intent, Contract, Code
+
+**Intent is the top of the chain. The contract follows intent. Code follows the contract.**
+
+**Intent** is what the user wants to be true when the work is done. **The contract** is this file, `docs/`, the models in `backend/idhazh/contracts/` and the generated `schemas/`; when intent and the contract disagree, the contract is what changes, in the same commit (section 0). **Code** follows the contract; when they disagree, the code is what changes.
+
+**Compliance is to the intent, not to the current shape of the system.** An existing limitation - a guardrail, a budget, a schema, a dependency, a design already shipped - is a cost to price, never an answer on its own. "We cannot, because X" is not a finished sentence. The finished sentence names what X costs to move, what moving it buys, and what you recommend.
+
+**When intent meets a limitation, the answer moves.** Three moves are legitimate.
+
+- **Do it**, and say what it moved.
+- **Price it**: what the limitation costs to move, what moving it buys, and a recommendation (section 0c).
+- **Say what would settle it**, when the price cannot be measured today: name the measurement, what it costs to take, and the smallest step that makes progress while it is unknown. Label the guess an estimate (Guardrail #10) - an estimate carrying its own name is a better answer than a refusal.
+
+Not legitimate: naming the limitation and stopping. **A limitation named with no next move is an unfinished answer.**
+
+**When the measurement refuses the intent, that is a finding and not a veto.** Report what the data says, name the part of the intent it still supports, and hand the decision back with options. The agent never narrows the intent by itself (section 10); the person does (section 0).
+
+**What this does not license.** It does not license routing around a person's ruling (section 0), the runner budget (Guardrail #2), or the trust boundary (Guardrail #11) - those are surfaced, not overruled. And it does not license a larger change than the intent needs: intent is what the user asked for, not what you would have asked for.
+
+### Design rationale
+
+**This section was added on 2026-09-12, on the owner's instruction, because citing a constraint had become a way to decline work rather than price it.** An agent that named a guardrail, a budget or a schema and stopped there was reporting a fact and calling it an answer, and nothing in this contract said what it owed instead. The three moves are that missing clause: do it, price it, or name the measurement that would settle it.
+
+**The rejected alternative was a clause reading "a sentence that declines carries a price".** It was refused because it demands a number on exactly the days no number exists, which Guardrail #10 forbids - a hard rule wearing a guardrail's clothes. The third move does the same job without that cost: a labelled estimate that names what would settle it is the answer when a measurement is not available today. Authority: owner, 2026-09-12.
+
+## 1. Adaptive Guardrails (Read First, Every Session)
+
+**These are guardrails, not rules, and the difference is the point.** A rule is obeyed or broken. A guardrail is a shaped constraint that holds the normal path, and **when a guardrail bites, that is feedback, not a verdict.** Two responses are legitimate and one is not. Legitimate: adapt the guardrail, saying what changed and why, or take a named exception recorded next to the work. Not legitimate: quietly route around it, or read it as advice because it is inconvenient.
+
+**Every deviation carries a person's name. No agent may adapt a guardrail or take an exception for itself** - it proposes, a person disposes, and the person's decision is written into the commit that carries the deviation. An adaptation nobody approved is the same failure as quietly routing around it, wearing better clothes.
+
+**Each guardrail carries its reason, and the reason is the load-bearing part.** A guardrail whose reason no longer holds is a guardrail to change, and saying so is the job rather than a deviation from it. A guardrail cited without its reason is a half-quote.
+
+**Three of the twelve are boundaries rather than adaptable constraints** - static-first publication (#1), the runner budget (#2) and the trust boundary (#11). An agent surfaces those and never overrules them, because the first two are set outside this project and the third protects a reader.
 
 1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no server we run, no runtime call to a model provider, no runtime telemetry, analytics, error-tracking SDKs, ads, accounts, or push notifications. The pipeline runs in CI and commits its output; the site only renders what is already committed. **Every computation happens in the reader's browser or in CI - never on a server we operate.** Fetching static assets is allowed, including from a third party: a font, a stylesheet, an icon set, a charting library. Fetching our own committed files at runtime is likewise allowed and is how an interactive view reads its data. What is forbidden is a *service* - anything that executes our logic off the reader's device, anything that reports a reader's behaviour anywhere, and any third-party script that phones home. A third-party asset is judged on its bytes, its licence and its privacy behaviour (section 8), not on its hostname; prefer self-hosting when the asset is small enough that a request is the larger cost.
 2. **The runner is the architecture.** Every pipeline decision is measured against a stock GitHub-hosted `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage, and a **1 GB hard cap on the published Pages site**. Actions minutes are free and unmetered because this repository is public - wall-clock is the constraint, not a monthly budget. Nothing here is billed, which is why the money figure Rule #10 permits on the operator console is a counterfactual and not a cost. A model that does not fit, a step that does not finish, a cache that does not hold, or a site that outgrows 1 GB is a design error, not a budget request.
@@ -91,7 +125,7 @@ A message with no options is a status update, not a decision request, and does n
 
 ### Design rationale
 
-**These are "Rules", not "Holy Laws" (renamed 2026-08-23).** The old name dressed eleven engineering constraints in religious language, which made them sound unarguable rather than reasoned. A rule earns its authority from the reason written next to it.
+**This section has been renamed twice, and both renames are the same argument at a higher resolution.** Holy Laws became Rules on 2026-08-23: the old name dressed eleven engineering constraints in religious language, which made them sound unarguable rather than reasoned, and a rule earns its authority from the reason written next to it. Rules became Adaptive Guardrails on 2026-09-12, because a rule is still obeyed or broken - which makes citing one a way to end a conversation rather than to price a cost. A guardrail that bites is feedback, and the reason beside it is the load-bearing part, so a constraint whose reason no longer holds is a constraint to change rather than a wall to stop at. Authority: owner, 2026-09-12.
 
 **Rule #12 was added 2026-09-05, and it is about cost rather than correctness.** Measured that day on an Intel Core i7-1265U: two frontend checks spent 270 s and 93 s asserting once per published story, while reading and parsing the whole archive took 0.15 s and running the function under test on every story took a further 0.02 s. The work was never the archive - it was the same handful of cases re-checked tens of thousands of times. Those 6,539 stories carried six distinct cases between them, so the corpus stopped teaching anything on about day one while the bill went on arriving every four hours. A published day is frozen once it is written, so re-reading it later cannot find a fault that `idhazh validate-days` and the contract models did not already refuse. Authority: owner, 2026-09-05.
 
@@ -250,6 +284,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] No `[DEBUG]` markers left.
 - [ ] No new hardcoded values.
 - [ ] No new mocks unless explicitly requested.
+- [ ] Any guardrail adapted or excepted in this change carries a person's name and a dated line in the living doc it impacts (section 1).
 - [ ] Lockfiles in sync with manifests.
 - [ ] Any new performance or quality number carries hardware, date and spread (Rule #10).
 - [ ] Runner budget respected: no step pushes a job past its timeout, the cache past 10 GB, artifacts past 500 MB, or the published site past 1 GB (Rule #2).
