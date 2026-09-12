@@ -171,7 +171,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Three docstrings defend a requirement the page retired | - | A | PENDING | - | - | - |
+| 1 | Two docstrings defend a requirement the page retired | - | A | IN-FLIGHT | p25-1 | - | worker |
 | 5 | The rail goes and the time lands under the heading | - | A | DONE #625 | p25-r5 | #625 | worker |
 | 2 | One order over the whole day, inside a frame a person set | 1 | B | PENDING | - | - | - |
 | 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | PENDING | - | - | - |
@@ -225,9 +225,11 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 ---
 
-## 2. Row #1 - Three docstrings defend a requirement the page retired
+## 2. Row #1 - Two docstrings defend a requirement the page retired
 
-- **Scope:** The link-stability justification is deleted from `assemble.build_day`, `cli.already_published` and `cli.stage_visual_planner`, and replaced with the reason the code actually has - crash consistency between the day write and the ledger append. Behaviour-free. No line of executable code changes.
+**The row said three and the tree holds two, re-measured 2026-09-12 before dispatch.** `git grep -n 'shared link' -- backend` returns exactly three hits: `assemble.py:1066` and `cli.py:1794`, which are the two this row deletes, and `backend/idhazh/contracts/app_config.py:2598`, which is a different claim - a per-reader layout breaking a shared link - and is **true** for the same reason decision 3 gives for the two frontend sentences. **`cli.stage_visual_planner` carries no link claim at all**: its docstring already gives the right reason ("the assembler keeps the published copy and discards the new one"), so there is nothing there to correct. Read `app_config.py:2598`, leave it alone, and say in the pull request that it was read.
+
+- **Scope:** The link-stability justification is deleted from `assemble.build_day` and `cli.already_published`, and replaced with the reason the code actually has - crash consistency between the day write and the ledger append. Behaviour-free. No line of executable code changes.
 - **Files touched:** `backend/idhazh/assemble.py`, `backend/idhazh/cli.py`, `backend/tests/test_pipeline.py`, `docs/architecture/publishing/visuals.md`, `docs/architecture/sources/discovery.md`
 - **Acceptance gates:** `GATE-PY` with `backend/tests/test_pipeline.py`, `GATE-SUITE`. Plus, in this row:
   - `git grep -n "shared link"` returns no hit in `backend/` that is about the item order;

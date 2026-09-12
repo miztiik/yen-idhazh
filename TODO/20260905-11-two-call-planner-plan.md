@@ -111,11 +111,11 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3c | Own the prompt bytes | 3d | C4 | DONE #640 | p11-3c | #640 | worker |
 | 3e | The instructions move in front of the article | 3c | C5 | DONE #644 | p11-3e | #644 | worker |
 | 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | PENDING | - | - | - |
-| 3g | Call 1's reply does not fit its own budget | - | C7 | PENDING | - | - | - |
+| 3g | Call 1's reply does not fit its own budget | - | C7 | IN-FLIGHT | p11-3g | - | worker |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
 | 5b | Call 1 and call 2 run in the pipeline | 5, 3b, 3e | E2 | DONE #646 | p11-5b | #646 | worker |
-| 6 | The small model, its job and its cache go | 5b | F | BLOCKED | - | - | - |
+| 6 | The small model, its job and its cache go | 5b | F | PENDING | - | - | - |
 
 **Six rows are live and five are merged.** Rows 1, 2, 3, 3b and 4 shipped. **`parallel N = 4`, so up to four rows of this plan run at once; a ready row is held only when its `Files touched` list overlaps one already in flight.**
 

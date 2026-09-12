@@ -151,7 +151,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 | 1 | What prerendering actually weighs, both arms | - | A | DONE #645 | p26-1 | #645 | worker |
 | 2 | The guard retires, and nothing a reader sees moves | - | A | DONE #613 | p26-r2 | #613 | worker |
 | 3 | The three surfaces that say every route is prerendered | - | B | DONE #614 | p26-r3 | #614 | worker |
-| 4 | The ruling, written where the next person arrives | 1, 2 | B | PENDING | - | - | - |
+| 4 | The ruling, written where the next person arrives | 1, 2 | B | IN-FLIGHT | p26-4 | - | worker |
 
 **What a parallel group means, stated so a worker can check it.** **Within one group, no two rows may write the same file.** A glob counts as every file it covers, so there are no globs in this plan - every row's `Files touched` list names files, and where a directory is named the row says what it creates in it and nothing else in the plan writes there.
 
@@ -377,6 +377,7 @@ What lands in `docs/architecture/publishing/frontend.md`:
 1. **The argument at line 48 is extended into a `## Design rationale` entry**, keeping its three sentences, adding section 0.2's fourth reason and **row #1's measurement**, and naming the decision as a decision rather than as three things that "make `/` different". `CLAUDE.md` section 4 puts a decision in the living doc it impacts and nowhere else.
 2. **A `## Rejected alternatives` row for turning prerendering off**, carrying section 6's price - HTTP 404 on every address, no first-screen content, the grid re-wrap, the console's blank first paint, and nothing rendering without a script.
 3. **The stale table row corrected.** Line 68 reads "Prerendered HTML on `/`, with the whole day in it". `/` has carried a seed and fetched the rest since 2026-09-10, and the same page argues for that change 22 lines above the table that contradicts it.
+4. **Three more stale counts on the same page, found 2026-09-12 before dispatch.** The heading at line 9 says "Six documents", line 11 says "Six routes are generated at build time" and names three console routes, and line 42 says "the sweep runs over the six documents a build writes". All three are false since plan 25 row #11 added two console tabs. They are corrected here because they are the same claim as item 3, on the same page, and leaving two of four right is worse than leaving all four wrong.
 
 ### Files touched
 
@@ -390,7 +391,7 @@ What lands in `docs/architecture/publishing/frontend.md`:
 
 `GATE-DOCS`, plus all three of:
 
-1. **The page states a route count and it is `6`**, matching `git grep -c 'export const prerender = true' -- frontend/src` at `7` over six routes - the console layout and its page both declare it, which is why the two numbers differ and why the page says so.
+1. **The page states a document count and it is `8`.** Re-measured 2026-09-12 before dispatch, and **an earlier draft of this gate said `6`**: `git grep -c 'export const prerender = true' -- frontend/src` is `7`, and row #1's build produced **8 `index.html` documents**, because `/console/judgement/` and `/console/voices/` landed with plan 25 row #11 (pull request #616) and inherit prerendering from `console/+layout.ts` without declaring it. So three numbers differ - 7 declarations, 8 routes, 8 documents - and the page says which is which rather than picking one.
 2. **Every figure the rationale quotes carries its hardware, its date and its spread**, or cites row #1's record by name.
 3. **`git grep -n 'with the whole day in it' -- docs/` returns nothing.**
 
