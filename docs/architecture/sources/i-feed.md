@@ -1,6 +1,6 @@
 # Intelligent F.E.E.D - I Feed
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-13
 
 **Status: design proposal and guidelines, not deployed behavior.**
 F.E.E.D expands to Feed Evaluation & Execution Decider. Intelligent F.E.E.D -
@@ -25,19 +25,23 @@ The immediate problem is concrete: a feed can return valid RSS every time
 while its articles repeatedly refuse access or yield only teasers. Our current
 warning tells us about that problem but does not stop the next wasted request.
 
-The recommended first delivery is **a trustworthy admission report and a
-recoverable stop before article selection**. These use existing observations
-and address a measured failure. The score begins as a visible explanation;
-we test its proposed effects before letting it change more behavior.
+The recommended first delivery is **a trustworthy admission report and an
+every-run feedback loop**. Each run updates the enabled signal estimates from
+new outcomes. The next run uses that state to choose work, pause failing access
+and schedule checks. A short record-only qualification can test the wiring;
+record-only output is not the finished feature. Changing the formula or its
+weights is a separate, slower comparison, not a prerequisite for adaptation.
 
 | Priority | App-specific change | Value and limit |
 | --- | --- | --- |
 | First | Report every article in a bounded admission sample, including successful extraction warnings and selection exclusions. Return review when evidence is insufficient. | One readable exception can no longer hide a mostly blocked feed. This does not claim to automate editorial judgment. |
 | First | Use each feed's recent article-access outcomes to pause normal article work after supported repeated failures. Record the cause and a next check. | Stops wasting another selection slot. Our model failures and quiet publishing days are not source failures. |
 | First | Reserve a fixed allowance for new feeds and recovery checks, with enough distinct observations before restoring normal work. | A source can earn its way back. A pause ending permits a check, not an automatic return. |
-| First | Show the evidence, proposed score and decision together. Compare the proposed decisions with today's behavior on captured examples. | We can inspect and tune the model before it controls the digest. A higher score alone is not success. |
+| First | Settle new outcomes once, update each enabled signal estimate and commit private feed state before the next selection. | Live delivery changes scores every run without another model call or a new formula. Failed and partial runs must retain their observations. |
+| First | Let qualified signal estimates change source priority and allocation, with evidence and reasons beside each decision. | Replace the old source-priority term rather than stack another penalty on it. Qualification checks the behavior; a higher score alone is not success. |
+| First | Adjust when a feed is next polled from its rate of new eligible material. | A quiet feed gets fewer requests, not invented quality failures. The longest gap must respect the freshness and coverage choices. |
 | Adjacent fix | Make the existing affiliate exclusion match its intended host and path, not arbitrary text in a query. | Preserves the editorial decision without excluding unrelated reporting. |
-| Later | Let the composite replace today's source-priority calculation; tune its settings automatically within tested limits. | Needs trustworthy quality assessments, selection records and independent comparisons first. |
+| Later | Tune component weights, decay settings and allocation parameters automatically within tested limits. | Needs selection records and independent comparisons. Ordinary reputation updates do not wait for this tuner. |
 | Later | Change topic assignments, add publisher-wide limits, use richer classifiers or combine LLM and human quality assessments. | Keep these possible without making them prerequisites for stopping known bad article requests. |
 
 This is an impact-first choice, not a claim that exactly 20 percent of the
@@ -53,30 +57,35 @@ query cleanup separate because it changes article identity and old-record reads.
 
 Read the arithmetic from top to bottom: put measurements on a common scale,
 give recent evidence more influence, then combine the chosen weights. Selection
-also checks permission and work limits. The lower loop tests settings against
-actual results. It is not the score grading itself.
+also checks permission, due times and work limits. The solid return path updates
+the next run from live outcomes. The slower review path diagnoses drift and can
+test settings. It is not the score grading itself.
 
 ```mermaid
 flowchart TD
- evidence["Past article outcomes and assessments"] --> scale["Put signals on a common scale"]
+ evidence["Latest committed evidence and feed state"] --> scale["Put signals on a common scale"]
  scale --> age["Give recent evidence more weight"]
  seed["Starting belief that fades over time"] --> age
  age --> score["Combine signal and assessor weights"]
  settings["Tunable settings and formula version"] -.-> score
  score --> choose["Choose feeds and articles"]
- limits["Permission, pauses, coverage and work limits"] --> choose
+ limits["Permission, due times, pauses, coverage and work limits"] --> choose
  choose --> fetch["Fetch and extract source material"]
  fetch --> summarize["Usable material reaches the summarizer"]
  fetch --> record["Record results and actual work"]
- record --> evidence
- record --> compare["Check quality and useful output independently"]
- compare --> trial["Test a small settings change"]
+ summarize --> record
+ record --> settle["Every run: settle new outcomes once"]
+ settle --> update["Update signal estimates, restrictions and next-poll times"]
+ update --> commit["Commit private state for the next selection"]
+ commit --> evidence
+ record --> compare["Slower: check drift on recent live samples"]
+ compare --> trial["Later: compare candidate settings"]
  trial -. "Only after confirmation".-> settings
 ```
 
-The first delivery supplies the evidence, inspection and temporary-stop parts.
-Automatic score-led selection and settings promotion follow only when their
-comparisons justify them. Every box remains replaceable through a versioned
+The first delivery closes the solid loop, including the next selection using
+the updated state. Automatic settings promotion follows only when its separate
+comparisons justify it. Every box remains replaceable through a versioned
 contract, rather than through an unbounded plugin system.
 
 For example, an HTTP 403 costs a request and an article-selection opportunity,
@@ -122,6 +131,55 @@ The admission utility and periodic hygiene pass are two entry points to this
 same loop, not separate definitions of a good feed. The current utility's
 any-one-success verdict is an access observation, not a sufficient admission
 decision.
+
+### What changes before the next run
+
+Reputation is an online estimate, not a score assigned once during admission.
+After each run, the updater consumes its new settled outcomes and enabled
+assessments. It advances the age-weighted sums and exposure for each affected
+feed, signal and method using the arithmetic below. It then records the new
+component estimates, support, restrictions and due times. The formula and
+weights can remain unchanged while every affected feed's score changes.
+Refresh every enabled term; do not force every number to move. A ratio can
+remain unchanged after consistent evidence, while its support increases. A
+missing assessment remains missing. Apply time decay at the decision cutoff
+even for a feed that supplied no new observation.
+
+The next planner must load the latest committed state and apply any bounded
+pending outcomes before selecting work. A workflow checkout is pinned to its
+trigger commit, so reading that checkout alone can miss a predecessor's update.
+Record the state revision and evidence cutoff used for each decision. If an
+earlier run is still working, its unsettled results are unknown; do not wait for
+them or claim that the new plan used them. They enter the next available update.
+Read state through its versioned contract without silently replacing the run's
+pinned code or policy. An incompatible state revision needs an explicit
+migration or declared degraded mode, not a fresh score with restrictions lost.
+
+Keep one serialized state updater. Preserve evidence from failed and partial
+runs independently of successful publication. A checkpoint makes replay
+idempotent: the worker and assembler reporting one article do not create two
+successes. A hard-killed job can lose facts it never exported; those outcomes
+remain unknown. A failed state commit leaves durable pending evidence for
+catch-up; it does not silently clear a restriction. Bound catch-up by the
+retained window and declare insufficient state where that window cannot
+reconstruct an update.
+
+| Live input | Next-run effect | What does not follow |
+| --- | --- | --- |
+| Distinct articles repeatedly refuse permitted access | Lower the access-related estimates; apply the configured restriction and recovery schedule. | HTTP 403 does not prove a paywall, and three retries are not three articles. |
+| Readable, substantive material arrives | Update the applicable delivery and assessed-quality estimates. | A successful summary is not proof that the source's claims are true. |
+| Our model fails after usable extraction | Record model cost and pipeline failure; retain the successful source-side outcome. | Do not turn our failure into source misconduct. |
+| A permitted feed poll offers no new eligible URLs | Update expected discovery rate and the next-poll time. | Do not record a failed article opportunity that was never allocated. |
+
+Golden examples are regression anchors, not the evidence base for these live
+updates. A slower quality review uses a bounded rotating sample of recent
+material across topics, article forms, active feeds and permitted trial feeds.
+It checks deterioration and assessor disagreement. No quality assessment means
+unknown quality, not zero quality. A drift alarm starts diagnosis; it cannot
+prove by itself whether the source, extractor, assessor or selection changed.
+Candidate settings need separate confirmation on fresh evidence, not endless
+optimization on the same small reference set. None of these steps requires
+training a large model on the runner.
 
 ## How scoring works
 
@@ -314,10 +372,36 @@ Keep room for new and returning sources; otherwise a low-ranked source has
 no way to show that it improved. Keep permission and temporary stops outside
 the score so a large number cannot override them.
 
-For the first delivery, retain existing story ranking and coverage limits.
-Record the proposed score and which decisions it would change. Once qualified,
-use it to replace source priority rather than multiply yet another penalty
-into the current calculation.
+For the first delivery, retain existing story bonuses and coverage limits.
+Qualify the new source term with a bounded comparison, then use it to replace
+source priority rather than multiply yet another penalty into the current
+calculation. The feature is not complete until settled evidence can change the
+next run's allocation.
+
+### Quiet feeds and polling cost
+
+Not penalizing quiet days does not mean asking a quiet feed on every run.
+Track distinct new eligible discoveries per completed, permitted poll and the
+cost of that poll. Zero new discoveries is real scheduling evidence. It is not
+an article failure, because no article opportunity was allocated. An unchanged
+feed should earn a later due time within configured bounds; new useful arrivals
+can bring that time forward. Preserve useful specialist coverage and a bounded
+exploration allowance instead of ranking every feed by raw posting volume.
+
+Apply due times before requesting RSS. Permission checks and retries still
+consume the polling budget. Use conditional HTTP requests where supported as
+an adjacent optimization, not as a claim that the current fetcher implements
+them. A 304 is an unchanged response, not failed extraction. No poll means
+unknown new arrivals, never an observed zero.
+
+The maximum gap needs a freshness decision. With today's 24-hour article age
+limit, polling a weekly publisher only once a week can miss its entire output.
+The polling interval, run spacing, scheduling delays and time to process the
+article must leave room inside that limit, or the policy must explicitly accept
+missed coverage or change freshness. Feed-entry rotation can require a shorter
+gap too. No schedule can guarantee timely discovery under an unbounded CI
+delay. Do not save requests by silently redefining a missed article as a quiet
+publisher.
 
 ### Later coverage option
 
@@ -469,8 +553,15 @@ Shared publisher or topic context can guide new-source trials later. It does
 not become that source's earned history. Prefer a simple scan of compact state
 before adding a database, approximate index or contextual-bandit predictor.
 Validate scale with built varied catalogs and finite samples, not by treating
-copies of one feed as independent evidence. Shard and worker efficiency are
-outside this design question.
+copies of one feed as independent evidence.
+
+Shard and worker efficiency stay a separate question, and the owner raised it
+beside I Feed on 2026-09-09. One fact joins the two: on 2026-09-13 `digest.yml`
+restores the weights and starts the model before `cli.stage_work` fetches any
+article, and `shard_count` never returns fewer than one worker, so a day whose
+acquisition found nothing still pays a full restore and startup. What that
+should cost, and whether preparation belongs before startup, is owned by
+[throughput](../summarize/throughput.md), not by this page.
 
 ## Lifecycle and classification
 
@@ -760,11 +851,39 @@ scope. After the first delivery is agreed, write an execution plan under
 `TODO/` that links here for decisions and contains the ordered changes and
 checks. Do not create a second competing design or repeat the paper search.
 
-The next design pass should settle the usable-article definition and the
-minimum evidence, pause and recovery settings on captured examples. Choose a
-small initial signal set and identify which inputs are observed, assessed or
-still unavailable. Unavailable quality measurements are not zeros or invented
-model verdicts. Those decisions make the first implementation plan executable.
+The owner clarified on 2026-09-09 that every-run feedback is core delivery, not
+later tuning work. Live evidence must affect the next allocation. Quiet feeds
+should cost fewer polls without becoming quality failures. Rolling live audits
+complement small regression anchors; a golden set alone cannot represent the
+changing catalog. Worker startup stays with the catalog-scale section above and
+with [throughput](../summarize/throughput.md), so an execution experiment does
+not block the score-update path.
+
+### What the next design pass must settle
+
+An execution plan cannot be written until these are answered, because every row
+it would carry depends on one of them. Unavailable quality measurements are not
+zeros or invented model verdicts. Authority follows
+[CLAUDE.md](../../../CLAUDE.md) section 14.
+
+| # | Decision to settle | Authority |
+| --- | --- | --- |
+| 1 | Distinguish permitted access, extraction success, substantive material, editorial selection and summary quality. Settle it on captured examples including failures and short primary documents; word count alone decides none of them. | Owner with Editor and Andre. |
+| 2 | Name the initial enabled signals and their raw units, denominators, direction, normalizers, weights, priors, half-lives and missing-data behavior. Do not enable request or model-waste ratios without complete exposure records. | Owner with Andre. |
+| 3 | Set the evidence unit and duplicate key. Retries spend requests; repeated reports or several assessors of one article do not create additional article support. | Fowler. |
+| 4 | Set minimum distinct evidence, time span, affected scope, pause duration, recovery requirements, probation limit and automatic versus human authority. A confirmed restriction cannot expire through score decay. | Owner with Fowler and Editor. |
+| 5 | Set poll, article, assessment and recovery budgets, maximum discovery delay and the permitted coverage loss. Reconcile them with today's 24-hour article age policy and feed-entry rotation. | Owner with Carmack and Editor. |
+| 6 | Approve a single private-state writer, latest-state acquisition with pinned code, atomic snapshots and checkpoints, bounded late-event catch-up and explicit degraded behavior. Say how overlapping runs and a lost commit are recovered. | Owner with Fowler. |
+| 7 | Define the qualification period for score-led allocation and its activation condition. Record-only output is not completion. Every enabled estimate refreshes; not every value must move. | Owner with Andre and Fowler. |
+| 8 | Define the rolling review's sample units, rotation, strata, uncovered-group report and drift actions. Keep a small fixed regression set without making it the whole live learning set. | Owner with Andre and Editor. |
+| 9 | Preserve deterministic, LLM and human assessment as separately weighted options. Any newly enabled LLM numeric grading needs explicit adoption; no mandatory second model call per article is assumed. | Owner with Andre. |
+
+Only then write the execution plan under `TODO/`. Its rows would be: the
+admission report, the persisted outcomes and private state, the update-and-use
+step, due polling with recoverable pauses, the rolling drift review, the
+host-and-path affiliate fix, and bounded automatic settings changes last.
+Those file boundaries are proposals until the table above is answered, so
+writing them as a plan earlier states decisions nobody made.
 
 | Existing location | Where to continue |
 | --- | --- |
