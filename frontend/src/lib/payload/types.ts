@@ -94,6 +94,17 @@ export interface DigestItem {
 	 * read. Absent and null both mean nothing relabelled it, and a page falls back
 	 * to `vertical` - never to a topic of its own. Use `deskOf`. */
 	desk?: string | null;
+	/** The one other topic this story has a claim to, absent on every day published
+	 * before 2026-09-13. It never equals the topic the day filed the story under,
+	 * so a story names at most two. Absent and null both mean nothing named a
+	 * second one - never "this story has no second topic".
+	 *
+	 * **Nothing draws it yet, and that is deliberate rather than an oversight.** A
+	 * topic's pill count is a promise about what its page lists, so the number and
+	 * the list widen in one change or neither does. Until then `deskOf`,
+	 * `deskCount` and the page filter all answer for the topic a story is filed
+	 * under, and this is placement data the backend reads. */
+	secondary_desk?: string | null;
 }
 
 export interface DigestRunRef {
