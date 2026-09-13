@@ -105,12 +105,13 @@ address would start asking a dead one again.
 
 **The seen prune is the fifth thing, and it folds nothing on purpose.**
 `state/seen/` is a lookup rather than a measurement: `ledger.load_seen` opens
-the shards `shards_in_window(today, collect.seen_window_days)` names and
-nothing else, so a shard outside that set answers no question anybody asks and
-its honest retention is deletion. A fold would be inventing a total nobody
-reads. The keep-set is taken from the reader's own helper, and only months
+the day files `day_partition.days_in_window(today, collect.seen_window_days)`
+names and nothing else, so a day outside that set answers no question anybody
+asks and its honest retention is deletion. A fold would be inventing a total
+nobody reads. The keep-set is taken from the reader's own helper, and only days
 *older* than it are deleted, so the retained set is a superset of the read set
-whatever date the prune is handed.
+whatever date the prune is handed. It is the one prune here whose boundary is a
+day rather than a month, because it is the one whose knob is counted in days.
 
 **The score archive is the sixth thing, and it is the only one that has to prove
 itself twice.** `state/scores/` is the largest store here - 5,335 rows in
@@ -961,12 +962,21 @@ def prune_feed_health(
     )
 
 
-# --- The seen shards ---------------------------------------------------------
+# --- The seen day files ------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class SeenPruneResult:
-    """Which seen shards went, and what they weighed."""
+    """Which seen day files went, and what they weighed.
+
+    `deleted` and `kept` are both `state/seen/<YYYY>/<MM>/<DD>.csv`, POSIX and
+    relative to the repository, oldest first. One unit rather than two, because
+    this prune has no month in it at all: `collect.seen_window_days` is counted
+    in days, so the boundary is a day and the file it names is the file it
+    deletes. The two health prunes beside this one carry a second `days_removed`
+    list precisely because their knobs are months and `deleted` has to stay a
+    month to match.
+    """
 
     deleted: tuple[str, ...]
     bytes_freed: int
@@ -985,10 +995,10 @@ def prune_seen(
     within_days: int,
     dry_run: bool = False,
 ) -> SeenPruneResult:
-    """Delete every seen shard the reader would no longer open.
+    """Delete every seen day file the reader would no longer open.
 
-    `ledger.load_seen` consults `shards_in_window(today, within_days)` and
-    nothing else, so a shard older than the oldest month that names is already
+    `ledger.load_seen` consults `day_partition.days_in_window(today, within_days)`
+    and nothing else, so a day older than the oldest that names is already
     invisible to the pipeline - it is bytes in the working tree answering no
     question. Without this the ledger grows for ever at a rate nothing bounds:
     measured 2026-08-31, 356 KB a day after the address column came off, which
@@ -996,37 +1006,50 @@ def prune_seen(
 
     The keep-set comes from the reader's own helper rather than from a second
     date calculation here. That is the safety argument: two calculations drift,
-    and the day they drift this one deletes a shard the next plan wanted.
+    and the day they drift this one deletes a file the next plan wanted.
+
+    **The boundary is a day, and this is the one prune here where it is.** Every
+    other store in this module is bounded by a knob counted in months, so its
+    prune groups day files with `day_partition.days_by_month` and takes a month
+    whole. `collect.seen_window_days` is counted in days, so there is no month to
+    group by and the file the reader named is the file this keeps. The retained
+    span is therefore exactly the window - where the month shards this replaced
+    kept 90 to 120 days, because a whole shard survived if any of its days was in
+    range.
 
     **Only what is older than that set goes, never what is newer.** The window
     is anchored on the date this is handed, and a run can be handed a date in
     the past - `--date` takes whatever it is given. Deleting everything outside
-    the window would then delete the live shard, which is the one file every
-    later plan opens. Deleting everything below the window's oldest month keeps
+    the window would then delete the live day file, which is the one file every
+    later plan opens. Deleting everything below the window's oldest day keeps
     the retained set a superset of the read set for every date rather than for
     today's, and it costs nothing: on the scheduled path the two sets are the
-    same shards.
+    same files.
 
-    There is no fuse and no `max_deletes_per_run`. A shard nobody reads is not
+    There is no fuse and no `max_deletes_per_run`. A day nobody reads is not
     the archive, and the picture pruner's fuse exists because a date-parse bug
     there eats published images - the worst case here is that the pipeline
     re-learns a first-sight date it had already forgotten.
     """
-    # `shards_in_window` always names the anchor's own month, so this is never
-    # the minimum of an empty set.
-    oldest_read = min(ledger.shards_in_window(today, within_days))
+    # `days_in_window` always names the anchor's own day, so this is never the
+    # minimum of an empty set.
+    oldest_read = min(day_partition.days_in_window(today, within_days))
     deleted: list[str] = []
     kept: list[str] = []
     freed = 0
 
-    for shard in month_shards(state_dir / ledger.SEEN_DIRNAME):
-        if shard.stem >= oldest_read:
-            kept.append(shard.stem)
+    for day in day_partition.day_files(state_dir / ledger.SEEN_DIRNAME):
+        on = day_partition.date_of(day)
+        if on >= oldest_read:
+            kept.append(ledger.seen_relpath(on))
             continue
-        deleted.append(shard.stem)
-        freed += shard.stat().st_size
+        # Named and weighed before anything is unlinked, so the dry run prints
+        # the same list the live run removes.
+        deleted.append(ledger.seen_relpath(on))
+        freed += day.stat().st_size
         if not dry_run:
-            shard.unlink()
+            day.unlink()
+            _drop_empty_day_dirs(day)
 
     return SeenPruneResult(
         deleted=tuple(deleted),
@@ -1072,7 +1095,7 @@ def prune_traces(
     goes once it is further back, so the last `within_days` days survive and
     everything older is removed. A file dated ahead of `today` - a back-dated run
     handed an older `--date` - is newer than the window and is kept, the same
-    property `prune_seen` holds for the first-sight shards.
+    property `prune_seen` holds for the first-sight day files.
 
     There is no fuse and no max-per-run. A trace outside the window is not the
     archive, and the worst case is an operator losing a drill-down into a run

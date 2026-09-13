@@ -3317,7 +3317,7 @@ def stage_prune_state(
     dry_run: bool = False,
 ) -> int:
     """Retire what the ledgers no longer answer for: an item-health month and the
-    browser's copy of it, a feed-health month, every seen shard outside the
+    browser's copy of it, a feed-health month, every seen day file below the
     window the planner reads, every committed span trace past its short window,
     and every score month past its full-grain window. Then clean the rendered
     visuals the archive policy has aged out, and record what that pass found.
@@ -3505,10 +3505,19 @@ def _prune_feed_health_shards(
 def _prune_seen_shards(
     state: Path, collect: CollectConfig, today: date_type, *, dry_run: bool
 ) -> list[str]:
-    """Delete the seen shards `rank` will not read again, and say what went.
+    """Delete the seen day files `rank` will not read again, and say what went.
 
-    Separate from the fold above so a shard that will not delete cannot stop a
+    Separate from the fold above so a day that will not delete cannot stop a
     month being folded, and so the log line names one ledger at a time.
+
+    **Counted rather than listed, which is the one thing that moved when the
+    ledger went to day grain.** `deleted` and `kept` were at most a handful of
+    month stems and the line named every one; the window is 90 days, so `kept`
+    is now up to 91 paths and a line that joined them would be a wall nobody
+    reads. `_report_removals` already prints every removed file one line each,
+    so the count and the oldest file kept are what this line adds - and the
+    oldest kept is the number that says whether the boundary landed where the
+    reader needs it.
     """
     seen = retention.prune_seen(
         state,
@@ -3518,18 +3527,19 @@ def _prune_seen_shards(
     )
     if not seen.changed:
         LOG.info(
-            "seen prune: every shard is inside the %s-day window, so none was deleted",
+            "seen prune: every day file is inside the %s-day window, so none was deleted",
             collect.seen_window_days,
         )
         return []
     LOG.info(
-        "seen prune%s: deleted %s, freed %s bytes, kept %s",
+        "seen prune%s: deleted %s day files, freed %s bytes, kept %s back to %s",
         " (dry run)" if seen.dry_run else "",
-        ", ".join(seen.deleted),
+        len(seen.deleted),
         seen.bytes_freed,
-        ", ".join(seen.kept) or "no shard",
+        len(seen.kept),
+        seen.kept[0] if seen.kept else "no day file",
     )
-    return [ledger.seen_relpath(f"{stem}-01") for stem in seen.deleted]
+    return list(seen.deleted)
 
 
 def _prune_trace_shards(

@@ -65,7 +65,7 @@ same variable. There is no hosted inference anywhere in this project
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
 | `state/scores/<YYYY-MM>.csv` | One row per scored item | **yes** |
 | `state/fingerprints.csv` | One row per pipeline stamp | **yes** |
-| `state/seen/<YYYY-MM>.csv` | First sight of every address, so an undated article still has an age | **yes** |
+| `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | What every feed did on every run | **yes** |
 | `state/feed-retirements.csv` | Every endpoint the run stopped asking, and the evidence | **yes** |
