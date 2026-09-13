@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { assertBuild, beginBuild, buildMode, completeBuild, inputFingerprint, recordBuild } from '../build-state.ts';
+import { assertBuild, beginBuild, buildMode, changedInputNote, completeBuild, inputFingerprint, recordBuild } from '../build-state.ts';
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), 'idhazh-build-state-'));
@@ -48,6 +48,28 @@ test('test and documentation edits do not require a site rebuild', () => {
 		const after = inputFingerprint(root);
 		writeFileSync(join(root, 'docs/example.md'), '# More documentation\n');
 		assert.equal(inputFingerprint(root), after);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('a stale build names the inputs that moved, and nothing that is not one', () => {
+	const root = fixture();
+	try {
+		execFileSync('git', ['-C', root, 'add', '--all']);
+		execFileSync('git', ['-C', root, '-c', 'user.email=t@example.com', '-c', 'user.name=Test',
+			'-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'a fixture']);
+		recordBuild(root, 'real');
+		assert.equal(changedInputNote(root, 'build'), '', 'a clean tree has nothing to name');
+		writeFileSync(join(root, 'docs/example.md'), '# New documentation\n');
+		assert.equal(changedInputNote(root, 'build'), '', 'prose no program reads is not an input');
+		writeFileSync(join(root, 'frontend/src/page.ts'), 'export const value = 2;\n');
+		assert.throws(
+			() => assertBuild(root, 'real'),
+			(error) => /stale inputs/.test(error.message)
+				&& /Changed in the working tree: frontend\/src\/page\.ts\./.test(error.message),
+			'a stale build says which file moved, or the reader has to find it'
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
