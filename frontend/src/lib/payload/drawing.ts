@@ -38,12 +38,21 @@ const VISUAL_PATH = /^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9][a-z0-9_-]*\.svg$/;
 
 /** A published visual's data file, as a file we are allowed to ask for.
  *
- * Same shape, same reason, one extension along. The value comes off a committed
- * payload rather than off the web, and it is still matched rather than trusted:
- * it is about to be joined onto `base` and fetched, and a path that walked out
- * of the digest tree would be taken all the same.
+ * The value comes off a committed payload rather than off the web, and it is
+ * still matched rather than trusted: it is about to be joined onto `base` and
+ * fetched, and a path that walked out of the digest tree would be taken all the
+ * same.
+ *
+ * **The name has to be an item's**, which the `.svg` pattern above never had to
+ * say because no day payload was ever called `<something>.svg`. It is now: the
+ * day's own `digest.json` and `run.json` sit in the same directory and carry the
+ * same extension. An item id ends in a hyphen and a run of digits or sixteen
+ * base32 symbols, so neither can ever look like one - and that is the same rule
+ * the writer, the retention prune and the bundle staging read, rather than four
+ * spellings of it.
  */
-const VISUAL_DATA_PATH = /^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9][a-z0-9_-]*\.json$/;
+const VISUAL_DATA_PATH =
+	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 /** What a drawing may not carry into the document. */
 const NOT_INERT = /<\s*(script|foreignObject|iframe|image|use|a|set|animate)\b|\son[a-z]+\s*=|javascript:/i;

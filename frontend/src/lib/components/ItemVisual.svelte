@@ -187,14 +187,27 @@
 	}
 
 	/* Type on the card, read the way the reader note above it is read. The chart
-	   ramp is for marks that carry no word, and a name and a figure both do. */
+	   ramp is for marks that carry no word, and a name and a figure both do.
+
+	   `--text-xs` rather than a px size, for the reason every other type on the
+	   site takes a token: a px size ignores a reader who set their browser text
+	   larger.
+
+	   **It is the token and not yet the floor, and that difference is real.**
+	   The view box is a fixed 720 wide and the figure takes the card's width, so
+	   the browser scales every user unit - and a 12-unit string on a 390 px
+	   screen resolves near 6 CSS px, under the token it was set from. Plan 12
+	   row #2 takes the width the screen actually has, which removes the scale,
+	   and row #4 is the row that then holds the result to the floor. What this
+	   row buys is that the size is a token a later row can move in one place,
+	   and that the drawn strings can be measured at all. */
 	.name,
 	.figure,
 	.unit {
 		dominant-baseline: middle;
 		fill: var(--color-text-secondary);
 		font-family: inherit;
-		font-size: 13px;
+		font-size: var(--text-xs);
 	}
 
 	/* The figure a reader compares is the one thing on the drawing they read as a

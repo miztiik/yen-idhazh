@@ -946,6 +946,16 @@ that a route may be named in `page_weight.ceilings_bytes` only if its weight doe
 when a run publishes, and a reading route's document carries the day. The gate measures and
 prints it rather than guarding it.
 
+**What the reader can read, measured rather than promised, and it is not the floor yet.** The
+view box is a fixed 720 units wide and the figure takes the card's width, so the browser
+scales every user unit. Measured on the canary build at 390 CSS px, 2026-09-13: every drawn
+string resolves at **4.8 CSS px** against a `--text-xs` of 12. That is better than the
+**3.1 CSS px** plan 12 measured for the build-time renderer at the same width, and it is
+still well under the floor. Plan 12 row #2 takes the width the screen actually has, which
+removes the scale; row #4 is the row that holds the result to the floor, and it could not
+start until something measurable was drawing. What this row buys is that the size is a token
+in one place and that the strings can be measured at all.
+
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and
 only the second one ends. The model still never writes a number - it labels, names and

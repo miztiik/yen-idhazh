@@ -596,7 +596,7 @@ RUN_ARTIFACTS: Final = "backend/var/run"
 # and a decision payload saying where it landed. The name is the item's own id,
 # so a path both runs hold is that one item rendered twice.
 RACED_ITEM_ID: Final = "energy-0000000001"
-RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_ID}.svg"
+RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_ID}.json"
 
 
 _PARSED_WORKFLOWS: dict[str, dict[str, object]] | None = None
@@ -3744,7 +3744,7 @@ def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -
     """
     date = SUBSTITUTED_DATE
     raced, fresh = RACED_ITEM_ID, "energy-0000000002"
-    fresh_asset = f"digest/{date.replace('-', '/')}/{fresh}.svg"
+    fresh_asset = f"digest/{date.replace('-', '/')}/{fresh}.json"
     staged_paths, settings = _commit_call("assemble")
     settings = {
         **settings,
@@ -3789,10 +3789,10 @@ def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -
     # The published address still holds the bytes that were published under it,
     # rather than this run's second attempt at the same picture.
     assert _git(origin, env, "show", f"main:frontend/public/{RACED_ASSET}") == (
-        f"<svg>{raced}</svg>\n"
+        f'{{"item_id": "{raced}"}}\n'
     )
     assert _git(origin, env, "show", f"main:frontend/public/{fresh_asset}") == (
-        f"<svg>{fresh}</svg>\n"
+        f'{{"item_id": "{fresh}"}}\n'
     )
     assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
 

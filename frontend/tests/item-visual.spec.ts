@@ -101,7 +101,7 @@ async function wearing(page: Page, theme: string): Promise<void> {
 	await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 }
 
-/** The day, with every chart it publishes already drawn.
+/** The day, with every chart it is going to draw already drawn.
  *
  * **The scroll is not optional.** A story asks for its marks when it is nearly
  * on screen, so a `goto` and a wait draws whatever happened to start near the
@@ -109,6 +109,12 @@ async function wearing(page: Page, theme: string): Promise<void> {
  * of stories each time. One viewport at a time, because a jump to the bottom
  * steps over every slot in between
  * (`docs/reference/agent-notes/browser.md`).
+ *
+ * **It waits for the count to settle rather than for the slots to empty.** A
+ * story whose marks were refused keeps its zero-height slot for ever, which is
+ * the degrade rule working - so a wait on "no slot is left" can only pass on a
+ * day where nothing was refused, which is the one case the refusal arms are not
+ * testing.
  */
 async function drawnDay(page: Page, route = DAY): Promise<void> {
 	await page.goto(route);
@@ -120,15 +126,15 @@ async function drawnDay(page: Page, route = DAY): Promise<void> {
 		}
 		window.scrollTo(0, 0);
 	});
-	await expect(page.locator('main article figure svg rect.bar').first()).toBeVisible();
-	// Every story that promised a chart has drawn one, so a count taken now is
-	// the day's own rather than a race with the observer.
+	let settled = -1;
 	await expect
 		.poll(async () => {
-			const waiting = await page.locator('main article div.slot').count();
-			return waiting;
+			const now = await page.locator('main article figure svg').count();
+			const same = now === settled;
+			settled = now;
+			return same;
 		})
-		.toBe(0);
+		.toBe(true);
 }
 
 /** Every marks file the canary day declares, in payload order.
@@ -155,6 +161,21 @@ function drawnCharts(page: Page): Promise<string[]> {
 			(svg) => svg.querySelector('text.name')?.textContent ?? ''
 		)
 	);
+}
+
+/** The marks file behind a chart the page drew, found by its first bar name.
+ *
+ * The page runs newest first and the payload publishes in scored order, so the
+ * two lists are not the same order - and an arm that assumed they were would
+ * refuse the wrong file and pass for the wrong reason.
+ */
+function fileDrawing(name: string): string {
+	for (const path of declared()) {
+		const data = JSON.parse(readFileSync(join(CANARY, '..', path), 'utf8')) as VisualData;
+		const first = data.marks.find((mark) => mark.mark_id === data.encoding.category[0]);
+		if ((first?.text ?? '') === name) return path;
+	}
+	throw new Error(`no canary marks file draws a first bar called ${JSON.stringify(name)}`);
 }
 
 test.describe('the browser draws the chart', () => {
@@ -219,7 +240,7 @@ test.describe('the browser draws the chart', () => {
 		const both = await drawnCharts(page);
 		expect(both.length, 'the canary day drew fewer than two charts').toBe(2);
 
-		const refused = declared()[0];
+		const refused = fileDrawing(both[0]);
 		await page.route(`**/${refused}`, (route) => route.fulfill({ status: 404, body: '' }));
 		await drawnDay(page);
 
@@ -241,7 +262,7 @@ test.describe('the browser draws the chart', () => {
 		const both = await drawnCharts(page);
 		expect(both.length, 'the canary day drew fewer than two charts').toBe(2);
 
-		const broken = declared()[0];
+		const broken = fileDrawing(both[0]);
 		await page.route(`**/${broken}`, async (route) => {
 			const data = (await (await route.fetch()).json()) as VisualData;
 			data.encoding.quantity = data.encoding.quantity.slice(0, -1);

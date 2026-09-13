@@ -2869,7 +2869,7 @@ A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
 def a_published_day(public_root: Path, *, pretty: bool = False) -> Path:
     """One published day on disk, in the layout `published_days` globs for.
 
-    The pictures the payload names are drawn as well, because `_picture_faults`
+    The marks the payload names are written as well, because `_picture_faults`
     compares the two and a day naming a file that is not there is a fault rather
     than the clean day these tests need. `pretty` re-serialises the same payload
     over more bytes, which is what a re-encode does to a closed day.
@@ -2880,10 +2880,10 @@ def a_published_day(public_root: Path, *, pretty: bool = False) -> Path:
     where.mkdir(parents=True, exist_ok=True)
     for item in payload["items"]:
         visual = item.get("visual")
-        if visual and visual.get("path"):
-            drawing = public_root / visual["path"]
-            drawing.parent.mkdir(parents=True, exist_ok=True)
-            drawing.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
+        if visual and visual.get("data_path"):
+            marks = public_root / visual["data_path"]
+            marks.parent.mkdir(parents=True, exist_ok=True)
+            marks.write_text('{"item_id": "ai-01"}', encoding="utf-8")
     text = json.dumps(payload, indent=2) if pretty else json.dumps(payload)
     (where / "digest.json").write_text(text, encoding="utf-8")
     return where / "digest.json"
