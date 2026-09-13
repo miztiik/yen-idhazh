@@ -14,17 +14,19 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import replace
+from typing import Final
 
 import pytest
 
 from idhazh import cli
-from idhazh.config import REPO_ROOT
+from idhazh.config import REPO_ROOT, load
 from idhazh.contracts.app_config import AssistConfig, CollectConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.run_plan import PlannedItem, VerticalPlan
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTier
+from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
 from idhazh.embed import Embedder
 from idhazh.ledger import feed_reliability
@@ -38,6 +40,7 @@ from idhazh.rank import (
     desks_below_floor,
     duplicates_within_plan,
     item_id,
+    plan_vertical,
     score,
     tier_weight,
 )
@@ -219,7 +222,6 @@ def test_a_reduced_feed_scores_below_the_same_story_at_full_reliability() -> Non
         carried,
         config=CONFIG,
         watchlist_hit=False,
-        on_front_page=False,
         appeared=None,
         now=STAMP,
     )
@@ -227,13 +229,205 @@ def test_a_reduced_feed_scores_below_the_same_story_at_full_reliability() -> Non
         carried,
         config=CONFIG,
         watchlist_hit=False,
-        on_front_page=False,
         appeared=None,
         now=STAMP,
         reliability={"a-feed": 0.5},
     )
     assert reduced == pytest.approx(full * 0.5)
     assert reduced < full
+
+
+# --- the terms the order is built from, and what may never move it -----------
+
+#: A fixed clock. Recency is a term of the order, so a real one would make every
+#: assertion below answer differently tomorrow.
+ORDER_NOW: Final = "2026-09-13T12:00:00Z"
+
+AI: Final = VerticalDef(id="ai", display_name="AI", min_feeds=1)
+
+
+def _story(
+    name: str,
+    *,
+    tier: SourceTier = SourceTier.TRADE_PRESS,
+    weight: float = 1.0,
+    carriers: int = 1,
+    watchlist_hit: bool = False,
+    lens_bonus: float = 0.0,
+    appeared: str | None = "2026-09-13T11:00:00Z",
+    reliability: float = 1.0,
+    source_form: SourceForm = SourceForm.ARTICLE,
+    title: str = "A story",
+) -> float:
+    """One story's score, built from nothing but these arguments.
+
+    Built rather than sampled. The point of the pairs below is two stories
+    identical but for one term, and the committed archive has never held such a
+    pair - it could not, because every real story differs in several at once.
+    """
+    url = f"https://{name}.example.org/story"
+    carried = [
+        Candidate(
+            canonical_url=url,
+            source_url=url,
+            url_key=derive_url_key(url),
+            source_id=f"{name}-{index}",
+            vertical="ai",
+            tier=tier,
+            source_form=source_form,
+            title=title,
+            published_at=appeared,
+            weight=weight,
+        )
+        for index in range(carriers)
+    ]
+    return score(
+        carried,
+        config=CONFIG,
+        watchlist_hit=watchlist_hit,
+        lens_bonus=lens_bonus,
+        appeared=appeared,
+        now=ORDER_NOW,
+        reliability={candidate.source_id: reliability for candidate in carried},
+    )
+
+
+def test_every_term_the_order_names_moves_it_on_its_own() -> None:
+    """Four terms, four pairs identical but for one of them, four flips.
+
+    A term that cannot be shown to move the order on its own is a term nobody
+    can attribute a move to, and the front-page vote was exactly that until
+    2026-09-13.
+    """
+    assert _story("a", tier=SourceTier.INSTITUTION) > _story("b", tier=SourceTier.TRADE_PRESS)
+    assert _story("c", weight=1.0) > _story("d", weight=0.5)
+    assert _story("e", appeared="2026-09-13T11:00:00Z") > _story(
+        "f", appeared="2026-09-12T16:00:00Z"
+    )
+    assert _story("g", reliability=1.0) > _story("h", reliability=CONFIG.reliability_floor)
+    assert _story("i", watchlist_hit=True) > _story("j", watchlist_hit=False)
+
+
+def test_a_field_the_order_does_not_read_never_moves_it() -> None:
+    """The half a sampled test cannot do, and the half that catches an undeclared
+    term: two stories differing only in something the score never reads.
+    """
+    assert _story("a", source_form=SourceForm.ARTICLE) == _story(
+        "a", source_form=SourceForm.ABSTRACT
+    )
+    assert _story("a", title="A story") == _story("a", title="A story " * 40)
+
+
+def _addressed(name: str, *, tier: SourceTier = SourceTier.TRADE_PRESS) -> Candidate:
+    """A candidate whose `url_key` is a real digest, so `item_id` can read it.
+
+    `_candidate` above spells a readable `url_key` because nothing it drives
+    derives an id from one. `plan_vertical` does.
+    """
+    url = f"https://{name}.example.org/story"
+    return Candidate(
+        canonical_url=url,
+        source_url=url,
+        url_key=derive_url_key(url),
+        source_id=name,
+        vertical="ai",
+        tier=tier,
+        source_form=SourceForm.ARTICLE,
+        title="A story",
+        published_at="2026-09-13T11:00:00Z",
+        weight=1.0,
+    )
+
+
+def test_an_aggregators_front_page_no_longer_moves_the_order() -> None:
+    """The term this row removed, asserted end to end through the plan stage.
+
+    Driven through `plan_vertical` rather than `score` because that is where a
+    front-page vote reaches the arithmetic at all, and because `score` no longer
+    takes an argument the assertion could pass. It fails against the base tree,
+    where the vote was worth `collect.front_page_bonus` - 0.4, more than the
+    step between the community and trade-press tiers.
+    """
+    voted = _addressed("voted")
+    unvoted = _addressed("unvoted")
+    _, items = plan_vertical(
+        AI,
+        [voted, unvoted],
+        config=CONFIG,
+        eligible_feeds=2,
+        now=ORDER_NOW,
+        front_page_keys=frozenset({voted.canonical_url}),
+    )
+    by_source = {item.source_id: item for item in items}
+    assert by_source["voted"].on_front_page is True, "the vote must still be published"
+    assert by_source["unvoted"].on_front_page is False
+    assert by_source["voted"].rank_score == by_source["unvoted"].rank_score, (
+        "an aggregator's vote is a published fact about the item and not a term of "
+        "the order. It fired on 8 of 5,682 published stories, measured 2026-09-13."
+    )
+
+
+def test_the_terms_rank_in_the_order_the_editor_set() -> None:
+    """Authority, then recency, then reliability, then a watchlist subject.
+
+    Read off `config/` rather than spelled, so a weight edit moves the bound
+    with it instead of leaving this assertion true about numbers nobody uses.
+    Each bound is the most that term can move one story, which is the only
+    comparison available between a multiplier and an addition.
+
+    The last comparison allows a tie because today there is one: reliability's
+    ceiling on the best tier is 0.5 and `watchlist_bonus` is 0.5. A tie is not
+    an inversion, so it passes - and raising the watchlist weight one step
+    fails it, which is the bite.
+    """
+    config = load().app.collect
+    tiers = sorted(
+        (
+            config.tier_weights.community,
+            config.tier_weights.trade_press,
+            config.tier_weights.institution,
+        )
+    )
+    authority_span = tiers[-1] - tiers[0]
+    reliability_ceiling = (1.0 - config.reliability_floor) * tiers[-1]
+
+    assert authority_span > config.recency_weight, (
+        f"authority spans {authority_span} and recency may move a story "
+        f"{config.recency_weight}. Recency is the second term, not the first."
+    )
+    assert config.recency_weight > reliability_ceiling, (
+        f"recency may move a story {config.recency_weight} and reliability "
+        f"{reliability_ceiling}. Reliability is the third term, not the second."
+    )
+    assert reliability_ceiling >= config.watchlist_bonus, (
+        f"reliability may move a story {reliability_ceiling} and a watchlist subject "
+        f"{config.watchlist_bonus}. A watchlist subject is the fourth term, not the third."
+    )
+
+
+def test_no_weight_can_admit_a_story_the_age_gate_refused() -> None:
+    """A term may reorder; it may never admit.
+
+    Every bonus at once, on the best tier, against a story past
+    `max_age_hours`. The gate runs before the score and a weight cannot reach
+    past it - which is what lets the weights above be tuned for an order
+    without anybody checking what they let into the day.
+    """
+    stale = "2026-09-11T12:00:00Z"
+    assert CONFIG.max_age_hours < 48.0, "the fixture below is only stale under a day-ish gate"
+    old = replace(_addressed("old", tier=SourceTier.INSTITUTION), published_at=stale)
+    plan, items = plan_vertical(
+        AI,
+        [old],
+        config=CONFIG,
+        eligible_feeds=1,
+        now=ORDER_NOW,
+        watchlist_keys=frozenset({old.url_key}),
+        front_page_keys=frozenset({old.canonical_url}),
+        lens_bonuses={old.url_key: 10.0},
+    )
+    assert items == []
+    assert plan.too_old == 1
 
 
 # --- the plan-stage duplicate pass: same story, two addresses ----------------

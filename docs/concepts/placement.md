@@ -42,12 +42,18 @@ the story is to be worth your time.
 
 Start with how much we trust the feed that carried it. Multiply that by the
 number of feeds that carried the same link. Then add a set amount for each of
-four things: it names a company or a person we follow, it was on somebody's
-front page, it matches a subject we weight (we call one of those a **lens**),
-and it is recent. The day is then sorted, best first, and the three settings at
-the top of this page reshuffle the first twenty stories, so that one subject
-area (we call one a **desk**) cannot fill the whole first screen. On the days we
-measured, most of those twenty slots moved.
+three things: it names a company or a person we follow, it matches a subject we
+weight (we call one of those a **lens**), and it is recent. The day is then
+sorted, best first, and the three settings at the top of this page reshuffle the
+first twenty stories, so that one subject area (we call one a **desk**) cannot
+fill the whole first screen. On the days we measured, most of those twenty slots
+moved.
+
+**A fourth thing used to add to it and no longer does.** If an aggregator's
+front page carried the story, that was worth a set amount until 2026-09-13. It
+happened to 8 stories out of 5,682, so almost nobody ever saw it change an
+order, and a number that rare cannot be checked. We still record that it
+happened; it just no longer moves the story.
 
 **No bonus is ever taken away, and nothing already in the day is dropped for
 being old.** A feed we trust less simply starts lower, and an older story keeps
@@ -92,7 +98,6 @@ quietly going stale.
 | Trust in a community feed | `collect.tier_weights.community` | 0.3 |
 | What one more feed carrying the same link is worth | `collect.repetition_weight` | 1.0 |
 | Naming a company or person we follow | `collect.watchlist_bonus` | 0.5 |
-| Sitting on an aggregator's front page | `collect.front_page_bonus` | 0.4 |
 | How far freshness may move a score | `collect.recency_weight` | 0.6 |
 | The hours in which that freshness halves | `collect.recency_half_life_hours` | 18.0 |
 | The age past which a story may not be added at all | `collect.max_age_hours` | 24.0 |
@@ -127,7 +132,6 @@ flowchart LR
   rel["feed reliability"] --> s1
   carried["feeds carrying the link"] --> s1
   watch["watchlist subject"] --> s1
-  front["front-page vote"] --> s1
   lens["lens weight"] --> s1
   age["how old the story is"] --> s1
   s1["stage 1: rank.score<br/>before the article is read"] --> order["one order over the whole day"]
@@ -145,6 +149,10 @@ pair is the only loop in the diagram, and nothing builds it today**: it would
 let a lens weight move on what the day did, which is the one place this design
 could start optimising against its own output.
 
+**An eighth signal fed stage 1 until 2026-09-13** - an aggregator's front-page
+vote. It is still collected and still published on the story; it is no longer an
+edge into the score.
+
 ## A worked example
 
 Three stories, one day, driven from
@@ -159,15 +167,15 @@ Everything is measured against a clock reading 12:00 on 2026-09-13.
 | Story | How its number is built | Score |
 | --- | --- | ---: |
 | A ministry statement a wire service also carried | trust 1.0, doubled by the second feed, plus 0.48 for being six hours old | 2.47622 |
-| A trade-press scoop on a watchlist company, from a front page | trust 0.6, one feed, plus 1.2 of bonuses, plus 0.58 for being one hour old | 2.377334 |
+| A trade-press scoop on a watchlist company | trust 0.6, one feed, plus 0.8 of bonuses, plus 0.58 for being one hour old | 1.977334 |
 | A community post on a feed we turned down | trust 0.3, cut to 0.12 by the feed's own weight and its record, plus 0.28 for being twenty hours old | 0.397762 |
 
-**The second story collects every bonus this project can pay, and still loses.**
-Its watchlist company, its front page and its lens are worth 1.2 together, and
-being five hours fresher adds 0.1011 more - 1.3011 in all. The first story
-collects no bonus at all. What it has instead is a more trusted feed, worth 0.4,
-and a second feed carrying the same link, worth 1.0 - 1.4 together. It wins by
-0.0989, which is four percent of its own score, so the two are close.
+**The second story collects every bonus this project can pay, and still loses by
+a fifth of the winner's score.** Its watchlist company and its lens are worth 0.8
+together, and being five hours fresher adds 0.1011 more - 0.9011 in all. The
+first story collects no bonus at all. What it has instead is a more trusted feed,
+worth 0.4, and a second feed carrying the same link, worth 1.0 - 1.4 together. It
+wins by 0.498886, which is 20.1 percent of its own score.
 
 **The lesson is the multiply, not the size of any one bonus.** A bonus adds the
 same fixed amount whatever the story is. A second feed carrying the same link
@@ -175,6 +183,11 @@ doubles whatever trust the story already had: worth 1.0 to this institution and
 only 0.6 to the trade-press story. **So the same signal pays more to the stories
 that already score well** - which is how one subject area comes to own a whole
 first screen, and it is the defect the design rationale below owns.
+
+**The gap was 0.0989 until 2026-09-13**, when the front-page term was removed and
+the second story lost 0.4 of its bonuses. Two stories that were four percent
+apart are now twenty percent apart, and nothing about the two stories changed.
+That is the size of a term nobody could attribute a move to.
 
 Scores are printed to six decimal places because a test compares them with what
 the code returns. Nothing about the day turns on the sixth.
@@ -221,6 +234,109 @@ read the article and the feed's declared `vertical` where nothing has. Counting
 anything else would cap a grouping nobody is shown.
 
 ## Design rationale
+
+### The score's terms are ranked, and one of them was retired (2026-09-13)
+
+`rank_score` used to decide only which stories were admitted. Since the day
+became one order it also decides which story a reader meets first, and those are
+different jobs: an admission score only has to point the right way, while an
+order is read off the gaps between the numbers. So the terms are now ranked, and
+the ranking is an editor's rather than an accident of four numbers somebody
+typed. The ranking, what each term may move a story by, and the test that reads
+it off `config/` are on
+[discovery.md](../architecture/sources/discovery.md#the-terms-in-the-order-an-editor-set-them).
+
+**One term went.** An aggregator's front-page vote was worth
+`collect.front_page_bonus`, 0.4 - more than the 0.3 step between the community
+and trade-press tiers. Measured over the 13 committed days that carry
+`rank_score`, 5,682 stories, on Intel Core i7-1265U / Windows 11 / Python
+3.14.2, 2026-09-13:
+
+| The front-page vote | Value |
+| --- | --- |
+| Stories it fired on | **8 of 5,682 - 0.14 percent** |
+| Head slots it fired on | 2 of 260 |
+| Stories that enter or leave the first twenty when it is removed | **none, on all 13 days** |
+| Slots in the first twenty whose story changes | 17 of 260, on 2 of the 13 days |
+| Days on which the **lead story** changes | **2 of 13** |
+| What it was worth when it fired | 0.4, against a smallest tier step of 0.3 |
+
+A term that moves nothing 99.9 percent of the time and then decides the lead is
+a lottery rather than a ranking term, and nobody could attribute a move to it
+either way.
+[discovery.md](../architecture/sources/discovery.md#the-vote-is-thin-and-the-number-is-here-so-nobody-re-litigates-it-from-intuition)
+had already written the condition down on 2026-08-30 - retire it if it fires on
+under 1 percent - so this is that condition honoured rather than a new decision.
+
+**What the reader loses is the lead on about one day in seven.** The day keeps
+every story it had and the first twenty hold the same twenty stories; what
+changes is which of them is first. These are the two days:
+
+| Day | The vote made this the lead | Without it the lead is | Where the voted story lands |
+| --- | --- | --- | ---: |
+| 2026-09-03 | NVIDIA agrees to acquire Hugging Face for $12.93 billion, one feed | Supreme Court dismisses SEBI appeals against NSE, three feeds | slot 11 |
+| 2026-09-08 | Mistral raises 3 billion euros in Europe's largest tech round, one feed | Centrum Air launches Hyderabad-Tashkent flights, three feeds | slot 6 |
+
+**Both voted stories read like the better lead, and that is an argument about a
+different term.** Each is a single-feed story from the organisation it is about;
+each story that replaces it is a three-feed wire story that wins because carriage
+multiplies authority. The property worth keeping is "one feed, and it is the
+primary source" - not "a community upvoted it". Row #4 of this plan is the row
+that turns carriage into a flat step, and these two days are the case for it.
+`on_front_page` is still published, so restoring the term costs one weight the
+day an aggregator and a news digest start reading the same internet.
+
+### The watchlist weight did not move, and the measurement is why (2026-09-13)
+
+`discovery.md` sets a weight by measuring how often the signal fires: a commoner
+signal is worth less. Applied here, a watchlist subject fires on 22.1 percent of
+the stream against 5.7 percent for a second feed carrying one address - 3.88
+times as often - so the method prices it at 0.6 / 3.88 = **0.15, not 0.5**. The
+method is not suspect: it reproduces the heaviest lens weight at exactly the 0.3
+it already carries.
+
+It was not applied, because the measurement refused it. Over the same 13 days:
+
+| The raw top 20, before the frame runs | At 0.5, today | At 0.15 |
+| --- | --- | --- |
+| Biggest desk's share of it | 40 to 100 percent, median **80** | 85 to 100 percent, median **95** |
+| Distinct desks in it | 1 to 4 | **1 to 3** |
+| Institution stories in it, over 13 days | **51** | **16** |
+| Head slots that differ from today | - | median 17 of 20; the lead story moves on 4 of 13 days |
+
+**A watchlist subject is not informative because it is rare. It is informative
+because a person chose it**, so a frequency method is the wrong instrument for
+it. And while carriage still multiplies, this is the only additive term that can
+lift an un-syndicated story from a second desk into the head - so cutting it
+hands the head to the wires. **What the reader loses at 0.15 is the story nobody
+else carried, on a subject the desk said matters**, which is the one story they
+cannot get anywhere else.
+
+The frame would still cap the biggest desk at 5 of 20, so a reader would not see
+the 95 percent. They would see slots 6 to 20 filled from further down a tail the
+score ranked lower: **a frame that holds the shape does not hold the quality.**
+
+Ruled by Editor, 2026-09-13. Re-measure when plan 25 row #4 turns carriage into a
+flat step, and set the weight then by what it puts in the head rather than by how
+often it fires.
+
+### Recency is nearly a constant, and no row owns the fix (2026-09-13)
+
+Recency is the second of the four terms by ceiling, and the ceiling is most of
+what it is. The bonus is not published, so it has to be recovered from the score,
+which leaves **5,442 of those 5,682 stories** answerable. It fires on **every one
+of them**, paying a median of 0.5656 against a ceiling of 0.6 - **94 percent of
+the most it can ever pay** - and the middle half of the stream spans 0.5053 to
+0.5874, **a spread of 0.08, a quarter of the smallest step between two tiers**.
+The median story is 1.5 hours old when it is scored and three quarters are under
+4.5 hours, so an 18-hour half-life over a 24-hour admission window adds nearly
+the same amount to everything.
+
+Raising `collect.recency_weight` does not fix that - it scales a flat term. The
+half-life is what would, and this row's scope named 18 hours, so it could not be
+touched here. Named in
+[TODO/20260910-25-placement-plan.md](../../TODO/20260910-25-placement-plan.md)
+section 18 as a gap nobody owns.
 
 ### The desk cap is 5, and it was set on what the reader is guaranteed (2026-09-13)
 
@@ -289,8 +405,10 @@ replaced the estimate it rested on.
 **Why the head is lopsided at all is a different defect, and it is owned.**
 `rank_score` today multiplies authority by carriage, which doubles it at two
 carriers, so a desk whose stories get syndicated sweeps the head. Plan 25 row #3
-rewrites the score's terms and row #4 turns carriage into a single tie-break
-worth less than one tier step.
+ranked the score's terms and retired the one nobody could attribute a move to,
+and it took no story out of the first twenty on any committed day - the
+lopsidedness is the multiplier, and row #4 is the row that turns carriage into a
+single tie-break worth less than one tier step.
 
 ### Stage 3 is proposed, and the research answer to our constraint is a target distribution (2026-09-13)
 
