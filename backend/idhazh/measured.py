@@ -155,10 +155,122 @@ WORST_TOKENS_A_WORD: Final = Measured(
     ),
 )
 
+#: Everything below is call 1's prompt, which the two-call path renders itself.
+#: Four numbers rather than one, because they move for different reasons: the
+#: scaffold moves when a prompt file is edited, the per-word rate when an article
+#: tokenizes harder, the per-row rate when the menu's layout changes, and the
+#: seam when call 2's trailing turn is reworded. One number would hide which.
+#:
+#: All four were taken together on 2026-09-13 against
+#: `backend/models/Qwen3.5-9B-Q4_K_M.gguf` through `llama-server`'s own
+#: `/tokenize`, on a laptop (i7-1265U, 32 GiB, four other agents live). A
+#: tokenizer reading is not a timing, so the hardware bounds nothing here: the
+#: same weights return the same token counts on a runner.
+#:
+#: **The cap-length article had to be built.** The committed corpus's longest
+#: body is 3,846 words against a cut point of 7,692, so every reading below comes
+#: from eight articles joined out of corpus prose and cut by `truncate_to_tokens`
+#: itself - longest-first, densest-first, its reverse, and five seeded shuffles.
+#: `CLAUDE.md` section 13 is the rule: where the awkward shape is the point, the
+#: shape is built, because a built one carries the case the archive never produced.
+
+CALL_ONE_SCAFFOLD_TOKENS: Final = Measured(
+    value=2167,
+    measures="what call 1's prompt costs before a word of the article or a menu row lands",
+    taken_on=date(2026, 9, 13),
+    method=(
+        "rendered `build_call_one_request` over a seven-word article with an empty "
+        "candidate menu and tokenized the whole prompt. The system turn alone is "
+        "2,055 of it, measured separately, so the remaining 112 is the title line, "
+        "the two section headers and the fences. It is bigger than the single call's "
+        "997 because call 1's system turn carries both jobs since row #3e."
+    ),
+    when_it_fires=(
+        "a prompt file under backend/idhazh/prompts/ changed, or a turn marker moved. "
+        "Re-render the same seven-word article and tokenize it again."
+    ),
+    why_a_number=(
+        "it is the constant term of the arithmetic that checks the two-call sequence "
+        "against the window, so it has to be a number to be added to anything. It "
+        "moves when a prompt is edited, never when a run publishes."
+    ),
+)
+
+CALL_ONE_BODY_TOKENS_A_WORD: Final = Measured(
+    value=2.2285,
+    measures="the article and its sentence addresses, per word of the cut article",
+    taken_on=date(2026, 9, 13),
+    method=(
+        "(15,014 + 2,127) / 7,692 on the densest of the eight cap-length builds. The "
+        "body is 15,014 tokens and the `[sNN] ` addresses in front of each sentence "
+        "are the other 2,127. The spread across the eight is 1.524 to 2.228, and the "
+        "top of it is what a window has to hold."
+    ),
+    when_it_fires=(
+        "prose tokenized harder than this, or `numbered_sentences` changed how it "
+        "addresses a sentence. Rebuild the cap-length arms and re-take the worst."
+    ),
+    why_a_number=(
+        "a ratio has to be a number to be multiplied by a word count. It moves when "
+        "an article tokenizes harder than any built so far, which is a property of "
+        "one article rather than of how many we published."
+    ),
+)
+
+CALL_ONE_MENU_TOKENS_A_ROW: Final = Measured(
+    value=34.115,
+    measures="one row of call 1's candidate menu, in tokens",
+    taken_on=date(2026, 9, 13),
+    method=(
+        "8,665 / 254 on the worst of the eight cap-length builds; the spread across "
+        "them is 27.2 to 34.1. A row is `[element_id] excerpt = value unit (sentence "
+        "sNN)`. It is multiplied by `elements.max_per_article` rather than by a "
+        "density, because the cap is what a saturated menu costs and the census says "
+        "a cap-length article reaches it: over the 1,444 committed corpus rows the "
+        "95th-percentile density is 0.0659 elements a word, which is 507 elements at "
+        "7,692 words against a cap of 256."
+    ),
+    when_it_fires=(
+        "`candidate_menu` changed what a row prints, or `element_id` changed length. "
+        "Re-tokenize the menu of the same builds and re-take the worst per row."
+    ),
+    why_a_number=(
+        "it is the per-row term of the same arithmetic, and it is the one term that "
+        "reads a config knob back: `elements.max_per_article` sets how many rows it "
+        "is multiplied by. It moves when the menu's layout moves, never when a run "
+        "publishes."
+    ),
+)
+
+CALL_TWO_SEAM_TOKENS: Final = Measured(
+    value=58,
+    measures="what call 2 adds in front of its own reply, beyond call 1's prompt and reply",
+    taken_on=date(2026, 9, 13),
+    method=(
+        "tokenized call 2's whole prompt and subtracted call 1's prompt and the reply "
+        "between them, over both plan states and two reply strings. 53 with the plan "
+        "asked for, 58 with it suppressed - the wider of the two, because the "
+        "suppressed shape is the one that has to fit when the window is tightest."
+    ),
+    when_it_fires=(
+        "`call_two_user_turn` was reworded or a turn marker moved. Re-tokenize both "
+        "prompts on the same build and subtract again."
+    ),
+    why_a_number=(
+        "it is the last term of the two-call sum. Small, and worth a record anyway: "
+        "row #3e cut this turn from 692 tokens to 58 by moving its work into the "
+        "system turn, and a number nobody wrote down is a saving that comes back."
+    ),
+)
+
 #: Everything above, so a check can walk the set rather than naming each one.
 EVERY_MEASURED: Final = (
     SITE_GROWTH_KB_A_DAY,
     WARNING_DAYS_REQUIRED,
     PROMPT_OVERHEAD_TOKENS,
     WORST_TOKENS_A_WORD,
+    CALL_ONE_SCAFFOLD_TOKENS,
+    CALL_ONE_BODY_TOKENS_A_WORD,
+    CALL_ONE_MENU_TOKENS_A_ROW,
+    CALL_TWO_SEAM_TOKENS,
 )
