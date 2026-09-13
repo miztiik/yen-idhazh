@@ -1,0 +1,6 @@
+A video which purportedly shows a roadside food vendor adding sewage water to a rice dish is being widely shared on social media, where users have claimed that the video is from India.
+How did we find out the truth?: We noticed that the video carried a watermark for Google's AI model Gemini.
+Given the watermark, we asked Gemini for a SynthID check, which detects whether a piece of media was made or altered using Google's AI tools.
+Gemini confirmed that "both the visuals and the audio in this video were edited or generated using Google AI," adding that its SynthID watermark was present throughout the video.
+Conclusion: An AI-generated video is being shared to falsely claim that it shows a street vendor adding sewage water to food.
+(Not convinced of a post or information you came across online and want it verified? Send us the details on WhatsApp at 9540511818 , or e-mail it to us at webqoof@thequint.com and we'll fact-check it for you. You can also read all our fact-checked stories here.)

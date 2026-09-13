@@ -1,0 +1,11 @@
+HyperVault, a subsidiary of Tata Consultancy Services (TCS), will set up a 1 GW AI data centre campus in Hyderabad on 264 acres. The company and its partners envisage investing ₹70,000 crore to build the data centre campus, which will be developed in phases.
+The announcement followed a meeting between TCS Chief Executive Officer and Managing Director K Krithivasan and Telangana Chief Minister A Revanth Reddy on Saturday.
+The campus will be purpose-built to serve the needs of frontier AI companies and hyperscalers, enabling high-density GPU deployments for AI training, inference and advanced computing workloads.
+
+The campus will also leverage green energy and water-neutral design principles as part of the build-out. The project is expected to create 7,000 direct and indirect jobs.
+“HyperVault advances TCS’ Infrastructure-to-Intelligence strategy by bringing together AI-ready infrastructure with our cloud, engineering, enterprise transformation and AI capabilities. Hyderabad offers the scale, talent and ecosystem to serve global customers,” K Krithivasan, Chief Executive Officer and Managing Director of TCS, said.
+“This reinforces Telangana’s position as a strategic hub for artificial intelligence and advanced digital infrastructure. The project would boost the AI infrastructure ecosystem in the country. The project will generate several thousand direct and indirect jobs in the region,” a senior Telangana government official said.
+“This establishes that Hyderabad is now at the forefront of the global AI revolution with a strong focus on infrastructure,” Revanth Reddy said.
+Deepesh Nanda, MD and CEO of HyperVault AI Data Center Ltd, said that the company was building infrastructure for where AI is going: higher density, liquid cooling, larger power blocks and faster deployment. “Hyderabad gives us the foundation to build that at scale for frontier AI companies and hyperscalers,” he said.
+The TCS decision to establish the data centre complex follows a meeting between Tata Sons Chairman N. Chandrasekaran and the Chief Minister at Davos earlier this year.
+Published on September 5, 2026

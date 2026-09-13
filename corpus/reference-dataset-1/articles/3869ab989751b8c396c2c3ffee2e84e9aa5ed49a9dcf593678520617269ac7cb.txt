@@ -1,0 +1,4 @@
+I was looking to see what the Administration’s Mid-Session Review economic forecast looked like. Alas, courtesy of Jared Bernstein, I am disappointed. Did Vought et al. purge all the economists from the CEA, Treasury and OMB? The MSR:
+We’ll have to take it that the Administration’s forecast is then the same as those released in April (which were finalized in November 2025). I reprise from this August post, modified to add in today’s NY Fed nowcast:
+Figure 1: Reported GDP (bold black), Administration’s FY2027 Budget forecast, aka OMB-Treasury-CEA “Troika” (red squares), WSJ April survey mean (blue), SPF median forecast (pink), Hassett 5% growth in 2027 (teal triangle), . Source: BEA, WSJ April survey, Philadelphia Fed, and author’s calculations.
+Given reported GDP growth and the NY Fed nowcast, we are more on track with the April WSJ mean forecast than the Administration’s forecast.

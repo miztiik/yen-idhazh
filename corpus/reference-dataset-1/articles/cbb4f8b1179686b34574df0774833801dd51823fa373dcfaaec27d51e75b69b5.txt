@@ -1,0 +1,29 @@
+Artificial intelligence tokens — once a term familiar only to techies — are rapidly entering everyday life in China.
+Banks, cafes, and telcos, among other small and big businesses, are offering free AI tokens as incentives to attract more customers. Some businesses are selling tokens much like mobile data plans, offering them as credit card rewards, or giving them out like free Wi-Fi.
+An AI token is essentially a unit of computing that an AI model uses to process text. When a user asks a model a question or gives it an instruction, the words are broken down into small pieces called tokens, which the model processes to generate a response.
+500 trillion Daily token consumption in China in mid-2026.
+The massive popularity of AI has led to has sharply increase in token consumption globally. Daily token consumption in China surged to 500 trillion in mid-2026 from 100 billion in early 2024.
+Token prices have become a new front in the global AI race as U.S. and Chinese AI companies aggressively lower them to compete for wider adoption of their models. Chinese open-source and open-weight models, despite lagging behind U.S. rivals on some measures of frontier performance, can cost 60% to 90% less than comparable models from OpenAI and Anthropic. Cheaper tokens allow Chinese businesses to experiment with ways to package and market them to ordinary consumers.
+Poe Zhao, a Beijing-based analyst and founder of the newsletter Hello China Tech, told Rest of World some of the token packages Chinese companies pushed into the consumer market are a “supply-led experiment.”
+“Most ordinary users still encounter AI through an app or feature, without seeing a token balance,” he said.
+Zhao said China’s effort to bring tokens into the consumer marketplace points to an unusual approach to commercializing AI.
+Here are five ways AI tokens are moving into everyday life in China:
+AI tokens as credit-card rewards
+In July, Chinese AI startup Moonshot AI launched a credit card named after its model Kimi, in partnership with the Agricultural Bank of China and American Express. Users earn Kimi AI tokens, as well as agent and coding quotas, on their spending, just like credit cards reward consumers with airline miles and cashback offers.
+The trend began in June, when China Merchants Bank launched a credit card targeting AI developers. It offered new cardholders up to 1.8 billion tokens for use on Chinese AI startup MiniMax’s models.
+Shanghai Pudong Development Bank also launched a credit card for AI developers, offering subsidies worth up to 3 billion tokens for AlibabaAlibabaAlibaba, founded in 1999 by Chinese entrepreneur Jack Ma, is one of the most prominent global e-commerce companies that operates platforms like AliExpress, Taobao, and Tmall.READ MORE’s Qwen models.
+AI tokens as mobile data
+China’s three major telecom operators have packaged AI usage much like mobile data plans.
+China Telecom offers consumer plans starting at 9.9 yuan ($1.40) a month for 10 million tokens, with larger allowances available for heavier users and businesses. The company also has a TokenHub platform that offers subscriptions on 142 large models, as the state-owned carrier tries to evolve from selling traditional telecom connectivity to AI computing and services.
+Its competitors offer similar plans. China Mobile offered 400,000 tokens for 1 yuan (14 cents) in Shanghai, payable through users’ phone bills. China Unicom introduced monthly plans ranging from 15 yuan ($2.10) for 6 million tokens to 45 yuan ($6.30) for 18 million for business users.
+AI tokens as a freebie
+Instead of offering free Wi-Fi, an increasing number of Chinese restaurants, cafes, and bars are now luring customers with free AI computing.
+At Beijing’s AGI Bar, customers who buy a drink and connect to the Wi-Fi can get unlimited access to DeepSeek V4 Flash. The bar, which targets customers who are programmers and AI startup founders, runs the model locally using a Nvidia DGX Spark workstation.
+Nearby, Beijing’s Jingu Yuan dumpling restaurant gives customers 10 yuan ($1.40) worth of computing credits after a meal. Cards on its tables tell diners: “You’re full after eating the dumplings. Go collect some tokens at the cashier so your [AI] agent can be fed with some computing power too.” Its two stores have been handing out more than 100 vouchers a day.
+In Changsha, an upcoming 24-hour coffee shop uses a similar approach for promotion, offering customers AI tokens with their coffee.
+AI tokens on e-commerce
+Tokens have also reached one of China’s largest online secondhand marketplaces. On Alibaba-owned Xianyu, a platform known for selling used phones, furniture, and clothes, sellers advertise cheap access to AI models in packages measured by tokens.
+Listings offer millions of tokens for a few dollars in day passes or monthly subscriptions and shared access to AI accounts. Some sellers break up model allowances and resell them to students, independent developers, and small businesses. Others attempt to profit from the gap between official token prices and the discounted or free access they obtained elsewhere.
+AI tokens in bank lending
+The increasing number of AI startups in China has presented a challenge for its banks, as they struggle to assess the financial status of young companies on traditional metrics such as physical assets.
+Banks in the southern city of Guangzhou are experimenting with tokens to boost business for AI startups. The city’s Haizhu district launched a financial product called “token loan” in August. It allows banks including Bank of China, China CITIC Bank, and Bank of Guangzhou to measure a company’s token production and consumption to decide how much it can borrow.

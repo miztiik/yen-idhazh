@@ -1,0 +1,7 @@
+Is a Dollar a Dollar? How Transfer Design Shapes Household Spending
+Government transfers vary along two design dimensions that standard models predict should not matter: whether benefits are paid in cash or kind, and whether they arrive as one-time or recurring payments. We test how these design choices affect household spending using sharp changes in four pandemic-era transfers to low-income families with children: one-time food vouchers, monthly food benefits, one-time cash payments, and monthly cash payments. Linking variation in benefit timing and amount to high-frequency household scanner data, we estimate spending responses in a harmonized difference-in-differences and event-study framework.
+Households spend more out of in-kind benefits than out of cash transfers of similar value, and more out of recurring than one-time transfers in the short run. Our estimates produce the first internally comparable set of short-run food-store MPCs across transfer types, ranging from 0.18 (one-time) and 0.38 (monthly) for in-kind benefits, versus 0.06 (one-time) and 0.20 (monthly) for cash. The patterns are consistent with mental accounting, labeling, and forward-looking responses. More broadly, transfer design—not just generosity and targeting—is an important policy lever for social insurance and short-run demand stabilization.
+-
+
+-
+Copy CitationTherese Bonomo, Krista J. Ruffini, and Diane Whitmore Schanzenbach, "Is a Dollar a Dollar? How Transfer Design Shapes Household Spending," NBER Working Paper 35698 (2026), [link] Citation
