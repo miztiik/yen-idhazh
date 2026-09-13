@@ -276,9 +276,9 @@ whether the desk is worth opening at all, and six stories is a fragment on a
 100-story day and on a 450-story one alike.
 
 **Neither one admits a story or drops one.** Both re-file: a story over the
-ceiling moves to the desk it would otherwise have been filed under, and a thin
-desk is opened from stories the day already carries. The day is exactly as long
-either way, so nothing a reader could have seen is ever taken out
+ceiling moves to its second desk, and a thin desk is opened from stories the day
+already carries. The day is exactly as long either way, so nothing a reader
+could have seen is ever taken out
 (`backend/tests/test_placement.py`).
 
 ### The four things neither rule may do
@@ -297,26 +297,89 @@ either way, so nothing a reader could have seen is ever taken out
   two thin desks where there was one full one, so a floor that cannot be reached
   in one piece is not started.
 
-### What happens to the overflow today, said plainly
+### A story's second desk, and where the overflow goes
 
-A story over its desk's ceiling goes to the desk whose feed carried it. So the
-rule only has somewhere to send a story when something has already filed it
-somewhere other than there - and **nothing reads an article yet, so on every day
-published so far a story's only desk IS its feed's desk and nothing moves.**
-Measured 2026-09-13 over the committed archive: 0 of 9,353 items across 24 days
-carry a read desk.
+A story over its desk's ceiling moves to its **second desk**, and it keeps a
+claim on the desk it left. So it is filed under one name and has a claim on two,
+and it is drawn once in the stream: cross-filing changes which desk a story
+belongs to, never how many times it appears in the day.
 
-**That is the honest state and it is written here rather than implied.** The two
-numbers are live arithmetic with a test behind each, and they change no day the
-site has published. They start moving stories on the day a model reads the
-article and names the desk itself, which is
+The second desk is the one other desk the reading of the article named. Where no
+reading named one, it is the desk whose feed carried the story, which is the
+fallback the ceiling shipped with on 2026-09-13. **One, never a list**: a story
+on four desks is a story on no desk. A second desk is also refused outright in
+two cases, because each would be a claim nothing can honour - one that repeats
+the desk the day already filed the story under, and one naming a desk this run
+found below its feed floor and will not render.
+
+**Nothing moves on any day the site has published, and that is the honest state
+rather than something to imply.** Both numbers are live arithmetic with a test
+behind each, and both are inert, because a story only gets a second desk once
+something reads the article. Measured 2026-09-13 over the committed archive: **0
+of 9,353 items across 24 days carry a read desk of any kind.** The field is
+there; the call that fills it is
 [20260910-23-article-classification-plan.md](../../TODO/20260910-23-article-classification-plan.md)
-row #6 - not on the day a story gains a second desk of its own reading, which is
-plan 25 row #8. **A ceiling with nowhere to send a story leaves it where it is**
-rather than shortening the day, and that is the one behaviour this rule may
-never get wrong.
+row #8, and until that ships the valve is dry.
+
+**A ceiling with nowhere to send a story leaves it where it is** rather than
+shortening the day, and that is the one behaviour this rule may never get wrong.
+
+### What the number on a pill promises
+
+**The number on a desk's pill is how many stories that desk's page lists** - the
+same set, counted the same way - so a reader who taps it and counts gets the
+number they tapped.
+
+It promises the number and the page agree. It does not promise which set, and
+today that set is the stories filed under the desk: a cross-filed story is
+counted and listed where it is filed, and not on its second desk. Widening one
+side without the other is the defect this sentence exists to refuse - a pill
+reading 40 over a page listing 37 - so the two widen together or neither does.
+Ruled by Editor, 2026-09-13.
 
 ## Design rationale
+
+### A story cross-files to a second desk, and the ceiling stops erasing a reading (2026-09-13)
+
+**The ceiling had one place to send a story and it was backwards.** Until this
+date a story's second desk was the desk whose feed carried it, so the only move
+available was back to where the story arrived - and a story already filed under
+its feed's word had nowhere to go at all. On the day the ceiling is most needed,
+that is the story it cannot move. The article's own reading now names the second
+desk, and the feed's word stays as the fallback beneath it.
+
+**A move swaps the two desks rather than overwriting the first.** The published
+item carries `desk` and `secondary_desk`, and a move puts the old first desk in
+the second slot. A ceiling says a desk is busy today; nothing about the story
+changed, so erasing what the story was read as would hand a crowding rule a
+second job nobody gave it. The alternative - consuming the second desk on the
+move - was rejected on what it costs a reader: on a heavy AI day, AI stories
+would fall off the AI page **because** the desk was busy, which is the inverted
+failure and the reader cannot see the reason for it.
+
+**A story names at most two desks, and the contract is what enforces it.** The
+second desk may never equal the desk the day filed the story under, and the day
+must list every name any story holds. Both are `DigestDay` validators rather
+than a rule written down somewhere, so a payload that broke either one fails at
+write time.
+
+**Neither count moved, and that is the decision rather than an omission.** A
+pill is a promise about what its page lists, so the number and the list widen in
+one change or in neither - and the page half needs a render test in
+`frontend/tests/`, which a second worker held while this landed. Ruled by Editor,
+2026-09-13, who also named what the follow-up owes: the desk page lists every
+story naming the desk either way, `desk_count` counts that same set, the three
+day totals switch from summing `desk_count` to summing `count` so a cross-filed
+story is counted once in the day's own total, and the ceiling sentence above is
+rewritten to say it bounds where the day **files** a story rather than how many
+a reader can reach under that name.
+
+**What a reader gets today: nothing, and that is measurable rather than
+arguable.** 0 of 9,353 committed items across 24 days carry a read desk, so no
+story has a second desk, no story moves, and every count on every published day
+is the number it was. What lands is the mechanism and the contract, and the two
+tests that say the mechanism is load-bearing: neuter the reading and the oracle
+goes red, neuter the swap and the payload refuses to validate.
 
 ### The desk floor and the desk ceiling, and the numbers behind them (2026-09-13)
 

@@ -19,6 +19,7 @@
   "published_at": "2026-08-20T22:10:00Z",
   "rank_score": 2.6,
   "sanitizer_version": "sanitizer-1",
+  "secondary_desk": null,
   "source_form": "article",
   "source_id": "example-grid-newsroom",
   "source_url": "https://newsroom.example-grid.com/2026/08/reactor-order?utm_source=rss",

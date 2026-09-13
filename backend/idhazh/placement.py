@@ -19,7 +19,9 @@ was left out.
 
 The same rule governs the desk floor and the desk ceiling below. They change
 which desk a story is filed under and nothing else: no story is admitted, none
-is dropped, and the day comes back exactly as long as it went in.
+is dropped, and the day comes back exactly as long as it went in. A story they
+move keeps a claim on the desk it left, so a story names at most two desks and
+the payload never loses what the story is about.
 """
 
 from __future__ import annotations
@@ -112,14 +114,39 @@ def _allowance(bounds: Mapping[str, DeskBounds], desk: str, *, day: int) -> int:
     return max(bound.floor, int(bound.ceiling * day))
 
 
+def secondary_desk_of(
+    secondary: str | None, *, filed_as: str, below_floor: Container[str]
+) -> str | None:
+    """The second desk a finished item may publish, or None where it may not.
+
+    Two things disqualify a reading, and each would put a claim in the payload
+    that nothing can honour. A second desk equal to the one the day already
+    filed the story under is one desk written twice. A desk this run found under
+    its feed floor renders nothing today, so a story pointing at it would be
+    reachable under a name the same day's payload says planned nothing - which
+    is the disagreement `rank.desk_of` already exists to stop, applied to the
+    second name as well as the first.
+
+    Null is nothing having said. It is never "this story has no second desk":
+    the day falls back to the feed's declared vertical, which is what `refile`
+    reads when this is absent.
+    """
+    if secondary is None or secondary == filed_as or secondary in below_floor:
+        return None
+    return secondary
+
+
 def second_desk(item: DigestItem, *, filed_as: str, closed: Container[str]) -> str | None:
     """The desk a story falls back to when the desk it is on has no room for it.
 
-    Today it is the feed's declared vertical, and only where something else has
-    already filed the story somewhere other than there - so on a day where
-    nothing read the article, every story's only desk IS its feed's vertical and
-    no story has a second one. Row #8 of the placement plan gives a story a
-    second desk of its own reading, and this is the function that will read it.
+    **The article's own second reading, and the feed's declared vertical only
+    where there is no reading.** The feed's word was the whole answer until
+    2026-09-13 and it is now the fallback: it could only ever send a story back
+    to where it arrived, so a story already filed under its feed's word had
+    nowhere to go and a crowded desk stayed crowded. A story has one second desk
+    and never a list - a story on four desks is a story on no desk - so where a
+    reading names one, that reading IS the answer and the feed's word is not a
+    third try behind it.
 
     It reads where the story is filed NOW rather than where it arrived, so a
     story that has already moved has no second desk left and cannot move twice.
@@ -130,11 +157,14 @@ def second_desk(item: DigestItem, *, filed_as: str, closed: Container[str]) -> s
     already sends a story away from a below-floor desk, and a rule that sent it
     back would publish stories under a name the same day's payload says planned
     nothing - the page and the operator surface saying opposite things about one
-    word.
+    word. `secondary_desk_of` keeps one out of a payload this run writes; this
+    keeps one out of a move, and both are owed because the day also holds items
+    an earlier run published against a different set of closed desks.
     """
-    if item.vertical == filed_as or item.vertical in closed:
+    other = item.secondary_desk or item.vertical
+    if other == filed_as or other in closed:
         return None
-    return item.vertical
+    return other
 
 
 def refile(
@@ -176,6 +206,15 @@ def refile(
     A desk over its ceiling with nowhere to send the overflow stays over its
     ceiling. A rule that dropped the surplus would shorten the day, which is the
     one thing a frame may not buy.
+
+    **A move swaps the two desks rather than overwriting the first.** The story
+    goes to its second desk and the desk it left becomes its second, so the
+    payload keeps saying what the story is about. A ceiling says a desk is busy
+    today; it is not a judgement that the story was filed wrongly, and erasing
+    the reading would give a crowding rule a second job nobody handed it. No
+    count moves for it - `count` and `desk_count` both still answer for the desk
+    a story is filed under, and the pill and the desk page widen together in a
+    later change or neither does (Editor, 2026-09-13).
     """
     filed = {item.item_id: _desk_of(item) for item in stream}
     counts = Counter(filed.values())
@@ -227,7 +266,9 @@ def refile(
     return [
         item
         if filed[item.item_id] == _desk_of(item)
-        else item.model_copy(update={"desk": filed[item.item_id]})
+        else item.model_copy(
+            update={"desk": filed[item.item_id], "secondary_desk": _desk_of(item)}
+        )
         for item in stream
     ]
 
