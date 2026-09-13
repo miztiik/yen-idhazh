@@ -27,14 +27,24 @@ export function filesUnder(root: string): string[] {
 	}).sort();
 }
 
+/** The bytes of a file, or null when it is not there. One open, never two. */
+function contentOf(path: string): Buffer | null {
+	try {
+		return readFileSync(path);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+		throw error;
+	}
+}
+
 function hashFiles(root: string, paths: string[]): string {
 	const hash = createHash('sha256');
 	for (const path of paths.sort()) {
 		hash.update(relative(root, path).replaceAll('\\', '/'));
 		hash.update('\0');
-		const present = existsSync(path);
-		hash.update(present ? 'present\0' : 'missing\0');
-		if (present) hash.update(readFileSync(path));
+		const content = contentOf(path);
+		hash.update(content ? 'present\0' : 'missing\0');
+		if (content) hash.update(content);
 		hash.update('\0');
 	}
 	return hash.digest('hex');
@@ -72,12 +82,61 @@ function isInput(path: string, purpose: 'build' | 'checks'): boolean {
 	return !/^(README|AGENTS|CLAUDE)\.md$/.test(path);
 }
 
-export function inputFingerprint(root: string, purpose: 'build' | 'checks' = 'checks'): string {
-	const listed = execFileSync('git', ['-C', root, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
-		encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
+function gitPaths(root: string, args: string[]): string[] {
+	const listed = execFileSync('git', ['-C', root, ...args, '-z'], {
+		encoding: 'utf8', maxBuffer: 64 * 1024 * 1024
 	});
-	const paths = [...new Set(listed.split('\0').filter(Boolean))].filter((path) => isInput(path, purpose));
-	return hashFiles(root, paths.map((path) => join(root, path)));
+	return listed.split('\0').filter(Boolean);
+}
+
+/** Every tracked path against the hash git already holds for its content.
+ *
+ * Git hashed each of these when it staged them, so asking the index is the same
+ * answer as reading the file - `core.autocrlf` is false and `.gitattributes`
+ * pins these paths to LF, so the bytes on disk are the bytes git hashed.
+ */
+function indexDigests(root: string): Map<string, string> {
+	const found = new Map<string, string>();
+	for (const entry of gitPaths(root, ['ls-files', '--stage'])) {
+		const tab = entry.indexOf('\t');
+		const blob = entry.slice(0, tab).split(' ')[1];
+		if (tab > 0 && blob) found.set(entry.slice(tab + 1), blob);
+	}
+	return found;
+}
+
+/** What the build was made from, as one hash.
+ *
+ * The cost follows the working tree's diff, not the repository's size. A tracked
+ * file git reports unchanged contributes the hash from the index and is never
+ * opened; only what is modified, deleted or untracked is read. That matters
+ * because `frontend/public/digest/` is tracked and gains a payload and its
+ * pictures on every run, so reading every named path charged this check for the
+ * whole archive on a change that touched one file.
+ *
+ * A file modified and then reverted reads as changed until git refreshes its
+ * stat cache, which costs one rebuild and never a wrong certification.
+ */
+export function inputFingerprint(root: string, purpose: 'build' | 'checks' = 'checks'): string {
+	const index = indexDigests(root);
+	const unread = new Set(gitPaths(root, ['ls-files', '--modified', '--deleted', '--others', '--exclude-standard']));
+	const paths = [...new Set([...index.keys(), ...unread])].filter((path) => isInput(path, purpose));
+	const hash = createHash('sha256');
+	for (const path of paths.sort()) {
+		hash.update(path);
+		hash.update('\0');
+		const staged = unread.has(path) ? undefined : index.get(path);
+		if (staged !== undefined) {
+			hash.update('staged\0');
+			hash.update(staged);
+		} else {
+			const content = contentOf(join(root, path));
+			hash.update(content ? 'present\0' : 'missing\0');
+			if (content) hash.update(content);
+		}
+		hash.update('\0');
+	}
+	return hash.digest('hex');
 }
 
 /** The fingerprinted paths git reports as changed, as a sentence or as nothing.
