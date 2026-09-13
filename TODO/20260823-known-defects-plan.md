@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-09-13
 
 **Two defects are open and neither closes on more of the same code.** Defect 2
 needed three repairs before a person could label anything, and all three
@@ -13,6 +13,8 @@ deleted by writing more of it.**
 
 Defects 15, 16 and 17 closed on 2026-08-27. Defects 19 and 20 were filed later,
 on 2026-09-12, by two rows that found them and declined to widen into them.
+Defect 19 closed on 2026-09-13; defect 20 is open and needs a ruling rather than
+a patch.
 
 Closed rows are removed after checking their current production code, regression
 tests and canonical docs. Git history holds their execution record; the living
@@ -28,29 +30,8 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | CLOSED 2026-08-27 |
 | 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
 | 18 | The truncation flag still cannot fire, now for a different reason | 5 | **OPEN - not measurable without the scorer weights** |
-| 19 | A summarize call that failed on its reply reports no cost at all | 2 | **IN-FLIGHT 2026-09-13, worktree `d19`** - found 2026-09-12 by plan 11 row #3b (PR #636) |
+| 19 | A summarize call that failed on its reply reports no cost at all | 2 | CLOSED 2026-09-13 (PR #PENDING) |
 | 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | **OPEN - found 2026-09-12 by plan 23 row #5 (PR #642)** |
-
-## 19 - A summarize call that failed on its reply reports no cost at all (OPEN)
-`summarize._failed` never receives the `Completion`, so every typed reply
-failure - `bad_shape`, `length_out_of_range`, `copied_source`,
-`leaked_address`, `output_truncated` - writes a `Summary` whose five cost cells
-are the model's defaults of zero. The server had already read the prompt and
-written the reply by then, so the prefill and the decode were really spent and
-the ledger says they were free.
-
-**It is a cost question rather than a quality one, which is why it is worth a
-row.** A day that failed many replies reads as a cheap day, and
-`backend/utilities/reconcile_prefill.py` pools this ledger against the model
-server's own job totals inside 5 percent - the server counted those calls and
-the ledger did not, so the audit absorbs the difference as drift rather than
-naming it.
-
-Pre-existing and not caused by the per-call split, which is why plan 11 row #3b
-filed it rather than widening to take it. The fix is a signature change: hand
-`_failed` the `Completion` it already has in scope at every call site, record a
-`CallCost` from it, and let the same validator that binds an ok row bind a
-failed one. Level 2 - one file, one explicit behaviour change, and its tests.
 
 ## 20 - The `publishing` group dirties a file the build fingerprint hashes (OPEN)
 
@@ -198,6 +179,7 @@ The canonical measurement contract lives in
 | 15 | `median()` returned `0` for an empty sample, so all four stage timings lost the difference between "not measured" and "measured as zero" before the chart saw them. `StageTimings.svelte` reconstructed absence from the value, which is a repair on top of a lost fact. | 2026-08-27, PR #180. `median()` returns `null`, `StageTimingDay` carries `number | null`, and the console reads the null directly. Both a missing timing and a real zero are pinned in `frontend/tests/console.spec.ts`. Recorded in [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md). |
 | 16 | `dual_score` exists to tell "the model invented something" from "the model faithfully summarized the half we gave it", and its only production caller handed it `article.text` twice. Measured over the whole committed ledger: `hhem_delta` exactly 0.0 on **2,232 of 2,232 rows**. The run also paid for the duplicate pass - about 2 s an item, 21 to 24 minutes of runner wall-clock a day. | 2026-08-27. `extract.to_article_with_source` returns the payload beside the untruncated body; the body stays in the process that extracted it and is never persisted or republished (Guardrail #1). The work stage scores against it, and `dual_score` scores identical texts once. About 97 percent of items are never cut, so most now pay one pass instead of two. Stamped `2026-08-27T20:30` with the read-side rule: a row older than that stamp recorded two scores of one text, so its zero means "never measured". Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
 | 17 | `source_word_count` came from `metrics.word_count(full_text)` and `source_seen_word_count` from `article.word_count` - the **same post-cap string** through two different counters. Read as a truncation signal the pair said 87 percent of items were truncated; the real rate is 6.3 percent. The proof is the impossible direction: `source_seen_word_count` was larger on **590 of 2,232 rows**, which cannot happen when one string is a cut of the other. | 2026-08-27. The column is `Article.source_word_count`, the pre-cap count the payload already carried, so one counter produces both numbers and the difference between them is the cut. An article written before that field existed reports its post-cap count rather than inventing a source length. Stamped `2026-08-27T20:00`. Proved by a test that builds its article through the real extractor, so the pair is a genuine cut. Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
+| 19 | `summarize._failed` never received the `Completion`, so a reply the stage refused wrote a `Summary` whose five cost cells were the model's defaults of zero - and `telemetry`'s failed-summarize branch then passed the three stage timings and none of the five model cells, so the census row carried blanks. `reconcile_prefill.pool_ledger` skips a blank rather than pooling it, so the model server counted those requests and the ledger counted none of them. Measured on the committed ledger 2026-09-13: **93 of 93 failed summarize rows carried no cost at all**, and on run `2026-09-12-34717684802` one refused reply is the whole of that run's disagreement with the server - 72,739 tokens over 3,918.41 s against 73,616 over 3,936.07 s, **0.746 percent apart, one article consuming 15 percent of the 5 percent tolerance.** The two neighbouring runs carry no refused reply and match the server to the token, at 0.051 and 0.070 percent. | 2026-09-13. `_failed` takes the `Completion` and records a `CallCost` from it at all six sites in `to_summary` that hold one; the two that do not - the article never extracted, the model never answered - leave the slot empty, because that null is the real zero and is what a pooled read skips rather than averages in. The census row carries the same five cells and call slots a passing row does. No lenient path: the sum rule on `Summary` and on `ItemHealthRow` binds a failed row exactly as it binds an ok one. Both contracts stamped `2026-09-13T14:20` with the read-side rule - on a failed payload written earlier, a zero or an empty cost cell means never recorded, not free. Recorded in [`docs/architecture/summarize/throughput.md`](../docs/architecture/summarize/throughput.md) and [`docs/architecture/sources/item-health.md`](../docs/architecture/sources/item-health.md). The same sweep found the symptom on the flagged two-call path, in a different function; Fowler refused the widening and it is plan 11 row #3h. |
 
 ## See also
 

@@ -112,12 +112,15 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3e | The instructions move in front of the article | 3c | C5 | DONE #644 | p11-3e | #644 | worker |
 | 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | IN-FLIGHT | p11-3f | - | worker |
 | 3g | Call 1's reply does not fit its own budget | - | C7 | DONE #652 | p11-3g | #652 | worker |
+| 3h | A two-call item that failed on call 1 reports no cost at all | 3g | C8 | PENDING | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
 | 5b | Call 1 and call 2 run in the pipeline | 5, 3b, 3e | E2 | DONE #646 | p11-5b | #646 | worker |
 | 6 | The small model, its job and its cache go | 5b | F | PENDING | - | - | - |
 
 **Six rows are live and five are merged.** Rows 1, 2, 3, 3b and 4 shipped. **`parallel N = 4`, so up to four rows of this plan run at once; a ready row is held only when its `Files touched` list overlaps one already in flight.**
+
+**Row #3h was added on 2026-09-13 by the worker closing known defect 19.** That defect was the single-call summarize stage writing a zero cost on a reply it refused. Sweeping for its call sites found the same symptom on this plan's flagged path, in a different function: `cli._two_calls_one_item`'s local `failed(...)` helper discards call 1's cost at three of its four sites. It is not the same fix, nobody is reading it wrong while `run.two_calls_per_item` is false, and it bites the day row #6 flips the flag. Ruled by Fowler, 2026-09-13, who refused the widening.
 
 **Row #3f was added on 2026-09-12 by row #3d's worker, and it is BLOCKED on an owner decision.** Row #3d measured both prompts on the configured weights and found that **at the configured truncation cap the two calls do not fit the window**: call 2's prompt plus the reply budget its grammar may write is 20,098 tokens against an `n_ctx` of 16,384, over by 3,714 - 23 percent more than the window holds. `test_the_longest_article_the_cap_allows_still_fits_the_window` sizes the single call and passes; nothing sizes the two-call sequence. Nothing is wrong today, because the longest article the corpus holds is half the cap's length. It blocks neither #3c nor #3e, and every fix for it changes a contract, so it is a Level-5 decision rather than a widening of any row here. Ruled by Andre, 2026-09-12, on row #3d's reading.
 
@@ -393,7 +396,28 @@ Row #3d rendered both prompts on the configured weights through the configured s
 
 ---
 
+## 4g. Row #3h - A two-call item that failed on call 1 reports no cost at all
+
+**Added 2026-09-13 by the worker closing known defect 19, which found this while sweeping for that defect's call sites and was told not to widen into it.** Defect 19 was the single-call stage writing a zero cost on a reply it refused; it is closed, and `summarize.to_summary` now hands the reply to the failure path at all six sites that hold one. **This is the same symptom on the flagged path, and it is a different fix in a different function**, which is why it is a row here rather than part of that change.
+
+`cli._two_calls_one_item` has a local `failed(no_reply)` helper that calls `to_summary(article, None, ...)`. Three of its four call sites happen after call 1 has already returned and been paid for:
+
+| Site | What has already been spent |
+| --- | --- |
+| `failed(FailureCode.LABELS_TRUNCATED)` | call 1's whole prefill and decode - it hit its output budget, so it decoded the maximum |
+| `failed(FailureCode.BAD_SHAPE)` after `calls.anchored` | call 1's whole prefill and decode |
+| `failed(no_reply)` when `two is None` | call 1's whole prefill and decode; call 2 really was free |
+
+- **The machinery is already there and simply is not reached.** `_split_the_cost(summary, one, two)` rewrites both slots and the flat five, and its own docstring already says a failed summary is stamped too. The early returns bypass it because they have no `two` to hand it.
+- **Scope:** give the early returns a route that records the calls that did return. `_split_the_cost` takes two completions today, so either it takes an optional second or the early returns build call 1's `CallCost` directly. Both leave `Summary`'s sum rule doing the checking.
+- **Files touched:** `backend/idhazh/cli.py`, `backend/tests/test_pipeline.py`. No contract moves - `Summary.call_1`, `call_2` and the five flat cells already exist and their validator already binds.
+- **Oracle:** a two-call item whose labelling reply is cut reports call 1's five numbers, driven from the recorded pair under `tests/fixtures/completions/call-one/` and `call-two/`. It must fail on the base commit.
+- **Nobody is reading it wrong today, and that is the whole of why it is a row rather than a defect.** `run.two_calls_per_item` defaults to false, so no committed ledger row came from this path. It bites on the day the flag flips, which is row #6's own scope - so this lands before #6 or the first two-call day under-reports its own cost. Ruled by Fowler, 2026-09-13, who refused the widening: taking `cli.py` into the defect-19 change would have made a one-file fix a two-subsystem commit in the highest-collision file in the tree, with a sibling live on row #3f.
+
+---
+
 ## 5. Row #4 - The gate that refuses before the plan is drafted, and the ladder that steps down
+
 
 - **Scope:** The reachability gate, `none_reason` as a typed enum, and the downgrade ladder with its four invariance rules.
 - **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/visual_decision.py`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/prompts/summarize_and_plan_visual.txt`, `backend/idhazh/prompts/plan_visual.txt`, `schemas/visual-decision.schema.json`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_visual_planner.py`, `backend/tests/test_visual_validator.py`, `tests/fixtures/contracts/**`, `docs/architecture/publishing/visuals.md`. **Named rather than globbed on 2026-09-11**; `docs/architecture/publishing/**` is eight pages today and this row writes one of them. **Corrected on 2026-09-11 by the row itself**: it was `backend/idhazh/contracts/visual.py` and `schemas/visual-plan.schema.json`, and neither moves. `none_reason` belongs on `VisualDecision`, because two of its four routes fire when no plan object exists at all - the gate takes the plan fields off the request and the budget cut loses the plan's bytes - so a field on `VisualPlan` would be unwritable on exactly the cases it is for (Fowler, 2026-09-11). The row widened by three files instead: `visual_vocabulary.py` holds the downgrade-edge allow-list beside the role table it is a sibling of, and the call-2 prompt splits in two so the plan half can be substituted out with the plan half of the grammar.
