@@ -93,6 +93,30 @@ class VisualDecision(Contract):
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T20:00",
+            change=(
+                "Added data_path, where this item's published visual data landed. "
+                "Optional, null by default, and refused on a decision whose visual did "
+                "not render. spec's description stops naming Vega-Lite: it now says "
+                "what the field is for and leaves the grammar to the renderer."
+            ),
+            why=(
+                "The owner ruled on 2026-09-13 that the reader's browser draws the "
+                "chart and the pipeline never draws one, so the compiled data is "
+                "published and the decision has to record where. It is a second path "
+                "beside asset_path rather than a derivation of it, for the reason "
+                "asset_path is stored rather than derived: a path a later build "
+                "recomputes is a path a later build can recompute differently. The "
+                "description moves now because a description IS the field's meaning "
+                "(CLAUDE.md section 11), and the row that deletes the build-time "
+                "renderer changes what the field holds - naming the grammar here would "
+                "make this contract wrong on the day that lands rather than on the day "
+                "somebody remembered. Nothing is owed on the read side either way: this "
+                "payload is written under gitignored backend/var/ and travels as a "
+                "one-day artifact, so the run that writes it is the run that reads it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13",
             change=(
                 "NoneReason takes a fifth member, window_exhausted. Additive: no "
@@ -285,8 +309,12 @@ class VisualDecision(Contract):
     spec: str | None = Field(
         default=None,
         description=(
-            "The Vega-Lite JSON the renderer draws, built here from the article's own "
-            "numbers. Null on an item decided to nothing."
+            "The compiled drawing instruction, built here from the article's own "
+            "numbers and read back by whatever renderer the build that wrote it ships. "
+            "The grammar is the renderer's rather than this contract's - it is "
+            "Vega-Lite JSON while the build-time renderer runs - and naming one here "
+            "would date the field to a renderer this project has already changed once. "
+            "Null on an item decided to nothing."
         ),
     )
     asset_path: RelPath | None = Field(
@@ -295,6 +323,15 @@ class VisualDecision(Contract):
             "Relative POSIX path under frontend/public/, once rendered. Written as "
             "digest/<Y>/<M>/<D>/<item_id>.svg since 2026-08-27; payloads before that "
             "carry digest/<Y>/<M>/<D>/<vertical>-<NN>.svg and stay valid."
+        ),
+    )
+    data_path: RelPath | None = Field(
+        default=None,
+        description=(
+            "Relative POSIX path under frontend/public/ to this visual's published "
+            "data, as digest/<Y>/<M>/<D>/<item_id>.json beside the drawing. Null on a "
+            "payload written before the file existed, and null where the drawing landed "
+            "and its data did not - absent reads as no data carried."
         ),
     )
     alt_text: UntrustedLine | None = None
@@ -360,6 +397,14 @@ class VisualDecision(Contract):
                 raise ValueError("a rendered visual must record where it landed")
         elif self.asset_path is not None:
             raise ValueError("only a rendered visual carries an asset_path")
+
+        # One-way on purpose. The data is written after the drawing has landed,
+        # so a data_path on anything else names a file nothing drew; a rendered
+        # drawing with no data_path is the honest record of a write that did not
+        # happen, and a reader of that day draws nothing rather than an empty
+        # chart.
+        if self.data_path is not None and self.visual_state is not VisualState.RENDERED:
+            raise ValueError("only a rendered visual carries a data_path")
 
         if (self.visual_state is VisualState.RENDER_FAILED) != (self.failure_detail is not None):
             raise ValueError("a failed render records why, and only a failed render does")
