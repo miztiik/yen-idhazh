@@ -1,7 +1,9 @@
 # 24 - Five ledgers file by day
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-13
 **Level**: 5 (a persisted layout every stage writes, the retention path that deletes, and the mirrors a reader fetches)
+
+**Every row has landed. This is the record of how the five ledgers changed grain, not a queue of work.** Section 10 says which two statements were distilled afterwards and where they went.
 
 **Chain**: split out of [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) section 0, which named this work and refused it: thirteen-plus modules, three published mirrors and a shared reader-facing control, and not one line of it about what an article is about.
 
@@ -475,6 +477,17 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | `docs/reference/measurements.md` | yes | 1 | The day-window reading with its hardware, its date and its spread |
 
 **No page is created by this plan and no page is deleted.** One is renamed. Every other change extends or corrects a page that already owns the question.
+
+### Distilled after the last row, 2026-09-13
+
+**Every row wrote its own docs in its own commit, so the closing pass found two statements and no more.** That is the outcome [`../docs/how-to/distill-a-plan.md`](../docs/how-to/distill-a-plan.md) predicts, and it is the reason the pass is cheap. Both now live on the page that owns them; this plan keeps the audit trail and points at them.
+
+| From | Now lives in |
+| --- | --- |
+| Row #5 decision 2 - the publisher indexes by the day tree's own filenames, because each name IS a recorded date and a calendar window of the same width names a different set | [`../docs/concepts/partitions.md`](../docs/concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains) |
+| Section 0.1 - a grain migration is re-taken after every merge, because a `digest.yml` run pinned to its start sha keeps appending to the month shard the row deleted, and the result is a store holding both grains that every read then refuses | [`../docs/reference/agent-notes/git-and-github.md`](../docs/reference/agent-notes/git-and-github.md) |
+
+**One item in section 11 is not a finding and was never scheduled.** `backend/tests/test_publish_telemetry.py` still globs `frontend/public/telemetry/` at import and migrates every shard it finds. Fowler ruled it a row rather than a gap on 2026-09-12 and asked for it after row #5; no row was ever cut, so it is open work and belongs in a plan rather than in a doc.
 
 ---
 
