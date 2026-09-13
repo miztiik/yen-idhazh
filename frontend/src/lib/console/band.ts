@@ -119,7 +119,7 @@ const ROUTE_WORDS: Record<RouteId, { label: string; href: string; description: s
 	pipelines: {
 		label: 'Pipelines',
 		href: '/console/',
-		description: 'Did the runs work, which feeds broke, and what each stage cost.'
+		description: 'Did the runs work, and what each stage cost.'
 	},
 	model: {
 		label: 'Summaries',

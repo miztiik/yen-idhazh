@@ -124,13 +124,15 @@ VERDICT_WORD: Final[dict[Health, str]] = {
 
 #: The strip's word for each route, its address, and the line under it. The
 #: labels are the owner's own, taken verbatim on 2026-08-30 and 2026-08-31; the
-#: ids and the addresses did not move with them.
+#: ids and the addresses did not move with them. Pipelines lost its "which feeds
+#: broke" clause on 2026-09-14, when the four feed and source panels moved to
+#: Voices and it kept none of them.
 ROUTES: Final[tuple[tuple[RouteId, str, str, str], ...]] = (
     (
         RouteId.PIPELINES,
         "Pipelines",
         "/console/",
-        "Did the runs work, which feeds broke, and what each stage cost.",
+        "Did the runs work, and what each stage cost.",
     ),
     (
         RouteId.MODEL,
