@@ -869,7 +869,7 @@ def _health_rows() -> list[FeedHealthRow]:
 
 
 def health(state: Path) -> int:
-    """Append the canary's feed results, one shard a date."""
+    """Append the canary's feed results, one day file a date."""
     rows = _health_rows()
     for date in (YESTERDAY, DATE):
         append_health(state, date, [row for row in rows if row.date == date])

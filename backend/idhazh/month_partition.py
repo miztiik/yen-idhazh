@@ -1,6 +1,6 @@
 """What a `<YYYY-MM>` partition file is called, in one place.
 
-Six directories are pruned by month - `state/seen/`, `state/feed-health/`,
+Six directories used to be pruned by month - `state/seen/`, `state/feed-health/`,
 `state/item-health/`, `state/telemetry-aggregate/`, `state/scores/` and
 `state/score-archive/`, plus the browser's copy under
 `frontend/public/telemetry/` - and each one used to carry its own answer to "is
@@ -11,6 +11,12 @@ digits, while `evals.writer` and `evals.archive` accepted all four. So
 DELETED in `state/scores/` - one name, two dispositions, and the destructive one
 landing on the store that holds the evidence behind every published quality
 claim.
+
+**`state/item-health/` and `state/feed-health/` file by day now**, so they walk
+through `day_partition` instead and the month rule no longer reaches them. Their
+prunes still take a month at a time, because a keep-months knob is a month
+boundary whatever the files below it are - and that boundary is arithmetic on a
+date rather than a filename, so it needs nothing from here.
 
 **The rule is a real calendar month, spelled in ASCII, seven characters wide.**
 `str.isdigit` and `int` both accept another script's numerals, so a stem in
