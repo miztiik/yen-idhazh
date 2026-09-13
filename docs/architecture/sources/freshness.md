@@ -48,11 +48,15 @@ The gate reads the date the run believes, not the date the feed printed - so a f
 
 Plenty of feeds carry no publish date, and the ones that omit it omit it consistently. For those the only honest age is the first time we saw the address, so the planning step writes one down.
 
-`state/seen/<YYYY-MM>.csv` is append-only: the URL key, the timestamp, and the run that saw it first. It carries no address, because `ledger.load_seen` opens the key and the timestamp and nothing else - the address was 49.1 percent of the file for no reader, and it came off on 2026-08-31 for the reason `PublishedRow` shed its own on 2026-08-26. An address seen for the first time is treated as new, which is the truth as far as we can check it. Every run after that reads its real first-sighting.
+`state/seen/<YYYY>/<MM>/<DD>.csv` is append-only: the URL key, the timestamp, and the run that saw it first. It carries no address, because `ledger.load_seen` opens the key and the timestamp and nothing else - the address was 49.1 percent of the file for no reader, and it came off on 2026-08-31 for the reason `PublishedRow` shed its own on 2026-08-26. An address seen for the first time is treated as new, which is the truth as far as we can check it. Every run after that reads its real first-sighting.
+
+**Which file a row sits in is `first_seen_run`, not `first_seen_at`.** A run id is `<date>-<n>`, so its first ten characters are the run's digest date - the date `ledger.append_seen` is handed and files by. `first_seen_at` is a wall clock taken at the top of the planning stage, and it crosses midnight independently of the run it belongs to. The two agree over every committed row today and they are not the same rule, which is why the migration to day files used the run id.
 
 **An undated article is therefore never refused for age on the day we find it, and is always refused a day later.** Dropping it on sight would silently retire every feed that omits a date, which is a different decision from refusing a back catalogue, and it is not the one taken here.
 
-The shard is monthly and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over. A shard below that window is therefore deleted rather than kept: `retention.prune_seen` takes its floor from `ledger.shards_in_window`, the same function the read uses, so the two cannot drift. It deletes what is *older* than the oldest month that helper names and never merely what is outside the window - the window is drawn around whatever date the prune is handed, and a run given a date in the past would otherwise delete the live shard. Measured over 366 anchor dates at a 90-day window, what survives reaches back 90 to 120 days: a whole shard is kept if any of its days is in the window.
+The file is one day and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over. A day file below that window is therefore deleted rather than kept: `retention.prune_seen` takes its floor from `day_partition.days_in_window`, the same function the read uses, so the two cannot drift. It deletes what is *older* than the oldest day that helper names and never merely what is outside the window - the window is drawn around whatever date the prune is handed, and a run given a date in the past would otherwise delete the live file.
+
+**The grain moved on 2026-09-13 and the margin went with it.** At month grain a whole shard survived if any of its days was in range, so what the prune kept reached back 90 to 120 days for a 90-day read - measured over 366 anchor dates. At day grain the two are the same unit and the retained span is exactly the window on every date. What that costs is file handles: a 90-day read opens at most 91 files where it opened at most 4. What it buys is fewer rows, a removal that is one `rm`, and a first-sight record two runs collide on only when they are the same day - which `merge=union` cannot express inside a shared shard. It also means a day leaves 8 days earlier than it used to: the first file this store loses is `state/seen/2026/08/23.csv` on 2026-11-22, where the month rule took `2026-08.csv` whole on 2026-11-30.
 
 ## A date in the future is ignored
 
@@ -82,11 +86,12 @@ No run ever rewrites either ledger. A mutable `published` flag on a seen row wou
 
 ### The published ledger files by day, and the read carries a cover
 
-`state/seen/` and `state/feed-health/` shard by month. `state/published/` files
-by day: one `YYYY/MM/DD.csv` per digest date, mirroring the day the rows are
-derived from. Its dedupe read carries `collect.published_window_days`, a cover
-the committed config sets to `-1` - so the read is whole today and the guard
-still answers "have we ever published this address?"
+`state/seen/`, `state/feed-health/` and `state/published/` all file by day now:
+one `YYYY/MM/DD.csv` per digest date. For `state/published/` that day mirrors
+the day the rows are derived from, and its dedupe read carries
+`collect.published_window_days`, a cover the committed config sets to `-1` - so
+the read is whole today and the guard still answers "have we ever published this
+address?"
 
 **This reverses what this page argued until 2026-09-08, and the argument it
 reverses was right when it was written.** The old text said the ledger must not
