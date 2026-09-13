@@ -19,9 +19,9 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 3 | 4 | 3 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 4 | 3 | 3 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 11 | 2 | 1 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 14 | 11 | 3 | 2 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -33,20 +33,17 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 8 | 20 | 6 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 4 | 4 | 3 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 9 | 19 | 6 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 5 | 3 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 4 | 10 | 4 |
 
-## In flight - 4
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #19 | 20260823-known-defects-plan | - | A summarize call that failed on its reply reports no cost at all | - |
 | #3f | 11 | C6 | The window is sized for two calls | p11-3f |
-| #20 | 23 | A | The order of the day, written down | p23-20 |
-| #5 | 24 | C | `state/item-health/` files by day | p24-5 |
 
-## Ready now - 29
+## Ready now - 30
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -58,6 +55,7 @@ section 3 is where it is answered.
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #20 | 20260823-known-defects-plan | - | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
+| #3h | 11 | C8 | A two-call item that failed on call 1 reports no cost at all | 3g |
 | #6 | 11 | F | The small model, its job and its cache go | 5b |
 | #1 | 12 | A | A new engine behind the same seam | - |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
@@ -142,7 +140,7 @@ section 3 is where it is answered.
 | #18 | 23 | M | The closing measurement: is a read desk better than a declared one | P3 is PENDING; 14 is PENDING |
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
-| #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING; 20 is IN-FLIGHT |
+| #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #4 | 25 | D | Carriage becomes a tie-break | 3 is PENDING |
 | #8 | 25 | E | A story cross-files to a second desk | 7 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3 is PENDING; plan 23 row #21 is PENDING |
