@@ -12,9 +12,9 @@ what it needs is a ruling on which instrument to keep. **This file cannot be
 deleted by writing more of it.**
 
 Defects 15, 16 and 17 closed on 2026-08-27. Defects 19 and 20 were filed later,
-on 2026-09-12, by two rows that found them and declined to widen into them.
-Defect 19 closed on 2026-09-13; defect 20 is open and needs a ruling rather than
-a patch.
+on 2026-09-12, by two rows that found them and declined to widen into them. Both
+closed on 2026-09-13. Defect 20 got its ruling and the ruling moved the fix: the
+fingerprint was right and the producer was wrong.
 
 Closed rows are removed after checking their current production code, regression
 tests and canonical docs. Git history holds their execution record; the living
@@ -31,40 +31,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
 | 18 | The truncation flag still cannot fire, now for a different reason | 5 | **OPEN - not measurable without the scorer weights** |
 | 19 | A summarize call that failed on its reply reports no cost at all | 2 | CLOSED 2026-09-13 (PR #657) |
-| 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | **IN-FLIGHT 2026-09-13, worktree `d20`** - found 2026-09-12 by plan 23 row #5 (PR #642) |
-
-## 20 - The `publishing` group dirties a file the build fingerprint hashes (OPEN)
-
-`npm run test:changed -- --group publishing` passes every test and then exits 1
-with `The canary build has stale inputs`. Measured 2026-09-12 on a developer
-machine: 72 of 72 tests pass in 1.2 minutes, and the launcher still reports
-`exit 1` after 277.1 seconds.
-
-Nothing is wrong with the build. `frontend/tests/malformed-day.spec.ts` runs
-`idhazh validate-days` four times, each run appends a receipt to
-`state/day-validations.csv`, and `inputFingerprint` in
-`frontend/scripts/build-state.ts` hashes every tracked file outside
-`backend/var/`, `docs/`, `TODO/` and a short list of frontend directories. That
-file is tracked and is not on the exclusion list, so the group changes one of
-its own build's inputs while running and then fails the check that the inputs
-did not change.
-
-**The cost is that a passing local run reads as a failing one**, on the one
-group that owns the published payload and its projections. A worker who takes
-the exit code at face value has a red branch that is green, and one who ignores
-it has learnt to ignore the check that catches a real mid-run source edit.
-
-Pre-existing and not caused by the base32 item id, which is why plan 23 row #5
-filed it rather than widening to take it: the spec, the ledger, the validator
-and the fingerprint are all untouched by that pull request. CI does not hit it -
-the `browser` job passed on the same commit in 3m1s.
-
-Level 2. Two candidate fixes and they are not equivalent, so this needs a
-ruling rather than a patch: exclude `state/` from the **checks** fingerprint
-while keeping it in the **build** one, or have `validate-days` write no receipt
-when it is driven by a test. The first is a one-line exclusion and widens what a
-mid-run edit can hide; the second keeps the fingerprint honest and puts a test
-flag into a producer.
+| 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | CLOSED 2026-09-13 (PR #660) |
 
 ## 18 - The truncation flag still cannot fire, now for a different reason (OPEN)
 
@@ -180,9 +147,12 @@ The canonical measurement contract lives in
 | 16 | `dual_score` exists to tell "the model invented something" from "the model faithfully summarized the half we gave it", and its only production caller handed it `article.text` twice. Measured over the whole committed ledger: `hhem_delta` exactly 0.0 on **2,232 of 2,232 rows**. The run also paid for the duplicate pass - about 2 s an item, 21 to 24 minutes of runner wall-clock a day. | 2026-08-27. `extract.to_article_with_source` returns the payload beside the untruncated body; the body stays in the process that extracted it and is never persisted or republished (Guardrail #1). The work stage scores against it, and `dual_score` scores identical texts once. About 97 percent of items are never cut, so most now pay one pass instead of two. Stamped `2026-08-27T20:30` with the read-side rule: a row older than that stamp recorded two scores of one text, so its zero means "never measured". Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
 | 17 | `source_word_count` came from `metrics.word_count(full_text)` and `source_seen_word_count` from `article.word_count` - the **same post-cap string** through two different counters. Read as a truncation signal the pair said 87 percent of items were truncated; the real rate is 6.3 percent. The proof is the impossible direction: `source_seen_word_count` was larger on **590 of 2,232 rows**, which cannot happen when one string is a cut of the other. | 2026-08-27. The column is `Article.source_word_count`, the pre-cap count the payload already carried, so one counter produces both numbers and the difference between them is the cut. An article written before that field existed reports its post-cap count rather than inventing a source length. Stamped `2026-08-27T20:00`. Proved by a test that builds its article through the real extractor, so the pair is a genuine cut. Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
 | 19 | `summarize._failed` never received the `Completion`, so a reply the stage refused wrote a `Summary` whose five cost cells were the model's defaults of zero - and `telemetry`'s failed-summarize branch then passed the three stage timings and none of the five model cells, so the census row carried blanks. `reconcile_prefill.pool_ledger` skips a blank rather than pooling it, so the model server counted those requests and the ledger counted none of them. Measured on the committed ledger 2026-09-13: **93 of 93 failed summarize rows carried no cost at all**, and on run `2026-09-12-34717684802` one refused reply is the whole of that run's disagreement with the server - 72,739 tokens over 3,918.41 s against 73,616 over 3,936.07 s, **0.746 percent apart, one article consuming 15 percent of the 5 percent tolerance.** The two neighbouring runs carry no refused reply and match the server to the token, at 0.051 and 0.070 percent. | 2026-09-13. `_failed` takes the `Completion` and records a `CallCost` from it at all six sites in `to_summary` that hold one; the two that do not - the article never extracted, the model never answered - leave the slot empty, because that null is the real zero and is what a pooled read skips rather than averages in. The census row carries the same five cells and call slots a passing row does. No lenient path: the sum rule on `Summary` and on `ItemHealthRow` binds a failed row exactly as it binds an ok one. Both contracts stamped `2026-09-13T14:20` with the read-side rule - on a failed payload written earlier, a zero or an empty cost cell means never recorded, not free. Recorded in [`docs/architecture/summarize/throughput.md`](../docs/architecture/summarize/throughput.md) and [`docs/architecture/sources/item-health.md`](../docs/architecture/sources/item-health.md). The same sweep found the symptom on the flagged two-call path, in a different function; Fowler refused the widening and it is plan 11 row #3h. |
+| 20 | Filed as a fingerprint problem: `npm run test:changed -- --group publishing` passed 72 of 72 tests and exited 1 with `The canary build has stale inputs`, because `frontend/tests/malformed-day.spec.ts` ran `idhazh validate-days` with `--digest-root` at a scratch tree and no `--state-root`, so receipts about those scratch trees landed in the tracked `state/day-validations.csv` that `inputFingerprint` hashes. **Both candidate fixes in the original filing were built on a wrong premise.** The message comes from `assertBuild`, which hashes the **build** fingerprint, so excluding `state/` from the **checks** fingerprint would not have changed the failure at all; and `validate-days` already had the flag the second one proposed to add. The exclusion list has no stated rule but is not arbitrary - read against the code it holds exactly two kinds, a tree the tooling itself writes and prose no program reads, and a ledger the console prerenders from is neither. **The real defect was a correctness one and the dirty file was its shadow.** A receipt records a payload's LENGTH and a day is settled on that length, never on a re-read, so the committed receipts settle a same-length day in any other tree without opening it: measured 2026-09-13, a copy of the newest committed day with `"items"` overwritten by `"itemz"`, one byte for one byte, passed against the committed store reporting `0 of them opened`, and was refused against an empty one. The spec's `unbroken` arm - which exists because a guard that only ever refuses proves nothing - had stopped proving anything. | 2026-09-13. Neither candidate: the fingerprint was telling the truth and the producer was fixed (Fowler). `validate-days` refuses a `--digest-root` that is not the committed tree unless `--state-root` is named too, so the pairing is enforced rather than remembered, and the spec names a scratch store beside each scratch tree. `inputFingerprint`'s list is unchanged and now carries the rule it was always following, in writing, including why a `state/` ledger stays in. Caught next time by an argument-level test in `backend/tests/test_contracts.py` - one fabricated day under `tmp_path`, no archive walk, nothing to age out - and by `changedInputNote`, which makes both stale-input failures name the paths that moved instead of saying only that something did. Recorded in [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) and [`docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md). Base-tree re-measurement, 2026-09-13: the reported symptom no longer reproduces - 72 of 72 pass and the launcher exits **0** in 269.3 s - because every committed day now has a current receipt, which makes the dirty file latent and the silent skip live. |
 
 ## See also
 
 - [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) - the label and calibration contract.
 - [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - the console timing surface defect 15 repaired.
+- [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - the validation receipt defect 20 pinned to the tree it is about.
+- [`docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md) - what a stale-input failure says now that defect 20 is closed.
 - [`docs/how-to/distill-a-plan.md`](../docs/how-to/distill-a-plan.md) - how closed rows leave this file.
