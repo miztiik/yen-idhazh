@@ -82,10 +82,13 @@ from idhazh.contracts.reference_dataset import (
     ReferenceExtractionRow,
     ReferenceExtractionTotals,
     ReferenceFailureCode,
+    ReferenceGroupBy,
     ReferenceImportTotals,
     ReferenceManifestRow,
     ReferencePhase,
     ReferencePublisherPart,
+    ReferenceSelectionRow,
+    ReferenceSelectionTotals,
     ReferenceSplit,
 )
 from idhazh.discover import canonicalise
@@ -1261,6 +1264,189 @@ def export_extraction(
     return 0
 
 
+# --- select-urls -----------------------------------------------------------
+
+SELECTIONS_DIRNAME: Final = "selections"
+SELECTED_FILENAME: Final = "urls.json"
+
+
+def group_of(record: ReferenceExtractionRow, by: ReferenceGroupBy) -> str:
+    """Which outlet a record counts under, read from the record rather than recomputed."""
+    if by is ReferenceGroupBy.PUBLISHER:
+        return record.publisher
+    if by is ReferenceGroupBy.SOURCE_DOMAIN:
+        return record.source_domain
+    return record.host
+
+
+def allocate(
+    pools: Mapping[str, Sequence[str]], *, target: int, cap: int, fill: bool
+) -> dict[str, list[str]]:
+    """Round-robin one article per group per round, then fill what small groups cannot use.
+
+    Deterministic: group names in sorted order, candidates in the order the caller
+    sorted them, and no random number anywhere. The same pool and the same
+    settings return the same selection.
+    """
+    taken: dict[str, list[str]] = {name: [] for name in pools}
+    total = 0
+
+    def rounds(ceiling: int) -> None:
+        nonlocal total
+        moved = True
+        while moved and total < cap:
+            moved = False
+            for name in sorted(pools):
+                if total >= cap:
+                    return
+                pool = pools[name]
+                if len(taken[name]) >= ceiling or len(taken[name]) >= len(pool):
+                    continue
+                taken[name].append(pool[len(taken[name])])
+                total += 1
+                moved = True
+
+    rounds(target)
+    if fill:
+        # A place a short group cannot use moves to a group that still has
+        # articles, rather than being reported as a shortfall nobody could fix.
+        rounds(max(len(pool) for pool in pools.values()) if pools else 0)
+    return taken
+
+
+def select_sample(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    selection_id: str,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Draw a balanced sample from a finished extraction and write it with its totals."""
+    source = dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    if not source.is_file():
+        print(f"no extraction at {source.as_posix()}. Run `export-urls` first")
+        return 1
+    records = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(source.read_text(encoding="utf-8"))
+    ]
+
+    by = local.selection.group_by
+    # Every group the manifest represents, including the ones that produced no
+    # article: their unfilled places are what `fill_shortfall` moves elsewhere.
+    universe = {group_of(record, by) for record in records}
+    usable: dict[str, list[ReferenceExtractionRow]] = {name: [] for name in universe}
+    seen: set[str] = set()
+    for record in sorted(records, key=lambda r: r.url_key):
+        if record.status is not ArticleStatus.OK or record.url_key in seen:
+            continue
+        seen.add(record.url_key)
+        usable[group_of(record, by)].append(record)
+
+    target = local.selection.rows_per_domain_target
+    cap = local.selection.rows_max
+    requested = min(cap, target * len(universe))
+    chosen = allocate(
+        {name: [record.url_key for record in pool] for name, pool in usable.items()},
+        target=target,
+        cap=requested,
+        fill=local.selection.fill_shortfall,
+    )
+
+    by_key = {record.url_key: record for pool in usable.values() for record in pool}
+    rows = [
+        ReferenceSelectionRow(
+            version=ReferenceSelectionRow.schema_version(),
+            url_key=by_key[key].url_key,
+            source_url=by_key[key].source_url,
+            canonical_url=by_key[key].canonical_url,
+            source_domain=by_key[key].source_domain,
+            host=by_key[key].host,
+            publisher=by_key[key].publisher,
+            vertical=by_key[key].vertical,
+            article_sha256=_digest_of(by_key[key]),
+        )
+        for name in sorted(chosen)
+        for key in chosen[name]
+    ]
+
+    target_path = dataset_dir / SELECTIONS_DIRNAME / selection_id / SELECTED_FILENAME
+    _write_atomically(
+        target_path, canonical_json([row.model_dump(mode="json") for row in rows])
+    )
+
+    written = [
+        ReferenceSelectionRow.model_validate(payload)
+        for payload in json.loads(target_path.read_text(encoding="utf-8"))
+    ]
+    selected_by_group = _tally(
+        group_of(by_key[row.url_key], by) for row in written
+    ) | {name: 0 for name in universe if not chosen[name]}
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.SELECTION,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceSelectionRow.__schema_stem__,
+        input_path=_under(root, source),
+        input_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        output_path=_under(root, target_path),
+        output_sha256=hashlib.sha256(target_path.read_bytes()).hexdigest(),
+        rows=len(written),
+        verticals=_tally(row.vertical for row in written if row.vertical),
+        domains=_tally(row.source_domain for row in written),
+        hosts=_tally(row.host for row in written),
+        publishers=_tally(row.publisher for row in written),
+        publisher_hosts={
+            key: sorted({row.host for row in written if row.publisher == key})
+            for key in sorted({row.publisher for row in written})
+        },
+        lengthened_publishers={},
+        settings=local,
+        selection_totals=ReferenceSelectionTotals(
+            extraction_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            group_by=by,
+            groups=len(universe),
+            requested=requested,
+            selected=len(written),
+            shortfall=max(requested - len(written), 0),
+            available_by_group={name: len(pool) for name, pool in sorted(usable.items())},
+            selected_by_group=dict(sorted(selected_by_group.items())),
+            extra_by_group={
+                name: len(keys) - target
+                for name, keys in sorted(chosen.items())
+                if len(keys) > target
+            },
+            shortfall_by_group={
+                name: target - len(keys)
+                for name, keys in sorted(chosen.items())
+                if len(keys) < target
+            },
+        ),
+    )
+    _write_atomically(
+        target_path.with_name(METADATA_FILENAME), canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.selection_totals
+    assert totals is not None
+    print(f"{'selection':<{_WIDTH}} {_under(root, target_path)}")
+    print(f"{'grouped by':<{_WIDTH}} {by.value}")
+    print(f"{'groups':<{_WIDTH}} {totals.groups}")
+    print(f"{'requested':<{_WIDTH}} {totals.requested}")
+    print(f"{'selected':<{_WIDTH}} {totals.selected}")
+    print(f"{'unfilled places':<{_WIDTH}} {totals.shortfall}")
+    print(f"{'groups above the target':<{_WIDTH}} {len(totals.extra_by_group)}")
+    print(f"{'groups below the target':<{_WIDTH}} {len(totals.shortfall_by_group)}")
+    return 0
+
+
+def _digest_of(record: ReferenceExtractionRow) -> str:
+    if record.article_sha256 is None:  # pragma: no cover - a kept article always carries one
+        raise ValueError("a selected article has no text digest")
+    return record.article_sha256
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=REPO_ROOT / DATASET_RELPATH)
@@ -1308,9 +1494,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="The collection's own config.json. Never config/idhazh.json.",
     )
     exporting.add_argument("--run-id", required=True, help="Which saved run to export.")
+    selecting = verbs.add_parser(
+        "select-urls", help="Draw a balanced sample from a finished extraction. No network."
+    )
+    selecting.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    selecting.add_argument("--run-id", required=True, help="Which extraction to draw from.")
+    selecting.add_argument(
+        "--selection-id",
+        required=True,
+        help="Names the output directory. A new sample gets a new name.",
+    )
 
     args = parser.parse_args(argv)
-    if args.verb in {"import-urls", "extract-urls", "export-urls"}:
+    if args.verb in {"import-urls", "extract-urls", "export-urls", "select-urls"}:
         local = ReferenceDatasetLocalConfig.model_validate_json(
             args.local_config.read_text(encoding="utf-8")
         )
@@ -1320,6 +1521,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         if args.verb == "export-urls":
             return export_extraction(args.local_config.parent, local, run_id=args.run_id)
+        if args.verb == "select-urls":
+            return select_sample(
+                args.local_config.parent,
+                local,
+                run_id=args.run_id,
+                selection_id=args.selection_id,
+            )
         return extract_supplied(
             args.local_config.parent, local, run_id=args.run_id, limit=args.limit
         )

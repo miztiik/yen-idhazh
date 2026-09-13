@@ -40,6 +40,7 @@ from idhazh.contracts.reference_dataset import (
     ReferenceImportTotals,
     ReferenceManifestRow,
     ReferencePhase,
+    ReferenceSelectionSettings,
     ReferenceSplit,
 )
 from idhazh.fetch import FetchResult
@@ -1064,6 +1065,168 @@ def test_a_second_export_of_the_same_run_is_byte_identical(tmp_path: Path) -> No
     )
     assert builder.export_extraction(dataset, local, run_id="2026-09-13-1", root=tmp_path) == 0
     assert target.read_bytes() == once
+
+
+# --- select-urls ------------------------------------------------------------
+#
+# The allocation cases are built here rather than drawn from a collected set, so
+# the awkward shapes - a group with nothing usable, a cap that bites before any
+# group reaches its target - are present whether or not a real run produced one.
+
+
+def pools(**sizes: int) -> dict[str, list[str]]:
+    return {name: [f"{name}-{index}" for index in range(size)] for name, size in sizes.items()}
+
+
+def test_the_allocation_fills_what_a_short_group_cannot_use() -> None:
+    """Three groups holding 1, 5 and 5, target 2, cap 6: fill on selects 6."""
+    taken = builder.allocate(pools(a=1, b=5, c=5), target=2, cap=6, fill=True)
+    assert sum(len(keys) for keys in taken.values()) == 6
+    assert len(taken["a"]) == 1
+    assert max(len(taken["b"]), len(taken["c"])) > 2
+
+
+def test_the_allocation_stops_at_the_target_when_filling_is_off() -> None:
+    taken = builder.allocate(pools(a=1, b=5, c=5), target=2, cap=6, fill=False)
+    assert sum(len(keys) for keys in taken.values()) == 5
+    assert len(taken["a"]) == 1
+    assert len(taken["b"]) == len(taken["c"]) == 2
+
+
+def test_the_cap_wins_before_every_group_reaches_its_target() -> None:
+    taken = builder.allocate(pools(a=1, b=5, c=5), target=2, cap=4, fill=True)
+    assert sum(len(keys) for keys in taken.values()) == 4
+
+
+def test_a_group_with_nothing_usable_contributes_nothing_and_is_still_counted() -> None:
+    taken = builder.allocate(pools(a=0, b=3), target=2, cap=10, fill=False)
+    assert taken["a"] == []
+    assert len(taken["b"]) == 2
+
+
+def test_the_allocation_never_repeats_an_article() -> None:
+    taken = builder.allocate(pools(a=3, b=3), target=9, cap=99, fill=True)
+    chosen = [key for keys in taken.values() for key in keys]
+    assert len(chosen) == len(set(chosen)) == 6
+
+
+def test_the_same_pool_and_settings_allocate_the_same_articles() -> None:
+    first = builder.allocate(pools(a=1, b=5, c=5), target=2, cap=6, fill=True)
+    second = builder.allocate(pools(c=5, a=1, b=5), target=2, cap=6, fill=True)
+    assert first == second
+
+
+def selected(tmp_path: Path, **overrides: Any) -> tuple[Path, dict[str, Any], list[dict[str, Any]]]:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+        selection=ReferenceSelectionSettings.model_validate(
+            {"rows_per_domain_target": 1, "rows_max": 10, **overrides}
+        ),
+    )
+    assert (
+        builder.select_sample(
+            dataset,
+            local,
+            run_id="2026-09-13-1",
+            selection_id="first",
+            root=tmp_path,
+        )
+        == 0
+    )
+    run = dataset / builder.SELECTIONS_DIRNAME / "first"
+    rows = json.loads((run / builder.SELECTED_FILENAME).read_text(encoding="utf-8"))
+    meta = json.loads((run / builder.METADATA_FILENAME).read_text(encoding="utf-8"))
+    return dataset, meta, rows
+
+
+def test_a_sample_takes_one_article_per_publisher_and_never_an_alias_twice(
+    tmp_path: Path,
+) -> None:
+    _dataset, meta, rows = selected(tmp_path)
+    assert len({row["url_key"] for row in rows}) == len(rows)
+    assert meta["selection_totals"]["group_by"] == "publisher"
+    assert meta["selection_totals"]["groups"] == 6
+    assert all(count <= 1 for count in meta["selection_totals"]["selected_by_group"].values())
+
+
+def test_the_sample_carries_the_digest_and_not_the_article(tmp_path: Path) -> None:
+    _dataset, _meta, rows = selected(tmp_path)
+    assert all("text" not in row for row in rows)
+    assert all(len(row["article_sha256"]) == 64 for row in rows)
+
+
+def test_a_sample_records_the_extraction_it_was_drawn_from(tmp_path: Path) -> None:
+    dataset, meta, _rows = selected(tmp_path)
+    source = (
+        dataset / builder.EXTRACTIONS_DIRNAME / "2026-09-13-1" / builder.ARTICLES_FILENAME
+    ).read_bytes()
+    assert meta["selection_totals"]["extraction_sha256"] == hashlib.sha256(source).hexdigest()
+    assert meta["input_sha256"] == hashlib.sha256(source).hexdigest()
+
+
+def test_the_same_pool_and_settings_reproduce_the_same_sample(tmp_path: Path) -> None:
+    dataset, _meta, rows = selected(tmp_path)
+    target = dataset / builder.SELECTIONS_DIRNAME / "first" / builder.SELECTED_FILENAME
+    once = target.read_bytes()
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+        selection=ReferenceSelectionSettings(rows_per_domain_target=1, rows_max=10),
+    )
+    assert (
+        builder.select_sample(
+            dataset, local, run_id="2026-09-13-1", selection_id="first", root=tmp_path
+        )
+        == 0
+    )
+    assert target.read_bytes() == once
+    assert len(rows) == len(json.loads(once.decode("utf-8")))
+
+
+def test_a_different_sample_gets_its_own_directory(tmp_path: Path) -> None:
+    dataset, _meta, _rows = selected(tmp_path)
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+        selection=ReferenceSelectionSettings(rows_per_domain_target=2, rows_max=3),
+    )
+    assert (
+        builder.select_sample(
+            dataset, local, run_id="2026-09-13-1", selection_id="second", root=tmp_path
+        )
+        == 0
+    )
+    first = dataset / builder.SELECTIONS_DIRNAME / "first" / builder.SELECTED_FILENAME
+    second = dataset / builder.SELECTIONS_DIRNAME / "second" / builder.SELECTED_FILENAME
+    assert first.is_file() and second.is_file()
+    assert len(json.loads(second.read_text(encoding="utf-8"))) == 3
+
+
+def test_grouping_by_host_and_by_domain_are_both_available(tmp_path: Path) -> None:
+    _dataset, meta, _rows = selected(tmp_path, group_by="source_domain")
+    assert meta["selection_totals"]["group_by"] == "source_domain"
+    assert meta["selection_totals"]["groups"] == 5
+
+
+def test_the_selection_refuses_when_there_is_no_extraction(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+    )
+    assert (
+        builder.select_sample(
+            dataset, local, run_id="missing", selection_id="first", root=tmp_path
+        )
+        == 1
+    )
 
 
 # --- the builder refuses, rather than writing a set that leaks ---------------
