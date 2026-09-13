@@ -697,9 +697,9 @@ jobs:
       # been together.
       #
       # `--date` is what it settles. This run appended to one item-health day
-      # file and one score shard, so those are the only files a repeat can be in,
-      # and naming them is what keeps the pass costing the same however many
-      # months the archive holds (Guardrail #12).
+      # file and one score day file, so those are the only files a repeat can be
+      # in, and naming them is what keeps the pass costing the same however many
+      # days the archive holds (Guardrail #12).
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true

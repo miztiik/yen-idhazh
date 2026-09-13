@@ -2668,7 +2668,7 @@ def score_row(*, day: str, run: int, number: int) -> EvalRow:
 
 
 def score_history(state_dir: Path, months: list[str]) -> None:
-    """A real score shard per month, written through the real appender."""
+    """Two real score days a month, written through the real appender."""
     for index, month in enumerate(months):
         for day_of_month in (4, 17):
             day = f"{month}-{day_of_month:02d}"

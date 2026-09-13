@@ -126,11 +126,13 @@ def rebuild(root: Path, date: str) -> None:
     _write_rows(health_path, HEALTH_COLUMNS, health)
 
     # The eval ledger refuses an observation it already holds, as
-    # `idhazh.evals.writer.append` does.
-    scores = _read_rows(root / "state" / "scores" / "2026-08.csv")
+    # `idhazh.evals.writer.append` does, and files by the day it names, as that
+    # function has done since 2026-09-13.
+    scores_path = root / "state" / "scores" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    scores = _read_rows(scores_path)
     already = {row["item_id"] for row in scores}
     scores += [{"item_id": item, "hhem": "0.900"} for item in mine if item not in already]
-    _write_rows(root / "state" / "scores" / "2026-08.csv", SCORE_COLUMNS, scores)
+    _write_rows(scores_path, SCORE_COLUMNS, scores)
 
     # The public projection is a full rewrite of the month the day falls in,
     # folded from that month's day files, never a merge of two of them.

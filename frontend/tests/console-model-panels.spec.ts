@@ -8,7 +8,7 @@ import {
 	thinLabels
 } from '../src/lib/charts/frame';
 import { grouped, swapScale } from '../src/lib/charts/series';
-import { readDayShards, readShards } from '../src/lib/server/payload';
+import { readDayShards } from '../src/lib/server/payload';
 import {
 	modelSwap,
 	runLengths,
@@ -41,12 +41,7 @@ const VALUE_PX = 10;
 /** The canary's own state tree, which the built page was rendered from. */
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** A month-sharded series directory, read the way the page's server reads it. */
-function shards(dir: string): Record<string, string>[] {
-	return readShards(dir, -1).rows;
-}
-
-/** A day-filed ledger directory, read the same way. */
+/** A day-filed ledger directory, read the way the page's server reads it. */
 function days(dir: string): Record<string, string>[] {
 	return readDayShards(dir, -1).rows;
 }

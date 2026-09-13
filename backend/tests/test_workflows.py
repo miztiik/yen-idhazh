@@ -2676,12 +2676,12 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
 def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
     """The bound, mirrored where a workflow that drops it reds (Guardrail #12).
 
-    A run appends only to the shard its own date routes to, so a repeat the union
-    merge left can only be in a file that run wrote, and the date names it. Drop
-    the flag and `cli.stage_dedupe_ledgers` walks every feed-health shard, every
-    item-health shard and every score shard the archive holds - a bill that rises
-    every month for an answer already given, because a finished month was settled
-    when it was written and cannot change again.
+    A run appends only to the partition its own date routes to, so a repeat the
+    union merge left can only be in a file that run wrote, and the date names it.
+    Drop the flag and `cli.stage_dedupe_ledgers` walks every feed-health day,
+    every item-health day and every score day the archive holds - a bill that
+    rises every day for an answer already given, because a finished partition was
+    settled when it was written and cannot change again.
 
     The command refuses to run with no cover at all, so a workflow that lost the
     flag fails its commit step rather than quietly reading the archive. This
@@ -3784,7 +3784,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     assert manifest["runs"] == day["runs"]
 
     published = _rows(_git(origin, env, "show", f"main:{ledger.published_relpath(date)}"))
-    scores = _rows(_git(origin, env, "show", f"main:state/scores/{month}.csv"))
+    scores = _rows(_git(origin, env, "show", f"main:{score_writer.ledger_relpath(date)}"))
     health = _rows(_git(origin, env, "show", f"main:{ledger.item_health_relpath(date)}"))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
     # Exactly once each. Two of these ledgers append blind, so a rebuild against

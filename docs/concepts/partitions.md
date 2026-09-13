@@ -151,11 +151,14 @@ A partition is **closed** when the writer's own date no longer falls in it. Not
 "old" and not "past retention" - closed the moment the calendar moves on, which for
 a daily pipeline is the first run of the next month.
 
-The rule binds writes, not reads. A closed partition is still opened: `evals.writer.append`
-checks the header of every committed day file before it writes one, and
-`day_partition.days_in_window` opens every date a reader's window names. What bounds reads is
-[growing-reads.md](growing-reads.md) - the cover a read declares, and `CLAUDE.md` Guardrail #12
-behind it.
+The rule binds writes, not reads. A closed partition is still opened:
+`day_partition.days_in_window` opens every date a reader's window names, and
+`evals.writer.recorded_observations` reads every index partition there is. What
+bounds reads is [growing-reads.md](growing-reads.md) - the cover a read declares,
+and `CLAUDE.md` Guardrail #12 behind it. **`evals.writer.append` was the example
+here until 2026-09-13** and is not one any more: it checked the header of every
+committed shard before writing, and at day grain that would have cost one more
+open a day for ever, so its cover is now the one or two days it writes.
 
 Authority: owner, 2026-09-06.
 

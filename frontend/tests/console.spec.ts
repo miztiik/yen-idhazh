@@ -1705,7 +1705,6 @@ test('the renamed section draws what it drew before, figure for figure', async (
 	await expect(page.locator('[data-charts="table"] thead th')).toHaveCount(8);
 });
 
-/** The canary's own score rows and item-health rows for one date. */
 /** Every score row the canary wrote.
  *
  * `state/scores/` files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this goes
@@ -1718,7 +1717,6 @@ function scoreRows(): Record<string, string>[] {
 	return readDayShards(join(CANARY, 'state', 'scores'), -1).rows;
 }
 
-/** The canary's own score rows and item-health rows for one date. */
 /** Every item-health row the canary wrote.
  *
  * `state/item-health/` files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this
@@ -1730,6 +1728,7 @@ function healthRows(): Record<string, string>[] {
 	return readDayShards(join(CANARY, 'state', 'item-health'), -1).rows;
 }
 
+/** The canary's own score rows and item-health rows for one date. */
 function ledgers(date: string): {
 	scores: Record<string, string>[];
 	health: Record<string, string>[];
@@ -1908,7 +1907,7 @@ test('nothing under the heading is a score or an internal column name', async ({
 	expect(section).not.toMatch(/\b[01]\.\d/);
 
 	// A ledger column name on screen makes a reader open the schema to read the
-	// page. Every one of these is a real column of `state/scores/<YYYY-MM>.csv` or
+	// page. Every one of these is a real column of `state/scores/` or
 	// `state/item-health/`.
 	for (const name of [
 		'hhem',

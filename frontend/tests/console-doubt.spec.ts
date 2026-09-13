@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { grouped } from '../src/lib/charts/series';
 import { doubted, sourceDoubts, type DayWindow } from '../src/lib/server/model-work';
-import { readDayShards, readShards } from '../src/lib/server/payload';
+import { readDayShards } from '../src/lib/server/payload';
 
 /**
  * Which sources the checker doubts, and the rule the ranking is made of.

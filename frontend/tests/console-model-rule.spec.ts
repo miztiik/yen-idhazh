@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { modelRules } from '../src/lib/charts/frame';

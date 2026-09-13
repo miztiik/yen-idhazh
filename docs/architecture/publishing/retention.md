@@ -240,14 +240,17 @@ The aggregate is kept forever by default. `observability.item_health_aggregate_k
 
 Authority: Andre, under Guardrail #10 - a claim about an archived month has to be one the archive can still support.
 
-## `state/scores/` shards by month, and that bounds nothing on its own (2026-08-31)
+## `state/scores/` became a directory, and that bounds nothing on its own (2026-08-31)
 
 **The eval ledger moved from `state/scores.csv` to `state/scores/<YYYY-MM>.csv` on
-2026-08-31.** The migration is a split and nothing else: 3,509 rows, one month,
+2026-08-31**, and from those month shards to `state/scores/<YYYY>/<MM>/<DD>.csv` on
+**2026-09-13**. The first migration is a split and nothing else: 3,509 rows, one month,
 2,700,019 bytes before and after, every cell compared by name across both
 revisions. Say what it did not do first, because the section this replaces was
 right about it: **sharding is not a bound.** Nothing is deleted, nothing is
-folded, and the tree grows at the same rate it grew yesterday.
+folded, and the tree grows at the same rate it grew yesterday. The second
+migration did not change that either - it is the same rows in more files, and
+what bounds them is still `observability.scores_full_grain_months`.
 
 What it buys is that the two things which could bound it are now possible. A
 retention rule can take a whole month the way `state/item-health/` already does,
@@ -288,6 +291,14 @@ turn a count over the ledger into a count of times the pipeline looked. The
 header check moved ahead of the dedupe for the same reason: a corrupt shard is
 corrupt whatever the call had to say, and checking after the dedupe let a stale
 header survive an append that returned zero.
+
+**The header check's cover narrowed on 2026-09-13, and the dedupe's did not.**
+At day grain, checking every committed partition before every append would have
+cost one more open a day for ever on the hot path (Guardrail #12), so `append`
+now checks the one or two days it is about to write - which is also the exact
+cover, because a file this call does not append to is a file this call cannot
+corrupt. The dedupe still reads every identity, through the index rather than
+the rows, for the reason the paragraph above gives.
 
 ### What the ledger is made of, and the three narrowings not taken
 
