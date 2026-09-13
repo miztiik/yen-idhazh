@@ -35,15 +35,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 12 | 16 | 3 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 7 | 1 | 0 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 5 | 9 | 3 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 6 | 8 | 3 |
 
-## In flight - 3
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | p23-1b |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | p24-8 |
-| #4 | 25 | D | Carriage becomes a tie-break | p25-4 |
 
 ## Ready now - 22
 
