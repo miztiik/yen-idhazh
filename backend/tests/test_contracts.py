@@ -2235,21 +2235,33 @@ def test_a_run_records_which_weights_ran_and_not_how_their_turns_are_written() -
     ModelUse.model_validate(recorded), "and the record it wrote reads back"
 
 
-def test_the_retired_marker_file_is_refused_if_it_comes_back(tmp_path: Path) -> None:
+def test_the_retired_marker_file_is_refused_if_it_comes_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A file nothing reads is a set of markers an operator believes are live.
 
     The package directory is exactly where somebody would put them back, so the
-    path is checked rather than forgotten. Proved by creating the file and
-    deleting it again, never by asserting it is absent - an assertion that it is
-    absent passes on a tree where the check does not exist.
+    path is checked rather than forgotten. Proved by making the file and watching
+    the refusal, never by asserting it is absent - an assertion that it is absent
+    passes on a tree where the check does not exist.
+
+    The file is made at a redirected path, and the real one is pinned by a
+    separate assertion. The suite runs several processes over one working tree,
+    so a file written into the package refuses every config load a sibling
+    process happens to be making at that moment.
     """
+    assert config.RETIRED_TURN_MARKERS == (
+        REPO_ROOT / "backend" / "idhazh" / "prompts" / "turn_markers.json"
+    ), "the check must name the package directory, which is where they would come back"
     assert not config.RETIRED_TURN_MARKERS.exists(), "the row deleted it"
-    config.RETIRED_TURN_MARKERS.write_text("{}\n", encoding="utf-8")
-    try:
-        with pytest.raises(ValueError, match=re.escape("models.<role>.turns")):
-            config.load(CONFIG_DIR)
-    finally:
-        config.RETIRED_TURN_MARKERS.unlink()
+
+    came_back = tmp_path / "turn_markers.json"
+    came_back.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(config, "RETIRED_TURN_MARKERS", came_back)
+    with pytest.raises(ValueError, match=re.escape("models.<role>.turns")):
+        config.load(CONFIG_DIR)
+
+    monkeypatch.undo()
     assert config.load(CONFIG_DIR).app.models.summarize.turns.turn_closing
 
 

@@ -1920,8 +1920,10 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
         "message"
     ]["content"]
 
-    asked = build_call_two_request(first, reply, plan=True)
-    suppressed = build_call_two_request(first, reply, plan=False)
+    asked = build_call_two_request(first, reply, turns=configured().turns, plan=True)
+    suppressed = build_call_two_request(
+        first, reply, turns=configured().turns, plan=False
+    )
     opening = str(first["prompt"])
 
     assert str(asked["prompt"]).startswith(opening)
