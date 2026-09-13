@@ -188,6 +188,28 @@
       "weight": 1.0
     },
     {
+      "id": "ben-goertzel",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Eurykosmotron",
+      "url": "https://bengoertzel.substack.com/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "bleepingcomputer",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "BleepingComputer",
+      "url": "https://www.bleepingcomputer.com/feed/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
       "id": "bruegel",
       "kind": "analysis",
       "retired_on": null,
@@ -1046,6 +1068,17 @@
       "weight": 1.0
     },
     {
+      "id": "mts-live",
+      "kind": "community",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "MTS",
+      "url": "https://mtslive.substack.com/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
       "id": "naked-capitalism",
       "kind": "analysis",
       "retired_on": null,
@@ -1212,6 +1245,39 @@
       "weight": 1.0
     },
     {
+      "id": "out-of-control",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Getting Out of Control",
+      "url": "https://outofcontrol.substack.com/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "paul-walsh",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Paul Walsh",
+      "url": "https://paulfwalsh.substack.com/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "policy-wire",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Policy Wire",
+      "url": "https://policywire.substack.com/feed",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
       "id": "power-magazine",
       "kind": "reporting",
       "retired_on": null,
@@ -1242,6 +1308,17 @@
       "title": "PyTorch",
       "url": "https://pytorch.org/blog/feed.xml",
       "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "robert-eringer",
+      "kind": "community",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "ERINGER",
+      "url": "https://roberteringer.substack.com/feed",
+      "vertical": "world",
       "weight": 1.0
     },
     {
@@ -1528,6 +1605,28 @@
       "title": "The Hindu - International",
       "url": "https://www.thehindu.com/news/international/feeder/default.rss",
       "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "think-brics",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Think BRICS",
+      "url": "https://thinkbrics.substack.com/feed",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "tldr-sec",
+      "kind": "community",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "tl;dr sec",
+      "url": "https://rss.beehiiv.com/feeds/xgTKUmMmUm.xml",
+      "vertical": "ai",
       "weight": 1.0
     },
     {
