@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
 	AXIS_LABEL_GAP_PX,
@@ -8,6 +8,7 @@ import {
 	thinLabels
 } from '../src/lib/charts/frame';
 import { grouped, swapScale } from '../src/lib/charts/series';
+import { readDayShards, readShards } from '../src/lib/server/payload';
 import {
 	modelSwap,
 	runLengths,
@@ -40,20 +41,18 @@ const VALUE_PX = 10;
 /** The canary's own state tree, which the built page was rendered from. */
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** A ledger directory, read the way the page's server reads it. */
+/** A month-sharded ledger directory, read the way the page's server reads it. */
 function shards(dir: string): Record<string, string>[] {
-	const rows: Record<string, string>[] = [];
-	for (const name of readdirSync(dir)
-		.filter((entry) => entry.endsWith('.csv'))
-		.sort()) {
-		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
-		const header = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(header.map((key, at) => [key, cells[at] ?? ''])));
-		}
-	}
-	return rows;
+	return readShards(dir, -1).rows;
+}
+
+/** The item-health ledger, which files by day rather than by month.
+ *
+ * Through the production reader rather than a copy here, so a grain change in
+ * the store cannot leave this comparing the page against an empty set.
+ */
+function healthRows(): Record<string, string>[] {
+	return readDayShards(join(STATE, 'item-health'), -1).rows;
 }
 
 /** The three bands the committed config carries at the ends of its range, so a
@@ -303,7 +302,7 @@ test.describe('what checking a summary cost, off the critical path', () => {
 		// bar's centre, and on a doubling axis the centre of the bar holding the
 		// median can be a factor of two away from the median.
 		const ledgers: Record<string, { rows: Record<string, string>[]; column: string }> = {
-			'write-times': { rows: shards(join(STATE, 'item-health')), column: 'summarize_ms' },
+			'write-times': { rows: healthRows(), column: 'summarize_ms' },
 			'score-cost': { rows: shards(join(STATE, 'scores')), column: 'score_ms' }
 		};
 

@@ -8,9 +8,19 @@ never read `state/item-health/` directly.
 ## Published shards
 
 `backend/idhazh/publish_telemetry.py` reads
-`state/item-health/<YYYY-MM>.csv` and writes
+`state/item-health/<YYYY>/<MM>/<DD>.csv` and writes
 `frontend/public/telemetry/<YYYY-MM>.csv`. The browser fetches these monthly
 shards on demand as the operator pans the viewport.
+
+**The source files by day and the projection files by month, since 2026-09-13.**
+They take their grain from different things - the ledger from what a run writes
+and what a removal takes away, the mirror from what a browser fetches - and
+[../../concepts/partitions.md](../../concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains)
+owns both rules. This module is the bridge: `day_partition.days_by_month` groups
+the day files, and a month is projected whole from at most 31 of them. What it
+cost, stated rather than implied: the unbounded arm opens about thirty times as
+many file handles for the same rows, and the count is asserted in
+`backend/tests/test_publish_telemetry.py` rather than described here.
 
 **This is a month partition, and it now honours the freeze rule.** The pattern -
 what closes a partition, and what a correction, a deletion or a late arrival does
@@ -244,7 +254,7 @@ The console's `What the model did` section is not drawn from the published
 shards. It is computed while the site is built, out of two private ledgers:
 
 - `state/scores/<YYYY-MM>.csv` - one row per scored item.
-- `state/item-health/<YYYY-MM>.csv` - one row per planned item per run.
+- `state/item-health/<YYYY>/<MM>/<DD>.csv` - one row per planned item per run.
 
 Neither file is served and neither crosses to a browser. What reaches the page
 is a count of that day's items, never a row and never a score. The derivation is

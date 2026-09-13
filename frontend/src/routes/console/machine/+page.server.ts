@@ -28,7 +28,7 @@ import {
 	observabilityConfig,
 	runConfig
 } from '$lib/server/config';
-import { itemHealthRows, evalRows, loadManifests, shardMonths } from '$lib/server/payload';
+import { itemHealthRows, evalRows, loadManifests, shardDays, shardMonths } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
@@ -124,15 +124,18 @@ export interface RunSeries {
  */
 export async function load() {
 	const console_ = consoleConfig();
-	// The widest span the control can reach, in the months the ledgers shard by.
-	// Nothing older can be drawn whatever the operator does, so nothing older is
-	// read (`CLAUDE.md` Guardrail #12), and the cover follows `console.window_presets`
-	// rather than a literal so raising a preset widens it (Guardrail #6).
-	const shards = shardMonths(Math.max(...console_.window_presets));
+	// The widest span the control can reach. Nothing older can be drawn whatever
+	// the operator does, so nothing older is read (`CLAUDE.md` Guardrail #12), and the
+	// cover follows `console.window_presets` rather than a literal so raising a
+	// preset widens it (Guardrail #6). Two covers, because the two ledgers file at
+	// different grains: the score ledger by month, item-health by day.
+	const widestPreset = Math.max(...console_.window_presets);
+	const shards = shardMonths(widestPreset);
+	const days = shardDays(widestPreset);
 	const chart = chartConfig();
 	const limits = machineLimits();
-	const counters = loadMachineCounters(shards);
-	const health = itemHealthRows(shards).rows;
+	const counters = loadMachineCounters(days);
+	const health = itemHealthRows(days).rows;
 	const observability = observabilityConfig();
 	const today = new Date().toISOString().slice(0, 10);
 

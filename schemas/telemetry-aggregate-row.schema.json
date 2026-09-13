@@ -23,7 +23,7 @@
       "why": "The item-health census grows at about 212,000 bytes a published day and nothing bounded it. Deleting an old shard outright would answer that and cost every year-over-year comparison, so a month past observability.keep_months is folded to this shape first. Five rows a day keeps the counts and the timing distribution and drops only the per-item detail, which is what the console's failure list offers and no rate needs."
     }
   ],
-  "description": "One `(date, stage)` pair, summarised from the item-health shard.",
+  "description": "One `(date, stage)` pair, summarised from one month of item-health rows.",
   "properties": {
     "date": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",

@@ -10,22 +10,27 @@ shows where item evidence stops and feed quarantine or retirement begins.
 
 ## Every item, every run, one row
 
-`state/item-health/<YYYY-MM>.csv`. One row is written for each planned item on
-each run, whether the item succeeds or fails. Two stages write it: a worker
-commits the rows for its own items as each one settles, and Assemble writes the
-whole day's census afterwards.
+`state/item-health/<YYYY>/<MM>/<DD>.csv`. One row is written for each planned
+item on each run, whether the item succeeds or fails. Two stages write it: a
+worker commits the rows for its own items as each one settles, and Assemble
+writes the whole day's census afterwards.
 
 The row carries:
 
 `version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard, span_integrity, elements_found, element_class, model_calls, call_1_kind, call_1_prefill_ms, call_1_decode_ms, call_1_input_tokens, call_1_output_tokens, call_1_cached_tokens, call_2_kind, call_2_prefill_ms, call_2_decode_ms, call_2_input_tokens, call_2_output_tokens, call_2_cached_tokens`
 
-The file is append-only inside its own month. It is not kept for ever: a month
+The file is append-only inside its own day. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
-row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv` and the
-full-grain shard is deleted, by `idhazh prune-state` after the day is committed.
-The browser's copy of that same month under `frontend/public/telemetry/` goes in
-the same step. Until 2026-09-03 this page said the ledger was never pruned, which
-was true when it was written and stopped being true when the fold landed.
+row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv` and that
+month's day files are deleted, by `idhazh prune-state` after the day is
+committed. The browser's copy of that same month under
+`frontend/public/telemetry/` goes in the same step. Until 2026-09-03 this page
+said the ledger was never pruned, which was true when it was written and stopped
+being true when the fold landed.
+
+**The boundary is still a month and only the files below it are days.** The fold
+is where the two grains meet: it reads a month's day files - at most 31 - writes
+one aggregate, reads it back, and only then unlinks them.
 
 **The step ships in dry run.** It logs every file a live run would remove and
 removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
@@ -33,11 +38,14 @@ on a schedule and a deleted state file stops being recoverable from history once
 that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a
 one-line commit taken after a scheduled run has printed the list. Measured on
 this checkout on 2026-09-02, the earliest a live run would touch this ledger is
-**2027-10-01**, when `state/item-health/2026-08.csv` falls below the window.
+**2027-10-01**, when `state/item-health/2026/08/` falls below the window.
 
 The 30-day window on this page is a read-side parameter and is unrelated to that
-age. Monthly shards follow `state/seen/` and `state/feed-health/`. What the fold
-keeps, what it costs and why fourteen is
+age. Day files follow `state/published/` rather than `state/seen/` and
+`state/feed-health/`, which are still monthly - owner instruction, 2026-09-10,
+and the reason is in
+[../../concepts/partitions.md](../../concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains).
+What the fold keeps, what it costs and why fourteen is
 [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
 ## The structure
@@ -48,17 +56,19 @@ Three files carry one item-health row, and each owns one thing:
 | --- | --- |
 | `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
 | `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Guardrail #3) |
-| `backend/idhazh/ledger.py` | the append, the header guard, and the monthly shard path |
+| `backend/idhazh/ledger.py` | the append, the header guard, and the day file path |
 
 **One definition of the column list.** `ItemHealthRow.csv_columns` returns
 `tuple(model_fields)`, so the CSV header IS the contract's field order. A writer
 and a reader cannot disagree, and there is no second list to forget.
 
-**The file layout.** One directory, one file per calendar month of the `date`
-column, named `YYYY-MM.csv`. A row is placed by the digest date it describes,
-not by the clock when it was written, so a run that publishes just after
-midnight UTC still files under the day it published. Header on line 1, `\n`
-endings, `utf-8`, no quoting beyond what `csv` needs.
+**The file layout.** One file per calendar day of the `date` column, nested
+`<YYYY>/<MM>/<DD>.csv`. A row is placed by the digest date it describes, not by
+the clock when it was written, so a run that publishes just after midnight UTC
+still files under the day it published. Header on line 1, `\n` endings, `utf-8`,
+no quoting beyond what `csv` needs. `day_partition.day_files` is the walk, and it
+refuses a name it cannot place rather than skipping it - a file the reader cannot
+place is how it starts missing rows.
 
 **Every cell is a string.** `csv_row` writes `""` for an absent optional and
 `from_csv_row` reads `""` back as `None`. There is no sentinel number and no
@@ -69,7 +79,7 @@ The 42 columns, in file order:
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
 | `version` | date-stamp | always | which contract wrote this row (section 11) |
-| `date` | `YYYY-MM-DD` | always | the digest day, and the shard this row files under |
+| `date` | `YYYY-MM-DD` | always | the digest day, and the file this row lives in |
 | `run_id` | `<date>-<execution>` | always | which execution wrote it. The trailing field is the CI run id, and a small ordinal on rows written before 2026-08-31 |
 | `item_id` | slug | always | `<vertical>-<ten decimal digits>` on a row written before 2026-09-12 and `<vertical>-<sixteen base32 symbols>` after it, derived from the address either way. Join on `url_key`, and see below |
 | `url_key` | sha256 | always | the stable article key. Join on this, not `item_id` |

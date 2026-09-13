@@ -27,6 +27,7 @@ import {
 	loadManifests,
 	publishedCharts,
 	publishedItems,
+	shardDays,
 	shardMonths,
 	sourceHealthView,
 	telemetryRows,
@@ -501,11 +502,12 @@ export async function load() {
 	// whatever the operator does, so every read below is covered by it and no
 	// panel loses a day (`CLAUDE.md` Guardrail #12). Read from `console.window_presets`
 	// rather than written down here, so raising the widest preset widens the
-	// reads with it (Guardrail #6).
+	// reads with it (Guardrail #6). Two covers, because the two ledgers file at
+	// different grains: the score ledger by month, item-health by day.
 	const widest = Math.max(...console.window_presets);
 	const shards = shardMonths(widest);
 	const { rows } = evalRows(shards);
-	const itemRows = itemHealthRows(shards).rows;
+	const itemRows = itemHealthRows(shardDays(widest)).rows;
 	const floorPct = runConfig().success_floor_pct;
 	const itemCeiling = runConfig().safety_ceiling_per_run;
 	const siteBudgetMb = retentionConfig().site_budget_mb;
