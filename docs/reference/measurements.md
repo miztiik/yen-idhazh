@@ -786,19 +786,19 @@ size.
 
 ### What landed from this, and what one server start now costs
 
-**The flag is committed.** `models.summarize.inference.log_verbosity` and
-`models.visual_planner.inference.log_verbosity` are both `4` in
+**The flag is committed.** `models.summarize.inference.log_verbosity` is `4` in
 `config/idhazh.json`, and `idhazh.llm.server.server_argv` emits `-lv 4` from
-them. It is a knob rather than a literal because an operator debugging a start
+it. It is a knob rather than a literal because an operator debugging a start
 wants `9` and a daily run does not (Guardrail #6). Null omits the flag and keeps the
 runtime's own default of 3, so a checkout with no config file starts a quiet
 server exactly as before.
 
 **The cost is one job artifact, and it is not a committed file.** A server start
 goes from 12 stderr lines and 1,085 bytes to about 206 lines and 16,011 bytes -
-roughly 15 KB per start, on the readings in the table above. A daily run makes
-five starts across the two roles, four work shards and the visual planner, so
-about 78 KiB a day. It lands in the run's own log, which GitHub Actions retains
+roughly 15 KB per start, on the readings in the table above. A daily run made
+five starts across two roles when this was written, four work shards and the
+visual planner; that second role retired on 2026-09-13, so it is four starts and
+about 62 KiB a day now. It lands in the run's own log, which GitHub Actions retains
 and nothing else reads, and no byte of it reaches the 1 GB published site
 (Guardrail #2) or the repository. The daily workflow already uploads
 `llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
@@ -1248,7 +1248,7 @@ so there is no spread.
 
 | Entry | Bytes | GiB |
 | --- | --- | --- |
-| `llm-Qwen3-4B-Q4_K_M.gguf-b10598-v4` (router, kept) | 2,438,761,586 | 2.27 |
+| `llm-Qwen3-4B-Q4_K_M.gguf-b10598-v4` (the visual planner's weights, kept then, retired 2026-09-13) | 2,438,761,586 | 2.27 |
 | `qualify-03b74727...-b10598` (stale qualification copy, **deleted**) | 5,614,108,894 | 5.23 |
 | Python and node caches | about 0.59 GB | - |
 | **Before the switch** | **8.05 GB of a 10 GB cap** | - |
@@ -1493,6 +1493,10 @@ re-run job, or a build that renames a series. Re-run
 days before treating the agreement as a property rather than an observation.
 
 ## The visual planner job's budget
+
+**This whole section is about a job that retired on 2026-09-13** (plan 11 row
+#6). The readings stand as what was measured; nothing in them describes a run
+the pipeline still makes.
 
 **Measured 2026-08-24 on `ubuntu-latest` (4 vCPU, 16 GB), run `32742672105`.**
 Per-item inference owns the time. Model load, cache and orchestration do not.
@@ -2106,9 +2110,10 @@ to justify a design decision.
 | **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two arms of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](measurements-site.md#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs off the runner ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). A developer box measures itself, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
 | **What holds the 1.5 GiB a work shard's own python holds** | **bounded, not attributed: 1.49 to 1.55 GiB over four captured shards, in one process nothing names** | two dispatches of `.github/workflows/digest.yml`, no code. The first with `faithfulness: false`: the install step then takes `.` instead of `.[faithfulness]` and `_scorer` returns nothing, so the difference in `python_peak_rss_bytes` between that run and a scored one **is** the scorer's resident share, on the runner. The second at the default, to read the new per-process roll-call in **What memory this shard used** and confirm what the other two pythons are ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). Do the second one first - it costs nothing extra and it says whether the 4 percent attributed to the host is really the host. |
-| **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and one instrument was broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. **Both greps are now explained and neither needs fixing again.** `system_info` was never a grep fault: it is not printed at all below verbosity 4, so the pattern was always right and the line was never there to find ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)). The log summary's `^(srv|slot) ` anchor was a real fault - it matched 1 line of 40 in every committed capture and none of them by the anchor - and it was corrected on 2026-09-09 to read the timestamp and level letter the tag sits behind, which finds 38 of 40. So `prompt eval time` reaches a job log again from the next run. Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
-| **Which CPU the visuals job drew, run by run** | **the instrument landed 2026-09-12 and has no population yet** | the CPU model does not sort the per-item cost - seven runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29** and **the `visuals` job left it on 2026-09-12**: it now stamps its own clock, samples its own memory and commits one `RuntimeCountersRow` carrying `job` = `visuals`, its `cpu_model`, its `cpu_busy_pct` and the four live-path cells a bench run cannot produce ([What the visual planner has never reported about itself](#what-the-visual-planner-has-never-reported-about-itself-2026-09-12)). Nothing has been read off it: every committed counters row still says `work`, and the first row that does not arrives with the first scheduled run after that change merges. Read it, then re-derive the two plan-11 row-6 estimates against it. |
-| **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
+| **What makes a visuals host 21 s or 38 s an item** | **void: the job retired on 2026-09-13** | it was a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The nine runs that name a CPU rule the CPU model out rather than confirming it ([The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Plan 11 row #6 deleted the job, so nothing will ever add to that population. The same swing, if it is a property of the host rather than of the model, will show up in the `work` job's own prefill rate; that is where to look for it, and it is a new question with a new denominator rather than this one continued. |
+| **Which CPU the visuals job drew, run by run** | **void: the job retired on 2026-09-13** | the instrument landed 2026-09-12 and collected nothing before the job it measured was deleted. The `work` job has carried the same cells since 2026-08-29 and is the only server job left, so the covariate is still recorded - for one job rather than two, and `RuntimeCountersRow.job` is what tells the two apart in the committed ledger. |
+| **What a sharded `route` job would cost** | **void: the job retired on 2026-09-13** | four shards would have divided the stage while each paid the fixed cost. Plan 11 row #6 took the whole job away instead: the picture is decided inside the `work` shard that read the article, so the day's pictures are already spread over four to eight runners and there is nothing left to shard. |
+| **What the two calls cost a work shard, measured rather than estimated** | **owed: the first scheduled runs after 2026-09-13** | the design was landed on an estimate of 182 to 185 minutes for the worst shard against a 200-minute timeout and a 180-minute escalation bar, built from a cap-length call-1 prompt at the slowest recorded prefill. Read `job_seconds` for the worst `work` shard out of `state/runtime-counters.csv` over seven scheduled days, and report the worst and the median against 180. If the worst passes 180, the plan's own escalation trigger has fired and the next move is the design that fits, not a raised bound (Guardrail #2). |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record)). |
 | A production day payload | fixture figure above | the first real pipeline run |

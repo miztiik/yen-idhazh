@@ -95,9 +95,6 @@ jobs:
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
       summarize_file: ${{ steps.models.outputs.summarize_file }}
-      visual_planner_repo: ${{ steps.models.outputs.visual_planner_repo }}
-      visual_planner_revision: ${{ steps.models.outputs.visual_planner_revision }}
-      visual_planner_file: ${{ steps.models.outputs.visual_planner_file }}
     steps:
       - uses: actions/checkout@v6
 
@@ -166,7 +163,7 @@ jobs:
           import json
 
           models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
-          for role in ("summarize", "visual_planner"):
+          for role in ("summarize",):
               for field in ("repo", "revision", "file"):
                   value = models[role].get(field) or ""
                   if value.split() != [value]:
@@ -354,9 +351,8 @@ jobs:
       # may name up to eight. A fixed number here is a second answer to how wide
       # the fan-out is, and the two can disagree - at four it would have queued
       # half of an eight-shard dispatch and handed back the wall-clock the
-      # fan-out buys. Eight workers plus the visuals job is nine, well inside
-      # Guardrail #2's 20 concurrent jobs, and `visuals` waits on `work` rather than
-      # racing it.
+      # fan-out buys. Eight workers is well inside Guardrail #2's 20 concurrent
+      # jobs.
       max-parallel: ${{ fromJSON(needs.plan.outputs.shards) }}
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -442,9 +438,9 @@ jobs:
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
         # One pinned build, checked against its digest before anything runs from
-        # it. Authenticated, because every shard and the visuals job ask at once
-        # and anonymous api.github.com allows 60 requests an hour - a ceiling of
-        # eight shards makes that nine askers on a cold cache, not five.
+        # it. Authenticated, because every shard asks at once and anonymous
+        # api.github.com allows 60 requests an hour - a ceiling of eight shards
+        # makes that eight askers on a cold cache, not four.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -553,12 +549,11 @@ jobs:
       # and the runner has 16 GB (Guardrail #2). `measure.yml` already samples exactly
       # this; the daily path did not.
       #
-      # The sampler itself is `.github/scripts/sample-rss.sh`, and it moved there
-      # on 2026-09-12 when the visuals job started taking the same reading. Two
-      # jobs running one script is what that directory is for (`CLAUDE.md`
-      # section 3), it puts the sampler under `shellcheck`, and it means a test
-      # can execute it rather than grep a `run:` body. Every column it writes,
-      # and why each one is there, is in the script's own header.
+      # The sampler itself is `.github/scripts/sample-rss.sh`. A script rather
+      # than an inline `run:` body because that directory is what `CLAUDE.md`
+      # section 3 asks for, it puts the sampler under `shellcheck`, and it means
+      # a test can execute it rather than grep a `run:` body. Every column it
+      # writes, and why each one is there, is in the script's own header.
       - name: Sample memory
         run: |
           set -euo pipefail
@@ -807,7 +802,7 @@ jobs:
           retention-days: 2
           if-no-files-found: ignore
 
-      # Seven days, not one. The visuals job and assemble read this within the
+      # Seven days, not one. Assemble reads this within the
       # hour, so one day was enough for the run itself - but it is also the only
       # copy of the article text a finished run leaves behind, and
       # `data_wrangler.py backfill` replays it into the training corpus.
@@ -829,20 +824,19 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # The pictures this shard drew, and only under `run.two_calls_per_item`.
-      # With the flag off the stage draws nothing here and the glob matches
-      # nothing, which `if-no-files-found: ignore` makes a green no-op; with it
-      # on, `work` is the only job that renders, and a decision naming an asset
-      # whose bytes never left this runner is a broken image on the page -
-      # `_picture_faults` calls it "names a picture file that is not there".
+      # The pictures this shard drew. Call 2 writes the summary and the plan in
+      # one reply, so `work` is the only job that renders, and a decision naming
+      # an asset whose bytes never left this runner is a broken image on the
+      # page - `_picture_faults` calls it "names a picture file that is not
+      # there". A day where nothing was drawable matches nothing here, which
+      # `if-no-files-found: ignore` makes a green no-op.
       #
       # The decisions themselves need no line: they are written into the items
       # directory above and travel in that artifact.
       #
-      # This run's day and never the whole tree, for the reason the visuals
-      # job's own upload gives: `render.write.asset_relpath` files every chart
-      # under the day that names it, so a wider line sends every committed day
-      # back to Actions on every run (Guardrail #12).
+      # This run's day and never the whole tree: `render.write.asset_relpath`
+      # files every chart under the day that names it, so a wider line sends
+      # every committed day back to Actions on every run (Guardrail #12).
       - uses: actions/upload-artifact@v7
         with:
           name: shard-visuals-${{ matrix.shard }}
@@ -872,323 +866,8 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # Visual planning runs on the small model, in its own job, because one
-  # llama-server serves one set of weights. It is deliberately unable to stop a
-  # publication: `continue-on-error` plus assemble's `always()` means a visual
-  # planner that never starts costs every item its picture and costs the day
-  # nothing.
-  #
-  # This bound is the backstop, not the budget. The stage stops itself at
-  # `run.visual_planner_budget_minutes` in config/idhazh.json, which is set below this
-  # number with room for the fixed cost and one worst-case item. Raising this
-  # number is not the fix for a slow visual planner (Guardrail #2); lowering that one
-  # is.
-  visuals:
-    needs: [plan, work]
-    if: always()
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
-    steps:
-      # First, before the checkout, for the reason the work job's copy gives: the
-      # number then covers the cache restore and the weight load as well as the
-      # model time. This job took none of these three readings until 2026-09-12,
-      # so every live-path figure on record belonged to the summarizer and none
-      # to the visual planner.
-      - name: Stamp the visuals clock and the host
-        run: |
-          set -euo pipefail
-          echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
-          echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)" >> "$GITHUB_ENV"
-          echo "CPU_STAT_AT_START=$(awk '/^cpu / { print }' /proc/stat || true)" >> "$GITHUB_ENV"
-
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      # Before the step that builds the server command, for the same reason the
-      # work job installs early: that step imports `idhazh`.
-      - name: Install
-        run: pip install -e .
-
-      # Same key shape as the work job, and the same reason: the fetch below runs
-      # only on a miss, so the key is what dates the binary, the weights and the
-      # upload of those weights.
-      - name: Cache the visual planner weights and runtime
-        id: weights
-        uses: actions/cache@v6
-        with:
-          path: |
-            backend/models
-            backend/bin
-          key: llm-${{ needs.plan.outputs.visual_planner_file }}-${{ needs.plan.outputs.visual_planner_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
-
-      - name: Fetch runtime and visual planner weights
-        if: steps.weights.outputs.cache-hit != 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p backend/bin backend/models
-          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
-            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
-              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
-            exit 1
-          fi
-          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
-          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
-          mkdir -p llama && tar -xzf llama.tar.gz -C llama
-          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
-          cp -a "$SRC"/. backend/bin/
-          chmod +x backend/bin/llama-server
-          curl -fsSL --retry 3 --retry-all-errors \
-            -o "backend/models/${{ needs.plan.outputs.visual_planner_file }}" \
-            "https://huggingface.co/${{ needs.plan.outputs.visual_planner_repo }}/resolve/${{ needs.plan.outputs.visual_planner_revision }}/${{ needs.plan.outputs.visual_planner_file }}?download=true"
-
-      # No `if:`, for the same reason the work job's check carries none: a
-      # restored cache entry is the one case where nobody watched the bytes
-      # arrive. This job cannot stop a publication, so a wrong file here costs
-      # every item its picture in silence unless something says so (Guardrail #10).
-      - name: Verify the visual planner weights
-        run: |
-          set -euo pipefail
-          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["visual_planner"]["sha256"] or "")')
-          if [ -z "$EXPECTED" ]; then
-            echo "config records no sha256 for models.visual_planner" >&2
-            exit 1
-          fi
-          echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.visual_planner_file }}" | sha256sum --check
-
-      - name: Start the visual planner
-        env:
-          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.visual_planner_file }}
-        run: |
-          .github/scripts/start-llama-server.sh visual_planner visual-planner
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: plan
-          path: backend/var/run/${{ needs.plan.outputs.date }}/
-
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: items-*
-          merge-multiple: true
-          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
-
-      - name: Check visual planner health
-        run: |
-          set -euo pipefail
-          for _ in $(seq 1 120); do
-            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
-            sleep 5
-          done
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
-            echo "the visual planner never became healthy" >&2
-            tail -50 visual-planner.log >&2
-            exit 1
-          }
-
-      # This job's prefill rate varies 3x between runs (20.2 to 62.9 tok/s,
-      # six runs 2026-08-24/25) while the prompt size and the decode rate stay
-      # put, which is what decides whether a day fits its budget. The runner's
-      # CPU is the remaining suspect and nothing recorded it, so record it -
-      # along with the binary and the weights, so a number names its own bytes.
-      - name: What this runner is
-        if: always()
-        run: |
-          echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
-          grep -m1 'model name' /proc/cpuinfo || true
-          nproc || true
-          grep -m1 'system_info' visual-planner.log || true
-          LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
-          sha256sum backend/bin/llama-server || true
-          sha256sum "backend/models/${{ needs.plan.outputs.visual_planner_file }}" || true
-
-      # The same reading the work job takes, from the same script, so the
-      # planner's memory high-water mark can be read against the summarizer's.
-      - name: Sample visuals memory
-        run: |
-          set -euo pipefail
-          nohup bash .github/scripts/sample-rss.sh "$(cat visual-planner.pid)" \
-            > sample-rss.log 2>&1 &
-          echo "$!" > sample-rss.pid
-
-      - name: Plan the visuals and render them
-        run: python -m idhazh visuals --date "${{ needs.plan.outputs.date }}"
-
-      - name: Visual planner log on failure
-        if: failure()
-        run: tail -50 visual-planner.log || true
-
-      # The planner's own live-path figures, which nothing committed carried
-      # until 2026-09-12: what its prompts cost to read, what the cache saved,
-      # the window one sequence got and what the server held. `llama-bench`
-      # produces none of the four. The two plan-11 row-6 estimates in
-      # `TODO/20260910-23-article-classification-plan.md` section 0.3 scale this
-      # stage's measured 21.0 s an item by a ratio of decode rates, which
-      # assumes the whole 21.0 s is decode; these cells are what tests that.
-      #
-      # `--job visuals` is the whole point of the step: the ledger already holds
-      # a row for shard 0 of this run, written by a work shard against different
-      # weights, and without this cell the two are one record.
-      #
-      # `always()` and `continue-on-error` for the reason the work job's copy
-      # gives - a broken scrape costs one observation row, never the run. This
-      # job cannot stop a publication at all.
-      - name: What the visual planner counted
-        if: always()
-        continue-on-error: true
-        run: |
-          curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
-          if [ -s llama-metrics.prom ]; then
-            grep -E '^llamacpp:' llama-metrics.prom || true
-            for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max; do
-              grep -m1 "^${series} " llama-metrics.prom \
-                || echo "${series}: this build does not publish it"
-            done
-          else
-            echo "no metrics: the visual planner was already gone, or the role's inference.metrics is off"
-          fi
-          if [ -f /sys/fs/cgroup/memory.peak ]; then
-            echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
-          else
-            echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
-          fi
-          CPU_STAT_AT_END=$(awk '/^cpu / { print }' /proc/stat || true)
-          python -m idhazh counters \
-            --date "${{ needs.plan.outputs.date }}" \
-            --job visuals \
-            --shard 0 \
-            --shards 1 \
-            --counters-file llama-metrics.prom \
-            --job-started-at "${JOB_STARTED_AT:-}" \
-            --cpu-model "${CPU_MODEL:-}" \
-            --cpu-stat-at-start "${CPU_STAT_AT_START:-}" \
-            --cpu-stat-at-end "${CPU_STAT_AT_END:-}" \
-            --rss-samples-file rss-samples.tsv \
-            --server-log visual-planner.log \
-            --memory-peak-file memory-peak.txt
-
-      # One file, one row. The work shards have finished committing by the time
-      # this job runs - it waits on `work` - so this is never racing eight
-      # siblings the way their own commit is, and `merge=union` on the path
-      # settles it against assemble either way. It may not fail the job: a row
-      # that will not push costs one reading and a failed visuals job costs the
-      # day every picture.
-      - name: Commit what the visual planner counted
-        if: always()
-        continue-on-error: true
-        env:
-          COMMIT_MESSAGE: "visuals: ${{ needs.plan.outputs.date }} runtime counters"
-          NOTHING_STAGED_MESSAGE: "nothing counted to record"
-          PUSH_FAILED_MESSAGE: "could not push what the visual planner counted after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: >-
-            python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
-        run: >-
-          bash .github/scripts/commit-and-push.sh
-          state/runtime-counters.csv
-
-      # The operator's read of the same two files the row above read, in the job
-      # log where a person looking at a slow visuals job will find it.
-      - name: What memory the visual planner used
-        if: always()
-        run: |
-          cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
-          if [ -f rss-samples.tsv ]; then
-            awk -F'\t' '
-              NR > 1 {
-                if ($3 + 0 > llama) llama = $3 + 0
-                if ($6 + 0 > py) py = $6 + 0
-                if ($2 + $4 > together) together = $2 + $4
-              }
-              END {
-                printf "peak llama VmHWM %d kB, peak python VmHWM %d kB, most the two held at once %d kB, n=%d samples\n", llama, py, together, NR - 1
-              }
-            ' rss-samples.tsv
-          else
-            echo "rss-samples.tsv not found"
-          fi
-
-      - name: Visual planner cache log summary
-        if: always()
-        run: |
-          if [ ! -f visual-planner.log ]; then
-            echo "visual-planner.log not found"
-            exit 0
-          fi
-          grep -E '^[0-9.]+ [A-Z] (srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' visual-planner.log || true
-          for field in f_sim_best f_keep; do
-            grep -oE "${field} = [0-9.]+" visual-planner.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
-              { v[NR] = $1 + 0 }
-              END {
-                if (NR == 0) { printf "%s: no samples\n", field; exit }
-                for (i = 1; i <= NR; i++) { b = int(v[i] * 10); if (b > 9) b = 9; bucket[b]++ }
-                line = ""
-                for (b = 0; b <= 9; b++) line = line sprintf(" %.1f:%d", b / 10, bucket[b] + 0)
-                printf "%s: n=%d min=%.3f median=%.3f max=%.3f buckets%s\n", field, NR, v[1], v[int((NR + 1) / 2)], v[NR], line
-              }'
-          done
-
-      - name: Upload the visual planner log
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: visual-planner-log
-          path: |
-            visual-planner.log
-            rss-samples.tsv
-            python-procs.tsv
-            memory-peak.txt
-            llama-metrics.prom
-          retention-days: 2
-          if-no-files-found: ignore
-
-      # `always()`, because a cancelled job skips a step that has no condition.
-      # Every visual decision and every rendered chart lives only in this
-      # artifact, so without it a visual planner stopped for any reason hands
-      # assemble nothing and the day publishes with no visuals at all - which is
-      # exactly what four of the six runs on 2026-08-24/25 did.
-      #
-      # The glob is the suffix `idhazh.cli` writes and `idhazh.render.write`
-      # reads, and `if-no-files-found: ignore` means a glob that matches nothing
-      # uploads an empty artifact on a green run. Move the suffix without this
-      # line and the day publishes with no pictures and no error;
-      # `test_workflows.py` holds the pair.
-      #
-      # The second line is this run's day and not the whole archive, because
-      # `idhazh.render.write.asset_relpath` files every chart under the day that
-      # names it - so no other day in the tree can hold anything this job made.
-      # Sending the archive cost 6.42 MB of the 6.67 MB parcel and the figure
-      # rose with every run that published a day: 6.36, 6.41, 6.47, 6.53, 6.59
-      # and 6.66 MB over six consecutive runs on 2026-09-07/08, with nobody
-      # writing any code (Guardrail #12). Measured 2026-09-08 on an Intel Core
-      # i7-1265U over 19 committed days: the archive zips to 6,989,142 bytes and
-      # one day to 255,447.
-      #
-      # Both lines stay. Drop the first and `assemble` receives no decisions,
-      # every item publishes with no picture, and the run stays green
-      # throughout. Keeping it also holds the artifact root at the repository
-      # root, which is what lets `assemble` unpack with `path: .`.
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: visuals
-          path: |
-            backend/var/run/${{ needs.plan.outputs.date }}/items/*.visual.json
-            ${{ needs.plan.outputs.day_dir }}/
-          retention-days: 1
-          if-no-files-found: ignore
-
   assemble:
-    needs: [plan, work, visuals]
+    needs: [plan, work]
     # Always runs, even when a worker failed. A run that publishes nothing on a
     # bad day is a run whose bad days are invisible.
     if: always()
@@ -1217,18 +896,11 @@ jobs:
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
-      # The visual decisions and their rendered assets. `continue-on-error`
-      # above means this artifact may simply not exist, which is the
-      # degraded-not-failed path: every item then publishes with no picture.
-      - uses: actions/download-artifact@v8
-        continue-on-error: true
-        with:
-          name: visuals
-          path: .
-
-      # The pictures the work shards drew under `run.two_calls_per_item`. One
-      # artifact per shard and empty on every shard when the flag is off, so
-      # this is a no-op until it is on and the whole of the transfer once it is.
+      # The pictures the work shards drew. Call 2 writes the summary and the
+      # plan in one reply, so a chart is rendered on the shard that read the
+      # article and travels with it - one artifact per shard, and
+      # `continue-on-error` because a day where nothing was drawable is a normal
+      # day rather than a failed one.
       - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
@@ -1317,8 +989,9 @@ jobs:
       # push loses a race, the fix is to build the day again against the tip the
       # push wants, not to ask git to text-merge two digests. `REFRESH_PATHS` is
       # what that rebuild owns, named one file at a time under the day's
-      # directory - the visuals artifact unpacked this run's rendered charts into
-      # that same directory, and no producer here can make those again.
+      # directory - the `shard-visuals-*` artifacts unpacked this run's rendered
+      # charts into that same directory, and no producer here can make those
+      # again.
       #
       # `DROP_RACED_ASSETS_COMMAND` is what keeps those charts from being the
       # thing that loses the day. A chart is filed under its item's own id, so a
@@ -1526,9 +1199,10 @@ jobs:
       # publish decision can (../../CLAUDE.md section 0a).
       #
       # This job because it is the only one holding every population at once -
-      # `items-*` carries the decisions and `visuals` carries the drawings - and
-      # a job of its own would re-pay a checkout, an install and a second
-      # download of both to isolate about twenty seconds of file copying.
+      # `items-*` carries the decisions and `shard-visuals-*` carries the
+      # drawings - and a job of its own would re-pay a checkout, an install and
+      # a second download of both to isolate about twenty seconds of file
+      # copying.
       #
       # Last, and `continue-on-error`, for the reason the corpus harvest carries
       # it: what this job owes a reader is the published day, and a contact

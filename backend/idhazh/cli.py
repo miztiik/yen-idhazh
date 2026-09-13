@@ -120,7 +120,7 @@ from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )
 from idhazh.contracts.visual import PlanDecision, VisualPlan
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
 from idhazh.evals import archive as score_archive
 from idhazh.evals import evidence, golden, metrics, qualify, sampling, score, validation, writer
@@ -150,7 +150,7 @@ from idhazh.llm.server import (
     post,
     props,
 )
-from idhazh.render import asset_relpath, render_planned_visual, render_visual
+from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import assets_in_day
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 from idhazh.visual_validator import validate_plan
@@ -1019,7 +1019,6 @@ def stage_work(
     read_url = fetcher or live_fetcher(settings, tracer=tracer)
     inference = settings.app.models.summarize.inference
     model = settings.app.models.summarize
-    two_calls = settings.app.run.two_calls_per_item
     observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
     inputs = build_inputs(
         model=model,
@@ -1032,11 +1031,7 @@ def stage_work(
         # longer reaches what the model reads and the turn markers do. Handing
         # over the rendered pair is what digests the markers, all four prompt
         # files and the turn order together.
-        prompt=(
-            calls.prompt_inputs(settings.app.summarize, inference=inference)
-            if two_calls
-            else summarize.prompt_inputs(settings.app.summarize)
-        ),
+        prompt=calls.prompt_inputs(settings.app.summarize, inference=inference),
         output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
@@ -1095,24 +1090,14 @@ def stage_work(
         ):
             telemetry.item_attributes(item_span, item, run_id=plan.run_id, shard=shard)
             model_started = time.monotonic()
-            decision: VisualDecision | None = None
-            if two_calls:
-                summary, decision = _two_calls_one_item(
-                    article,
-                    settings,
-                    date=plan.date,
-                    endpoint=model_endpoint,
-                    run_id=plan.run_id,
-                    tracer=tracer,
-                )
-            else:
-                summary = _summarize_one(
-                    article,
-                    settings,
-                    endpoint=model_endpoint,
-                    run_id=plan.run_id,
-                    tracer=tracer,
-                )
+            summary, decision = _two_calls_one_item(
+                article,
+                settings,
+                date=plan.date,
+                endpoint=model_endpoint,
+                run_id=plan.run_id,
+                tracer=tracer,
+            )
             summarize_ms = int((time.monotonic() - model_started) * 1000)
             summary = summary.model_copy(
                 update={
@@ -1488,11 +1473,11 @@ def _summary_half_of(completion: Completion) -> Completion | None:
     return None if body is None else replace(completion, content=body)
 
 
-def _split_the_cost(summary: Summary, one: Completion, two: Completion) -> Summary:
-    """The item's five numbers, recorded as the two calls that really spent them.
+def _split_the_cost(summary: Summary, one: Completion, two: Completion | None) -> Summary:
+    """The item's five numbers, recorded as the calls that really spent them.
 
     `to_summary` sizes one call and records it in slot 1, because the stage it
-    was written for makes one. Here both calls are in hand, so the slots are
+    was written for makes one. Here the calls are in hand, so the slots are
     rewritten and the flat five become their sum - which `Summary` enforces, so
     this goes through the contract rather than around it with `model_copy`.
 
@@ -1500,6 +1485,12 @@ def _split_the_cost(summary: Summary, one: Completion, two: Completion) -> Summa
     Both calls really spent what they spent, and an item that failed on its
     length or its shape is exactly the item whose cost a reader of the ledger
     wants: leaving it at zero would make a bad day look like a cheap one.
+
+    **`two` is None when the item died between the calls.** Call 1 still ran, so
+    slot 2 is left empty and the flat five are call 1's alone. The alternative -
+    the zeros an unstamped failure records - reads as an item that cost nothing,
+    and the items that die here are the expensive ones: a labelling reply is cut
+    off precisely because the article was long.
     """
     first = CallCost(
         kind=CallKind.LABEL,
@@ -1509,20 +1500,26 @@ def _split_the_cost(summary: Summary, one: Completion, two: Completion) -> Summa
         output_tokens=one.completion_tokens,
         cached_tokens=min(one.cached_tokens, one.prompt_tokens),
     )
-    second = CallCost(
-        kind=CallKind.SUMMARIZE_AND_PLAN,
-        prefill_ms=two.prefill_ms,
-        decode_ms=two.decode_ms,
-        input_tokens=two.prompt_tokens,
-        output_tokens=two.completion_tokens,
-        cached_tokens=min(two.cached_tokens, two.prompt_tokens),
-    )
+    spent = [first]
+    if two is not None:
+        spent.append(
+            CallCost(
+                kind=CallKind.SUMMARIZE_AND_PLAN,
+                prefill_ms=two.prefill_ms,
+                decode_ms=two.decode_ms,
+                input_tokens=two.prompt_tokens,
+                output_tokens=two.completion_tokens,
+                cached_tokens=min(two.cached_tokens, two.prompt_tokens),
+            )
+        )
     return Summary.model_validate(
         summary.model_dump(mode="json")
         | {
             "call_1": first.model_dump(mode="json"),
-            "call_2": second.model_dump(mode="json"),
-            **{field: getattr(first, field) + getattr(second, field) for field in COST_FIELDS},
+            "call_2": spent[1].model_dump(mode="json") if len(spent) > 1 else None,
+            **{
+                field: sum(getattr(call, field) for call in spent) for field in COST_FIELDS
+            },
         }
     )
 
@@ -1615,19 +1612,24 @@ def _two_calls_one_item(
         "version": VisualDecision.schema_version(),
     }
 
-    def failed(no_reply: FailureCode) -> _TwoCalls:
-        return _TwoCalls(
-            summarize.to_summary(
-                article,
-                None,
-                model_id=model_id,
-                generated_at=generated_at,
-                prompt_config=settings.app.summarize,
-                evaluation=settings.app.evaluation,
-                no_reply=no_reply,
-            ),
+    def failed(no_reply: FailureCode, one: Completion | None = None) -> _TwoCalls:
+        """The item, lost, with whatever the run really spent on it.
+
+        `one` is the labelling reply when there was one. Three of the four ways
+        this item can die happen after call 1 answered, so without it the ledger
+        records a zero for a call that ran - and the three are truncation, a
+        reply that would not parse, and a second call that never came back.
+        """
+        summary = summarize.to_summary(
+            article,
             None,
+            model_id=model_id,
+            generated_at=generated_at,
+            prompt_config=settings.app.summarize,
+            evaluation=settings.app.evaluation,
+            no_reply=no_reply,
         )
+        return _TwoCalls(summary if one is None else _split_the_cost(summary, one, None), None)
 
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
@@ -1667,7 +1669,7 @@ def _two_calls_one_item(
                 article.item_id,
                 one.completion_tokens,
             )
-            return failed(FailureCode.LABELS_TRUNCATED)
+            return failed(FailureCode.LABELS_TRUNCATED, one)
 
         text = article.text or ""
         try:
@@ -1685,7 +1687,7 @@ def _two_calls_one_item(
                 article.item_id,
                 type(error).__name__,
             )
-            return failed(FailureCode.BAD_SHAPE)
+            return failed(FailureCode.BAD_SHAPE, one)
 
         wants_a_plan = visual_planner.plan_is_reachable(labelled, visuals=settings.app.visuals)
         with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
@@ -1710,7 +1712,7 @@ def _two_calls_one_item(
             trace=trace,
         )
         if two is None:
-            return failed(no_reply)
+            return failed(no_reply, one)
 
         with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
             half = _summary_half_of(two)
@@ -1824,275 +1826,6 @@ def _decide_the_visual(
             summary, why=plan.why if plan is not None else "the reply carried no plan", **stamp
         )
     return _drawn(summary, plan, table, settings=settings, date=date, stamp=stamp)
-
-
-# --- visual planner ----------------------------------------------------------
-
-
-class _PlannableItem(NamedTuple):
-    item: PlannedItem
-    article_path: Path
-    summary: Summary
-
-
-def already_published(date: str) -> frozenset[str]:
-    """The item ids the day's committed digest already carries.
-
-    `assemble.build_day` keeps an already-published item and discards the new
-    run's copy of it, so a later run's visual decision for one of those items can
-    never reach a reader: it is computed, written, read back, and thrown away.
-    That discard is crash consistency between the day write and the ledger
-    append, not a published order a reader ever sees.
-
-    A day runs five times. Without this the second run spends its whole budget
-    re-deciding the first run's items at 20 to 40 measured seconds each, and the
-    items it actually introduced queue behind them.
-    """
-    day = _load_day(assemble.day_dir(PUBLIC_ROOT, date) / "digest.json")
-    return frozenset(item.item_id for item in day.items) if day else frozenset()
-
-
-def plannable_items(
-    plan: RunPlan, items_dir: Path, *, published: frozenset[str]
-) -> list[_PlannableItem]:
-    """The items this run could still decide, best story first.
-
-    Rank order, not plan order. The plan is vertical-major, so stopping part-way
-    down it would cost whole verticals their pictures while the weakest story in
-    the first vertical kept one. This is the rule the safety ceiling already
-    follows: drop the weakest stories across every vertical, never a suffix.
-
-    The article stays on disk until the item is actually decided. Building this
-    list is what lets the stage know its own denominator before it spends
-    anything on the first item.
-    """
-    plannable: list[_PlannableItem] = []
-    for item in plan.items:
-        if item.item_id in published:
-            continue
-        article_path = items_dir / f"{item.item_id}.article.json"
-        summary_path = items_dir / f"{item.item_id}.summary.json"
-        if not (article_path.exists() and summary_path.exists()):
-            continue
-        summary = Summary.read(summary_path)
-        if summary.status is not SummaryStatus.OK:
-            continue
-        plannable.append(_PlannableItem(item, article_path, summary))
-    plannable.sort(key=lambda entry: (-entry.item.rank_score, entry.item.item_id))
-    return plannable
-
-
-def stage_visual_planner(
-    plan: RunPlan,
-    *,
-    settings: config.Settings,
-    clock: Callable[[], float] = time.monotonic,
-) -> None:
-    """Decide and draw the visuals, one item at a time.
-
-    A separate stage from `work` because it runs a different, smaller model, and
-    one llama-server serves one set of weights. Splitting it also means a run
-    that never starts a planner still publishes - every item simply carries no
-    picture, which is already the common and correct answer.
-
-    **The stage stops itself at `run.visual_planner_budget_minutes`.** It used to run
-    until the job's own timeout killed it, and a killed job uploads no artifact,
-    so a day that overran by one item threw away every decision the whole hour
-    had bought. Measured on `ubuntu-latest`: five of the eight runs since the
-    daily size moved to 200 items were cancelled that way, and each one published
-    a full day with zero visuals. Stopping early is the difference between
-    publishing the charts the run made and publishing none of them (Guardrail #2 -
-    the feature fits the runner, the runner is not raised to fit the feature).
-
-    **It also skips what the day already published**, because the assembler keeps
-    the published copy and discards the new one. That is what makes the stage
-    resumable in the sense the rest of the pipeline already is: a re-run costs
-    only the items the earlier run did not introduce.
-
-    `clock` is injected so the bound can be tested without spending it.
-
-    **It decides nothing when `run.two_calls_per_item` is on**, because `work`
-    has already decided every item it could: call 2 writes the summary and the
-    plan in one reply, so a second pass on the small model would overwrite a
-    decision drawn from the article with one drawn from the summary of it. The
-    stage stays rather than being deleted here - the job and the model go
-    together in plan 11 row #6, and until then the flag has to be reversible.
-    """
-    items_dir = _run_dir(plan.date) / "items"
-    if settings.app.run.two_calls_per_item:
-        LOG.info("planning skipped: the work stage decided every item it could")
-        return
-    tracer = telemetry.Tracer(
-        sink=trace_sink(settings, run_id=plan.run_id, shard=0),
-        now=assemble.utc_now,
-    )
-    spent: list[int] = []
-    skipped = 0
-    drafted = 0
-    kept = 0
-    undecided = 0
-
-    published = already_published(plan.date)
-    plannable = plannable_items(plan, items_dir, published=published)
-    budget_ms = settings.app.run.visual_planner_budget_minutes * 60_000
-    stage_started = clock()
-    LOG.info(
-        "planning start items=%s already_published=%s budget_minutes=%s",
-        len(plannable),
-        len(published),
-        settings.app.run.visual_planner_budget_minutes,
-    )
-
-    for index, entry in enumerate(plannable):
-        if (clock() - stage_started) * 1000 >= budget_ms:
-            undecided = len(plannable) - index
-            break
-        item, summary = entry.item, entry.summary
-        article = Article.read(entry.article_path)
-
-        started = clock()
-        with (
-            tracer.trace(_trace_id(plan.run_id, item)),
-            tracer.span(telemetry.SpanName.VISUAL_PLANNER) as span,
-        ):
-            telemetry.item_attributes(span, item, run_id=plan.run_id, shard=0)
-            decision, asked = _plan_one_visual(article, summary, settings)
-            if not asked:
-                skipped += 1
-            if decision.drafted_chart:
-                drafted += 1
-            if decision.kind is not VisualKind.NONE:
-                decision = render_visual(
-                    decision,
-                    public_root=PUBLIC_ROOT.parent,
-                    relpath=asset_relpath(plan.date, item.item_id),
-                )
-            if decision.kind is VisualKind.CHART:
-                kept += 1
-            span.set(telemetry.AttrKey.MODEL_ASKED, asked)
-            span.set(telemetry.AttrKey.DRAFTED_CHART, decision.drafted_chart)
-            span.set(telemetry.AttrKey.VISUAL_KIND, decision.kind.value)
-            span.set(telemetry.AttrKey.VISUAL_STATE, decision.visual_state.value)
-        decision_ms = int((clock() - started) * 1000)
-        spent.append(decision_ms)
-        decision = decision.model_copy(update={"decision_ms": decision_ms})
-        assemble.write_atomic(items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}", decision.to_json())
-        LOG.info(
-            "item decided id=%s kind=%s state=%s asked=%s decision_ms=%s",
-            item.item_id,
-            decision.kind.value,
-            decision.visual_state.value,
-            asked,
-            decision_ms,
-        )
-
-    # The job's own wall-clock is in the run log; this is what the stage inside
-    # it spent. The gap between the two is the fixed cost - checkout, weights,
-    # install, model start - and separating them is the whole point of the
-    # measurement (Guardrail #10).
-    tracer.flush()
-    total_ms = sum(spent)
-    # `drafted` minus `kept` is what the post-model checks refused. Without both
-    # numbers a model that stopped asking for charts reads the same as checks
-    # that started refusing them.
-    LOG.info(
-        "planning done items=%s asked=%s prefiltered=%s undecided=%s "
-        "charts_drafted=%s charts_kept=%s "
-        "total_ms=%s median_ms=%s slowest_ms=%s",
-        len(spent),
-        len(spent) - skipped,
-        skipped,
-        undecided,
-        drafted,
-        kept,
-        total_ms,
-        sorted(spent)[len(spent) // 2] if spent else 0,
-        max(spent, default=0),
-    )
-    if undecided:
-        # An undecided item is one the run never decided, which is what
-        # `items_routed` in the manifest already reports. This says it in the run
-        # log too, with the rate that would have to change for it to fit.
-        LOG.warning(
-            "visual planner stopped at its budget minutes=%s decided=%s undecided=%s mean_ms=%s",
-            settings.app.run.visual_planner_budget_minutes,
-            len(spent),
-            undecided,
-            total_ms // len(spent) if spent else 0,
-        )
-
-
-def _plan_one_visual(
-    article: Article,
-    summary: Summary,
-    settings: config.Settings,
-    *,
-    endpoint: str = DEFAULT_ENDPOINT,
-) -> tuple[VisualDecision, bool]:
-    """One visual decision, and whether the model was asked for it.
-
-    The model is skipped when no enabled visual kind could survive `to_decision`'s
-    own checks - a chart's bars are indices into these facts and must share one
-    unit, so an article whose numbers hold no unit group wide enough cannot
-    produce one whatever the model answers. Measured at 21.0 s an item on
-    `ubuntu-latest` (2026-08-24), asking anyway is that long spent proving a
-    settled question.
-
-    A skipped item still writes a `VisualDecision`. Silence is what turns a skip into a
-    quiet descope of the feature. So does an item the model never answered for,
-    and the two ways it can go unanswered are logged apart: a server that
-    refused the prompt for length is running, and a run log that calls it
-    unreachable sends whoever reads it to look for a process that never died.
-    """
-    visuals = settings.app.visuals
-    facts = visual_planner.numeric_facts(article.text or "", limit=visuals.max_facts)
-    model_id = settings.app.models.visual_planner.id
-    if not visual_planner.reachable_kinds(facts, visuals=visuals):
-        return (
-            visual_planner.decided_without_the_model(
-                summary,
-                model_id=model_id,
-                decided_at=assemble.utc_now(),
-                facts_found=len(facts),
-            ),
-            False,
-        )
-    payload = visual_planner.build_request(
-        article,
-        summary,
-        facts,
-        model_id=model_id,
-        inference=settings.app.models.visual_planner.inference,
-        visuals=visuals,
-    )
-    completion: Completion
-    cause = "visual planner unreachable"
-    try:
-        completion = post(payload, endpoint=endpoint, timeout=visuals.request_timeout_minutes * 60)
-    except HTTPError as error:
-        # Before OSError, which HTTPError subclasses. A server that answered is
-        # not an unreachable one, and the body is the only place it says why it
-        # refused. It is a stream, so read it once.
-        completion = Completion(content="")
-        with error:
-            if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
-                cause = "visual planner prompt did not fit the context window"
-        LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
-    except OSError as error:
-        completion = Completion(content="")
-        LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
-    return (
-        visual_planner.to_decision(
-            article,
-            summary,
-            completion,
-            model_id=model_id,
-            decided_at=assemble.utc_now(),
-            visuals=visuals,
-            facts=facts,
-        ),
-        True,
-    )
 
 
 # --- validate (Row #7) --------------------------------------------------------
@@ -4732,7 +4465,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "work",
             "record",
             "counters",
-            "visuals",
             "assemble",
             "harvest",
             "dedupe-ledgers",
@@ -4771,11 +4503,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--no-faithfulness",
         action="store_true",
         help="Skip the scorer. The digest still publishes; the ledger stays empty.",
-    )
-    parser.add_argument(
-        "--visuals",
-        action="store_true",
-        help="Include the visuals stage in a full run. It needs the visual planner served.",
     )
     parser.add_argument(
         "--leaderboard",
@@ -5198,9 +4925,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             memory_peak_path=args.memory_peak_file,
         )
         return 0
-
-    if args.stage == "visuals" or (args.stage == "run" and args.visuals):
-        stage_visual_planner(_load_plan(date), settings=settings)
 
     if args.stage in ("assemble", "run"):
         stage_assemble(

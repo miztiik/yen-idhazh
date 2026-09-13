@@ -276,7 +276,7 @@ anywhere has to be repointed.
 | Selector | What it holds |
 | --- | --- |
 | `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree |
-| `-m visual` | The visual planner, its validator, the spec compiler, both renderers, and the planted attacks aimed at the planner |
+| `-m visual` | The picture's gate and ladder, its validator, the spec compiler, both renderers, and the planted attacks aimed at the picture |
 | `-m workflow` | The workflow YAML and the shell scripts under `.github/` |
 | `-m slow` | Every module whose average test runs over a second |
 | `-m "not slow"` | Everything else, which is most of the tests |

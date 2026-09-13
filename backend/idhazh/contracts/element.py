@@ -26,9 +26,10 @@ earlier and a mismatch is its own arithmetic being wrong; a consumer degrades
 that one item, because the text moving under a span is one article's problem and
 says nothing about a sibling.
 
-**One name for the verbatim slice, and it is `span_excerpt`.** `raw` on
-`visual_planner.NumericFact` is whitespace-cleaned and drops the magnitude word
-and the unit, so it is not a slice of anything. `surface` is this project's word
+**One name for the verbatim slice, and it is `span_excerpt`.** `raw` on the
+retired planner's `NumericFact` was whitespace-cleaned and dropped the magnitude
+word and the unit, so it was not a slice of anything. `surface` is this
+project's word
 for a place something is shown or persisted, in 458 sentences across 104 files
 (measured 2026-09-08), and it does not get a second meaning here. The reason the
 name is one word rather than two fields is on
@@ -50,12 +51,12 @@ record who assigned them and under which pass. A judged field without that pair
 is unattributable and the pair with nothing judged is a claim about nothing, so
 neither half loads alone.
 
-**`context` is not a field here, and the absence is deliberate.**
-`visual_planner.NumericFact` carries a whitespace-cleaned window of the words
+**`context` is not a field here, and the absence is deliberate.** The retired
+planner's `NumericFact` carried a whitespace-cleaned window of the words
 around a number. This shape replaces that derived string with a pointer:
 `sentence_index` plus the span says where the words are, and `Article.text`
 still holds them, so nothing stores a second copy of the reader's sentence.
-`NumericFact.context` is untouched by this module and retires with its producer.
+That derived string retired with its producer.
 
 Six kinds land here and two of them have a producer. A kind with no producer is
 legal and simply never appears, which is cheaper than widening a persisted shape

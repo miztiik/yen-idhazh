@@ -2,10 +2,9 @@
 # Sample what this job holds in memory, once every 15 seconds, until the server
 # it was given goes away.
 #
-# Two jobs of the daily run stand a llama-server up - `work` serves the
-# summarizer and `visuals` serves the visual planner - and both need the same
-# reading, so it is written once here rather than pasted into two `run:` bodies
-# (`CLAUDE.md` section 3). Everything it writes is read back by
+# One job of the daily run stands a llama-server up - `work` serves the
+# summarizer. The reading is written once here rather than pasted into a `run:`
+# body (`CLAUDE.md` section 3). Everything it writes is read back by
 # `RuntimeCountersRow.from_metrics_text`, which finds each column by name off
 # this file's own header.
 #

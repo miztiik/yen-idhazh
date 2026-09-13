@@ -424,14 +424,15 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
     assert loud[loud.index("-lv") + 1] == "4"
 
 
-def test_both_committed_roles_start_a_server_that_names_its_own_settings() -> None:
+def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> None:
     """The daily run prints the lines, or the check row 3 rests on has nothing to read.
 
-    Read off the committed config rather than restated, so a role that is left
-    quiet fails here rather than at 04:00 on a runner.
+    Driven off the roles the contract declares rather than a list here, so a
+    role that arrives or retires cannot leave this check naming the other set,
+    and a role that is left quiet fails here rather than at 04:00 on a runner.
     """
     settings = config.load(CONFIG_DIR)
-    for role in ("summarize", "visual_planner"):
+    for role in sorted(type(settings.app.models).model_fields):
         entry = getattr(settings.app.models, role)
         argv = server_argv(
             binary=Path("bin/llama-server"),

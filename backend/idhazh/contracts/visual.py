@@ -76,15 +76,11 @@ else, so the event text is the mark rather than a name for one.
 is `"<name>":[]` and a comma, so the nine role names cost 114 characters on a
 plan that fills none and the seven a `bar` leaves empty cost 87. Tokenized with
 the Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`,
-2026-09-09; Qwen3-4B, the configured planner, is the same tokenizer) that is
-**28 tokens** on the declining plan and **23** on the four-bar one, about 3.1
-tokens an empty role. At the 13.00 tok/s the 4B decodes at (`ubuntu-latest`,
-2026-08-22) that is 2.2 s and 1.8 s a plan; at the 6.01 tok/s the configured
-summarizer decodes at (`ubuntu-latest`, 2026-08-23) it is 4.7 s and 3.8 s. Over
-`run.safety_ceiling_per_run` (80) items it is 2.4 to 2.9 minutes of the 4B's
-`run.visual_planner_budget_minutes` (40), which is 6 to 7 percent of that budget
-and 8 to 10 percent on top of the 21.0 s an item the stage measured on
-2026-08-24.
+2026-09-09) that is **28 tokens** on the declining plan and **23** on the
+four-bar one, about 3.1 tokens an empty role. At the 6.01 tok/s the configured
+summarizer decodes at (`ubuntu-latest`, 2026-08-23) that is 4.7 s and 3.8 s a
+plan. The plan is decoded by call 2, behind the summary, so this sits inside
+`run.shard_timeout_minutes` (200) along with everything else an item costs.
 
 ## The worst-case decoded reply, in characters
 

@@ -1,6 +1,6 @@
 # 11 - One model, two calls
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 **Level**: 5 (the model pick, the trust boundary, and the call structure every later plan rests on)
 
 **Chain**: previous [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) | next [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md).
@@ -112,13 +112,38 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3e | The instructions move in front of the article | 3c | C5 | DONE #644 | p11-3e | #644 | worker |
 | 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | DONE #659 | p11-3f | #659 | worker |
 | 3g | Call 1's reply does not fit its own budget | - | C7 | DONE #652 | p11-3g | #652 | worker |
-| 3h | A two-call item that failed on call 1 reports no cost at all | 3g | C8 | PENDING | - | - | - |
+| 3h | A two-call item that failed on call 1 reports no cost at all | 3g | C8 | DONE #680 | p11-r6 | #680 | worker |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
 | 5b | Call 1 and call 2 run in the pipeline | 5, 3b, 3e | E2 | DONE #646 | p11-5b | #646 | worker |
-| 6 | The small model, its job and its cache go | 5b | F | ESCALATED #671 | p11-6b | #671 | worker |
+| 6 | The small model, its job and its cache go | 5b | F | DONE #680 | p11-r6 | #680 | worker |
 
-**Six rows are live and five are merged.** Rows 1, 2, 3, 3b and 4 shipped. **`parallel N = 4`, so up to four rows of this plan run at once; a ready row is held only when its `Files touched` list overlaps one already in flight.**
+**Every row of this plan has landed.** It is the record of how the two-call
+summariser was built rather than a queue of work.
+
+**Rows #6 and #3h landed together on 2026-09-13, in one commit, on the owner's
+ruling.** The ruling is one sentence: *"moving forward is the only way, if there
+are issues we fix them. no reverting back."* It overrules three things this plan
+had written down, and each one is named here so nobody re-argues a settled
+point. It overrules **the two-commit separation** - row #6's own text said the
+flip and the removal are the two commits Beck's two-hat rule separates, with a
+day's reading between them; the owner took one commit, so `run.two_calls_per_item`
+never ran a day in the on position and went away with the path it switched. It
+accepts **the 180-minute escalation trigger** in advance: the estimate below
+says the worst shard lands at 182 to 185 minutes, past the bar and under the
+200-minute timeout, and the owner's answer is that a real reading is what
+settles it and a fix follows if it bites. And it closes the **owner decision
+row #5b handed over** on how the flag's three numbers get read - they are read
+off the scheduled runs after the merge, not off a flag nobody turned on.
+
+**What is owed, and it is one reading.** The worst `work` shard in
+`state/runtime-counters.csv` over the seven days after this merged, against the
+180-minute bar, with the merge date named. Merged 2026-09-13. The estimate it
+checks is 182 to 185 minutes, built in section 7 from a cap-length call-1 prompt
+at the slowest recorded prefill of 9.43 tokens a second; it is an estimate and
+it is labelled one (Guardrail #10). `docs/reference/measurements.md` carries the
+same row under "What the two calls cost a work shard, measured rather than
+estimated".
 
 **Row #3h was added on 2026-09-13 by the worker closing known defect 19.** That defect was the single-call summarize stage writing a zero cost on a reply it refused. Sweeping for its call sites found the same symptom on this plan's flagged path, in a different function: `cli._two_calls_one_item`'s local `failed(...)` helper discards call 1's cost at three of its four sites. It is not the same fix, nobody is reading it wrong while `run.two_calls_per_item` is false, and it bites the day row #6 flips the flag. Ruled by Fowler, 2026-09-13, who refused the widening.
 
@@ -434,6 +459,13 @@ Row #3d rendered both prompts on the configured weights through the configured s
 
 ## 4g. Row #3h - A two-call item that failed on call 1 reports no cost at all
 
+**DONE, 2026-09-13, in row #6's commit.** It shipped there rather than ahead of
+it because the owner ruled one commit for the whole move, and this row's own
+text says it must land before the first two-call day - which is the day row #6
+created. `_split_the_cost` now takes `two: Completion | None`, `failed(...)`
+takes the call-1 completion when there is one, and the three sites in the table
+below hand it over. Slot 2 is left empty and the flat five are call 1's alone.
+
 **Added 2026-09-13 by the worker closing known defect 19, which found this while sweeping for that defect's call sites and was told not to widen into it.** Defect 19 was the single-call stage writing a zero cost on a reply it refused; it is closed, and `summarize.to_summary` now hands the reply to the failure path at all six sites that hold one. **This is the same symptom on the flagged path, and it is a different fix in a different function**, which is why it is a row here rather than part of that change.
 
 `cli._two_calls_one_item` has a local `failed(no_reply)` helper that calls `to_summary(article, None, ...)`. Three of its four call sites happen after call 1 has already returned and been paid for:
@@ -551,6 +583,38 @@ Adding call 1's 140-token label budget and call 2's 176-token plan half, plus th
 ---
 
 ## 7. Row #6 - The small model, its job and its cache go
+
+**DONE, 2026-09-13, and it shipped row #3h with it.** The owner ruled: *"moving
+forward is the only way, if there are issues we fix them. no reverting back."*
+That overrules the two-commit separation this row's own text set out, accepts
+the shard-clock escalation below in advance, and settles the owner decision row
+#5b handed over (`CLAUDE.md` section 0). What landed, in one commit:
+`run.two_calls_per_item` and the single-call branch of `stage_work` are gone, so
+the pair is what the stage does rather than what it can be asked to do;
+`models.visual_planner`, `run.visual_planner_budget_minutes` and
+`finetune.student` are gone; the `visuals` job, its cache role, its weights
+check, its server start and its counters row are gone from `digest.yml`;
+`backend/idhazh/prompts/visual_planner.txt` is deleted, and with it
+`stage_visual_planner`, `_plan_one_visual` and the seventeen functions in
+`visual_planner.py` that only the 4B request path could reach. Both rename maps
+retired with the keys they pointed at, and all six retired spellings are refused
+by name (decisions 5, 6 and 7).
+
+**`finetune.student` was deleted rather than re-pointed, which decision 3 did not
+anticipate.** Decision 3 says the student must be re-pointed in the same commit
+and decision 7 refuses pointing it at `summarize`, because teacher and student
+would then be one model. With one role left in `models` there is no third
+answer, so the knob went: **nothing read it.** `finetune.teacher` has two
+readers, `backend/utilities/data_wrangler.py` and `reference_set.py`, plus the
+notebook; `student` had none outside one test. Deleting it also dissolves
+decision 9's problem - the every-knob fixture now has one `finetune` role it
+cannot differ on rather than two.
+
+**What is owed.** The worst `work` shard in `state/runtime-counters.csv` over the
+seven days after this merged, against the 180-minute bar, with the merge date
+named. Merged 2026-09-13.
+
+Everything below is the record of how the row got here.
 
 **BLOCKED behind row #5b since 2026-09-12, and its `Depends-on` moved from 5 to 5b.** This row was dispatched and stopped on its own decision 1. **Call 2 does not run in the pipeline**, so it has replaced nothing and there is nothing to retire onto. Nothing under `backend/idhazh/` imports `classify.calls`; `stage_visual_planner` and the 4B are still the only producer of a `VisualDecision`, and they published 18 charts on 2026-09-10 and 17 on 2026-09-11. **The flag this row's scope opens by flipping does not exist** - `config/idhazh.json` carries no such knob and rows 1 to 5 never built one. Deleting the job today is this row's own rejected alternative 1. Ruled by Carmack and Fowler independently, 2026-09-12; both refused the widening as well as the deletion. Everything below is what this row still does, once row #5b lands.
 **Three of the four sentences above stopped being true when row #5b merged on 2026-09-12, and this is what stands in their place.** `cli.stage_work` imports `classify.calls` and dispatches both calls; the flag is `run.two_calls_per_item` and it is false in the committed config; `stage_visual_planner` returns without asking the 4B anything when it is true. What has NOT changed is decision 1: **no run has yet been taken with the flag on**, so call 2 has still replaced nothing in production and the three oracle numbers are still unread. Turning the flag on is an owner decision row #5b hands over rather than takes, and **this row may not flip it as a step of its own** - the flip and the removal are the two commits Beck's two-hat rule separates, and the first of them needs a day's reading between it and the second.

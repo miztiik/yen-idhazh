@@ -682,8 +682,10 @@ no row of plan 12. It is written here so the distill picks it up.
 **Which prompt asks what.** Call 1 labels what is in the item - what its
 already-extracted quantities and dates mean - and never asks for a picture. Call
 2 asks for two things in one reply, in this order: the summary first, then the
-plan for one picture. `prompts/visual_planner.txt` and `prompts/summarize.txt`
-are the single-call pair these two replace, and row 6 of plan 11 deletes them.
+plan for one picture. `prompts/summarize.txt` is the single-call prompt these
+two replace, and it is still what `validate` and the qualification harness send.
+`prompts/visual_planner.txt` asked the retired small model for a picture and was
+deleted by row 6 of plan 11.
 
 **A prompt file is named for what it asks the model to produce, not for its
 position in the sequence.** Both files carried their call number as their name
@@ -756,11 +758,11 @@ ceiling would leave no window for the article it is summarising.
 tokens a second the configured summarizer decodes at on `ubuntu-latest`
 (2026-08-23), 4,694 tokens is 13.0 minutes, against a
 `models.summarize.inference.request_timeout_minutes` of 22.1 and a
-`run.visual_planner_budget_minutes` of 40. So a single reply that ran to the
-brake would not trip the request timeout, and three of them would spend the
-whole stage budget. The grammar closes the object long before that on every
+`run.shard_timeout_minutes` of 200. So a single reply that ran to the
+brake would not trip the request timeout, and fifteen of them would spend the
+whole shard. The grammar closes the object long before that on every
 reply seen so far - the two committed plan fixtures are a fifth and a tenth of
-the plan's own ceiling - but the wiring row is where that stops being a
+the plan's own ceiling - but this is where that stops being a
 reassurance and starts being something to watch.
 
 ### Call 1's budget, and why it converts differently
@@ -1049,8 +1051,8 @@ template off `/props`, which no longer renders those two prompts, and
 `turn_markers.json` would have moved every output while the record said the ask
 held still - and after 2026-09-12 that is a missing reading rather than a wrong
 skip, because nothing skips. It could not bite while no stage dispatched either
-call, and it bites on the first run under `run.two_calls_per_item`. **Under that
-flag `build_inputs` is handed `classify.calls.prompt_inputs` instead**: one
+call, and it bites on every run since `stage_work` started sending the pair.
+**`build_inputs` is handed `classify.calls.prompt_inputs`**: one
 argument at one call site, and it covers the markers, all four prompt files and
 the turn order together. It is not one item's rendered prompt - a digest that
 moved per item could not answer the question the record exists to answer - so

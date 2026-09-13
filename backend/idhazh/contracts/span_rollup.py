@@ -8,8 +8,8 @@ record, and only five, because the row exists to hold what no ledger already
 holds.
 
 **The other six are left out because a ledger column already times them.**
-`fetch`, `extract`, `summarize`, `score` and `visual_planner` each own a `*_ms`
-column - `fetch_ms`, `extract_ms`, `summarize_ms` on the item-health row,
+`fetch`, `extract`, `summarize`, `score` and the picture decision each own a
+`*_ms` column - `fetch_ms`, `extract_ms`, `summarize_ms` on the item-health row,
 `score_ms` on the eval row, `decision_ms` on the visual decision. `model_call`
 is `prefill_ms` plus `decode_ms`, reported by the model server after the call
 returned. Committing any of those here would be a second account of a number a

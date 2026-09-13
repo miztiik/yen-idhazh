@@ -459,12 +459,13 @@ under `$lib/server/` for the same reason `model-work.ts` is. Nothing is served
 and no column is published: `state/` is not part of the site, and the figures
 below reach a page as numbers, never as rows.
 
-**This page is the `work` series, and the ledger has held two since
-2026-09-12.** The `visuals` job files a row of its own for the visual planner it
-serves, and `publish_machine.PUBLISHED_JOB` keeps it out of the published
+**This page is the `work` series, and the ledger held two between 2026-09-12 and
+2026-09-13.** The `visuals` job filed a row of its own for the small model it
+served, and `publish_machine.PUBLISHED_JOB` keeps it out of the published
 mirror: the figures below pool a run's tokens over a run's seconds, and the two
-jobs serve different weights, so one pooled rate over both would describe no
-model. The planner's own row is read from `state/` by hand, not drawn here.
+jobs served different weights, so one pooled rate over both would describe no
+model. Plan 11 row #6 retired that job, so `work` is the only series a run
+appends to now and the older rows are read from `state/` by hand.
 
 Since 2026-08-31 `/console/machine/` draws them
 ([console.md](console.md#what-the-hardware-route-draws)). Before that the

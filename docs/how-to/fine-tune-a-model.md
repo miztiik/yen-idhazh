@@ -397,7 +397,6 @@ All in the `finetune` block of `config/idhazh.json`.
 | Knob | Default | What it costs |
 | --- | --- | --- |
 | `teacher` | `summarize` | a key in `models`, never a model name |
-| `student` | `visual_planner` | a key in `models` |
 | `corpus_rows` | 2000 | storage and history: 2.9 KB compressed per row |
 | `train_rows` | 1000 | GPU hours. A **ceiling**, not a demand |
 | `min_rows` | 500 | nothing trains below it, and a repair refuses to cut past it |

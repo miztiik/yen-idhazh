@@ -111,11 +111,9 @@ the two committed shards with every timed row populated, twelve cells cost
 **72.9 and 80.1 percent more gzipped** against **35.3 and 40.8 percent** for the
 seven that ship.
 
-**The small model's visual-planner call is not in any of this.** It runs in the
-`visuals` job, hours after the census row for that item was committed, so no
-per-item cell can reach it; what that job costs per run is in
-`state/runtime-counters.csv`. The gap closes on its own when plan 11 row #5b
-puts both calls in `stage_work`.
+**The picture costs nothing outside these cells.** Call 2 writes the summary and
+the plan in one reply, so what a picture cost is already inside the call-2
+columns; there is no second model call for an item, and no second job.
 
 **The split accounts for all but 0.066 percent of the call.** `summarize_ms` is
 our stopwatch around the HTTP request; `prefill_ms + decode_ms` is what the
@@ -247,29 +245,26 @@ tokens of pointer stay behind, which is what the row's floor exists to say.
 them are this page's own measured rate rather than the laptop the counts came
 from.
 
-## Which stage sends the two calls, and the knob that decides
+## Which stage sends the two calls
 
 Until 2026-09-12 nothing sent them. The two calls, the gate in front of them,
 the ladder below them and the renderer at the end were all built and none of
 them was reachable from a stage: `work` made one summarizer call an item and the
 separate `visuals` job drew the pictures on the small model.
 
-**`run.two_calls_per_item` is the switch, and it is false in the committed
-config.** False is exactly today's pipeline. True makes `work` send call 1 and
-then call 2 **adjacently, per item**, and that adjacency is a correctness rule
-rather than a layout taste: `models.summarize.inference` pins `n_parallel` to 1,
-so the server holds one cache slot, and every call 1 first with every call 2
-afterwards would evict the prefix before it was reused - on every item, with
-nothing in any log to say so. With the flag on, `visuals` decides nothing,
-because `work` has already decided every item it could.
+**`work` sends both, adjacently, per item**, and that adjacency is a correctness
+rule rather than a layout taste: `models.summarize.inference` pins `n_parallel`
+to 1, so the server holds one cache slot, and every call 1 first with every call
+2 afterwards would evict the prefix before it was reused - on every item, with
+nothing in any log to say so.
 
-**The flag is the first of two commits.** Plan 11 row #6 is the second: it
-deletes the flag, the small model, the `visuals` job and the old path together.
-Until then the flag off has to leave the pipeline where it was, which is what
-`backend/tests/test_pipeline.py::TestTheFlagOffLeavesTodaysPipelineWhereItWas`
-holds.
+**There is no flag and no second path.** `run.two_calls_per_item` switched
+between the two for one day. Plan 11 row #6 deleted the knob, the small model,
+the `visuals` job and the single-call branch of `stage_work` in one commit, so
+the pair is what the stage does rather than what it can be asked to do. Owner
+ruling, 2026-09-13: move forward, no rollback.
 
-**The pipeline stamp digests a different prompt under the flag.** The stamp
+**The pipeline stamp digests a different prompt now.** The stamp
 hashes the chat template read off `/props`, and the two calls render their own
 bytes, so that template no longer reaches what the model reads and
 `backend/idhazh/prompts/turn_markers.json` does. `classify.calls.prompt_inputs`
@@ -287,7 +282,8 @@ so the reading is one comparison over that ledger. The second is call 2's
 decode: its output budget is 4,694 tokens and the one reply ever measured was
 327, and a reply at half the budget is 143 minutes of call 2 alone on a 20-item
 shard. The third is the worst `work` shard against the 180-minute bar in
-`state/runtime-counters.csv`. All three need a run with the flag on.
+`state/runtime-counters.csv`. All three are read off the first scheduled runs
+after row #6 merged.
 
 ## The write rate still falls through a run, and the cause is the ordering
 

@@ -8,27 +8,24 @@ The rule this subsystem serves is in [`../../concepts/digest.md`](../../concepts
 visual must carry a fact the sentence beside it does not. A picture that decorates is worse than
 no picture, because the product is trust and an invented axis label costs it permanently.
 
-## The stage runs on its own model, in its own pass
+## One model, one pass, inside `work`
 
-Visual planning is a separate CLI stage from `work`, not a step inside it:
+There is no separate visual stage and no second model:
 
 ```
-idhazh work --date <D> # the 8B summarizes
-idhazh visuals --date <D> # the 4B plans a visual and renders it
+idhazh work --date <D> # two calls an item: labels, then the summary and the plan
 idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
-One llama-server serves one set of weights, and classification is the easy task, so the planner
-runs on Qwen3-4B while the summarizer keeps the 8B. Splitting the stage also means **a run that
-never starts a planner still publishes.** Every item simply carries no picture, which is already
-the common and correct answer.
+Call 2 writes the summary and the plan in one reply, so the same model that read the article
+decides the picture and `work` draws it while it still holds the text.
 
-**`run.two_calls_per_item` folds the whole of it back into `work`, and it is false today.** With
-the flag on, the summarizer's second call writes the summary and the plan in one reply, so `work`
-decides the picture and draws it while it still holds the article; `idhazh visuals` then runs,
-finds that every item is already decided, and returns without asking the small model anything.
-Which is the point - a second pass would overwrite a decision drawn from the **article** with one
-drawn from a summary of it, and both payloads validate, so nothing would say it had happened.
+**It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
+summarizer had finished, decided a picture from the summary, and rendered it in a job of its own.
+Plan 11 row #6 deleted that stage, the job, the model and the flag that switched between the two
+paths, in one commit (owner ruling 2026-09-13: move forward, no rollback). The reason the pass
+moved is that a second pass decides from a **summary of** the article rather than from the
+article, and both payloads validate - so nothing would say it had happened.
 
 Two things follow from `work` being the job that draws. It is sharded four ways, so four runners
 render a quarter of the day each instead of one runner rendering all of it against a budget; and
@@ -151,22 +148,19 @@ text is the mark rather than a name for one.
 
 **What that costs, measured.** An empty role is `"<name>":[]` and a comma. The nine role names cost
 114 characters on a plan that declines and the seven a `bar` leaves empty cost 87. Tokenized with the
-Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`, 2026-09-09; Qwen3-4B, the
-configured planner, uses the same tokenizer) that is 28 tokens and 23 tokens, about 3.1 tokens an
-empty role.
+Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`, 2026-09-09) that is 28 tokens and
+23 tokens, about 3.1 tokens an empty role.
 
 | At | Declining plan, 9 empty | Eight-bar plan, 7 empty | Over 80 items |
 | --- | --- | --- | --- |
-| 13.00 tok/s, Qwen3-4B, `ubuntu-latest`, 2026-08-22 | 2.2 s | 1.8 s | 2.4 to 2.9 min |
 | 6.01 tok/s, the configured summarizer, `ubuntu-latest`, 2026-08-23 | 4.7 s | 3.8 s | 5.1 to 6.2 min |
 
 Eighty is `run.safety_ceiling_per_run` and is the most items a run plans for, so the run figure is an
-upper bound - an item the reachability predicate refuses never reaches the model at all. On the 4B it
-is 6 to 7 percent of the 40-minute `run.visual_planner_budget_minutes`, and 8 to 10 percent on top of
-the 21.0 s an item this stage measured on `ubuntu-latest`, 2026-08-24 over 148 items. `digest.yml`
-fires five scheduled runs a day, so the day's ceiling is 400 plans: 12 to 14 minutes of runner
-wall-clock on the 4B, 26 to 31 on the summarizer. The worst-case reply ceiling did not move: it
-already counted every declared key, because a grammar-constrained decoder emits them all.
+upper bound - an item the reachability gate refuses never reaches call 2's plan half at all.
+`digest.yml` fires five scheduled runs a day, so the day's ceiling is 400 plans: 26 to 31 minutes of
+runner wall-clock, spread over four shards rather than paid serially. The worst-case reply ceiling
+did not move: it already counted every declared key, because a grammar-constrained decoder emits
+them all.
 
 ## The validator refuses, and each check refuses on its own
 
@@ -563,11 +557,12 @@ whole reply is **327 tokens**, the summary alone is **152**, and the plan half i
 plan is 54 percent of what an ordinary reply decodes. At the 6.01 tok/s the summarizer decodes at
 (`ubuntu-latest`, 2026-08-23) that is **29.3 seconds an item**, on the items the gate fires for.
 **It is one reply and not a distribution**: the fixture is written by hand, so this sizes the saving
-rather than measuring a run, and no run has read one - the stage that dispatches call 2 shipped on
-2026-09-12 behind `run.two_calls_per_item`, which is off. (176 by direct count and 175
+rather than measuring a run, and no run had read one when it was written - the stage that dispatches
+call 2 shipped on 2026-09-12 behind a flag, and the flag went away with the old path on 2026-09-13.
+(176 by direct count and 175
 by subtracting the summary from the whole - the one-token gap is a merge across the object
-boundary.) How often the gate fires is the other half of the bill and is a run measurement nobody
-has taken on the two-call flow; the single-call gate's own rate was 46.9 percent of items, measured
+boundary.) How often the gate fires is the other half of the bill and is a run measurement still
+owed on the two-call flow; the single-call gate's own rate was 46.9 percent of items, measured
 on 2026-08-25.
 
 **The prompt loses its plan half too, and that is the same rule read a second time.** A turn that
@@ -720,13 +715,17 @@ instrument is `visual_keep_rate` at depth 1 or more against depth 0, and it need
 and the ledger behind it, so the criterion cannot fire until both exist. Writing the line down first
 is what stops the number being argued after it is seen.
 
-## The stage stops itself before the job does
+## The stage stopped itself before the job did
 
-The stage's wall-clock is `items with an OK summary x per-item cost`, and neither factor was
-bounded. The first is set by how well the summarizer did, up to `run.safety_ceiling_per_run`
-(200). The second is set by whichever host the runner gave us: measured mean **20.7 s on a fast
+**This section is history.** The separate stage, its job and its clock retired on 2026-09-13, and a
+picture is now decided inside the shard that read the article. It is kept because the defect it
+records is a property of any long job that hands its only copy of its output to an upload step.
+
+The stage's wall-clock was `items with an OK summary x per-item cost`, and neither factor was
+bounded. The first was set by how well the summarizer did, up to `run.safety_ceiling_per_run`
+(200). The second was set by whichever host the runner gave us: measured mean **20.7 s on a fast
 host and 40.3 s on a slow one**, over six runs and 703 items on 2026-08-24/25. A 145-item day
-therefore needs anywhere from 50 to 97 minutes against a 50-minute job.
+therefore needed anywhere from 50 to 97 minutes against a 50-minute job.
 
 What happened when it went over is the part that made the defect invisible. A job cancelled at its
 timeout **skips any step without an explicit condition**, and the `visuals` artifact upload was one
@@ -800,10 +799,10 @@ planner reply asked for a chart, whatever the decision became, so the gap betwee
 published charts is exactly what the two controls below rejected. Without it a model that stops
 asking for charts and checks that start refusing them are the same number.
 
-**The summarizer swap on 2026-08-27 moved an input the window sits on.** The planner runs on its own
-Qwen3-4B and that model did not change, but the user turn it reads carries the summary text as well
-as the article's opening and the indexed numbers - so a different summarizer writes a different
-question, and `charts_drafted` can move with no planner change at all. The 6.2% and 4.4 minutes
+**The summarizer swap on 2026-08-27 moved an input the window sits on.** The planner ran on its own
+Qwen3-4B and that model did not change, but the user turn it read carried the summary text as well
+as the article's opening and the indexed numbers - so a different summarizer wrote a different
+question, and `charts_drafted` could move with no planner change at all. The 6.2% and 4.4 minutes
 measured on 2026-08-25 were taken on the retired incumbent's summaries. Read the fourteen-day window
 from days after the swap, and treat a step at the swap date as a changed input rather than a
 verdict. The mark that would make that step visible on the console is not built
@@ -830,7 +829,7 @@ request. Drafted against published is the two post-model controls. A single funn
 make the last stage the shortest and hardest to read, and the last stage is where the decision sits -
 so it is a table.
 
-**A number that does not exist prints a dash, never a zero.** A day whose visuals job never ran
+**A number that does not exist prints a dash, never a zero.** A day on which nothing was decided
 reached zero items, which is a measurement and prints as `0`. It spent no measured minutes, which is
 not the same as spending none - `route_ms` is null on that manifest, and `0.0` there would read as a
 stage that was free. A day with no published chart has no per-chart cost, so that cell is a dash
@@ -1114,7 +1113,7 @@ not chart quantities that measure different things" were requests. A request is 
 4B reading an article that mentions years. Both are now enforced - the first in the extractor, the
 second after the model answers - and the prompt is shorter for it.
 
-**Why the planner skips a call rather than running faster.** Measured 2026-08-24 on `ubuntu-latest`
+**Why the planner skipped a call rather than running faster.** Measured 2026-08-24 on `ubuntu-latest`
 (run `32742672105`): 47 s of fixed cost, a 3155 s stage, 149 items at a mean of 21.0 s each, and 15
 charts out of 149. Nine calls in ten produced nothing. Removing a call whose outcome is decided is
 not an optimisation of the model; it is deleting work that could not have mattered. Everything else
@@ -1188,8 +1187,9 @@ Bash never learns what an item id means (Guardrail #3).
 existed and already logged when the stage went over. It fired after the fact, into a log nobody
 reads until a reader notices a day with no pictures - and by then the run had already been
 cancelled and had already binned its artifact. A warning that only ever describes a loss is not a
-control. The same field now stops the loop, which is the smallest change that makes the job fit its
-bound by design instead of by which host it drew (Guardrail #2).
+control. The same field then stopped the loop, which was the smallest change that made the job fit its
+bound by design instead of by which host it drew (Guardrail #2). The knob retired with the stage on
+2026-09-13.
 
 **Two things about the 2026-08-24 repair are not in the record above.** Authority: owner,
 2026-08-27.

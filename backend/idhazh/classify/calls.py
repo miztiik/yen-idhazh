@@ -16,9 +16,9 @@ everything behind the break is read again - 100 tokens an item, measured on the
 configured weights 2026-09-12. Call 2's reply carries the summary first and the
 plan second, and that order is the recovery: a decode the output budget cuts is
 cut in the plan, and the summary behind it is already closed. Both calls are
-built here and `idhazh.cli.stage_work` dispatches them, adjacently per item,
-when `run.two_calls_per_item` is on; the gate in front of them and the picture
-they lead to are wired at that same call site.
+built here and `idhazh.cli.stage_work` dispatches them, adjacently per item;
+the gate in front of them and the picture they lead to are wired at that same
+call site.
 
 **Each call's output budget is derived from its own grammar.** Neither is the
 summariser role's `max_output_tokens`, which is sized for a summary and knows
@@ -101,8 +101,8 @@ PLAN_HALF_PROMPT_PATH: Final = PROMPTS / "plan_visual.txt"
 POINTER_PROMPT_PATH: Final = PROMPTS / "write_about_the_item.txt"
 
 #: Each module that reads a raw model reply keeps its own two-line cleaner,
-#: as `summarize` and `visual_planner` do. One shared cleaner is worth having
-#: and is not this row's to make.
+#: as `summarize` does. One shared cleaner is worth having and is not this
+#: row's to make.
 _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 

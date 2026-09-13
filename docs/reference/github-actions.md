@@ -165,16 +165,15 @@ all and the 10:20 slot started at 12:50, two and a half hours late. Read
 `gh run list --workflow digest.yml` for what actually exists rather than working
 from the cron.
 
-Guardrail #2 allows 20 concurrent jobs. Eight workers plus the visuals job is nine,
-and `visuals` waits on `work` rather than racing it, so the ceiling is nowhere
-near
+Guardrail #2 allows 20 concurrent jobs. Eight workers is eight, so the ceiling
+is nowhere near
 the platform limit. Every shard restores the same cache key, so more shards buy
 more restores and never more cache bytes.
 
 The derivation runs in its own `fanout` step after `Plan the day`, because there
 is no planned item count before the plan exists. `jobs.plan.outputs.shards` and
 `jobs.plan.outputs.matrix` both read that step; `date` and `faithfulness` still
-come from `decide`, the four model refs come from `models`, and
+come from `decide`, the three model refs come from `models`, and
 `shard_timeout_minutes` comes from `bounds`. Everything a job needs before its
 first step travels as a job output, because `needs` resolves there and `steps`
 does not.
@@ -190,8 +189,7 @@ value and nothing else, so changing the config number changes the bound.
 Each worker checks its weights before it starts the server. `sha256sum` compares
 the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a
 cache hit as well as a miss, because a restored cache entry is the one case where
-nobody watched the bytes arrive. The visuals job does the same against
-`models.visual_planner.sha256`; so do the two measurement jobs that load the summarizer.
+nobody watched the bytes arrive. So do the two measurement jobs that load the summarizer.
 The rule is written once, under
 [Every download fails loudly, and every weight is checked](#every-download-fails-loudly-and-every-weight-is-checked).
 The health check then asserts that
@@ -199,16 +197,14 @@ The health check then asserts that
 configured filename. A shard that fails either one stops before it summarizes
 anything.
 
-The visuals job uses the worker outputs. Assemble runs even after a worker or a
-visuals failure, then commits the digest and state.
+Assemble runs even after a worker failure, then commits the digest and state.
 
 ```mermaid
 flowchart LR
  SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
  MANUAL["manual dispatch"] --> PLAN
  PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
- WORK --> VISUALS["visuals"]
- VISUALS --> ASSEMBLE["assemble"]
+  WORK --> ASSEMBLE["assemble"]
  ASSEMBLE --> COMMIT["commit digest and state"]
  COMMIT --> COMPLETE["Content refresh completed"]
  COMPLETE --> PAGES["Pages publication"]
@@ -292,8 +288,8 @@ producer would ever write.
 
 `REFRESH_PATHS` names what the rebuild owns: the day's `digest.json` and
 `run.json`, `frontend/public/telemetry/`, and the four ledgers the workers and
-assemble append to. It never names the day's directory. The visuals artifact
-unpacks this run's rendered charts into that same directory and no producer in
+assemble append to. It never names the day's directory. The `shard-visuals-*`
+artifacts unpack this run's rendered charts into that same directory and no producer in
 the assemble job can make them again, so the two payload files are named one at a
 time. `frontend/public/telemetry/` is a full rewrite of `state/item-health/`,
 which is why it is regenerated and not unioned: a union of two rewrites is a file
@@ -346,7 +342,7 @@ re-runs the code at the tip, and the per-item payloads on the runner's disk were
 written hours earlier by the code the run started with. If the two disagree about
 a field, the reader raises where nothing is wrong with the data.
 
-Measured on run `33951249328`, 2026-09-05. The `visuals` job wrote its per-item
+Measured on run `33951249328`, 2026-09-05. The then-separate `visuals` job wrote its per-item
 payloads at 08:23:21. `assemble` committed at 09:03:08, lost the push at
 09:03:09, rebased `a6acdb6..b68f625`, printed `rebuilding the day against
 origin/main`, and raised:
@@ -609,12 +605,11 @@ watched the bytes arrive - so it is the case that most needs the check.
 | Workflow and job | Weights | Digest read from |
 | --- | --- | --- |
 | `digest.yml` / `work` | the summarizer | `models.summarize.sha256` |
-| `digest.yml` / `visuals` | the visual planner | `models.visual_planner.sha256` |
 | `measure.yml` / `runtime` | the summarizer | `models.summarize.sha256` |
 | `measure.yml` / `batched` | the summarizer | `models.summarize.sha256` |
 | `validate.yml` / `qualify` | the candidate | the `plan` job's `candidate_sha256` |
 
-The four config digests are the same field, `ModelRef.sha256` in
+The three config digests are the same field, `ModelRef.sha256` in
 `config/idhazh.json`. `validate.yml` is the one exception, and deliberately: an
 operator can point it at a model config does not name, so its `plan` job decides
 the digest once - from the dispatch input, or from config when there is none -
@@ -627,14 +622,14 @@ downloads weights fails the test until it carries the same pair of steps.
 
 ## One place writes a production model ref, and it is config
 
-`config/idhazh.json` holds `models.summarize` and `models.visual_planner`. None of the
+`config/idhazh.json` holds `models.summarize`. None of the
 three workflows that load weights - `digest.yml`, `measure.yml`, `validate.yml` -
 holds a model repository, a weights filename or a publisher name of its own.
 Grepping all three for a `.gguf` name, a Hugging Face repository or a branch in a
 download path returns nothing, and a workflow contract test asserts exactly that.
 
 Each one reads config in a `models` step and publishes job outputs. `digest.yml`
-does it inside `plan`, which `work` and `visuals` already need; `measure.yml` has
+does it inside `plan`, which `work` already needs; `measure.yml` has
 a small `models` job of its own that every target depends on; `validate.yml`
 resolves the candidate once inside `plan`. **The `needs` context resolves before
 a job's first step while `steps` does not**, which is the whole reason the refs
@@ -891,7 +886,7 @@ Verified 2026-08-20.
  every step that carries no condition.** `if: failure` does not run either -
  only `if: always` does. So an artifact upload written the ordinary way is
  silently dropped exactly when a long job most needed to hand over what it
- made. Observed 2026-08-25 on the job now called `visuals` in `digest.yml`, run
+  made. Observed 2026-08-25 on the since-retired `visuals` job in `digest.yml`, run
  `32804437110`: the step list records the render step as `cancelled`, the log
  upload (which has `always`) as `success`, and the decisions upload as
  **`skipped`**.
@@ -900,15 +895,14 @@ Verified 2026-08-20.
  needs `if: always`.**
 - **A pipeline intermediate is gone within two days, so "re-render the day from
  its decisions" is not a repair option for any day older than 24 hours.** Verified
- 2026-08-27. `digest.yml` sets `retention-days: 1` on the `visuals` upload, the
- one that carries `backend/var/run/<date>/items/*.visual.json` and
- `frontend/public/digest/`; `plan` and `items-<shard>` are also 1, and
- `visual-planner-log` and `runtime-log-<shard>` are 2. Nothing under `backend/var/` is
+ 2026-08-27. `digest.yml` sets `retention-days: 1` on `plan`, `items-<shard>`
+ and `shard-visuals-<shard>` - the last of which carries this run's rendered
+ charts - and 2 on `runtime-log-<shard>`. Nothing under `backend/var/` is
  committed either: `.gitignore` line 47 is `backend/var/`, and
  `git ls-files backend/var` returns no files. **The committed record of a run
  is the digest under `frontend/public/digest/` plus the rows under `state/`,
- and never the intermediates.** Repairing an older day therefore means planning
- its visuals again and paying the `visuals` stage again - there is no cheaper
+ and never the intermediates.** Repairing an older day therefore means reading
+ its articles again and paying the whole work stage again - there is no cheaper
  path, and a
  plan that assumes one is proposing something that cannot be done. Job *logs*
  are the exception: they outlive every artifact here, which is why a question
@@ -917,9 +911,9 @@ Verified 2026-08-20.
  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
  again from its first step; there is no way to resume at the step that failed.
  That is survivable here only because the expensive jobs are separate: a failed
- `assemble` re-runs alone - 82 s in run `33270983446` - while `plan`, the four
- `work` shards and `visuals` keep their results and are not repeated. It works
- for one day, because the `plan` and `visuals` artifacts it downloads carry
+ `assemble` re-runs alone - 82 s in run `33270983446` - while `plan` and the
+ `work` shards keep their results and are not repeated. It works
+ for one day, because the artifacts it downloads carry
  `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
  workflow file as the original event**, so it cannot pick up a fix that landed
  afterwards, and a job that failed against a `main` which has since moved will

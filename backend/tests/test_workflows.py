@@ -184,12 +184,6 @@ WEIGHTS_CHECKS: Final = {
         "Start the model",
         '["models"]["summarize"]["sha256"]',
     ),
-    ("digest.yml", "visuals"): (
-        "Fetch runtime and visual planner weights",
-        "Verify the visual planner weights",
-        "Start the visual planner",
-        '["models"]["visual_planner"]["sha256"]',
-    ),
     ("measure.yml", "runtime"): (
         "Fetch runtime and weights",
         "Verify the weights",
@@ -218,9 +212,6 @@ MODEL_REF_OUTPUTS: Final = (
     "summarize_repo",
     "summarize_revision",
     "summarize_file",
-    "visual_planner_repo",
-    "visual_planner_revision",
-    "visual_planner_file",
 )
 MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
 # What the daily run used to call them at workflow scope. Named here so the
@@ -236,7 +227,7 @@ MODEL_ENV_NAMES: Final = frozenset(
     }
 )
 # The weights cache jobs, and the config role each one serves.
-WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "visuals": "visual_planner"}
+WEIGHTS_CACHE_ROLES: Final = {"work": "summarize"}
 # Bumped from v3 when the weights half of the key moved off the workflow `env`
 # copy, so the first run after that lands refetches once instead of restoring an
 # entry nobody can attribute.
@@ -255,7 +246,6 @@ MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime", "ba
 # not a measurement (Guardrail #10).
 RUNTIME_IDENTITY_JOBS: Final = {
     "work": ("llama-server.log", "summarize_file"),
-    "visuals": ("visual-planner.log", "visual_planner_file"),
 }
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
 # One loopback port per workflow, declared once. `server_argv` binds it, every
@@ -270,13 +260,11 @@ LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 # here until it appears with an install ahead of it.
 SERVER_STARTERS: Final = {
     ("digest.yml", "work"): ("Start the model", "config"),
-    ("digest.yml", "visuals"): ("Start the visual planner", "config"),
     ("measure.yml", "runtime"): ("Measure runtime candidate", None),
     ("validate.yml", "qualify"): ("Start the candidate", "backend/var/candidate-config"),
 }
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
     "work": ("Prompt cache log summary", "llama-server.log"),
-    "visuals": ("Visual planner cache log summary", "visual-planner.log"),
 }
 # Four llama-server lines, copied from the captures under
 # `tests/fixtures/runtime/` and then edited in one place each: the second
@@ -399,14 +387,12 @@ COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 COMMIT_JOBS: Final = {
     "plan": "plan",
     "work": "work",
-    "visuals": "visuals",
     "assemble": "assemble",
     "fold": "assemble",
 }
 COMMIT_STEPS: Final = {
     "plan": "Commit what the plan saw",
     "work": "Commit what this shard measured",
-    "visuals": "Commit what the visual planner counted",
     "assemble": "Commit the day",
     "fold": "Commit the folded telemetry",
 }
@@ -426,10 +412,6 @@ COMMIT_SCRIPT_ENV: Final = {
     # so a second attempt cannot see the first attempt's pushed rows and the
     # union keeps both - which is what the post-merge pass is for.
     "work": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
-    # One row, from a job that runs after every work shard has pushed. It still
-    # settles, for the same reason: a second attempt at this job cannot see the
-    # row the first attempt pushed, and the union merge keeps both.
-    "visuals": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
     "assemble": COMMIT_BASE_ENV
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
     "fold": COMMIT_BASE_ENV,
@@ -446,9 +428,6 @@ COMMIT_STAGED_PATHS: Final = {
         "state/score-index",
         "state/runtime-counters.csv",
     ],
-    # One file. The visuals job measures one server and writes one row, and the
-    # `job` cell on it is what keeps that row out of the work shards' record.
-    "visuals": ["state/runtime-counters.csv"],
     "assemble": [
         "frontend/public/digest",
         "frontend/public/telemetry",
@@ -524,22 +503,17 @@ CONSOLE_SEED: Final = tuple(
 # is committed by the step after it.
 COUNTERS_STEP: Final = "What the server counted"
 COUNTERS_COMMAND: Final = "python -m idhazh counters"
-# The same three steps in the visuals job, which took none of these readings
-# until 2026-09-12 - so every live-path figure on record belonged to the
-# summarizer and none to the visual planner.
-VISUALS_CLOCK_STEP: Final = "Stamp the visuals clock and the host"
-VISUALS_SAMPLE_MEMORY_STEP: Final = "Sample visuals memory"
-VISUALS_COUNTERS_STEP: Final = "What the visual planner counted"
-VISUALS_MEMORY_SUMMARY_STEP: Final = "What memory the visual planner used"
-VISUALS_SERVER_LOG_FILE: Final = "visual-planner.log"
-# The flag that says which job a row came from, and the two values in use. A row
-# that cannot say which job wrote it proves nothing: the two jobs serve
-# different weights, and they both spell shard 0 of the same run.
+# The flag that says which job a row came from. Only `work` stands a server up
+# now, and the flag stays because the committed ledger holds rows from the
+# retired visuals job: a row that cannot say which job wrote it proves nothing,
+# and the two jobs both spelled shard 0 of the same run.
 COUNTERS_JOB_FLAG: Final = "--job"
-COUNTERS_JOBS: Final = {"work": "work", "visuals": "visuals"}
+COUNTERS_JOBS: Final = {"work": "work"}
 # The two-row fixture the reader is driven over: one `work` row and one
 # `visuals` row, sharing a date, a run and a shard index. Fixed in size, and it
-# carries a case the committed ledger has never held (Guardrail #12).
+# carries a case the committed ledger has never held (Guardrail #12). The
+# `visuals` row is history - plan 11 row #6 retired that job - and the reader
+# still has to read it back.
 COUNTERS_FIXTURE: Final = FIXTURES_DIR / "runtime-counters" / "visuals-job-row.csv"
 # Deliberately not `--metrics`: that is llama-server's own flag, and
 # `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` forbids any
@@ -555,11 +529,6 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
 WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
-# The same pair in the visuals job. It is one rung further down: the work job
-# may not fail the shard, and this job may not fail at all - `continue-on-error`
-# on the whole job plus assemble's `always()` means a visual planner that never
-# started costs every item its picture and costs the day nothing.
-VISUALS_LEDGER_STEPS: Final = (VISUALS_COUNTERS_STEP, COMMIT_STEPS["visuals"])
 TOLERATED: Final = "true"
 COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
 #: Every file that configures git before a job commits. A runner carries no
@@ -587,9 +556,9 @@ EXPRESSION_VALUES: Final = {
     "matrix.shard": SUBSTITUTED_SHARD,
 }
 # What assemble hands back to origin's tip before it rebuilds. The day's own
-# directory is never in this list: the visuals artifact unpacks this run's
-# rendered charts into it, and no producer in the assemble job can make those
-# again, so the two payload files are named one at a time.
+# directory is never in this list: the `shard-visuals-*` artifacts unpack this
+# run's rendered charts into it, and no producer in the assemble job can make
+# those again, so the two payload files are named one at a time.
 COMMIT_REFRESH_PATHS: Final = {
     "assemble": [
         f"{SUBSTITUTED_DAY_DIR}/digest.json",
@@ -623,7 +592,7 @@ SETTLE_STAND_IN: Final = Path(__file__).with_name("settle_ledger.py")
 # directory, so it runs inside a temporary clone unchanged.
 DROP_ENTRY_POINT: Final = REPO_ROOT / "backend" / "utilities" / "drop_raced_assets.py"
 RUN_ARTIFACTS: Final = "backend/var/run"
-# One rendered chart, as the visuals job leaves it: an SVG in the day's directory
+# One rendered chart, as a work shard leaves it: an SVG in the day's directory
 # and a decision payload saying where it landed. The name is the item's own id,
 # so a path both runs hold is that one item rendered twice.
 RACED_ITEM_ID: Final = "energy-0000000001"
@@ -2477,49 +2446,8 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
                 )
 
 
-def test_the_visuals_artifact_collects_the_file_the_stage_writes() -> None:
-    """The upload glob and the Python writer are one pair, and only this holds them.
-
-    `idhazh.cli` files one decision per item under `backend/var/run/<date>/items/`,
-    and the `visuals` job hands them to `assemble` by globbing that suffix. The
-    upload carries `if-no-files-found: ignore` on purpose - the stage is allowed
-    to decide nothing - so a glob that no longer matches the writer uploads an
-    empty artifact, `assemble` receives no decisions, every item publishes with
-    no picture, and the run is green throughout. Nothing else in the repository
-    connects the two: the glob is YAML and the suffix is a Python name.
-
-    The second line is the run's own day, and this asserts that as well as the
-    first, because the two failures are opposite and both are silent.
-    `render.write.asset_relpath` files every chart under the day that names it,
-    so a line naming the whole tree sends every committed day back to Actions on
-    every run - a parcel that grows when nobody writes any code (Guardrail #12), and
-    it grew 6.36 to 6.66 MB over six runs on 2026-09-07/08. A line that narrows
-    past the day loses the charts instead, and the day publishes with none.
-    """
-    workflow = _load_workflows()["digest.yml"]
-    upload = _mapping(_artifact_upload(workflow, "visuals", "visuals").get("with"), "upload")
-    paths = _string_list(str(upload.get("path")).splitlines(), "visuals upload path")
-    globs = [_substitute(path.strip()) for path in paths if path.strip()]
-
-    # Closed, and in order, because both lines are load-bearing and each one
-    # fails silently on its own: the day line without the items line publishes a
-    # day with no pictures, and either line alone would move the artifact root
-    # off the repository root that `assemble` unpacks into with `path: .`.
-    assert globs == [
-        f"{RUN_ARTIFACTS}/{SUBSTITUTED_DATE}/items/*{PAYLOAD_SUFFIX}",
-        f"{SUBSTITUTED_DAY_DIR}/",
-    ], (
-        f"the visuals upload must glob *{PAYLOAD_SUFFIX}, which is what the stage "
-        "writes, and carry this run's day rather than the whole digest tree"
-    )
-    assert upload.get("if-no-files-found") == "ignore", (
-        "a stage that decided nothing must not fail the job - which is why the "
-        "glob above has to be checked here"
-    )
-
-
 def test_a_work_shard_hands_over_the_pictures_it_drew_itself() -> None:
-    """Under `run.two_calls_per_item` the work shards are the only job that draws.
+    """The work shards are the only job that draws, and their checkouts go away.
 
     Call 2 writes the summary and the plan in one reply, so `work` renders the
     picture on its own runner and its checkout is thrown away when the shard
@@ -2528,9 +2456,8 @@ def test_a_work_shard_hands_over_the_pictures_it_drew_itself() -> None:
     `assemble` publishes a payload naming an asset that is not there, which
     `_picture_faults` reports as a broken image on every story that got one.
 
-    Empty and green while the flag is off, which is why this is the only thing
-    connecting the two halves: no run exercises it until somebody turns the flag
-    on, and by then the wiring has to already be right.
+    Nothing else in the repository connects the two halves: one is YAML and the
+    other is where `render.write.asset_relpath` puts a file.
     """
     workflow = _load_workflows()["digest.yml"]
     upload = _mapping(
@@ -2543,7 +2470,7 @@ def test_a_work_shard_hands_over_the_pictures_it_drew_itself() -> None:
         "committed day back to Actions on every run"
     )
     assert upload.get("if-no-files-found") == "ignore", (
-        "the flag is off, so the glob matches nothing and must not fail the shard"
+        "a day where nothing was drawable matches nothing and must not fail the shard"
     )
 
     downloads = [
@@ -2690,7 +2617,7 @@ def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
     settling = [
         label for label, names in COMMIT_SCRIPT_ENV.items() if "DROP_REPEATED_ROWS_COMMAND" in names
     ]
-    assert settling == ["plan", "work", "visuals"]
+    assert settling == ["plan", "work"]
 
     for label in settling:
         settle = _commit_call(label)[1]["DROP_REPEATED_ROWS_COMMAND"].split()
@@ -3196,24 +3123,17 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         assert step.get("continue-on-error") == TOLERATED, (
             f"work step {name} must not fail the shard"
         )
-    for name in VISUALS_LEDGER_STEPS:
-        step = _step(workflow, "visuals", "name", name)
-        assert step.get("continue-on-error") == TOLERATED, (
-            f"visuals step {name} must not fail the job"
-        )
     # Closed-world, because a publish step that swallowed its own failure would
-    # publish nothing and report success. The one that was already here is
-    # assemble's visuals download: `visuals` is allowed to produce no artifact at
-    # all, and every item then publishes with no picture. The two fold steps join
-    # it for the harvest's reason: they run after the day is committed and touch
-    # only months past `observability.item_health_full_grain_months`, so the most
-    # a failure costs is one run's worth of bytes and the next run folds the same
-    # month again. The two visuals steps join it for the work job's reason, one
-    # rung down: this job cannot stop a publication at all, so a scrape or a push
-    # that fails there costs one reading and the day nothing. The review tree
-    # joins it one rung further out again: nothing downloads it, no gate reads
-    # it, and it is built after the day is committed - so the most a failure
-    # costs is one day's contact sheet, and the next run builds its own.
+    # publish nothing and report success. The two fold steps are here for the
+    # harvest's reason: they run after the day is committed and touch only
+    # months past `observability.item_health_full_grain_months`, so the most a
+    # failure costs is one run's worth of bytes and the next run folds the same
+    # month again. The picture download joins them because a day where nothing
+    # was drawable produces no `shard-visuals-*` artifact at all, and every item
+    # then publishes with no picture. The review tree joins it one rung further
+    # out again: nothing downloads it, no gate reads it, and it is built after
+    # the day is committed - so the most a failure costs is one day's contact
+    # sheet, and the next run builds its own.
     tolerant = {
         (job_name, step.get("name") or step.get("uses"))
         for job_name in _mapping(workflow.get("jobs"), "jobs")
@@ -3222,7 +3142,6 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     }
     assert tolerant == {
         *(("work", name) for name in WORK_LEDGER_STEPS),
-        *(("visuals", name) for name in VISUALS_LEDGER_STEPS),
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", HARVEST_STEP),
         ("assemble", FOLD_STEP),
@@ -4050,7 +3969,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
     assert _run_the_inline_program(script, REPO_ROOT) == {
         f"{role}_{field}": models[role][field]
-        for role in ("summarize", "visual_planner")
+        for role in set(WEIGHTS_CACHE_ROLES.values())
         for field in MODEL_REF_FIELDS
     }
 
@@ -4100,7 +4019,9 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
             f"-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
         ), job_name
 
-    assert keys["work"] != keys["visuals"], "one entry cannot hold two sets of weights"
+    assert len(set(keys.values())) == len(keys), "one entry cannot hold two sets of weights"
+
+
 def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
     """Production, the validation arm and the harness run one binary.
 
@@ -4367,7 +4288,6 @@ def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> No
 
     launched = {
         "work": (_work_step(SAMPLE_MEMORY_STEP), "llama-server.pid"),
-        "visuals": (_digest_step("visuals", VISUALS_SAMPLE_MEMORY_STEP), "visual-planner.pid"),
     }
     for job_name, (script, pid_file) in launched.items():
         assert f"bash {SAMPLE_SCRIPT.relative_to(REPO_ROOT).as_posix()}" in script, (
@@ -4704,15 +4624,17 @@ def test_the_counters_step_and_the_row_agree_on_what_it_reads() -> None:
 def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
     """The Oracle for row #P4. A row with no job name proves nothing.
 
-    Two jobs of the daily run stand a llama-server up and they serve different
-    weights - `work` the summarizer at Qwen3.5-9B, `visuals` the planner at
-    Qwen3-4B - and both spell shard 0 of the same run. So `(date, run_id,
-    shard)` names one record and describes two servers, and a reader pooling
-    them reports a rate that belongs to no model.
+    Two jobs of the daily run used to stand a llama-server up and they served
+    different weights - `work` the summarizer at Qwen3.5-9B, `visuals` the
+    planner at Qwen3-4B - and both spelled shard 0 of the same run. So
+    `(date, run_id, shard)` names one record and described two servers, and a
+    reader pooling them reports a rate that belongs to no model. Plan 11 row #6
+    retired the second job; the committed ledger still holds its rows, so the
+    reader still has to tell them apart.
 
     Driven from a two-row fixture rather than from `state/runtime-counters.csv`,
     which a run appends to five times a day (Guardrail #12). The fixture also carries
-    a case the committed ledger cannot: until this lands, every row in it came
+    a case the committed ledger cannot: until row #P4 landed, every row in it came
     from `work`.
 
     Three assertions, because three things can go wrong. The reader has to
@@ -4728,7 +4650,8 @@ def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
     rows = [runtime_counters.RuntimeCountersRow.from_csv_row(row) for row in raw]
 
     by_job = {row.job: row for row in rows}
-    assert set(by_job) == set(COUNTERS_JOBS.values()), "the reader must separate them by job"
+    assert set(by_job) == {row["job"] for row in raw}, "the reader must separate them by job"
+    assert len(by_job) == len(rows), "two rows of one job prove nothing about the column"
     assert len({(row.date, row.run_id, row.shard) for row in rows}) == 1, (
         "the fixture has to share a shard index, or it proves the wrong thing"
     )
@@ -4764,66 +4687,19 @@ def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
     )
 
 
-def test_the_visuals_job_writes_a_counters_row_of_its_own() -> None:
-    """The reading row #P4 exists to take, held where a workflow that drops it reds.
-
-    `measurements.md` records the 4B at 13.00 +/- 0.03 tok/s on a `llama-bench`
-    run, and a bench run produces no `prompt_tokens_cached_total`, no
-    `peak_rss_bytes`, no `prompt_seconds_total` and no `n_ctx_configured`. Those
-    four are what the labelling rows of plan 23 are priced against, and until
-    this step existed every committed counters row came from `work`.
-
-    The three inputs are asserted rather than the output, because the output is
-    a dispatched run. Each of them is a way the step can produce a row that
-    looks fine and says nothing: no clock stamp and `job_seconds` and
-    `cpu_busy_pct` are empty; the wrong server log and `n_ctx_configured` is
-    empty; no commit and the row never leaves the runner.
-    """
-    workflow = _load_workflows()["digest.yml"]
-    names = [step.get("name") for step in _steps(workflow, "visuals")]
-
-    for step_name in (
-        VISUALS_CLOCK_STEP,
-        VISUALS_SAMPLE_MEMORY_STEP,
-        VISUALS_COUNTERS_STEP,
-        COMMIT_STEPS["visuals"],
-    ):
-        assert step_name in names, f"the visuals job must carry {step_name}"
-
-    # The clock is stamped before the checkout, so it covers the cache restore
-    # and the weight load as well as the model time.
-    assert names.index(VISUALS_CLOCK_STEP) == 0, "the clock must cover the whole job"
-    assert names.index(VISUALS_SAMPLE_MEMORY_STEP) < names.index(VISUALS_COUNTERS_STEP)
-    assert names.index(VISUALS_COUNTERS_STEP) < names.index(COMMIT_STEPS["visuals"]), (
-        "the commit has to run after the row it commits is written"
-    )
-
-    clock = _digest_step("visuals", VISUALS_CLOCK_STEP)
-    for variable in CLOCK_VARIABLES:
-        assert variable in clock, f"{VISUALS_CLOCK_STEP} must stamp {variable}"
-    assert clock.count(CPU_STAT_READING) == 1, f"{VISUALS_CLOCK_STEP} must read /proc/stat once"
-
-    counters = _digest_step("visuals", VISUALS_COUNTERS_STEP)
-    assert counters.count(CPU_STAT_READING) == 1
-    assert f"--server-log {VISUALS_SERVER_LOG_FILE}" in counters, (
-        "the window one sequence got is read off the planner's own log, not the summarizer's"
-    )
-    assert f"--rss-samples-file {RSS_SAMPLE_FILE}" in counters
-    assert f"--memory-peak-file {MEMORY_PEAK_FILE}" in counters
-    assert f"--counters-file {METRICS_FILE}" in counters
-
-
 @pytest.mark.parametrize("job_name", sorted(COUNTERS_JOBS))
 def test_every_counters_step_says_which_job_it_is(job_name: str) -> None:
-    """A default is not a statement, and both callers have to make one.
+    """A default is not a statement, and every caller has to make one.
 
     `--job` defaults to `work`, which is what lets a row written before the
-    column existed still validate. That same default is why the visuals step has
-    to name its own value out loud: a copy-paste that dropped the flag would
-    file the planner's numbers under the summarizer's name, the ledger would
-    accept them, and the console would pool two models into one rate.
+    column existed still validate. That same default is why every step has to
+    name its own value out loud: a second server job would otherwise file its
+    numbers under the summarizer's name, the ledger would accept them, and the
+    console would pool two models into one rate. The committed ledger already
+    holds rows from the retired visuals job, which is what the column is read
+    back for.
     """
-    step_name = {"work": COUNTERS_STEP, "visuals": VISUALS_COUNTERS_STEP}[job_name]
+    step_name = {"work": COUNTERS_STEP}[job_name]
     script = _digest_step(job_name, step_name)
     assert COUNTERS_COMMAND in script, f"{step_name} must run {COUNTERS_COMMAND}"
     assert f"{COUNTERS_JOB_FLAG} {COUNTERS_JOBS[job_name]}" in script, (
