@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | A new engine behind the same seam | - | A | PENDING | - | - | - |
+| 1 | A new engine behind the same seam | - | A | IN-FLIGHT | p12-r1 | - | worker |
 | 2 | The drawing takes the width it is given | 1 | B | PENDING | - | - | - |
 | 3 | Numbers a reader can say out loud | 1 | B | PENDING | - | - | - |
 | 4 | The smallest label a person can read, and enough marks to be worth the space | 2, 3 | C | PENDING | - | - | - |
