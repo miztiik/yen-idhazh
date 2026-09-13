@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { leadingStories, splitPills } from '../src/lib/day-shape';
+import { AUTO_DISCOVERED_DESKS } from '../src/lib/payload/desks';
 import type { DigestItem, DigestLead, DigestVerticalRef } from '../src/lib/payload/types';
 
 /**
@@ -35,6 +36,10 @@ function publishedDay(): string {
 }
 
 const DAY = publishedDay();
+
+/** `digest.pill_move_min` as `config/appearance.json` commits it. Named once so
+ * a test says which margin it is asserting rather than carrying a bare 2. */
+const MOVE_MIN = 2;
 
 function ref(id: string, count: number): DigestVerticalRef {
 	return { id, display_name: id.toUpperCase(), count };
@@ -101,14 +106,124 @@ test('a day with no block asks for nothing to be drawn', () => {
 	expect(leadingStories([], [item('ai-1', 'ai')])).toEqual([]);
 });
 
-test('the topic pills fold by story count, and the active topic always stays out', () => {
+test('the topic row reads biggest first, and the active topic never folds away', () => {
 	const verticals = [ref('ai', 9), ref('world', 4), ref('energy', 1)];
+	const auto = new Set(['energy']);
 
-	const split = splitPills(verticals, 'energy', 2);
+	const split = splitPills(verticals, 'energy', 2, MOVE_MIN, auto);
 
 	expect(split.shown.map((vertical) => vertical.id)).toEqual(['ai', 'world', 'energy']);
 	expect(split.folded).toEqual([]);
-	expect(splitPills(verticals, null, 2).folded.map((vertical) => vertical.id)).toEqual(['energy']);
+	expect(
+		splitPills(verticals, null, 2, MOVE_MIN, auto).folded.map((vertical) => vertical.id)
+	).toEqual(['energy']);
+});
+
+/** Row #6's oracle. The fixture carries a PREVIOUS ORDER no committed day does:
+ * `ai` sits ahead of `business-economy` and holds one story FEWER, so the three
+ * candidate answers are all different and no accident passes this.
+ *
+ *   the payload order   ai, business-economy, energy, india, world
+ *   raw count order     world, energy, business-economy, ai, india
+ *   the margin rule     world, energy, ai, business-economy, india
+ *
+ * Built rather than read off `frontend/public/digest/`, which is a collection
+ * every run appends to (`CLAUDE.md` section 13, Guardrail #12) and which has
+ * never once published a day shaped like this.
+ */
+const PREVIOUS_ORDER = [
+	ref('ai', 9),
+	ref('business-economy', 10),
+	ref('energy', 30),
+	ref('india', 8),
+	ref('world', 40)
+];
+
+test('the topic row is a pure function of the payload', () => {
+	// The same day rendered twice. A row that disagreed with itself would make a
+	// shared link show the recipient a different page from the one the sender saw.
+	const once = splitPills(PREVIOUS_ORDER, null, 5, MOVE_MIN);
+	const twice = splitPills(PREVIOUS_ORDER, null, 5, MOVE_MIN);
+
+	expect(once.shown.map((vertical) => vertical.id)).toEqual(
+		twice.shown.map((vertical) => vertical.id)
+	);
+	expect(once.shown.map((vertical) => vertical.id)[0]).toBe('world');
+});
+
+test('a desk ahead by the margin takes the front of the row', () => {
+	const shown = splitPills(PREVIOUS_ORDER, null, 5, MOVE_MIN).shown;
+
+	// world 40 then energy 30: both leads are far past the margin, so the row
+	// leads with the desk holding most of the day.
+	expect(shown.slice(0, 2).map((vertical) => vertical.id)).toEqual(['world', 'energy']);
+});
+
+test('a lead under the margin moves nothing, and that is the whole rule', () => {
+	const shown = splitPills(PREVIOUS_ORDER, null, 5, MOVE_MIN).shown;
+
+	// `business-economy` holds 10 against `ai`'s 9. One story is under the margin
+	// of two, so it does not take the place in front of it - and a raw count sort
+	// would have put it there. That inversion is the price of the rule and the
+	// counts on the pills are what make it readable.
+	expect(shown.map((vertical) => vertical.id)).toEqual([
+		'world',
+		'energy',
+		'ai',
+		'business-economy',
+		'india'
+	]);
+	// And a margin of one is strict count order, which is the setting that says
+	// the margin is doing the work rather than the alphabet.
+	expect(splitPills(PREVIOUS_ORDER, null, 5, 1).shown.map((vertical) => vertical.id)).toEqual([
+		'world',
+		'energy',
+		'business-economy',
+		'ai',
+		'india'
+	]);
+});
+
+test('a curated desk is never folded away, and an auto-created one may be', () => {
+	// Auto-created verticals arrive from plan 23 row #16 and do not exist today,
+	// so the branch is driven here. `energy` holds more of the day than `india`
+	// and folds anyway, which is the rule: the fold asks who put the desk there,
+	// the order asks how much it holds.
+	const verticals = [ref('ai', 40), ref('energy', 20), ref('india', 6), ref('world', 30)];
+
+	const split = splitPills(verticals, null, 2, MOVE_MIN, new Set(['energy']));
+
+	expect(split.shown.map((vertical) => vertical.id)).toEqual(['ai', 'world', 'india']);
+	expect(split.folded.map((vertical) => vertical.id)).toEqual(['energy']);
+	// The limit is a SOFT cap. Three curated desks sit on a row capped at two,
+	// because hiding a desk a person declared costs the reader the whole desk.
+	expect(split.shown.length).toBeGreaterThan(2);
+});
+
+test('the desk the reader is on stays on the row even when it was proposed', () => {
+	const verticals = [ref('ai', 40), ref('energy', 1)];
+
+	const split = splitPills(verticals, 'energy', 1, MOVE_MIN, new Set(['energy']));
+
+	expect(split.shown.map((vertical) => vertical.id)).toEqual(['ai', 'energy']);
+	expect(split.folded).toEqual([]);
+});
+
+test('the frontend names every auto-discovered desk the vocabulary declares', () => {
+	// The handoff to plan 23 row #16, as a failing check rather than a note in a
+	// plan-doc nobody will open. It reads one fixed-size config file and no
+	// collection a run appends to (`CLAUDE.md` section 13), and it is the same
+	// shape as the lens drift test `lenses.ts` cites.
+	const taxonomy = JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'taxonomy.json'), 'utf8')
+	) as { verticals: { id: string; is_auto_discovered?: boolean }[] };
+
+	const declared = taxonomy.verticals
+		.filter((vertical) => vertical.is_auto_discovered === true)
+		.map((vertical) => vertical.id)
+		.sort();
+
+	expect([...AUTO_DISCOVERED_DESKS].sort()).toEqual(declared);
 });
 
 test('a single-topic day renders flat, with every item on the page', async ({ page }) => {
