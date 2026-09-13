@@ -203,6 +203,35 @@
       "title": "DayInstrument",
       "type": "object"
     },
+    "DayLabelSimilarity": {
+      "additionalProperties": false,
+      "description": "How close the day's own item vectors sat to the committed label vectors.\n\n**Neither end of this is better than the other, and nothing here is a\ngrade.** The cosine between a 384-dimension int8 item vector and a label\nvector is uncalibrated - one encodes a news sentence and the other a\ndefinitional one - so a fixed threshold would be a number somebody picked\n(Carmack). Only a change says anything, and a day file cannot hold a change:\nit holds the level, and a reducer over a window is what reads a change out\nof two of them.\n\n**No label is picked and no per-item value survives.** The closest label is\ncomputed and thrown away; `nearest` is the aggregate and nothing anywhere\nsays what one item scored. A verdict that reaches no reader and selects\nnothing to publish is not a `CLAUDE.md` section 0a deviation, and the\nmoment either half of that stopped being true this would need everything a\nclassifier needs.\n\n**The two rulers travel with the reading**, because a number is only\ncomparable against another number taken under the same ones. `taxonomy_digest`\npins the words that were encoded; `encoder_ref` pins the weights that\nencoded them. Two different values of either inside one window is a step in\nthe ruler and not a change in the days, so a reducer refuses the comparison\nrather than drawing it.",
+      "properties": {
+        "encoder_ref": {
+          "description": "Which weights encoded both sides, as `<embedder id>/<encoder directory>`. The id alone does not move when the weights move, so it is not an encoder identity on its own.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*/\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Encoder Ref",
+          "type": "string"
+        },
+        "nearest": {
+          "$ref": "#/$defs/DayDistribution",
+          "description": "The day's distribution of each item's cosine to its closest label vector. `count` and `total` are additive, so a window mean is a sum over items and never a mean of daily means; `count` is also the denominator, and it moves on its own when the share of items the encoder could read moves."
+        },
+        "taxonomy_digest": {
+          "description": "The digest of the label sentences the vectors were built from, exactly as `config/taxonomy-vectors.bin` carries it. A vocabulary edit moves it.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Taxonomy Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "taxonomy_digest",
+        "encoder_ref",
+        "nearest"
+      ],
+      "title": "DayLabelSimilarity",
+      "type": "object"
+    },
     "DayReasons": {
       "additionalProperties": false,
       "description": "Why each doubted item did not reach the top band.\n\nAdditive. A `high` item has no reason; every `medium` or `low` item falls\ninto exactly one bucket here, so the six counts partition the doubted set.\n`unattributed` is a doubted item the checker recorded no reason for - a real\ncategory the Model page counts separately, not the same fact as `not_scored`\n(which is a recorded reason meaning no faithfulness score exists).",
@@ -431,6 +460,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the optional label_similarity block: the day's distribution of each item's cosine to its closest committed label vector, with the vocabulary digest and the encoder reference it was taken under.",
+      "version": "2026-09-13",
+      "why": "Nothing said whether the encoder's geometry had moved. The item vectors are already on the day payload and the label vectors are committed once, so the reading costs no encoder pass and no byte on an item - and a day that reads differently from the days around it is the only signal there is, because the cosine is uncalibrated in absolute terms and a fixed threshold would be a number somebody picked (Carmack). Optional, because the 23 day records already on disk carry no such block and a block of zeros there would report an encoder that matched nothing rather than a day that measured nothing. It picks no label and keeps no per-item value, so it reaches no reader and selects nothing to publish (CLAUDE.md section 0a)."
+    },
+    {
       "change": "pipeline_fingerprint is optional and nothing sets it.",
       "version": "2026-09-12T21:00",
       "why": "The stamp stopped being a gate and stopped being the eval window's key, so no writer fills it. Relaxing rather than removing: every payload already on disk still validates, and the field is dropped in its own commit with the read-side migration that lets an older payload parse."
@@ -526,6 +560,18 @@
       "title": "Items Truncated",
       "type": "integer"
     },
+    "label_similarity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DayLabelSimilarity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How close the day's item vectors sat to the committed label vectors, or null when the day carried no vectors, the label vectors are not committed in this checkout, or the record was written before 2026-09-13. Not a grade and not a verdict: neither end of it is better than the other."
+    },
     "model_id": {
       "description": "The model that wrote the day's summaries. Not additive - a per-day attribute a reader compares against the next day to find a model change (finding 70).",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -602,7 +648,7 @@
       "description": "The day's token clock, or null when no item timed a token. Additive parts."
     },
     "version": {
-      "default": "2026-09-12T21:00",
+      "default": "2026-09-13",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -633,5 +679,5 @@
   ],
   "title": "DayMetrics",
   "type": "object",
-  "version": "2026-09-12T21:00"
+  "version": "2026-09-13"
 }
