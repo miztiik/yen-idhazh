@@ -69,7 +69,7 @@ from idhazh.classify.calls import (
     call_two_output_tokens,
     call_two_user_turn,
 )
-from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.app_config import AppConfig, TurnsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
@@ -324,7 +324,7 @@ def common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
     return index
 
 
-def describe(endpoint: str, *, digest: str) -> dict[str, Any]:
+def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any]:
     """What the server says about itself, beside the weights it was handed.
 
     The chat template no longer renders these two prompts and is still recorded,
@@ -335,13 +335,13 @@ def describe(endpoint: str, *, digest: str) -> dict[str, Any]:
     digested rather than quoted: it is a few thousand characters of Jinja and the
     only question is whether it is the same one.
 
-    The turn markers are digested beside it. They are what renders these prompts
+    The turn envelope is digested beside it. It is what renders these prompts
     now, so a run whose markers moved is a run whose outputs may have moved, and
     nothing else here would say so.
     """
     said = props(endpoint, timeout=60.0)
     template = said.get("chat_template")
-    markers = turn_markers()
+    markers = turn_markers(turns)
     return {
         "weights_sha256": digest,
         "build": said.get("build_info"),
@@ -647,6 +647,7 @@ def run_item(
         table,
         model_id=model.id,
         inference=model.inference,
+        turns=model.turns,
         prompt_config=app.summarize,
     )
     if call_one_cap:
@@ -655,7 +656,11 @@ def run_item(
     report_call("call 1", one)
 
     second = build_call_two_request(
-        first, one.content, source_words=article.band_source_words, brief=article.brief
+        first,
+        one.content,
+        turns=model.turns,
+        source_words=article.band_source_words,
+        brief=article.brief,
     )
     if call_two_cap:
         second["n_predict"] = call_two_cap
@@ -710,6 +715,7 @@ def pick_samples(
             table,
             model_id=model.id,
             inference=model.inference,
+            turns=model.turns,
             prompt_config=app.summarize,
         )
         tokens = tokenizer.count(str(request["prompt"]))
@@ -902,7 +908,7 @@ def main(argv: list[str] | None = None) -> int:
         endpoint = completion_url(base)
         timeout = args.request_minutes * 60.0
         tokenizer = Tokenizer(base=base, timeout=60.0)
-        described = describe(endpoint, digest=digest)
+        described = describe(endpoint, digest=digest, turns=model.turns)
 
         # What one item needs after call 1's prompt: call 1's decode, the
         # trailing turn and call 2's decode. Call 2's prompt is call 1's plus
@@ -915,7 +921,7 @@ def main(argv: list[str] | None = None) -> int:
         # question's own text, because the difference between the two IS the
         # marker floor row #3e cannot go below - and measuring the report with
         # the rendered number makes that floor come out negative.
-        markers = turn_markers()
+        markers = turn_markers(model.turns)
         question = call_two_user_turn(app.summarize)
         rendered_turn = tokenizer.count(markers.turn("user", question))
         question_tokens = tokenizer.tokenize(question)
@@ -955,6 +961,7 @@ def main(argv: list[str] | None = None) -> int:
                     element_table(built.article, config=app.elements),
                     model_id=model.id,
                     inference=model.inference,
+                    turns=model.turns,
                     prompt_config=app.summarize,
                 )["prompt"]
             )

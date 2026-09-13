@@ -23,6 +23,7 @@ from datetime import date as date_type
 from datetime import timedelta
 from enum import StrEnum
 from functools import lru_cache
+from string import Template
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final, Literal, Self
 
@@ -203,8 +204,99 @@ class InferenceConfig(Model):
     )
 
 
+#: The name a turn opening substitutes the role under. `string.Template` renders
+#: it, so both `$role` and `${role}` spell it and the validator accepts either.
+TURN_ROLE: Final = "role"
+
+
+class TurnsConfig(Model):
+    """How one turn is written for the weights this entry names.
+
+    It is the envelope, never the content. These four strings decide where a
+    turn opens and closes and how a reply begins; what the turns SAY is
+    `backend/idhazh/prompts/*.txt` and is the same set for every model
+    (docs/architecture/summarize/model-boundary.md).
+
+    They sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,
+    which put a fact about somebody else's weights in a package this project
+    writes and held it apart from the entry that names those weights. A swap
+    then moved the entry and left the markers, and nothing raised: a wrong
+    marker renders a prompt with no turn structure that the decoder's grammar
+    still accepts - worse summaries and no error anywhere.
+
+    **The trailing newlines are load-bearing and invisible.** They survive here
+    because JSON spells them `\\n` rather than leaving them at the end of a line
+    for an editor or a line-ending pass to rewrite.
+    """
+
+    turn_opening: str = Field(
+        min_length=1,
+        description=(
+            "Opens a turn, with the role substituted in. A string.Template "
+            "placeholder, so `$role` or `${role}`; the substitution is strict, so a "
+            "placeholder by any other name raises at the first render."
+        ),
+    )
+    turn_closing: str = Field(
+        min_length=1,
+        description=(
+            "Closes a turn. The second call's prompt is the first one's spliced on "
+            "this marker, so an empty seam would join two turns into one and break "
+            "the prefix the two-call design rests on."
+        ),
+    )
+    reply_opening: str = Field(
+        min_length=1,
+        description=(
+            "Where the model starts writing, with reasoning off. Not derived from "
+            "turn_opening: a chat template ends a generation prompt with more than a "
+            "role header, and what it ends with belongs to the model."
+        ),
+    )
+    reply_opening_thinking: str = Field(
+        min_length=1,
+        description="The same, with reasoning on. Recorded from the server that applies it.",
+    )
+    declared_for: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The weights these markers are recorded from - the sha256 of the entry "
+            "that carries them. It sits here for the reason inference.declared_for "
+            "sits beside the numbers: swap the weights and the block is left behind, "
+            "and this is the one event the field exists to make loud. Absent means an "
+            "entry nobody has measured yet, which is legal; ModelsConfig refuses a "
+            "block whose digest is not the entry's."
+        ),
+    )
+
+    @field_validator("turn_opening")
+    @classmethod
+    def _the_opening_names_the_role(cls, value: str) -> str:
+        """A turn opening with no placeholder renders every turn without a role header.
+
+        `Template.substitute` over a string that names nothing returns it
+        unchanged, so the prompt is syntactically fine, the grammar still
+        accepts the reply, and every turn in the conversation is anonymous.
+        Nothing downstream can see it.
+        """
+        if TURN_ROLE not in Template(value).get_identifiers():
+            raise ValueError(
+                f"a turn opening must name ${TURN_ROLE}, and {value!r} names "
+                f"{sorted(Template(value).get_identifiers()) or 'nothing'} - a turn with no "
+                "role header renders cleanly and says nothing about who is speaking"
+            )
+        return value
+
+
 class ModelRef(Model):
-    """Which weights, from where. Per-item payloads carry only the `id`."""
+    """Which weights, from where. Per-item payloads carry only the `id`.
+
+    **This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.
+    `ModelEntry` below is the shape a person declares in `config/`. The turn
+    envelope belongs to the second and not to this one: no `model_ref` a run has
+    ever written carries markers, and a field required here would stop today's
+    build reading yesterday's run (`CLAUDE.md` section 11).
+    """
 
     id: Slug
     repo: str = Field(min_length=1, description="Hugging Face repository the GGUF is pulled from.")
@@ -243,6 +335,30 @@ class ModelRef(Model):
             "raising. `ModelsConfig` refuses a block whose declared_for is not this "
             "entry's sha256, so a default block under measured weights is refused "
             "rather than inherited."
+        ),
+    )
+
+
+class ModelEntry(ModelRef):
+    """Which weights, and everything a run needs to talk to them.
+
+    **This is the shape a person declares**, and `ModelsConfig` is made of it.
+    It is `ModelRef` plus the turn envelope, which is required here and absent
+    from the recorded shape - so a config entry that forgets its markers fails
+    at load, and a `run.json` written before the markers were declared still
+    reads. A swap that moved the markers is still visible in a run record:
+    `RunRecord.inputs.prompt_sha256` digests both turns rendered through them.
+
+    Do not move `turns` down onto `ModelRef` as a tidy-up. That is the change
+    this split exists to prevent.
+    """
+
+    turns: TurnsConfig = Field(
+        description=(
+            "The turn envelope these weights are rendered with. Required and with no "
+            "default: an entry that forgets its markers must fail rather than inherit "
+            "the incumbent's, because inheriting them renders a prompt the grammar "
+            "still accepts and nothing else can see is wrong."
         ),
     )
 
@@ -903,6 +1019,20 @@ class ElementsConfig(Model):
     )
 
 
+#: What an operator does next when one of an entry's two declared blocks names
+#: weights the entry does not. The check is the same for both; only the repair
+#: differs, so each block carries its own clause rather than a second copy of
+#: the rule.
+_REDERIVE_THE_NUMBERS: Final = (
+    "Every setting in that block was measured against one model on one runner, "
+    "so re-derive them for these weights"
+)
+_RERECORD_THE_MARKERS: Final = (
+    "Every marker in that block was recorded off the server that renders these "
+    "turns, so re-record them for these weights"
+)
+
+
 class ModelsConfig(Model):
     """One entry per role, and each entry carries the settings it runs on.
 
@@ -915,7 +1045,7 @@ class ModelsConfig(Model):
     is decided by the same model that wrote the summary.
     """
 
-    summarize: ModelRef
+    summarize: ModelEntry
 
     @model_validator(mode="before")
     @classmethod
@@ -927,29 +1057,36 @@ class ModelsConfig(Model):
         """A settings block belongs to one entry's bytes, and says which.
 
         The swap this refuses is five strings edited in place: repo, file,
-        revision, digest and id, with the block underneath them untouched. That
+        revision, digest and id, with the blocks underneath them untouched. That
         used to raise nothing, and the run then stood a server up on numbers
         derived for weights it never opened. It is not hypothetical - the
-        summarizer moved from the 8B to the 9B on 2026-08-27 and this block did
-        not move with it.
+        summarizer moved from the 8B to the 9B on 2026-08-27 and the settings
+        block did not move with it.
+
+        **Two blocks, one rule, one loop.** `inference` and `turns` are both
+        measurements about one model, so the check is the same for both and only
+        the repair differs - re-derive the numbers, or re-record the markers off
+        the server that applies them.
 
         Both digests absent is legal and means an entry nobody has measured yet.
         The stamp already refuses to run on one: `idhazh.fingerprint.build_inputs`
         stops when the weights have no recorded digest.
         """
         for role in sorted(type(self).model_fields):
-            entry: ModelRef = getattr(self, role)
-            declared = entry.inference.declared_for
-            if declared == entry.sha256:
-                continue
-            raise ValueError(
-                f"models.{role}.inference is declared for "
-                f"{declared or 'no weights at all'}, and models.{role} names "
-                f"{entry.sha256 or 'no weights at all'}. Every setting in that block "
-                "was measured against one model on one runner, so re-derive them for "
-                f"these weights and set models.{role}.inference.declared_for to the "
-                "digest the entry carries - or put the entry back"
-            )
+            entry: ModelEntry = getattr(self, role)
+            for block, declared, repair in (
+                ("inference", entry.inference.declared_for, _REDERIVE_THE_NUMBERS),
+                ("turns", entry.turns.declared_for, _RERECORD_THE_MARKERS),
+            ):
+                if declared == entry.sha256:
+                    continue
+                raise ValueError(
+                    f"models.{role}.{block} is declared for "
+                    f"{declared or 'no weights at all'}, and models.{role} names "
+                    f"{entry.sha256 or 'no weights at all'}. {repair} and set "
+                    f"models.{role}.{block}.declared_for to the digest the entry "
+                    "carries - or put the entry back"
+                )
         return self
 
 
@@ -3638,6 +3775,40 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T23:55",
+            change=(
+                "models.<role>.turns is new, required, and has no default. It carries "
+                "turn_opening, turn_closing, reply_opening, reply_opening_thinking and "
+                "declared_for, which must name the same weights the entry does - the "
+                "rule models.<role>.inference.declared_for already obeyed, now checked "
+                "for both blocks in one loop. turn_opening must name $role and the "
+                "other three may not be empty. The four strings come verbatim from "
+                "backend/idhazh/prompts/turn_markers.json, which is deleted in this "
+                "commit; config load refuses that path if it comes back, because an "
+                "operator editing a file nothing reads is the failure the package "
+                "location was supposed to prevent. There is no read-side alias for the "
+                "old location: a config file is a file a person edits, and silent "
+                "acceptance teaches the wrong place to put it. The field sits on a new "
+                "ModelEntry, which is ModelRef plus the envelope, so the shape a run "
+                "records is unchanged."
+            ),
+            why=(
+                "Plan 28 row #2. The turn envelope is a fact about somebody else's "
+                "weights, and it was held in a package this project writes, apart from "
+                "the entry naming those weights. A swap moved the entry and left the "
+                "markers, and nothing raised - a wrong marker renders a prompt with no "
+                "turn structure that the grammar still accepts, so the only symptom is "
+                "worse summaries. On the entry, a model whose turns differ is a config "
+                "edit rather than a source edit, and declared_for makes the swap that "
+                "forgets them loud. It is required on the declared shape only, because "
+                "run_manifest.ModelUse embeds ModelRef and no model_ref a run has ever "
+                "written carries markers - requiring it there would stop this build "
+                "reading them. So run.json never records the envelope, and what still "
+                "catches a moved marker is RunRecord.inputs.prompt_sha256, which "
+                "digests both turns rendered through it. Ruled by Fowler, 2026-09-13."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T23:30",
             change=(

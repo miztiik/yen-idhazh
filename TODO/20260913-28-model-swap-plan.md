@@ -47,7 +47,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The runtime sweep reaches for a key that is not there | - | A | PENDING | - | - | - |
-| 2 | The turn envelope moves onto the model entry | - | A | PENDING | - | - | - |
+| 2 | The turn envelope moves onto the model entry | - | A | DONE | p28-r2 | - | Fowler (Architecture and Engineering) |
 | 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | PENDING | - | - | - |
 | 4 | Benchmark records lose the date from their filename | 2, 3 | B | PENDING | - | - | - |
 | 5 | Five things the server proves before the first item | 2 | C | PENDING | - | - | - |
@@ -137,6 +137,8 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 9 | The deleted file's reappearance is refused at config load. An operator editing a file nothing reads is the silent failure the package location existed to prevent. | Fowler, 2026-09-13 |
 | 10 | `AppConfig.version` is stamped and one changelog entry appended. No read-side alias for the old spelling - the precedent is `refuse_a_removed_knob` with `SUPERSEDED_MODELS_NAMES`, because a config file is a file a person can edit and silent acceptance teaches the wrong spelling. | Fowler, 2026-09-13 |
 | 11 | The app-config fixture gains `turns` in sorted key order in this same commit. `test_fixture_round_trips_byte_identically` fails otherwise, and a required field absent from the fixture fails validation before that. | Fowler, 2026-09-13 |
+| 12 | **`turns.declared_for` is `Sha256 \| None`, not a required `Sha256`.** The row's contract line said required; decision 3's own words say "the same validator shape `inference` carries", and that block is nullable. Required would make the comparison against `entry.sha256` unsatisfiable for an unmeasured entry, silently repealing the "both digests absent is legal" rule the validator states in its own docstring - a narrowing of `sha256` from optional to required that decision 2 never priced. The two blocks are checked in one loop, each carrying its own repair clause. | Fowler, 2026-09-13, during execution |
+| 13 | **`turns` is required on a new `ModelEntry(ModelRef)`, not on `ModelRef`.** Found during execution: `run_manifest.ModelUse` embeds `ModelRef`, and no `model_ref` a run has ever written carries markers, so requiring it on the shared class stops `publish_run_days.build_day` reading every committed day (`CLAUDE.md` section 11). `ModelEntry` is what a person declares and `ModelRef` is what a run recorded. What it gives up is that `run.json` never records the envelope; `RunRecord.inputs.prompt_sha256` digests both turns rendered through it, so a moved marker still moves the stamp. `run-manifest.schema.json` moves by one description line and no field. | Fowler, 2026-09-13, during execution |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |

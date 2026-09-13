@@ -161,10 +161,12 @@ def stage_work(
         runtime_build=runtime_build(),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         # The two calls render their own bytes, so the chat template above no
-        # longer reaches what the model reads and the turn markers do. Handing
-        # over the rendered pair is what digests the markers, all four prompt
-        # files and the turn order together.
-        prompt=calls.prompt_inputs(settings.app.summarize, inference=inference),
+        # longer reaches what the model reads and the entry's turn envelope
+        # does. Handing over the rendered pair is what digests the envelope, all
+        # four prompt files and the turn order together.
+        prompt=calls.prompt_inputs(
+            settings.app.summarize, turns=model.turns, inference=inference
+        ),
         output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
@@ -561,6 +563,7 @@ def _two_calls_one_item(
                 table,
                 model_id=model_id,
                 inference=inference,
+                turns=model.turns,
                 prompt_config=settings.app.summarize,
             )
             rendered = str(first["prompt"])
@@ -610,6 +613,7 @@ def _two_calls_one_item(
             second = calls.build_call_two_request(
                 first,
                 one.content,
+                turns=model.turns,
                 prompt_config=settings.app.summarize,
                 source_words=article.band_source_words,
                 brief=article.brief,

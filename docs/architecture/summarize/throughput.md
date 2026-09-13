@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-13
 
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
@@ -267,11 +267,14 @@ ruling, 2026-09-13: move forward, no rollback.
 **The pipeline stamp digests a different prompt now.** The stamp
 hashes the chat template read off `/props`, and the two calls render their own
 bytes, so that template no longer reaches what the model reads and
-`backend/idhazh/prompts/turn_markers.json` does. `classify.calls.prompt_inputs`
+`models.summarize.turns` does. `classify.calls.prompt_inputs`
 is what the stamp hashes instead: both turns rendered through the same helpers
 the live requests use, with the article and call 1's reply empty, plus every
 number `summarize` can substitute into them. Editing a marker moves the stamp,
-which is the state `Observation.DETERMINISM_VIOLATION` exists to make visible.
+which is the state `Observation.DETERMINISM_VIOLATION` exists to make visible -
+and it is the only route the envelope takes into a run record, because
+`run.json` carries the recorded model reference and the markers sit on the
+declared entry.
 
 **Three prices nobody can read off a token count, and each can fail the design
 on its own.** The first is the prompt cache: if call 2's `cached_tokens` is

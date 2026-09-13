@@ -3477,7 +3477,9 @@ class TestTheWorkStageDispatchesBothCalls:
         stamped = recorded_inputs(items).prompt_sha256
         assert stamped == text_digest(
             calls.prompt_inputs(
-                settings.app.summarize, inference=settings.app.models.summarize.inference
+                settings.app.summarize,
+                turns=settings.app.models.summarize.turns,
+                inference=settings.app.models.summarize.inference,
             )
         )
         assert stamped != text_digest(summarize.prompt_inputs(settings.app.summarize))

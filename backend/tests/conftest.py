@@ -296,9 +296,11 @@ def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> Ele
 
 
 def call_one_payload(article: Article) -> dict[str, Any]:
+    entry = config.load(CONFIG_DIR).app.models.summarize
     return build_call_one_request(
         article,
         a_table(article),
         model_id="m",
-        inference=config.load(CONFIG_DIR).app.models.summarize.inference,
+        inference=entry.inference,
+        turns=entry.turns,
     )
