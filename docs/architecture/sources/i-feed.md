@@ -557,7 +557,7 @@ copies of one feed as independent evidence.
 
 Shard and worker efficiency stay a separate question, and the owner raised it
 beside I Feed on 2026-09-09. One fact joins the two: on 2026-09-13 `digest.yml`
-restores the weights and starts the model before `cli.stage_work` fetches any
+restores the weights and starts the model before `stages.work.stage_work` fetches any
 article, and `shard_count` never returns fewer than one worker, so a day whose
 acquisition found nothing still pays a full restore and startup. What that
 should cost, and whether preparation belongs before startup, is owned by

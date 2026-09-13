@@ -26,7 +26,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config, embed, publish_day_metrics
+from idhazh import assemble, config, embed, publish_day_metrics
 from idhazh.contracts.article import Article
 from idhazh.contracts.day_metrics import DayDistribution, DayLabelSimilarity, DayMetrics
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
@@ -36,6 +36,8 @@ from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
 from idhazh.stages import common
+from idhazh.stages.assemble import stage_assemble
+from idhazh.stages.common import _load_day
 from utilities import build_canary_day
 
 
@@ -127,11 +129,11 @@ class TestTheStageAssembledTwice:
         items_dir = tmp_path / "run" / full_plan().date / "items"
         write_payloads(items_dir, full_plan().items[0])
 
-        first = cli.stage_assemble(
+        first = stage_assemble(
             plan_for(0), settings=settings, commit_sha="a" * 40, runner="fixture"
         )
         write_payloads(items_dir, full_plan().items[1])
-        second = cli.stage_assemble(
+        second = stage_assemble(
             plan_for(1, execution=2), settings=settings, commit_sha="a" * 40, runner="fixture"
         )
 
@@ -157,12 +159,12 @@ class TestTheStageAssembledTwice:
         items_dir = tmp_path / "run" / full_plan().date / "items"
         for index in (0, 1):
             write_payloads(items_dir, full_plan().items[index])
-        cli.stage_assemble(plan_for(0), settings=settings, commit_sha="a" * 40, runner="fixture")
-        cli.stage_assemble(
+        stage_assemble(plan_for(0), settings=settings, commit_sha="a" * 40, runner="fixture")
+        stage_assemble(
             plan_for(1, execution=2), settings=settings, commit_sha="a" * 40, runner="fixture"
         )
 
-        committed = cli._load_day(
+        committed = _load_day(
             assemble.day_dir(tmp_path / "public" / "digest", full_plan().date) / "digest.json"
         )
 
@@ -188,8 +190,8 @@ class TestTheStageAssembledTwice:
         items_dir = tmp_path / "run" / full_plan().date / "items"
         for index in (0, 1):
             write_payloads(items_dir, full_plan().items[index])
-        cli.stage_assemble(plan_for(0), settings=settings, commit_sha="a" * 40, runner="fixture")
-        day = cli.stage_assemble(
+        stage_assemble(plan_for(0), settings=settings, commit_sha="a" * 40, runner="fixture")
+        day = stage_assemble(
             plan_for(1, execution=2), settings=settings, commit_sha="a" * 40, runner="fixture"
         )
 
