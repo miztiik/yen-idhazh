@@ -250,7 +250,6 @@ def _day_metrics_sample() -> DayMetrics:
         revision=5,
         runs=5,
         model_id="qwen35-9b",
-        pipeline_fingerprint="a" * 64,
         items_published=6,
         items_planned=8,
         items_failed=2,
@@ -1854,47 +1853,80 @@ def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> Non
 
 
 #: Every place `pipeline_fingerprint` may still be named in source a person
-#: wrote, and why. The field stays on the contracts, so the gate cannot be "the
-#: name appears nowhere" - it is that nothing READS it to decide anything, with
-#: the survivors named rather than implied.
+#: wrote, and why. The removal cannot be gated on "the name appears nowhere":
+#: the read-side migration has to name the key it pops, and one shape still
+#: declares the field because the console still reads its column. So the gate is
+#: that every mention is one of these, with its reason beside it.
 FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
-    "backend/idhazh/cli.py": (
-        "the qualification stage copying the column from a shard onto the report, "
-        "both of which keep the field until it is dropped from every shape at once"
+    "backend/idhazh/contracts/day_metrics.py": (
+        "the popper: 23 committed state/day-metrics/ records and both published "
+        "month mirrors carry the key, and extra=forbid refuses it"
     ),
-    "backend/idhazh/contracts/day_metrics.py": "the field, relaxed to optional",
-    "backend/idhazh/contracts/eval_row.py": "the field, relaxed to optional",
-    "backend/idhazh/contracts/evidence.py": "the field, relaxed to optional",
-    "backend/idhazh/contracts/fingerprint.py": "the field, relaxed to optional",
-    "backend/idhazh/contracts/label_row.py": "the field, relaxed to optional",
-    "backend/idhazh/contracts/public_eval.py": "the published column, which stays a column",
-    "backend/idhazh/contracts/qualification.py": "the field, relaxed to optional",
-    "backend/idhazh/contracts/run_manifest.py": "the empty list, kept so an older manifest reads",
-    "backend/idhazh/contracts/score_archive.py": "the field, relaxed to optional",
-    "backend/idhazh/contracts/summary.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/run_manifest.py": (
+        "the popper, spelled plural: all 23 committed run.json files carry "
+        "pipeline_fingerprints and a published day is never rewritten"
+    ),
+    "backend/idhazh/contracts/eval_row.py": (
+        "the one field that survives the drop, because the console reads its "
+        "state/scores/ column for every day before RECORDED_INPUTS_FROM - the "
+        "condition that removes it is on the line that declares it"
+    ),
     "backend/idhazh/contracts/app_config.py": "a changelog entry, which is history",
+    "backend/idhazh/contracts/score_archive.py": "a changelog entry and a docstring, both history",
+    "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",
+    "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
+    "backend/idhazh/contracts/public_eval.py": "a changelog entry, which is history",
+    "backend/idhazh/contracts/qualification.py": "a changelog entry, which is history",
+    "backend/idhazh/contracts/summary.py": "a changelog entry, which is history",
     "frontend/src/lib/server/model-work.ts": (
         "the dated historical branch, which reads the months committed before "
         "2026-09-12 and retires on the condition written beside RECORDED_INPUTS_FROM"
     ),
     "frontend/src/lib/console/eval-instruments.ts": (
-        "the published column's own note, which says the column is blank from now on"
+        "the ledger column's own note, which says why no panel draws it"
     ),
 }
 
+#: The two shapes that carry a read-side migration for the retired key, the key
+#: each one pops, and the misspelling that must still be refused. `RunRecord`
+#: spells it plural, so one shared key constant in `base.py` would have covered
+#: neither model honestly. Each misspelling is the key with one letter gone,
+#: which is the shape a hand-written payload actually takes.
+FINGERPRINT_POPPERS: Final[dict[str, tuple[str, str]]] = {
+    "DayMetrics": ("pipeline_fingerprint", "pipeline_fingerprnt"),
+    "RunManifest": ("pipeline_fingerprints", "pipeline_fingerprnts"),
+}
+
+#: One payload per popped shape, copied out of the committed archive so the
+#: oracle reads a fixed file rather than whatever a run last wrote. They sit
+#: outside `tests/fixtures/contracts/` on purpose: every file under that tree is
+#: asserted to round-trip byte-identically through its own shape, and a payload
+#: of the PREVIOUS shape cannot, which is the whole point of it.
+FINGERPRINT_FIXTURES: Final[dict[str, Path]] = {
+    "DayMetrics": FIXTURES_DIR / "retired-fingerprint" / "day-metrics.json",
+    "RunManifest": FIXTURES_DIR / "retired-fingerprint" / "run-manifest.json",
+}
+
+
+def misspell(node: Any, key: str, wrong: str) -> Any:
+    """The same payload with one key renamed, wherever in the tree it sits."""
+    if isinstance(node, dict):
+        return {(wrong if name == key else name): misspell(v, key, wrong) for name, v in node.items()}
+    if isinstance(node, list):
+        return [misspell(value, key, wrong) for value in node]
+    return node
+
 
 def test_nothing_reads_the_pipeline_fingerprint_except_the_places_named_here() -> None:
-    """The stamp stopped gating and stopped being the eval window's key.
+    """The stamp stopped gating, and the field is gone from nine of the ten shapes.
 
     A fixed-size read of code a person wrote, never of data a run appended
     (`CLAUDE.md` section 13). It grows with the codebase and not with the
     archive, so a day that publishes changes nothing here.
 
-    The gate is not "the name appears nowhere": the field stays on twelve
-    contracts until its own commit drops it, and one console branch still reads
-    the months committed before the cutover so a chart over them does not report
-    that nothing moved. Both are named above, which is what makes this a rule
-    rather than a habit.
+    The gate is not "the name appears nowhere", because two shapes have to name
+    the key to pop it and one still declares the field. Both are named above,
+    which is what makes this a rule rather than a habit.
     """
     roots = (
         (REPO_ROOT / "backend" / "idhazh", ("*.py",)),
@@ -1912,6 +1944,80 @@ def test_nothing_reads_the_pipeline_fingerprint_except_the_places_named_here() -
         "Either it is a reader and has to stop reading, or it is a survivor and "
         "has to say why it survives."
     )
+
+
+@pytest.mark.parametrize(("name", "key"), [(n, k) for n, (k, _) in FINGERPRINT_POPPERS.items()])
+def test_a_payload_carrying_the_retired_key_parses_and_comes_back_without_it(
+    name: str, key: str
+) -> None:
+    """The read-side migration `CLAUDE.md` section 11 owes for a breaking removal.
+
+    Driven from a payload a real run wrote - `state/day-metrics/2026/09/11.json`
+    and `frontend/public/digest/2026/09/11/run.json`, copied into
+    `tests/fixtures/` so the oracle cannot change when the archive does.
+    """
+    contract = {model.__name__: model for model in CONTRACTS}[name]
+    payload = json.loads(read_text(FINGERPRINT_FIXTURES[name]))
+    assert key in canonical_json(payload), f"the fixture no longer carries {key}"
+
+    parsed = contract.model_validate(payload)
+
+    assert key not in canonical_json(parsed.model_dump(mode="json"))
+    assert key not in contract.model_fields
+
+
+@pytest.mark.parametrize(
+    ("name", "key", "wrong"), [(n, k, w) for n, (k, w) in FINGERPRINT_POPPERS.items()]
+)
+def test_the_same_payload_with_the_key_misspelt_is_still_refused(
+    name: str, key: str, wrong: str
+) -> None:
+    """The arm that matters, and the reason the popper names its key.
+
+    A migration written as "drop whatever the model does not declare" passes the
+    test above perfectly and turns `extra="forbid"` into `extra="ignore"` for the
+    shape it sits on - so a misspelt key in a hand-written payload would parse
+    and the value it was meant to carry would simply be absent.
+
+    The misspelling is made here rather than committed as a second fixture,
+    because renaming one key of the payload above is what proves the two differ
+    in the spelling and in nothing else.
+    """
+    contract = {model.__name__: model for model in CONTRACTS}[name]
+    payload = misspell(json.loads(read_text(FINGERPRINT_FIXTURES[name])), key, wrong)
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        contract.model_validate(payload)
+
+
+def test_no_other_contract_learned_to_accept_the_retired_key() -> None:
+    """The popper is opted into by two shapes and inherited by none.
+
+    Written on `Model` or `Contract` instead, a popper reading a shared key list
+    passes both arms above and silently opens every contract in the repository
+    to a key only two of them ever held. Nothing else can fail that, which is why
+    this arm is not optional.
+
+    Driven from the committed contract fixtures, which are a fixed set of files a
+    person wrote (`CLAUDE.md` section 13). `EvalRow` is skipped because it still
+    declares the field.
+    """
+    checked = 0
+    for model in CONTRACTS:
+        key = "pipeline_fingerprint"
+        if model.__name__ in FINGERPRINT_POPPERS or key in model.model_fields:
+            continue
+        directory = CONTRACT_FIXTURES_DIR / model.__schema_stem__
+        for path in sorted(directory.glob("*.json")):
+            payload = json.loads(read_text(path))
+            if not isinstance(payload, dict):
+                continue
+            with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+                model.model_validate({**payload, key: "a" * 64})
+            checked += 1
+            break
+
+    assert checked >= 30, f"only {checked} contracts were offered the retired key"
 
 
 def swapped_summarizer() -> dict[str, Any]:

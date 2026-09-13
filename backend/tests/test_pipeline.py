@@ -1114,7 +1114,9 @@ def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
     assert (items_dir / cli.INPUTS_PAYLOAD).is_file()
     assert written is not None
     assert manifest.runs[-1].inputs == written
-    assert not manifest.runs[-1].pipeline_fingerprints, "the stamp was retired and nothing fills it"
+    assert "pipeline_fingerprints" not in type(manifest.runs[-1]).model_fields, (
+        "the stamp was retired, and the run record stopped carrying the list on 2026-09-13"
+    )
 
 
 def test_an_assemble_that_saw_no_work_shard_records_no_inputs(

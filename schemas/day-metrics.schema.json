@@ -460,6 +460,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed pipeline_fingerprint. BREAKING.",
+      "version": "2026-09-13T22:00",
+      "why": "The stamp gated nothing and no writer had filled it since 2026-09-12, so the field was a question every future author of this shape had to ask and an answer nobody could use. Removing it is breaking, because contracts.base.Model sets extra='forbid' and 23 committed state/day-metrics/ records and the two published month mirrors folded from them all carry the key. The read-side migration ships in this commit and is permanent: _drop_retired_keys pops the one named key before validation. What would let it be deleted is written on the line that declares it."
+    },
+    {
       "change": "Added the optional label_similarity block: the day's distribution of each item's cosine to its closest committed label vector, with the vocabulary digest and the encoder reference it was taken under.",
       "version": "2026-09-13",
       "why": "Nothing said whether the encoder's geometry had moved. The item vectors are already on the day payload and the label vectors are committed once, so the reading costs no encoder pass and no byte on an item - and a day that reads differently from the days around it is the only signal there is, because the cosine is uncalibrated in absolute terms and a fixed threshold would be a number somebody picked (Carmack). Optional, because the 23 day records already on disk carry no such block and a block of zeros there would report an encoder that matched nothing rather than a day that measured nothing. It picks no label and keeps no per-item value, so it reaches no reader and selects nothing to publish (CLAUDE.md section 0a)."
@@ -578,20 +583,6 @@
       "title": "Model Id",
       "type": "string"
     },
-    "pipeline_fingerprint": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "The digest of the declared settings the day ran under, as EvalRow carried it. Null on every day written after 2026-09-12: the stamp stopped being a gate and no writer fills it. A model-change boundary is read from the run record's recorded inputs instead.",
-      "title": "Pipeline Fingerprint"
-    },
     "reasons": {
       "$ref": "#/$defs/DayReasons"
     },
@@ -648,7 +639,7 @@
       "description": "The day's token clock, or null when no item timed a token. Additive parts."
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-13T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -679,5 +670,5 @@
   ],
   "title": "DayMetrics",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-13T22:00"
 }

@@ -51,7 +51,6 @@ The shapes, and where each one lives once written:
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
-| `FingerprintRow` | `fingerprint-row` | one appended row of the retired `state/fingerprints.csv`; nothing writes it |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
@@ -144,7 +143,6 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health/` | day files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and the read opens the days it names |
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
-| `state/fingerprints.csv` | one file | what did this run open? - retired 2026-09-12; the run record answers it | no |
 | `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
 | `state/score-index/` | monthly shards | which measurements does the shard beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, pipeline, output and scorer is one measurement whenever it is re-taken |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
@@ -189,15 +187,19 @@ Two consequences worth stating so nobody re-derives them:
  the period is a layout change and not a contract change; see
  [../sources/item-health.md](../sources/item-health.md).
 
-**The four single files above are deliberately unsharded, and the burden is on a
-change that shards one.** `state/fingerprints.csv`, `state/runtime-counters.csv`,
+**The three single files above are deliberately unsharded, and the burden is on a
+change that shards one.** `state/runtime-counters.csv`,
 `state/feed-retirements.csv` and `state/day-validations.csv` are not work left
 undone. None of their reads carries a window, so by the rule above a partition
 would open every file anyway and cost a directory walk a single `open` does not
-need. Two of the four - `runtime-counters.csv` and `day-validations.csv` - grow
+need. Two of the three - `runtime-counters.csv` and `day-validations.csv` - grow
 for ever with no prune, and **that is a retention question rather than a grain
 question**: sharding them would make their reads worse and leave the growth
 exactly where it is.
+
+There were four until 2026-09-13. `state/fingerprints.csv` was the fourth, and it
+was deleted rather than sharded: its read had no window because it had no reader
+left at all.
 
 **A collection can file by day for a reason that is not the read**, and
 `state/visual-prunes/` is the worked case: its question is the whole series, so
@@ -304,7 +306,7 @@ Where a field is a function of other fields on the same payload, the model recom
 - `url_key` is the sha256 of `canonical_url`. It is item identity for dedupe and skip, it is a **field and never a path segment**, and a payload that carries someone else's key does not load.
 - `hhem_delta` is `hhem - hhem_full`. The truncation signal cannot be silently wrong.
 - `output_digest` is the sha256 of the summary and its key points - the published words only, so a re-run that produced the same text in a different wall-clock does not read as drift.
-- `pipeline_fingerprint` was the sha256 of the `PipelineInputs` model's own serialization. Nothing has written it since 2026-09-12; the same inputs are recorded by name on the run record. See [determinism.md](determinism.md).
+- `pipeline_fingerprint` was the sha256 of the `PipelineInputs` model's own serialization. Nothing has written it since 2026-09-12, and on 2026-09-13 it was removed from every shape except `EvalRow`, which keeps it because the console still reads that column for days committed before the cutover. The same inputs are recorded by name on the run record. See [determinism.md](determinism.md).
 
 The alternative - trusting the stored value - makes a stale derived field indistinguishable from a correct one, and the mismatch surfaces months later as a dedupe that quietly stopped working.
 

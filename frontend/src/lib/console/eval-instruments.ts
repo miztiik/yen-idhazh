@@ -111,7 +111,7 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 	vertical: 'Which desk the article belongs to.',
 	model_id: 'Which model wrote the summary.',
 	pipeline_fingerprint:
-		'A digest of the declared settings, on rows written before 2026-09-12 and blank after. It has no direction to plot, and the model-change panel reads the run record instead.',
+		'A digest of the declared settings, on rows written before 2026-09-12 and blank after. It has no direction to plot. It is the last shape in the repository that still declares the stamp, and it is here because the model-change panel reads this column for every day before that date.',
 	output_digest: 'A digest of the summary, kept so a re-run can be proved identical.',
 	source_digest: 'A digest of the article text, kept for the same reason.',
 	scorer_version: 'Which checker ran. It says the instrument changed, not that the summaries did.',
