@@ -53,6 +53,7 @@ from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow
 from idhazh.contracts.watchlist import Watchlist
 
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
@@ -98,6 +99,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Taxonomy,
     TelemetryAggregateRow,
     ValidationRow,
+    VisualAggregateRow,
+    VisualAttemptRow,
     VisualPlan,
     VisualPruneRow,
     Watchlist,
