@@ -2,7 +2,7 @@
 
 A published day is frozen. The only thing that can happen to it is deletion, so
 nothing about it can stop matching its contracts on its own - what can move is
-the shape it is read through. `cli.stage_validate_days` opened every committed
+the shape it is read through. `stages.validate_days.stage_validate_days` opened every committed
 day anyway, on every scheduled publication and on every CI run, parsed it and
 put it through both contracts a reader holds. Measured on this repository on
 2026-09-08, on an Intel Core i7-1265U: 18 committed days, 19,867,266 bytes,

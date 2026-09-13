@@ -41,6 +41,8 @@ from idhazh.elements import element_table
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import text_digest
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, sanitize, untrusted_block
+from idhazh.stages.common import _canary_article
+from idhazh.stages.qualify_canaries import _canary_report
 from idhazh.visual_planner import plan_is_reachable
 
 # `visual`, because two of the planted attacks are aimed at the picture.
@@ -252,7 +254,7 @@ def test_the_canary_article_is_the_one_extract_would_have_built(canary: Canary) 
     """
     real = as_a_real_page(canary)
     assert real.status is ArticleStatus.OK, "the page must extract, or this compares two failures"
-    mine = cli._canary_article(
+    mine = _canary_article(
         payload_of(canary), extract_config=EXTRACT, fetched_at="2026-08-27T00:00:00Z"
     )
     assert mine.status is real.status
@@ -278,7 +280,7 @@ def test_a_canary_is_sized_by_the_words_that_survive_the_boundary() -> None:
         "this fixture no longer straddles the brief threshold, so it proves nothing here"
     )
 
-    article = cli._canary_article(
+    article = _canary_article(
         payload_of(canary), extract_config=EXTRACT, fetched_at="2026-08-27T00:00:00Z"
     )
     assert article.source_word_count == kept_words
@@ -295,7 +297,7 @@ def test_the_canary_hands_the_fence_the_raw_bytes(canary: Canary) -> None:
     Handing it pre-cleaned text would exercise the boundary against text that
     had already crossed it.
     """
-    article = cli._canary_article(
+    article = _canary_article(
         payload_of(canary), extract_config=EXTRACT, fetched_at="2026-08-27T00:00:00Z"
     )
     assert article.text == canary.raw_text
@@ -310,7 +312,7 @@ def test_the_canary_arm_writes_what_it_saw_and_fails_closed(tmp_path: Path) -> N
     not a control test that passed.
     """
     held = [CanaryObservation(name=name, replied=True) for name in sorted(REQUIRED_ATTACKS)]
-    assert cli._canary_report(held, root=tmp_path, required=len(held)) == 0
+    assert _canary_report(held, root=tmp_path, required=len(held)) == 0
     written = json.loads(read_text(tmp_path / "canaries.json"))
     assert [row["name"] for row in written] == sorted(REQUIRED_ATTACKS)
     assert written[0]["failure_code"] is None
@@ -319,7 +321,7 @@ def test_the_canary_arm_writes_what_it_saw_and_fails_closed(tmp_path: Path) -> N
         held[0].model_copy(update={"replied": False, "failure_code": "model_unreachable"}),
         *held[1:],
     ]
-    assert cli._canary_report(silent, root=tmp_path, required=len(held)) == 1
+    assert _canary_report(silent, root=tmp_path, required=len(held)) == 1
     assert json.loads(read_text(tmp_path / "canaries.json"))[0]["failure_code"] == (
         "model_unreachable"
     )

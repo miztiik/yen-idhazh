@@ -11,7 +11,6 @@ import pytest
 from conftest import REPO_ROOT
 from pydantic import ValidationError
 
-from idhazh import cli
 from idhazh.contracts.item_health import (
     FailureCode,
     ItemHealthRow,
@@ -29,6 +28,7 @@ from idhazh.publish_telemetry import (
     shard_path,
     shard_relpath,
 )
+from idhazh.stages.assemble import stage_assemble
 
 COMMITTED_ROOT = REPO_ROOT / "frontend" / "public" / "telemetry"
 
@@ -255,7 +255,7 @@ def test_the_pipeline_never_writes_the_committed_telemetry_projection(tmp_path: 
     and discards a day, so the default must never reach a caller that passed
     its own roots.
     """
-    source = inspect.getsource(cli.stage_assemble)
+    source = inspect.getsource(stage_assemble)
 
     assert "publish_telemetry.publish(" in source
     assert "public_root=" in source.split("publish_telemetry.publish(", 1)[1][:200]
