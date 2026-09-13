@@ -253,7 +253,7 @@
     },
     "ModelRef": {
       "additionalProperties": false,
-      "description": "Which weights, from where. Per-item payloads carry only the `id`.",
+      "description": "Which weights, from where. Per-item payloads carry only the `id`.\n\n**This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.\n`ModelEntry` below is the shape a person declares in `config/`. The turn\nenvelope belongs to the second and not to this one: no `model_ref` a run has\never written carries markers, and a field required here would stop today's\nbuild reading yesterday's run (`CLAUDE.md` section 11).",
       "properties": {
         "file": {
           "minLength": 1,

@@ -430,13 +430,20 @@ with no number is a valid summary. The ban now names the job it belongs to.
 
 ### What is in the prompt bytes, and who wrote each part
 
-Three strings open and close a turn, and they live in
-`backend/idhazh/prompts/turn_markers.json` beside the two prompt files. They are
-model-shaped text and they move when the model does, so they sit with the
-prompts rather than in `config/`: an operator turns no dial here, and a wrong
-value renders a prompt with no turn structure that the decoder's grammar still
+Three strings open and close a turn, and since 2026-09-13 they live on the model
+entry that names the weights - `models.summarize.turns` in `config/idhazh.json`.
+They are model-shaped text and they move when the model does, so they belong
+beside the weights rather than in a package this project writes: held apart, a
+swap moved the entry and left the markers, and nothing raised. A wrong value
+renders a prompt with no turn structure that the decoder's grammar still
 accepts - worse summaries and no error. They are JSON rather than raw text
 because the trailing newlines are load-bearing and invisible.
+
+`turns.declared_for` is the sha256 of the entry that carries them, the same pin
+`inference.declared_for` carries, and config load refuses a block whose digest
+is not the entry's. The wording they wrap did not move and cannot: the
+instructions are one set for every model
+([model-boundary.md](model-boundary.md)).
 
 | Marker | What it is | On the configured weights |
 | --- | --- | --- |
@@ -444,6 +451,12 @@ because the trailing newlines are load-bearing and invisible.
 | `turn_closing` | closes a turn | `<\|im_end\|>\n` |
 | `reply_opening` | where the model starts writing, reasoning off | `<\|im_start\|>assistant\n<think>\n\n</think>\n\n` |
 | `reply_opening_thinking` | the same, reasoning on | `<\|im_start\|>assistant\n<think>\n` |
+
+**Four validators, because each failure is silent.** `turn_opening` must name
+`$role` - a substitution over a string that names nothing returns it unchanged
+and renders every turn anonymous. The other three may not be empty;
+`continued_prompt` splices call 2 onto `turn_closing`, so an empty seam joins
+two turns into one and the grammar still answers.
 
 **The empty reasoning block is written deliberately, and writing it is what
 keeps this a transport change.** It is what the chat template put there, so the
@@ -1062,22 +1075,29 @@ summaries are publishable and were absent from the record, so a change to the
 rule a summary was written under left no trace at all.
 
 **The two-call path opened a hole of its own, and row #5b closed it on
-2026-09-12.** Since the prompt bytes became ours, the turn markers are a
-determinism input, and nothing digested them: `build_inputs` hashes the chat
+2026-09-12.** Since the prompt bytes became ours, the turn envelope is a
+determinism input, and nothing digested it: `build_inputs` hashes the chat
 template off `/props`, which no longer renders those two prompts, and
-`prompt_inputs`, which is the single-call template. So a change to
-`turn_markers.json` would have moved every output while the record said the ask
-held still - and after 2026-09-12 that is a missing reading rather than a wrong
-skip, because nothing skips. It could not bite while no stage dispatched either
-call, and it bites on every run since `stage_work` started sending the pair.
+`prompt_inputs`, which is the single-call template. So a change to a marker
+would have moved every output while the record said the ask held still - and
+after 2026-09-12 that is a missing reading rather than a wrong skip, because
+nothing skips. It could not bite while no stage dispatched either call, and it
+bites on every run since `stage_work` started sending the pair.
 **`build_inputs` is handed `classify.calls.prompt_inputs`**: one
-argument at one call site, and it covers the markers, all four prompt files and
+argument at one call site, and it covers the envelope, all four prompt files and
 the turn order together. It is not one item's rendered prompt - a digest that
 moved per item could not answer the question the record exists to answer - so
 the article and call 1's reply render as empty strings and every number
 `summarize` can substitute is appended, exactly as the single call's own
 `prompt_inputs` does. Recorded here 2026-09-12 by plan 11 row #3c; closed by row
 #5b the same day.
+
+**`run.json` does not record the envelope, and that is the one thing this route
+has to carry.** `ModelUse.model_ref` is the shape a run recorded and the markers
+sit on the shape a person declares, because no `model_ref` a run has ever
+written carries them and a required field there would stop this build reading
+yesterday's day (`CLAUDE.md` section 11). So `prompt_sha256` is the whole of the
+envelope's reach into the record. Ruled by Fowler, 2026-09-13.
 
 ## The changes are not retroactive
 
