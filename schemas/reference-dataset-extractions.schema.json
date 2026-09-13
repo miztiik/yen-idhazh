@@ -1,0 +1,250 @@
+{
+  "$defs": {
+    "ArticleStatus": {
+      "enum": [
+        "ok",
+        "fetch_failed",
+        "extract_failed",
+        "robots_denied"
+      ],
+      "title": "ArticleStatus",
+      "type": "string"
+    },
+    "ReferenceFailureCode": {
+      "description": "Why one URL produced no article text.\n\n`ArticleStatus` says which stage ended it; this says what happened there. A\ntruncated body is its own member rather than a success with less text,\nbecause a download stopped by its byte limit looks exactly like a short\narticle once the reason is thrown away.",
+      "enum": [
+        "robots_denied",
+        "robots_unreachable",
+        "blocked_address",
+        "fetch_permanent",
+        "fetch_transient",
+        "body_truncated",
+        "paywalled",
+        "empty_text"
+      ],
+      "title": "ReferenceFailureCode",
+      "type": "string"
+    }
+  },
+  "$id": "reference-dataset-extractions.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the manifest identity, the full sanitized text with its digest and word count, the two timestamps, the two tool versions, and the outcome with its typed reason.",
+      "version": "2026-09-13",
+      "why": "The extraction needs a declared row before it writes one (Guardrail #3). The text is the untruncated sanitized prose rather than the capped `Article.text`, because a classifier reading a 2,500-token excerpt is reading a different article from the one a person opened."
+    }
+  ],
+  "description": "What one manifest identity produced, as one element of `articles.json`.\n\nA failure is a row, not an absence. It carries `text: null` with a typed\nreason, so the count of URLs that were tried and the count that worked are\nboth readable from the file instead of one being inferred from the other.",
+  "properties": {
+    "article_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 of `text`. Null where there is no text.",
+      "title": "Article Sha256"
+    },
+    "article_words": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Words in `text`. Null where there is no text.",
+      "title": "Article Words"
+    },
+    "canonical_url": {
+      "description": "What `url_key` is derived from.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "extracted_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the text was taken. Null where none was.",
+      "title": "Extracted At"
+    },
+    "extractor_version": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which extractor produced the text.",
+      "title": "Extractor Version"
+    },
+    "failure_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceFailureCode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What happened there. Null on a success, and only then."
+    },
+    "failure_detail": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One sentence a person can act on. Never a page's own words.",
+      "title": "Failure Detail"
+    },
+    "fetched_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the request was made. Null where none was.",
+      "title": "Fetched At"
+    },
+    "host": {
+      "description": "The host, lower case.",
+      "maxLength": 253,
+      "minLength": 3,
+      "title": "Host",
+      "type": "string"
+    },
+    "publisher": {
+      "description": "The frozen outlet key, carried from the manifest row.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Publisher",
+      "type": "string"
+    },
+    "sanitizer_version": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which sanitizer the text crossed the trust boundary through.",
+      "title": "Sanitizer Version"
+    },
+    "source_domain": {
+      "description": "The registered domain.",
+      "maxLength": 253,
+      "minLength": 3,
+      "title": "Source Domain",
+      "type": "string"
+    },
+    "source_line": {
+      "description": "The input line, carried from the manifest row.",
+      "minimum": 1,
+      "title": "Source Line",
+      "type": "integer"
+    },
+    "source_url": {
+      "description": "The address as supplied.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ArticleStatus",
+      "description": "Which stage ended this attempt, in the vocabulary the pipeline uses."
+    },
+    "text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The full sanitized article prose, paragraph breaks kept. Null on a failure, and never an empty string standing in for one.",
+      "title": "Text"
+    },
+    "url_key": {
+      "description": "sha256 of the canonical URL, recomputed on read.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-13",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Source context, or null.",
+      "title": "Vertical"
+    }
+  },
+  "required": [
+    "source_line",
+    "source_url",
+    "canonical_url",
+    "url_key",
+    "source_domain",
+    "host",
+    "publisher",
+    "status"
+  ],
+  "title": "ReferenceExtractionRow",
+  "type": "object",
+  "version": "2026-09-13"
+}

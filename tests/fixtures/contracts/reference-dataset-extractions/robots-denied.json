@@ -1,0 +1,21 @@
+{
+  "article_sha256": null,
+  "article_words": null,
+  "canonical_url": "https://www.globaltimes.cn/page/202609/1340012.shtml",
+  "extracted_at": null,
+  "extractor_version": null,
+  "failure_code": "robots_denied",
+  "failure_detail": "robots.txt disallows this path",
+  "fetched_at": null,
+  "host": "www.globaltimes.cn",
+  "publisher": "globaltimes",
+  "sanitizer_version": null,
+  "source_domain": "globaltimes.cn",
+  "source_line": 7,
+  "source_url": "https://www.globaltimes.cn/page/202609/1340012.shtml",
+  "status": "robots_denied",
+  "text": null,
+  "url_key": "2e7cf3625c56b916d9aea8050847459c4e36db7e571bcf76eb9eceb72ba5e3bc",
+  "version": "2026-09-13",
+  "vertical": "world"
+}

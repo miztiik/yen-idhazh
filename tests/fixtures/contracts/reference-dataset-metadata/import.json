@@ -1,0 +1,87 @@
+{
+  "collection_schema": "reference-dataset-manifest",
+  "domains": {
+    "globaltimes.cn": 1,
+    "substack.com": 1
+  },
+  "extraction_totals": null,
+  "generated_at": "2026-09-13T09:02:11Z",
+  "hosts": {
+    "chipbriefing.substack.com": 1,
+    "www.globaltimes.cn": 1
+  },
+  "import_totals": {
+    "blank_lines": 1,
+    "equivalent_urls": 0,
+    "input_lines": 3,
+    "invalid_lines": 0,
+    "unassigned_vertical": 1,
+    "unique_urls": 2,
+    "valid_urls": 2
+  },
+  "input_path": "corpus/reference-dataset-2/urls.txt",
+  "input_sha256": "64dc5e2787d08aae67faef31fd32b6309bf81b902edbeaf17062ca11ad54e071",
+  "lengthened_publishers": {},
+  "output_path": "corpus/reference-dataset-2/manifest.json",
+  "output_sha256": "9d2bb46cc43105777ce58bbce9085c6f6ca3e49951368db907763e7aacc30a5b",
+  "phase": "import",
+  "publisher_hosts": {
+    "chipbriefing": [
+      "chipbriefing.substack.com"
+    ],
+    "globaltimes": [
+      "www.globaltimes.cn"
+    ]
+  },
+  "publishers": {
+    "chipbriefing": 1,
+    "globaltimes": 1
+  },
+  "rows": 2,
+  "selection_totals": null,
+  "settings": {
+    "extract": {
+      "backoff_initial_seconds": 1.0,
+      "backoff_multiplier": 2.0,
+      "boilerplate_ratio_max": 0.4,
+      "max_body_bytes": 2000000,
+      "max_retries": 3,
+      "min_source_words": 60,
+      "paywall_markers": [
+        "isaccessibleforfree\":false",
+        "isaccessibleforfree\": false",
+        "subscribe to continue reading",
+        "register or subscribe to continue"
+      ],
+      "prose_line_count_min": 12,
+      "prose_line_ratio_min": 0.5,
+      "prose_sentence_min": 3,
+      "prose_sentence_words_min": 8,
+      "reject_boilerplate": false,
+      "reject_not_prose": false,
+      "request_timeout_seconds": 20.0,
+      "truncation_cap_tokens": 2500,
+      "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+    },
+    "input_file": "corpus/reference-dataset-2/urls.txt",
+    "request_delay_seconds": 1.0,
+    "selection": {
+      "fill_shortfall": true,
+      "group_by": "publisher",
+      "publisher_disambiguation": [
+        "registered_name",
+        "public_suffix",
+        "host"
+      ],
+      "rows_max": 1000,
+      "rows_per_domain_target": 20
+    },
+    "sources_file": "config/sources.json",
+    "taxonomy_file": "config/taxonomy.json",
+    "version": "2026-09-13"
+  },
+  "version": "2026-09-13",
+  "verticals": {
+    "world": 1
+  }
+}

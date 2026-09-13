@@ -1,0 +1,41 @@
+{
+  "extract": {
+    "backoff_initial_seconds": 1.0,
+    "backoff_multiplier": 2.0,
+    "boilerplate_ratio_max": 0.4,
+    "max_body_bytes": 2000000,
+    "max_retries": 3,
+    "min_source_words": 60,
+    "paywall_markers": [
+      "isaccessibleforfree\":false",
+      "isaccessibleforfree\": false",
+      "subscribe to continue reading",
+      "register or subscribe to continue"
+    ],
+    "prose_line_count_min": 12,
+    "prose_line_ratio_min": 0.5,
+    "prose_sentence_min": 3,
+    "prose_sentence_words_min": 8,
+    "reject_boilerplate": false,
+    "reject_not_prose": false,
+    "request_timeout_seconds": 20.0,
+    "truncation_cap_tokens": 2500,
+    "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+  },
+  "input_file": "corpus/reference-dataset-2/urls.txt",
+  "request_delay_seconds": 1.0,
+  "selection": {
+    "fill_shortfall": true,
+    "group_by": "publisher",
+    "publisher_disambiguation": [
+      "registered_name",
+      "public_suffix",
+      "host"
+    ],
+    "rows_max": 1000,
+    "rows_per_domain_target": 20
+  },
+  "sources_file": "config/sources.json",
+  "taxonomy_file": "config/taxonomy.json",
+  "version": "2026-09-13"
+}

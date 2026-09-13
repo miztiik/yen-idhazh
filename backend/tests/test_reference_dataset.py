@@ -26,7 +26,20 @@ import pytest
 from conftest import REPO_ROOT
 
 from idhazh.contracts.app_config import ReferenceDatasetConfig
-from idhazh.contracts.reference_dataset import ReferenceDatasetRow, ReferenceSplit
+from idhazh.contracts.article import ArticleStatus
+from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.reference_dataset import (
+    ReferenceCollectionMetadata,
+    ReferenceDatasetLocalConfig,
+    ReferenceDatasetRow,
+    ReferenceExtractionRow,
+    ReferenceFailureCode,
+    ReferenceGroupBy,
+    ReferenceImportTotals,
+    ReferenceManifestRow,
+    ReferencePhase,
+    ReferenceSplit,
+)
 from utilities import build_reference_dataset as builder
 
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "reference-dataset"
@@ -313,6 +326,214 @@ def test_the_schema_is_stamped_with_a_date_and_a_first_changelog_entry() -> None
     assert ReferenceDatasetRow.schema_version() == "2026-09-13"
     assert ReferenceDatasetRow.__changelog__[0].version == "2026-09-13"
     assert ReferenceDatasetRow.__changelog__[0].why
+
+
+# --- the supplied-URL collection's shapes -----------------------------------
+#
+# `corpus/reference-dataset-2/` is a different collection from the frozen set
+# above. These build every case in the test body rather than reading the
+# collection, so they carry the awkward shapes a real run may never produce.
+
+SAMPLE_URL = "https://chipbriefing.substack.com/p/the-lithography-squeeze"
+
+
+def manifest_row(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "source_line": 412,
+        "source_url": SAMPLE_URL,
+        "canonical_url": SAMPLE_URL,
+        "url_key": derive_url_key(SAMPLE_URL),
+        "source_domain": "substack.com",
+        "host": "chipbriefing.substack.com",
+        "publisher": "chipbriefing",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def extraction_row(**overrides: object) -> dict[str, object]:
+    text = "One paragraph.\n\nAnd a second one, so the break survives."
+    payload: dict[str, object] = {
+        **manifest_row(),
+        "status": ArticleStatus.OK.value,
+        "text": text,
+        "article_words": len(text.split()),
+        "article_sha256": derive_text_digest(text),
+        "fetched_at": "2026-09-13T09:14:02Z",
+        "extracted_at": "2026-09-13T09:14:03Z",
+        "extractor_version": "trafilatura-2.0.0-idhazh-2",
+        "sanitizer_version": "idhazh-sanitize-3",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def import_metadata(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "phase": ReferencePhase.IMPORT.value,
+        "generated_at": "2026-09-13T09:02:11Z",
+        "collection_schema": "reference-dataset-manifest",
+        "input_path": "corpus/reference-dataset-2/urls.txt",
+        "input_sha256": derive_text_digest("input"),
+        "output_path": "corpus/reference-dataset-2/manifest.json",
+        "output_sha256": derive_text_digest("output"),
+        "rows": 1,
+        "settings": ReferenceDatasetLocalConfig().model_dump(mode="json"),
+        "import_totals": ReferenceImportTotals(
+            input_lines=1,
+            blank_lines=0,
+            valid_urls=1,
+            unique_urls=1,
+            equivalent_urls=0,
+            invalid_lines=0,
+            unassigned_vertical=1,
+        ).model_dump(mode="json"),
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_the_local_config_defaults_to_the_approved_sampling_rule() -> None:
+    """20 an outlet, 1,000 at most, shortfalls filled, grouped on the publisher prefix."""
+    config = ReferenceDatasetLocalConfig()
+    assert config.selection.rows_per_domain_target == 20
+    assert config.selection.rows_max == 1000
+    assert config.selection.fill_shortfall is True
+    assert config.selection.group_by is ReferenceGroupBy.PUBLISHER
+
+
+def test_the_local_config_takes_a_different_sample_size_without_a_code_change() -> None:
+    config = ReferenceDatasetLocalConfig.model_validate(
+        {"selection": {"rows_per_domain_target": 5, "rows_max": 40, "group_by": "host"}}
+    )
+    assert config.selection.rows_per_domain_target == 5
+    assert config.selection.rows_max == 40
+    assert config.selection.group_by is ReferenceGroupBy.HOST
+
+
+def test_the_local_config_refuses_a_field_nobody_declared() -> None:
+    with pytest.raises(ValueError, match="Extra inputs"):
+        ReferenceDatasetLocalConfig.model_validate({"rows_per_domain": 20})
+
+
+def test_the_local_config_refuses_a_path_that_climbs_out_of_the_repository() -> None:
+    with pytest.raises(ValueError):
+        ReferenceDatasetLocalConfig.model_validate({"taxonomy_file": "../../config/taxonomy.json"})
+
+
+def test_a_manifest_row_needs_no_feed_and_no_vertical() -> None:
+    """A supplied URL belongs to no feed, and null is 'we do not know'."""
+    row = ReferenceManifestRow.model_validate(manifest_row())
+    assert row.source_id is None
+    assert row.vertical is None
+    assert row.publisher == "chipbriefing"
+
+
+def test_a_manifest_row_cannot_claim_an_identity_it_does_not_own() -> None:
+    with pytest.raises(ValueError, match="identity it does not own"):
+        ReferenceManifestRow.model_validate(
+            manifest_row(canonical_url="https://chipbriefing.substack.com/p/something-else")
+        )
+
+
+def test_a_successful_extraction_keeps_its_paragraph_break_and_its_provenance() -> None:
+    row = ReferenceExtractionRow.model_validate(extraction_row())
+    assert row.text is not None and "\n\n" in row.text
+    assert row.failure_code is None
+    assert row.article_sha256 == derive_text_digest(row.text)
+
+
+def test_a_failure_carries_a_reason_and_no_text() -> None:
+    row = ReferenceExtractionRow.model_validate(
+        {
+            **manifest_row(),
+            "status": ArticleStatus.ROBOTS_DENIED.value,
+            "failure_code": ReferenceFailureCode.ROBOTS_DENIED.value,
+            "failure_detail": "robots.txt disallows this path",
+        }
+    )
+    assert row.text is None
+    assert row.article_words is None
+    assert row.extracted_at is None
+
+
+def test_a_failure_that_says_nothing_about_why_is_refused() -> None:
+    with pytest.raises(ValueError, match="has to say why"):
+        ReferenceExtractionRow.model_validate(
+            {**manifest_row(), "status": ArticleStatus.FETCH_FAILED.value}
+        )
+
+
+def test_a_failure_carrying_article_text_is_refused() -> None:
+    """A truncated download must not arrive as a short article."""
+    with pytest.raises(ValueError, match="carries no text"):
+        ReferenceExtractionRow.model_validate(
+            extraction_row(
+                status=ArticleStatus.EXTRACT_FAILED.value,
+                failure_code=ReferenceFailureCode.BODY_TRUNCATED.value,
+            )
+        )
+
+
+def test_a_success_with_no_text_is_refused() -> None:
+    with pytest.raises(ValueError, match="carries its text"):
+        ReferenceExtractionRow.model_validate(
+            extraction_row(
+                text=None,
+                article_words=None,
+                article_sha256=None,
+                extracted_at=None,
+                extractor_version=None,
+                sanitizer_version=None,
+            )
+        )
+
+
+def test_an_empty_string_is_a_failure_rather_than_a_short_article() -> None:
+    with pytest.raises(ValueError, match="empty string is a failure"):
+        ReferenceExtractionRow.model_validate(
+            extraction_row(text="", article_words=0, article_sha256=derive_text_digest(""))
+        )
+
+
+def test_metadata_carries_the_totals_of_the_phase_that_wrote_it() -> None:
+    meta = ReferenceCollectionMetadata.model_validate(import_metadata())
+    assert meta.import_totals is not None
+    assert meta.extraction_totals is None
+    assert meta.lengthened_publishers == {}
+
+
+def test_metadata_without_the_totals_of_its_own_phase_is_refused() -> None:
+    payload = import_metadata()
+    payload.pop("import_totals")
+    with pytest.raises(ValueError, match="carries no import totals"):
+        ReferenceCollectionMetadata.model_validate(payload)
+
+
+def test_metadata_carrying_another_phase_s_totals_is_refused() -> None:
+    payload = import_metadata(
+        selection_totals={
+            "extraction_sha256": derive_text_digest("articles"),
+            "group_by": ReferenceGroupBy.PUBLISHER.value,
+            "groups": 1,
+            "requested": 1,
+            "selected": 1,
+            "shortfall": 0,
+        }
+    )
+    with pytest.raises(ValueError, match="totals it did not produce"):
+        ReferenceCollectionMetadata.model_validate(payload)
+
+
+def test_the_new_shapes_are_stamped_and_changelogged() -> None:
+    for contract in (
+        ReferenceDatasetLocalConfig,
+        ReferenceManifestRow,
+        ReferenceExtractionRow,
+        ReferenceCollectionMetadata,
+    ):
+        assert contract.schema_version() == "2026-09-13"
+        assert contract.__changelog__[0].why
 
 
 # --- the builder refuses, rather than writing a set that leaks ---------------
