@@ -531,14 +531,20 @@ def test_the_cap_flag_reaches_the_plan_stage(tmp_path: Path, monkeypatch: pytest
 # --- salience: a vote, never a discovery -------------------------------------
 
 
-def test_a_salience_feed_lifts_a_story_the_pool_already_had() -> None:
+def test_a_salience_feed_records_a_vote_on_a_story_the_pool_already_had() -> None:
+    """The vote is published on the item and no longer moves its place.
+
+    It was worth `collect.front_page_bonus` until 2026-09-13, when the term was
+    removed: it fired on 8 of 5,682 published stories. The fact survives so the
+    page can still say another desk led with the story.
+    """
     without = plan([LAB, TRADE, COMMUNITY])
     with_vote = plan([LAB, TRADE, COMMUNITY], salience=[FRONT_PAGE])
     voted = next(item for item in with_vote.items if item.canonical_url == MODEL_RELEASE)
     unvoted = next(item for item in without.items if item.canonical_url == MODEL_RELEASE)
     assert voted.on_front_page
     assert not unvoted.on_front_page
-    assert voted.rank_score > unvoted.rank_score
+    assert voted.rank_score == unvoted.rank_score
 
 
 def test_a_salience_feed_never_puts_a_new_address_in_the_pool() -> None:

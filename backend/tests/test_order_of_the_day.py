@@ -134,7 +134,6 @@ def scored() -> list[tuple[str, rank.Ranked]]:
                         carried,
                         config=collect,
                         watchlist_hit=story["watchlist_hit"],
-                        on_front_page=story["on_front_page"],
                         lens_bonus=story["lens_bonus"],
                         appeared=story["appeared"],
                         now=now,
@@ -145,7 +144,7 @@ def scored() -> list[tuple[str, rank.Ranked]]:
                     time_source=TimeSource.FEED,
                     carried_by=len(carried),
                     watchlist_hit=story["watchlist_hit"],
-                    on_front_page=story["on_front_page"],
+                    on_front_page=False,
                     lens_bonus=story["lens_bonus"],
                 ),
             )
@@ -200,7 +199,7 @@ def test_every_config_address_the_page_prints_resolves_and_still_holds_that_valu
                     "Correct the page, or the knob."
                 )
                 checked += 1
-    assert checked >= 13, (
+    assert checked >= 12, (
         f"only {checked} config addresses were checked against config/. The page's term table "
         "was renamed, reformatted or removed, so this test stopped reading it and passed anyway."
     )
