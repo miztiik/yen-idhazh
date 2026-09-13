@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 How a summary is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -822,6 +822,96 @@ what that costs are in [Design rationale](search-quality.md#design-rationale) be
 **Nothing here may move a threshold.** The queue is usable now; the labels are
 not collected and the run-days are not banked. Until both counts are met, any
 re-cut is a number chosen so a chart looks humbler.
+
+## The review tree: where a person looks at a day's visuals
+
+The label queue above asks whether a summary is faithful. **The review tree asks
+the other half: is the visual the machine kept the visual a person would have
+kept?** Nothing has asked it yet, and this is the place to.
+
+It gates nothing, the same way the label queue gates nothing. No publish
+decision reads it, nothing downloads it back into a run, and no later row may
+make one. **The verdict here is a person's, which is what `CLAUDE.md` section 0a
+requires**: a model may not grade a published visual, and a human reading one is
+the instrument that clause leaves open.
+
+`backend/utilities/review_queue.py` builds one day's tree under
+`backend/var/review/<date>/`: a contact sheet a reviewer scrolls, a copy of every
+drawing it names, and `queue.json`, the shape the reviewing tools read back.
+
+**Three populations, because three have a producer.**
+
+| Population | What it holds | What a reviewer is judging |
+| --- | --- | --- |
+| `published` | a chart was drawn and the day publishes it | whether it earned its place |
+| `rejected` | a chart was drafted and the item carries none anyway - the validator refused the plan, or the render failed after it passed | whether the machine threw away something worth keeping |
+| `none` | no chart was ever drafted. The majority answer by design | whether the story had a picture in it nobody drew |
+
+**The split is read off the run's own decisions, never off the published day.**
+A day payload carries `visual: null` for every item without a picture, so from
+it alone a chart the validator refused and a story nobody drafted one for are
+the same absence. Telling those two apart is most of the point, and
+`backend/var/run/<date>/items/*.visual.json` is the only place it can be done.
+
+**A rejected row has no picture to show, and that is the contract rather than a
+gap.** `VisualDecision` refuses a spec on an item decided to nothing, so a plan
+the validator threw out survives as `drafted_chart` and a `none_reason` and
+never as a drawing. The card names the gate that refused it; it cannot show what
+the drawing would have looked like.
+
+**A fourth population is named by the plan that asked for this surface and has
+no producer.** A config-B arm is a second configuration's render of the same
+day, and nothing in this build can select one. There is no member for it and no
+empty section pretending otherwise, for the reason `NoneReason` already gives
+about its own vocabulary: a word nobody can write is a word nobody can retire
+and nobody can tell from a bug. It arrives with the row that builds the second
+arm.
+
+### How a reviewer gets the tree
+
+**Two doors, and they produce the same thing** - the same shape the evidence
+package already uses, because it is the same person's evening.
+
+1. **The artifact.** The `assemble` job of `Content refresh` builds the tree and
+   uploads it as `review`, kept for seven days.
+   `gh run download <run-id> --repo <owner>/<repo> --pattern review --dir /tmp/review`,
+   then open `index.html`.
+2. **A day you ran yourself.** `python backend/utilities/review_queue.py --date <YYYY-MM-DD>`
+   reads the day under `frontend/public/digest/` and the run payloads under
+   `backend/var/run/`, which are the defaults, and writes the same tree to the
+   same place.
+
+**There is no dispatch of its own, and that is the decision this surface owed.**
+A `Content refresh` run is 164 to 184 minutes, and a queued dispatch is
+cancelled without an error by the next scheduled run
+([github-actions.md](../reference/github-actions.md)) - an expensive and
+unreliable way to obtain a contact sheet that the scheduled runs already
+produce. What refusing it costs, stated rather than implied: a reviewer cannot
+conjure a tree for a day whose artifact has aged out, and has to re-run that day
+locally. The seven-day retention is the answer to that, not a dispatch button.
+Ruled by Carmack and Fowler, 2026-09-13.
+
+**The tree is a build artifact and was never a page.** Never committed, never
+under `frontend/public/`, and bounded by the 500 MB artifact ceiling
+(Guardrail #2). The writer refuses an output directory that resolves inside
+`frontend/public/` or `frontend/build/` rather than trusting a later scan to
+notice, because `backend/var/` is gitignored and a path that drifted under the
+published tree would appear in no diff.
+
+**Three mechanisms written for a shipped review surface are now moot, and saying
+so is what stops a later plan-doc implementing them.** The proposal this surface
+comes from would have served `review/` from the published site, and guarded it
+by excluding it from indexing, from sitemaps and from feeds. **There is nothing
+to exclude.** A build artifact is never on the origin, so a `noindex`, a sitemap
+rule and a feed filter would each be a control over a page that does not exist -
+three things to keep correct that protect nothing.
+
+**It degrades rather than failing.** The job that builds the tree also publishes
+the day, so `--budget-mb` caps every population in proportion and records each
+population's true size beside the number of rows kept. Truncating one
+population's tail would produce an artifact that looks complete and is a biased
+sample, which is worse than a smaller honest one because nobody can see it
+happened.
 
 ## The band says what is missing, not how good the item is
 
