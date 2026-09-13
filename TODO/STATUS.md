@@ -28,7 +28,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-17-infographic-vocabulary-plan.md](20260905-17-infographic-vocabulary-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-18-diagram-vocabulary-plan.md](20260905-18-diagram-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-19-visual-telemetry-plan.md](20260905-19-visual-telemetry-plan.md) | 4 | 1 | 3 | 1 |
+| [20260905-19-visual-telemetry-plan.md](20260905-19-visual-telemetry-plan.md) | 4 | 2 | 2 | 1 |
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
@@ -62,7 +62,7 @@ section 3 is where it is answered.
 | #2 | 16 | B | The four ways code may reach a number the article did not write | 1 |
 | #1 | 17 | A | A real sentence made to fit, without anyone re-writing it | - |
 | #1 | 18 | A | The words that mean "then", and the words that mean "against" | - |
-| #2 | 19 | B | A stage of its own | 1 |
+| #3 | 19 | C | One row per attempt, and a reason for every refusal | 2 |
 | #1 | 20 | A | The two funnels | - |
 | #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 |
 | #1 | 22 | A | What is durable, and where it already lives | - |
@@ -77,7 +77,7 @@ section 3 is where it is answered.
 | #5 | 28 | C | Five things the server proves before the first item | 2 |
 | #6 | 28 | C | One complete config file per model, selected by a pointer | 2 |
 
-## Waiting on another row - 57
+## Waiting on another row - 56
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -108,7 +108,6 @@ section 3 is where it is answered.
 | #4 | 18 | D | A layout that draws the same twice | 3 is PENDING |
 | #5 | 18 | E | Trees, states and branches | 4 is PENDING |
 | #6 | 18 | F | A whole day, once more | 5 is PENDING |
-| #3 | 19 | C | One row per attempt, and a reason for every refusal | 2 is PENDING |
 | #4 | 19 | D | What a re-render needs, and where a rejected plan lives | 3 is PENDING |
 | #2 | 20 | B | Why it was refused, and what happened when it stepped down | 1 is PENDING |
 | #3 | 20 | C | The rules for reading any of it | 2 is PENDING |
