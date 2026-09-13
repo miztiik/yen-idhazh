@@ -27,7 +27,7 @@ import json
 import os
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -36,7 +36,7 @@ from typing import Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
-from idhazh.contracts.app_config import InferenceConfig, ModelRef
+from idhazh.contracts.app_config import InferenceConfig, ModelRef, TurnsConfig
 
 # One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
 # read it here: the argv the server binds with, and the address the stage posts
@@ -93,14 +93,12 @@ def is_context_exceeded(body: str) -> bool:
     return bool(error.get("type") == CONTEXT_EXCEEDED_TYPE)
 
 
-#: How one turn is written for the weights we load. It is model-shaped text and
-#: it moves when the model does, so it sits beside the prompts rather than in
-#: `config/`: an operator turns no dial here, and a wrong value renders a prompt
-#: with no turn structure that the decoder's grammar still accepts - worse
-#: summaries and no error. JSON rather than raw text because the trailing
-#: newlines are load-bearing and invisible, and an editor or a line-ending pass
-#: would rewrite them in silence.
-TURN_MARKERS_PATH: Final = Path(__file__).parent.parent / "prompts" / "turn_markers.json"
+#: The strings that open and close a turn belong to the weights, so they are
+#: read off the entry that names those weights - `models.<role>.turns` in
+#: `config/idhazh.json`. They lived in `backend/idhazh/prompts/turn_markers.json`
+#: until 2026-09-13, one global file with no model key, which meant a model
+#: whose turns differ was a source edit and a swap that forgot them raised
+#: nothing (`docs/architecture/summarize/model-boundary.md`).
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,41 +133,55 @@ class TurnMarkers:
         beside it, so the second call cannot open its reply differently from the
         first - which is the one way a continuation could still break the prefix
         it exists to preserve.
+
+        **Longest first.** The match is on a suffix, so a shorter opening that
+        is a suffix of a longer one would answer for both and a thinking
+        continuation would be spliced with the plain opening. Sorting by length
+        makes that unreachable for any pair, rather than safe for the pair the
+        incumbent happens to declare.
         """
-        for opening in (self.reply_opening_thinking, self.reply_opening):
+        for opening in sorted(
+            (self.reply_opening_thinking, self.reply_opening), key=len, reverse=True
+        ):
             if prompt.endswith(opening):
                 return opening
         raise ValueError("this prompt does not end on a reply opening, so nothing may follow it")
 
 
-@lru_cache(maxsize=1)
-def turn_markers() -> TurnMarkers:
-    """The markers, read once and checked once.
-
-    A missing key raises at the first render rather than becoming a `KeyError`
-    part-way through a shard.
-    """
-    loaded = json.loads(TURN_MARKERS_PATH.read_text(encoding="utf-8"))
-    missing = sorted({field.name for field in fields(TurnMarkers)} - set(loaded))
-    if missing:
-        raise ValueError(f"{TURN_MARKERS_PATH.name} names no {', '.join(missing)}")
+@lru_cache(maxsize=8)
+def _markers(
+    turn_opening: str, turn_closing: str, reply_opening: str, reply_opening_thinking: str
+) -> TurnMarkers:
     return TurnMarkers(
-        turn_opening=Template(loaded["turn_opening"]),
-        turn_closing=loaded["turn_closing"],
-        reply_opening=loaded["reply_opening"],
-        reply_opening_thinking=loaded["reply_opening_thinking"],
+        turn_opening=Template(turn_opening),
+        turn_closing=turn_closing,
+        reply_opening=reply_opening,
+        reply_opening_thinking=reply_opening_thinking,
     )
 
 
-def render_prompt(*, system: str, user: str, thinking: bool) -> str:
+def turn_markers(turns: TurnsConfig) -> TurnMarkers:
+    """The markers one entry declares, cached under that entry's own strings.
+
+    Keyed rather than single-slot. One process holding two entries - a bench
+    comparing an incumbent against a candidate - would otherwise render the
+    second model's prompts with the first model's markers, and the grammar would
+    accept every reply.
+    """
+    return _markers(
+        turns.turn_opening, turns.turn_closing, turns.reply_opening, turns.reply_opening_thinking
+    )
+
+
+def render_prompt(*, system: str, user: str, thinking: bool, turns: TurnsConfig) -> str:
     """The prompt bytes a rendered completion is sent, from the turns it is made of."""
-    markers = turn_markers()
+    markers = turn_markers(turns)
     return markers.turn("system", system) + markers.turn("user", user) + markers.opening(
         thinking=thinking
     )
 
 
-def continued_prompt(prompt: str, *, reply: str, user: str) -> str:
+def continued_prompt(prompt: str, *, reply: str, user: str, turns: TurnsConfig) -> str:
     """The next prompt in a sequence: this one, what came back, and one new turn.
 
     The opening is a literal concatenation, so the property a prefix cache needs
@@ -178,7 +190,7 @@ def continued_prompt(prompt: str, *, reply: str, user: str) -> str:
     as one entry of the model's own vocabulary, so the byte prefix survives as a
     token prefix rather than re-splitting at the join.
     """
-    markers = turn_markers()
+    markers = turn_markers(turns)
     opening = markers.opening_of(prompt)
     return prompt + reply + markers.turn_closing + markers.turn("user", user) + opening
 
@@ -374,6 +386,7 @@ def completion_payload(
     user: str,
     output_schema: dict[str, Any],
     inference: InferenceConfig,
+    turns: TurnsConfig,
     max_output_tokens: int,
 ) -> dict[str, Any]:
     """The request body for a prompt we rendered ourselves.
@@ -402,7 +415,9 @@ def completion_payload(
     """
     return {
         "model": model_id,
-        "prompt": render_prompt(system=system, user=user, thinking=inference.thinking),
+        "prompt": render_prompt(
+            system=system, user=user, thinking=inference.thinking, turns=turns
+        ),
         "temperature": inference.temperature,
         "top_p": inference.top_p,
         "seed": inference.seed,
@@ -419,6 +434,7 @@ def continued_completion_payload(
     reply: str,
     user: str,
     output_schema: dict[str, Any],
+    turns: TurnsConfig,
     max_output_tokens: int,
 ) -> dict[str, Any]:
     """A second request whose prompt IS the first one's, plus what it returned.
@@ -446,7 +462,7 @@ def continued_completion_payload(
     """
     return {
         **first,
-        "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user),
+        "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user, turns=turns),
         "n_predict": max_output_tokens,
         "json_schema": output_schema,
     }

@@ -321,13 +321,14 @@ def test_a_turn_whose_first_line_is_not_a_title_keeps_its_first_paragraph() -> N
 def declaring(app: AppConfig, digest: str) -> AppConfig:
     """The same config, declaring a different set of summarizer weights.
 
-    Both cells move, because `ModelsConfig` refuses a block whose `declared_for`
-    is not its own entry's `sha256` - which is exactly why the tool has to hash
-    the bytes on disk rather than reading either cell.
+    All three cells move, because `ModelsConfig` refuses a block whose
+    `declared_for` is not its own entry's `sha256` - which is exactly why the
+    tool has to hash the bytes on disk rather than reading any of them.
     """
     raw: dict[str, Any] = app.model_dump(mode="json")
     raw["models"]["summarize"]["sha256"] = digest
     raw["models"]["summarize"]["inference"]["declared_for"] = digest
+    raw["models"]["summarize"]["turns"]["declared_for"] = digest
     return AppConfig.model_validate(raw)
 
 

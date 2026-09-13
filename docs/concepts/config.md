@@ -491,6 +491,50 @@ Both digests absent is legal and means an entry nobody has measured yet. Nothing
 runs on one: `idhazh.fingerprint.build_inputs` already refuses to record a run
 whose weights have no recorded digest.
 
+### The turn envelope sits on the entry too, and obeys the same rule
+
+Four strings decide where a turn opens and closes and how a reply begins. They
+lived in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13 - one
+global file with no model key, in a package this project writes, holding a fact
+about somebody else's weights. A model whose turns differ was a source edit, and
+a swap that left them behind raised nothing. They are `models.<role>.turns` now,
+and `turns.declared_for` pins them to the entry's `sha256` exactly as
+`inference.declared_for` pins the numbers.
+
+| Marker | What it is |
+| --- | --- |
+| `turn_opening` | opens a turn, with `$role` substituted into it |
+| `turn_closing` | closes a turn, and is where call 2's prompt splices onto call 1's |
+| `reply_opening` | where the model starts writing, reasoning off |
+| `reply_opening_thinking` | the same, reasoning on |
+
+**The block is required and has no default**, which is the one place the model
+references' "no honest default" rule reaches past the weights themselves: an
+entry that inherited the incumbent's markers would render a prompt with no turn
+structure that the decoder's grammar still accepts, so the only symptom is worse
+summaries. `turn_opening` must name `$role` and the other three may not be
+empty, because both of those failures are silent in the same way.
+
+**What is per model is the envelope, never the words.** The instructions stay
+one set for every model - a per-model prompt would hide every wording change
+inside the swap that carried it, and would make a qualification run measure two
+changes and report one number
+([../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md)).
+
+**The file's reappearance is refused at config load.** `idhazh.config.load`
+checks the retired path and raises, because the package directory is exactly
+where somebody would put the markers back and a file nothing reads is a set of
+markers an operator believes are live.
+
+**The recorded shape did not move.** `run_manifest.ModelUse` embeds `ModelRef`,
+which is what a run recorded; the envelope sits on `ModelEntry`, which is what a
+person declares. No `model_ref` a run has ever written carries markers, and
+requiring them there would stop this build reading yesterday's day (`CLAUDE.md`
+section 11). What is given up is that `run.json` never says how the turns were
+written - `RunRecord.inputs.prompt_sha256` digests both turns rendered through
+them, so a marker that moved still moves the stamp. Ruled by Fowler,
+2026-09-13.
+
 **The stamp did not move.** `declared_for` is classified in
 `idhazh.fingerprint.NOT_DIGESTED`, so `pipeline_fingerprint` is byte-identical
 across this change and every committed row stays comparable

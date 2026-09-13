@@ -31,18 +31,28 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, read_text
 
-from idhazh.contracts.app_config import AppConfig, InferenceConfig, ModelRef, ModelsConfig
+from idhazh.classify import calls
+from idhazh.contracts.app_config import (
+    AppConfig,
+    InferenceConfig,
+    ModelEntry,
+    ModelRef,
+    ModelsConfig,
+    TurnsConfig,
+)
 from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
     MACHINE_INPUTS,
+    MODEL_FIELD_SPELLING,
     NOT_DIGESTED,
     PLACEHOLDER_DIGEST,
     PROSE_INPUTS,
     UNRECORDED_BUILD,
     build_inputs,
     digested_inference_fields,
+    digested_model_fields,
     host_cpu,
     prose_changed_alone,
     runner_class,
@@ -147,13 +157,29 @@ def test_the_digest_is_stable_across_construction_order() -> None:
 
 
 def unclassified_knobs(knobs: Iterable[str]) -> frozenset[str]:
-    """Knob names that neither reach the stamp nor sit in `NOT_DIGESTED`."""
-    return frozenset(knobs) - digested_inference_fields() - frozenset(NOT_DIGESTED)
+    """Names that neither reach the stamp nor sit in `NOT_DIGESTED`."""
+    return (
+        frozenset(knobs)
+        - digested_inference_fields()
+        - digested_model_fields()
+        - frozenset(NOT_DIGESTED)
+    )
+
+
+def model_shaped_fields() -> frozenset[str]:
+    """The whole universe the closed set has to answer for.
+
+    Both shapes, not just the inference block. It was that block alone until
+    2026-09-13, which was closed over the wrong set the moment `turns` moved
+    onto the entry - a prompt-shaping field in no stamp and in no closed set,
+    with nothing saying so.
+    """
+    return frozenset(InferenceConfig.model_fields) | frozenset(ModelEntry.model_fields)
 
 
 def test_every_inference_knob_is_digested_or_written_down_as_undigested() -> None:
     """A knob nobody classified is a drift source nobody recorded."""
-    missing = unclassified_knobs(InferenceConfig.model_fields)
+    missing = unclassified_knobs(model_shaped_fields())
     assert not missing, (
         "classify these in idhazh.fingerprint.NOT_DIGESTED, or digest them in "
         f"PipelineInputs: {sorted(missing)}"
@@ -162,18 +188,40 @@ def test_every_inference_knob_is_digested_or_written_down_as_undigested() -> Non
 
 def test_a_new_knob_nobody_classified_fails_the_check() -> None:
     """The check has to bite, or the closed world is only a comment."""
-    with_an_unclassified_knob = [*InferenceConfig.model_fields, "cache_reuse"]
+    with_an_unclassified_knob = [*model_shaped_fields(), "cache_reuse"]
     assert unclassified_knobs(with_an_unclassified_knob) == {"cache_reuse"}
 
 
 def test_no_knob_is_both_digested_and_written_down_as_undigested() -> None:
     """A knob in both places means one of the two statements is false."""
     assert not digested_inference_fields() & frozenset(NOT_DIGESTED)
+    assert not digested_model_fields() & frozenset(NOT_DIGESTED)
 
 
 def test_the_undigested_set_names_only_real_knobs() -> None:
     """A renamed knob leaves a stale name here, and the stale name proves nothing."""
-    assert frozenset(NOT_DIGESTED) <= frozenset(InferenceConfig.model_fields)
+    assert frozenset(NOT_DIGESTED) <= model_shaped_fields()
+    assert frozenset(MODEL_FIELD_SPELLING) <= frozenset(ModelEntry.model_fields)
+
+
+def test_the_turn_envelope_reaches_the_stamp_through_the_rendered_prompt() -> None:
+    """`turns` is digested, and this is the only route it takes.
+
+    `MODEL_FIELD_SPELLING` claims the envelope arrives as `prompt_sha256`. The
+    claim is worth nothing unless a moved marker moves that digest, so the
+    marker is moved and the two renders compared. Driven from a built entry, so
+    it says nothing about what the committed config happens to hold.
+    """
+    assert MODEL_FIELD_SPELLING["turns"] == "prompt_sha256"
+    turns = TurnsConfig(
+        turn_opening="<|im_start|>$role\n",
+        turn_closing="<|im_end|>\n",
+        reply_opening="<|im_start|>assistant\n",
+        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
+    )
+    moved = turns.model_copy(update={"turn_closing": "<|end_of_turn|>\n"})
+
+    assert calls.prompt_inputs(turns=turns) != calls.prompt_inputs(turns=moved)
 
 
 def test_every_undigested_knob_carries_a_reason() -> None:

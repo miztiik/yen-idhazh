@@ -269,11 +269,12 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         """
         first = call_one_payload(article_ok)
         reply = read_text(FIXTURES_DIR / "completions" / "call-one" / "labelled.json")
+        turns = config.load(CONFIG_DIR).app.models.summarize.turns
         whole = build_call_two_request(
-            first, reply, source_words=article_ok.band_source_words
+            first, reply, turns=turns, source_words=article_ok.band_source_words
         )
         suppressed = build_call_two_request(
-            first, reply, source_words=article_ok.band_source_words, plan=False
+            first, reply, turns=turns, source_words=article_ok.band_source_words, plan=False
         )
         shared = first["prompt"] + reply
 

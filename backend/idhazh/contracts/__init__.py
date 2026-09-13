@@ -14,11 +14,13 @@ from idhazh.contracts.app_config import (
     InferenceConfig,
     LoggingConfig,
     LogLevel,
+    ModelEntry,
     ModelRef,
     ModelsConfig,
     RetentionConfig,
     RunConfig,
     TierWeights,
+    TurnsConfig,
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import (
@@ -98,6 +100,7 @@ __all__ = [
     "LogLevel",
     "LoggingConfig",
     "Model",
+    "ModelEntry",
     "ModelRef",
     "ModelRole",
     "ModelUse",
@@ -119,6 +122,7 @@ __all__ = [
     "SummaryStatus",
     "Taxonomy",
     "TierWeights",
+    "TurnsConfig",
     "ValidationRow",
     "ValidationVerdict",
     "VerticalCount",

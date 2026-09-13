@@ -61,7 +61,12 @@ from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 
 from idhazh import summarize
-from idhazh.contracts.app_config import ElementsConfig, InferenceConfig, SummarizeConfig
+from idhazh.contracts.app_config import (
+    ElementsConfig,
+    InferenceConfig,
+    SummarizeConfig,
+    TurnsConfig,
+)
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
 from idhazh.contracts.base import Model as ContractModel
 from idhazh.contracts.base import canonical_json, derive_text_digest
@@ -528,6 +533,7 @@ def build_call_one_request(
     *,
     model_id: str,
     inference: InferenceConfig,
+    turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
     """Call 1's request body, with the reply shape enforced by the decoder.
@@ -541,6 +547,9 @@ def build_call_one_request(
     `prompt_config` reaches call 1 because the system turn carries both jobs
     now. Every number it spends is a config-level one, the same on every item,
     so the turn is still the same bytes on every item.
+
+    `turns` comes from the entry that names the weights this body will be sent
+    to, so a model whose turns differ is a config edit rather than a source one.
     """
     return completion_payload(
         model_id=model_id,
@@ -548,6 +557,7 @@ def build_call_one_request(
         user=call_one_user_turn(article, table),
         output_schema=call_one_schema(),
         inference=inference,
+        turns=turns,
         max_output_tokens=call_one_output_tokens(),
     )
 
@@ -1327,6 +1337,7 @@ def build_call_two_request(
     first: Mapping[str, Any],
     reply: str,
     *,
+    turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
     source_words: int | None = None,
     brief: bool = False,
@@ -1367,12 +1378,16 @@ def build_call_two_request(
         output_schema=call_two_schema(
             prompt_config, source_words=source_words, brief=brief, plan=plan
         ),
+        turns=turns,
         max_output_tokens=call_two_output_tokens(prompt_config, plan=plan),
     )
 
 
 def prompt_inputs(
-    prompt_config: SummarizeConfig | None = None, *, inference: InferenceConfig | None = None
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    turns: TurnsConfig,
+    inference: InferenceConfig | None = None,
 ) -> str:
     """What the fingerprint hashes to stand for these two prompts.
 
@@ -1382,15 +1397,14 @@ def prompt_inputs(
     substituted into them. A stamp that moved per item could not answer the
     question the stamp exists to answer.
 
-    **The rendering is what makes the turn markers a digested input.** Since the
-    prompt bytes became ours, `backend/idhazh/prompts/turn_markers.json`
-    decides where every turn opens and closes, and nothing else in the stamp
-    reaches it: the chat template hashed off `/props` no longer renders these
-    prompts. Editing a marker would move every reply while the fingerprint
-    ledger said `unchanged`, which is the state `Observation.DETERMINISM_VIOLATION`
-    exists to make visible. Rendering both turns through the same helpers the
-    live requests use covers the markers, all four prompt files and the turn
-    order together.
+    **The rendering is what makes the turn envelope a digested input.** Since
+    the prompt bytes became ours, `models.<role>.turns` decides where every turn
+    opens and closes, and nothing else in the stamp reaches it: the chat
+    template hashed off `/props` no longer renders these prompts. Editing a
+    marker would move every reply while the fingerprint ledger said `unchanged`,
+    which is the state `Observation.DETERMINISM_VIOLATION` exists to make
+    visible. Rendering both turns through the same helpers the live requests use
+    covers the envelope, all four prompt files and the turn order together.
 
     The article and call 1's reply are rendered as empty strings, which is what
     leaves the result the same on every item.
@@ -1400,8 +1414,9 @@ def prompt_inputs(
         system=call_one_system_prompt(ask),
         user="",
         thinking=(inference or InferenceConfig()).thinking,
+        turns=turns,
     )
-    rendered = continued_prompt(first, reply="", user=call_two_user_turn(ask))
+    rendered = continued_prompt(first, reply="", user=call_two_user_turn(ask), turns=turns)
     return rendered + canonical_json(ask.model_dump(mode="json"))
 
 

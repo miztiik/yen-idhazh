@@ -124,6 +124,36 @@ A model with no system role is the case that looks like an exception and is
 not. The same bytes go to a different address, so the prompt digest does not
 move and an envelope field records that the placement changed.
 
+## Two shapes, and which one a run writes down
+
+The entry is two things at once, so it is two contracts.
+
+| Shape | Who writes it | Carries |
+| --- | --- | --- |
+| `ModelEntry` | a person, in `config/` | the weights, the runtime settings, **and the turn envelope** |
+| `ModelRef` | a run, into `run.json` | the weights and the runtime settings |
+
+The envelope is required on the declared shape and absent from the recorded
+one. Required, because an entry that forgets its markers must fail rather than
+inherit the incumbent's: inherited markers render a prompt with no turn
+structure that the grammar still accepts, so the only symptom is worse
+summaries. Absent from the record, because no `model_ref` a run has ever
+written carries markers, and a required field there would stop today's build
+reading yesterday's day (`CLAUDE.md` section 11).
+
+What that gives up is that `run.json` never says how the turns were written.
+It is paid for by `RunRecord.inputs.prompt_sha256`, which digests both turns
+**rendered through** the envelope - so a marker that moved still moves the
+stamp, and `prose_changed_alone` still has something to compare. Ruled by
+Fowler, 2026-09-13.
+
+The envelope reached the entry on 2026-09-13. Before that it was one global
+file, `backend/idhazh/prompts/turn_markers.json`, with no model key - so a
+model whose turns differ was a source edit, and one process holding two
+candidates would have rendered both with the first one's markers. The lookup is
+keyed by the entry now, and config load refuses that path if the file comes
+back.
+
 ## The inward shim
 
 Three steps, in order, all reading the entry and never a model name.
