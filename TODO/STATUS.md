@@ -37,11 +37,10 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 7 | 1 | 0 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 7 | 7 | 1 |
 
-## In flight - 3
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #6 | 11 | F | The small model, its job and its cache go | p11-6b |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | p24-8 |
 | #7 | 25 | D | A desk floor and a desk ceiling | p25-7 |
 
@@ -73,7 +72,7 @@ section 3 is where it is answered.
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
-## Waiting on another row - 59
+## Waiting on another row - 60
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -82,6 +81,7 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
+| #6 | 11 | F | The small model, its job and its cache go | - |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
@@ -119,7 +119,7 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is IN-FLIGHT |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is UNKNOWN |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
 | #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is PENDING; 8 is PENDING |
