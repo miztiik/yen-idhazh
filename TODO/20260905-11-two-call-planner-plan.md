@@ -110,7 +110,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3d | The instrument says where every re-read token went | 3b | C3 | DONE #639 | p11-3d | #639 | worker |
 | 3c | Own the prompt bytes | 3d | C4 | DONE #640 | p11-3c | #640 | worker |
 | 3e | The instructions move in front of the article | 3c | C5 | DONE #644 | p11-3e | #644 | worker |
-| 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | PENDING | - | - | - |
+| 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | IN-FLIGHT | p11-3f | - | worker |
 | 3g | Call 1's reply does not fit its own budget | - | C7 | DONE #652 | p11-3g | #652 | worker |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
@@ -349,6 +349,7 @@ Row #3d rendered both prompts on the configured weights through the configured s
 - **Two things are wrong and the second is the one that matters.** `backend/tests/test_contracts.py::test_the_longest_article_the_cap_allows_still_fits_the_window` sizes 997 + 12,191 + 900 = 14,088 and passes, and `qualify.py` refuses on `prompt_tokens + max_output_tokens > n_ctx`; both size the single call this plan is replacing. And with `--no-context-shift` the overflow is not an error: the decode stops at the wall, `recovered_completion` salvages the summary, the item publishes with `decision = none`, and **no counter says the window was the reason.** Row #4 built the `none_reason` enum on exactly that argument - a refusal indistinguishable from another's explains nothing - and the window has no member in it.
 - **The only shape that fits at the cap is the one with the picture already suppressed.** `SUPPRESSED_BUDGET_TOKENS` is 905, so 15,404 + 905 = 16,309 of 16,384 - **75 tokens of margin, 0.46 percent.** The reachability gate is doing the window's job by accident, and 75 tokens is luck rather than a margin. It goes the first time any bound moves.
 - **What this row does not do:** it does not lower the cap or narrow the reply. **It does raise `n_ctx` to 32,768**, which the owner authorised on 2026-09-12, and the other two remain out of scope.
+- **Files touched, added 2026-09-13 before dispatch - this row shipped without the bullet every other row of this plan carries.** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `backend/idhazh/qualify.py` (whose refusal sizes the single call), `backend/tests/test_contracts.py` (which holds `test_the_longest_article_the_cap_allows_still_fits_the_window`), `backend/tests/test_qualify.py`, and the page that owns the window - plus whatever the named refusal needs, which is this row's own call. **It does not touch `backend/idhazh/classify/calls.py`**: row #3g changed call 1's output budget on 2026-09-12 and that file is settled.
 
 ### Decisions
 
