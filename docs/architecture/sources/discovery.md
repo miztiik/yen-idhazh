@@ -623,6 +623,74 @@ This establishes access from that developer machine on that date, not access
 from a GitHub runner, permission to train on the text, or summary quality.
 The source shape and historical health records are unchanged.
 
+### The 2026-09-13 France 24 regional split and the Newslaundry retirement
+
+Owner decision: replace the one general France 24 feed with two regional feeds,
+and retire Newslaundry. The two calls are unrelated and share only a date.
+
+| Feed | Address | Decision |
+| --- | --- | --- |
+| France 24 - Europe | `https://www.france24.com/en/europe/rss` | Added to `world`, tier 2, `reporting`, weight 1.0 |
+| France 24 - Asia-Pacific | `https://www.france24.com/en/asia-pacific/rss` | Added to `world`, tier 2, `reporting`, weight 1.0 |
+| France 24 | `https://www.france24.com/en/rss` | Retired. The two regional feeds replace it |
+| Newslaundry | `https://www.newslaundry.com/stories.rss` | Retired. The feed answers 200 and carries no entries |
+
+Two out and two in, so the live list holds 160 feeds either side of this change.
+`world` goes from 30 feeds to 31 and `india` from 23 to 22, against a floor of 21
+each. Both retirements move to the `retired` key and keep their id, title, kind
+and address, so an item already published under `france24` or `newslaundry`
+still resolves a name through `Sources.known_feeds`. `retired_on` carries
+2026-09-13, the day this change lands and the last day a plan can select them.
+The committed item-health record shows `france24` producing rows on 2026-09-13
+and `newslaundry` on 2026-09-11, so an earlier date would claim a stop that did
+not happen.
+
+Two production-path probes ran on a Windows developer machine on 2026-09-13, at
+13:33 UTC with `--articles 3` and at 13:34 UTC with `--articles 5`. Every France
+24 address returned HTTP 200, parsed without a warning, carried a date on every
+entry, and allowed the configured user agent under the robots policy.
+
+| Feed | Entries | Sampled articles |
+| --- | --- | --- |
+| France 24 - Europe | 30 of 30 dated | 5 of 5 readable; 58 to 716 words |
+| France 24 - Asia-Pacific | 30 of 30 dated | 5 of 5 readable; 53 to 1,040 words |
+| France 24 (general) | 24 of 24 dated | 3 of 3 readable; 53 to 70 words |
+
+**France 24 is a swap, not a removal.** The general feed still works, so it is
+retired for what it duplicates rather than for a failure: its committed
+feed-health record is 96 reads across 22 days, all of them `ok`, none of them
+empty. Two of its three sampled stories came back from a regional feed in the
+same run, while the Europe and Asia-Pacific samples shared nothing with each
+other. The general feed also offered six fewer entries than either regional one.
+Splitting it doubles the room France 24 gets, because `collect.max_per_source` is
+a per-feed limit. The reversal is one `retired_on: null` and two deletions.
+
+**Newslaundry is retired because its feed stopped carrying anything.** Today it
+answered HTTP 200 with zero entries, which the utility reports as `not_a_feed`.
+That is not one bad day. Across the committed feed-health record it was read 96
+times over 22 days, and **30 of the 81 successful reads returned zero items**.
+Its `robots.txt` allows `/stories.rss`, and the articles behind it read when
+there are any - 48 of its 52 item-health rows are `ok`. The feed is the problem,
+not the site or its permissions, so this is a retirement and not an access
+refusal.
+
+**France 24 carries the same unresolved tension `fastcompany-tech` does.** Its
+`robots.txt` allows `*` with an empty `Disallow`, then names about forty AI
+crawlers - GPTBot, ClaudeBot, Google-Extended, PerplexityBot and the rest - with
+`Disallow: /`. We are none of those user agents, so the fetch is allowed. But
+`corpus/` commits article text as training samples (`CLAUDE.md` section 0a), so
+the publisher's stated intent and one of our uses point in opposite directions.
+This is not new exposure, because France 24 has been a live source throughout.
+It is recorded here rather than resolved: the owner takes that call, and if it
+goes the other way the fix is two `retired_on` dates.
+
+This establishes access from that developer machine on that date, not access
+from a GitHub runner, permission to train on the text, or summary quality. Two
+of the eleven articles sampled here came in under `extract.min_source_words`,
+which marks them `brief` and routes them to the shortest summary band rather
+than refusing them. France 24 publishes short video and live segments beside its
+reporting, so expect more of those.
+
 ### The 2026-09-09 finance curation
 
 Owner decision, 2026-09-09: add these four feeds and retire the existing
