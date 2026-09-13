@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { assertBuild, buildEnvironment, inputFingerprint, REPO, treeFingerprint, writeRecord } from './build-state.ts';
+import { assertBuild, buildEnvironment, changedInputNote, inputFingerprint, REPO, treeFingerprint, writeRecord } from './build-state.ts';
 import type { BuildMode, BuildRecord } from './build-state.ts';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from './test-groups.ts';
 import { selectionForChange } from './test-scope.ts';
@@ -342,7 +342,9 @@ async function main(args: string[]): Promise<number> {
 					throw new Error('The build changed while browser checks were running.');
 				}
 			}
-			if (inputFingerprint(root) !== source) throw new Error('Inputs changed during the checks; this result cannot certify the new tree.');
+			if (inputFingerprint(root) !== source) {
+				throw new Error(`Inputs changed during the checks; this result cannot certify the new tree. ${changedInputNote(root)}`);
+			}
 		} catch (error) {
 			console.error(error instanceof Error ? error.message : error);
 			if (!steps.some((step) => step.exitCode !== 0)) steps.push({ name: 'input verification', exitCode: 1, milliseconds: 0 });
