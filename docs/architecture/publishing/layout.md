@@ -414,7 +414,7 @@ Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinne
 
 A topic route is the day filtered to one desk, and until 2026-09-01 the filter ran at build time in five documents a day. Each of those documents carried the **whole** day so a client-side filter could throw most of it away. Now the document carries the head of its own desk - `ui.shell_seed_items` stories - and a browser fetches the served day for the rest.
 
-**The seed is the head of the desk's list, never of the day's.** The published order is desk-blocked rather than globally ranked ([../sources/discovery.md](../sources/discovery.md)), so the head of the whole day is one desk and every other topic route would have opened on a screen holding none of its own stories.
+**The seed is the head of the desk's list, never of the day's.** The day publishes one order over every story it carries ([../../concepts/placement.md](../../concepts/placement.md)), so the head of the whole day is the day's best stories rather than one desk's - and a topic route seeded from it would open on a screen holding almost none of its own. **Until 2026-09-13 the reason was a different one and it was stronger**: the published order was desk-blocked, so the head of the day was literally one desk and every other topic route would have opened holding nothing at all. The decision outlived the reason.
 
 **The seed is also the head UNION anything the document has to be able to anchor.** A prefix cannot hold a leading story: the reading-page plan's lead block picks across the whole day, and its five leads on the 601-story arm sat at positions 249, 285, 337, 344 and 493. A lead link into a document that carries only a prefix lands on nothing until the fetch arrives, and on nothing at all when it fails. `dayShell` therefore takes a set of ids to keep whatever their position, and the union is what it seeds.
 
@@ -726,6 +726,7 @@ Counting a syscall is deterministic, so the spread is zero.
 ## See also
 
 - [retention.md](retention.md) - the other half: what may be deleted, when, and what bounds every collection a run appends to.
+- [../../concepts/placement.md](../../concepts/placement.md) - the one order this payload carries, and the frame a person set over its head.
 - [../../concepts/digest.md](../../concepts/digest.md) - what a reader gets and the visual rule this layout serves.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Assemble stage that writes all of this.
 - [../sources/discovery.md](../sources/discovery.md) - where the day's items come from, and the same retire-never-delete discipline applied to sources.

@@ -255,6 +255,11 @@
       "telemetry/": 1100000
     }
   },
+  "placement": {
+    "head_items": 20,
+    "head_no_repeat": 10,
+    "max_desk_in_head": 5
+  },
   "retention": {
     "dry_run": true,
     "image_months": 13,

@@ -350,9 +350,12 @@ export function leadingStories(leads: DigestLead[], items: DigestItem[]): Leadin
  * rather than dropping out, because "we could not date this" is not a reason to
  * stop publishing it.
  *
- * The order it replaces is the published one, which is desk-blocked rather than
- * ranked - the whole of one desk, then the whole of the next - so a reader
- * scrolling it met the same desk ninety times before the next one started.
+ * The order it replaces is the published one, which until 2026-09-13 was
+ * desk-blocked rather than ranked - the whole of one desk, then the whole of the
+ * next - so a reader scrolling it met the same desk ninety times before the next
+ * one started. The payload now carries one scored order with a frame over its
+ * head, so this is re-ordering something defensible rather than rescuing
+ * something broken, and plan 25 row #10 is where it stops.
  * Nothing editorial is lost by re-ordering it: what the day thinks is important
  * is in the leading block, chosen across the whole day.
  *

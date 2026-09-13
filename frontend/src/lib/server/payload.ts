@@ -246,9 +246,9 @@ export interface DayShellSplit {
 	/** One topic's stories only, in the day's own published order.
 	 *
 	 * A topic page's seed has to be the head of the list that page renders. The
-	 * published order is desk-blocked rather than globally ranked, so the head of
-	 * the whole day is one desk - and every other topic route would open on a
-	 * screen holding none of its own stories.
+	 * day publishes one scored order over every story it carries, so the head of
+	 * the whole day is the day's best stories rather than one desk's - and every
+	 * other topic route would open on a screen holding almost none of its own.
 	 */
 	vertical?: string | null;
 	/** Item ids the seed keeps whatever their position in the order.
@@ -329,9 +329,9 @@ export function dayShell(
 	if (!day) return null;
 	// The head has to be the head of the order the PAGE draws, not of the
 	// published one. The stream runs newest first, so a seed taken off the
-	// desk-blocked payload would put one desk's stories in the document and then
-	// shuffle them the moment the rest of the day arrived - a first screen that
-	// rewrites itself while the reader is on it.
+	// published order would put the day's highest-scoring stories in the document
+	// and then shuffle them the moment the rest of the day arrived - a first
+	// screen that rewrites itself while the reader is on it.
 	const ordered = orderByTime(day.items);
 	// `deskOf` and not `item.vertical`: the route is a topic, and the topic a
 	// story is read under is where the day published it. Filtering on the feed's
