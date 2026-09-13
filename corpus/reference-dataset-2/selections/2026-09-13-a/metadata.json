@@ -1,0 +1,531 @@
+{
+  "collection_schema": "reference-dataset-selection",
+  "domains": {
+    "babylonburns.com": 10,
+    "baiguan.news": 7,
+    "coincenter.org": 10,
+    "economicforces.xyz": 28,
+    "globaltimes.cn": 28,
+    "humanityredefined.com": 28,
+    "latent.space": 20,
+    "semianalysis.com": 2,
+    "substack.com": 742,
+    "themarketdispatch.com": 27,
+    "thevccorner.com": 27,
+    "threatswithoutborders.com": 25,
+    "venturecurator.com": 19,
+    "venturedailydigest.com": 27
+  },
+  "extraction_totals": null,
+  "generated_at": "2026-09-13T18:45:51Z",
+  "hosts": {
+    "aleximas.substack.com": 12,
+    "alwaysbecurious.substack.com": 5,
+    "aswathdamodaran.substack.com": 22,
+    "babylonburns.com": 10,
+    "baiguan.news": 7,
+    "bengoertzel.substack.com": 28,
+    "bharatnama.substack.com": 25,
+    "capitalonchain.substack.com": 28,
+    "catherinemcbride.substack.com": 10,
+    "chipbriefing.substack.com": 28,
+    "ctexp.substack.com": 10,
+    "culturecapitalist.substack.com": 3,
+    "decodingthedragon.substack.com": 25,
+    "economicforces.xyz": 28,
+    "econovis.substack.com": 10,
+    "edofarina.substack.com": 10,
+    "explainx.substack.com": 28,
+    "geopolitics24hradar.substack.com": 5,
+    "globaltimes.cn": 28,
+    "humanityredefined.com": 28,
+    "ilyastrebulaev.substack.com": 27,
+    "josephaaron.substack.com": 2,
+    "latent.space": 20,
+    "latestincyber.substack.com": 25,
+    "meridiandealpartner.substack.com": 5,
+    "metatrends.substack.com": 27,
+    "mtslive.substack.com": 27,
+    "murphcapital.substack.com": 27,
+    "neiscenter.substack.com": 25,
+    "newsletter.semianalysis.com": 2,
+    "nicholasdecker.substack.com": 20,
+    "nicolocaiti.substack.com": 27,
+    "oldmennewmoney.substack.com": 13,
+    "oligarchwatch.substack.com": 27,
+    "outofcontrol.substack.com": 6,
+    "p2p.coincenter.org": 10,
+    "pefuncast.substack.com": 27,
+    "peinsights.substack.com": 17,
+    "roberteringer.substack.com": 27,
+    "sagarikas1.substack.com": 9,
+    "sharmilakantha.substack.com": 27,
+    "thecryptoalarm.substack.com": 25,
+    "thefusionreport.substack.com": 27,
+    "themarketdispatch.com": 27,
+    "thesovereignai.substack.com": 20,
+    "thevccorner.com": 27,
+    "thevcstack.substack.com": 4,
+    "thewolfden.substack.com": 25,
+    "thinkbrics.substack.com": 27,
+    "threatswithoutborders.com": 25,
+    "venturecurator.com": 19,
+    "venturedailydigest.com": 27
+  },
+  "import_totals": null,
+  "input_path": "corpus/reference-dataset-2/extractions/2026-09-13-1/articles.json",
+  "input_sha256": "ee2551415611e9666261914b0d07e467b4910f2f5e13733e90d6677494831493",
+  "lengthened_publishers": {},
+  "output_path": "corpus/reference-dataset-2/selections/2026-09-13-a/urls.json",
+  "output_sha256": "982e1250c5e186a0b374a2ec4c8a653cb097e17daa40c376ac481c3dd9d6d0e4",
+  "phase": "selection",
+  "publisher_hosts": {
+    "aleximas": [
+      "aleximas.substack.com"
+    ],
+    "alwaysbecurious": [
+      "alwaysbecurious.substack.com"
+    ],
+    "aswathdamodaran": [
+      "aswathdamodaran.substack.com"
+    ],
+    "babylonburns": [
+      "babylonburns.com"
+    ],
+    "baiguan": [
+      "baiguan.news"
+    ],
+    "bengoertzel": [
+      "bengoertzel.substack.com"
+    ],
+    "bharatnama": [
+      "bharatnama.substack.com"
+    ],
+    "capitalonchain": [
+      "capitalonchain.substack.com"
+    ],
+    "catherinemcbride": [
+      "catherinemcbride.substack.com"
+    ],
+    "chipbriefing": [
+      "chipbriefing.substack.com"
+    ],
+    "ctexp": [
+      "ctexp.substack.com"
+    ],
+    "culturecapitalist": [
+      "culturecapitalist.substack.com"
+    ],
+    "decodingthedragon": [
+      "decodingthedragon.substack.com"
+    ],
+    "economicforces": [
+      "economicforces.xyz"
+    ],
+    "econovis": [
+      "econovis.substack.com"
+    ],
+    "edofarina": [
+      "edofarina.substack.com"
+    ],
+    "explainx": [
+      "explainx.substack.com"
+    ],
+    "geopolitics24hradar": [
+      "geopolitics24hradar.substack.com"
+    ],
+    "globaltimes": [
+      "globaltimes.cn"
+    ],
+    "humanityredefined": [
+      "humanityredefined.com"
+    ],
+    "ilyastrebulaev": [
+      "ilyastrebulaev.substack.com"
+    ],
+    "josephaaron": [
+      "josephaaron.substack.com"
+    ],
+    "latent": [
+      "latent.space"
+    ],
+    "latestincyber": [
+      "latestincyber.substack.com"
+    ],
+    "meridiandealpartner": [
+      "meridiandealpartner.substack.com"
+    ],
+    "metatrends": [
+      "metatrends.substack.com"
+    ],
+    "mtslive": [
+      "mtslive.substack.com"
+    ],
+    "murphcapital": [
+      "murphcapital.substack.com"
+    ],
+    "neiscenter": [
+      "neiscenter.substack.com"
+    ],
+    "nicholasdecker": [
+      "nicholasdecker.substack.com"
+    ],
+    "nicolocaiti": [
+      "nicolocaiti.substack.com"
+    ],
+    "oldmennewmoney": [
+      "oldmennewmoney.substack.com"
+    ],
+    "oligarchwatch": [
+      "oligarchwatch.substack.com"
+    ],
+    "outofcontrol": [
+      "outofcontrol.substack.com"
+    ],
+    "p2p": [
+      "p2p.coincenter.org"
+    ],
+    "pefuncast": [
+      "pefuncast.substack.com"
+    ],
+    "peinsights": [
+      "peinsights.substack.com"
+    ],
+    "roberteringer": [
+      "roberteringer.substack.com"
+    ],
+    "sagarikas1": [
+      "sagarikas1.substack.com"
+    ],
+    "semianalysis": [
+      "newsletter.semianalysis.com"
+    ],
+    "sharmilakantha": [
+      "sharmilakantha.substack.com"
+    ],
+    "thecryptoalarm": [
+      "thecryptoalarm.substack.com"
+    ],
+    "thefusionreport": [
+      "thefusionreport.substack.com"
+    ],
+    "themarketdispatch": [
+      "themarketdispatch.com"
+    ],
+    "thesovereignai": [
+      "thesovereignai.substack.com"
+    ],
+    "thevccorner": [
+      "thevccorner.com"
+    ],
+    "thevcstack": [
+      "thevcstack.substack.com"
+    ],
+    "thewolfden": [
+      "thewolfden.substack.com"
+    ],
+    "thinkbrics": [
+      "thinkbrics.substack.com"
+    ],
+    "threatswithoutborders": [
+      "threatswithoutborders.com"
+    ],
+    "venturecurator": [
+      "venturecurator.com"
+    ],
+    "venturedailydigest": [
+      "venturedailydigest.com"
+    ]
+  },
+  "publishers": {
+    "aleximas": 12,
+    "alwaysbecurious": 5,
+    "aswathdamodaran": 22,
+    "babylonburns": 10,
+    "baiguan": 7,
+    "bengoertzel": 28,
+    "bharatnama": 25,
+    "capitalonchain": 28,
+    "catherinemcbride": 10,
+    "chipbriefing": 28,
+    "ctexp": 10,
+    "culturecapitalist": 3,
+    "decodingthedragon": 25,
+    "economicforces": 28,
+    "econovis": 10,
+    "edofarina": 10,
+    "explainx": 28,
+    "geopolitics24hradar": 5,
+    "globaltimes": 28,
+    "humanityredefined": 28,
+    "ilyastrebulaev": 27,
+    "josephaaron": 2,
+    "latent": 20,
+    "latestincyber": 25,
+    "meridiandealpartner": 5,
+    "metatrends": 27,
+    "mtslive": 27,
+    "murphcapital": 27,
+    "neiscenter": 25,
+    "nicholasdecker": 20,
+    "nicolocaiti": 27,
+    "oldmennewmoney": 13,
+    "oligarchwatch": 27,
+    "outofcontrol": 6,
+    "p2p": 10,
+    "pefuncast": 27,
+    "peinsights": 17,
+    "roberteringer": 27,
+    "sagarikas1": 9,
+    "semianalysis": 2,
+    "sharmilakantha": 27,
+    "thecryptoalarm": 25,
+    "thefusionreport": 27,
+    "themarketdispatch": 27,
+    "thesovereignai": 20,
+    "thevccorner": 27,
+    "thevcstack": 4,
+    "thewolfden": 25,
+    "thinkbrics": 27,
+    "threatswithoutborders": 25,
+    "venturecurator": 19,
+    "venturedailydigest": 27
+  },
+  "rows": 1000,
+  "selection_totals": {
+    "available_by_group": {
+      "ai-supremacy": 0,
+      "aleximas": 12,
+      "alwaysbecurious": 5,
+      "aswathdamodaran": 22,
+      "babylonburns": 10,
+      "baiguan": 7,
+      "bengoertzel": 50,
+      "bharatnama": 25,
+      "capitalonchain": 38,
+      "catherinemcbride": 10,
+      "chipbriefing": 50,
+      "ctexp": 10,
+      "culturecapitalist": 3,
+      "decodingthedragon": 25,
+      "economicforces": 47,
+      "econovis": 10,
+      "edofarina": 10,
+      "explainx": 50,
+      "geopolitics24hradar": 5,
+      "globaltimes": 63,
+      "humanityredefined": 43,
+      "ilyastrebulaev": 31,
+      "josephaaron": 2,
+      "latent": 20,
+      "latestincyber": 25,
+      "meridiandealpartner": 5,
+      "metatrends": 48,
+      "mtslive": 50,
+      "murphcapital": 28,
+      "neiscenter": 25,
+      "nicholasdecker": 20,
+      "nicolocaiti": 34,
+      "oldmennewmoney": 13,
+      "oligarchwatch": 49,
+      "outofcontrol": 6,
+      "p2p": 10,
+      "paymentswrapup": 0,
+      "pefuncast": 27,
+      "peinsights": 17,
+      "roberteringer": 50,
+      "sagarikas1": 9,
+      "semianalysis": 2,
+      "sharmilakantha": 42,
+      "thecryptoalarm": 25,
+      "thefusionreport": 50,
+      "theinvisiblefounder": 0,
+      "themarketdispatch": 36,
+      "thesovereignai": 20,
+      "thevccorner": 33,
+      "thevcstack": 4,
+      "thewolfden": 25,
+      "thinkbrics": 50,
+      "threatswithoutborders": 25,
+      "venturecurator": 19,
+      "venturedailydigest": 50
+    },
+    "extra_by_group": {
+      "aswathdamodaran": 2,
+      "bengoertzel": 8,
+      "bharatnama": 5,
+      "capitalonchain": 8,
+      "chipbriefing": 8,
+      "decodingthedragon": 5,
+      "economicforces": 8,
+      "explainx": 8,
+      "globaltimes": 8,
+      "humanityredefined": 8,
+      "ilyastrebulaev": 7,
+      "latestincyber": 5,
+      "metatrends": 7,
+      "mtslive": 7,
+      "murphcapital": 7,
+      "neiscenter": 5,
+      "nicolocaiti": 7,
+      "oligarchwatch": 7,
+      "pefuncast": 7,
+      "roberteringer": 7,
+      "sharmilakantha": 7,
+      "thecryptoalarm": 5,
+      "thefusionreport": 7,
+      "themarketdispatch": 7,
+      "thevccorner": 7,
+      "thewolfden": 5,
+      "thinkbrics": 7,
+      "threatswithoutborders": 5,
+      "venturedailydigest": 7
+    },
+    "extraction_sha256": "ee2551415611e9666261914b0d07e467b4910f2f5e13733e90d6677494831493",
+    "group_by": "publisher",
+    "groups": 55,
+    "requested": 1000,
+    "selected": 1000,
+    "selected_by_group": {
+      "ai-supremacy": 0,
+      "aleximas": 12,
+      "alwaysbecurious": 5,
+      "aswathdamodaran": 22,
+      "babylonburns": 10,
+      "baiguan": 7,
+      "bengoertzel": 28,
+      "bharatnama": 25,
+      "capitalonchain": 28,
+      "catherinemcbride": 10,
+      "chipbriefing": 28,
+      "ctexp": 10,
+      "culturecapitalist": 3,
+      "decodingthedragon": 25,
+      "economicforces": 28,
+      "econovis": 10,
+      "edofarina": 10,
+      "explainx": 28,
+      "geopolitics24hradar": 5,
+      "globaltimes": 28,
+      "humanityredefined": 28,
+      "ilyastrebulaev": 27,
+      "josephaaron": 2,
+      "latent": 20,
+      "latestincyber": 25,
+      "meridiandealpartner": 5,
+      "metatrends": 27,
+      "mtslive": 27,
+      "murphcapital": 27,
+      "neiscenter": 25,
+      "nicholasdecker": 20,
+      "nicolocaiti": 27,
+      "oldmennewmoney": 13,
+      "oligarchwatch": 27,
+      "outofcontrol": 6,
+      "p2p": 10,
+      "paymentswrapup": 0,
+      "pefuncast": 27,
+      "peinsights": 17,
+      "roberteringer": 27,
+      "sagarikas1": 9,
+      "semianalysis": 2,
+      "sharmilakantha": 27,
+      "thecryptoalarm": 25,
+      "thefusionreport": 27,
+      "theinvisiblefounder": 0,
+      "themarketdispatch": 27,
+      "thesovereignai": 20,
+      "thevccorner": 27,
+      "thevcstack": 4,
+      "thewolfden": 25,
+      "thinkbrics": 27,
+      "threatswithoutborders": 25,
+      "venturecurator": 19,
+      "venturedailydigest": 27
+    },
+    "shortfall": 0,
+    "shortfall_by_group": {
+      "ai-supremacy": 20,
+      "aleximas": 8,
+      "alwaysbecurious": 15,
+      "babylonburns": 10,
+      "baiguan": 13,
+      "catherinemcbride": 10,
+      "ctexp": 10,
+      "culturecapitalist": 17,
+      "econovis": 10,
+      "edofarina": 10,
+      "geopolitics24hradar": 15,
+      "josephaaron": 18,
+      "meridiandealpartner": 15,
+      "oldmennewmoney": 7,
+      "outofcontrol": 14,
+      "p2p": 10,
+      "paymentswrapup": 20,
+      "peinsights": 3,
+      "sagarikas1": 11,
+      "semianalysis": 18,
+      "theinvisiblefounder": 20,
+      "thevcstack": 16,
+      "venturecurator": 1
+    }
+  },
+  "settings": {
+    "extract": {
+      "backoff_initial_seconds": 1.0,
+      "backoff_multiplier": 2.0,
+      "boilerplate_ratio_max": 0.4,
+      "max_body_bytes": 2000000,
+      "max_retries": 3,
+      "min_source_words": 60,
+      "paywall_markers": [
+        "isaccessibleforfree\":false",
+        "isaccessibleforfree\": false",
+        "subscribe to continue reading",
+        "register or subscribe to continue"
+      ],
+      "prose_line_count_min": 12,
+      "prose_line_ratio_min": 0.5,
+      "prose_sentence_min": 3,
+      "prose_sentence_words_min": 8,
+      "reject_boilerplate": false,
+      "reject_not_prose": false,
+      "request_timeout_seconds": 20.0,
+      "truncation_cap_tokens": 2500,
+      "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+    },
+    "input_file": "corpus/reference-dataset-2/urls.txt",
+    "request_delay_seconds": 1.0,
+    "selection": {
+      "fill_shortfall": true,
+      "generic_host_labels": [
+        "blog",
+        "feed",
+        "feeds",
+        "mail",
+        "news",
+        "newsletter",
+        "rss",
+        "stories",
+        "web",
+        "www2"
+      ],
+      "group_by": "publisher",
+      "publisher_disambiguation": [
+        "registered_name",
+        "public_suffix",
+        "host"
+      ],
+      "rows_max": 1000,
+      "rows_per_domain_target": 20
+    },
+    "sources_file": "config/sources.json",
+    "taxonomy_file": "config/taxonomy.json",
+    "version": "2026-09-13T10:20"
+  },
+  "version": "2026-09-13T11:40",
+  "verticals": {
+    "ai": 61,
+    "world": 54
+  }
+}
