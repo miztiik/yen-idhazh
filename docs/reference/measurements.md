@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 Every number this project's design rests on, with the date it was taken and the
 spread. Guardrail #10 in one page: **an unmeasured number is labelled an estimate and
@@ -99,6 +99,47 @@ governed. **`CLAUDE.md` Guardrail #10 governs.** This page is a guardrail and th
 contract carries the rules; where the two disagree the rule wins, and what a
 guardrail may do is say how the rule's intent is met - never contradict it.
 Owner ruling, 2026-09-12, narrowing the ruling of 2026-09-10.
+
+## How often an article states a whole its parts add up to, 2026-09-13
+
+**At most 1 article in 20 writes a total that its own parts add up to, and at
+most 1 in 66 writes one with the three or more parts a circle is for.** Over the
+1,444 committed corpus articles, 72 pass the screen - 4.99 percent - and 22 of
+those have three or more parts. A published day holds a median of 372 items, so
+the screen would fire on about 19 of them and the three-part form on about 6.
+Both figures are **ceilings and not rates**, and the reason is in the next
+paragraph.
+
+The screen is deterministic and no model reads anything: a total and two to five
+parts in the same unit, adding up within 0.5 percent, every part above zero and
+below the total, all of them inside 600 characters, and one of the article's own
+joining words between the first and the last. **What it cannot do is tell a
+stated composition from a numeric coincidence.** Its own null arm - every value
+re-dealt at random within its unit, every position and every joining word left
+where it was - still finds 14 articles, 0.97 percent, and that null under-states
+chance rather than estimating it. Three figures are quoted together here and
+never one alone: **4.99 percent as the screen's hit rate, 0.97 percent as a
+coincidence floor, and an agent's reading of twelve printed hits that found three
+genuine** - n=12, one unblinded rater, a model, and not a measurement. What
+settles it is in [Still unmeasured](#still-unmeasured).
+
+`corpus/corpus.jsonl` is the population because it is the only text that can
+answer the question - a published day carries our summary and a link, never the
+article (section 0a) - and it is 1,444 articles harvested 2026-08-23 to
+2026-09-10 after the corpus's own quality filter, so it under-represents
+number-dense articles if it is biased at all. The counts are arithmetic over
+committed bytes and travel; the full record - the definition rule by rule, the
+window sweep, what the joining words bought, what the tolerance costs, and the
+worked example of each side - is
+[benchmarks/2026-09-13-articles-that-state-a-whole.md](benchmarks/2026-09-13-articles-that-state-a-whole.md).
+Re-run it with `python backend/utilities/measure_declared_wholes.py --sweep`.
+
+This **sizes** `pie` and does not gate it: the owner ruled on 2026-09-05 that the
+template ships whichever way the number falls, and a template that fires rarely
+is the gate working rather than the template failing
+([../../TODO/20260905-16-composition-vocabulary-plan.md](../../TODO/20260905-16-composition-vocabulary-plan.md)).
+**The number that must not be read as a target is 4.99 percent**: a `pie` firing
+that often would be drawing a circle out of three unrelated market indices.
 
 ## What a 90-day window costs at each grain, 2026-09-11
 
@@ -2002,6 +2043,7 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
+| **How many articles really state a whole its parts add up to** | **bounded, not measured: at most 72 of 1,444, 4.99 percent** | the deterministic screen cannot tell a stated composition from a numeric coincidence, and its own examples show it failing at that - three unrelated stock indices whose two smaller moves sum to the larger pass it ([How often an article states a whole its parts add up to](#how-often-an-article-states-a-whole-its-parts-add-up-to-2026-09-13)). One person marks all 72 hits genuine or not against the written definition; the instrument already emits them with `python backend/utilities/measure_declared_wholes.py --window 600 --examples 72 --json`, so it needs no new code and costs one to two hours of one person's attention. Record the count with a Wilson interval - the true rate is 4.99 percent times that precision. Nothing may use the 4.99 as a rate until then, and nothing may use the agent's three-of-twelve reading at all. |
 | **How long a reader waits for a console panel's payload** | **`console.shimmer_after_ms` ships at 400, a declared estimate and not a measurement** | the shell-and-fetch migration was meant to settle this and **could not, for a reason that is a ruling rather than an omission.** The knob decides when a reserved box starts to shimmer, so the number it needs is the median time a payload takes to reach a **reader** - and the same plan scoped out a reader-facing timing measurement (owner, 2026-09-08). Everything measured instead is localhost: that migration counted 3 serial round trips and 303,306 payload bytes on a cold `/console/` over `vite preview`, where arrival is a few milliseconds and any threshold derived from it would be a threshold nobody ever crosses. Two things settle it, and both need the owner to reopen that scope-out: throttle a Playwright context to a named profile and read the median arrival over the default window, which measures a chosen network rather than a reader's; or accept a reader-facing timing measurement and take it on the live origin. Until one of them, 400 stays and stays labelled. |
 | **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **answered 2026-09-10, and half the question is void** | the site ships at 98.7 MB in 581 files with 727 published days of runway, measured four times on the runner with zero spread ([What the shell migration saved](measurements-site.md#what-the-shell-migration-saved-and-the-run-that-got-it-wrong-2026-09-10)). The encoder weights never left, so there is no second arm to measure - row #17 was descoped on 2026-09-09. The harness this row used to prescribe measured a tree that was never built and is deleted. |
 | **Whether a subject the registry does not name goes quiet for long enough to matter** | **bounded, not measured: 75.2 percent of published items carry no registry name** | the 30 registry names are all covered near-daily, so nothing in the record supports a fade rate ([How long we go quiet about a registry name](../archive/measurements-2026-08.md#how-long-we-go-quiet-about-a-registry-name-2026-08-31)). Whether a quiet subject exists in the other three items in four cannot be read from a closed vocabulary, and this repository has no entity recogniser. Two things settle it, in order: put one real subject in `config/watchlist.json` and re-run `python backend/utilities/entity_gap.py` for that entry alone; or, if the question is ever worth a model, score the model on the gap as well as the coverage, because a recogniser that splits one subject across three names raises coverage and shortens every gap. |
