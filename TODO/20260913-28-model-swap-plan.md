@@ -120,6 +120,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `docs/concepts/config.md`
   - `docs/architecture/summarize/prompt.md`
   - `docs/architecture/summarize/throughput.md`
+  - `docs/architecture/summarize/model-boundary.md`
 - **Acceptance gates:** local - `python backend/utilities/gate_lock.py -- ruff check backend`, `mypy backend`, the contract export followed by `git diff --exit-code -- schemas/`, and `python -m pytest backend/tests/test_contracts.py backend/tests/test_fingerprint.py backend/tests/test_summarize.py backend/tests/test_classify.py -q`. CI - `ci.yml` full suite and the drift gate.
 - **Oracle:** the rendered prompt for a fixture article is **byte-identical** before and after. Capture the render on the base tree into a fixture, assert equality on the branch. One differing byte stops the row (ESCALATE trigger 4).
 
@@ -225,6 +226,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `tests/fixtures/llm/props-probe.json` (new)
   - `.github/workflows/digest.yml`
   - `docs/architecture/summarize/prompt.md`
+  - `docs/architecture/summarize/model-boundary.md`
 - **Acceptance gates:** local - ruff, mypy, `python -m pytest backend/tests/test_summarize.py -q`. CI - `ci.yml` full suite. Manual post-merge proof: one `digest.yml` dispatch reaching the first item.
 - **Oracle:** every arm has a two-armed test. With the fixture's values the probe agrees and the server starts; with one value changed in a built entry the probe refuses and the message names both sides. A check nobody has made fail is a check nobody has tested.
 
@@ -337,6 +339,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `backend/tests/test_contracts.py`
   - `backend/tests/test_summarize.py`
   - `docs/architecture/summarize/prompt.md`
+  - `docs/architecture/summarize/model-boundary.md`
 - **Acceptance gates:** local - ruff, mypy, contract export plus `git diff --exit-code -- schemas/`, `python -m pytest backend/tests/test_contracts.py backend/tests/test_summarize.py -q`. CI - `ci.yml` full suite and the drift gate.
 - **Oracle:** two arms. Under `own_turn` the rendered prompt is byte-identical to the incumbent's. Under a built `fold_into_first_user` entry the rendered bytes differ **while `prompt_sha256` is unchanged** - which is the envelope-and-content split of section 0.2 stated as a test.
 
@@ -366,6 +369,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `backend/tests/test_summarize.py`
   - `backend/tests/test_canaries.py`
   - `docs/architecture/summarize/prompt.md`
+  - `docs/architecture/summarize/model-boundary.md`
 - **Acceptance gates:** local - ruff, mypy, `python -m pytest backend/tests/test_summarize.py backend/tests/test_canaries.py -q`. CI - `ci.yml` full suite.
 - **Oracle:** built entry, never a walk. An entry declaring a marker the sanitizer does not strip is refused at config load, and the refusal names the marker. Second arm: `SANITIZER_VERSION` moved in the same commit, and a stamp built before and after differs in exactly that one field.
 
@@ -539,6 +543,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 
 ## See also
 
+- [`../docs/architecture/summarize/model-boundary.md`](../docs/architecture/summarize/model-boundary.md) - the boundary this plan moves into config, and the two measurement arms.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and the no-two-rows-one-file rule.
 - [`../docs/how-to/evaluate-new-summarizer-model.md`](../docs/how-to/evaluate-new-summarizer-model.md) - the page row #9 rewrites.
 - [`../docs/how-to/fine-tune-a-model.md`](../docs/how-to/fine-tune-a-model.md) - the page row #9 gives a base-swap refusal.
