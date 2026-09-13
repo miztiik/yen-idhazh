@@ -338,7 +338,7 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | # | Title | Owner | Ruling | Proposal ref |
 |---|---|---|---|---|
 | 21 | **Inline the SVG. Delete the `img` carrier** | Jony | Root cause of the unreadable dark theme. Swapping engines without this fixes nothing | P.4.4.2 |
-| 22 | Progressive enhancement | Jony, Susan, Carmack | Build-time SVG, hydrate on point-or-focus. Hydration off by default per type; any hydrated route earns a `page_weight` entry before it merges | P.L21 |
+| 22 | **SUPERSEDED 2026-09-13 by owner ruling: the browser draws, always.** Progressive enhancement | Jony, Susan, Carmack; owner | Was: build-time SVG, hydrate on point-or-focus. There is no build-time SVG now and no hydration boundary, so there is one drawing path rather than two kept identical. **What the reader loses is named rather than implied**: with JavaScript off there is no chart, where this ruling gave them one. The ruling and its full cost are in [`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md) | P.L21 |
 | 23 | d3 is the single digest engine | Jony, Owner O5 | See section 7 for the type-to-module matrix | P.L18 |
 | 24 | Exact-pin every d3 module | Carmack | A caret range lets a patch bump change pixels with no diff to review. Record in `renderer_version` | P.R17 |
 | 25 | No fixed canvas | Susan, Owner O18 | The box is a function of what is encoded and of the space available. Retires `visuals.canvas_width`/`canvas_height` as a fixed pair | P.4.4.1 |
@@ -347,13 +347,13 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | 28 | Token contract, with a derived-palette escape | Susan, Jony, Owner O19 | The compiler emits against the closed token set by default. The model **may** propose an entity-derived palette; it degrades to the token ramp when it cannot, and the derived colours are still contrast-checked in both themes | P.4.4.1 |
 | 29 | The figure renders a caption when present | Susan, Owner O20 | `ItemVisual.svelte` renders `figure > img` and nothing else today, so `title` and `caption` have no home | P.3.1.1 |
 | 30 | One mark lands first | Susan | `annotations` non-empty and drawn differently from its siblings. Eight bars of equal weight have no reading order | P.3.1.1 |
-| 31 | Hydration is pixel-identical | Jony | A chart that redraws on hydrate is this project's first spinner in all but name | P.4.4.2 |
+| 31 | **SUPERSEDED 2026-09-13 with row 22, which created the thing it controlled.** Hydration is pixel-identical | Jony; owner | A chart that redraws on hydrate is this project's first spinner in all but name - true, and it can no longer happen, because there is no build-time drawing for a hydrated one to disagree with. **The reader keeps what this row protected**: the chart is drawn once and never redrawn under them | P.4.4.2 |
 | 32 | Motion tokenised, bounded, killable | Susan | The largest committed day carries 621 items (2026-08-26). 621 entrance animations is a page that never settles | not in proposal |
 | 33 | Keyboard route to every fact | Susan, Reader | No fact exists only on hover. The dominant device has no hover | P.4.3.2 |
 | 34 | Empty is nothing | Susan | No placeholder, no reserved slot, no skeleton. Already true; written down so the downgrade ladder cannot reintroduce it | P.4.2 |
 | 35 | A renderer bump re-renders whole days or none | Jony | Otherwise one page shows two drawing styles in one scroll, which reads as a broken site | P.R17 |
 | 36 | Per-visual byte cap; over-cap degrades to `none` | Jony | There is no per-item route, so the visual lives on a list that reached 621 items | P.4.4 |
-| 37 | The reading page is two contexts | Jony | Seed items are prerendered; past-seed items are drawn by the browser after a fetch. The compiled spec travels in the day payload and one code path draws both | not in proposal |
+| 37 | **UPHELD and widened 2026-09-13; this row was right and row 22 was what blocked it.** The reading page is two contexts | Jony; owner | Was: seed items are prerendered, past-seed items are drawn by the browser after a fetch, the compiled spec travels in the day payload and one code path draws both. **The second sentence is now the whole rule** - the spec travels for every item and the browser draws every item. The two contexts remain, and they differ only in whether the payload arrived with the document or after a fetch, never in who draws | not in proposal |
 
 ### 4.D Vocabulary
 
@@ -471,6 +471,12 @@ Three consequences, and one of them is a genuine conflict.
 | Past-seed items (already fetched by the browser) | Fetch the SVG and inline it into the DOM | Yes | **No** | The long tail, where the byte pressure actually is |
 | Raster fallback, archives | `img` with the config base URL | No | No | Anything not themed |
 
+**SUPERSEDED 2026-09-13 by the owner ruling: there are no SVG bytes to carry.** The chart
+arrives as data in the day payload and the browser draws it, so all three rows above collapse
+to one path and the carrier question stops existing for charts. The 495 committed drawings -
+6.01 MB, measured 2026-09-13 - leave the bundle rather than move host. `visuals.asset_base_url`
+keeps its job only for anything that is genuinely a raster, which today is nothing.
+
 This gives themed visuals everywhere and moves the growing tail off the Pages cap. It works because the reading page is already two contexts (row 37) - past-seed items already require a fetch.
 
 **Config shape**: `visuals.asset_base_url`, defaulting to same-origin. Pointing it at `raw.githubusercontent.com` in this repo, then at another branch, repo or Pages site later, is one config edit. Branch-based raw URLs survive the `prune.yml` force-push because the prune squashes history and leaves the working tree intact; only commit-SHA-pinned URLs break.
@@ -527,7 +533,7 @@ This matrix is the record of the decision and moves into `docs/architecture/publ
 | `whowhat` | actors and roles | none - one-attribute `comparison` | |
 | `keyfacts` | 3-5 takeaways | none - typography | |
 
-Shared across all SVG types: `d3-scale`, `d3-array`, `d3-format` (number formatting), `d3-time-format` (date labels), `d3-selection` **only in the hydrated path** - the build step emits markup as strings, so no DOM is needed at build time.
+Shared across all SVG types: `d3-scale`, `d3-array`, `d3-format` (number formatting), `d3-time-format` (date labels), and `d3-selection`. **Corrected 2026-09-13 by the owner ruling.** This sentence read that `d3-selection` appears only in the hydrated path, because the build step emitted markup as strings and needed no DOM. There is no build step and no hydrated path now: the browser is the only renderer, it has a DOM, and `d3-selection` is on the only path there is. Every module in this matrix now ships to the reader, which is what makes the per-type byte cap of row 36 load-bearing rather than a formality.
 
 ### 7.3 `d3-force` determinism
 
@@ -1182,7 +1188,7 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 | L18 | **CLOSED - d3** | Jony / Owner O5 | section 7 |
 | L19 | ACCEPT - span-anchored edges, no exception | Editor | row 47 |
 | L20 | AMEND - bound by legibility, not a node count | Susan, Carmack | row 26 |
-| L21 | **CLOSED - progressive enhancement** | Jony, Susan, Carmack | row 22 |
+| L21 | **RE-CLOSED 2026-09-13 - client-side from the spec.** Was closed as progressive enhancement | Owner, superseding Jony, Susan, Carmack | row 22, row 37 |
 | L22 | ACCEPT - derived values built with the closed allow-list | Owner O16 | row 45 |
 | L23 | AMEND - `confidence` moves after `type` or is deleted | Andre | row 18 |
 | L24 | ACCEPT - principle amended | Andre | 12.1 D15 |
@@ -1366,9 +1372,11 @@ P.1.5 scores the governing principle clause by clause, and P.1.5.3 claims **zero
 | **One larger model** | Compliant | **Compliant**, and stronger | O17 retires the 4B completely - config entry, cache role, workflow job, env vars, prompt, tests. The proposal deleted a model; this document deleted its last mention |
 | **performs all semantic analysis** | Compliant, as amended by D15 | **Compliant**, and the amendment carries more weight | Still one semantic authority, invoked twice. Section 10 reverses the ordering and adds the candidate pass, which is deterministic code and not an invocation at all (O37) |
 | **deterministic code controls data integrity** | Partial - **Deviation A** | **Partial - Deviation A stands, and is now accepted as permanent** | Tier 2 labels and diagram edges are model-assigned by design. Section 10.1a tightens the anchoring rule per kind and names the two failures no check catches - mis-pointing and mis-labelling - which discloses more of the deviation rather than shrinking it. **O40 accepts it and moves the risk into [`../docs/concepts/digest.md`](../docs/concepts/digest.md)**, so it outlives this document |
-| **and rendering afterward** | Open in practice - **Deviation B**, on L21 | **Decided, and conditionally compliant** | Row 22 closes L21: build-time SVG, hydrated on point-or-focus. The answer is "both, deliberately", so the clause holds only while row 31 holds - hydration must be pixel-identical. **Nothing has tested row 31**; doc I does not exist yet |
+| **and rendering afterward** | Open in practice - **Deviation B**, on L21 | **Decided, and compliant, 2026-09-13** | The owner ruling re-closes L21 on client-side drawing, which **removes the condition rather than satisfying it**. There is one rendering path, so there is no second path for it to stay identical to, and row 31's untested control is retired with row 22. Code still owns the spec, which is the clause; the browser turns that spec into pixels, and the architecture record's own rule is that determinism belongs to the specification rather than to the pixels |
 
-**Deviation B is closed as a decision and open as a control**, and recording it as simply closed would be the comfortable sentence rather than the true one. "Code owns the spec-to-pixels path" survives progressive enhancement only while the browser reproduces bytes code already chose. Row 31's stated reason was reader-facing - a chart that redraws on hydrate is this project's first spinner in all but name - and it turns out to carry a compliance load as well. **Doc I owns the test**: one plan, the build-time emit and the post-hydrate DOM compared byte for byte.
+**Deviation B is now closed as a decision and needs no control, 2026-09-13.** What follows is the reasoning while row 22 stood, kept because it is what the owner ruling answers.
+
+~~**Deviation B is closed as a decision and open as a control**~~, and recording it as simply closed would be the comfortable sentence rather than the true one. "Code owns the spec-to-pixels path" survives progressive enhancement only while the browser reproduces bytes code already chose. Row 31's stated reason was reader-facing - a chart that redraws on hydrate is this project's first spinner in all but name - and it turns out to carry a compliance load as well. **Doc I owns the test**: one plan, the build-time emit and the post-hydrate DOM compared byte for byte.
 
 #### One candidate new deviation, disclosed rather than assumed
 

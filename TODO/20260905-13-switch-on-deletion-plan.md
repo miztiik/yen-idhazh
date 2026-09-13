@@ -31,7 +31,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The rules, and which rule governs every file this project writes | - | A | DONE #643 | p13-1 | #643 | worker |
 | 2 | The window takes a value, and nothing is deleted yet | 1 | B | DONE #651 | p13-2 | #651 | worker |
-| 3 | The fuse comes out, and one run is watched | 2, plan 12 row #1 | C | BLOCKED | - | - | - |
+| 3 | The fuse comes out, and one run is watched | 2, plan 12 row #1b | C | PENDING | - | - | - |
 
 **Row #3's `Depends-on` was `2` alone until 2026-09-13, and its own decision 1 contradicted that.** "This lands after the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound." The new renderer is [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) row #1, which is PENDING - so the queue reader was offering row #3 as ready while the row's own text refused it. The dependency is now written where a tool can read it. Corrected by the orchestrator before dispatch.
 
@@ -103,7 +103,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | This lands **after** the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound | Row 61, O8 |
+| 1 | This lands **after** the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound. **Amended 2026-09-13 by the owner ruling that the reader's browser draws the chart** ([`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md)). Plan 12 row #1b deletes all 495 committed drawings itself, in one reviewed commit, so by the time this row runs **there is no visual asset left for the prune to select**. The dependency is unchanged and it is now a correctness dependency rather than a safety one: run this row first and the fuse eats a year of drawings that row #1b was going to delete anyway, with the 200-per-run cap the only bound and no record of which day lost what. What this row watches after #1b is a prune whose visual arm has nothing to do, which is a real reading and worth taking - it is the first run where `skipped_by_fuse` means the window rather than the backlog | Row 61, O8; owner ruling 2026-09-13 |
 | 2 | It lands **here** rather than at the end of the group, because the Pages cap is the first budget the chain breaches and every plan from 15 to 18 adds a family of drawings | Carmack, 2026-09-05 |
 | 3 | `skipped_by_fuse` is watched, not `deleted`. `deleted` is capped at 200, so it reads the same on a healthy run and a runaway one | Row 62 |
 | 4 | Both figures are re-measured after the run and written into `docs/reference/measurements.md` with the date and the corpus they were taken over | Guardrail #10 |
