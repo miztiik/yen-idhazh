@@ -1,0 +1,93 @@
+{
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "item_id": "energy-4821903756",
+  "marks": [
+    {
+      "derived": null,
+      "element_id": "entity-41-48",
+      "mark_id": "m0",
+      "text": "Denmark",
+      "unit": null,
+      "value": null
+    },
+    {
+      "derived": null,
+      "element_id": "entity-68-75",
+      "mark_id": "m1",
+      "text": "Germany",
+      "unit": null,
+      "value": null
+    },
+    {
+      "derived": null,
+      "element_id": "entity-86-92",
+      "mark_id": "m2",
+      "text": "Norway",
+      "unit": null,
+      "value": null
+    },
+    {
+      "derived": null,
+      "element_id": "entity-104-111",
+      "mark_id": "m3",
+      "text": "Ireland",
+      "unit": null,
+      "value": null
+    },
+    {
+      "derived": null,
+      "element_id": "quantity-58-66",
+      "mark_id": "m4",
+      "text": null,
+      "unit": "mw",
+      "value": "1200"
+    },
+    {
+      "derived": null,
+      "element_id": "quantity-76-84",
+      "mark_id": "m5",
+      "text": null,
+      "unit": "mw",
+      "value": "3400"
+    },
+    {
+      "derived": null,
+      "element_id": "quantity-93-99",
+      "mark_id": "m6",
+      "text": null,
+      "unit": "mw",
+      "value": "900"
+    },
+    {
+      "derived": null,
+      "element_id": "quantity-112-120",
+      "mark_id": "m7",
+      "text": null,
+      "unit": "mw",
+      "value": "2100"
+    }
+  ],
+  "renderer_version": "2026-09-13",
+  "type": "bar",
+  "version": "2026-09-13T20:00"
+}

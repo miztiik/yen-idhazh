@@ -13,7 +13,8 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig, VisualsConfig
 from idhazh.contracts.element import ElementTable
-from idhazh.contracts.visual import VisualPlan, VisualType
+from idhazh.contracts.visual import EncodingRole, VisualPlan, VisualType
+from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -24,6 +25,7 @@ from idhazh.render.chart import CompileError, compile_bar, render_chart
 from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.write import (
     asset_relpath,
+    data_relpath,
     drop_raced_assets,
     render_planned_visual,
     render_visual,
@@ -222,6 +224,127 @@ class TestCompiledBar:
             )
 
 
+class TestPublishedData:
+    """THE ORACLE: the data on the wire redraws the picture the old renderer drew.
+
+    From 2026-09-13 the reader's browser draws the chart and the pipeline never
+    draws one, so a compiled plan now leaves two things behind: the SVG this
+    build still writes, and the marks a browser will draw. **This is the only
+    moment at which the two can be compared at all** - the row after this one
+    deletes the renderer, and with it the picture there would be to compare
+    against.
+
+    So the comparison is made against the drawn geometry rather than against the
+    spec, exactly as `TestCompiledBar` does: a spec holding the right figures
+    proves the compiler agreed with itself, and this proves the data would draw
+    the same picture the reader is getting today.
+
+    Built from the committed plan and table, never walked over the committed
+    archive (`CLAUDE.md` section 13, Guardrail #12).
+    """
+
+    @staticmethod
+    def _compiled() -> tuple[list[tuple[str, Decimal]], VisualData]:
+        table = ElementTable.read(BAR_TABLE)
+        plan = VisualPlan.read(BAR_PLAN)
+        compiled = compile_bar(plan, table, visuals=committed_visuals())
+        drawn = drawn_bars(render_chart(json.dumps(compiled.spec)).decode("utf-8"))
+        return drawn, compiled.data
+
+    def test_the_published_marks_are_the_bars_the_renderer_drew(self) -> None:
+        """Same count, same values, same order - measured off the drawing itself.
+
+        The names are compared as strings, and the figures through the scale the
+        drawing was made at: a width is pixels and a mark carries the article's
+        own number, so what has to hold is that one pixel is the same quantity on
+        every bar. A published figure that came from another bar, a channel
+        published in a different order, or a mark whose length was reached from
+        anywhere but the table puts a second entry in that set.
+        """
+        bars, data = self._compiled()
+
+        held = {mark.mark_id: mark for mark in data.marks}
+        names = [held[mark_id].text for mark_id in data.encoding.category]
+        figures = [held[mark_id].value for mark_id in data.encoding.quantity]
+
+        assert len(bars) == len(names) == len(figures), "the wire and the drawing disagree on count"
+        assert [name for name, _ in bars] == names
+        per_unit = {
+            round(width / Decimal(str(figure)), 9)
+            for (_, width), figure in zip(bars, figures, strict=True)
+        }
+        assert len(per_unit) == 1, f"the published figures redraw {len(per_unit)} different pictures"
+
+    def test_the_published_data_carries_the_shape_and_none_of_the_geometry(self) -> None:
+        """What travels is what the compiler cut or derived, and nothing drawn.
+
+        The plan may not carry geometry, a literal value or authored text, and
+        publishing the compiled result must not become the hole one gets through
+        (owner, 2026-09-13). So the check is against the serialised document: not
+        one of the words the spec uses to say how wide, how tall, what colour or
+        what font appears anywhere in it.
+        """
+        _, data = self._compiled()
+        document = data.to_json()
+
+        assert data.type is VisualType.BAR
+        assert data.renderer_version == RENDERER_VERSION
+        for drawn in ("width", "height", "background", "fontSize", "cornerRadius", "#4c6ef5"):
+            assert drawn not in document, f"the published data carries {drawn}, which is geometry"
+
+    def test_every_published_mark_states_where_its_figure_came_from(self) -> None:
+        """A drawn number with no provenance is the thing this subsystem refuses."""
+        _, data = self._compiled()
+
+        known = {element.element_id for element in ElementTable.read(BAR_TABLE).elements}
+        for mark in data.marks:
+            assert (mark.element_id is None) != (mark.derived is None)
+            if mark.element_id is not None:
+                assert mark.element_id in known, f"{mark.mark_id} names an element the article lacks"
+            else:
+                assert mark.derived is not None
+                assert set(mark.derived.inputs) <= known
+
+    def test_the_channels_pair_and_nothing_is_carried_that_is_not_drawn(self) -> None:
+        """The shape the browser's refusal is written against."""
+        _, data = self._compiled()
+
+        assert len(data.encoding.category) == len(data.encoding.quantity)
+        assert set(data.encoding.filled()) == {EncodingRole.CATEGORY, EncodingRole.QUANTITY}
+        drawn = [*data.encoding.category, *data.encoding.quantity]
+        assert sorted(drawn) == sorted(mark.mark_id for mark in data.marks)
+
+    def test_a_bar_nobody_can_name_is_refused_rather_than_drawn_blank(self) -> None:
+        """A span excerpt that sanitizes to nothing would draw an unlabelled bar.
+
+        The excerpt keeps its width, because it is the verbatim slice and the
+        table checks that. What changes is what it is made of: zero-width spaces
+        are characters an article can genuinely carry and the sanitizer takes
+        every one of them out, so the name arrives empty and the bar arrives with
+        a length and no label.
+        """
+        table = ElementTable.read(BAR_TABLE)
+        plan = VisualPlan.read(BAR_PLAN)
+        blank = plan.encodings.category[0]
+        rewritten = ElementTable.model_validate(
+            table.model_dump(mode="json")
+            | {
+                "elements": [
+                    row
+                    | (
+                        {"span_excerpt": "\u200b" * (row["span_end"] - row["span_start"])}
+                        if row["element_id"] == blank
+                        else {}
+                    )
+                    for row in table.model_dump(mode="json")["elements"]
+                ]
+            }
+        )
+
+        with pytest.raises(CompileError, match="nothing after sanitizing"):
+            compile_bar(plan, rewritten, visuals=committed_visuals())
+
+
 class TestRenderPlannedVisual:
     """An item is decided to nothing until a plan compiles into a picture.
 
@@ -289,6 +412,63 @@ class TestRenderPlannedVisual:
                 visuals=committed_visuals(),
             )
 
+    def test_the_data_lands_beside_the_drawing_and_the_decision_says_where(
+        self, tmp_path: Path
+    ) -> None:
+        """One visual, one file, in the day's own directory (owner, 2026-09-13)."""
+        result = render_planned_visual(
+            self._nothing_yet(),
+            VisualPlan.read(BAR_PLAN),
+            ElementTable.read(BAR_TABLE),
+            public_root=tmp_path,
+            relpath="digest/2026/08/22/ai-01.svg",
+            visuals=committed_visuals(),
+        )
+
+        assert result.data_path == "digest/2026/08/22/ai-01.json"
+        published = VisualData.read(tmp_path / "digest/2026/08/22/ai-01.json")
+        assert published.item_id == ElementTable.read(BAR_TABLE).item_id
+        assert len(published.encoding.category) == len(published.encoding.quantity) == 4
+
+    def test_a_plan_that_never_compiles_publishes_no_data_either(self, tmp_path: Path) -> None:
+        """The story is simply shorter, and the directory says the same thing."""
+        result = render_planned_visual(
+            self._nothing_yet(),
+            VisualPlan.read(PLAN_FIXTURES / "declines.json"),
+            ElementTable.read(BAR_TABLE),
+            public_root=tmp_path,
+            relpath="digest/2026/08/22/ai-01.svg",
+            visuals=committed_visuals(),
+        )
+
+        assert result.data_path is None
+        assert not (tmp_path / "digest/2026/08/22/ai-01.json").exists()
+
+    def test_data_that_cannot_be_written_costs_the_data_and_not_the_drawing(
+        self, tmp_path: Path
+    ) -> None:
+        """Absent reads as no data carried, and the reader still gets the picture.
+
+        The data file's own path is occupied by a directory, so the write fails
+        with an `OSError` the way a full disk or a read-only tree would. Nothing
+        raises, the drawing is still published, and `data_path` stays null.
+        """
+        (tmp_path / "digest/2026/08/22/ai-01.json").mkdir(parents=True)
+
+        result = render_planned_visual(
+            self._nothing_yet(),
+            VisualPlan.read(BAR_PLAN),
+            ElementTable.read(BAR_TABLE),
+            public_root=tmp_path,
+            relpath="digest/2026/08/22/ai-01.svg",
+            visuals=committed_visuals(),
+        )
+
+        assert result.visual_state is VisualState.RENDERED
+        assert result.asset_path == "digest/2026/08/22/ai-01.svg"
+        assert result.data_path is None
+        assert (tmp_path / "digest/2026/08/22/ai-01.svg").read_bytes().startswith(b"<svg")
+
 
 class TestChartRenderer:
     def test_a_valid_spec_becomes_an_svg(self) -> None:
@@ -354,6 +534,23 @@ class TestAssetPaths:
             == "digest/2026/08/22/india-0000000002.svg"
         )
 
+    def test_the_data_is_the_drawing_s_own_path_and_nothing_recomputed(self) -> None:
+        """Derived from the drawing, so the two can never be named for two items.
+
+        Recomputing it from the date and the item id would put a second copy of
+        the naming rule in the tree, and the failure mode of a second copy is the
+        2026-08-24 one: two names for one story, one of them pointing at another
+        story's numbers.
+        """
+        drawing = asset_relpath("2026-08-22", "energy-4821903756")
+        assert data_relpath(drawing) == "digest/2026/08/22/energy-4821903756.json"
+        assert data_relpath(drawing).removesuffix(".json") == drawing.removesuffix(".svg")
+
+    def test_a_path_that_is_not_a_drawing_is_refused_rather_than_guessed_at(self) -> None:
+        """The day payload lives in the same directory. Appending would collide."""
+        with pytest.raises(ValueError, match="drawing"):
+            data_relpath("digest/2026/08/22/digest.json")
+
 
 class TestRenderVisual:
     def test_a_rendered_chart_records_where_it_landed(self, tmp_path: Path) -> None:
@@ -404,10 +601,14 @@ def _rendered(tmp_path: Path, item_id: str, relpath: str) -> Path:
     """One rendered chart on disk, plus the decision payload that says where it is."""
     (tmp_path / "public" / relpath).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / "public" / relpath).write_bytes(f"<svg>{item_id}</svg>".encode("ascii"))
+    (tmp_path / "public" / data_relpath(relpath)).write_text(
+        f'{{"item_id": "{item_id}"}}', encoding="utf-8", newline="\n"
+    )
     decision = _decision(VisualKind.CHART, json.dumps(SPEC)).model_copy(
         update={
             "item_id": item_id,
             "asset_path": relpath,
+            "data_path": data_relpath(relpath),
             "visual_state": VisualState.RENDERED,
         }
     )
@@ -467,8 +668,48 @@ class TestDropRacedAssets:
             f"{DAY}/energy-0000000002.svg"
         ]
 
+        assert sorted(path.name for path in (tmp_path / "public" / DAY).iterdir()) == [
+            "energy-0000000002.json",
+            "energy-0000000003.json",
+            "energy-0000000003.svg",
+        ]
+
+    def test_a_visual_gives_up_both_its_files_when_the_tip_holds_both(
+        self, tmp_path: Path
+    ) -> None:
+        """The data races exactly as the drawing does, and for the same reason.
+
+        Both are named from the item, so a path the tip already holds is this
+        story rendered twice. Dropping the drawing and keeping the data would
+        leave the day carrying a file the published payload does not point at.
+        """
+        _rendered(tmp_path, "energy-0000000002", f"{DAY}/energy-0000000002.svg")
+
+        dropped = _drop(
+            tmp_path,
+            [f"{DAY}/energy-0000000002.svg", f"{DAY}/energy-0000000002.json"],
+        )
+
+        assert dropped == [f"{DAY}/energy-0000000002.svg", f"{DAY}/energy-0000000002.json"]
+        assert list((tmp_path / "public" / DAY).iterdir()) == []
+
+    def test_a_tip_that_predates_the_data_file_drops_only_the_drawing(
+        self, tmp_path: Path
+    ) -> None:
+        """The first run after this row lands meets a tip holding drawings alone.
+
+        Ours is the only copy of the data, so it stays and the payload still
+        points at it. Dropping it because its drawing dropped would publish a
+        story whose `data_path` names a file nobody wrote.
+        """
+        _rendered(tmp_path, "energy-0000000002", f"{DAY}/energy-0000000002.svg")
+
+        assert _drop(tmp_path, [f"{DAY}/energy-0000000002.svg"]) == [
+            f"{DAY}/energy-0000000002.svg"
+        ]
+
         assert [path.name for path in (tmp_path / "public" / DAY).iterdir()] == [
-            "energy-0000000003.svg"
+            "energy-0000000002.json"
         ]
 
     def test_a_payload_whose_file_this_checkout_lacks_is_left_alone(
