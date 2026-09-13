@@ -7,7 +7,7 @@ import {
 	stepPreset,
 	windowOfDays
 } from '../src/lib/charts/viewport';
-import { readCsv, readDayShards } from '../src/lib/server/payload';
+import { readDayShards } from '../src/lib/server/payload';
 
 /**
  * One window, and every section that follows it saying the same number.
@@ -102,17 +102,7 @@ function chartArmDays(): string[] {
 	return found.sort();
 }
 
-function csvDates(dir: string, keep: (row: Record<string, string>) => boolean): string[] {
-	if (!existsSync(dir)) return [];
-	return readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(dir, name)).rows)
-		.filter(keep)
-		.map((row) => row.date ?? '')
-		.filter(Boolean);
-}
-
-/** The same, for a store that files `<YYYY>/<MM>/<DD>.csv` rather than by month. */
+/** Every date a store that files `<YYYY>/<MM>/<DD>.csv` holds a kept row for. */
 function dayDates(dir: string, keep: (row: Record<string, string>) => boolean): string[] {
 	return readDayShards(dir, -1)
 		.rows.filter(keep)
@@ -123,7 +113,7 @@ function dayDates(dir: string, keep: (row: Record<string, string>) => boolean): 
 /** Every day the Summaries daily table can draw a row for, read off the two
  * committed ledgers rather than off the page it is checking. */
 function workedDays(): string[] {
-	const scored = csvDates(join(CANARY, 'state', 'scores'), () => true);
+	const scored = dayDates(join(CANARY, 'state', 'scores'), () => true);
 	const ran = dayDates(
 		join(CANARY, 'state', 'item-health'),
 		(row) => Number(row.summarize_ms) > 0

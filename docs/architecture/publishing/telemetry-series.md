@@ -253,7 +253,7 @@ keeps reading a projection it cannot see the end of.
 The console's `What the model did` section is not drawn from the published
 shards. It is computed while the site is built, out of two private ledgers:
 
-- `state/scores/<YYYY-MM>.csv` - one row per scored item.
+- `state/scores/<YYYY>/<MM>/<DD>.csv` - one row per scored item.
 - `state/item-health/<YYYY>/<MM>/<DD>.csv` - one row per planned item per run.
 
 Neither file is served and neither crosses to a browser. What reaches the page

@@ -49,8 +49,8 @@ The shapes, and where each one lives once written:
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/visuals.md](../publishing/visuals.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
-| `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
-| `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
+| `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY>/<MM>/<DD>.csv` |
+| `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY>/<MM>/<DD>.csv`, the identity of one measurement the day file beside it holds |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
@@ -72,7 +72,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 `TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored, and `merge=union` could not tell the copy from the original. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
-`ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past `observability.scores_full_grain_months` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the shard's SHA-256 and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of the shard before the shard is unlinked; `.github/workflows/prune.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a shard deleted on the strength of an unchecked summary does not come back. What it weighs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
+`ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past `observability.scores_full_grain_months` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the SHA-256 of that month's day files in day order, and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of those day files before any of them is unlinked; `.github/workflows/prune.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a file deleted on the strength of an unchecked summary does not come back. What it weighs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
 `DayMetrics` is the third, and a document for the same reason `ScoreArchive` is: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Guardrail #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
 
@@ -143,8 +143,8 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health/` | day files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and the read opens the days it names |
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
-| `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
-| `state/score-index/` | monthly shards | which measurements does the shard beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, pipeline, output and scorer is one measurement whenever it is re-taken |
+| `state/scores/` | day files | how did every scored item do? | no - sharded by month from 2026-08-31 and filed by **day** since 2026-09-13, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
+| `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because `refresh_index` fills a partition with no index from the partition beside it |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
@@ -152,13 +152,16 @@ mirrors the digest tree its rows are derived from.
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/visual-prunes/` | day files | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
 
-A window turns a shard into a skipped file open. `ledger.shards_in_window`
-walks the days the window can touch and opens only those stems, so a plan run
-reads one or two files instead of every month the project has ever written.
-`day_partition.days_in_window` is the same rule one grain down, and it is exact
-where the month version is generous: a 90-day cover over `state/item-health/`
-opens 91 day files and reads 90 days of rows, where four month shards could hold
-up to 120 days of them.
+A window turns a partition into a skipped file open. `day_partition.days_in_window`
+names both ends of a day cover, so a plan run opens the days it names and no
+others. It is exact where the month rule it replaced was generous: a 90-day cover
+over `state/item-health/` opens 91 day files and reads 90 days of rows, where four
+month shards could hold up to 120 days of them.
+
+`ledger.shards_in_window` is that rule one grain up, and **no ledger is read with
+it any more** - `drift.read_windows` was the last and moved on 2026-09-13 with
+`state/scores/`. What it still answers is how many month-shaped buckets a
+day-counted window reaches, which is what sizes the `keep_months` knobs.
 
 **A store and its published mirror may file at different grains, and
 `state/item-health/` is the worked example.** The ledger files by day because a

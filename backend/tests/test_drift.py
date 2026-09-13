@@ -601,7 +601,7 @@ def test_a_ledger_that_is_not_there_is_not_a_green_check(tmp_path: Path) -> None
     result = review(tmp_path)
 
     assert result.returncode != 0, result.stdout
-    assert "state/scores/ holds no month" in result.stdout
+    assert "state/scores/ holds no day" in result.stdout
 
 
 def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
@@ -640,7 +640,15 @@ def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
     assert "--body-file drift-issue.txt" in issue_step["run"]
 
 
-def test_the_reader_uses_completed_utc_days_and_only_relevant_months(tmp_path: Path) -> None:
+def test_the_reader_uses_completed_utc_days_and_only_relevant_days(tmp_path: Path) -> None:
+    """The cover is the days the two windows reach, and nothing else is opened.
+
+    At day grain the window's own arithmetic excludes the incomplete day and the
+    day after it, so those two files are never opened at all - where the month
+    shard holding them used to be opened and its rows filtered. The stray
+    `2024-01.csv` is a month-shaped name at the root of a day tree, which no
+    `ledger_path` can produce and which is therefore never named.
+    """
     anchor = datetime.date(2026, 1, 5)
     write_rows(
         tmp_path,
@@ -660,7 +668,7 @@ def test_the_reader_uses_completed_utc_days_and_only_relevant_months(tmp_path: P
 
     result = read_windows(tmp_path / "state", today=anchor, recent_days=7, baseline_days=28)
 
-    assert result.months_read == ("2025-12", "2026-01")
+    assert result.days_read == ("2025-12-01", "2025-12-28", "2025-12-29", "2026-01-04")
     assert {row.date for row in result.recent} == {"2025-12-29", "2026-01-04"}
     assert {row.date for row in result.baseline} == {"2025-12-01", "2025-12-28"}
     assert all(row.hhem is None for row in result.recent + result.baseline)

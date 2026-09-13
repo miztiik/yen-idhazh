@@ -61,7 +61,8 @@ set is what an unpublish has to answer for:
 | `frontend/public/telemetry/<Y>-<M>.csv` | month | rewrite without the day's rows |
 | `frontend/public/source-health.json` | whole site | rebuild |
 | `state/published/<Y>/<M>/<D>.csv` | day | remove |
-| `state/scores/<Y>-<M>.csv` | month | rewrite without the day |
+| `state/scores/<Y>/<M>/<D>.csv` | day | remove |
+| `state/score-index/<Y>/<M>/<D>.csv` | day | remove |
 | `state/item-health/<Y>/<M>/<D>.csv` | day | remove |
 | `state/runtime-counters.csv` | append-only | rewrite without the day |
 | `corpus/corpus.jsonl` | rolling window | rewrite without the day |
@@ -174,7 +175,7 @@ The three levers this page already names - encode efficiently, honour the visual
 | File | Bytes | Share of `state/` | Bounded by |
 | --- | --- | --- | --- |
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | 2,904,221 | 37.2 percent | `collect.seen_window_days` |
-| `state/scores/<YYYY-MM>.csv` | 2,700,019 | 34.6 percent | `observability.scores_full_grain_months` - **archived and deleted from 2026-09-03, and the deletion is in dry run** |
+| `state/scores/<YYYY>/<MM>/<DD>.csv` | 2,700,019 | 34.6 percent | `observability.scores_full_grain_months` - **archived and deleted from 2026-09-03, and the deletion is in dry run** |
 | `state/item-health/<YYYY>/<MM>/<DD>.csv` | 1,409,945 | 18.0 percent | `observability.item_health_full_grain_months` - folded a month at a time from that month's day files, and the fold is in dry run |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | 384,448 | 4.9 percent | `collect.published_window_days`, committed at `-1` - so nothing bounds it today, and the day files are what a finite cover would skip |
 | everything else | 416,995 | 5.3 percent | small enough not to ask |
@@ -189,13 +190,13 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 **The step ships in dry run, and that is what makes it safe to have written at all.** `idhazh prune-state` logs every file a live run would remove and removes none of them. The reason is `.github/workflows/prune.yml`: it squashes and force-pushes `main` on a schedule, so a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8) - `git revert` is not a recovery path for a file older than `finetune.prune_keep_days`. Turning the deletion on is a one-line commit somebody takes after a scheduled run has printed the list.
 
-**Measured on this checkout on 2026-09-13, that list is empty and stays empty for a year.** Every committed file is inside its own window, so a live run today would remove nothing at all. The first file any store loses is `state/seen/2026/08/23.csv` on **2026-11-22**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four stores go together - the day files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`, the day files under `state/feed-health/2026/08/` and `state/scores/2026-08.csv`. The sight date was 2026-11-30 while that ledger filed by month, because a whole month shard survived if any of its days was in range; at day grain the file the window stops naming is the file that goes, which is 8 days earlier. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
+**Measured on this checkout on 2026-09-13, that list is empty and stays empty for a year.** Every committed file is inside its own window, so a live run today would remove nothing at all. The first file any store loses is `state/seen/2026/08/23.csv` on **2026-11-22**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four stores go together - the day files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`, the day files under `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`. The sight date was 2026-11-30 while that ledger filed by month, because a whole month shard survived if any of its days was in range; at day grain the file the window stops naming is the file that goes, which is 8 days earlier. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
-**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and until 2026-09-07 `evals.writer` refused a repeat measurement by reading those rows - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the shard's SHA-256 and row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of the shard; only then is the shard unlinked.
+**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and until 2026-09-07 `evals.writer` refused a repeat measurement by reading those rows - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the SHA-256 of that month's day files in day order, the month's row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. **The ledger files by day and this boundary is a month**, so the prune groups with `day_partition.days_by_month` and folds a month whole or not at all - at most 31 files in, one out. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of those day files; only then are they unlinked, with the month and year directories they empty.
 
-**The writer reads the identities rather than the rows, and that costs 76 bytes a measurement.** A repeat is refused against `state/score-index/<YYYY-MM>.csv` - a ten-character stamp, a comma, the observation digest and a newline - and the rows are not opened at all. Measured on this checkout on 2026-09-07 over 7,710 measurements in two shards: 572.3 KB of index against 6,174.4 KB of rows, 10.8 times smaller, and 820.0 bytes a row against a fixed 76. Both figures are file sizes, so the spread is zero. Nothing is forgotten and no clock is involved: `OBSERVATION_KEY` carries no date, so a January measurement re-taken in February is still the same measurement. A live index is dropped only once the archive that supersedes it is on disk, so the two records of one month never both exist and neither is ever the last one removed.
+**The writer reads the identities rather than the rows, and that costs 76 bytes a measurement.** A repeat is refused against `state/score-index/<YYYY>/<MM>/<DD>.csv` - a ten-character stamp, a comma, the observation digest and a newline - and the rows are not opened at all. Measured on this checkout on 2026-09-07 over 7,710 measurements in two shards: 572.3 KB of index against 6,174.4 KB of rows, 10.8 times smaller, and 820.0 bytes a row against a fixed 76. Both figures are file sizes, so the spread is zero. **The index moved to day files with the ledger on 2026-09-13** and files by the ledger's own day, because `refresh_index` fills a partition with no index from the partition beside it. Nothing is forgotten and no clock is involved: `OBSERVATION_KEY` carries no date, so a January measurement re-taken in February is still the same measurement. A live index day is dropped only once the archive that supersedes its month is on disk, so the two records never both exist and neither is ever the last one removed.
 
-**An index that fell behind its shard is repaired by deleting it, and nothing detects that state on its own.** Detecting it means reading the rows, which is the cost this file exists to remove, so the pair is kept in step by the two writers instead: `append` writes the rows and their identities in one call, and a month with no index is filled from its rows once. The only way to fall behind is therefore rows appended by something that never maintained the index - which is what a long-lived branch meets when it merges a `main` older than this file, and what happened here: the scheduled pipeline added 74 rows to the September shard while this work was open. Delete that month's index and the next run rebuilds it. Leaving it costs what this writer already declares: it under-reports, so those measurements are taken a second time and `idhazh dedupe-ledgers` settles the repeats against `OBSERVATION_KEY`.
+**An index that fell behind its rows is repaired by deleting it, and nothing detects that state on its own.** Detecting it means reading the rows, which is the cost this file exists to remove, so the pair is kept in step by the two writers instead: `append` writes the rows and their identities in one call, and a day with no index is filled from its rows once. The only way to fall behind is therefore rows appended by something that never maintained the index - which is what a long-lived branch meets when it merges a `main` older than this file, and what happened here: the scheduled pipeline added 74 rows to the September shard while this work was open. Delete that day's index and the next run rebuilds it; `idhazh rebuild-score-index --month <YYYY-MM>` does a whole month at once and checks its own result both ways. Leaving it costs what this writer already declares: it under-reports, so those measurements are taken a second time and `idhazh dedupe-ledgers` settles the repeats against `OBSERVATION_KEY`.
 
 **Measured 2026-09-03** on an (build 26200), CPython 3.14.2, over both committed shards, three reads each:
 
@@ -239,14 +240,17 @@ The aggregate is kept forever by default. `observability.item_health_aggregate_k
 
 Authority: Andre, under Guardrail #10 - a claim about an archived month has to be one the archive can still support.
 
-## `state/scores/` shards by month, and that bounds nothing on its own (2026-08-31)
+## `state/scores/` became a directory, and that bounds nothing on its own (2026-08-31)
 
 **The eval ledger moved from `state/scores.csv` to `state/scores/<YYYY-MM>.csv` on
-2026-08-31.** The migration is a split and nothing else: 3,509 rows, one month,
+2026-08-31**, and from those month shards to `state/scores/<YYYY>/<MM>/<DD>.csv` on
+**2026-09-13**. The first migration is a split and nothing else: 3,509 rows, one month,
 2,700,019 bytes before and after, every cell compared by name across both
 revisions. Say what it did not do first, because the section this replaces was
 right about it: **sharding is not a bound.** Nothing is deleted, nothing is
-folded, and the tree grows at the same rate it grew yesterday.
+folded, and the tree grows at the same rate it grew yesterday. The second
+migration did not change that either - it is the same rows in more files, and
+what bounds them is still `observability.scores_full_grain_months`.
 
 What it buys is that the two things which could bound it are now possible. A
 retention rule can take a whole month the way `state/item-health/` already does,
@@ -287,6 +291,14 @@ turn a count over the ledger into a count of times the pipeline looked. The
 header check moved ahead of the dedupe for the same reason: a corrupt shard is
 corrupt whatever the call had to say, and checking after the dedupe let a stale
 header survive an append that returned zero.
+
+**The header check's cover narrowed on 2026-09-13, and the dedupe's did not.**
+At day grain, checking every committed partition before every append would have
+cost one more open a day for ever on the hot path (Guardrail #12), so `append`
+now checks the one or two days it is about to write - which is also the exact
+cover, because a file this call does not append to is a file this call cannot
+corrupt. The dedupe still reads every identity, through the index rather than
+the rows, for the reason the paragraph above gives.
 
 ### What the ledger is made of, and the three narrowings not taken
 

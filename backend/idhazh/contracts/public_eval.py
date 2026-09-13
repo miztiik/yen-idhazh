@@ -1,9 +1,11 @@
 """The browser-safe projection of the score ledger.
 
-`state/scores/<YYYY-MM>.csv` is the ledger - one row per scored item per attempt
-- and it carries three cells a reader must never receive. This is the narrow
-shape that does cross, written to `frontend/public/scores/<YYYY-MM>.csv` and
-fetched a month at a time as the console pans its viewport.
+`state/scores/<YYYY>/<MM>/<DD>.csv` is the ledger - one row per scored item per
+attempt - and it carries three cells a reader must never receive. This is the
+narrow shape that does cross, written to `frontend/public/scores/<YYYY-MM>.csv`
+and fetched a month at a time as the console pans its viewport. The two grains
+differ on purpose: a `state/` store files by what a run writes, a published
+mirror by what a browser fetches (`docs/concepts/partitions.md`).
 
 It is the same trade `public_telemetry.py` makes, for the same reason, against a
 different ledger: the console draws faithfulness, coverage, compression and the
