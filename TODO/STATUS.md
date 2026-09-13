@@ -33,16 +33,15 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 4 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 8 | 6 | 2 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 4 |
 
-## In flight - 2
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #1 | 12 | A | A new engine behind the same seam | p12-r1 |
-| #8 | 25 | E | A story cross-files to a second desk | p25-r8 |
 
-## Ready now - 19
+## Ready now - 21
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -67,10 +66,12 @@ section 3 is where it is answered.
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 |
 | #7b | 23 | H | The two calls become a DAG, and every label rides in the first | 7a, P4, 6, plan 11 row 6 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
+| #8a | 25 | J | The second desk reaches the reader | 8 |
+| #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
-## Waiting on another row - 56
+## Waiting on another row - 55
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -128,7 +129,6 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
-| #10 | 25 | F | The `assemble` consolidation | 8 is IN-FLIGHT |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 
 ## Finished - 17 plans with no live row
