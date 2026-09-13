@@ -88,6 +88,7 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
 from idhazh.contracts.item_health import (
     FAILURE_CODE_STAGES,
     SOURCE_NEUTRAL_FAILURE_CODES,
+    TERMINAL_STAGES,
     FailureCode,
     ItemHealthRow,
     ItemOutcome,
@@ -3595,6 +3596,41 @@ def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None
     assert cells["code"] == ""
     assert cells["http_status"] == ""
     assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_no_failure_code_admits_a_stage_an_item_cannot_stop_at() -> None:
+    """A code's stage set is the gate a new stage name has to get past.
+
+    `unknown` mapped to `frozenset(ItemStage)`, so any name added to the enum for
+    any reason became a legal census row the day it was declared - one line, and
+    the only one, between a stage vocabulary and a ledger that accepts it.
+    `ItemStage` is also the type of `telemetry.event(src=...)` and of
+    `DayStageTiming.stage`, and neither of those means an ending, so names that
+    no row may carry now exist and this is what keeps them out.
+    """
+    for code, stages in FAILURE_CODE_STAGES.items():
+        assert stages <= TERMINAL_STAGES, f"{code.value} admits a stage no item stops at"
+
+
+@pytest.mark.parametrize("stage", sorted(set(ItemStage) - TERMINAL_STAGES))
+def test_the_census_refuses_a_stage_an_item_cannot_stop_at(stage: ItemStage) -> None:
+    """`stage` answers where the item STOPPED, so a step it passed through is a lie.
+
+    An item whose picture failed still reaches the digest. A `visual` row here
+    would say it did not, and would take one off the `publish` count that
+    `publish_day_metrics` and the console read off this same file.
+
+    Parametrized over whatever is not terminal rather than over `visual`, so the
+    next stage name added for a log line or a clock arrives here already asked
+    the question instead of arriving unnoticed.
+    """
+    payload = ItemHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json")
+    ).model_dump(mode="json")
+    payload["stage"] = stage.value
+
+    with pytest.raises(ValidationError, match="where an item stopped"):
+        ItemHealthRow.model_validate(payload)
 
 
 def test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum() -> None:

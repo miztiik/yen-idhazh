@@ -53,12 +53,18 @@ DEGRADED_BUT_DONE: Final = frozenset(
 class EventName(StrEnum):
     """Every event name a stage may emit.
 
-    One member, because one stage emits. A name with no emitter cannot be told
+    Two members, because two stages emit. A name with no emitter cannot be told
     apart from one that fires, so a name is added here in the commit that emits
     it.
     """
 
     ITEM_SUMMARIZE_FAILED = "item.summarize.failed"
+    #: The marks compiled and the file did not land. This is the visual stage
+    #: breaking, and it is a different fact from the planner deciding an article
+    #: has nothing to draw - `VisualDecision.none_reason` records that one, and
+    #: no reader can tell a refusal from a broken writer by looking at a picture
+    #: that is not there. The item publishes either way, shorter.
+    ITEM_VISUAL_FAILED = "item.visual.failed"
 
 
 class EventLevel(StrEnum):
