@@ -19,7 +19,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 4 | 3 | 3 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 4 | 3 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 14 | 11 | 3 | 2 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
@@ -33,17 +33,21 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 9 | 19 | 6 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 5 | 3 | 3 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 4 | 10 | 4 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 9 | 19 | 5 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 5 | 3 | 2 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 4 | 10 | 3 |
 
-## In flight - 1
+## In flight - 5
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
+| #20 | 20260823-known-defects-plan | - | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | - |
 | #3f | 11 | C6 | The window is sized for two calls | p11-3f |
+| #P2 | 23 | B | The reference dataset, built so a number cannot flatter us | p23-p2 |
+| #6 | 24 | D | `state/feed-health/` files by day | p24-6 |
+| #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | p25-3 |
 
-## Ready now - 30
+## Ready now - 26
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -53,7 +57,6 @@ section 3 is where it is answered.
 | --- | --- | --- | --- | --- |
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
-| #20 | 20260823-known-defects-plan | - | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3h | 11 | C8 | A two-call item that failed on call 1 reports no cost at all | 3g |
 | #6 | 11 | F | The small model, its job and its cache go | 5b |
@@ -68,16 +71,13 @@ section 3 is where it is answered.
 | #1 | 20 | A | The two funnels | - |
 | #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 |
 | #1 | 22 | A | What is durable, and where it already lives | - |
-| #P2 | 23 | B | The reference dataset, built so a number cannot flatter us | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #4 | 23 | F | An event gets a lifecycle | 3 |
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a |
-| #6 | 24 | D | `state/feed-health/` files by day | 1, 3 |
 | #7 | 24 | E | `state/seen/` files by day | 1, 3 |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 1, 2, 3 |
-| #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | 2 |
 | #6 | 25 | C | The topic pills order by what is running | 2 |
 | #7 | 25 | D | A desk floor and a desk ceiling | 2 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
@@ -128,7 +128,7 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #P3 | 23 | D | A person labels the dev split and the test split | P2 is PENDING |
+| #P3 | 23 | D | A person labels the dev split and the test split | P2 is IN-FLIGHT |
 | #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is PENDING |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
@@ -141,9 +141,9 @@ section 3 is where it is answered.
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
-| #4 | 25 | D | Carriage becomes a tie-break | 3 is PENDING |
+| #4 | 25 | D | Carriage becomes a tie-break | 3 is IN-FLIGHT |
 | #8 | 25 | E | A story cross-files to a second desk | 7 is PENDING |
-| #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3 is PENDING; plan 23 row #21 is PENDING |
+| #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3 is IN-FLIGHT; plan 23 row #21 is PENDING |
 | #10 | 25 | F | The `assemble` consolidation | 7 is PENDING; 8 is PENDING |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
