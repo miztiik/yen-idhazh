@@ -1518,3 +1518,53 @@ jobs:
       - name: Bundle gate - encoder, page ceilings and payload ceilings
         working-directory: frontend
         run: npm run bundle-gate
+
+      # Every visual decision this day made, laid out so a person can look at
+      # them and say whether the machine kept the visual they would have kept.
+      # It gates nothing: nothing downloads this, nothing reads it back, and no
+      # publish decision can (../../CLAUDE.md section 0a).
+      #
+      # This job because it is the only one holding every population at once -
+      # `items-*` carries the decisions and `visuals` carries the drawings - and
+      # a job of its own would re-pay a checkout, an install and a second
+      # download of both to isolate about twenty seconds of file copying.
+      #
+      # Last, and `continue-on-error`, for the reason the corpus harvest carries
+      # it: what this job owes a reader is the published day, and a contact
+      # sheet is further from the reader than the training corpus is. The
+      # step-level bound is what `continue-on-error` cannot give - it does not
+      # stop a hung step spending the job's remaining minutes.
+      #
+      # The tree lands under backend/var/, which .gitignore already covers, so
+      # no commit step names it and no rebuild owns it.
+      - name: Build the day's review tree
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          python backend/utilities/review_queue.py \
+            --date "${{ needs.plan.outputs.date }}" \
+            --budget-mb 5
+
+      # Seven days, and the number is not the evidence package's 14. A review
+      # tree is rebuilt by every run that publishes a day, so a reviewer who
+      # misses a week loses freshness and nothing else; `evidence-*` is 14
+      # because a missed day there is an article body that cannot be recovered,
+      # and that reason does not transfer.
+      #
+      # What it costs, stated rather than implied: the `--budget-mb` above caps
+      # one run's tree at 5 MB, so the five cron slots held for seven days is
+      # 175 MB worst case against the 500 MB of artifact storage Guardrail #2
+      # allows - 35 percent, and that assumes every run fills its whole budget.
+      # A typical day's rendered set has measured 324,580 bytes
+      # (../../docs/concepts/adaptive-pruning.md, 2026-09-13), which puts the
+      # real figure near 5 percent.
+      #
+      # `if: always()`, because the step above may have degraded and a partial
+      # sheet is still worth looking at.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: review
+          path: backend/var/review/${{ needs.plan.outputs.date }}/
+          retention-days: 7
+          if-no-files-found: ignore

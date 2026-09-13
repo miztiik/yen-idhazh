@@ -1,0 +1,62 @@
+{
+  "budget_bytes": 5000000,
+  "built_at": "2026-08-21T07:02:11Z",
+  "bytes_written": 18442,
+  "census": [
+    {
+      "kept": 1,
+      "population": "published",
+      "seen": 1
+    },
+    {
+      "kept": 1,
+      "population": "rejected",
+      "seen": 1
+    },
+    {
+      "kept": 1,
+      "population": "none",
+      "seen": 1
+    }
+  ],
+  "date": "2026-08-21",
+  "rows": [
+    {
+      "alt_text": "Cost per million tokens, previous release against the new one.",
+      "asset_relpath": "assets/ai-01.svg",
+      "item_id": "ai-01",
+      "none_reason": null,
+      "population": "published",
+      "rationale": "The article states two comparable cost figures.",
+      "source_url": "https://blog.example-lab.org/2026/08/model-release",
+      "title": "Example Lab releases a smaller model",
+      "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+      "visual_state": "rendered"
+    },
+    {
+      "alt_text": null,
+      "asset_relpath": null,
+      "item_id": "ai-02",
+      "none_reason": "validation_failed",
+      "population": "rejected",
+      "rationale": "The article states two capacity figures in different units.",
+      "source_url": "https://grid.example.com/2026/08/winter-outlook",
+      "title": "Grid operator publishes its winter outlook",
+      "url_key": "4b2c1f0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c",
+      "visual_state": "absent"
+    },
+    {
+      "alt_text": null,
+      "asset_relpath": null,
+      "item_id": "world-03",
+      "none_reason": "model_declined",
+      "population": "none",
+      "rationale": "Nothing in this story is a quantity worth drawing.",
+      "source_url": "https://news.example.org/2026/08/talks-resume",
+      "title": "Talks resume after a week of silence",
+      "url_key": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+      "visual_state": "absent"
+    }
+  ],
+  "version": "2026-09-13"
+}
