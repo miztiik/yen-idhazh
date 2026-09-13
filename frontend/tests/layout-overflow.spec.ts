@@ -66,34 +66,61 @@ test.describe('the topic row folds instead of scrolling', () => {
 		ref('world', 14)
 	];
 
+	/** `digest.pill_move_min` as `config/appearance.json` commits it. */
+	const MOVE_MIN = 2;
+
+	/** The five desks a person declared; the other four stand in for the
+	 * auto-created ones plan 23 row #16 will propose, which do not exist today.
+	 * Only an auto-created desk can fold, so the fold has to be driven from a
+	 * fixture rather than from `config/taxonomy.json`. */
+	const AUTO = new Set(['health', 'science', 'sport', 'tech']);
+
 	test('a row that fits keeps every pill and opens no control', () => {
-		const split = splitPills(nine, null, 9);
-		expect(split.shown).toEqual(nine);
-		expect(split.folded).toEqual([]);
-	});
-
-	test('the topics that fold are the smallest ones, and the order never moves', () => {
-		const split = splitPills(nine, null, 4);
-
-		// The four biggest stay: ai 40, tech 21, world 14, business-economy 13.
-		expect(split.shown.map((v) => v.id)).toEqual(['ai', 'business-economy', 'tech', 'world']);
-		// And both halves read in the payload's order, not in size order - a topic
-		// that moved between two days for a reason a reader cannot see is worse
-		// than a topic that is one click further away.
-		expect(split.folded.map((v) => v.id)).toEqual([
+		const split = splitPills(nine, null, 9, MOVE_MIN, AUTO);
+		// Every pill is still there and the set is unchanged - but the ORDER is now
+		// the day's, biggest desk first, which is what row #6 changed. `world` 14
+		// stays behind `business-economy` 13: a one-story lead is under the margin,
+		// so it does not take the place in front of it.
+		expect(split.shown.map((v) => v.id)).toEqual([
+			'ai',
+			'tech',
+			'business-economy',
+			'world',
 			'energy',
-			'health',
 			'india',
+			'health',
 			'science',
 			'sport'
 		]);
+		expect(split.folded).toEqual([]);
+	});
+
+	test('the topics that fold are the proposed ones, and the order is the day it draws', () => {
+		const split = splitPills(nine, null, 4, MOVE_MIN, AUTO);
+
+		// The row reads biggest first, and `limit` is a SOFT cap: `energy` and
+		// `india` sit past the fourth slot and stay, because a desk a person put in
+		// `config/taxonomy.json` is never folded away.
+		expect(split.shown.map((v) => v.id)).toEqual([
+			'ai',
+			'tech',
+			'business-economy',
+			'world',
+			'energy',
+			'india'
+		]);
+		// Only the proposed desks past the cap go inside the disclosure, and they
+		// read in the day's order too - the fold asks who put the desk there, the
+		// order asks how much of the day it holds.
+		expect(split.folded.map((v) => v.id)).toEqual(['health', 'science', 'sport']);
 		expect(split.shown.length + split.folded.length).toBe(nine.length);
 	});
 
 	test('the topic the reader is on is never the one that folds away', () => {
-		// `sport` has one story, so the count alone would hide it - together with
-		// the only mark on the page saying where the reader is.
-		const split = splitPills(nine, 'sport', 4);
+		// `sport` has one story and was proposed rather than declared, so the count
+		// alone would hide it - together with the only mark on the page saying
+		// where the reader is.
+		const split = splitPills(nine, 'sport', 4, MOVE_MIN, AUTO);
 		expect(split.shown.map((v) => v.id)).toContain('sport');
 		expect(split.folded.map((v) => v.id)).not.toContain('sport');
 	});
@@ -101,10 +128,18 @@ test.describe('the topic row folds instead of scrolling', () => {
 	test('a cap of zero still leaves a row rather than an empty control', () => {
 		// The contract floors this at 1, so zero is unreachable through config.
 		// It is asserted anyway: the alternative is a page whose entire topic set
-		// is behind one closed disclosure.
-		const split = splitPills(nine, null, 0);
-		expect(split.shown.length).toBe(1);
-		expect(split.folded.length).toBe(nine.length - 1);
+		// is behind one closed disclosure. Every curated desk stays whatever the cap
+		// says, so what the floor of 1 protects is the first proposed desk - `tech`
+		// here, which holds more of the day than four desks that stay on the row.
+		const split = splitPills(nine, null, 0, MOVE_MIN, AUTO);
+		expect(split.shown.map((v) => v.id)).toEqual([
+			'ai',
+			'business-economy',
+			'world',
+			'energy',
+			'india'
+		]);
+		expect(split.folded.map((v) => v.id)).toEqual(['tech', 'health', 'science', 'sport']);
 	});
 });
 
