@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -86,7 +86,7 @@ The 42 columns, in file order:
 | `canonical_url` | URL | always | the address, after a run artifact has expired |
 | `vertical` | slug | always | which topic queue it was planned into |
 | `source_id` | slug | always | which feed contributed it |
-| `stage` | enum | always | where it stopped: `plan`, `fetch`, `extract`, `summarize`, `publish` |
+| `stage` | enum | always | where it stopped: `plan`, `fetch`, `extract`, `summarize`, `publish`. The schema lists `visual` because the enum is inlined; this column refuses it |
 | `outcome` | enum | always | `ok` or `failed` |
 | `code` | enum | on failure, or as an `ok` extract signal | the typed cause |
 | `http_status` | 100-599 | `fetch` rows only | what the server said |
@@ -226,8 +226,16 @@ The outcome is either `ok` or `failed`. A failed row has one failure code that
 belongs to its stage. A successful row usually has no code, but may carry an
 extract signal: `too_short`, `not_prose` or `boilerplate`.
 
-`visuals` and `render` are not terminal item-health stages. A render failure
-degrades an item and never fails it.
+**`ItemStage` holds a sixth name and this column refuses it.** `visual` is the
+step that plans and draws a picture, and it is a stage the pipeline can name
+rather than a place an item can stop: an item whose picture failed still reaches
+the digest, so it leaves a `publish` row. `contracts.item_health.TERMINAL_STAGES`
+is the five this column accepts and a validator raises on anything else, so a
+row carrying `visual` cannot be written rather than being merely unusual. The
+same enum types `telemetry.event(src=...)`, which names the step that wrote a
+log line, and `DayStageTiming.stage`, which names the step a clock was read at -
+neither of those two means an ending. Before 2026-09-14 there was no name at
+all, and a render failure was silent.
 
 **A successful item leaves a `publish` row, so `summarize` rows are a failure
 count and nothing else.** The stage on the row is where the item STOPPED, not
@@ -557,6 +565,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is not uploaded at all when a job is cancelled, so a longer retention protects nothing in the case that loses the rows. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |
+| Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `publish_day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |
 
 ## See also
 

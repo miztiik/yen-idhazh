@@ -12,15 +12,18 @@ gone with the renderer.
 
 from __future__ import annotations
 
+import logging
 import re
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
+from idhazh import assemble, telemetry
 from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.element import ElementTable
+from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
@@ -29,6 +32,8 @@ from idhazh.contracts.visual_decision import (
     VisualState,
 )
 from idhazh.render.chart import CompileError, compile_bar
+
+LOG: Final = logging.getLogger("idhazh")
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 #: What a visual's published data is filed as. It was `.svg` until 2026-09-13,
@@ -165,6 +170,7 @@ def render_planned_visual(
     public_root: Path,
     relpath: str,
     visuals: VisualsConfig,
+    run_id: str | None = None,
 ) -> VisualDecision:
     """A validated plan becomes a published data file, or the item stays decided to nothing.
 
@@ -190,6 +196,13 @@ def render_planned_visual(
     ([`docs/architecture/publishing/visuals.md`](../../../docs/architecture/publishing/visuals.md)),
     so the compiled marks are the last thing the pipeline writes for a picture
     and the first thing the drawing code reads.
+
+    **A file that would not land says so.** Until 2026-09-14 this branch
+    returned in silence, so a full disk and a planner that correctly found
+    nothing to draw reached an operator as the same thing - a story with no
+    picture. `run_id` is what names the run in that line; it defaults to empty
+    because a fixture builder has no run, and the line is still worth writing
+    without one.
     """
     if decision.kind is not VisualKind.NONE:
         raise ValueError("a planned visual starts as an item decided to nothing")
@@ -209,6 +222,7 @@ def render_planned_visual(
     try:
         write_bytes_atomic(public_root / relpath, compiled.data.to_json().encode("utf-8"))
     except OSError as error:
+        _log_render_failed(planned, error=error, run_id=run_id)
         return planned.model_copy(
             update={
                 "visual_state": VisualState.RENDER_FAILED,
@@ -217,4 +231,39 @@ def render_planned_visual(
         )
     return planned.model_copy(
         update={"visual_state": VisualState.RENDERED, "data_path": relpath}
+    )
+
+
+def _log_render_failed(planned: VisualDecision, *, error: OSError, run_id: str | None) -> None:
+    """The marks compiled and the file did not land, said out loud.
+
+    `src` is the step that broke rather than the stage the item ends at, which
+    is what `ItemStage.VISUAL` is for: the item still publishes, shorter, and
+    still leaves a `publish` census row. The two facts an operator needs are
+    which item lost its picture and what kind of `OSError` it was - a full disk
+    and a read-only tree are two different fixes and the exception class is the
+    only thing that separates them.
+
+    `failure_detail` is not carried. It is an `UntrustedLine` by type, and a
+    typed exception name and a closed enum value are what may leave the process
+    (Guardrail #11).
+    """
+    LOG.warning(
+        "%s",
+        telemetry.event(
+            ts=assemble.utc_now(),
+            src=ItemStage.VISUAL,
+            run=run_id,
+            name=telemetry.EventName.ITEM_VISUAL_FAILED,
+            level=telemetry.EventLevel.WARNING,
+            ctx={
+                "item_id": planned.item_id,
+                "url_key": planned.url_key,
+                "model_id": planned.model_id,
+            },
+            data={
+                "visual_state": VisualState.RENDER_FAILED.value,
+                "error_type": type(error).__name__,
+            },
+        ),
     )

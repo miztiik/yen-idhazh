@@ -450,6 +450,7 @@ def _drawn(
     settings: config.Settings,
     date: str,
     stamp: Mapping[str, str],
+    run_id: str | None,
 ) -> VisualDecision:
     """One drafted plan becomes a picture on disk, or the reason it did not.
 
@@ -478,6 +479,7 @@ def _drawn(
         public_root=common.PUBLIC_ROOT.parent,
         relpath=asset_relpath(date, summary.item_id),
         visuals=visuals,
+        run_id=run_id,
     )
 
 
@@ -766,6 +768,7 @@ def _two_calls_one_item(
             date=date,
             stamp=stamp,
             wants_a_plan=wants_a_plan,
+            run_id=run_id,
         )
         decision = decision.model_copy(
             update={"decision_ms": int((time.monotonic() - started) * 1000)}
@@ -787,6 +790,7 @@ def _decide_the_visual(
     date: str,
     stamp: Mapping[str, str],
     wants_a_plan: bool,
+    run_id: str | None,
 ) -> VisualDecision:
     """Which of the routes to a picture, or to none, this reply took.
 
@@ -841,4 +845,4 @@ def _decide_the_visual(
         return visual_planner.declined_by_the_model(
             summary, why=plan.why if plan is not None else "the reply carried no plan", **stamp
         )
-    return _drawn(summary, plan, table, settings=settings, date=date, stamp=stamp)
+    return _drawn(summary, plan, table, settings=settings, date=date, stamp=stamp, run_id=run_id)

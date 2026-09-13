@@ -52,6 +52,18 @@ class TelemetryAggregateRow(Contract):
     __schema_stem__: ClassVar[str] = "telemetry-aggregate-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T01:30",
+            change="ItemStage gained visual. No folded row can carry it.",
+            why=(
+                "The enum is inlined in this schema, so a name added for the event "
+                "envelope's src becomes legal in this column too. It is unreachable: "
+                "retention.fold_month groups item-health rows, and that census column "
+                "refuses visual because an item whose picture failed still publishes. A "
+                "folded month an earlier run wrote reads unchanged, and the entry exists "
+                "so the widening is dated rather than inferred from a schema diff."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-30T20:00",
             change="Initial shape: one row per (date, stage) folded from an item-health shard.",
             why=(

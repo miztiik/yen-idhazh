@@ -384,6 +384,19 @@ class DayMetrics(Contract):
     __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T01:30",
+            change="ItemStage gained visual, so stage_timing may name it. Nothing writes it yet.",
+            why=(
+                "The enum is inlined in this schema, so a name added for the event "
+                "envelope's src becomes a legal stage timing here as well. "
+                "publish_day_metrics times fetch, extract and summarize and nothing else, "
+                "so no day metrics file carries the new name and this entry records a "
+                "vocabulary that widened rather than a field that moved. The date is what "
+                "lets a reader of an old payload place the shape without diffing two "
+                "generated files."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:00",
             change="Removed pipeline_fingerprint. BREAKING.",
             why=(

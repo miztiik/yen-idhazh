@@ -57,6 +57,17 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T01:30",
+            change="ItemStage gained visual. No row here can carry it.",
+            why=(
+                "The enum is inlined in this schema, so a name added for the event "
+                "envelope's src becomes legal in this column too. It is unreachable: every "
+                "row here projects an item-health row, and that census column refuses "
+                "visual because an item whose picture failed still publishes. The entry "
+                "exists so the widening is dated rather than inferred from a schema diff."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T16:20",
             change=(
                 "Added nullable model_calls, call_1_kind and the first call's five cost "

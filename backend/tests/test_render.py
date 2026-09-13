@@ -21,6 +21,8 @@ gives one document.
 
 from __future__ import annotations
 
+import json
+import logging
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
@@ -28,8 +30,10 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
+from idhazh import telemetry
 from idhazh.contracts.app_config import AppConfig, VisualsConfig
 from idhazh.contracts.element import ElementTable
+from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.visual import EncodingRole, VisualPlan, VisualType
 from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import (
@@ -412,6 +416,75 @@ class TestRenderPlannedVisual:
         assert result.visual_state is VisualState.RENDER_FAILED
         assert result.data_path is None
         assert result.failure_detail and "could not be written" in result.failure_detail
+
+    def test_a_file_that_would_not_land_says_so_and_names_the_visual_stage(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """This branch returned in silence until 2026-09-14.
+
+        Nothing was logged and nothing counted it, so a disk that would not take
+        the file and a planner that correctly found nothing to draw arrived at an
+        operator as the same thing: a story with no picture. `src` is
+        `ItemStage.VISUAL` - the step that broke, never where the item ended,
+        because the item still publishes and still leaves a `publish` census row.
+
+        The whole key set is asserted rather than one value, so a second emitter
+        cannot ship a second shape. The exception class is not asserted: the same
+        occupied path raises `IsADirectoryError` on Linux and `PermissionError`
+        on Windows, and pinning either would make this test a platform check.
+        """
+        (tmp_path / MARKS).mkdir(parents=True)
+
+        with caplog.at_level(logging.WARNING, logger="idhazh"):
+            result = render_planned_visual(
+                self._nothing_yet(),
+                VisualPlan.read(BAR_PLAN),
+                ElementTable.read(BAR_TABLE),
+                public_root=tmp_path,
+                relpath=MARKS,
+                visuals=committed_visuals(),
+                run_id="2026-08-22-1",
+            )
+
+        assert result.visual_state is VisualState.RENDER_FAILED
+        assert len(caplog.records) == 1
+        line = caplog.records[0].getMessage()
+        envelope = json.loads(line)
+
+        assert sorted(envelope) == ["ctx", "data", "level", "name", "run", "src", "ts", "v"]
+        assert envelope["src"] == ItemStage.VISUAL.value
+        assert envelope["name"] == telemetry.EventName.ITEM_VISUAL_FAILED.value
+        assert envelope["level"] == telemetry.EventLevel.WARNING.value
+        assert envelope["run"] == "2026-08-22-1"
+        assert envelope["ctx"] == {
+            "item_id": "energy-01",
+            "url_key": "b" * 64,
+            "model_id": "qwen3-4b",
+        }
+        assert envelope["data"]["visual_state"] == VisualState.RENDER_FAILED.value
+        assert envelope["data"]["error_type"]
+        # `failure_detail` is an `UntrustedLine` by type. A typed exception name
+        # and a closed enum value are what may leave the process (Guardrail #11),
+        # and this is the assertion that notices when prose starts to.
+        assert "could not be written" not in line
+
+    def test_a_file_that_lands_says_nothing(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A warning on the ordinary path is a warning an operator learns to skip."""
+        with caplog.at_level(logging.WARNING, logger="idhazh"):
+            result = render_planned_visual(
+                self._nothing_yet(),
+                VisualPlan.read(BAR_PLAN),
+                ElementTable.read(BAR_TABLE),
+                public_root=tmp_path,
+                relpath=MARKS,
+                visuals=committed_visuals(),
+                run_id="2026-08-22-1",
+            )
+
+        assert result.visual_state is VisualState.RENDERED
+        assert caplog.records == []
 
 
 class TestAssetPaths:
