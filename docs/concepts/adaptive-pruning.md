@@ -116,6 +116,18 @@ are broken: a published month whose source was folded away is a rate nobody can
 check against the rows behind it, and a source month with no published copy is a
 window the console draws as a gap.
 
+**A build artifact gets no row, and question 1 is why.** A tree a run rewrites
+whole cannot grow, so there is no retention question for this page to answer -
+the artifact's own storage is bounded by the workflow line that uploads it and
+by GitHub's 500 MB ceiling (`CLAUDE.md` Guardrail #2), neither of which is a
+policy here. `backend/var/review/<date>/` is the worked example and
+`backend/var/evidence/<date>/` is the precedent: both are gitignored, both are
+rewritten by their next run, and both reach a person as an artifact with a
+retention written beside the `upload-artifact` step in `digest.yml`. Adding
+either to the register would teach the next reader that a directory under
+`backend/var/` is something this page governs, and none of it is. The register
+below reads committed trees, which is what its own verification command says.
+
 Reach for a clock last. Which cover is honest, and why a clock is usually the
 wrong one, is
 [growing-reads.md](growing-reads.md#deciding-it-for-a-collection-this-page-does-not-list).
