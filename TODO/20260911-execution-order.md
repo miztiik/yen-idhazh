@@ -115,7 +115,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | Written by | Plans | File | What it means for a wave |
 | --- | --- | --- | --- |
 | 19 rows | 11, 23, 25 | `backend/tests/test_contracts.py` | Every row that adds a contract field |
-| 18 rows | 11, 23, 24, 25 | `backend/idhazh/cli.py` | The single busiest module in the project. Assume any two rows collide here until their lists say otherwise |
+| 18 rows | 11, 23, 24, 25 | `backend/idhazh/cli.py` | **This stopped being true on 2026-09-13.** It was the single busiest module in the project, holding the body of all eighteen stages. The bodies now sit one to a module under `backend/idhazh/stages/`, so a row collides only with a row writing the same stage. Re-read each row's file list against the new paths before assuming a collision; `cli.py` itself is now the parser and the verb table, which few rows touch |
 | 15 rows | 11, 23, 25 | `backend/idhazh/contracts/app_config.py` | Every row that adds a knob, and it regenerates a schema |
 | 15 rows | 11, 23, 25 | `config/idhazh.json` | The same rows |
 | 14 rows | 11, 23, 25 | `schemas/app-config.schema.json` | The drift gate fails on one byte, so this is a hard collision and never a soft one |

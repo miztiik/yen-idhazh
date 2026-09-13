@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -32,7 +32,7 @@ question, and the four answers do not mix.
 | `config/` | The tunable knobs: `idhazh.json`, `appearance.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout. **`corpus/reference-dataset-1/` is a second collection in the same directory and a different thing entirely**: a frozen, hand-labelled set for measuring the article classifier, written once by hand and never by a run. The two must not share an article, and `build_reference_dataset.py verify` is what says so | a run, in CI; `reference-dataset-1/` by a person | **never** |
 | `schemas/` | One generated JSON Schema per contract | `python -m idhazh.contracts.export` | no |
-| `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
+| `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/idhazh/stages/` one module per pipeline stage, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
@@ -158,6 +158,30 @@ answering the same question: what does a run leave behind for a later reader?
 One answer, one place. The `/evals/` route survived the fold because the folder
 was an implementation detail and the URL was a promise to a reader.
 
+**`backend/idhazh/stages/` exists because the router had eaten the work.**
+`backend/idhazh/cli.py` held the argument parser, the verb table, and the body of
+all eighteen stages: 4,946 lines and 117 top-level names in one file. Nothing in
+it was wrong, and that is the point - a router grows a stage at a time, and no
+one commit is the one to refuse. What it cost was real. Every row of four active
+plans wrote that file, so the collision table on
+[`../../TODO/20260911-execution-order.md`](../../TODO/20260911-execution-order.md)
+named it the single busiest module in the project at 18 rows, and two rows that
+touched nothing in common still could not run in the same wave. Split on
+2026-09-13: one module a stage, `stages/common.py` for the 31 names two or more
+stages share, and `cli.py` down to 762 lines - the parser, the verb table, five
+routing helpers, and nothing a stage does. The stage names are re-exported from
+`cli`, so every caller and every doc that says `cli.stage_assemble` still says a
+true thing (CLAUDE.md section 1a, "A router is not a worker").
+
+**The nine roots the tests redirect are deliberately not re-exported.** A stage
+reads `common.PUBLIC_ROOT` as an attribute rather than importing the value, so
+one `monkeypatch.setattr(common, "PUBLIC_ROOT", tmp)` reaches every reader. Had
+`cli` re-exported the name too, a redirect left on `cli` would bind a copy no
+stage reads and the test would go on passing against the real tree. It raises
+instead. For the names `cli` does re-export, a test in
+`backend/tests/test_contracts.py` walks the suite and fails any redirect naming
+the router rather than the module that defines the name.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -170,6 +194,8 @@ was an implementation detail and the URL was a promise to a reader.
 | A shared workflow step under `backend/utilities/` | `backend/` is the producer, and a step only GitHub Actions runs is not producer code. Filing it there puts a runner detail inside the installable package and hides it from the workflow that calls it. |
 | Leaving the step duplicated in both jobs | Two copies of a retry loop, neither executable by a test. The copies had already drifted in two log strings. |
 | A `decisions/` directory of ADR files | A decision filed away from the thing it governs is a decision the next reader does not find. |
+| Moving the stages out one at a time, as each plan row happened to touch one | The rows land over weeks and each one adds a module while the file it left keeps growing, so the collision stays and nobody can say when it ends. The whole file was mechanical to move and the suite proves it: one commit, one answer. |
+| A `stages/` module per plan rather than per stage | A plan is a schedule, not a shape. The stage is the unit the router dispatches and the unit a test drives, so it is the unit the file follows. |
 
 ## See also
 

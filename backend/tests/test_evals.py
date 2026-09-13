@@ -1730,9 +1730,10 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
         for path in (REPO_ROOT / "backend" / "idhazh").rglob("*.py")
         if "rebuild_index" in read_text(path)
     )
-    assert callers == ["backend/idhazh/cli.py", "backend/idhazh/evals/writer.py"], (
-        f"the rebuild is reached from {callers}"
-    )
+    assert callers == [
+        "backend/idhazh/evals/writer.py",
+        "backend/idhazh/stages/rebuild_score_index.py",
+    ], f"the rebuild is reached from {callers}"
 
 
 def _archive_row(number: int) -> EvalRow:

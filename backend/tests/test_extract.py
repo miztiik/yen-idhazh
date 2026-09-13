@@ -22,7 +22,7 @@ from typing import NamedTuple
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
-from idhazh import cli, config
+from idhazh import config
 from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_url_key
@@ -53,6 +53,7 @@ from idhazh.fetch import (
     robots_rules,
     robots_url,
 )
+from idhazh.stages import common
 
 PAGES = FIXTURES_DIR / "pages"
 SHORT_SOURCES = FIXTURES_DIR / "short-sources"
@@ -413,13 +414,13 @@ def test_a_refused_target_is_never_asked_and_the_next_run_asks_again() -> None:
     target = f"{HOST}/private/a"
 
     refusing = Recorder(served(read_text(ROBOTS / "crawler-specific-group.txt")))
-    refusal = cli.live_fetcher(settings, read_address=refusing)(target)
+    refusal = common.live_fetcher(settings, read_address=refusing)(target)
     assert refusing.asked == [f"{HOST}/robots.txt"]
     assert refusal.outcome is FetchOutcome.ROBOTS_DENIED
     assert refusal.robots is RobotsOutcome.DENIED
 
     permitting = Recorder(served(read_text(ROBOTS / "no-rules.txt")))
-    allowed = cli.live_fetcher(settings, read_address=permitting)(target)
+    allowed = common.live_fetcher(settings, read_address=permitting)(target)
     assert permitting.asked == [f"{HOST}/robots.txt", target]
     assert allowed.outcome is FetchOutcome.OK
 
@@ -427,7 +428,7 @@ def test_a_refused_target_is_never_asked_and_the_next_run_asks_again() -> None:
 def test_a_target_whose_rules_nobody_answered_for_is_never_asked() -> None:
     settings = config.load(CONFIG_DIR)
     silent = Recorder(FetchResult(FetchOutcome.TRANSIENT, status=503, detail="HTTP 503"))
-    result = cli.live_fetcher(settings, read_address=silent)(f"{HOST}/a")
+    result = common.live_fetcher(settings, read_address=silent)(f"{HOST}/a")
     assert silent.asked == [f"{HOST}/robots.txt"]
     assert result.outcome is FetchOutcome.ROBOTS_DENIED
     assert result.robots is RobotsOutcome.UNREACHABLE
@@ -437,7 +438,7 @@ def test_one_host_is_asked_for_its_rules_once_a_run() -> None:
     """However many of its pages a run reads, and however the addresses are spelled."""
     settings = config.load(CONFIG_DIR)
     recorder = Recorder(served(read_text(ROBOTS / "no-rules.txt")))
-    read = cli.live_fetcher(settings, read_address=recorder)
+    read = common.live_fetcher(settings, read_address=recorder)
     read(f"{HOST}/one")
     read("HTTPS://X.Example:443/two")
     assert recorder.asked == [

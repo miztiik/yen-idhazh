@@ -9,7 +9,7 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import cli, config
+from idhazh import config
 from idhazh.classify.calls import build_call_one_request
 from idhazh.contracts.app_config import AppConfig, ElementsConfig, InferenceConfig, ModelRef
 from idhazh.contracts.article import Article
@@ -26,6 +26,7 @@ from idhazh.elements import element_table
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
 from idhazh.llm.server import server_argv
+from idhazh.stages import common
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 SCHEMAS_DIR: Final = REPO_ROOT / "schemas"
@@ -97,12 +98,12 @@ def isolate_committed_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     Tracing is on in the committed config (2026-09-06), so `stage_work` folds a
     span rollup into `state/span-rollup/` and both it and `stage_visual_planner`
     write a raw trace under `state/traces/` - committed paths keyed off
-    `cli.STATE_ROOT`. A stage test that only redirected `VAR_ROOT` would otherwise
+    `common.STATE_ROOT`. A stage test that only redirected `VAR_ROOT` would otherwise
     write real committed files. This points `STATE_ROOT` at the test's own tree; a
     test that sets it itself still wins, because its `monkeypatch` call runs after
     this fixture and the last write to an attribute is the one that holds.
     """
-    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
 
 
 @pytest.fixture

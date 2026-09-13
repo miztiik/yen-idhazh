@@ -1070,7 +1070,7 @@ the archive still, and neither is a skip - there is none, and the one the retire
 stamp was going to define was never wired: a committed digest is frozen output
 the site reads as-is, and
 the plan stage drops every already-run address (`ledger.load_published`, in
-`backend/idhazh/cli.py`) before the summariser is called, so a URL summarised
+`backend/idhazh/stages/plan.py`) before the summariser is called, so a URL summarised
 last week is not summarised again under the new rules. Neither is a skip built on
 the run's recorded inputs - there is no such skip and there never was one wired.
 The gain arrives going

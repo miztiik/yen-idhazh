@@ -45,6 +45,7 @@ from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
+from idhazh.stages import common
 
 FEEDS = FIXTURES_DIR / "feeds"
 
@@ -512,11 +513,11 @@ def test_the_cap_flag_reaches_the_plan_stage(tmp_path: Path, monkeypatch: pytest
         ).to_json(),
         encoding="utf-8",
     )
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
     monkeypatch.setattr(
-        cli, "live_fetcher", lambda _settings: fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL)
+        common, "live_fetcher", lambda _settings: fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL)
     )
 
     assert cli.main(["plan", "--date", DATE, "--config", str(config_dir), "--cap", "1"]) == 0

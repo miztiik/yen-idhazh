@@ -26,6 +26,7 @@ from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, VECTOR_SCALE, dequantise, from_base64
+from idhazh.stages import common
 
 DIGEST_ROOT = REPO_ROOT / "frontend" / "public" / "digest"
 
@@ -394,7 +395,7 @@ class TestTheCommittedShard:
         """The test that would have caught it, and does now."""
         assert cli._index_root() == REPO_ROOT / "frontend" / "public" / "assist" / "index"
 
-        monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
         redirected = cli._index_root()
 
         assert redirected == tmp_path / "public" / "assist" / "index"
