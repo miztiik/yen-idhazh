@@ -271,11 +271,30 @@ class ReferenceFailureCode(StrEnum):
 
 
 class ReferencePhase(StrEnum):
-    """Which of the three writers produced a metadata file."""
+    """Which of the four writers produced a metadata file."""
 
     IMPORT = "import"
     EXTRACTION = "extraction"
+    CLEANING = "cleaning"
     SELECTION = "selection"
+
+
+class ReferenceQualityFlag(StrEnum):
+    """Why one article is not worth putting in front of a classifier.
+
+    Every member here was measured on a real extraction before it was written
+    down. Two candidates were tried and deleted instead: a global unique-word
+    ratio, which only ever flagged long essays for being long, and an ending
+    without a full stop, which called 198 complete articles truncated.
+    """
+
+    SHORT = "short"
+    NO_SENTENCE = "no_sentence"
+    FRAGMENTED = "fragmented"
+    NEAR_DUPLICATE = "near_duplicate"
+    VIDEO_OR_PODCAST = "video_or_podcast"
+    PROMOTIONAL = "promotional"
+    OVER_CLEANED = "over_cleaned"
 
 
 class ReferenceSelectionSettings(Model):
@@ -334,6 +353,87 @@ class ReferenceSelectionSettings(Model):
     )
 
 
+class ReferenceCleaningSettings(Model):
+    """How the cleaning phase decides what is furniture and what is an article.
+
+    The furniture rule is one sentence: a line a publisher puts on most of its
+    own articles is furniture, not news. It is per-publisher because the
+    extractor has already removed the furniture that looks like markup, and what
+    survives - a disclaimer, a standing newsletter blurb, a sponsor slot - reads
+    exactly like prose until you notice it appears forty times in a row.
+    """
+
+    words_min: int = Field(
+        default=120, ge=1, description="Below this an article is flagged short."
+    )
+    repeat_min_share: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description="The share of a publisher's articles a line must appear on to be furniture.",
+    )
+    repeat_min_count: int = Field(
+        default=3,
+        ge=2,
+        description="And the least number of times. A phrase used twice is not a habit.",
+    )
+    publisher_min_articles: int = Field(
+        default=4,
+        ge=2,
+        description="Articles a publisher needs before the rule runs. Two samples decide nothing.",
+    )
+    max_removed_share: float = Field(
+        default=0.4,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The safety valve. An article that would lose more than this keeps its "
+            "text and is flagged instead, because a rule that can empty an article "
+            "should say so rather than do it quietly."
+        ),
+    )
+    sentence_words_min: int = Field(
+        default=8, ge=1, description="Words a line needs before it counts as a sentence."
+    )
+    fragment_ratio_min: float = Field(
+        default=0.35,
+        ge=0.0,
+        le=1.0,
+        description="Below this share of real sentences, the text is a list rather than prose.",
+    )
+    near_duplicate_jaccard: float = Field(
+        default=0.7,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Shared five-word phrases before two articles are one story. Measured on the "
+            "real corpus: 0.7, 0.5 and 0.35 all found the same 11, so these are near-exact "
+            "repeats rather than a threshold to tune."
+        ),
+    )
+    promo_hits: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Sales phrases before an article reads as an advertisement. Two, not one: "
+            "one hit flags 82 real articles that merely carry a subscription line."
+        ),
+    )
+    drop_flags: list[ReferenceQualityFlag] = Field(
+        default_factory=lambda: [
+            ReferenceQualityFlag.SHORT,
+            ReferenceQualityFlag.NO_SENTENCE,
+            ReferenceQualityFlag.FRAGMENTED,
+            ReferenceQualityFlag.NEAR_DUPLICATE,
+            ReferenceQualityFlag.VIDEO_OR_PODCAST,
+        ],
+        description=(
+            "Which flags keep an article out of the cleaned collection. A flagged "
+            "article is still written with its flags when it is not on this list."
+        ),
+    )
+
+
 class ReferenceDatasetLocalConfig(Contract):
     """Every setting `corpus/reference-dataset-2/` is built with, and it reads no other.
 
@@ -350,6 +450,17 @@ class ReferenceDatasetLocalConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "reference-dataset-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T13:05",
+            change="Added the cleaning block.",
+            why=(
+                "Filtering rows cannot improve text, and 44,523 words of the real corpus "
+                "- 1.8 percent overall and 15.9 percent of one publisher - are disclaimers "
+                "and sales pitches sitting inside articles that pass every flag. Every "
+                "threshold is here rather than in the loop so a different judgement about "
+                "what counts as furniture is a config edit (Guardrail #6)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T10:20",
             change="Added selection.generic_host_labels.",
@@ -404,6 +515,10 @@ class ReferenceDatasetLocalConfig(Contract):
     selection: ReferenceSelectionSettings = Field(
         default_factory=ReferenceSelectionSettings,
         description="How a balanced sample is drawn from the finished extraction.",
+    )
+    cleaning: ReferenceCleaningSettings = Field(
+        default_factory=ReferenceCleaningSettings,
+        description="How publisher furniture is removed and which articles are dropped.",
     )
 
 
@@ -488,6 +603,16 @@ class ReferenceExtractionRow(Contract):
     __schema_stem__: ClassVar[str] = "reference-dataset-extractions"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T13:05",
+            change="Added quality_flags, defaulting to empty.",
+            why=(
+                "The cleaning phase writes the same row shape with its text cleaned, and "
+                "an article it kept but is unhappy about has to be able to say so. It "
+                "stays empty on an extraction row: the fetch judges whether a page "
+                "answered, never whether the prose is worth reading."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13",
             change=(
                 "Initial shape: the manifest identity, the full sanitized text with its "
@@ -549,6 +674,14 @@ class ReferenceExtractionRow(Contract):
         min_length=1,
         max_length=64,
         description="Which sanitizer the text crossed the trust boundary through.",
+    )
+    quality_flags: list[ReferenceQualityFlag] = Field(
+        default_factory=list,
+        description=(
+            "What the cleaning phase found wrong with this article. Empty on an "
+            "extraction row, because the fetch judges whether a page answered and "
+            "never whether the prose is worth reading."
+        ),
     )
 
     @model_validator(mode="after")
@@ -665,6 +798,40 @@ class ReferenceExtractionTotals(Model):
     )
 
 
+class ReferenceCleaningTotals(Model):
+    """What one cleaning pass removed, dropped and kept.
+
+    `removed_lines` is the point of this block: it names every line the pass took
+    out, per publisher. This is the only step that changes an article's text, and
+    a removal nobody can read is a removal nobody can argue with.
+    """
+
+    extraction_sha256: Sha256 = Field(description="Which extraction bytes this pass read.")
+    articles_in: int = Field(ge=0, description="Articles with text in the extraction.")
+    articles_out: int = Field(ge=0, description="Articles written to the cleaned collection.")
+    articles_dropped: int = Field(ge=0, description="Articles a drop flag kept out.")
+    words_in: int = Field(ge=0, description="Words before cleaning, over the articles kept.")
+    words_out: int = Field(ge=0, description="Words after.")
+    lines_removed: int = Field(ge=0, description="Furniture lines taken out, counting repeats.")
+    over_cleaned: int = Field(
+        ge=0,
+        description="Articles the safety valve saved: flagged and left whole, never trimmed.",
+    )
+    dropped_by_flag: dict[ReferenceQualityFlag, int] = Field(
+        default_factory=dict, description="How many articles each drop flag kept out."
+    )
+    flagged_by_flag: dict[ReferenceQualityFlag, int] = Field(
+        default_factory=dict, description="How many articles raised each flag, dropped or not."
+    )
+    removed_words_by_publisher: dict[Slug, int] = Field(
+        default_factory=dict, description="Furniture words removed, per outlet."
+    )
+    removed_lines: dict[Slug, list[str]] = Field(
+        default_factory=dict,
+        description="Every distinct line removed, per outlet, so a person can check the rule.",
+    )
+
+
 class ReferenceSelectionTotals(Model):
     """What a sample asked for and what it got, per group and overall."""
 
@@ -702,6 +869,16 @@ class ReferenceCollectionMetadata(Contract):
 
     __schema_stem__: ClassVar[str] = "reference-dataset-metadata"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T13:05",
+            change="Added the cleaning phase and its totals.",
+            why=(
+                "Cleaning writes a new collection rather than editing the frozen "
+                "extraction, so it needs its own phase and its own totals. removed_lines "
+                "carries every line the pass took out, because this is the one step that "
+                "changes an article's text."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T11:40",
             change="Removed extraction_totals.attempts.",
@@ -765,10 +942,13 @@ class ReferenceCollectionMetadata(Contract):
         default=None, description="Present on an import file, absent on the other two."
     )
     extraction_totals: ReferenceExtractionTotals | None = Field(
-        default=None, description="Present on an extraction file, absent on the other two."
+        default=None, description="Present on an extraction file, absent on the others."
+    )
+    cleaning_totals: ReferenceCleaningTotals | None = Field(
+        default=None, description="Present on a cleaned file, absent on the others."
     )
     selection_totals: ReferenceSelectionTotals | None = Field(
-        default=None, description="Present on a selection file, absent on the other two."
+        default=None, description="Present on a selection file, absent on the others."
     )
 
     @model_validator(mode="after")
@@ -776,6 +956,7 @@ class ReferenceCollectionMetadata(Contract):
         blocks = {
             ReferencePhase.IMPORT: self.import_totals,
             ReferencePhase.EXTRACTION: self.extraction_totals,
+            ReferencePhase.CLEANING: self.cleaning_totals,
             ReferencePhase.SELECTION: self.selection_totals,
         }
         if blocks[self.phase] is None:

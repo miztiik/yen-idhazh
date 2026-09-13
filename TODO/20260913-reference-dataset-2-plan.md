@@ -155,11 +155,12 @@ Table F - Status Reckoner
 | F5 | 5 | Add resumable extraction through existing helpers | 4 | E | DONE | refdata2 | direct | - |
 | F6 | 6 | Run and review a small extraction pilot | 5 | F | DONE (run 2026-09-13; the bulk fetch waits on the review) | refdata2 | direct | - |
 | F7 | 7 | Validate the utility with offline tests | 6 | G | DONE (tests shipped with each step; the pilot's one gap closed) | refdata2 | direct | - |
-| F8 | 8 | Extract the full URL list | 7 | H | PENDING | - | - | - |
-| F9 | 9 | Export extraction arrays and metadata | 8 | I | PENDING | - | - | - |
-| F10 | 10 | Verify and freeze the extraction | 9 | J | PENDING | - | - | - |
-| F11 | 11 | Select the configurable classification sample | 10 | K | PENDING | - | - | - |
-| F12 | 12 | Verify the selection and hand over | 11 | L | PENDING | - | - | - |
+| F8 | 8 | Extract the full URL list | 7 | H | DONE (1,345 articles of 1,661; 52.5 min) | refdata2 | direct | - |
+| F9 | 9 | Export extraction arrays and metadata | 8 | I | DONE | refdata2 | direct | - |
+| F10 | 10 | Verify and freeze the extraction | 9 | J | DONE (zero faults) | refdata2 | direct | - |
+| F11 | 11 | Select the configurable classification sample | 10 | K | DONE (1,000 articles, 52 publishers) | refdata2 | direct | - |
+| F12 | 12 | Verify the selection and hand over | 11 | L | DONE | refdata2 | direct | - |
+| F13 | 13 | Clean publisher furniture from the text | 10 | M | DONE (owner decision B3, 2026-09-13; 44,380 words removed) | refdata2 | direct | - |
 
 ## 2. Step 1 - Approve the local layout and meanings
 

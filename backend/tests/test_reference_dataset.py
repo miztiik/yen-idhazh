@@ -21,16 +21,17 @@ import hashlib
 import json
 from collections.abc import Callable, Mapping, Sequence, Set
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from conftest import REPO_ROOT
 
 from idhazh.contracts.app_config import ReferenceDatasetConfig
 from idhazh.contracts.article import ArticleStatus
-from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.base import canonical_json, derive_text_digest, derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.reference_dataset import (
+    ReferenceCleaningSettings,
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
     ReferenceDatasetRow,
@@ -1137,6 +1138,233 @@ def test_metadata_naming_bytes_that_are_not_on_disk_is_caught(tmp_path: Path) ->
     )
     faults = builder.extraction_faults(dataset, "2026-09-13-1", tmp_path)
     assert any("not the one on disk" in fault for fault in faults)
+
+
+# --- clean-urls -------------------------------------------------------------
+#
+# Built in the test body, because the case that matters - a publisher that says
+# the same thing on every article - is the one a bounded fixture can carry and a
+# real extraction only sometimes does.
+
+
+#: Six unrelated openings. The bodies have to differ in substance, not just in a
+#: number: six near-identical articles are correctly read as one story, which is
+#: the near-duplicate flag working rather than the fixture working.
+_SUBJECTS: Final = (
+    "The port authority said the dredging contract had been awarded to a local firm.",
+    "Rainfall across the northern districts was the heaviest recorded since the war.",
+    "Shares in the tool maker fell after it named a new chief financial officer.",
+    "Two researchers published a paper arguing the census undercounts rural workers.",
+    "The regulator opened an inquiry into how the utility bills its oldest customers.",
+    "A committee recommended the bridge be closed to freight until spring at least.",
+    "The airline restored its morning service between the two coastal capitals today.",
+)
+
+
+def furniture_rows(count: int, *, publisher: str = "outlet") -> list[ReferenceExtractionRow]:
+    rows: list[ReferenceExtractionRow] = []
+    for index in range(count):
+        url = f"https://{publisher}.example.com/p/story-{index}"
+        subject = _SUBJECTS[index % len(_SUBJECTS)]
+        body = (
+            f"{subject}\n"
+            f"Officials would not say when the decision was taken or by whom, case {index}.\n"
+            f"The written record for {subject.split()[1]} number {index} runs to many pages.\n"
+            f"Two of the three people named in matter {index} have since left their posts.\n"
+            f"A spokesman confirmed the {index} figures but declined to answer any questions.\n"
+            "Disclaimer: nothing here is advice and the publisher accepts no liability.\n"
+            "Subscribe now to receive our weekly letter, free, every single Tuesday.\n"
+        )
+        rows.append(
+            ReferenceExtractionRow(
+                version=ReferenceExtractionRow.schema_version(),
+                source_line=index + 1,
+                source_url=url,
+                canonical_url=url,
+                url_key=derive_url_key(url),
+                source_domain="example.com",
+                host=f"{publisher}.example.com",
+                publisher=publisher,
+                status=ArticleStatus.OK,
+                text=body,
+                article_words=len(body.split()),
+                article_sha256=derive_text_digest(body),
+                fetched_at="2026-09-13T09:00:00Z",
+                extracted_at="2026-09-13T09:00:01Z",
+                extractor_version="trafilatura-2.0.0-idhazh-2",
+                sanitizer_version="idhazh-sanitize-3",
+            )
+        )
+    return rows
+
+
+def staged(tmp_path: Path, rows: list[ReferenceExtractionRow]) -> Path:
+    dataset = tmp_path / "reference-dataset-2"
+    (dataset / builder.MANIFEST_FILENAME).parent.mkdir(parents=True, exist_ok=True)
+    target = dataset / builder.EXTRACTIONS_DIRNAME / "run" / builder.ARTICLES_FILENAME
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(
+        canonical_json([row.model_dump(mode="json") for row in rows]).encode("utf-8")
+    )
+    return dataset
+
+
+def cleaned(
+    tmp_path: Path, rows: list[ReferenceExtractionRow], **overrides: Any
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    dataset = staged(tmp_path, rows)
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        cleaning=ReferenceCleaningSettings.model_validate({"words_min": 10, **overrides}),
+    )
+    assert (
+        builder.clean_extraction(
+            dataset, local, run_id="run", clean_id="first", root=tmp_path
+        )
+        == 0
+    )
+    out = dataset / builder.CLEANED_DIRNAME / "first"
+    return (
+        json.loads((out / builder.ARTICLES_FILENAME).read_text(encoding="utf-8")),
+        json.loads((out / builder.METADATA_FILENAME).read_text(encoding="utf-8")),
+    )
+
+
+def test_a_line_every_article_carries_is_removed_from_all_of_them(tmp_path: Path) -> None:
+    rows, meta = cleaned(tmp_path, furniture_rows(6))
+    assert len(rows) == 6
+    assert all("Disclaimer" not in row["text"] for row in rows)
+    assert all("Subscribe now" not in row["text"] for row in rows)
+    survived = {row["text"].splitlines()[0] for row in rows}
+    assert survived == set(_SUBJECTS[:6]), "the article itself survives, whole"
+    assert meta["cleaning_totals"]["lines_removed"] == 12
+
+
+def test_the_removed_lines_are_written_down_where_a_person_can_read_them(
+    tmp_path: Path,
+) -> None:
+    """A removal nobody can read is a removal nobody can argue with."""
+    _rows, meta = cleaned(tmp_path, furniture_rows(6))
+    removed = meta["cleaning_totals"]["removed_lines"]["outlet"]
+    assert any("Disclaimer" in line for line in removed)
+    assert any("Subscribe now" in line for line in removed)
+    assert meta["cleaning_totals"]["removed_words_by_publisher"]["outlet"] > 0
+
+
+def test_a_line_one_article_carries_is_left_alone(tmp_path: Path) -> None:
+    rows = furniture_rows(6)
+    once = rows[0]
+    body = (once.text or "") + "A sentence that appears on exactly one of these six articles.\n"
+    rows[0] = once.model_copy(
+        update={
+            "text": body,
+            "article_words": len(body.split()),
+            "article_sha256": derive_text_digest(body),
+        }
+    )
+    written, _meta = cleaned(tmp_path, rows)
+    survivor = next(row for row in written if row["url_key"] == once.url_key)
+    assert "appears on exactly one" in survivor["text"]
+
+
+def test_a_publisher_with_too_few_articles_is_not_touched(tmp_path: Path) -> None:
+    """Two samples cannot tell furniture from content."""
+    rows, meta = cleaned(tmp_path, furniture_rows(3), publisher_min_articles=4)
+    assert all("Disclaimer" in row["text"] for row in rows)
+    assert meta["cleaning_totals"]["lines_removed"] == 0
+
+
+def test_the_safety_valve_keeps_an_article_whole_and_says_so(tmp_path: Path) -> None:
+    """A rule that can empty an article says so rather than doing it quietly."""
+    rows, meta = cleaned(tmp_path, furniture_rows(6), max_removed_share=0.1)
+    assert all("Disclaimer" in row["text"] for row in rows)
+    assert meta["cleaning_totals"]["over_cleaned"] == 6
+    assert all("over_cleaned" in row["quality_flags"] for row in rows)
+
+
+def test_a_dropped_article_is_absent_and_counted_by_its_reason(tmp_path: Path) -> None:
+    rows = furniture_rows(6)
+    url = "https://outlet.example.com/p/stub"
+    rows.append(
+        ReferenceExtractionRow(
+            version=ReferenceExtractionRow.schema_version(),
+            source_line=99,
+            source_url=url,
+            canonical_url=url,
+            url_key=derive_url_key(url),
+            source_domain="example.com",
+            host="outlet.example.com",
+            publisher="outlet",
+            status=ArticleStatus.OK,
+            text="Too short.\n",
+            article_words=2,
+            article_sha256=derive_text_digest("Too short.\n"),
+            fetched_at="2026-09-13T09:00:00Z",
+            extracted_at="2026-09-13T09:00:01Z",
+            extractor_version="trafilatura-2.0.0-idhazh-2",
+            sanitizer_version="idhazh-sanitize-3",
+        )
+    )
+    written, meta = cleaned(tmp_path, rows)
+    assert derive_url_key(url) not in {row["url_key"] for row in written}
+    assert meta["cleaning_totals"]["articles_dropped"] == 1
+    assert meta["cleaning_totals"]["dropped_by_flag"]["short"] == 1
+
+
+def test_a_cleaned_row_carries_a_digest_that_matches_its_new_text(tmp_path: Path) -> None:
+    written, _meta = cleaned(tmp_path, furniture_rows(6))
+    for row in written:
+        assert row["article_sha256"] == derive_text_digest(row["text"])
+        assert row["article_words"] == len(row["text"].split())
+
+
+def test_the_frozen_extraction_is_not_touched(tmp_path: Path) -> None:
+    rows = furniture_rows(6)
+    dataset = staged(tmp_path, rows)
+    source = dataset / builder.EXTRACTIONS_DIRNAME / "run" / builder.ARTICLES_FILENAME
+    before = source.read_bytes()
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        cleaning=ReferenceCleaningSettings(words_min=10),
+    )
+    assert (
+        builder.clean_extraction(dataset, local, run_id="run", clean_id="first", root=tmp_path)
+        == 0
+    )
+    assert source.read_bytes() == before
+
+
+def test_the_cleaning_names_the_extraction_it_read(tmp_path: Path) -> None:
+    rows = furniture_rows(6)
+    dataset = staged(tmp_path, rows)
+    _written, meta = cleaned(tmp_path, rows)
+    source = dataset / builder.EXTRACTIONS_DIRNAME / "run" / builder.ARTICLES_FILENAME
+    assert meta["cleaning_totals"]["extraction_sha256"] == hashlib.sha256(
+        source.read_bytes()
+    ).hexdigest()
+
+
+def test_a_second_cleaning_pass_is_byte_identical(tmp_path: Path) -> None:
+    rows = furniture_rows(6)
+    dataset = staged(tmp_path, rows)
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        cleaning=ReferenceCleaningSettings(words_min=10),
+    )
+    assert (
+        builder.clean_extraction(dataset, local, run_id="run", clean_id="first", root=tmp_path)
+        == 0
+    )
+    target = dataset / builder.CLEANED_DIRNAME / "first" / builder.ARTICLES_FILENAME
+    once = target.read_bytes()
+    assert (
+        builder.clean_extraction(dataset, local, run_id="run", clean_id="first", root=tmp_path)
+        == 0
+    )
+    assert target.read_bytes() == once
 
 
 # --- select-urls ------------------------------------------------------------

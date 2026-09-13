@@ -24,12 +24,31 @@
       ],
       "title": "ReferenceFailureCode",
       "type": "string"
+    },
+    "ReferenceQualityFlag": {
+      "description": "Why one article is not worth putting in front of a classifier.\n\nEvery member here was measured on a real extraction before it was written\ndown. Two candidates were tried and deleted instead: a global unique-word\nratio, which only ever flagged long essays for being long, and an ending\nwithout a full stop, which called 198 complete articles truncated.",
+      "enum": [
+        "short",
+        "no_sentence",
+        "fragmented",
+        "near_duplicate",
+        "video_or_podcast",
+        "promotional",
+        "over_cleaned"
+      ],
+      "title": "ReferenceQualityFlag",
+      "type": "string"
     }
   },
   "$id": "reference-dataset-extractions.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added quality_flags, defaulting to empty.",
+      "version": "2026-09-13T13:05",
+      "why": "The cleaning phase writes the same row shape with its text cleaned, and an article it kept but is unhappy about has to be able to say so. It stays empty on an extraction row: the fetch judges whether a page answered, never whether the prose is worth reading."
+    },
     {
       "change": "Initial shape: the manifest identity, the full sanitized text with its digest and word count, the two timestamps, the two tool versions, and the outcome with its typed reason.",
       "version": "2026-09-13",
@@ -155,6 +174,14 @@
       "title": "Publisher",
       "type": "string"
     },
+    "quality_flags": {
+      "description": "What the cleaning phase found wrong with this article. Empty on an extraction row, because the fetch judges whether a page answered and never whether the prose is worth reading.",
+      "items": {
+        "$ref": "#/$defs/ReferenceQualityFlag"
+      },
+      "title": "Quality Flags",
+      "type": "array"
+    },
     "sanitizer_version": {
       "anyOf": [
         {
@@ -214,7 +241,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-13T13:05",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -246,5 +273,5 @@
   ],
   "title": "ReferenceExtractionRow",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-13T13:05"
 }

@@ -57,6 +57,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from idhazh.contracts.reference_dataset import ReferenceQualityFlag
+
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 _WIDTH: Final = 26
 
@@ -79,6 +81,13 @@ _PROMO: Final = (
     "cancel anytime",
     "best price",
     "early bird",
+)
+#: A post whose article is somewhere else, in a player. Matched against the
+#: opening only, so an article that mentions a video in passing is not a blurb.
+_VIDEO: Final = re.compile(
+    r"\b(in this (video|episode)|watch the (video|full)|subscribe to (my|our) channel"
+    r"|link in (the )?(bio|description)|listen to (this|the) episode|full episode on)\b",
+    re.IGNORECASE,
 )
 #: Minhash sketch width. 64 signatures is enough to separate "shares almost
 #: every phrase" from "shares a few", which is the only question asked here.
@@ -175,32 +184,29 @@ def near_duplicates(
     return dict(found)
 
 
-def flags_of(text: str, asked: Thresholds) -> list[str]:
+def flags_of(text: str, asked: Thresholds) -> list[ReferenceQualityFlag]:
     """Everything wrong with one article's text, named rather than scored."""
-    raised: list[str] = []
+    raised: set[ReferenceQualityFlag] = set()
     tokens = words_of(text)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
 
     if len(tokens) < asked.words_min:
-        raised.append("short")
+        raised.add(ReferenceQualityFlag.SHORT)
     if lines:
         short = sum(1 for line in lines if len(line.split()) < asked.short_line_words)
         if short / len(lines) >= asked.link_dump_ratio and len(lines) >= 5:
-            raised.append("link_dump")
-    if len(tokens) >= 50 and moving_diversity(tokens) < asked.diversity_min:
-        raised.append("repetitive")
+            raised.add(ReferenceQualityFlag.FRAGMENTED)
     folded = text.casefold()
     if sum(1 for phrase in _PROMO if phrase in folded) >= asked.promo_hits:
-        raised.append("promotional")
-    letters = [character for character in text if character.isalpha()]
-    if letters:
-        latin = sum(1 for character in letters if character.isascii())
-        if latin / len(letters) < asked.latin_ratio_min:
-            raised.append("not_latin")
+        raised.add(ReferenceQualityFlag.PROMOTIONAL)
+    if _VIDEO.search(text[:800]):
+        raised.add(ReferenceQualityFlag.VIDEO_OR_PODCAST)
     prose = [line for line in lines if len(line.split()) >= asked.sentence_words_min]
     if not prose:
-        raised.append("no_sentence")
-    return raised
+        raised.add(ReferenceQualityFlag.NO_SENTENCE)
+    elif len(lines) >= 8 and len(prose) / len(lines) < 0.35:
+        raised.add(ReferenceQualityFlag.FRAGMENTED)
+    return sorted(raised)
 
 
 def scan(extraction: Path, asked: Thresholds, *, examples: int) -> int:
@@ -214,7 +220,7 @@ def scan(extraction: Path, asked: Thresholds, *, examples: int) -> int:
         seen.setdefault(str(row["url_key"]), row)
     articles = list(seen.values())
 
-    raised: dict[str, list[str]] = {}
+    raised: dict[str, list[ReferenceQualityFlag]] = {}
     for row in articles:
         found = flags_of(str(row["text"]), asked)
         if found:
@@ -223,9 +229,9 @@ def scan(extraction: Path, asked: Thresholds, *, examples: int) -> int:
     sketches = {str(row["url_key"]): sketch(str(row["text"])) for row in articles}
     twins = near_duplicates(sketches, jaccard_min=asked.near_duplicate_jaccard)
     for key in twins:
-        raised.setdefault(key, []).append("near_duplicate")
+        raised.setdefault(key, []).append(ReferenceQualityFlag.NEAR_DUPLICATE)
 
-    counted = Counter(flag for found in raised.values() for flag in found)
+    counted = Counter(flag.value for found in raised.values() for flag in found)
     clean = [row for row in articles if str(row["url_key"]) not in raised]
 
     print(f"{'articles read':<{_WIDTH}} {len(articles)}")

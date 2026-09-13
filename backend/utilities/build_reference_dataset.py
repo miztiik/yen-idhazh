@@ -60,7 +60,7 @@ import json
 import re
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -76,6 +76,8 @@ from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_text_digest, derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.reference_dataset import (
+    ReferenceCleaningSettings,
+    ReferenceCleaningTotals,
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
     ReferenceDatasetRow,
@@ -87,12 +89,14 @@ from idhazh.contracts.reference_dataset import (
     ReferenceManifestRow,
     ReferencePhase,
     ReferencePublisherPart,
+    ReferenceQualityFlag,
     ReferenceSelectionRow,
     ReferenceSelectionTotals,
     ReferenceSplit,
 )
 from idhazh.discover import canonicalise
 from idhazh.sanitize import SANITIZER_VERSION
+from utilities import scan_reference_articles as quality
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DATASET_RELPATH: Final = "corpus/reference-dataset-1"
@@ -1326,12 +1330,22 @@ def select_sample(
     *,
     run_id: str,
     selection_id: str,
+    clean_id: str | None = None,
     root: Path = REPO_ROOT,
 ) -> int:
-    """Draw a balanced sample from a finished extraction and write it with its totals."""
-    source = dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    """Draw a balanced sample from a finished extraction and write it with its totals.
+
+    `clean_id` names a cleaned collection to draw from instead of the raw
+    extraction. The sample records which one it read, so a later reader can tell
+    a sample of cleaned text from a sample of the text as fetched.
+    """
+    source = (
+        dataset_dir / CLEANED_DIRNAME / clean_id / ARTICLES_FILENAME
+        if clean_id
+        else dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    )
     if not source.is_file():
-        print(f"no extraction at {source.as_posix()}. Run `export-urls` first")
+        print(f"no collection at {source.as_posix()}. Run `export-urls` first")
         return 1
     records = [
         ReferenceExtractionRow.model_validate(payload)
@@ -1561,6 +1575,237 @@ def verify_extraction(dataset_dir: Path, run_id: str, root: Path = REPO_ROOT) ->
     return 0
 
 
+# --- clean-urls ------------------------------------------------------------
+
+CLEANED_DIRNAME: Final = "cleaned"
+
+
+def furniture_by_publisher(
+    articles: Sequence[ReferenceExtractionRow], asked: ReferenceCleaningSettings
+) -> dict[str, set[str]]:
+    """The lines each publisher puts on most of its own articles.
+
+    Per-publisher because the extractor has already taken out the furniture that
+    looks like markup. What survives reads exactly like prose - a disclaimer, a
+    standing blurb, a sponsor slot - and the only thing that gives it away is
+    that one outlet repeats it verbatim.
+    """
+    grouped: dict[str, list[ReferenceExtractionRow]] = defaultdict(list)
+    for row in articles:
+        grouped[row.publisher].append(row)
+
+    found: dict[str, set[str]] = {}
+    for name, group in sorted(grouped.items()):
+        if len(group) < asked.publisher_min_articles:
+            continue
+        counted: Counter[str] = Counter()
+        for row in group:
+            counted.update({line.strip() for line in (row.text or "").splitlines() if line.strip()})
+        floor = max(asked.repeat_min_count, int(len(group) * asked.repeat_min_share))
+        repeated = {line for line, count in counted.items() if count >= floor}
+        if repeated:
+            found[name] = repeated
+    return found
+
+
+def strip_furniture(text: str, furniture: Set[str]) -> tuple[str, int, int]:
+    """The text without its furniture, and how many lines and words that removed."""
+    kept: list[str] = []
+    lines = words = 0
+    for line in text.splitlines():
+        if line.strip() in furniture:
+            lines += 1
+            words += len(line.split())
+            continue
+        kept.append(line)
+    cleaned = "\n".join(kept).strip("\n")
+    return (cleaned + "\n" if cleaned else ""), lines, words
+
+
+def clean_extraction(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    clean_id: str,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Write a cleaned collection beside a frozen extraction. No network, no edit.
+
+    The extraction is verified and stays exactly as it was verified. This reads
+    it, removes each publisher's own repeated furniture, drops the articles a
+    configured flag rules out, and writes a new collection whose metadata names
+    every line it took away.
+    """
+    source = dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    if not source.is_file():
+        print(f"no extraction at {source.as_posix()}. Run `export-urls` first")
+        return 1
+    rows = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(source.read_text(encoding="utf-8"))
+    ]
+
+    unique: dict[str, ReferenceExtractionRow] = {}
+    for row in rows:
+        if row.status is ArticleStatus.OK and row.text:
+            unique.setdefault(row.url_key, row)
+    articles = list(unique.values())
+
+    asked = local.cleaning
+    furniture = furniture_by_publisher(articles, asked)
+
+    # Strip first, then judge. Two articles from one newsletter share its
+    # disclaimer, and comparing them before that is removed reads the shared
+    # furniture as a shared story.
+    stripped: dict[str, tuple[str, int, int]] = {}
+    for row in articles:
+        original = row.text or ""
+        text, lines, words = strip_furniture(original, furniture.get(row.publisher, set()))
+        before = len(original.split())
+        if before and words / before > asked.max_removed_share:
+            stripped[row.url_key] = (original, 0, 0)
+        elif not text.strip():
+            stripped[row.url_key] = (original, 0, 0)
+        else:
+            stripped[row.url_key] = (text, lines, words)
+
+    twins = quality.near_duplicates(
+        {row.url_key: quality.sketch(stripped[row.url_key][0]) for row in articles},
+        jaccard_min=asked.near_duplicate_jaccard,
+    )
+
+    cleaned: list[ReferenceExtractionRow] = []
+    dropped: Counter[ReferenceQualityFlag] = Counter()
+    flagged: Counter[ReferenceQualityFlag] = Counter()
+    removed_words: Counter[str] = Counter()
+    removed_lines: dict[str, set[str]] = defaultdict(set)
+    lines_removed = words_in = words_out = over_cleaned = 0
+
+    for row in sorted(articles, key=lambda entry: entry.url_key):
+        original = row.text or ""
+        before = len(original.split())
+        text, lines, words = stripped[row.url_key]
+        flags = set(quality.flags_of(text, _limits(asked)))
+        if row.url_key in twins:
+            flags.add(ReferenceQualityFlag.NEAR_DUPLICATE)
+        # The safety valve. A rule that can empty an article says so instead.
+        if text == original and furniture.get(row.publisher) and before:
+            wholly, _lines, would_remove = strip_furniture(
+                original, furniture.get(row.publisher, set())
+            )
+            if would_remove and (
+                would_remove / before > asked.max_removed_share or not wholly.strip()
+            ):
+                over_cleaned += 1
+                flags.add(ReferenceQualityFlag.OVER_CLEANED)
+
+        for flag in flags:
+            flagged[flag] += 1
+        if flags & set(asked.drop_flags):
+            for flag in sorted(flags & set(asked.drop_flags)):
+                dropped[flag] += 1
+            continue
+
+        lines_removed += lines
+        words_in += before
+        words_out += len(text.split())
+        if words:
+            removed_words[row.publisher] += words
+            removed_lines[row.publisher] |= {
+                line.strip()
+                for line in original.splitlines()
+                if line.strip() in furniture.get(row.publisher, set())
+            }
+        cleaned.append(
+            row.model_copy(
+                update={
+                    "text": text,
+                    "article_words": len(text.split()),
+                    "article_sha256": derive_text_digest(text),
+                    "quality_flags": sorted(flags),
+                }
+            )
+        )
+
+    target = dataset_dir / CLEANED_DIRNAME / clean_id / ARTICLES_FILENAME
+    _write_atomically(
+        target, canonical_json([row.model_dump(mode="json") for row in cleaned])
+    )
+    written = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(target.read_text(encoding="utf-8"))
+    ]
+
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.CLEANING,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceExtractionRow.__schema_stem__,
+        input_path=_under(root, source),
+        input_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        output_path=_under(root, target),
+        output_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
+        rows=len(written),
+        verticals=_tally(row.vertical for row in written if row.vertical),
+        domains=_tally(row.source_domain for row in written),
+        hosts=_tally(row.host for row in written),
+        publishers=_tally(row.publisher for row in written),
+        publisher_hosts={
+            key: sorted({row.host for row in written if row.publisher == key})
+            for key in sorted({row.publisher for row in written})
+        },
+        lengthened_publishers={},
+        settings=local,
+        cleaning_totals=ReferenceCleaningTotals(
+            extraction_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            articles_in=len(articles),
+            articles_out=len(written),
+            articles_dropped=len(articles) - len(written),
+            words_in=words_in,
+            words_out=sum(len((row.text or "").split()) for row in written),
+            lines_removed=lines_removed,
+            over_cleaned=over_cleaned,
+            dropped_by_flag=dict(sorted(dropped.items())),
+            flagged_by_flag=dict(sorted(flagged.items())),
+            removed_words_by_publisher=dict(sorted(removed_words.items())),
+            removed_lines={name: sorted(lines) for name, lines in sorted(removed_lines.items())},
+        ),
+    )
+    _write_atomically(
+        target.with_name(METADATA_FILENAME), canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.cleaning_totals
+    assert totals is not None
+    print(f"{'cleaned':<{_WIDTH}} {_under(root, target)}")
+    print(f"{'articles in':<{_WIDTH}} {totals.articles_in}")
+    print(f"{'articles out':<{_WIDTH}} {totals.articles_out}")
+    print(f"{'articles dropped':<{_WIDTH}} {totals.articles_dropped}")
+    print(f"{'words in':<{_WIDTH}} {totals.words_in:,}")
+    print(f"{'words out':<{_WIDTH}} {totals.words_out:,}")
+    print(f"{'furniture lines removed':<{_WIDTH}} {totals.lines_removed:,}")
+    print(f"{'publishers trimmed':<{_WIDTH}} {len(totals.removed_words_by_publisher)}")
+    print(f"{'saved by the safety valve':<{_WIDTH}} {totals.over_cleaned}")
+    for flag, count in totals.dropped_by_flag.items():
+        print(f"  dropped {flag.value:<{_WIDTH - 10}} {count}")
+    return 0
+
+
+def _limits(asked: ReferenceCleaningSettings) -> quality.Thresholds:
+    """The cleaning settings as the scanner's own threshold record."""
+    return quality.Thresholds(
+        words_min=asked.words_min,
+        short_line_words=5,
+        link_dump_ratio=0.6,
+        diversity_min=0.0,
+        promo_hits=asked.promo_hits,
+        latin_ratio_min=0.5,
+        sentence_words_min=asked.sentence_words_min,
+        near_duplicate_jaccard=asked.near_duplicate_jaccard,
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=REPO_ROOT / DATASET_RELPATH)
@@ -1623,6 +1868,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Names the output directory. A new sample gets a new name.",
     )
+    selecting.add_argument(
+        "--clean-id",
+        default=None,
+        help="Draw from this cleaned collection instead of the raw extraction.",
+    )
     verifying = verbs.add_parser(
         "verify-urls", help="Re-check a finished extraction. No network, no re-fetch."
     )
@@ -1633,9 +1883,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="The collection's own config.json. Never config/idhazh.json.",
     )
     verifying.add_argument("--run-id", required=True, help="Which extraction to re-check.")
+    cleaning = verbs.add_parser(
+        "clean-urls",
+        help="Write a cleaned collection beside a frozen extraction. No network, no edit.",
+    )
+    cleaning.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    cleaning.add_argument("--run-id", required=True, help="Which extraction to clean.")
+    cleaning.add_argument(
+        "--clean-id", required=True, help="Names the output directory. A new pass, a new name."
+    )
 
     args = parser.parse_args(argv)
-    if args.verb in {"import-urls", "extract-urls", "export-urls", "select-urls", "verify-urls"}:
+    if args.verb in {
+        "import-urls",
+        "extract-urls",
+        "export-urls",
+        "select-urls",
+        "verify-urls",
+        "clean-urls",
+    }:
         local = ReferenceDatasetLocalConfig.model_validate_json(
             args.local_config.read_text(encoding="utf-8")
         )
@@ -1647,12 +1918,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             return export_extraction(args.local_config.parent, local, run_id=args.run_id)
         if args.verb == "verify-urls":
             return verify_extraction(args.local_config.parent, args.run_id)
+        if args.verb == "clean-urls":
+            return clean_extraction(
+                args.local_config.parent, local, run_id=args.run_id, clean_id=args.clean_id
+            )
         if args.verb == "select-urls":
             return select_sample(
                 args.local_config.parent,
                 local,
                 run_id=args.run_id,
                 selection_id=args.selection_id,
+                clean_id=args.clean_id,
             )
         return extract_supplied(
             args.local_config.parent, local, run_id=args.run_id, limit=args.limit

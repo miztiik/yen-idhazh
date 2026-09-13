@@ -1,4 +1,5 @@
 {
+  "cleaning_totals": null,
   "collection_schema": "reference-dataset-extractions",
   "domains": {
     "globaltimes.cn": 1,
@@ -52,6 +53,24 @@
   "rows": 2,
   "selection_totals": null,
   "settings": {
+    "cleaning": {
+      "drop_flags": [
+        "short",
+        "no_sentence",
+        "fragmented",
+        "near_duplicate",
+        "video_or_podcast"
+      ],
+      "fragment_ratio_min": 0.35,
+      "max_removed_share": 0.4,
+      "near_duplicate_jaccard": 0.7,
+      "promo_hits": 2,
+      "publisher_min_articles": 4,
+      "repeat_min_count": 3,
+      "repeat_min_share": 0.5,
+      "sentence_words_min": 8,
+      "words_min": 120
+    },
     "extract": {
       "backoff_initial_seconds": 1.0,
       "backoff_multiplier": 2.0,
@@ -102,9 +121,9 @@
     },
     "sources_file": "config/sources.json",
     "taxonomy_file": "config/taxonomy.json",
-    "version": "2026-09-13T10:20"
+    "version": "2026-09-13T13:05"
   },
-  "version": "2026-09-13T11:40",
+  "version": "2026-09-13T13:05",
   "verticals": {
     "world": 1
   }

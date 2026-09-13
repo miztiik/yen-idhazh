@@ -9,6 +9,7 @@
   "fetched_at": null,
   "host": "www.globaltimes.cn",
   "publisher": "globaltimes",
+  "quality_flags": [],
   "sanitizer_version": null,
   "source_domain": "globaltimes.cn",
   "source_line": 7,
@@ -16,6 +17,6 @@
   "status": "robots_denied",
   "text": null,
   "url_key": "2e7cf3625c56b916d9aea8050847459c4e36db7e571bcf76eb9eceb72ba5e3bc",
-  "version": "2026-09-13",
+  "version": "2026-09-13T13:05",
   "vertical": "world"
 }

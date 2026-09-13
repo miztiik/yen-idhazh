@@ -114,10 +114,208 @@
       "title": "ExtractConfig",
       "type": "object"
     },
+    "ReferenceCleaningSettings": {
+      "additionalProperties": false,
+      "description": "How the cleaning phase decides what is furniture and what is an article.\n\nThe furniture rule is one sentence: a line a publisher puts on most of its\nown articles is furniture, not news. It is per-publisher because the\nextractor has already removed the furniture that looks like markup, and what\nsurvives - a disclaimer, a standing newsletter blurb, a sponsor slot - reads\nexactly like prose until you notice it appears forty times in a row.",
+      "properties": {
+        "drop_flags": {
+          "description": "Which flags keep an article out of the cleaned collection. A flagged article is still written with its flags when it is not on this list.",
+          "items": {
+            "$ref": "#/$defs/ReferenceQualityFlag"
+          },
+          "title": "Drop Flags",
+          "type": "array"
+        },
+        "fragment_ratio_min": {
+          "default": 0.35,
+          "description": "Below this share of real sentences, the text is a list rather than prose.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Fragment Ratio Min",
+          "type": "number"
+        },
+        "max_removed_share": {
+          "default": 0.4,
+          "description": "The safety valve. An article that would lose more than this keeps its text and is flagged instead, because a rule that can empty an article should say so rather than do it quietly.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Max Removed Share",
+          "type": "number"
+        },
+        "near_duplicate_jaccard": {
+          "default": 0.7,
+          "description": "Shared five-word phrases before two articles are one story. Measured on the real corpus: 0.7, 0.5 and 0.35 all found the same 11, so these are near-exact repeats rather than a threshold to tune.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Near Duplicate Jaccard",
+          "type": "number"
+        },
+        "promo_hits": {
+          "default": 2,
+          "description": "Sales phrases before an article reads as an advertisement. Two, not one: one hit flags 82 real articles that merely carry a subscription line.",
+          "minimum": 1,
+          "title": "Promo Hits",
+          "type": "integer"
+        },
+        "publisher_min_articles": {
+          "default": 4,
+          "description": "Articles a publisher needs before the rule runs. Two samples decide nothing.",
+          "minimum": 2,
+          "title": "Publisher Min Articles",
+          "type": "integer"
+        },
+        "repeat_min_count": {
+          "default": 3,
+          "description": "And the least number of times. A phrase used twice is not a habit.",
+          "minimum": 2,
+          "title": "Repeat Min Count",
+          "type": "integer"
+        },
+        "repeat_min_share": {
+          "default": 0.5,
+          "description": "The share of a publisher's articles a line must appear on to be furniture.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Repeat Min Share",
+          "type": "number"
+        },
+        "sentence_words_min": {
+          "default": 8,
+          "description": "Words a line needs before it counts as a sentence.",
+          "minimum": 1,
+          "title": "Sentence Words Min",
+          "type": "integer"
+        },
+        "words_min": {
+          "default": 120,
+          "description": "Below this an article is flagged short.",
+          "minimum": 1,
+          "title": "Words Min",
+          "type": "integer"
+        }
+      },
+      "title": "ReferenceCleaningSettings",
+      "type": "object"
+    },
+    "ReferenceCleaningTotals": {
+      "additionalProperties": false,
+      "description": "What one cleaning pass removed, dropped and kept.\n\n`removed_lines` is the point of this block: it names every line the pass took\nout, per publisher. This is the only step that changes an article's text, and\na removal nobody can read is a removal nobody can argue with.",
+      "properties": {
+        "articles_dropped": {
+          "description": "Articles a drop flag kept out.",
+          "minimum": 0,
+          "title": "Articles Dropped",
+          "type": "integer"
+        },
+        "articles_in": {
+          "description": "Articles with text in the extraction.",
+          "minimum": 0,
+          "title": "Articles In",
+          "type": "integer"
+        },
+        "articles_out": {
+          "description": "Articles written to the cleaned collection.",
+          "minimum": 0,
+          "title": "Articles Out",
+          "type": "integer"
+        },
+        "dropped_by_flag": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "How many articles each drop flag kept out.",
+          "propertyNames": {
+            "$ref": "#/$defs/ReferenceQualityFlag"
+          },
+          "title": "Dropped By Flag",
+          "type": "object"
+        },
+        "extraction_sha256": {
+          "description": "Which extraction bytes this pass read.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Sha256",
+          "type": "string"
+        },
+        "flagged_by_flag": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "How many articles raised each flag, dropped or not.",
+          "propertyNames": {
+            "$ref": "#/$defs/ReferenceQualityFlag"
+          },
+          "title": "Flagged By Flag",
+          "type": "object"
+        },
+        "lines_removed": {
+          "description": "Furniture lines taken out, counting repeats.",
+          "minimum": 0,
+          "title": "Lines Removed",
+          "type": "integer"
+        },
+        "over_cleaned": {
+          "description": "Articles the safety valve saved: flagged and left whole, never trimmed.",
+          "minimum": 0,
+          "title": "Over Cleaned",
+          "type": "integer"
+        },
+        "removed_lines": {
+          "description": "Every distinct line removed, per outlet, so a person can check the rule.",
+          "patternProperties": {
+            "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "title": "Removed Lines",
+          "type": "object"
+        },
+        "removed_words_by_publisher": {
+          "description": "Furniture words removed, per outlet.",
+          "patternProperties": {
+            "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+              "type": "integer"
+            }
+          },
+          "title": "Removed Words By Publisher",
+          "type": "object"
+        },
+        "words_in": {
+          "description": "Words before cleaning, over the articles kept.",
+          "minimum": 0,
+          "title": "Words In",
+          "type": "integer"
+        },
+        "words_out": {
+          "description": "Words after.",
+          "minimum": 0,
+          "title": "Words Out",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "extraction_sha256",
+        "articles_in",
+        "articles_out",
+        "articles_dropped",
+        "words_in",
+        "words_out",
+        "lines_removed",
+        "over_cleaned"
+      ],
+      "title": "ReferenceCleaningTotals",
+      "type": "object"
+    },
     "ReferenceDatasetLocalConfig": {
       "additionalProperties": false,
       "description": "Every setting `corpus/reference-dataset-2/` is built with, and it reads no other.\n\nIt is deliberately not a block of `config/idhazh.json`. This collection is\nbuilt by hand once or twice a year and the pipeline runs every day, so a\nknob that only this tool reads does not belong in the file every stage\nloads (owner decision, 2026-09-13).\n\nPaths are relative to the repository root, POSIX-separated, with no `..`\nsegment (`CLAUDE.md` section 2). A path relative to this file would have to\nclimb out of the collection to name the taxonomy, and a stored `..` is the\none form that stops meaning the same thing when a file moves.",
       "properties": {
+        "cleaning": {
+          "$ref": "#/$defs/ReferenceCleaningSettings",
+          "description": "How publisher furniture is removed and which articles are dropped."
+        },
         "extract": {
           "$ref": "#/$defs/ExtractConfig",
           "description": "The settings `fetch.fetch` already consumes. `truncation_cap_tokens` caps what a model reads and is never applied to saved text."
@@ -364,10 +562,11 @@
       "type": "object"
     },
     "ReferencePhase": {
-      "description": "Which of the three writers produced a metadata file.",
+      "description": "Which of the four writers produced a metadata file.",
       "enum": [
         "import",
         "extraction",
+        "cleaning",
         "selection"
       ],
       "title": "ReferencePhase",
@@ -381,6 +580,20 @@
         "host"
       ],
       "title": "ReferencePublisherPart",
+      "type": "string"
+    },
+    "ReferenceQualityFlag": {
+      "description": "Why one article is not worth putting in front of a classifier.\n\nEvery member here was measured on a real extraction before it was written\ndown. Two candidates were tried and deleted instead: a global unique-word\nratio, which only ever flagged long essays for being long, and an ending\nwithout a full stop, which called 198 complete articles truncated.",
+      "enum": [
+        "short",
+        "no_sentence",
+        "fragmented",
+        "near_duplicate",
+        "video_or_podcast",
+        "promotional",
+        "over_cleaned"
+      ],
+      "title": "ReferenceQualityFlag",
       "type": "string"
     },
     "ReferenceSelectionSettings": {
@@ -522,6 +735,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the cleaning phase and its totals.",
+      "version": "2026-09-13T13:05",
+      "why": "Cleaning writes a new collection rather than editing the frozen extraction, so it needs its own phase and its own totals. removed_lines carries every line the pass took out, because this is the one step that changes an article's text."
+    },
+    {
       "change": "Removed extraction_totals.attempts.",
       "version": "2026-09-13T11:40",
       "why": "The extraction makes one request per identity, so attempts and unique_attempted were computed from the same set and could never disagree. A number that cannot disagree with its neighbour reads as a check and is decoration (Guardrail #10)."
@@ -534,6 +752,18 @@
   ],
   "description": "The `.meta.json` beside one collection file: what wrote it, from what, and how much.\n\nOne model for the three phases, with one block each and a refusal when the\nblock does not match the phase. Three near-identical models would drift, and\na single flat model would let an import file carry a selection's counts.\n\nEvery count here is read back off the written file rather than carried from\nthe loop that produced it: two numbers computed from one variable agree by\nconstruction and prove nothing (Guardrail #10).",
   "properties": {
+    "cleaning_totals": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceCleaningTotals"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Present on a cleaned file, absent on the others."
+    },
     "collection_schema": {
       "description": "The `schemas/<stem>.schema.json` the file beside this one validates against.",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -558,7 +788,7 @@
         }
       ],
       "default": null,
-      "description": "Present on an extraction file, absent on the other two."
+      "description": "Present on an extraction file, absent on the others."
     },
     "generated_at": {
       "description": "When the file beside this one was written.",
@@ -665,14 +895,14 @@
         }
       ],
       "default": null,
-      "description": "Present on a selection file, absent on the other two."
+      "description": "Present on a selection file, absent on the others."
     },
     "settings": {
       "$ref": "#/$defs/ReferenceDatasetLocalConfig",
       "description": "The fully resolved settings this phase ran with."
     },
     "version": {
-      "default": "2026-09-13T11:40",
+      "default": "2026-09-13T13:05",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -701,5 +931,5 @@
   ],
   "title": "ReferenceCollectionMetadata",
   "type": "object",
-  "version": "2026-09-13T11:40"
+  "version": "2026-09-13T13:05"
 }

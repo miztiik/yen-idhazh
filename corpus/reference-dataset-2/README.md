@@ -1,8 +1,38 @@
 # Reference dataset 2
 
 **Built**: 2026-09-13
-**State**: step 6 of 12. The list is snapshotted, the manifest is built, and a
-pilot of 8 articles has been fetched. The full fetch waits on a review.
+**State**: collected, cleaned and sampled. No labels, and no classification has run.
+
+## What is here
+
+| | |
+| --- | ---: |
+| Supplied URLs | 1,661 |
+| Articles fetched | 1,345 |
+| Articles after cleaning | 1,311 |
+| Words of article text | 2,390,810 |
+| Publisher furniture removed | 44,380 words, 4,759 lines, 25 publishers |
+| Sample drawn | 1,000 articles across 52 publishers |
+
+The fetch failed on 316 URLs and every one of them is a row with a reason: 239
+paywalled and 77 pages carrying no article prose. Nothing was dropped silently.
+
+## What the cleaning removed
+
+A line one publisher puts on most of its own articles is furniture, not news.
+`themarketdispatch` lost a five-sentence legal disclaimer and a
+"Subscribe for free" pitch from every article, which is 15.9 percent of that
+publisher's words. Every removed line is listed per publisher in
+`cleaned/2026-09-13-a/metadata.json`, so the rule can be checked rather than
+trusted.
+
+34 articles were dropped whole: 19 shorter than 120 words, 11 near-duplicates of
+another article, 9 with no sentence in them, 9 video or podcast posts, and 3 that
+are lists rather than prose. An article may raise more than one of those.
+
+The safety valve - refuse to clean and flag instead when an article would lose
+more than 40 percent of its words - did not fire once. The largest real cut was
+33 percent.
 
 ## What the pilot found
 
