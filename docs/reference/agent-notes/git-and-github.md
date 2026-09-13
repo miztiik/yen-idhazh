@@ -54,6 +54,15 @@ Get-Process | ForEach-Object { try { $_.Modules | Where-Object { $_.FileName -li
 
 **Your own feature branch can move too, and one of the two causes is benign.** `git reflog -8` tells them apart: `merge origin/main: Fast-forward` is a background process advancing the branch and your commits are still there; `checkout: moving from X to Y` is a parallel agent switching branches in the checkout, so the tree you are about to stage is not the tree you think it is.
 
+**A pull request that reads `CONFLICTING` may have nothing left to resolve.** GitHub judges the head it was pushed, and a worktree handed over mid-row often already holds the merge commit that settles it. On 2026-09-13 PR #669 read `DIRTY`/`CONFLICTING` while its worktree sat on an unpushed merge of `origin/main`; pushing that commit was the whole fix. Ask the two questions before you resolve anything - what GitHub is judging, and whether your own tree still conflicts:
+
+```powershell
+gh pr view <n> --repo <owner/repo> --json headRefOid,mergeable,mergeStateStatus
+git merge-tree --write-tree --name-only HEAD origin/main   # exit 0 means no conflict
+```
+
+`git merge-tree` answers without touching the worktree, so it is also the cheapest way to find out whether a fetch has made a merge you already resolved conflict again.
+
 **Local `main` is often behind on purpose.** When the shared checkout is dirty with work that overlaps incoming commits, `git merge --ff-only` aborts. That is correct. Do not force it.
 
 **A killed `git push -u` can land the push and skip the `-u`.** The tool cuts the command with no output and exit 1, which reads like a failed push, while the branch is on the remote at the right sha and only the upstream config is missing. Read the remote before concluding anything:
