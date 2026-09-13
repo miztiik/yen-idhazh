@@ -34,14 +34,13 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 12 | 16 | 4 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 6 | 2 | 1 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 7 | 1 | 1 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 5 | 9 | 3 |
 
-## In flight - 2
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #7 | 24 | E | `state/seen/` files by day | p24-7 |
 | #4 | 25 | D | Carriage becomes a tie-break | p25-4 |
 
 ## Ready now - 24
