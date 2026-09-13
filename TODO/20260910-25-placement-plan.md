@@ -175,7 +175,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 5 | The rail goes and the time lands under the heading | - | A | DONE #625 | p25-r5 | #625 | worker |
 | 2 | One order over the whole day, inside a frame a person set | 1 | B | DONE #653 | p25-2 | #653 | worker |
 | 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | DONE #664 | p25-3 | #664 | worker |
-| 6 | The topic pills order by what is running | 2 | C | IN-FLIGHT | p25-6 | - | worker |
+| 6 | The topic pills order by what is running | 2 | C | DONE #670 | p25-6 | #670 | worker |
 | 4 | Carriage becomes a tie-break | 3 | D | DONE #667 | p25-4 | #667 | worker |
 | 7 | A desk floor and a desk ceiling | 2 | D | PENDING | - | - | - |
 | 8 | A story cross-files to a second desk | 7 | E | PENDING | - | - | - |
