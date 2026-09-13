@@ -669,28 +669,19 @@ const MIN_ATTEMPTS =
  *
  * The CANARY tree, because that is what `build:canary` built the site from.
  * Reading `state/` here would compare the page to a ledger it never saw.
+ *
+ * Through `readDayShards`, the reader the page's own server uses, so a grain
+ * change cannot pass here and fail there.
  */
 function feedLedger(root: string): FeedRecord[] {
 	const dir = join(root, 'state', 'feed-health');
-	const rows: FeedRecord[] = [];
-	for (const shard of readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.sort()) {
-		const lines = readFileSync(join(dir, shard), 'utf8').trim().split(/\r?\n/);
-		const head = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cell = line.split(',');
-			const row = new Map(head.map((name, index) => [name, cell[index] ?? '']));
-			rows.push({
-				date: row.get('date') ?? '',
-				runId: row.get('run_id') ?? '',
-				outcome: row.get('outcome') ?? '',
-				items: Number(row.get('items') ?? 0) || 0,
-				feedId: row.get('feed_id') ?? ''
-			});
-		}
-	}
-	return rows;
+	return readDayShards(dir, -1).rows.map((row) => ({
+		date: row.date ?? '',
+		runId: row.run_id ?? '',
+		outcome: row.outcome ?? '',
+		items: Number(row.items ?? 0) || 0,
+		feedId: row.feed_id ?? ''
+	}));
 }
 
 /** The clean count, the denominator and the span, computed here from scratch.

@@ -1193,7 +1193,8 @@ def publish(
 
     - the newest `shard_months(widest)` run-day shards, for the runs, the size
       and the article counts;
-    - `state/feed-health/` over the widest span, through `ledger.load_health`;
+    - `state/feed-health/` over the widest span, through `ledger.load_health`,
+      which opens the day files that span names and no others;
     - the newest day's item-health shard and its day-metrics record, one file
       each;
     - the counters for the months the widest span reaches.

@@ -291,7 +291,7 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
             [_ledger_cells(_eval_row(month))],
         )
         _write_csv(
-            state / "feed-health" / f"{month}.csv",
+            state / "feed-health" / month[:4] / month[5:7] / "01.csv",
             FeedHealthRow.csv_columns(),
             [
                 _feed_row(month, feed_id="grid-news", outcome=FetchOutcome.OK, items=4).csv_row(),
