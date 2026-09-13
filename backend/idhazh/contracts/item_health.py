@@ -31,13 +31,49 @@ ItemHealthDetail = Annotated[str, StringConstraints(min_length=1, max_length=200
 
 
 class ItemStage(StrEnum):
-    """The terminal stage for an item."""
+    """The pipeline's stage vocabulary - one name per step an item passes through.
+
+    **Three contracts take this type and only one of them means "terminal".**
+    `ItemHealthRow.stage` is the census column and records where an item
+    STOPPED, so it takes `TERMINAL_STAGES` and refuses anything else.
+    `DayStageTiming.stage` names the step a clock was read at, and
+    `telemetry.event(src=...)` names the step that logged a line. Neither of
+    those two is an ending, and neither is exhaustive - `publish_day_metrics`
+    times three of these names and one emitter writes one of them.
+
+    Declaration order is the funnel a person reads down, and
+    `retention.fold_month` sorts a month's groups by it. The order is free to
+    change: this is a `StrEnum`, so the wire value is the string and never the
+    position.
+    """
 
     PLAN = "plan"
     FETCH = "fetch"
     EXTRACT = "extract"
     SUMMARIZE = "summarize"
+    #: Planning and drawing a picture, which happen inside the work stage once a
+    #: summary is accepted. **Not terminal**: an item whose picture failed still
+    #: reaches the digest, so it leaves a `publish` row and the census column
+    #: refuses this name. It exists so the step that draws can say so in a log
+    #: line - `telemetry.event(src=...)` names the step that wrote the line, and
+    #: a render failure had no name and made no sound until it did.
+    VISUAL = "visual"
     PUBLISH = "publish"
+
+
+#: The stages an item can STOP at, and the only values `ItemHealthRow.stage`
+#: accepts. Spelled out rather than derived from the enum, so a stage added for
+#: the event envelope or for a clock has to say whether it is terminal instead
+#: of inheriting the answer from `frozenset(ItemStage)`.
+TERMINAL_STAGES: Final[frozenset[ItemStage]] = frozenset(
+    {
+        ItemStage.PLAN,
+        ItemStage.FETCH,
+        ItemStage.EXTRACT,
+        ItemStage.SUMMARIZE,
+        ItemStage.PUBLISH,
+    }
+)
 
 
 class ItemOutcome(StrEnum):
@@ -142,7 +178,11 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.LENGTH_OUT_OF_RANGE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.COPIED_SOURCE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LEAKED_ADDRESS: frozenset({ItemStage.SUMMARIZE}),
-        FailureCode.UNKNOWN: frozenset(ItemStage),
+        # The catch-all covers every stage an item can stop at, and no more. It
+        # read `frozenset(ItemStage)` until 2026-09-14, which meant a stage
+        # added for any other reason became a legal census row the day it was
+        # declared - the one line that would have let a new member in silently.
+        FailureCode.UNKNOWN: TERMINAL_STAGES,
     }
 )
 
@@ -173,6 +213,27 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T01:30",
+            change=(
+                "ItemStage gained visual. The generated schema lists it because the enum "
+                "is inlined here; the stage column refuses it and no row may carry it."
+            ),
+            why=(
+                "The pipeline had no name for the step that draws a picture, so a render "
+                "failure was silent: render.write caught the OSError, recorded "
+                "render_failed on the day's own payload and logged nothing at all. The "
+                "name exists for telemetry.event(src=...), which says which step wrote a "
+                "line rather than where an item ended, and item.visual.failed is the "
+                "first event to use it. It is not terminal - an item whose picture failed "
+                "still publishes - so a visual row here would say the item stopped where "
+                "it did not, and would shrink the publish count that publish_day_metrics "
+                "and the console read. TERMINAL_STAGES is what this column accepts and a "
+                "validator refuses the rest, so the widening is legal in the schema and "
+                "unreachable in this ledger. No read-side migration is owed: no row an "
+                "earlier run wrote can carry a value that did not exist."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T14:20",
             change=(
@@ -510,6 +571,8 @@ class ItemHealthRow(Contract):
 
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:
+        if self.stage not in TERMINAL_STAGES:
+            raise ValueError("an item-health row records where an item stopped")
         if self.outcome is ItemOutcome.OK:
             if self.code not in {
                 None,
