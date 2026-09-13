@@ -1,14 +1,16 @@
-"""The day's one order, and the frame a person set over its head.
+"""The day's one order, the frame a person set over its head, and the desk rules.
 
 Unit tier (CLAUDE.md section 13). Nothing here is mocked, no test touches the
 network, and nothing reads the committed archive: every day below is built in
 the test, including the day this plan needs and the archive has never produced -
-one desk holding 18 of the top 20, one feed holding 9 of the top 10
-(Guardrail #12).
+one desk holding 18 of the top 20, one feed holding 9 of the top 10, and a day
+whose every story reads AI (Guardrail #12).
 
 What every test here defends is one sentence: **the frame moves a story and
 never removes one.** A cap that drops rather than displaces shortens the day,
-and a reader cannot see what was left out.
+and a reader cannot see what was left out. The desk floor and the desk ceiling
+obey the same sentence - they change which desk a story is filed under and
+nothing else.
 """
 
 from __future__ import annotations
@@ -20,10 +22,22 @@ import pytest
 from idhazh.contracts.app_config import PlacementConfig
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
-from idhazh.placement import place, stream_order
+from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy, VerticalDef
+from idhazh.placement import DeskBounds, desk_bounds, place, refile, stream_order
 
 #: The five desks the taxonomy declares today.
 DESKS = ("india", "world", "ai", "energy", "business-economy")
+
+#: The floor and the ceiling the Editor ruled on 2026-09-13, as
+#: `config/taxonomy.json` carries them. Repeated here rather than read off the
+#: file, so a test that fails says which of the two moved.
+BOUNDS = {
+    "ai": DeskBounds(floor=6, ceiling=0.35),
+    "energy": DeskBounds(floor=6, ceiling=0.25),
+    "business-economy": DeskBounds(floor=6, ceiling=0.25),
+    "world": DeskBounds(floor=6, ceiling=0.4),
+    "india": DeskBounds(floor=6, ceiling=0.4),
+}
 
 
 def story(
@@ -105,6 +119,72 @@ def lopsided_day() -> list[DigestItem]:
 
 def frame(**knobs: int) -> PlacementConfig:
     return PlacementConfig(**knobs)
+
+
+def heavy_ai_day() -> list[DigestItem]:
+    """Forty stories, every one of which reads AI, carried by five desks' feeds.
+
+    The day plan 23 row #6 makes possible and the archive has never produced: a
+    model reads every article onto one desk while the feeds that carried them
+    are spread across five. Without the ceiling this is a one-desk digest with
+    four empty rails, on exactly the day a reader most needs the other four.
+    """
+    return [
+        story(
+            f"{DESKS[index % 5]}-heavy-{index:02d}",
+            vertical=DESKS[index % 5],
+            desk="ai",
+            source_id=f"feed-{index}",
+            rank_score=100.0 - index,
+        )
+        for index in range(40)
+    ]
+
+
+def gated_day() -> list[DigestItem]:
+    """A day where two thin desks can only be filled from something refused.
+
+    `world` is thin because this run found fewer live feeds than its floor, so
+    it planned nothing and will render nothing - five stories its feeds carried
+    on an earlier run are in the day, relabelled onto `ai`, and sending them back
+    would publish under a name this day's own payload says planned nothing.
+    `business-economy` is thin because what would have filled it was past
+    `collect.max_age_hours`, so it never became a story at all and nothing in the
+    day names that desk.
+
+    The only lawful supply is the six `energy` stories relabelled onto `ai`. A
+    naive rule that filled a floor from whatever was left would reach the five
+    `world` stories first, because they outscore the day's tail.
+    """
+    day = [
+        story(f"ai-bulk-{index:02d}", vertical="ai", desk="ai", source_id=f"feed-a{index}",
+              rank_score=100.0 - index)
+        for index in range(10)
+    ]
+    day += [
+        story(f"energy-relabelled-{index:02d}", vertical="energy", desk="ai",
+              source_id=f"feed-e{index}", rank_score=90.0 - index)
+        for index in range(6)
+    ]
+    day += [
+        story(f"world-relabelled-{index:02d}", vertical="world", desk="ai",
+              source_id=f"feed-w{index}", rank_score=84.0 - index)
+        for index in range(5)
+    ]
+    day.append(
+        story("energy-own-00", vertical="energy", desk="energy", source_id="feed-e9",
+              rank_score=79.0)
+    )
+    day += [
+        story(f"business-economy-own-{index:02d}", vertical="business-economy",
+              desk="business-economy", source_id=f"feed-b{index}", rank_score=78.0 - index)
+        for index in range(2)
+    ]
+    return day
+
+
+def filed(items: list[DigestItem]) -> Counter[str]:
+    return Counter(desk_of(item) for item in items)
 
 
 # --- The oracle -------------------------------------------------------------
@@ -368,8 +448,245 @@ def test_a_no_repeat_window_wider_than_the_head_is_refused() -> None:
         PlacementConfig(head_items=10, head_no_repeat=11)
 
 
+def test_the_frame_counts_the_desk_the_rules_left_the_story_on() -> None:
+    """`place` re-files before it frames, and the order between them matters.
+
+    The frame caps how much of the head one desk may hold, and the desk rules
+    decide which desk a story is on. A frame that ran first would cap a filing
+    that was about to change, so the head would be spread against names the
+    finished day no longer uses.
+    """
+    day = heavy_ai_day()
+    config = frame()
+
+    unbounded = place(day, config=config)[: config.head_items]
+    bounded = place(day, config=config, bounds=BOUNDS)[: config.head_items]
+
+    assert Counter(desk_of(item) for item in unbounded) == {"ai": 20}
+    assert max(Counter(desk_of(item) for item in bounded).values()) <= config.max_desk_in_head
+    assert len({desk_of(item) for item in bounded}) == 5
+
+
 def test_the_committed_defaults_are_the_ones_that_were_ruled_on() -> None:
     """A fresh clone runs on these, so they are the numbers that ship."""
     config = PlacementConfig()
 
     assert (config.head_items, config.max_desk_in_head, config.head_no_repeat) == (20, 5, 10)
+
+
+# --- The oracle: the desk floor and the desk ceiling -------------------------
+
+
+def test_a_day_where_every_story_reads_ai_still_publishes_five_desks() -> None:
+    """The first half of row #7's oracle, and the day is not one story shorter.
+
+    Forty stories, every one filed on `ai` by whatever read them. The ceiling
+    sends the surplus back to the desk whose feed carried the story, and the
+    floor tops up anything that lands under six. Five desks, none over its
+    ceiling, none under its floor, and exactly forty stories either way.
+    """
+    day = heavy_ai_day()
+
+    assert filed(day) == {"ai": 40}
+
+    out = refile(stream_order(day), bounds=BOUNDS)
+    counted = filed(out)
+
+    assert len(out) == len(day)
+    assert {item.item_id for item in out} == {item.item_id for item in day}
+    assert set(counted) == set(DESKS)
+    for desk, count in counted.items():
+        assert count <= int(BOUNDS[desk].ceiling * len(out)), f"{desk} is over its ceiling"
+        assert count >= BOUNDS[desk].floor, f"{desk} is under its floor"
+    assert counted == {"ai": 14, "energy": 7, "business-economy": 7, "world": 6, "india": 6}
+
+
+def test_the_floor_never_admits_a_story_a_gate_refused() -> None:
+    """The second half, and the half that matters.
+
+    A floor that can promote a rejected story is a floor that publishes what a
+    gate refused. Two gates stand here and they fail differently. `world` is
+    below its feed floor, so this run planned nothing for it and it must receive
+    nothing - even though five stories in the day would lawfully fall back to it
+    and every one of them outscores the day's tail. `business-economy` is thin
+    because what would have filled it was too old to be collected, so no story in
+    the day names that desk and there is nothing to reach for.
+
+    Three rules give three different answers on this day and only one is right.
+    The day as it arrives leaves `energy` at 1. A rule that filled a floor from
+    whatever was left would take the `world` stories first and publish them under
+    a name this day says planned nothing. The rule that ships moves the five
+    lowest-scoring `energy` stories and stops.
+    """
+    day = gated_day()
+    closed = frozenset({"world"})
+
+    assert filed(day) == {"ai": 21, "energy": 1, "business-economy": 2}
+
+    out = refile(stream_order(day), bounds=BOUNDS, closed=closed)
+    counted = filed(out)
+
+    assert len(out) == len(day)
+    assert counted == {"ai": 16, "energy": 6, "business-economy": 2}
+    assert "world" not in counted, "a desk this run refused to render published stories"
+    assert counted["business-economy"] < BOUNDS["business-economy"].floor, (
+        "the desk whose stories were all too old must publish thin rather than be filled"
+    )
+    moved = {item.item_id for item in out if item.desk == "energy"} - {"energy-own-00"}
+    assert moved == {f"energy-relabelled-{index:02d}" for index in range(1, 6)}, (
+        "the ceiling gives up a desk's lowest-scoring stories, not its best"
+    )
+
+
+def test_a_ceiling_with_nowhere_to_send_the_overflow_does_not_shorten_the_day() -> None:
+    """The honest state of this row while row #8 does not exist.
+
+    Every story's only desk is the desk its own feed declares, so none of them
+    has a second desk to fall back to. `india` is over its ceiling and stays
+    over it. The one thing that may not happen is the day getting shorter, and
+    that is what this asserts.
+    """
+    day = [
+        story(f"india-solo-{index:02d}", vertical="india", source_id=f"feed-{index}",
+              rank_score=100.0 - index)
+        for index in range(30)
+    ]
+    out = refile(stream_order(day), bounds=BOUNDS)
+
+    assert len(out) == 30
+    assert filed(out) == {"india": 30}
+    assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
+
+
+def test_no_committed_day_moves_because_no_story_has_a_second_desk() -> None:
+    """Nothing read an article yet, so `desk` is null and the rules are inert.
+
+    Measured 2026-09-13 over the committed archive: 0 of 9,353 items carry a
+    read desk. This is that fact as a property rather than as a count, driven
+    from a built day so it cannot go stale or grow more expensive.
+    """
+    day = [
+        story(f"{DESKS[index % 5]}-null-{index:02d}", vertical=DESKS[index % 5],
+              source_id=f"feed-{index}", rank_score=100.0 - index)
+        for index in range(40)
+    ]
+    out = refile(stream_order(day), bounds=BOUNDS)
+
+    assert all(item.desk is None for item in out)
+    assert filed(out) == filed(day)
+
+
+def test_a_desk_never_dips_under_its_own_floor_to_lift_another_one() -> None:
+    """Robbing one desk to open another is two thin desks, not one full one.
+
+    Six `energy` stories read onto `ai`, and two `ai` stories of its own. `ai`
+    may give up two before it hits its own floor of six, which would leave
+    `energy` at two and `ai` at six - both thin, where one was full. So the
+    floor does not start a move it cannot finish and nothing moves at all.
+    """
+    day = [
+        story(f"energy-give-{index:02d}", vertical="energy", desk="ai", source_id=f"feed-e{index}",
+              rank_score=100.0 - index)
+        for index in range(6)
+    ] + [
+        story(f"ai-own-{index:02d}", vertical="ai", desk="ai", source_id=f"feed-a{index}",
+              rank_score=50.0 - index)
+        for index in range(2)
+    ]
+    out = refile(stream_order(day), bounds={"ai": DeskBounds(floor=6, ceiling=1.0),
+                                            "energy": DeskBounds(floor=6, ceiling=1.0)})
+
+    assert len(out) == 8
+    assert filed(out) == {"ai": 8}
+
+
+def test_a_thin_day_is_spread_rather_than_drained() -> None:
+    """The floor and the ceiling cannot contradict each other on a small day.
+
+    Five desks at a floor of six need thirty stories, and a quarter of a
+    twenty-story day is five. A desk may always hold its floor whatever its
+    share says, which is the arithmetic `rank.day_source_ceiling` already uses
+    for the per-feed case, and it is what stops the two rules disagreeing.
+
+    Thirty stories, six per desk's feeds, every one read onto `ai`. The ceiling
+    brings `ai` down to its share of ten, the floor takes the four desks it
+    opened the last story each to six, and the day lands on the only shape that
+    satisfies both.
+    """
+    day = [
+        story(f"{DESKS[index % 5]}-thin-{index:02d}", vertical=DESKS[index % 5], desk="ai",
+              source_id=f"feed-{index}", rank_score=100.0 - index)
+        for index in range(30)
+    ]
+    out = refile(stream_order(day), bounds=BOUNDS)
+
+    assert len(out) == 30
+    assert filed(out) == dict.fromkeys(DESKS, 6)
+
+
+# --- The desk knobs are knobs -----------------------------------------------
+
+
+def test_changing_a_ceiling_changes_the_filing_with_no_source_edit() -> None:
+    """Guardrail #6's substitution test, run on the desk ceiling."""
+    day = heavy_ai_day()
+    ruled = filed(refile(stream_order(day), bounds=BOUNDS))
+    tighter = filed(
+        refile(stream_order(day), bounds={**BOUNDS, "ai": DeskBounds(floor=6, ceiling=0.2)})
+    )
+
+    assert ruled["ai"] == 14
+    assert tighter["ai"] == 8
+    assert sum(ruled.values()) == sum(tighter.values()) == 40
+
+
+def test_changing_a_floor_changes_the_filing_with_no_source_edit() -> None:
+    day = gated_day()
+    ruled = filed(refile(stream_order(day), bounds=BOUNDS, closed=frozenset({"world"})))
+    raised = filed(
+        refile(
+            stream_order(day),
+            bounds={**BOUNDS, "energy": DeskBounds(floor=3, ceiling=0.25)},
+            closed=frozenset({"world"}),
+        )
+    )
+
+    assert ruled["energy"] == 6
+    assert raised["energy"] == 6, "the ceiling still admits six, and a lower floor asks for fewer"
+    assert sum(ruled.values()) == sum(raised.values()) == 24
+
+
+def test_a_desk_with_no_rule_may_hold_the_whole_day() -> None:
+    """An absent rule is no rule, so the defaults are the two identity values."""
+    default = VerticalDef(id="ai", display_name="AI", definition="A desk.", min_feeds=21)
+
+    assert (default.floor, default.ceiling) == (0, 1.0)
+
+    day = heavy_ai_day()
+    out = refile(stream_order(day), bounds={})
+
+    assert filed(out) == {"ai": 40}
+
+
+def test_the_bounds_come_off_the_taxonomy_including_a_retired_desk() -> None:
+    """A day published last month can still hold a desk this file has retired.
+
+    Leaving it out would hand that desk no rule rather than the rule it had,
+    which on a heavy day is the difference between a ceiling and none.
+    """
+    taxonomy = Taxonomy(
+        version=Taxonomy.schema_version(),
+        verticals=[
+            VerticalDef(id="ai", display_name="AI", definition="A desk.", min_feeds=21,
+                        floor=6, ceiling=0.35),
+            VerticalDef(id="legacy", display_name="Legacy", min_feeds=21, floor=4, ceiling=0.1,
+                        status=LifecycleStatus.RETIRED, retired_on="2026-04-12"),
+        ],
+        lenses=[],
+        events=[],
+    )
+
+    assert desk_bounds(taxonomy) == {
+        "ai": DeskBounds(floor=6, ceiling=0.35),
+        "legacy": DeskBounds(floor=4, ceiling=0.1),
+    }
