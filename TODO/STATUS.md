@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 8 | 6 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
+| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 0 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
@@ -33,14 +33,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 4 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 8 | 6 | 3 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 8 | 6 | 2 |
 
-## In flight - 0
+## In flight - 2
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #1 | 12 | A | A new engine behind the same seam | p12-r1 |
+| #8 | 25 | E | A story cross-files to a second desk | p25-r8 |
 
-## Ready now - 21
+## Ready now - 19
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -51,7 +53,6 @@ section 3 is where it is answered.
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
-| #1 | 12 | A | A new engine behind the same seam | - |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
@@ -66,7 +67,6 @@ section 3 is where it is answered.
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 |
 | #7b | 23 | H | The two calls become a DAG, and every label rides in the first | 7a, P4, 6, plan 11 row 6 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
-| #8 | 25 | E | A story cross-files to a second desk | 7 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
@@ -79,12 +79,12 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
-| #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
+| #2 | 12 | B | The drawing takes the width it is given | 1 is IN-FLIGHT |
+| #3 | 12 | B | Numbers a reader can say out loud | 1 is IN-FLIGHT |
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | D | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | E | A whole day, again | 5 is PENDING |
-| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1 is PENDING |
+| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1 is IN-FLIGHT |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
@@ -128,7 +128,7 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
-| #10 | 25 | F | The `assemble` consolidation | 8 is PENDING |
+| #10 | 25 | F | The `assemble` consolidation | 8 is IN-FLIGHT |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 
 ## Finished - 17 plans with no live row
