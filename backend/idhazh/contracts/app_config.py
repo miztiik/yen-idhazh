@@ -2978,15 +2978,43 @@ class UiConfig(Model):
         ),
     )
     topic_pills_max: int = Field(
-        default=8,
+        default=5,
         ge=1,
         description=(
-            "How many topic pills stay on the row before the rest go inside a "
-            "disclosure. The cut is decided by each topic's story count at build "
-            "time, never by measuring the row in pixels: every page here is "
-            "prerendered, so a pixel-measured row is wrong until a script runs. "
-            "Eight is what a 360px screen holds in three wrapped lines without the "
-            "row becoming the page."
+            "How many topic pills stay on the row before an auto-created one goes "
+            "inside a disclosure. A SOFT cap: a desk a person put in "
+            "config/taxonomy.json is never folded away, so this bounds only the "
+            "model-proposed desks sitting on the row beside them, and the row's "
+            "height is the length of the vocabulary. The cut is decided by each "
+            "topic's story count at build time, never by measuring the row in "
+            "pixels - one order is computed in the backend and published, so a "
+            "measurement taken on a reader's device could disagree with the order "
+            "the payload carries. Five rather than eight since 2026-09-13: "
+            "config/taxonomy.json declares five verticals, so eight was a cap "
+            "nothing could reach, and the number now says what the row is for."
+        ),
+    )
+    pill_move_min: int = Field(
+        default=2,
+        ge=1,
+        le=3,
+        description=(
+            "How many stories ahead a desk must be before it takes another desk's "
+            "place on the topic row. The row orders by how much of the day each "
+            "desk holds and is redrawn at every publish, so with no margin a "
+            "one-story lead reorders a control the reader is pointing at. One is "
+            "strict count order and stays reachable. Three is the ceiling because "
+            "every inversion above it sits between three-digit desks a reader "
+            "cannot tell apart, so the margin stops protecting anything visible "
+            "and hands the row back to the alphabet. Measured 2026-09-13 over the "
+            "23 committed days carrying all five desks, 92 adjacent pairs: at two, "
+            "one pair in 92 shows a smaller count first and it reads 1 ahead of 2; "
+            "at three it is four pairs and the worst reads 1 ahead of 3. "
+            "Arithmetic over committed payloads, so the spread is zero by "
+            "construction. What it does NOT buy is steadiness across days - the "
+            "same measurement counted 31 desk-days moving at two against 28 at "
+            "one, so a bigger margin moves the row MORE. It bounds the reason a "
+            "desk moves, never how often."
         ),
     )
     desk_thin_max: int = Field(
@@ -3654,6 +3682,33 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T23:00",
+            change=(
+                "ui.pill_move_min added, defaulting to 2 and bounded 1 to 3, and "
+                "ui.topic_pills_max's default moves from 8 to 5 with its description "
+                "rewritten. The shape is `UiConfig`, which this document and "
+                "`AppearanceConfig` share, so both schemas moved together. The new key "
+                "is additive with a default, so a config written before today still "
+                "validates. The moved default is NOT a contract break either - every "
+                "committed config names the key - but a checkout with no config file "
+                "now draws five pills where it drew eight."
+            ),
+            why=(
+                "The topic row now orders by how much of the day each desk holds, and "
+                "an order refreshed five times a day needs a margin or a one-story "
+                "lead moves a control the reader is pointing at. Eight was a cap "
+                "nothing could reach: config/taxonomy.json declares five verticals, so "
+                "the row never folded and the number said nothing about the row. "
+                "Measured 2026-09-13 over the 23 committed days carrying all five "
+                "desks, 92 adjacent pairs: a margin of two shows a smaller count ahead "
+                "of a bigger one on one pair in 92, reading 1 ahead of 2. The same "
+                "measurement found the margin does not steady the row across days - 31 "
+                "desk-days move at two against 28 at one - so it bounds the reason a "
+                "desk moves and not how often. Ruled by Editor, 2026-09-13; the row is "
+                "plan 25 row #6."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T22:00",
             change=(

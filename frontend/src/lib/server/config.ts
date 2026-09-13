@@ -35,8 +35,14 @@ export interface UiConfig {
 	/** How many characters a reader types before an in-place filter narrows a
 	 * list. The day page and the archive share one panel, so they share this. */
 	filter_min_chars: number;
-	/** How many topic pills stay on the row before the rest go in a disclosure. */
+	/** How many topic pills stay on the row before an auto-created one goes in a
+	 * disclosure. A soft cap: a desk a person put in `config/taxonomy.json` is
+	 * never folded away, so it bounds only the model-proposed desks beside them. */
 	topic_pills_max: number;
+	/** How many stories ahead a desk must be before it takes another desk's place
+	 * on the topic row. The row is redrawn at every publish, so without a margin a
+	 * one-story lead moves a control the reader is pointing at. */
+	pill_move_min: number;
 	/** The most stories a desk may publish and still be called thin. A thin desk
 	 * prints one sentence saying what its sources offered and how much of it was
 	 * too old; every other desk prints nothing. */
@@ -310,7 +316,8 @@ const DEFAULTS: UiConfig = {
 	source_mark: true,
 	show_filter: true,
 	filter_min_chars: 2,
-	topic_pills_max: 8,
+	topic_pills_max: 5,
+	pill_move_min: 2,
 	desk_thin_max: 12,
 	payload_slow_ms: 1200,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',

@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -342,7 +342,7 @@ The other shape is different and stays: `Show N more` on the failed-item list an
 
 It says nothing about how much is behind it, it is invisible until a pointer arrives, and on a phone it competes with the gesture that moves between pages. Hiding the bar with `scrollbar-width: none` is strictly worse: the control still hides the contents and the only hint that more exists is gone.
 
-Two shapes replace it. A row of variable-width labels **wraps**, and the overflow past a configured count folds into a `<details>` reading `+N more` - the pill row is the case, with the count in `digest.topic_pills_max`. Which items fold is decided by a count at build time and never by measuring the row: every page here is prerendered, so a row that measures itself is wrong until a script runs. A grid guards its own minimum with `minmax(min(var(--auto-grid-min), 100%), 1fr)`, because a bare minimum is a demand for room the container may not have.
+Two shapes replace it. A row of variable-width labels **wraps**, and the overflow past a configured count folds into a `<details>` reading `+N more` - the pill row is the case, with the count in `digest.topic_pills_max`. Which items fold is decided by arithmetic over the payload at the point it is drawn, and never by measuring the row: one order is computed in the backend and published, so a row that measured itself on the reader's device could disagree with the order the payload carries and two readers of one shared link would see two pages. A grid guards its own minimum with `minmax(min(var(--auto-grid-min), 100%), 1fr)`, because a bare minimum is a demand for room the container may not have.
 
 ### A control only sticks where it is one band
 

@@ -501,6 +501,22 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T23:00",
+            change=(
+                "digest.pill_move_min added, defaulting to 2 and bounded 1 to 3, and "
+                "digest.topic_pills_max's default moves from 8 to 5 with its "
+                "description rewritten. The shape is `UiConfig`, which this document "
+                "and `AppConfig` share, so app-config is restamped with the same "
+                "version. config/appearance.json sets both. Additive with a default, "
+                "so an appearance file written before today still validates."
+            ),
+            why=(
+                "See the app-config entry of the same version: the topic row orders by "
+                "how much of the day each desk holds, and a margin is what stops a "
+                "one-story lead moving a control the reader is pointing at."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13",
             change=(
                 "digest.lead_shared_subject_weight is reworded and keeps its value of "

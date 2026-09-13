@@ -1972,6 +1972,14 @@
           "title": "Payload Slow Ms",
           "type": "integer"
         },
+        "pill_move_min": {
+          "default": 2,
+          "description": "How many stories ahead a desk must be before it takes another desk's place on the topic row. The row orders by how much of the day each desk holds and is redrawn at every publish, so with no margin a one-story lead reorders a control the reader is pointing at. One is strict count order and stays reachable. Three is the ceiling because every inversion above it sits between three-digit desks a reader cannot tell apart, so the margin stops protecting anything visible and hands the row back to the alphabet. Measured 2026-09-13 over the 23 committed days carrying all five desks, 92 adjacent pairs: at two, one pair in 92 shows a smaller count first and it reads 1 ahead of 2; at three it is four pairs and the worst reads 1 ahead of 3. Arithmetic over committed payloads, so the spread is zero by construction. What it does NOT buy is steadiness across days - the same measurement counted 31 desk-days moving at two against 28 at one, so a bigger margin moves the row MORE. It bounds the reason a desk moves, never how often.",
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Pill Move Min",
+          "type": "integer"
+        },
         "read_mark_days": {
           "default": 14,
           "description": "How far back a read mark is kept, counted in calendar days from today. Marks are held per digest date, so a mark made on one day can never grey out a different day's article, and every page load drops the dates that now sit outside this window. Fourteen days, the same span `archive_recent_days` lists, so the days the archive offers as rows of their own are exactly the days a reader can still see their own marks on. THIS RULE TRUSTS THE DEVICE CLOCK AND THE RULE IT REPLACED DELIBERATELY DID NOT: keeping the newest N dates present in the store needed no clock at all, and expiry by calendar cannot work without one, so a clock set wrong now keeps marks too long or drops them early. That is the price. It is worth paying because the old rule bounded the store by how often a reader came back rather than by time: a reader who opened one day a month kept marks from seven different months, and every one of them greyed out an article last seen most of a year ago. A wrong mark is the thing this store exists to avoid.",
@@ -2031,8 +2039,8 @@
           "description": "The theme a reader who has never touched the control is served. It is the theme `:root` carries in tokens.css, so it is also what a page paints before any script runs and what a page with no script keeps."
         },
         "topic_pills_max": {
-          "default": 8,
-          "description": "How many topic pills stay on the row before the rest go inside a disclosure. The cut is decided by each topic's story count at build time, never by measuring the row in pixels: every page here is prerendered, so a pixel-measured row is wrong until a script runs. Eight is what a 360px screen holds in three wrapped lines without the row becoming the page.",
+          "default": 5,
+          "description": "How many topic pills stay on the row before an auto-created one goes inside a disclosure. A SOFT cap: a desk a person put in config/taxonomy.json is never folded away, so this bounds only the model-proposed desks sitting on the row beside them, and the row's height is the length of the vocabulary. The cut is decided by each topic's story count at build time, never by measuring the row in pixels - one order is computed in the backend and published, so a measurement taken on a reader's device could disagree with the order the payload carries. Five rather than eight since 2026-09-13: config/taxonomy.json declares five verticals, so eight was a cap nothing could reach, and the number now says what the row is for.",
           "minimum": 1,
           "title": "Topic Pills Max",
           "type": "integer"
@@ -2166,6 +2174,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ui.pill_move_min added, defaulting to 2 and bounded 1 to 3, and ui.topic_pills_max's default moves from 8 to 5 with its description rewritten. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. The new key is additive with a default, so a config written before today still validates. The moved default is NOT a contract break either - every committed config names the key - but a checkout with no config file now draws five pills where it drew eight.",
+      "version": "2026-09-13T23:00",
+      "why": "The topic row now orders by how much of the day each desk holds, and an order refreshed five times a day needs a margin or a one-story lead moves a control the reader is pointing at. Eight was a cap nothing could reach: config/taxonomy.json declares five verticals, so the row never folded and the number said nothing about the row. Measured 2026-09-13 over the 23 committed days carrying all five desks, 92 adjacent pairs: a margin of two shows a smaller count ahead of a bigger one on one pair in 92, reading 1 ahead of 2. The same measurement found the margin does not steady the row across days - 31 desk-days move at two against 28 at one - so it bounds the reason a desk moves and not how often. Ruled by Editor, 2026-09-13; the row is plan 25 row #6."
+    },
     {
       "change": "collect.repetition_weight removed and collect.carriage_step added at 0.25. Carriage stops multiplying a story's authority and becomes one flat step that fires at two carriers and never grows. ui.lead_shared_subject_weight's bound moves with it: it was collect.tier_weights.trade_press times collect.repetition_weight, and it is now collect.carriage_step, because the term it bounds no longer multiplies a tier. This removes a key, so a config/idhazh.json still carrying repetition_weight is refused on read rather than silently ignored - the committed file drops it in this commit. No published payload schema moves: carried_by is written and read exactly as before, and only what the ranker pays for it has changed.",
       "version": "2026-09-13T22:00",
@@ -2832,7 +2845,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-13T22:00",
+      "default": "2026-09-13T23:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2846,5 +2859,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-13T22:00"
+  "version": "2026-09-13T23:00"
 }

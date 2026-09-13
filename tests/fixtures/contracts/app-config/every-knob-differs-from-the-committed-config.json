@@ -360,6 +360,7 @@
     "offline_retired_through": 0,
     "offline_version": 1,
     "payload_slow_ms": 900,
+    "pill_move_min": 3,
     "read_mark_days": 3,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
@@ -374,7 +375,7 @@
     "source_mark": true,
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark",
-    "topic_pills_max": 5,
+    "topic_pills_max": 6,
     "visual_side": "above"
   },
   "version": "2026-08-26T10:10",

@@ -74,6 +74,7 @@
 		activeTopic,
 		total,
 		pillsMax,
+		pillMoveMin,
 		query = $bindable(''),
 		onResults,
 		onTopic,
@@ -93,6 +94,7 @@
 		/** Stories in the whole archive, for the `All` pill. */
 		total: number;
 		pillsMax: number;
+		pillMoveMin: number;
 		/** What the field holds. The page reads it to narrow its browse list. */
 		query?: string;
 		/** Hand the page one search, or null to give it its story list back. */
@@ -300,6 +302,7 @@
 	active={activeTopic}
 	{total}
 	{pillsMax}
+	{pillMoveMin}
 	linked={false}
 	{onTopic}
 	bind:query
