@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 One question, asked of every read:
 
@@ -143,6 +143,18 @@ window. Measured 2026-09-08 on a developer machine over 18 committed days and
 19,867,266 bytes: 0.45 s median over three runs against 0.02 s with every receipt
 current. **What is left is honest and small**: the pass still lists the days and
 stats each one, so it still costs one `stat` a day, for ever. It says so.
+
+**The saving is paid for by the length, so the store travels with the tree.**
+Settling a day on the length a receipt recorded is what makes the skip free, and
+it is also the whole of the skip's evidence - so a receipt earned over one tree
+will settle a same-length day in another without opening it. Measured
+2026-09-13: a copy of the newest committed day with `"items"` overwritten by
+`"itemz"`, one byte for one byte, passed against the committed receipt store and
+reported `0 of them opened`; against an empty store the same file was refused.
+`validate-days` therefore refuses a `--digest-root` that is not the committed
+tree unless `--state-root` is named as well, rather than leaving the pairing to
+each caller to remember. One caller had already forgotten it
+([defect 20](../../TODO/20260823-known-defects-plan.md)).
 
 ### 3. Unbounded, on purpose, and it says so
 
@@ -462,7 +474,7 @@ way.
 | Read | What it opens | Why no cover |
 | --- | --- | --- |
 | `build-state.outputFingerprint` | every file under `frontend/build` and `frontend/.svelte-kit/output` | a fingerprint that skipped a file cannot say the tree did not change, which is the only thing it is for |
-| `build-state.inputFingerprint` | every tracked and untracked file `git ls-files` names, minus the test-only paths | the same, from the other side: an input it did not hash is an input that can move under a green result |
+| `build-state.inputFingerprint` | every tracked and untracked file `git ls-files` names, minus two kinds its `isInput` names in writing - a tree the tooling itself writes, and prose no program reads - and, for a build, the tests and the harness that cannot change the built site | the same, from the other side: an input it did not hash is an input that can move under a green result |
 
 **Both still grow with the archive after the migration, and the reason is the
 part of the tree the migration did not touch.** Row #14 deleted 116 dated

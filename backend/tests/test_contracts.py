@@ -4346,6 +4346,49 @@ def test_the_gate_defaults_to_the_one_committed_tree(tmp_path: Path) -> None:
     assert main(["validate-days", "--day", day, "--state-root", str(tmp_path)]) == 0
 
 
+def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The pairing is enforced rather than remembered, because forgetting it lies.
+
+    A receipt records a payload's LENGTH and `_proved` settles a day on that
+    length, never on a re-read. So the committed receipts will settle a
+    same-length day in any other tree without opening it. Measured 2026-09-13: a
+    copy of the newest committed day with `"items"` overwritten by `"itemz"`,
+    one byte for one byte, passed against the committed receipt store and
+    reported `0 of them opened`; against an empty store the same file was
+    refused. `frontend/tests/malformed-day.spec.ts` was making exactly that
+    call, so the control arm that exists because a guard which only ever refuses
+    proves nothing was passing on a receipt about a different file - and the
+    receipts it filed about its scratch trees landed in the tracked
+    `state/day-validations.csv`, which `frontend/scripts/build-state.ts`
+    fingerprints, so the `publishing` group changed one of its own build's
+    inputs while it ran. That was defect 20, and this is what stops the next
+    caller repeating it.
+
+    Bounded by construction: one fabricated day under `tmp_path`, no archive
+    walk, and nothing here can age out.
+    """
+    day = a_day_that_validates()
+    # The pictures stay on the committed tree, so a copy that still named them
+    # would fail on the missing files and say nothing about the receipts.
+    for item in day["items"]:
+        item.pop("visual", None)
+    copy = a_tree_holding(tmp_path / "copy", day)
+
+    with pytest.raises(SystemExit) as refused:
+        main(["validate-days", "--digest-root", str(copy)])
+
+    assert refused.value.code == 2, "a forgotten pair is a wrong answer, not a warning"
+    said = capsys.readouterr().err
+    assert "--state-root" in said, "the refusal has to name the flag that settles it"
+    assert "--digest-root" in said, "and the flag that caused it"
+
+    store = tmp_path / "receipts"
+    assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(store)]) == 0
+    assert (store / "day-validations.csv").is_file(), "the receipt belongs beside the tree it is about"
+
+
 def a_day_missing(names: tuple[str, ...], where: str = "items") -> tuple[str, int]:
     """The committed-day fixture with `names` removed from every `where` entry.
 

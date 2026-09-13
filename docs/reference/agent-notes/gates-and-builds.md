@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
@@ -24,7 +24,7 @@ The same variable is needed for any Playwright spec that runs a backend command.
 
 **`test:changed` REUSES a cached failed run.** A re-run prints `Reusing completed run <hash>: exit 1. Use --fresh to rerun unchanged inputs.` and exits 1 in two seconds, which reads as "still broken" when nothing ran. The record is keyed on the input tree, so an environmental flake stays cached until the tree changes. Pass `--fresh`; a green re-run then overwrites the record.
 
-**`test:changed` can exit 1 with every test green.** `malformed-day.spec.ts` runs `idhazh validate-days` at the repository root, which appends a row to the tracked `state/day-validations.csv` for any day lacking a receipt under the current rules. That file is inside the fingerprint the selector re-checks after the browser groups, so the run ends `The canary build has stale inputs` under a list where all 1,009 tests passed. The tell is a modified `state/day-validations.csv` you never touched. Compare the identity in your worktree and in clean `main` - identical means the rules did not move and the receipt was missing before you started. Do not commit the row; every historical one came from a `digest:` commit, and CI is unaffected because `ci.yml` calls `npm run test:browser` directly. Seen 2026-09-09.
+**`test:changed` can exit 1 with every test green, and it now says which file did it.** `malformed-day.spec.ts` used to run `idhazh validate-days` with `--digest-root` at a scratch tree and no `--state-root`, so it appended a row to the tracked `state/day-validations.csv` for any day lacking a receipt under the current rules. That file is inside the fingerprint the selector re-checks after the browser groups, so the run ended `The canary build has stale inputs` under a list where all 1,009 tests passed (seen 2026-09-09). Fixed 2026-09-13: `validate-days` refuses a `--digest-root` that is not the committed tree unless `--state-root` is named too, and the spec names one. The class survives the instance, so `The <mode> build has stale inputs` and `Inputs changed during the checks` now carry `Changed in the working tree: <paths>` - the file a run dirtied under itself, by name. If that sentence names something you never touched, the answer is at whatever wrote it, not in the fingerprint.
 
 ```powershell
 python -c "from idhazh.cli import _validator_identity; print(_validator_identity)"

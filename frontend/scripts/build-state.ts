@@ -44,18 +44,78 @@ export function treeFingerprint(root: string): string {
 	return hashFiles(root, filesUnder(root));
 }
 
+/** Whether a path's content can change what a run is certifying.
+ *
+ * **The rule, written down so the next file of this kind needs no second
+ * visit.** An input is any tracked or untracked file that a program in this
+ * repository reads. Exactly two kinds are not, and the list below holds nothing
+ * else. One is a tree this tooling itself writes: `backend/var/`, and the
+ * installed, built, reported and compiled trees under `frontend/`. The other is
+ * prose no program reads: `docs/`, `TODO/`, the authored agent material, and the
+ * three markdown files at the root. A `build` run drops a third kind - the tests
+ * and the harness that selects and runs them, neither of which can change the
+ * built site, so a test edit must not cost a rebuild.
+ *
+ * **A ledger under `state/` is an input under this rule and stays one**, because
+ * the console pages are prerendered from `state/`. So a run that finds one
+ * changed underneath it is not being told a lie by this list; it has a producer
+ * writing where it should not, and the answer belongs at that producer. That was
+ * defect 20, and the producer was `idhazh validate-days` filing receipts about a
+ * scratch tree into `state/day-validations.csv`. `changedInputNote` names the
+ * file so the next one costs a line rather than an afternoon.
+ */
+function isInput(path: string, purpose: 'build' | 'checks'): boolean {
+	if (/^(backend\/var\/|frontend\/(node_modules|build|test-results|\.svelte-kit)\/)/.test(path)) return false;
+	if (/^(docs\/|TODO\/|\.claude\/|\.github\/(agents|prompts|instructions|skills)\/)/.test(path)) return false;
+	if (purpose === 'build' && /^(frontend\/tests\/|frontend\/scripts\/tests\/|backend\/tests\/)/.test(path)) return false;
+	if (purpose === 'build' && /^frontend\/(playwright(?:\.logic)?\.config\.ts|scripts\/(test-(groups|scope|results)|run-checks|verified-preview)\.ts)$/.test(path)) return false;
+	return !/^(README|AGENTS|CLAUDE)\.md$/.test(path);
+}
+
 export function inputFingerprint(root: string, purpose: 'build' | 'checks' = 'checks'): string {
 	const listed = execFileSync('git', ['-C', root, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
 		encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
 	});
-	const paths = [...new Set(listed.split('\0').filter(Boolean))].filter((path) => {
-		if (/^(backend\/var\/|frontend\/(node_modules|build|test-results|\.svelte-kit)\/)/.test(path)) return false;
-		if (/^(docs\/|TODO\/|\.claude\/|\.github\/(agents|prompts|instructions|skills)\/)/.test(path)) return false;
-		if (purpose === 'build' && /^(frontend\/tests\/|frontend\/scripts\/tests\/|backend\/tests\/)/.test(path)) return false;
-		if (purpose === 'build' && /^frontend\/(playwright(?:\.logic)?\.config\.ts|scripts\/(test-(groups|scope|results)|run-checks|verified-preview)\.ts)$/.test(path)) return false;
-		return !/^(README|AGENTS|CLAUDE)\.md$/.test(path);
-	});
+	const paths = [...new Set(listed.split('\0').filter(Boolean))].filter((path) => isInput(path, purpose));
 	return hashFiles(root, paths.map((path) => join(root, path)));
+}
+
+/** The fingerprinted paths git reports as changed, as a sentence or as nothing.
+ *
+ * A stale fingerprint is a fact about every input at once, which is the least
+ * useful shape a true statement can have: the reader is told the tree moved and
+ * left to find out where. This names the files. It runs only on the failure
+ * path, so it costs one `git status` in a run that has already failed.
+ *
+ * It reports the working tree as it stands rather than a diff against the moment
+ * the fingerprint was taken, which is why the sentence says `changed in the
+ * working tree` - a tree that was already dirty is listed too. And a diagnostic
+ * may never turn a clear failure into an obscure one, so a git that will not
+ * answer says nothing at all.
+ */
+export function changedInputNote(root: string, purpose: 'build' | 'checks' = 'checks'): string {
+	let reported = '';
+	try {
+		reported = execFileSync('git', ['-C', root, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+			encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
+		});
+	} catch {
+		return '';
+	}
+	const entries = reported.split('\0');
+	const changed: string[] = [];
+	for (let index = 0; index < entries.length; index += 1) {
+		const entry = entries[index];
+		if (!entry) continue;
+		changed.push(entry.slice(3));
+		// A rename or a copy spends a second field on the name it came from.
+		if (/^[RC]/.test(entry)) index += 1;
+	}
+	const named = [...new Set(changed)].filter((path) => isInput(path, purpose)).sort();
+	if (named.length === 0) return '';
+	const shown = named.slice(0, 10).join(', ');
+	const rest = named.length > 10 ? `, and ${named.length - 10} more` : '';
+	return `Changed in the working tree: ${shown}${rest}. `;
 }
 
 function buildInputs(root: string, mode: BuildRecord['mode'], env: NodeJS.ProcessEnv): string {
@@ -118,7 +178,9 @@ export function assertBuild(root: string, mode: BuildMode, env: NodeJS.ProcessEn
 	if (!existsSync(file)) throw new Error(`No verified ${mode} build. ${help}`);
 	const record = JSON.parse(readFileSync(file, 'utf8')) as BuildRecord;
 	if (record.mode !== mode) throw new Error(`Expected a ${mode} build; found ${record.mode}. ${help}`);
-	if (record.inputs !== buildInputs(root, mode, env)) throw new Error(`The ${mode} build has stale inputs. ${help}`);
+	if (record.inputs !== buildInputs(root, mode, env)) {
+		throw new Error(`The ${mode} build has stale inputs. ${changedInputNote(root, 'build')}${help}`);
+	}
 	if (record.output !== outputFingerprint(root)) throw new Error(`The ${mode} build output changed. ${help}`);
 	return record;
 }

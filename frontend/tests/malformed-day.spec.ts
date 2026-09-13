@@ -138,14 +138,32 @@ function treeHolding(name: string, payload: string): string {
 	return root;
 }
 
-/** The command, run as a process. Its exit code and what it said. */
+/** The command, run as a process. Its exit code and what it said.
+ *
+ * `--state-root` travels with `--digest-root` and the command refuses the pair
+ * unless it does. A receipt records a payload's length and a day is settled on
+ * that length, never on a re-read, so the committed receipts would settle these
+ * scratch days without opening them - and the `unbroken` arm, which is here
+ * because a guard that only ever refuses proves nothing, would pass on a receipt
+ * about a different file. It did: measured 2026-09-13, this arm reported `0 of
+ * them opened`. The same forgotten flag also filed receipts about scratch trees
+ * into the tracked `state/day-validations.csv`, which
+ * [build-state.ts](../scripts/build-state.ts) fingerprints, so the group changed
+ * one of its own build's inputs while it ran (defect 20).
+ */
 function validateDays(root: string): { code: number; said: string } {
+	const state = path.join(path.dirname(root), 'state');
+	mkdirSync(state, { recursive: true });
 	try {
-		execFileSync(python(), ['-m', 'idhazh', 'validate-days', '--digest-root', root], {
-			cwd: REPO,
-			encoding: 'utf8',
-			stdio: 'pipe'
-		});
+		execFileSync(
+			python(),
+			['-m', 'idhazh', 'validate-days', '--digest-root', root, '--state-root', state],
+			{
+				cwd: REPO,
+				encoding: 'utf8',
+				stdio: 'pipe'
+			}
+		);
 		return { code: 0, said: '' };
 	} catch (thrown) {
 		const failure = thrown as { status?: number; stderr?: string; message?: string };
