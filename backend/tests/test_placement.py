@@ -690,4 +690,3 @@ def test_the_bounds_come_off_the_taxonomy_including_a_retired_desk() -> None:
         "ai": DeskBounds(floor=6, ceiling=0.35),
         "legacy": DeskBounds(floor=4, ceiling=0.1),
     }
-
