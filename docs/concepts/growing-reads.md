@@ -116,18 +116,31 @@ lose work the run just did.
 
 **An identity set cheaper than the rows.** `evals.writer.recorded_observations`
 answers *do we already hold this measurement*. `OBSERVATION_KEY` is address,
-pipeline fingerprint, output digest and scorer version, and it carries **no date,
-deliberately** - the same address, pipeline, output and scorer is the same
-measurement whenever it is re-taken. A cover in days would let a January
+output digest and scorer version, and it carries **no date, deliberately** - the
+same address, output and scorer is the same measurement whenever it is re-taken.
+A cover in days would let a January
 observation back in February and turn *how many measurements do we hold* into
 *how many times did the pipeline look*, which is the one thing the eval ledger
 promises it is not. So the memory stayed complete and the representation got
-cheaper: `state/score-index/<YYYY-MM>.csv` holds one 76-byte digest an
-observation beside the shard it describes. Counted over the committed shards on
+cheaper: `state/score-index/<YYYY>/<MM>/<DD>.csv` holds one 76-byte digest an
+observation beside the day file it describes. Counted over the committed shards on
 2026-09-07 - 7,636 measurements, 819.6 bytes a row - that is 566.8 KB against
 6,111.8 KB, so the read is **10.8 times smaller and 90.7 percent of it is gone**,
 exact, with nothing forgotten. Counting committed bytes is deterministic, so the
-spread is zero. `fingerprint.append_new` is the same shape one size down: it
+spread is zero.
+
+**What that read costs in file handles got worse on 2026-09-13, and it is declared
+rather than hidden.** `indexed_observations` opens one file a partition, and the
+index moved from month files to day files with the ledger it describes - so **2
+opens became 23, and it gains about 365 a year**. The bytes did not move: the same
+digests are spread over more files, 21 more header lines. The store bound is what
+answers it - `observability.scores_full_grain_months` is 14, so once the prune is
+switched on the live index holds at most fourteen months of days and everything
+older is one `state/score-archive/<YYYY-MM>.json` a month. **`--dry-run` is on the
+workflow step today, so nothing prunes and the count grows until that is flipped**
+([../architecture/publishing/retention.md](../architecture/publishing/retention.md)).
+A cover was rejected rather than overlooked, for the reason the paragraph above
+gives. `fingerprint.append_new` is the same shape one size down: it
 carries digests rather than built rows, and the set stops growing when the inputs
 stop changing.
 
@@ -403,9 +416,9 @@ the last day there was.
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `payload.readShards` | the newest `months` shards of a month-sharded ledger | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
+| `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `payload.readDayShards`, `payload.itemHealthRows` | the newest `days` day files of `state/item-health/` | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91 |
-| `payload.evalRows` | through `readShards`, over `state/scores/` | the same 5 |
+| `payload.evalRows` | through `readDayShards`, over `state/scores/` | the same 91 |
 | `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
 | `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
 | `runtime-counters.loadMachineCounters` | one file, plus item-health through `readDayShards` | the day cover, and `state/runtime-counters.csv` is one file |

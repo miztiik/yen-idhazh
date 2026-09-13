@@ -123,7 +123,7 @@ function dayDates(dir: string, keep: (row: Record<string, string>) => boolean): 
 /** Every day the Summaries daily table can draw a row for, read off the two
  * committed ledgers rather than off the page it is checking. */
 function workedDays(): string[] {
-	const scored = csvDates(join(CANARY, 'state', 'scores'), () => true);
+	const scored = dayDates(join(CANARY, 'state', 'scores'), () => true);
 	const ran = dayDates(
 		join(CANARY, 'state', 'item-health'),
 		(row) => Number(row.summarize_ms) > 0

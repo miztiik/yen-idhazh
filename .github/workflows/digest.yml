@@ -1394,9 +1394,10 @@ jobs:
       #
       # It also covers the score archive, which joined this step on 2026-09-03
       # and is the one store here whose deletion is preceded by a summary that is
-      # written, read back and reconciled against the shard it replaces. The
-      # earliest it removes anything is `state/scores/2026-08.csv` on 2027-10-01,
-      # and its dry run prints what the archive would weigh against the shard.
+      # written, read back and reconciled against the day files it replaces. The
+      # earliest it removes anything is the day files under `state/scores/2026/08/`
+      # on 2027-10-01, and its dry run prints what the archive would weigh against
+      # them.
       #
       # It also covers the archive cleanup, which joined this step on 2026-09-06
       # and is the one thing here that would cost a reader something it can see.

@@ -353,11 +353,17 @@ def visual_prunes_path(state_dir: Path, date: str) -> Path:
 def shards_in_window(today: str, within_days: int) -> list[str]:
     """The month stems a window of days can touch, newest first.
 
-    Public because `drift.read_windows` names the `state/scores/` shards it
-    opens with it. That is the last month-grained ledger a window reaches, and
-    plan 24 row #8 moves it; `prune_seen` used to keep exactly what this returns
-    and moved to `day_partition.days_in_window` on 2026-09-13 with the ledger it
-    guards.
+    **No ledger is read with this any more.** Every windowed read in this
+    repository files by day and takes `day_partition.days_in_window` -
+    `drift.read_windows` was the last month-grained one and moved on 2026-09-13
+    with `state/scores/`.
+
+    What it still answers is the question the `keep_months` knobs are sized
+    against: how many month-shaped buckets a day-counted window reaches. That is
+    why `observability.item_health_full_grain_months` is 14 and not 13 against a
+    366-day `console.max_window_days`, and `contracts.app_config` states the
+    rule while `test_contracts` and `test_retention` drive it. A grain change
+    does not touch it, because both knobs are still counted in months.
 
     Walking days rather than subtracting months keeps the arithmetic honest
     across a year boundary and needs no calendar table.

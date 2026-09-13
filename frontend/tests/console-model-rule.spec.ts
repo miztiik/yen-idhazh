@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { modelRules } from '../src/lib/charts/frame';
 import { pipelineChanges, RECORDED_INPUTS_FROM } from '../src/lib/server/model-work';
+import { readDayShards } from '../src/lib/server/payload';
 
 /**
  * The model-change rule, and the judgement behind it.
@@ -31,19 +32,15 @@ import { pipelineChanges, RECORDED_INPUTS_FROM } from '../src/lib/server/model-w
 
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** The canary's score rows, read as the page's server reads them. */
+/** The canary's score rows, read as the page's server reads them.
+ *
+ * Through the production reader rather than a directory listing here: the store
+ * files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, and a local `readdir` of
+ * `*.csv` over the root reads nothing at all - which leaves this oracle
+ * comparing the page against an empty set.
+ */
 function canaryScores(): Record<string, string>[] {
-	const dir = join(STATE, 'scores');
-	const rows: Record<string, string>[] = [];
-	for (const name of readdirSync(dir).filter((entry) => entry.endsWith('.csv')).sort()) {
-		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
-		const header = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(header.map((key, at) => [key, cells[at] ?? ''])));
-		}
-	}
-	return rows;
+	return readDayShards(join(STATE, 'scores'), -1).rows;
 }
 
 /**

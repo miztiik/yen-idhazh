@@ -63,7 +63,7 @@ same variable. There is no hosted inference anywhere in this project
 | `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
-| `state/scores/<YYYY-MM>.csv` | One row per scored item | **yes** |
+| `state/scores/<YYYY>/<MM>/<DD>.csv` | One row per scored item | **yes** |
 | `state/fingerprints.csv` | One row per pipeline stamp | **yes** |
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
@@ -106,7 +106,8 @@ Turning live deletion on is a separate one-line commit, and this is the order:
 3. Check the list against what you expect. On 2027-10-01 that is four stores -
  the day files under `state/item-health/2026/08/`,
  `frontend/public/telemetry/2026-08.csv`, the day files under
- `state/feed-health/2026/08/` and `state/scores/2026-08.csv`. A fifth name, or
+ `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`.
+ A fifth name, or
  a month that is not the oldest, means a boundary is wrong and the switch
  waits.
 4. Confirm `state/score-archive/2026-08.json` exists and reconciles. The step

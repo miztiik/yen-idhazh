@@ -46,8 +46,7 @@ import {
 	itemHealthRows,
 	loadDay,
 	publishedDates,
-	shardDays,
-	shardMonths
+	shardDays
 } from '$lib/server/payload';
 
 export const prerender = true;
@@ -123,11 +122,11 @@ export async function load() {
 	// The widest span the control can reach, worked out before the ledgers are
 	// read rather than after: nothing older than this can be drawn whatever the
 	// operator does, so nothing older is opened either (`CLAUDE.md` Guardrail #12).
-	// Two covers, because the score ledger files by month and item-health by day.
-	const widestDays = Math.max(...console.window_presets);
-	const shards = shardMonths(widestDays);
-	const { rows } = evalRows(shards);
-	const itemRows = itemHealthRows(shardDays(widestDays)).rows;
+  // One cover, in days: both ledgers this route reads file by day.
+  const widestDays = Math.max(...console.window_presets);
+  const days = shardDays(widestDays);
+  const { rows } = evalRows(days);
+  const itemRows = itemHealthRows(days).rows;
 	const modelOnDate = modelByDate(rows);
 	const itemHealthByDate = byDate(itemRows);
 	const bands = summarizeConfig().bands;

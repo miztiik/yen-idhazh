@@ -2,7 +2,7 @@
 
 `state/scores/` is the largest thing under `state/`: measured on this checkout on
 2026-09-03, 5,335 rows in 4,266,655 bytes across two monthly shards. Nothing
-bounded it, and monthly sharding bounds one file rather than the tree.
+bounded it, and sharding bounds one file rather than the tree.
 
 Deleting an old month outright would answer the bytes and cost two things that
 cannot be bought back. Every published quality claim about a past month would
@@ -278,6 +278,20 @@ class ScoreArchive(Contract):
     __schema_stem__: ClassVar[str] = "score-archive"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "source_sha256 digests the month's day files in day order, where it "
+                "digested one month shard. No field moved and no type changed."
+            ),
+            why=(
+                "state/scores/ files by day from today, so a month is a directory of "
+                "<YYYY>/<MM>/<DD>.csv rather than one file, and the field that says "
+                "WHICH bytes this summarises has to name all of them. No read side "
+                "migrates: state/score-archive/ has never been written, because the "
+                "prune that writes it takes --dry-run from the workflow step."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T21:00",
             change=(
                 "pipeline_fingerprint is optional and leaves the cohort key, which is now "
@@ -311,19 +325,22 @@ class ScoreArchive(Contract):
         ),
     )
 
-    month: MonthStamp = Field(description="The shard this replaces, spelled the way it was filed.")
+    month: MonthStamp = Field(
+        description="The month this replaces, spelled the way its day files were filed under."
+    )
     source_rows: int = Field(
         ge=0,
         description=(
-            "Data rows the shard held, header excluded. Reconciled against the shard "
-            "before it is unlinked, so a summary of a truncated read can never be the "
-            "reason a file is deleted."
+            "Data rows the month held, headers excluded. Reconciled against the day "
+            "files before they are unlinked, so a summary of a truncated read can never "
+            "be the reason a file is deleted."
         ),
     )
     source_sha256: Sha256 = Field(
         description=(
-            "The shard's bytes, digested whole. The one field that says WHICH file "
-            "this summarises rather than describing what was in it."
+            "The month's day files, digested in day order into one hash. The one field "
+            "that says WHICH files this summarises rather than describing what was in "
+            "them."
         )
     )
     observation_digests: list[Sha256] = Field(

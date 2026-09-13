@@ -31,9 +31,9 @@ import { readDayShards, readShards } from '../src/lib/server/payload';
 
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** The score ledger, which files by month, read the way the page's server reads it. */
+/** The score ledger, which files by day, read the way the page's server reads it. */
 function scoreRows(): Record<string, string>[] {
-	return readShards(join(STATE, 'scores'), -1).rows;
+	return readDayShards(join(STATE, 'scores'), -1).rows;
 }
 
 /** The item-health ledger, which files by day, read the same way.

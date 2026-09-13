@@ -152,8 +152,8 @@ A partition is **closed** when the writer's own date no longer falls in it. Not
 a daily pipeline is the first run of the next month.
 
 The rule binds writes, not reads. A closed partition is still opened: `evals.writer.append`
-checks the header of every committed shard before it writes one, and
-`ledger.shards_in_window` opens every stem a reader's window names. What bounds reads is
+checks the header of every committed day file before it writes one, and
+`day_partition.days_in_window` opens every date a reader's window names. What bounds reads is
 [growing-reads.md](growing-reads.md) - the cover a read declares, and `CLAUDE.md` Guardrail #12
 behind it.
 
@@ -163,13 +163,14 @@ Authority: owner, 2026-09-06.
 
 | Collection | Path pattern | Writer | What makes a partition closed |
 | --- | --- | --- | --- |
-| Eval ledger | `state/scores/<YYYY-MM>.csv` | `evals.writer.append` | It files each row by the row's own `date`, so a month is closed once no row being written names a date inside it. A run either side of midnight writes two shards and neither is wrong. |
+| Eval ledger | `state/scores/<YYYY>/<MM>/<DD>.csv` | `evals.writer.append` | Partitioned by **day** since 2026-09-13. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm`. Its mirror under `frontend/public/scores/` stays monthly, folded from that month's day files. |
+| Score index | `state/score-index/<YYYY>/<MM>/<DD>.csv` | `evals.writer.append`, refilled by `refresh_index` | Partitioned by **day** since 2026-09-13, and it files by the ledger's day rather than a grain of its own: `refresh_index` fills a partition with no index from the partition beside it, so two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-score-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. |
 | Item health | `state/item-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_item_health` | Partitioned by **day** since 2026-09-13. It takes one date and appends to that day alone, filtering against `ITEM_HEALTH_KEY` in that one file. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which `merge=union` cannot express. |
 | Feed health | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_health` | Partitioned by **day** since 2026-09-13. The same one-date append, then it settles that one day file against `FEED_HEALTH_KEY`. Closed once the run's date leaves the day. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. Its mirror under `frontend/public/feed-health/` stays monthly, folded from that month's day files. |
 | Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.fold_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the fold is where the two grains meet, reading at most 31 day files and writing one. Closed the moment it is written; the days it summarises are gone, so there is nothing left to append. No file is committed yet. |
-| Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of the shard. Closed the moment it is written. No file is committed yet. |
+| Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of that month's day files. It stays **monthly** while the ledger below it files by day, for the reason the folded item health gives: it summarises a month. Closed the moment it is written. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `cli.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
 | Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `publish_day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
@@ -239,8 +240,10 @@ from a shard, rebased onto a tip that added some, resolves by keeping both sides
 removal silently does not happen. And a shard's header is checked against the contract
 before any append, so a rewrite that changes the shape has to move every month at once.
 A correction therefore ships as a committed one-shot utility under `backend/utilities/`,
-not as an ad-hoc script; `migrate_published_ledger.py` and `migrate_score_ledger.py` are
-the worked examples.
+not as an ad-hoc script; `migrate_published_ledger.py` and `migrate_to_day_shards.py` are
+the worked examples. A utility whose input layout no longer exists is deleted with
+the layout: `migrate_item_health.py`, `migrate_feed_health.py` and
+`migrate_score_ledger.py` all went that way in September 2026.
 
 ### A deletion
 

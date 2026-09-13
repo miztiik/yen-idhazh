@@ -856,7 +856,8 @@ commit of its own. Measured on this checkout on 2026-09-13: a live run today
 removes nothing, the first file any store loses is `state/seen/2026/08/23.csv` on
 **2026-11-22**, and the first files the fourteen-month rules take are the day
 files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`,
-the day files under `state/feed-health/2026/08/` and `state/scores/2026-08.csv`,
+the day files under `state/feed-health/2026/08/` and the day files under
+`state/scores/2026/08/`,
 together, on **2027-10-01**. The sight date was 2026-11-30 while that ledger
 filed by month, because a whole month shard survived if any of its days was in
 range; at day grain the file the window stops naming is the file that goes.

@@ -41,9 +41,14 @@ const VALUE_PX = 10;
 /** The canary's own state tree, which the built page was rendered from. */
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** A month-sharded ledger directory, read the way the page's server reads it. */
+/** A month-sharded series directory, read the way the page's server reads it. */
 function shards(dir: string): Record<string, string>[] {
 	return readShards(dir, -1).rows;
+}
+
+/** A day-filed ledger directory, read the same way. */
+function days(dir: string): Record<string, string>[] {
+	return readDayShards(dir, -1).rows;
 }
 
 /** The item-health ledger, which files by day rather than by month.
@@ -303,7 +308,7 @@ test.describe('what checking a summary cost, off the critical path', () => {
 		// median can be a factor of two away from the median.
 		const ledgers: Record<string, { rows: Record<string, string>[]; column: string }> = {
 			'write-times': { rows: healthRows(), column: 'summarize_ms' },
-			'score-cost': { rows: shards(join(STATE, 'scores')), column: 'score_ms' }
+			'score-cost': { rows: days(join(STATE, 'scores')), column: 'score_ms' }
 		};
 
 		let checked = 0;

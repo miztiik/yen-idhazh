@@ -213,6 +213,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "source_sha256 digests the month's day files in day order, where it digested one month shard. No field moved and no type changed.",
+      "version": "2026-09-13",
+      "why": "state/scores/ files by day from today, so a month is a directory of <YYYY>/<MM>/<DD>.csv rather than one file, and the field that says WHICH bytes this summarises has to name all of them. No read side migrates: state/score-archive/ has never been written, because the prune that writes it takes --dry-run from the workflow step."
+    },
+    {
       "change": "pipeline_fingerprint is optional and leaves the cohort key, which is now (date, run, row version, model, scorer).",
       "version": "2026-09-12T21:00",
       "why": "Splitting a month's rows on a stamp that moved on any of seventeen inputs turned one day into several cohorts of a handful of rows each, which is how a monthly figure stopped being readable. The field stays on the cohort so an archive written before today still validates."
@@ -234,7 +239,7 @@
       "type": "array"
     },
     "month": {
-      "description": "The shard this replaces, spelled the way it was filed.",
+      "description": "The month this replaces, spelled the way its day files were filed under.",
       "pattern": "^\\d{4}-\\d{2}$",
       "title": "Month",
       "type": "string"
@@ -249,19 +254,19 @@
       "type": "array"
     },
     "source_rows": {
-      "description": "Data rows the shard held, header excluded. Reconciled against the shard before it is unlinked, so a summary of a truncated read can never be the reason a file is deleted.",
+      "description": "Data rows the month held, headers excluded. Reconciled against the day files before they are unlinked, so a summary of a truncated read can never be the reason a file is deleted.",
       "minimum": 0,
       "title": "Source Rows",
       "type": "integer"
     },
     "source_sha256": {
-      "description": "The shard's bytes, digested whole. The one field that says WHICH file this summarises rather than describing what was in it.",
+      "description": "The month's day files, digested in day order into one hash. The one field that says WHICH files this summarises rather than describing what was in them.",
       "pattern": "^[0-9a-f]{64}$",
       "title": "Source Sha256",
       "type": "string"
     },
     "version": {
-      "default": "2026-09-12T21:00",
+      "default": "2026-09-13",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -276,5 +281,5 @@
   ],
   "title": "ScoreArchive",
   "type": "object",
-  "version": "2026-09-12T21:00"
+  "version": "2026-09-13"
 }

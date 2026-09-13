@@ -205,7 +205,7 @@ function runCount(): number {
  * goes stale the day the fixture grows a row, and it goes stale silently.
  */
 function scoredItems(): number {
-	return shardRows(join(CANARY, 'state', 'scores')).length;
+	return scoreRows().length;
 }
 
 /** How many days a telemetry viewport window covers, ends included. */
@@ -1706,24 +1706,24 @@ test('the renamed section draws what it drew before, figure for figure', async (
 });
 
 /** The canary's own score rows and item-health rows for one date. */
-/** Every month shard in a ledger directory, oldest first.
+/** Every score row the canary wrote.
  *
- * `state/scores/` shards by month since 2026-08-31. A spec that opened one file
- * by name reads nothing, which makes every day look unscored - and a test whose
- * fixture silently empties passes for the wrong reason.
+ * `state/scores/` files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this goes
+ * through `readDayShards` - the reader the page's own server uses - rather than
+ * a directory listing here. A spec that opened one file by name reads nothing,
+ * which makes every day look unscored, and a test whose fixture silently empties
+ * passes for the wrong reason.
  */
-function shardRows(dir: string): Record<string, string>[] {
-	return readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.sort()
-		.flatMap((name) => readCsv(join(dir, name)).rows);
+function scoreRows(): Record<string, string>[] {
+	return readDayShards(join(CANARY, 'state', 'scores'), -1).rows;
 }
 
+/** The canary's own score rows and item-health rows for one date. */
 /** Every item-health row the canary wrote.
  *
  * `state/item-health/` files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this
  * goes through `readDayShards` - the reader the page's own server uses - rather
- * than a directory listing here. The comment above `shardRows` names the failure
+ * than a directory listing here. The comment above `scoreRows` names the failure
  * this avoids: a spec whose fixture silently empties passes for the wrong reason.
  */
 function healthRows(): Record<string, string>[] {
@@ -1735,7 +1735,7 @@ function ledgers(date: string): {
 	health: Record<string, string>[];
 } {
 	return {
-		scores: shardRows(join(CANARY, 'state', 'scores')).filter((row) => row.date === date),
+		scores: scoreRows().filter((row) => row.date === date),
 		health: healthRows().filter((row) => row.date === date)
 	};
 }
@@ -1748,7 +1748,7 @@ function middle(values: number[]): number {
 
 /** Every day the fixture gave the model work on, newest first. */
 function modelDays(): string[] {
-	const scored = shardRows(join(CANARY, 'state', 'scores')).map((row) => row.date);
+	const scored = scoreRows().map((row) => row.date);
 	const ran = healthRows()
 		.filter((row) => Number(row.summarize_ms) > 0)
 		.map((row) => row.date);

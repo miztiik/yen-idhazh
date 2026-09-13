@@ -3238,13 +3238,13 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     is the file that decides, and a second implementation of its globbing could
     agree with this test and disagree with the merge.
     """
-    # The file each staged path resolves to. `state/item-health/` files by day
-    # and the other two directories by month, so the union driver has to reach
-    # both shapes - `state/**/*.csv` is the attribute line that does it.
+    # The file each staged path resolves to. All four directories file by day
+    # now, so the union driver has to reach a nested path - `state/**/*.csv` is
+    # the attribute line that does it.
     written = {
         "state/item-health": ledger.item_health_relpath(SUBSTITUTED_DATE),
-        "state/scores": f"state/scores/{SUBSTITUTED_DATE[:7]}.csv",
-        "state/score-index": f"state/score-index/{SUBSTITUTED_DATE[:7]}.csv",
+        "state/scores": score_writer.ledger_relpath(SUBSTITUTED_DATE),
+        "state/score-index": score_writer.index_relpath(SUBSTITUTED_DATE),
         "state/runtime-counters.csv": "state/runtime-counters.csv",
     }
     assert set(written) == set(COMMIT_STAGED_PATHS["work"])
