@@ -1,7 +1,34 @@
 # Reference dataset 2
 
 **Built**: 2026-09-13
-**State**: step 4 of 12. The URL list is snapshotted and the manifest is built. Nothing is fetched yet.
+**State**: step 6 of 12. The list is snapshotted, the manifest is built, and a
+pilot of 8 articles has been fetched. The full fetch waits on a review.
+
+## What the pilot found
+
+Measured 2026-09-13 on a Windows developer box, `request_delay_seconds` 1.0,
+over one URL from each of 8 publishers.
+
+| | |
+| --- | ---: |
+| URLs attempted | 8 |
+| Articles kept | 5 |
+| Typed failures | 3 |
+| Wall time | 28.7 s |
+| Words saved | 9,585 |
+| Bytes saved | 58,262 |
+
+- The three failures were a paywall, a page carrying no article prose, and a
+  host whose `robots.txt` could not be reached. All three are recorded as rows
+  with a reason, not dropped.
+- The longest article kept 3,500 words, and both ends of it read as real prose,
+  so nothing was cut at the byte cap.
+- One defect surfaced and was fixed: a `robots.txt` refusal was recorded with no
+  reason at all. It now carries the sentence the fetch module already writes.
+- **Estimate, not a measurement**: 3.6 s per URL over 1,661 URLs is about 100
+  minutes for the full list. The full run is the measurement that would settle
+  it.
+
 
 A collection built from a URL list supplied by hand, not drawn from what this
 pipeline published. It exists so that the article classifier can later be run

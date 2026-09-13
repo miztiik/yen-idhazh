@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence, Set
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,7 @@ from conftest import REPO_ROOT
 from idhazh.contracts.app_config import ReferenceDatasetConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.reference_dataset import (
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
@@ -41,6 +42,7 @@ from idhazh.contracts.reference_dataset import (
     ReferencePhase,
     ReferenceSplit,
 )
+from idhazh.fetch import FetchResult
 from utilities import build_reference_dataset as builder
 
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "reference-dataset"
@@ -612,7 +614,7 @@ def test_the_key_is_the_same_whatever_the_pool_order() -> None:
 def supplied(tmp_path: Path) -> tuple[Path, ReferenceDatasetLocalConfig]:
     """A collection directory holding the fixture URL list and its own config."""
     dataset = tmp_path / "reference-dataset-2"
-    dataset.mkdir()
+    dataset.mkdir(exist_ok=True)
     listing = dataset / "urls.txt"
     listing.write_text(
         (FIXTURES / "url-inputs.txt").read_text(encoding="utf-8"), encoding="utf-8", newline=""
@@ -710,6 +712,252 @@ def test_the_import_reads_no_pipeline_config_and_writes_no_label(tmp_path: Path)
     rows = json.loads((dataset / builder.MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert all("desk" not in row and "labels" not in row for row in rows)
     assert meta["settings"]["selection"]["group_by"] == "publisher"
+
+
+# --- extract-urls -----------------------------------------------------------
+#
+# The network boundary is driven by recorded pages under `tests/fixtures/`, so
+# nothing here opens a socket (`CLAUDE.md` section 13). What is recorded is a
+# real response shape, not a stub that returns whatever the assertion wants.
+
+PAGES = REPO_ROOT / "tests" / "fixtures" / "pages"
+ROBOTS = REPO_ROOT / "tests" / "fixtures" / "robots"
+
+
+def served(
+    pages: Mapping[str, bytes],
+    *,
+    robots: bytes | None = None,
+    truncated: Set[str] = frozenset(),
+) -> Callable[[str, RobotsOutcome], FetchResult]:
+    """A reader over recorded bytes. One call, one recorded response, no socket."""
+    body = robots if robots is not None else (ROBOTS / "no-rules.txt").read_bytes()
+
+    def read(url: str, permission: RobotsOutcome) -> FetchResult:
+        if url.endswith("/robots.txt"):
+            return FetchResult(FetchOutcome.OK, status=200, body=body)
+        if url not in pages:
+            return FetchResult(FetchOutcome.PERMANENT, status=404, detail="not found")
+        return FetchResult(
+            FetchOutcome.OK,
+            status=200,
+            body=pages[url],
+            body_truncated=url in truncated,
+        )
+
+    return read
+
+
+def extracted(
+    tmp_path: Path,
+    reader: Callable[[str, RobotsOutcome], FetchResult],
+    *,
+    run_id: str = "2026-09-13-1",
+    limit: int | None = None,
+) -> tuple[Path, list[ReferenceExtractionRow]]:
+    dataset, _meta = imported(tmp_path)
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+    )
+    code = builder.extract_supplied(
+        dataset, local, run_id=run_id, limit=limit, read=reader
+    )
+    assert code == 0
+    saved = sorted(
+        (builder.run_dir(dataset, run_id) / builder.ITEMS_DIRNAME).glob("*.json")
+    )
+    return dataset, [
+        ReferenceExtractionRow.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in saved
+    ]
+
+
+def manifest_urls(dataset: Path) -> list[str]:
+    return [row.canonical_url for row in builder.read_manifest(dataset)]
+
+
+def all_pages(dataset: Path, body: bytes) -> dict[str, bytes]:
+    return dict.fromkeys(manifest_urls(dataset), body)
+
+
+def test_one_request_per_identity_and_a_failure_is_a_row(tmp_path: Path) -> None:
+    """Seven input lines, six identities, and the 404s are recorded rather than dropped."""
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    urls = manifest_urls(dataset)
+    reader = served({urls[0]: article})
+    _dataset, results = extracted(tmp_path, reader)
+    assert len(results) == 6
+    assert sum(1 for row in results if row.status is ArticleStatus.OK) == 1
+    missing = [row for row in results if row.failure_code is not None]
+    assert {row.failure_code for row in missing} == {ReferenceFailureCode.FETCH_PERMANENT}
+
+
+def test_the_saved_text_is_the_whole_article_and_keeps_its_paragraphs(
+    tmp_path: Path,
+) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    _dataset, results = extracted(tmp_path, served(all_pages(dataset, article)))
+    kept = next(row for row in results if row.status is ArticleStatus.OK)
+    assert kept.text is not None
+    # The sanitizer separates paragraphs with one newline, so several lines is
+    # what a kept paragraph break looks like here.
+    assert len([line for line in kept.text.splitlines() if line.strip()]) >= 3
+    assert kept.text.endswith("\n")
+    assert kept.article_words is not None and kept.article_words > 20
+    assert kept.article_sha256 == derive_text_digest(kept.text)
+    # The sanitizer's job, proven rather than assumed: the nav and the modal are
+    # on the page and not in what was saved.
+    assert "Subscribe" not in kept.text
+    assert "Unsubscribe at any time" not in kept.text
+
+
+def test_a_truncated_body_is_a_failure_and_never_a_short_article(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    urls = manifest_urls(dataset)
+    reader = served(all_pages(dataset, article), truncated={urls[0]})
+    _dataset, results = extracted(tmp_path, reader)
+    cut = next(row for row in results if row.canonical_url == urls[0])
+    assert cut.status is ArticleStatus.FETCH_FAILED
+    assert cut.failure_code is ReferenceFailureCode.BODY_TRUNCATED
+    assert cut.text is None
+
+
+def test_a_page_with_no_prose_is_an_empty_text_failure(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    bare = b"<!DOCTYPE html><html><head><title>Nothing</title></head><body></body></html>"
+    _dataset, results = extracted(tmp_path, served(all_pages(dataset, bare)))
+    assert {row.failure_code for row in results} == {ReferenceFailureCode.EMPTY_TEXT}
+    assert all(row.text is None for row in results)
+
+
+def test_a_robots_refusal_is_recorded_and_no_article_is_requested(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    asked: list[str] = []
+
+    inner = served(all_pages(dataset, article), robots=(ROBOTS / "blanket-disallow.txt").read_bytes())
+
+    def counting(url: str, permission: RobotsOutcome) -> FetchResult:
+        asked.append(url)
+        return inner(url, permission)
+
+    _dataset, results = extracted(tmp_path, counting)
+    assert all(row.status is ArticleStatus.ROBOTS_DENIED for row in results)
+    assert all(row.failure_code is ReferenceFailureCode.ROBOTS_DENIED for row in results)
+    assert all(row.failure_detail for row in results), "a refusal has to say why"
+    assert all(url.endswith("/robots.txt") for url in asked)
+
+
+def test_a_resume_keeps_the_saved_result_and_asks_only_for_what_is_missing(
+    tmp_path: Path,
+) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    pages = all_pages(dataset, article)
+
+    _dataset, first = extracted(tmp_path, served(pages), limit=2)
+    assert len(first) == 2
+    kept = first[0]
+
+    asked: list[str] = []
+    inner = served(pages)
+
+    def counting(url: str, permission: RobotsOutcome) -> FetchResult:
+        if not url.endswith("/robots.txt"):
+            asked.append(url)
+        return inner(url, permission)
+
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+    )
+    assert builder.extract_supplied(dataset, local, run_id="2026-09-13-1", read=counting) == 0
+
+    again = ReferenceExtractionRow.model_validate_json(
+        builder.checkpoint_path(dataset, "2026-09-13-1", kept.url_key).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert again.model_dump() == kept.model_dump()
+    assert kept.canonical_url not in asked
+    assert len(asked) == 4
+
+
+def test_a_second_pass_over_a_finished_run_makes_no_request(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    extracted(tmp_path, served(all_pages(dataset, article)))
+
+    def refuses(url: str, permission: RobotsOutcome) -> FetchResult:
+        raise AssertionError(f"a finished run asked for {url}")
+
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+    )
+    assert builder.extract_supplied(dataset, local, run_id="2026-09-13-1", read=refuses) == 0
+
+
+def test_a_run_taken_with_different_settings_is_refused_rather_than_mixed(
+    tmp_path: Path,
+) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    extracted(tmp_path, served(all_pages(dataset, article)), limit=1)
+
+    moved = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=2.0,
+    )
+    with pytest.raises(ValueError, match="different settings"):
+        builder.extract_supplied(
+            dataset, moved, run_id="2026-09-13-1", read=served(all_pages(dataset, article))
+        )
+
+
+def test_a_run_taken_against_a_different_manifest_is_refused(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    extracted(tmp_path, served(all_pages(dataset, article)), limit=1)
+
+    manifest = dataset / builder.MANIFEST_FILENAME
+    rows = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest.write_text(json.dumps(rows[:-1], indent=2) + "\n", encoding="utf-8", newline="")
+
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+    )
+    with pytest.raises(ValueError, match="different manifest"):
+        builder.extract_supplied(
+            dataset, local, run_id="2026-09-13-1", read=served(all_pages(dataset, article))
+        )
+
+
+def test_a_checkpoint_is_named_by_recomputed_identity_and_not_by_page_text(
+    tmp_path: Path,
+) -> None:
+    """A filename a fetched page could steer is a path a stranger controls."""
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "hostile.html").read_bytes()
+    _dataset, results = extracted(tmp_path, served(all_pages(dataset, article)))
+    saved = {
+        path.stem
+        for path in (builder.run_dir(dataset, "2026-09-13-1") / builder.ITEMS_DIRNAME).glob(
+            "*.json"
+        )
+    }
+    assert saved == {row.url_key for row in results}
+    assert all(derive_url_key(row.canonical_url) == row.url_key for row in results)
 
 
 # --- the builder refuses, rather than writing a set that leaks ---------------

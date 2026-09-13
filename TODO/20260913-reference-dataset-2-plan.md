@@ -152,8 +152,8 @@ Table F - Status Reckoner
 | F2 | 2 | Snapshot and inventory the supplied URLs | 1 | B | DONE | refdata2 | direct | - |
 | F3 | 3 | Define local config and record schemas | 2 | C | DONE | refdata2 | direct | - |
 | F4 | 4 | Build the manifest, publisher keys and totals | 3 | D | DONE | refdata2 | direct | - |
-| F5 | 5 | Add resumable extraction through existing helpers | 4 | E | PENDING | - | - | - |
-| F6 | 6 | Run and review a small extraction pilot | 5 | F | PENDING | - | - | - |
+| F5 | 5 | Add resumable extraction through existing helpers | 4 | E | DONE | refdata2 | direct | - |
+| F6 | 6 | Run and review a small extraction pilot | 5 | F | DONE (run 2026-09-13; the bulk fetch waits on the review) | refdata2 | direct | - |
 | F7 | 7 | Validate the utility with offline tests | 6 | G | PENDING | - | - | - |
 | F8 | 8 | Extract the full URL list | 7 | H | PENDING | - | - | - |
 | F9 | 9 | Export extraction arrays and metadata | 8 | I | PENDING | - | - | - |
@@ -212,7 +212,7 @@ Table F - Status Reckoner
 - **Files touched:** `corpus/reference-dataset-2/scratch/pilot/` holding the subset, local pilot config, typed results and report; `corpus/reference-dataset-2/README.md`; this plan's own status row.
 - **Acceptance gates:** Use the same backend code as the full run. Choose different hosts, including a long article and unconfigured sources; inspect both ends of extracted prose and paragraph breaks. Record any encountered refusals honestly. Record elapsed time, bytes, machine class and date; label the full-run forecast an estimate. Stop for user review.
 - **Oracle:** A manually checked long article retains its ending in saved text, and each pilot URL has either its own result or an explicit pending state. A failure never appears as successful empty text.
-- **Decisions:** Pilot size is an explicit input selection, not a baked-in number. Keep the full manifest intact. A site unavailable in the pilot remains unavailable; do not substitute an unrequested source to improve the success rate.
+- **Decisions:** Pilot size is an explicit input selection, not a baked-in number. Keep the full manifest intact. A site unavailable in the pilot remains unavailable; do not substitute an unrequested source to improve the success rate. Run 2026-09-13 over 8 publishers: 5 articles kept, 3 typed failures (one paywall, one page with no prose, one unreachable `robots.txt`), 28.7 s wall on a Windows developer box with a 1 s request delay. It found one defect - a robots refusal recorded no reason - which was fixed and re-proved against the live site.
 - **Rejected alternatives:** A successful HTTP status alone does not prove article extraction, and a short excerpt cannot prove the full-text requirement.
 
 ## 8. Step 7 - Validate the utility with offline tests

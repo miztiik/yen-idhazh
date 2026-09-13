@@ -61,7 +61,7 @@ import re
 import sys
 import time
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence, Set
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -72,12 +72,15 @@ from courlan import extract_domain
 
 from idhazh import config, corpus, extract, fetch
 from idhazh.contracts.app_config import ExtractConfig, ReferenceDatasetConfig
-from idhazh.contracts.base import canonical_json, derive_url_key
-from idhazh.contracts.feed_health import RobotsOutcome
+from idhazh.contracts.article import ArticleStatus
+from idhazh.contracts.base import canonical_json, derive_text_digest, derive_url_key
+from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.reference_dataset import (
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
     ReferenceDatasetRow,
+    ReferenceExtractionRow,
+    ReferenceFailureCode,
     ReferenceImportTotals,
     ReferenceManifestRow,
     ReferencePhase,
@@ -902,6 +905,240 @@ def _under(root: Path, path: Path) -> str:
     return path.resolve().relative_to(root.resolve()).as_posix()
 
 
+# --- extract-urls ----------------------------------------------------------
+
+SCRATCH_DIRNAME: Final = "scratch"
+ITEMS_DIRNAME: Final = "items"
+RUN_FILENAME: Final = "run.json"
+
+
+def read_manifest(dataset_dir: Path) -> list[ReferenceManifestRow]:
+    """Every manifest row, validated on read rather than trusted."""
+    path = dataset_dir / MANIFEST_FILENAME
+    return [
+        ReferenceManifestRow.model_validate(row)
+        for row in json.loads(path.read_text(encoding="utf-8"))
+    ]
+
+
+def run_dir(dataset_dir: Path, run_id: str) -> Path:
+    return dataset_dir / SCRATCH_DIRNAME / run_id
+
+
+def checkpoint_path(dataset_dir: Path, run_id: str, url_key: str) -> Path:
+    """`scratch/<run-id>/items/<url_key>.json`. The name is recomputed identity."""
+    return run_dir(dataset_dir, run_id) / ITEMS_DIRNAME / f"{url_key}.json"
+
+
+def open_run(
+    dataset_dir: Path, run_id: str, local: ReferenceDatasetLocalConfig, manifest_sha256: str
+) -> dict[str, object]:
+    """Start a run, or re-open one and refuse if its input or settings have moved.
+
+    A checkpoint is only worth reusing if it was taken under the same manifest
+    and the same fetch settings. Without this a resume silently mixes two runs
+    and the metadata describes neither.
+    """
+    marker = run_dir(dataset_dir, run_id) / RUN_FILENAME
+    started: dict[str, object] = {
+        "manifest_sha256": manifest_sha256,
+        "settings": local.model_dump(mode="json"),
+        "started_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    if marker.is_file():
+        found = json.loads(marker.read_text(encoding="utf-8"))
+        if found["manifest_sha256"] != manifest_sha256:
+            raise ValueError(f"run {run_id} was taken against a different manifest")
+        if found["settings"] != started["settings"]:
+            raise ValueError(f"run {run_id} was taken with different settings")
+        return dict(found)
+    _write_atomically(marker, canonical_json(started))
+    return started
+
+
+def outcome_of(
+    result: fetch.FetchResult, permission: RobotsOutcome
+) -> tuple[ArticleStatus, ReferenceFailureCode] | None:
+    """The typed reason a read produced no article, or `None` where it may have."""
+    if permission is RobotsOutcome.DENIED:
+        return ArticleStatus.ROBOTS_DENIED, ReferenceFailureCode.ROBOTS_DENIED
+    if permission is RobotsOutcome.UNREACHABLE:
+        return ArticleStatus.ROBOTS_DENIED, ReferenceFailureCode.ROBOTS_UNREACHABLE
+    if result.outcome is FetchOutcome.BLOCKED:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.BLOCKED_ADDRESS
+    if result.outcome is FetchOutcome.PERMANENT:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.FETCH_PERMANENT
+    if result.outcome is FetchOutcome.TRANSIENT:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.FETCH_TRANSIENT
+    if not result.ok:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.FETCH_PERMANENT
+    if result.body_truncated:
+        # The bytes stopped at the cap, so what came back is a prefix of the
+        # article. Calling that a short article is the one failure this
+        # collection cannot afford.
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.BODY_TRUNCATED
+    return None
+
+
+def extraction_of(
+    row: ReferenceManifestRow,
+    result: fetch.FetchResult,
+    permission: RobotsOutcome,
+    local: ReferenceDatasetLocalConfig,
+) -> ReferenceExtractionRow:
+    """One typed result for one identity: the article, or why there is none."""
+    identity = {
+        "version": ReferenceExtractionRow.schema_version(),
+        "source_line": row.source_line,
+        "source_url": row.source_url,
+        "canonical_url": row.canonical_url,
+        "url_key": row.url_key,
+        "source_domain": row.source_domain,
+        "host": row.host,
+        "publisher": row.publisher,
+        "vertical": row.vertical,
+    }
+    refusal = outcome_of(result, permission)
+    if refusal is not None:
+        status, code = refusal
+        # A robots refusal is synthesized rather than returned by a socket, so it
+        # carries no detail of its own. `fetch` already writes the sentence.
+        detail = result.detail or fetch.ROBOTS_REFUSALS.get(permission) if permission else None
+        return ReferenceExtractionRow.model_validate(
+            {
+                **identity,
+                "status": status,
+                "failure_code": code,
+                "failure_detail": detail,
+            }
+        )
+
+    fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    html = result.body.decode("utf-8", errors="replace")
+    if extract.is_paywalled(html, local.extract):
+        return ReferenceExtractionRow.model_validate(
+            {
+                **identity,
+                "status": ArticleStatus.EXTRACT_FAILED,
+                "failure_code": ReferenceFailureCode.PAYWALLED,
+                "failure_detail": "the page is behind a paywall or a login",
+            }
+        )
+    # `extract_text` is trafilatura plus the sanitizer and applies no token cap,
+    # so what is saved is the whole article rather than the model's input.
+    body = extract.extract_text(html)
+    if not body or not body.strip():
+        return ReferenceExtractionRow.model_validate(
+            {
+                **identity,
+                "status": ArticleStatus.EXTRACT_FAILED,
+                "failure_code": ReferenceFailureCode.EMPTY_TEXT,
+                "failure_detail": "no article prose was found on the page",
+            }
+        )
+    text = body if body.endswith("\n") else body + "\n"
+    return ReferenceExtractionRow.model_validate(
+        {
+            **identity,
+            "status": ArticleStatus.OK,
+            "text": text,
+            "article_words": len(text.split()),
+            "article_sha256": derive_text_digest(text),
+            "fetched_at": fetched_at,
+            "extracted_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "extractor_version": extract.EXTRACTOR_VERSION,
+            "sanitizer_version": SANITIZER_VERSION,
+        }
+    )
+
+
+def extract_supplied(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    limit: int | None = None,
+    only: Set[str] | None = None,
+    read: Callable[[str, RobotsOutcome], fetch.FetchResult] | None = None,
+) -> int:
+    """Fetch every manifest identity once and save a typed result for each. Resumable.
+
+    One request per identity, one saved file per identity, written with
+    temp-file-plus-rename. An interrupted pass loses at most the item in flight,
+    and a resume re-reads what is on disk rather than asking again.
+
+    `read` is the one seam that touches the network. It defaults to the project's
+    own protected fetch, and a test hands it recorded pages instead so no test
+    opens a socket (`CLAUDE.md` section 13).
+    """
+    reader = read or (
+        lambda url, permission: fetch.fetch(url, config=local.extract, permission=permission)
+    )
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        print(f"no manifest under {dataset_dir.as_posix()}. Run `import-urls` first")
+        return 1
+    rows = read_manifest(dataset_dir)
+    manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    open_run(dataset_dir, run_id, local, manifest_sha256)
+
+    # One row per identity: equivalent addresses are one article, fetched once.
+    identities: dict[str, ReferenceManifestRow] = {}
+    for row in rows:
+        if only is not None and row.url_key not in only:
+            continue
+        identities.setdefault(row.url_key, row)
+
+    rules: dict[str, fetch.RobotsRules] = {}
+    saved = attempted = 0
+    for url_key, row in sorted(identities.items()):
+        target = checkpoint_path(dataset_dir, run_id, url_key)
+        if target.is_file():
+            saved += 1
+            continue
+        if limit is not None and attempted >= limit:
+            break
+        attempted += 1
+        origin = fetch.origin(row.canonical_url)
+        if origin not in rules:
+            rules[origin] = fetch.robots_rules(
+                reader(fetch.robots_url(row.canonical_url), RobotsOutcome.ALLOWED)
+            )
+            time.sleep(local.request_delay_seconds)
+        permission = rules[origin].permits(local.extract.user_agent, row.canonical_url)
+        result = (
+            reader(row.canonical_url, permission)
+            if permission is RobotsOutcome.ALLOWED
+            else fetch.FetchResult(outcome=FetchOutcome.ROBOTS_DENIED, robots=permission)
+        )
+        time.sleep(local.request_delay_seconds)
+        record = extraction_of(row, result, permission, local)
+        _write_atomically(target, canonical_json(record.model_dump(mode="json")))
+        saved += 1
+        if attempted % 25 == 0:
+            print(f"  {attempted} attempted, {saved} saved", flush=True)
+
+    done = sorted((run_dir(dataset_dir, run_id) / ITEMS_DIRNAME).glob("*.json"))
+    results = [
+        ReferenceExtractionRow.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in done
+    ]
+    succeeded = sum(1 for record in results if record.status is ArticleStatus.OK)
+    print(f"{'identities':<{_WIDTH}} {len(identities)}")
+    print(f"{'attempted this pass':<{_WIDTH}} {attempted}")
+    print(f"{'results on disk':<{_WIDTH}} {len(results)}")
+    print(f"{'with article text':<{_WIDTH}} {succeeded}")
+    print(f"{'with a typed failure':<{_WIDTH}} {len(results) - succeeded}")
+    print(f"{'still to fetch':<{_WIDTH}} {len(identities) - len(results)}")
+    for code, count in sorted(
+        _tally(
+            record.failure_code.value for record in results if record.failure_code is not None
+        ).items()
+    ):
+        print(f"  {code:<{_WIDTH - 2}} {count}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=REPO_ROOT / DATASET_RELPATH)
@@ -926,14 +1163,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
         help="The collection's own config.json. Never config/idhazh.json.",
     )
+    extracting = verbs.add_parser(
+        "extract-urls", help="Take the article text for the supplied-URL manifest. Resumable."
+    )
+    extracting.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    extracting.add_argument("--run-id", required=True, help="Names the checkpoint directory.")
+    extracting.add_argument(
+        "--limit", type=int, default=None, help="Stop after this many attempts."
+    )
 
     args = parser.parse_args(argv)
-    if args.verb == "import-urls":
+    if args.verb in {"import-urls", "extract-urls"}:
         local = ReferenceDatasetLocalConfig.model_validate_json(
             args.local_config.read_text(encoding="utf-8")
         )
-        return build_manifest(
-            args.local_config.parent, local, sources_path=REPO_ROOT / local.sources_file
+        if args.verb == "import-urls":
+            return build_manifest(
+                args.local_config.parent, local, sources_path=REPO_ROOT / local.sources_file
+            )
+        return extract_supplied(
+            args.local_config.parent, local, run_id=args.run_id, limit=args.limit
         )
 
     settings = config.load(args.config)
