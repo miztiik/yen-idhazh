@@ -252,6 +252,7 @@
 			activeTopic={topic}
 			total={data.stories}
 			pillsMax={data.ui.topic_pills_max}
+			pillMoveMin={data.ui.pill_move_min}
 			bind:query
 			{onResults}
 			{onTopic}
