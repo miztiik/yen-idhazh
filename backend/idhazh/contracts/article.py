@@ -54,6 +54,27 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "Added secondary_desk: the one other desk the article's own reading "
+                "names, beside desk, which keeps naming where the digest publishes it."
+            ),
+            why=(
+                "The desk ceiling shipped on 2026-09-13 sends an over-ceiling story to a "
+                "second desk, and until now the only second desk available was the word "
+                "the FEED declares - so a story could only move back to where it "
+                "arrived, and a story whose feed word was already its filing could not "
+                "move at all. The feed's word stays the fallback and this is what "
+                "replaces it where a reading exists. One value rather than a list, "
+                "because a story on four desks is a story on no desk. Additive and "
+                "optional: null is nothing having said, the day falls back to vertical, "
+                "and every payload written before today still reads (section 11). "
+                "Nothing fills it yet - the model that will is plan 23 row #8, and 0 of "
+                "9,353 committed items across 24 days carry a read desk of any kind, "
+                "measured 2026-09-13."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T18:40",
             change=(
                 "item_id accepts a second shape: sixteen Crockford base32 symbols "
@@ -187,6 +208,16 @@ class Article(Contract):
             "Where the digest publishes this story, read off the whole article rather "
             "than off the feed that carried it. Null is nothing having said, and the "
             "digest falls back to `vertical`; a null is never read as a desk."
+        ),
+    )
+    secondary_desk: Slug | None = Field(
+        default=None,
+        description=(
+            "The one other desk this article has a claim to, read off the same article "
+            "`desk` is. It is where the day sends the story when the desk it is on is "
+            "over its ceiling. One, never a list: a story on four desks is a story on "
+            "no desk. Null is nothing having said, and the day falls back to "
+            "`vertical`; a null is never read as a second desk and never as 'none'."
         ),
     )
     lenses: list[Slug] = Field(default_factory=list)

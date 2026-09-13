@@ -68,7 +68,7 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
-from idhazh.placement import desk_bounds, place
+from idhazh.placement import desk_bounds, place, secondary_desk_of
 from idhazh.rank import desk_of, desks_below_floor
 from idhazh.tag import tags
 
@@ -163,11 +163,22 @@ def to_digest_item(
     Where the story publishes is the separate question `desk` answers, and
     `rank.desk_of` settles it - including the case where the desk is one this
     run collected but will not render, which falls back to the feed's word.
+
+    `secondary_desk` is the one other desk the same reading named, and
+    `placement.secondary_desk_of` settles it. It is dropped rather than
+    published where it repeats the desk the day already filed, or names a desk
+    this run will not render.
     """
+    filed_as = desk_of(article.vertical, article.desk, below_floor=below_floor_desks)
     return DigestItem(
         item_id=summary.item_id,
         vertical=article.vertical,
-        desk=desk_of(article.vertical, article.desk, below_floor=below_floor_desks),
+        desk=filed_as,
+        secondary_desk=secondary_desk_of(
+            article.secondary_desk,
+            filed_as=filed_as or article.vertical,
+            below_floor=below_floor_desks,
+        ),
         title=summary.title or article.title or _UNTITLED,
         source_url=article.canonical_url,
         source_id=article.source_id,
@@ -1350,13 +1361,16 @@ def build_day(
     runs.sort(key=lambda run: run.n)
 
     names = vertical_names(taxonomy)
-    # Both words, because a story can be carried by one vertical's feed and
-    # published under another. A ref is owed for each: `count` answers for the
-    # feed's word and `desk_count` for where the day put the story, and a name
-    # that is only one of the two carries a 0 for the other rather than being
-    # left out - which would leave a rendered story under an unlisted topic.
+    # Every word any story names, because a story can be carried by one
+    # vertical's feed, published under another and still hold a claim on a
+    # third. A ref is owed for each: `count` answers for the feed's word and
+    # `desk_count` for where the day put the story, and a name that is only one
+    # of the three carries a 0 for the others rather than being left out - which
+    # would leave a story naming a topic the day never listed.
     present = sorted(
-        {item.vertical for item in combined} | {item.desk for item in combined if item.desk}
+        {item.vertical for item in combined}
+        | {item.desk for item in combined if item.desk}
+        | {item.secondary_desk for item in combined if item.secondary_desk}
     )
     this_run = {vertical.id: vertical for vertical in plan.verticals}
     already_said = {ref.id: ref for ref in (previous.verticals if previous else [])}
