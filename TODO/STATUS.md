@@ -34,6 +34,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 0 | 13 | 3 |
 
 ## In flight - 4
 
@@ -44,7 +45,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #7b | 23 | H | The two calls become a DAG, and every label rides in the first | p23-r7b |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
 
-## Ready now - 18
+## Ready now - 21
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -70,8 +71,11 @@ section 3 is where it is answered.
 | #8a | 25 | J | The second desk reaches the reader | 8 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
+| #1 | 28 | A | The runtime sweep reaches for a key that is not there | - |
+| #2 | 28 | A | The turn envelope moves onto the model entry | - |
+| #3 | 28 | A | Every tokenizer-shaped constant names the weights it was taken against | - |
 
-## Waiting on another row - 55
+## Waiting on another row - 65
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -130,6 +134,16 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
+| #4 | 28 | B | Benchmark records lose the date from their filename | 2 is PENDING; 3 is PENDING |
+| #5 | 28 | C | Five things the server proves before the first item | 2 is PENDING |
+| #6 | 28 | C | One complete config file per model, selected by a pointer | 2 is PENDING |
+| #7 | 28 | D | The model dossier, and the index that points at every one | 3 is PENDING; 4 is PENDING |
+| #11 | 28 | D | Where the system text goes, and which keyword the runtime is told | 5 is PENDING; 6 is PENDING |
+| #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 is PENDING |
+| #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 3 is PENDING; 7 is PENDING |
+| #8 | 28 | F | Both bench arms in one workflow, emitting a page ready to paste | 1 is PENDING; 6 is PENDING; 7 is PENDING |
+| #9 | 28 | G | The runbook: swap and revert in one line each | 6 is PENDING; 8 is PENDING; 12 is PENDING |
+| #10 | 28 | H | Two spans on one call, so the model can think | 5 is PENDING; 6 is PENDING; 11 is PENDING |
 
 ## Finished - 17 plans with no live row
 
