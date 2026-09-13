@@ -33,18 +33,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 12 | 16 | 3 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 3 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 7 | 1 | 0 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 6 | 8 | 2 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 7 | 7 | 2 |
 
-## In flight - 4
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #6 | 11 | F | The small model, its job and its cache go | p11-6b |
-| #1b | 23 | P | The fingerprint field is dropped from the contracts | p23-1b |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | p24-8 |
-| #6 | 25 | C | The topic pills order by what is running | p25-6 |
 
 ## Ready now - 20
 
