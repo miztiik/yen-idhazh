@@ -27,6 +27,7 @@ import {
 	PERCENTILES,
 	RUNNER_MEMORY_BYTES
 } from '../src/lib/charts/machine';
+import { readDayShards } from '../src/lib/server/payload';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
 	machineCounters,
@@ -54,19 +55,13 @@ function canaryCounters(): Record<string, string>[] {
 		.map((line) => Object.fromEntries(header.map((key, at) => [key, line.split(',')[at] ?? ''])));
 }
 
-/** The canary's item rows, over every month shard. */
+/** The canary's item rows, over every day file.
+ *
+ * Through `readDayShards`, the reader the page's own server uses, so a grain
+ * change in the store cannot leave this comparing the page against an empty set.
+ */
 function canaryHealth(): Record<string, string>[] {
-	const dir = join(CANARY, 'item-health');
-	const rows: Record<string, string>[] = [];
-	for (const name of readdirSync(dir).filter((entry) => entry.endsWith('.csv')).sort()) {
-		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
-		const header = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(header.map((key, at) => [key, cells[at] ?? ''])));
-		}
-	}
-	return rows;
+	return readDayShards(join(CANARY, 'item-health'), -1).rows;
 }
 
 /** A fixed 150-minute job timeout as seconds, not read from config, so these

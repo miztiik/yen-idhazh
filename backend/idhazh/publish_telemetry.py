@@ -5,12 +5,18 @@ must never receive. This module writes a narrow monthly projection under
 `frontend/public/telemetry/`, which is the only item-health data the console
 fetches at runtime.
 
+**The two grains differ on purpose.** The ledger files by day, because a run
+writes one day and a removal takes one day. The mirror files by month, because
+its grain follows what a browser fetches and the console prices a window in month
+files. So a month here is folded from that month's day files - at most 31 of them
+- and `docs/concepts/partitions.md` owns both rules.
+
 The projection's shape is `PublicTelemetryRow`, not a list of names here. This
 module owns *when* a shard is written and *from what*; the contract owns which
 cells may cross and what each one may hold (Guardrail #3).
 
 It owns *where* a shard sits too, through `shard_path`. `retention.prune_telemetry`
-deletes a copy in the same step that folds the ledger it copies, and it asks here
+deletes a copy in the same step that folds the days it copies, and it asks here
 for the file to unlink rather than spelling `<month>.csv` a second time.
 """
 
@@ -24,7 +30,7 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, ledger
+from idhazh import config, day_partition, ledger
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
 
@@ -51,7 +57,7 @@ def shard_path(public_root: Path, month: str) -> Path:
 
     Spelled here and nowhere else, because the step that writes a copy and the
     step that deletes one have to name the same file. Two spellings of
-    `<month>.csv` would delete a shard nobody published and leave the one that
+    `<month>.csv` would delete a mirror nobody published and leave the one that
     was published behind.
     """
     return public_root / f"{month}.csv"
@@ -149,26 +155,34 @@ def publish(
     a correction targets it" - a correction changes the bytes, an ordinary
     re-run does not.
 
+    **The ledger files by day and this mirror files by month**, so a month is
+    folded from that month's day files through `day_partition.days_by_month`. Its
+    input is one month, so a named month opens at most 31 files.
+
     Cover: the months the caller names. The daily caller passes the one month it
-    appended to, so an ordinary run reads one partition whatever the ledger
+    appended to, so an ordinary run reads one month's days whatever the ledger
     holds. `None` is unbounded on purpose - a fresh clone has to rebuild a mirror
     it never published, and a cover in months would leave it permanently short of
     one. What bounds the ledger is the store rather than this read:
-    `observability.item_health_full_grain_months` caps it at fourteen partitions.
+    `observability.item_health_full_grain_months` caps it at fourteen months.
     That cap has never had a candidate to take - the oldest partition on disk is
     2026-08 and `retention.prune_telemetry` first reaches it on 2027-10-01 - so
-    the unbounded arm reads every partition there has ever been.
+    the unbounded arm reads every partition there has ever been. **The day grain
+    makes that arm about thirty times wider in file handles and not one row
+    wider**, and the listing behind it grows by one directory entry a day rather
+    than one a month.
     """
     source_dir = state_root / ledger.ITEM_HEALTH_DIRNAME
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    if source_dir.exists():
-        for source in sorted(source_dir.glob("*.csv")):
-            target = shard_path(public_root, source.stem)
-            if months is not None and source.stem not in months and target.exists():
-                continue
-            if _write_if_changed(target, _read(source)):
-                written.append(target)
+    by_month = day_partition.days_by_month(source_dir)
+    for month in sorted(by_month):
+        target = shard_path(public_root, month)
+        if months is not None and month not in months and target.exists():
+            continue
+        rows = [row for day in by_month[month] for row in _read(day)]
+        if _write_if_changed(target, rows):
+            written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):
         target = shard_path(public_root, ensure_month)
         if not target.exists():
