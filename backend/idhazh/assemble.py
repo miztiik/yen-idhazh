@@ -68,8 +68,8 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
-from idhazh.placement import place
-from idhazh.rank import desk_of
+from idhazh.placement import desk_bounds, place
+from idhazh.rank import desk_of, desks_below_floor
 from idhazh.tag import tags
 
 LOG: Final = logging.getLogger("idhazh")
@@ -1309,6 +1309,13 @@ def build_day(
     item of a group a reader meets at all. It is a re-order and never a filter:
     the day it returns holds exactly the items it was handed.
 
+    It is also where the desk floor and the desk ceiling run. Both re-file a
+    story onto its second-best desk and neither admits or drops one, so that
+    sentence holds for them too. The desks this run will not render are read off
+    its own plan and passed in, because a desk that planned nothing may not
+    receive a story - a page and an operator surface saying opposite things
+    about one word is the failure `rank.desk_of` already exists to avoid.
+
     The duplicate pass is a pure function of the items, their vectors and the
     threshold, so the same day rebuilt reaches the same groups.
 
@@ -1324,7 +1331,12 @@ def build_day(
     # view draws. Leading first would choose against a day that no longer exists
     # by the time it renders. See docs/architecture/publishing/layout.md.
     combined = collapse_same_story(combined, merged, similarity_min=duplicate_similarity_min)
-    combined = place(combined, config=placement or PlacementConfig())
+    combined = place(
+        combined,
+        config=placement or PlacementConfig(),
+        bounds=desk_bounds(taxonomy),
+        closed=desks_below_floor(plan.verticals),
+    )
 
     runs = list(previous.runs) if previous else []
     runs = [run for run in runs if run.n != run_n]
