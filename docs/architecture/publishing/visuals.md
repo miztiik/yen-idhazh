@@ -911,6 +911,133 @@ selects, and code cuts every character a reader sees. The validator, the downgra
 and the sufficiency bar all stay; what moves is only where the spec becomes pixels. The
 console keeps its own chart engine and is not migrated.
 
+### The whole flow, drawn, so nobody has to infer it again
+
+**This is the target state and it is drawn because inferring it is what went wrong.** The two
+drawings it extends are in
+[`../../../TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md):
+section 1a draws the pipeline end to end, and section 10.1b-m zooms into stage 1, where code and the
+model divide the work. Neither drawing reached the reader's browser, because when they were made the
+pipeline still drew the picture. This one carries the chain all the way to the screen. Same
+conventions: **a box carries a name and the one assertion an arrow cannot carry**, and every field
+list lives in the table below, keyed by node id.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","background":"#ffffff","mainBkg":"#ffffff","edgeLabelBackground":"#ffffff","labelBackground":"#ffffff","textColor":"#0b1020","titleColor":"#0b1020","nodeTextColor":"#0b1020","secondaryTextColor":"#0b1020","tertiaryTextColor":"#0b1020","lineColor":"#6e7781","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%
+flowchart TD
+
+  subgraph BE["BUILD TIME - the pipeline, in CI.  NOTHING IS DRAWN HERE."]
+    direction TB
+    ART["<b>ARTICLE</b><br/>sanitized text; every span indexes these bytes"]
+    CP["<b>CANDIDATE PASS</b> - code<br/>finds every quantity the number pattern matches<br/>mints element_id, span_start, span_end"]
+    C1["<b>CALL 1</b> - model<br/>labels what each number MEANS<br/>no schema field accepts a value, a unit or an offset"]
+    ANC["<b>ANCHORING</b> - code<br/>one rule per shape<br/>what will not anchor is dropped"]
+    TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, cut from the article<br/>TIER 2 model-assigned, span-anchored")]
+    C2["<b>CALL 2</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles"]
+    VP["<b>VISUAL PLAN</b><br/>type + role -&gt; element_ids<br/>no geometry, no literal value, no authored text"]
+    VV{"<b>VALIDATOR</b> - deterministic, no model<br/>is this type drawable from these elements?"}
+    DL["<b>DOWNGRADE LADDER</b><br/>depth 1, depth 2, then refuse"]
+    VC["<b>COMPILER</b> - code<br/>plan + elements =&gt; THE DATA AND ITS SHAPE<br/>every number traced to an element or a derived value"]
+    ART --> CP --> C1 --> ANC --> TE --> C2 --> VP --> VV
+    VV -->|"drawable"| VC
+    VV -->|"not drawable"| DL
+    DL -->|"re-enters the SAME validator"| VV
+  end
+
+  subgraph PUB["PUBLISHED - committed files, sharded by day"]
+    direction TB
+    DJ[("<b>digest.json</b> - the day's TEXT<br/>carries a POINTER to the visual, never its data<br/><b>never deleted</b>")]
+    VJ[("<b>&lt;item_id&gt;.json</b> - ONE VISUAL, ONE FILE<br/>the data, its shape, renderer_version<br/><b>pruned on its own clock</b>")]
+  end
+
+  subgraph FE["READ TIME - the reader's browser.  EVERY DRAWING HAPPENS HERE."]
+    direction TB
+    PG["<b>THE PAGE</b><br/>reads digest.json and renders the text<br/>the text never waits on a drawing"]
+    FJ["<b>FETCH</b> the visual file<br/>when the story comes near"]
+    SC{"<b>SHAPE CHECK</b> - the frontend contract<br/>does this data fit the type it names?"}
+    D3["<b>d3 DRAWS</b> the SVG into the document<br/>at the width the screen actually has"]
+    DEG(["<b>DEGRADE</b> - the story is simply shorter<br/>no broken glyph, no grey box, no skeleton"])
+    PG --> FJ --> SC
+    SC -->|"fits"| D3
+    SC -->|"does not fit"| DEG
+  end
+
+  VC -->|"the pointer"| DJ
+  VC -->|"the data"| VJ
+  DJ --> PG
+  VJ --> FJ
+
+  subgraph KEY["KEY"]
+    direction LR
+    K1["code"]
+    K2["model"]
+    K3{"a gate that can refuse"}
+    K4[("persisted")]
+    K5(["a refusal"])
+  end
+
+  classDef code fill:#eef2ff,stroke:#4c6ef5,stroke-width:2px,color:#0b1020;
+  classDef model fill:#fff4e6,stroke:#f08c00,stroke-width:2px,color:#0b1020;
+  classDef gate fill:#f3f0ff,stroke:#7048e8,stroke-width:2px,color:#0b1020;
+  classDef store fill:#e6fcf5,stroke:#0ca678,stroke-width:2px,color:#0b1020;
+  classDef none fill:#fff5f5,stroke:#e03131,stroke-width:1.5px,color:#0b1020;
+  classDef plain fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#0b1020;
+
+  class ART,PG,FJ plain;
+  class CP,ANC,VP,DL,VC,D3,K1 code;
+  class C1,C2,K2 model;
+  class VV,SC,K3 gate;
+  class TE,DJ,VJ,K4 store;
+  class DEG,K5 none;
+```
+
+**What the boxes do not carry.**
+
+| Node | What it holds |
+|---|---|
+| `CP` | Code reads first and the model never sees a raw article without a candidate table beside it. It emits `element_id`, `kind`, `surface`, `span_start`, `span_end`, `value`, `unit`, `sentence_index`, `extractor` |
+| `C1` | The model's whole numeric vocabulary is `0..len(candidates)-1`. **It cannot write a number because no field of the schema accepts one**, which is a property of the grammar rather than a check somebody remembered to add |
+| `VP` | `decision`, `purpose`, `type`, `encodings`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal value, no authored text, no `alt_text` |
+| `VV` | Eight checks: elements exist; semantically compatible; units compatible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched |
+| `VC` | The one place the picture's numbers come into being, and every one of them is arithmetic over Tier 1 elements through a closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |
+| `DJ` | The day's text, and for each item a pointer: the visual's `kind`, its `state`, and where its file is. **No chart data, ever** |
+| `VJ` | One visual. Its marks with their values and provenance, its encoding, its type, and `renderer_version` |
+| `SC` | The frontend contract. It refuses rather than guesses, and a refusal costs the story its picture and nothing else |
+
+**Three things this drawing rules out, and a plan-doc may not relax any of them.**
+
+**The model names the type; it never draws and never writes a number.** It selects by id into roles. Every displayed value is cut by code from the article's own bytes, or derived from those by the allow-list.
+
+**Nothing is drawn at build time.** There is no SVG on disk, no headless browser, and no Node in the pipeline. `BE` ends at data.
+
+**The text never waits on a drawing.** `digest.json` is a complete page on its own. The visual file is a separate fetch, and a reader who never scrolls to a chart never pays for one.
+
+### Where the data lives, and why it is not in the day payload
+
+**Published location, ruled 2026-09-13.** One visual is one file, in the day's own directory, beside
+the payload that points at it:
+
+```
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json
+```
+
+That is the path the drawing already occupies with a `.svg` extension, so the shape does not move -
+only what is inside it. **The shard is the day directory**, which is what every other published
+store uses, and the day is also what a reader fetches.
+
+**The chart data is kept out of `digest.json`, and the prune is the reason rather than the size.**
+The day payload is never deleted - it is the record that a day happened. Chart data inside it would
+therefore be undeletable, and `retention.image_months` would have nothing to act on. A separate file
+per visual keeps the two clocks apart: the text is permanent, the drawing ages out, and the prune
+granularity stays exactly what it is today rather than coarsening to a whole day.
+
+**The size argument is real but it is the second reason.** Measured 2026-09-13 over all 24 committed
+days: `digest.json` totals 23.30 MB, mean 994.3 KB a day, largest 1.88 MB. Only 495 of 9,353 items
+carry a drawing - **5.3 percent** - so folding chart data into the payload would make every reader
+download data for charts that 94.7 percent of stories do not have, and would push the largest day
+further up against the 1 GB site cap.
+
+
 ## The build-time renderer, which the ruling above retires
 
 **This section describes what runs today, and the ruling above ends it.** It stays until
