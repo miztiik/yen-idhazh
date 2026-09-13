@@ -5,7 +5,6 @@
     "substack.com": 1
   },
   "extraction_totals": {
-    "attempts": 3,
     "extractor_version": "trafilatura-2.0.0-idhazh-2",
     "failed": 1,
     "failure_codes": {
@@ -105,7 +104,7 @@
     "taxonomy_file": "config/taxonomy.json",
     "version": "2026-09-13T10:20"
   },
-  "version": "2026-09-13",
+  "version": "2026-09-13T11:40",
   "verticals": {
     "world": 1
   }

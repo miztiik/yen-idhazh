@@ -960,6 +960,112 @@ def test_a_checkpoint_is_named_by_recomputed_identity_and_not_by_page_text(
     assert all(derive_url_key(row.canonical_url) == row.url_key for row in results)
 
 
+# --- export-urls ------------------------------------------------------------
+
+
+def exported(tmp_path: Path, reader: Callable[[str, RobotsOutcome], FetchResult]) -> Path:
+    dataset, _results = extracted(tmp_path, reader)
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+    )
+    assert (
+        builder.export_extraction(dataset, local, run_id="2026-09-13-1", root=tmp_path) == 0
+    )
+    return dataset
+
+
+def export_of(dataset: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    run = dataset / builder.EXTRACTIONS_DIRNAME / "2026-09-13-1"
+    rows = json.loads((run / builder.ARTICLES_FILENAME).read_text(encoding="utf-8"))
+    meta = json.loads((run / builder.METADATA_FILENAME).read_text(encoding="utf-8"))
+    return rows, meta
+
+
+def test_the_export_writes_one_row_per_input_line_not_per_identity(tmp_path: Path) -> None:
+    """A reused checkpoint saves a request; it never removes an input row."""
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    rows, meta = export_of(dataset)
+    assert len(rows) == 7
+    assert meta["rows"] == 7
+    assert meta["extraction_totals"]["unique_attempted"] == 6
+    lines = [row["source_line"] for row in rows]
+    assert lines == sorted(lines)
+
+
+def test_an_alias_keeps_its_own_line_and_address_and_the_same_article(
+    tmp_path: Path,
+) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    rows, _meta = export_of(dataset)
+    briefing = [row for row in rows if row["publisher"] == "chipbriefing"]
+    assert len(briefing) == 2
+    assert {row["source_line"] for row in briefing} == {1, 8}
+    assert len({row["source_url"] for row in briefing}) == 2
+    assert len({row["url_key"] for row in briefing}) == 1
+    assert len({row["article_sha256"] for row in briefing}) == 1
+
+
+def test_the_export_counts_come_from_reading_the_file_back(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    rows, meta = export_of(dataset)
+    written = (
+        dataset / builder.EXTRACTIONS_DIRNAME / "2026-09-13-1" / builder.ARTICLES_FILENAME
+    ).read_bytes()
+    assert meta["output_sha256"] == hashlib.sha256(written).hexdigest()
+    assert meta["rows"] == len(rows)
+    assert meta["extraction_totals"]["rows_succeeded"] + meta["extraction_totals"][
+        "rows_failed"
+    ] == len(rows)
+
+
+def test_a_failure_is_exported_as_a_row_with_no_text(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    urls = manifest_urls(dataset)
+    dataset = exported(tmp_path, served({urls[0]: article}))
+    rows, meta = export_of(dataset)
+    failed = [row for row in rows if row["failure_code"]]
+    assert failed, "a failure has to survive the export"
+    assert all(row["text"] is None for row in failed)
+    assert meta["extraction_totals"]["failure_codes"]["fetch_permanent"] == len(failed)
+
+
+def test_the_export_refuses_while_an_identity_has_no_result(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    extracted(tmp_path, served(all_pages(dataset, article)), limit=2)
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+    )
+    assert builder.export_extraction(dataset, local, run_id="2026-09-13-1", root=tmp_path) == 1
+    assert not (dataset / builder.EXTRACTIONS_DIRNAME).exists()
+
+
+def test_a_second_export_of_the_same_run_is_byte_identical(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    target = dataset / builder.EXTRACTIONS_DIRNAME / "2026-09-13-1" / builder.ARTICLES_FILENAME
+    once = target.read_bytes()
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+        request_delay_seconds=0.0,
+    )
+    assert builder.export_extraction(dataset, local, run_id="2026-09-13-1", root=tmp_path) == 0
+    assert target.read_bytes() == once
+
+
 # --- the builder refuses, rather than writing a set that leaks ---------------
 
 

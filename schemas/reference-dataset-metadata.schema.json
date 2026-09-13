@@ -173,12 +173,6 @@
       "additionalProperties": false,
       "description": "What the extraction attempted and what it got.",
       "properties": {
-        "attempts": {
-          "description": "Requests made, retries included.",
-          "minimum": 0,
-          "title": "Attempts",
-          "type": "integer"
-        },
         "extractor_version": {
           "description": "The extractor.",
           "maxLength": 64,
@@ -263,7 +257,7 @@
           "type": "object"
         },
         "unique_attempted": {
-          "description": "Distinct identities tried. Separate from attempts so a retry cannot inflate the pool.",
+          "description": "Distinct identities that reached a final result. This collection makes one request per identity, so there is no separate attempt count to carry - a second number derived from this one could never disagree with it.",
           "minimum": 0,
           "title": "Unique Attempted",
           "type": "integer"
@@ -275,7 +269,6 @@
         "manifest_sha256",
         "extractor_version",
         "sanitizer_version",
-        "attempts",
         "unique_attempted",
         "succeeded",
         "failed",
@@ -529,6 +522,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed extraction_totals.attempts.",
+      "version": "2026-09-13T11:40",
+      "why": "The extraction makes one request per identity, so attempts and unique_attempted were computed from the same set and could never disagree. A number that cannot disagree with its neighbour reads as a check and is decoration (Guardrail #10)."
+    },
+    {
       "change": "Initial shape: the phase, the input and output identity, the count maps, the frozen publisher map, the resolved settings, and one totals block per phase.",
       "version": "2026-09-13",
       "why": "A collection file is a bare JSON array, so the provenance it cannot carry lives beside it (Guardrail #3). The resolved settings are recorded per run because a later edit to `config.json` must not change what an earlier result claims to have been built with."
@@ -674,7 +672,7 @@
       "description": "The fully resolved settings this phase ran with."
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-13T11:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -703,5 +701,5 @@
   ],
   "title": "ReferenceCollectionMetadata",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-13T11:40"
 }

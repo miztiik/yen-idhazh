@@ -80,6 +80,7 @@ from idhazh.contracts.reference_dataset import (
     ReferenceDatasetLocalConfig,
     ReferenceDatasetRow,
     ReferenceExtractionRow,
+    ReferenceExtractionTotals,
     ReferenceFailureCode,
     ReferenceImportTotals,
     ReferenceManifestRow,
@@ -1139,6 +1140,127 @@ def extract_supplied(
     return 0
 
 
+# --- export-urls -----------------------------------------------------------
+
+EXTRACTIONS_DIRNAME: Final = "extractions"
+ARTICLES_FILENAME: Final = "articles.json"
+METADATA_FILENAME: Final = "metadata.json"
+
+
+def read_checkpoints(dataset_dir: Path, run_id: str) -> dict[str, ReferenceExtractionRow]:
+    """Every saved result of one run, keyed by identity and validated on read."""
+    items = run_dir(dataset_dir, run_id) / ITEMS_DIRNAME
+    found: dict[str, ReferenceExtractionRow] = {}
+    for path in sorted(items.glob("*.json")):
+        record = ReferenceExtractionRow.model_validate_json(path.read_text(encoding="utf-8"))
+        found[record.url_key] = record
+    return found
+
+
+def export_extraction(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Turn the saved results into the collection file and its metadata. No network.
+
+    One row per input manifest line, so an address that two lines carried appears
+    twice with its own line number and its own supplied URL. A reused checkpoint
+    saves a request; it never removes an input row.
+    """
+    rows = read_manifest(dataset_dir)
+    saved = read_checkpoints(dataset_dir, run_id)
+    pending = [row for row in rows if row.url_key not in saved]
+    if pending:
+        print(f"{len(pending)} identity(ies) have no result yet, so nothing was exported:")
+        for row in pending[:10]:
+            print(f"  line {row.source_line}: {row.source_url[:100]}")
+        return 1
+
+    exported: list[ReferenceExtractionRow] = []
+    for row in rows:
+        record = saved[row.url_key]
+        # The alias keeps its own input position and its own supplied address;
+        # everything the fetch produced is the same article.
+        exported.append(
+            record.model_copy(update={"source_line": row.source_line, "source_url": row.source_url})
+        )
+
+    target = dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    _write_atomically(
+        target, canonical_json([record.model_dump(mode="json") for record in exported])
+    )
+
+    written = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(target.read_text(encoding="utf-8"))
+    ]
+    kept = [record for record in written if record.status is ArticleStatus.OK]
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+    marker = json.loads((run_dir(dataset_dir, run_id) / RUN_FILENAME).read_text(encoding="utf-8"))
+    identities = {record.url_key for record in written}
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.EXTRACTION,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceExtractionRow.__schema_stem__,
+        input_path=_under(root, manifest_path),
+        input_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        output_path=_under(root, target),
+        output_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
+        rows=len(written),
+        verticals=_tally(record.vertical for record in written if record.vertical),
+        domains=_tally(record.source_domain for record in written),
+        hosts=_tally(record.host for record in written),
+        publishers=_tally(record.publisher for record in written),
+        publisher_hosts={
+            key: sorted({record.host for record in written if record.publisher == key})
+            for key in sorted({record.publisher for record in written})
+        },
+        lengthened_publishers={},
+        settings=local,
+        extraction_totals=ReferenceExtractionTotals(
+            started_at=str(marker["started_at"]),
+            finished_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            manifest_sha256=str(marker["manifest_sha256"]),
+            extractor_version=extract.EXTRACTOR_VERSION,
+            sanitizer_version=SANITIZER_VERSION,
+            unique_attempted=len(identities),
+            succeeded=len({record.url_key for record in kept}),
+            failed=len(identities) - len({record.url_key for record in kept}),
+            pending=0,
+            rows_succeeded=len(kept),
+            rows_failed=len(written) - len(kept),
+            failure_codes={
+                ReferenceFailureCode(code): count
+                for code, count in _tally(
+                    record.failure_code.value
+                    for record in written
+                    if record.failure_code is not None
+                ).items()
+            },
+            succeeded_by_publisher=_tally(record.publisher for record in kept),
+        ),
+    )
+    _write_atomically(
+        target.with_name(METADATA_FILENAME), canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.extraction_totals
+    assert totals is not None
+    print(f"{'articles':<{_WIDTH}} {_under(root, target)}")
+    print(f"{'rows':<{_WIDTH}} {meta.rows}")
+    print(f"{'unique identities':<{_WIDTH}} {totals.unique_attempted}")
+    print(f"{'with article text':<{_WIDTH}} {totals.succeeded}")
+    print(f"{'with a typed failure':<{_WIDTH}} {totals.failed}")
+    print(f"{'publishers with an article':<{_WIDTH}} {len(totals.succeeded_by_publisher)}")
+    for code, count in totals.failure_codes.items():
+        print(f"  {code:<{_WIDTH - 2}} {count}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=REPO_ROOT / DATASET_RELPATH)
@@ -1176,9 +1298,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     extracting.add_argument(
         "--limit", type=int, default=None, help="Stop after this many attempts."
     )
+    exporting = verbs.add_parser(
+        "export-urls", help="Write the collection file and its metadata. No network."
+    )
+    exporting.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    exporting.add_argument("--run-id", required=True, help="Which saved run to export.")
 
     args = parser.parse_args(argv)
-    if args.verb in {"import-urls", "extract-urls"}:
+    if args.verb in {"import-urls", "extract-urls", "export-urls"}:
         local = ReferenceDatasetLocalConfig.model_validate_json(
             args.local_config.read_text(encoding="utf-8")
         )
@@ -1186,6 +1318,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return build_manifest(
                 args.local_config.parent, local, sources_path=REPO_ROOT / local.sources_file
             )
+        if args.verb == "export-urls":
+            return export_extraction(args.local_config.parent, local, run_id=args.run_id)
         return extract_supplied(
             args.local_config.parent, local, run_id=args.run_id, limit=args.limit
         )

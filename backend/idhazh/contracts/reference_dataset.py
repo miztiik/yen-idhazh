@@ -644,11 +644,13 @@ class ReferenceExtractionTotals(Model):
     manifest_sha256: Sha256 = Field(description="Which manifest bytes this run read.")
     extractor_version: str = Field(min_length=1, max_length=64, description="The extractor.")
     sanitizer_version: str = Field(min_length=1, max_length=64, description="The sanitizer.")
-    attempts: int = Field(ge=0, description="Requests made, retries included.")
     unique_attempted: int = Field(
         ge=0,
-        description="Distinct identities tried. Separate from attempts so a retry "
-        "cannot inflate the pool.",
+        description=(
+            "Distinct identities that reached a final result. This collection makes one "
+            "request per identity, so there is no separate attempt count to carry - a "
+            "second number derived from this one could never disagree with it."
+        ),
     )
     succeeded: int = Field(ge=0, description="Distinct identities that produced text.")
     failed: int = Field(ge=0, description="Distinct identities that produced a typed reason.")
@@ -700,6 +702,16 @@ class ReferenceCollectionMetadata(Contract):
 
     __schema_stem__: ClassVar[str] = "reference-dataset-metadata"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T11:40",
+            change="Removed extraction_totals.attempts.",
+            why=(
+                "The extraction makes one request per identity, so attempts and "
+                "unique_attempted were computed from the same set and could never "
+                "disagree. A number that cannot disagree with its neighbour reads as a "
+                "check and is decoration (Guardrail #10)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change=(
