@@ -30,6 +30,7 @@ from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.label_row import LabelTag, LabelVerdict
 from idhazh.contracts.summary import Summary
 from idhazh.evals import evidence
+from idhazh.stages import common
 from utilities import label_queue
 
 EVIDENCE_FIXTURE = CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json"
@@ -108,7 +109,7 @@ class TestTheTextSurvivesTheRun:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """The stage writes it once, beside every other item of that run-day."""
-        monkeypatch.setattr(cli, "EVIDENCE_ROOT", tmp_path)
+        monkeypatch.setattr(common, "EVIDENCE_ROOT", tmp_path)
         row = a_row()
 
         path = cli._write_evidence(row, premise=an_item().premise, summary="Some words.")
@@ -118,7 +119,7 @@ class TestTheTextSurvivesTheRun:
 
     def test_the_work_stage_writes_evidence_for_what_it_scores(self) -> None:
         """A writer nobody calls is a package nobody gets."""
-        tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
+        tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "work.py"))
         stage = next(
             node
             for node in ast.walk(tree)

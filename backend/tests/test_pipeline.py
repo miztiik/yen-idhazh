@@ -67,6 +67,7 @@ from idhazh.fetch import FetchResult
 from idhazh.fingerprint import prose_changed_alone, text_digest
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.render.write import asset_relpath
+from idhazh.stages import common, validate_days
 
 pytestmark = pytest.mark.slow
 
@@ -527,7 +528,7 @@ def test_the_work_stage_digests_the_same_text_it_scores() -> None:
     `stage_work` passes one name to `dual_score(seen_text=...)` and to
     `to_eval_row(premise=...)`.
     """
-    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
+    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "work.py"))
     stage = next(
         node
         for node in ast.walk(tree)
@@ -562,7 +563,7 @@ def test_the_work_stage_scores_against_a_different_text_than_it_showed_the_model
     same reason as the digest test above: the suite may not download the
     scorer's weights (Guardrail #7).
     """
-    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
+    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "work.py"))
     stage = next(
         node
         for node in ast.walk(tree)
@@ -1011,7 +1012,7 @@ def test_a_dead_model_server_marks_every_item_without_parsing(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     run_plan = plan()
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
     cli.stage_work(
         run_plan,
@@ -1068,7 +1069,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
         watchlist=settings.watchlist,
         digests=settings.digests,
     )
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
     with HangingLoopbackEndpoint() as server:
         cli.stage_work(
@@ -1104,9 +1105,9 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     from an empty fixture tree and truncated the served vectors to zero bytes - a
     change `git status` shows and a test never asserts on.
     """
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
 
 
 def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
@@ -1242,7 +1243,7 @@ def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
     writes in place of the gitignored one.
     """
     run_plan = plan()
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     settings = config.load(CONFIG_DIR)
     assert settings.app.observability.tracing_enabled, "the committed config traces by default"
 
@@ -1254,7 +1255,7 @@ def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
         model_endpoint=closed_loopback_endpoint(),
     )
 
-    shard = ledger.span_rollup_path(cli.STATE_ROOT, run_plan.date[:7])
+    shard = ledger.span_rollup_path(common.STATE_ROOT, run_plan.date[:7])
     rows = [
         SpanRollupRow.from_csv_row(raw)
         for raw in csv.DictReader(shard.read_text(encoding="utf-8").splitlines())
@@ -1270,7 +1271,7 @@ def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
         rides_on_item = name is RollupSpan.ITEM
         assert (row.unattributed_ms is not None) is rides_on_item
 
-    traces = list((cli.STATE_ROOT / telemetry.TRACES_DIRNAME).rglob("*.jsonl"))
+    traces = list((common.STATE_ROOT / telemetry.TRACES_DIRNAME).rglob("*.jsonl"))
     assert traces, "no committed trace was written under state/traces/"
 
 
@@ -1310,7 +1311,7 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     score_one_item(items_dir, run_plan)
     cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
-    day_path = assemble.day_dir(cli.PUBLIC_ROOT, run_plan.date) / "digest.json"
+    day_path = assemble.day_dir(common.PUBLIC_ROOT, run_plan.date) / "digest.json"
     published = DigestDay.from_json(read_text(day_path))
     assert published.items, "run 1 published nothing, so there is no window to test"
 
@@ -1600,9 +1601,9 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     run_plan = plan()
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
     items_dir = tmp_path / "run" / run_plan.date / "items"
     items_dir.mkdir(parents=True)
     (items_dir / f"{run_plan.items[0].item_id}.article.json").write_text(
@@ -1770,7 +1771,7 @@ def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
     isolate_ledgers(tmp_path, monkeypatch)
     settings = config.load(CONFIG_DIR)
     date = plan().date
-    frozen = assemble.day_dir(cli.PUBLIC_ROOT, date)
+    frozen = assemble.day_dir(common.PUBLIC_ROOT, date)
     frozen.mkdir(parents=True, exist_ok=True)
     day = assemble.build_day(
         plan=plan(),
@@ -2326,7 +2327,7 @@ def test_the_run_records_the_scoring_shape_that_decided_its_order() -> None:
     two spellings of one version is the failure this field exists to close.
     """
     settings = config.load(CONFIG_DIR)
-    source = read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py")
+    source = read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "assemble.py")
     assert "rank_version=rank.RANK_VERSION" in source, (
         "the assemble stage stopped recording the scoring shape"
     )
@@ -3057,7 +3058,7 @@ def test_the_validator_identity_moves_when_a_rule_moves() -> None:
         return shipped(public_root, day)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(cli, "_picture_faults", reworded)
+        patch.setattr(validate_days, "_picture_faults", reworded)
         assert cli._validator_identity() != before
 
 
@@ -3103,7 +3104,7 @@ def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
         return shipped(public_root, day)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(cli, "_picture_faults", reworded)
+        patch.setattr(validate_days, "_picture_faults", reworded)
         first, reopened = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
         second, again = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
 
@@ -3310,8 +3311,8 @@ def worked(
     without reading a payload either could produce.
     """
     run_plan = plan()
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     with RecordedEndpoint(200, *replies) as server:
         cli.stage_work(
             run_plan,
@@ -3429,7 +3430,7 @@ class TestTheWorkStageDispatchesBothCalls:
             for one in decisions
         )
 
-        public_root = cli.PUBLIC_ROOT.parent
+        public_root = common.PUBLIC_ROOT.parent
         for decision in drawn:
             assert decision.kind is VisualKind.CHART
             assert decision.asset_path == asset_relpath(run_plan.date, decision.item_id), (

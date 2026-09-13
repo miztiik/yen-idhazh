@@ -21,7 +21,7 @@ fails - `openai-news` served a perfect feed whose articles answered 4xx, and
 **It uses the production path, not an imitation.** The configured user agent,
 the public-address check, the `robots.txt` policy, the bounded retries,
 `feedparser`, the publisher-declared paywall check and the prose extractor are
-the pipeline's own, reached through `cli.live_fetcher` and `extract.to_article`.
+the pipeline's own, reached through `common.live_fetcher` and `extract.to_article`.
 A verdict here is a `FailureCode` from the same vocabulary an item-health row
 carries, so a result drops straight into the reasons table in `discovery.md`.
 
@@ -80,6 +80,7 @@ from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.fetch import FetchResult
+from idhazh.stages import common
 
 LOG: Final = logging.getLogger("idhazh.probe_feeds")
 
@@ -475,7 +476,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     tracer, trace_path = _tracer(args.trace)
-    fetcher = cli.live_fetcher(settings, tracer=tracer)
+    fetcher = common.live_fetcher(settings, tracer=tracer)
     LOG.info(
         "probing %d feed(s) as %s from %s",
         len(chosen),
