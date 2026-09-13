@@ -171,7 +171,7 @@ def test_the_corpus_the_oracle_runs_over_actually_carries_quantities() -> None:
         emitted += len(element_table(canary_article(canary), config=ELEMENTS).elements)
     for path in PAGES:
         emitted += len(element_table(page_article(path), config=ELEMENTS).elements)
-    assert emitted == 17, "the nine bounded fixtures carried 17 elements on 2026-09-08"
+    assert emitted == 22, "the ten bounded fixtures carried 22 elements on 2026-09-13"
 
 
 # --- The Oracle: two passes never hold the same character ------------------
@@ -183,7 +183,7 @@ def overlaps(left: Element, right: Element) -> bool:
 
 
 def bounded_articles() -> list[tuple[str, Article]]:
-    """The nine fixtures no run appends to: five canaries and four captured pages."""
+    """The ten fixtures no run appends to: five canaries and five captured pages."""
     articles = [(canary.name, canary_article(canary)) for canary in canaries.ALL]
     return articles + [(path.name, page_article(path)) for path in PAGES]
 
@@ -202,7 +202,7 @@ def test_a_bare_year_is_claimed_as_a_date_and_never_as_a_quantity() -> None:
 
 
 def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
-    """Every pair of spans on the nine bounded fixtures, checked for overlap.
+    """Every pair of spans on the ten bounded fixtures, checked for overlap.
 
     Pairwise is quadratic in one article's elements and bounded by
     `elements.max_per_article`, so it cannot grow with the archive (Guardrail #12).
@@ -220,8 +220,8 @@ def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
 def test_the_bounded_fixtures_carry_both_kinds_so_the_pair_check_can_fail() -> None:
     """The counter-oracle. One pass emitting nothing makes every pair disjoint."""
     kinds = Counter(element.kind for _, table in bounded_tables() for element in table.elements)
-    assert kinds == {ElementKind.QUANTITY: 9, ElementKind.DATE: 8}, (
-        "the nine bounded fixtures carried 9 quantities and 8 years on 2026-09-08"
+    assert kinds == {ElementKind.QUANTITY: 13, ElementKind.DATE: 9}, (
+        "the ten bounded fixtures carried 13 quantities and 9 years on 2026-09-13"
     )
 
 

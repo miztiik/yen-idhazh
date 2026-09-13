@@ -1,0 +1,14 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\"labels\": [], \"proposed\": [], \"entity_mentions\": [{\"mentions\": [{\"sentence_id\": \"s0\", \"surface\": \"Denmark\"}], \"name\": \"Denmark\", \"salience\": \"primary\"}, {\"mentions\": [{\"sentence_id\": \"s1\", \"surface\": \"Germany\"}], \"name\": \"Germany\", \"salience\": \"primary\"}, {\"mentions\": [{\"sentence_id\": \"s1\", \"surface\": \"Poland\"}], \"name\": \"Poland\", \"salience\": \"supporting\"}, {\"mentions\": [{\"sentence_id\": \"s2\", \"surface\": \"Ireland\"}], \"name\": \"Ireland\", \"salience\": \"supporting\"}], \"place_mentions\": [], \"quotes\": [], \"claims\": [], \"keyphrases\": [\"offshore wind\", \"nameplate capacity\"], \"lede_sentence_ids\": [\"s0\"]}",
+        "role": "assistant"
+      }
+    }
+  ],
+  "model": "qwen3.5-9b-q4-k-m",
+  "object": "chat.completion"
+}

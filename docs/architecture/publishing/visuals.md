@@ -42,6 +42,22 @@ second artifact the day publishes a payload naming an asset nobody uploaded, whi
 the small model, this stage and its job together. Until then the flag off leaves the pipeline
 exactly where it was.
 
+**What proves the fold still draws is `test_a_decided_item_leaves_a_drawn_chart_on_disk`, and it is
+the only test that does.** Once the small model goes, the two calls are the only thing left that
+puts a picture on disk, so the question a reader cares about is whether a file lands - not whether
+a decision does. Every route to no picture writes a decision too, so a test that reads
+`asked_the_model` off the payload passes on a day the digest drew nothing. This one reads the SVG
+back from the path the payload names and checks the bars carry the article's own entity names.
+
+It needs an article a bar can legally be drawn from, which is rarer than it sounds.
+`tests/fixtures/pages/article.html` states three figures in three units - dollars, megawatts and
+customers - so `units_convertible` refuses every bar expressible from it, correctly.
+`tests/fixtures/pages/wind.html` exists for this: four countries, four figures, one unit, matching
+the shape `tests/fixtures/visual-validator/` already keeps as the plan that passes. Its recorded
+pair is `call-one/wind-labelled.json` and `call-two/wind-summary-and-plan.json`, and the element
+ids in the second are the ones this pipeline mints from the first - so an extractor change that
+moves a span turns the test red rather than quietly turning the picture off.
+
 ## The model never writes a number
 
 This is the whole safety design, and it is structural rather than instructed.

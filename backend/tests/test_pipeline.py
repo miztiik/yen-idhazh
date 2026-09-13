@@ -52,7 +52,12 @@ from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    VisualDecision,
+    VisualKind,
+    VisualState,
+)
 from idhazh.evals import archive as score_archive
 from idhazh.evals import metrics, sampling, writer
 from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
@@ -61,6 +66,7 @@ from idhazh.fetch import FetchResult
 from idhazh.fingerprint import prose_changed_alone, text_digest
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.llm.server import parse_completion
+from idhazh.render.write import asset_relpath
 
 pytestmark = pytest.mark.slow
 
@@ -194,6 +200,21 @@ def captured_article_fetch(_url: str) -> FetchResult:
     )
     body = page.replace("</article>", f"{extra}</article>").encode("utf-8")
     return FetchResult(FetchOutcome.OK, status=200, body=body)
+
+
+def drawable_article_fetch(_url: str) -> FetchResult:
+    """A captured page a bar chart can actually be drawn from.
+
+    `article.html` states three figures in three units - dollars, megawatts and
+    customers - so every bar the validator would accept from it mixes units and
+    `units_convertible` refuses it. That is correct behaviour and it makes that
+    page unable to answer the one question plan 11 row #6 turns on, which is
+    whether the two calls still put a picture on disk. This page states four
+    figures in one unit, which is the shape `tests/fixtures/visual-validator/`
+    already keeps as the plan that passes.
+    """
+    page = read_text(FIXTURES_DIR / "pages" / "wind.html")
+    return FetchResult(FetchOutcome.OK, status=200, body=page.encode("utf-8"))
 
 
 # --- Config -----------------------------------------------------------------
@@ -3323,6 +3344,13 @@ CLOCKS: Final = ("generated_at", "duration_ms", "fetch_ms", "extract_ms", "summa
 CALL_ONE_REPLY: Final = FIXTURES_DIR / "completions" / "call-one" / "labelled.json"
 CALL_TWO_REPLY: Final = FIXTURES_DIR / "completions" / "call-two" / "summary-and-plan.json"
 
+#: The recorded pair for the one article in the fixture set a bar can be drawn
+#: from. Kept apart from the pair above because that pair's whole job is the
+#: transport - two calls, two costs, one payload - and this pair's whole job is
+#: the picture, which needs four figures in one unit to exist at all.
+DRAWS_CALL_ONE: Final = FIXTURES_DIR / "completions" / "call-one" / "wind-labelled.json"
+DRAWS_CALL_TWO: Final = FIXTURES_DIR / "completions" / "call-two" / "wind-summary-and-plan.json"
+
 
 def two_call_settings(on: bool) -> config.Settings:
     """The committed config with the flag moved and nothing else."""
@@ -3345,6 +3373,7 @@ def worked(
     *,
     on: bool,
     replies: tuple[bytes, ...],
+    fetcher: Callable[[str], FetchResult] = captured_article_fetch,
 ) -> tuple[RunPlan, Path, int]:
     """One real work stage over captured pages and recorded replies.
 
@@ -3361,7 +3390,7 @@ def worked(
             run_plan,
             settings=two_call_settings(on),
             scorer=None,
-            fetcher=captured_article_fetch,
+            fetcher=fetcher,
             model_endpoint=server.endpoint,
         )
         served = server.served
@@ -3506,6 +3535,61 @@ class TestTheFlagOnDispatchesBothCalls:
             assert decision.item_id == item_id
             assert decision.asked_the_model, "call 2 was sent, whatever it answered"
             assert decision.decision_ms is not None
+
+    def test_a_decided_item_leaves_a_drawn_chart_on_disk(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """The reader's side of the retirement, and the only test that asks it.
+
+        Plan 11 row #6 deletes the small model, its job and its prompt, and the
+        two calls become the only thing that draws. Its rejected alternative 1 is
+        "let row #6 delete the 4B now" - refused because it takes the digest from
+        17 charts a day to none. The sibling above proves an item carries a
+        *decision*; a decision is not a picture, and every route to `none` also
+        writes one. Nothing asserted that a file lands, so the whole of what
+        stops that regression was a payload field that a refusal fills in too.
+
+        So this reads the drawn bytes off disk at the path the payload names. It
+        fails if the compiler stops compiling, if the renderer stops writing, or
+        if the decision starts naming a path nothing wrote - which is the fault
+        `cli._picture_faults` catches a whole job later, on a day that has
+        already published.
+        """
+        run_plan, items, _served = worked(
+            tmp_path,
+            monkeypatch,
+            on=True,
+            replies=(DRAWS_CALL_ONE.read_bytes(), DRAWS_CALL_TWO.read_bytes()),
+            fetcher=drawable_article_fetch,
+        )
+
+        decisions = [
+            VisualDecision.from_json(read_text(path))
+            for path in sorted(items.glob(f"*{PAYLOAD_SUFFIX}"))
+        ]
+        drawn = [one for one in decisions if one.visual_state is VisualState.RENDERED]
+        assert drawn, "the two calls drew nothing from the recorded pair - " + ", ".join(
+            f"{one.item_id} {one.visual_state.value}"
+            f"/{one.none_reason.value if one.none_reason else '-'}"
+            f"/{one.failure_detail or '-'}"
+            for one in decisions
+        )
+
+        public_root = cli.PUBLIC_ROOT.parent
+        for decision in drawn:
+            assert decision.kind is VisualKind.CHART
+            assert decision.asset_path == asset_relpath(run_plan.date, decision.item_id), (
+                "a drawn chart is filed under its own item id and nothing else"
+            )
+            asset = public_root / decision.asset_path
+            assert asset.is_file(), f"the payload names {decision.asset_path} and nothing wrote it"
+            markup = asset.read_text(encoding="utf-8")
+            assert markup.lstrip().startswith("<svg"), "the drawn bytes are an SVG"
+            assert "Denmark" in markup, (
+                "the drawn bars are named from the article's own entities, not from the plan's prose"
+            )
+            assert decision.alt_text, "a drawn chart carries the words a screen reader gets"
+            assert decision.spec, "the chart's own spec travels with the decision"
 
     def test_the_stamp_digests_the_two_prompts_instead(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
