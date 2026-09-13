@@ -206,7 +206,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 None,
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
             )
             return telemetry.classify_item(
@@ -221,7 +220,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 None,
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
                 no_reply=FailureCode.CONTEXT_EXCEEDED,
             )
@@ -237,7 +235,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 Completion("{}", finish_reason="length"),
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
             )
             return telemetry.classify_item(
@@ -252,7 +249,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 None,
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
                 no_reply=FailureCode.LABELS_TRUNCATED,
             )
@@ -268,7 +264,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 Completion("{bad"),
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
             )
             return telemetry.classify_item(
@@ -288,7 +283,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 Completion(json.dumps(draft)),
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
             )
             return telemetry.classify_item(
@@ -308,7 +302,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 Completion(json.dumps(draft)),
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
             )
             return telemetry.classify_item(
@@ -332,7 +325,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 ok_article,
                 Completion(json.dumps(draft)),
                 model_id="qwen3-8b",
-                pipeline_fingerprint="0" * 64,
                 generated_at="2026-08-21T06:00:00Z",
             )
             return telemetry.classify_item(

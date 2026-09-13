@@ -1,55 +1,48 @@
-"""Build the pipeline stamp, and read what a stamp meant.
+"""Record what a run summarized with, and raise the one alarm that survives.
 
 Row 15 exists because `temperature=0, seed=0` is not determinism - it is
 determinism given identical logits. Eleven of the sixteen enumerated ways an
-output can move are silent without a stamp, including a publisher rewriting an
-article at the same URL.
+output can move are silent unless the inputs are written down, including a
+publisher rewriting an article at the same URL.
 
 Every input is read from the thing it describes rather than from a literal
 beside the call: the build from the environment the job pinned, the chat
 template from the server that will apply it, the runner class from the runner.
-A source that does not answer is recorded as unanswered, which stamps apart
-from every run whose source did answer (Guardrail #10).
+A source that does not answer is recorded as unanswered, which is a different
+reading from a source that answered (Guardrail #10).
 
-Two consequences are intended and only one is wired. `classify` and `SKIPPABLE`
-describe the skip - identical inputs do no work and write no eval row, because
-a re-run that changed nothing measured nothing - and nothing calls them yet;
-`docs/architecture/contracts/determinism.md` says what a safe skip still needs.
-The violation half is settled: a matching stamp with different words is
-recorded as a `determinism_violation`, never raised, because a gate that fires
-across runner CPU classes for reasons unrelated to a regression gets switched
-off within a month.
+**This records and it gates nothing.** Owner decision, 2026-09-10. The digest
+over these inputs used to do two jobs and did neither: the skip-if-unchanged
+half was never wired to a caller, and the eval-window half withheld a quality
+number until N consecutive run-days ran at one digest - which, in a repository
+whose prompts and vocabularies change weekly, meant never. What is left is the
+reading: `build_inputs` assembles the manifest, the caller hangs it on the run
+record, and `prose_changed_alone` is the single alarm. It reports; it never
+blocks and it never withholds a number.
 """
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import os
 import platform
-from collections.abc import Iterable, Mapping
-from enum import StrEnum
+from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import Final, NamedTuple
 
 from idhazh.contracts.app_config import InferenceConfig, ModelRef
 from idhazh.contracts.base import derive_text_digest
-from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
-from idhazh.ledger import require_matching_header
+from idhazh.contracts.fingerprint import PipelineInputs
 
-# Relative and POSIX-separated, because it is quoted in logs and manifests
-# (CLAUDE.md section 2).
-LEDGER_RELPATH: Final = "state/fingerprints.csv"
-
-#: Sixty-four zeroes. It satisfies `Sha256`, so a stamp built on it validates,
+#: Sixty-four zeroes. It satisfies `Sha256`, so a manifest built on it validates,
 #: publishes, and still says nothing about which weights ran (Guardrail #10).
 PLACEHOLDER_DIGEST: Final = "0" * 64
 
-#: What the stamp records when the runtime did not name the build that decoded
+#: What the manifest records when the runtime did not name the build that decoded
 #: the weights. It is not a llama.cpp release tag and cannot be read as one, so
-#: a run whose build went unrecorded fingerprints apart from every run whose
-#: build is known. Declaring the ignorance is the point (Guardrail #10).
+#: a run whose build went unrecorded reads apart from every run whose build is
+#: known. Declaring the ignorance is the point (Guardrail #10).
 UNRECORDED_BUILD: Final = "build-not-recorded"
 
 #: The same, for a chat template no server was there to hand over.
@@ -118,7 +111,7 @@ def runner_class(environ: Mapping[str, str] | None = None) -> str:
 
 
 def host_cpu(cpuinfo: Path = CPUINFO) -> str:
-    """The processor this run drew. Recorded on the ledger row, never digested.
+    """The processor this run drew. A diagnostic, and not part of the manifest.
 
     It is the only field that explains a determinism violation, which is why it
     has to name the part rather than the architecture.
@@ -152,16 +145,16 @@ def sampling_spelling(inference: InferenceConfig) -> str:
 def runtime_flags_spelling(inference: InferenceConfig) -> str:
     """One canonical spelling of the runtime knobs that move the arithmetic.
 
-    These five were enumerated as known blind spots and left out of the stamp
-    until 2026-08-26, so they could be moved without moving a fingerprint. A
-    quantised KV cache, another attention kernel, a second slot or a different
-    prompt-thread count each change how the partial sums accumulate, and a
-    summary that changed for one of those reasons used to stamp identical to
-    the one before it.
+    These five were enumerated as known blind spots and left out of the record
+    until 2026-08-26, so they could be moved without moving anything anybody
+    could read. A quantised KV cache, another attention kernel, a second slot or
+    a different prompt-thread count each change how the partial sums accumulate,
+    and a summary that changed for one of those reasons used to record identical
+    to the one before it.
 
     They arrive folded into one field for the same reason `sampling` is one
-    field: `state/fingerprints.csv` is a flat table, and five columns that are
-    null on almost every row is five columns nobody reads.
+    field: five values that are null on almost every run are five lines nobody
+    reads.
     """
     return ";".join(
         (
@@ -178,28 +171,28 @@ def runtime_flags_spelling(inference: InferenceConfig) -> str:
 
 
 class Undigested(NamedTuple):
-    """Why one inference knob sits outside the stamp."""
+    """Why one inference knob sits outside the recorded manifest."""
 
     moves_logits: bool
     reason: str
 
 
-#: Every `InferenceConfig` knob the stamp does not carry, and why each one is out.
+#: Every `InferenceConfig` knob the manifest does not carry, and why each one is out.
 #:
 #: Every knob left here is one that cannot move an output. The five that could -
 #: `cache_type_k`, `cache_type_v`, `flash_attention`, `n_parallel` and
 #: `n_threads_batch` - were listed here as known blind spots until 2026-08-26
 #: and are now folded into `runtime_flags`.
 #:
-#: The set is closed: a knob that is neither here nor digested fails the
+#: The set is closed: a knob that is neither here nor recorded fails the
 #: contract test in `backend/tests/test_fingerprint.py`.
 NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
     {
         "declared_for": Undigested(
             False,
-            "Names the weights the block is set for. The stamp already carries those "
-            "bytes as model_sha256, so digesting it twice would move the fingerprint "
-            "on a swap the digest itself already moved.",
+            "Names the weights the block is set for. The manifest already carries those "
+            "bytes as model_sha256, so recording it twice would say a swap happened "
+            "twice.",
         ),
         "load_mode": Undigested(
             False, "mmap and mlock move where the weights sit, not what they hold."
@@ -207,8 +200,7 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
         "log_verbosity": Undigested(
             False,
             "How much the server says about itself. It cannot move a logit, and "
-            "digesting it would invalidate every earlier work identity the day "
-            "somebody turned the logging up.",
+            "recording it would report a change the day somebody turned the logging up.",
         ),
         "metrics": Undigested(
             False, "Exposes an endpoint. It counts the decode, it does not change one."
@@ -228,7 +220,7 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
 
 
 def digested_inference_fields() -> frozenset[str]:
-    """The `InferenceConfig` knobs the stamp carries, read back from the stamp itself.
+    """The `InferenceConfig` knobs the manifest carries, read back from the manifest.
 
     Four reach `PipelineInputs` under their own name. The rest arrive folded
     into one of the two canonical spellings, so the names come out of those
@@ -255,15 +247,15 @@ def build_inputs(
     extractor_version: str,
     sanitizer_version: str,
 ) -> PipelineInputs:
-    """Assemble the stamp from the weights that were loaded, not the ones configured.
+    """Assemble the manifest from the weights that were loaded, not the ones configured.
 
     `model_sha256` is the digest of the file the runtime actually opened.
     `ModelRef.sha256` is what config expected, and the two disagreeing is the
-    exact event this stamp exists to make visible.
+    exact event this record exists to make visible.
 
-    An absent digest stops the stamp. The caller used to substitute
+    An absent digest stops the record. The caller used to substitute
     `PLACEHOLDER_DIGEST`, which turned "nobody measured the weights" into a
-    fingerprint that looked measured.
+    manifest that looked measured.
     """
     if not model_sha256 or model_sha256 == PLACEHOLDER_DIGEST:
         raise ValueError(
@@ -290,110 +282,35 @@ def build_inputs(
     )
 
 
-class Observation(StrEnum):
-    """What a prior stamp says about the work in front of us."""
+#: The inputs that are the words we hand the model. Prose, in the alarm's sense.
+PROSE_INPUTS: Final = ("prompt_sha256", "chat_template_sha256", "output_schema_sha256")
 
-    FIRST_RUN = "first_run"
-    INPUTS_CHANGED = "inputs_changed"
-    UNCHANGED = "unchanged"
-    DETERMINISM_VIOLATION = "determinism_violation"
+#: The inputs that are the machine doing the reading.
+MACHINE_INPUTS: Final = ("model_sha256", "quantisation", "runtime_build")
 
 
-#: The one observation that does no work. Everything else summarizes.
-SKIPPABLE: Final[frozenset[Observation]] = frozenset({Observation.UNCHANGED})
+def prose_changed_alone(
+    previous: PipelineInputs | None, current: PipelineInputs
+) -> tuple[str, ...]:
+    """The prose inputs that moved while the model and the binary held still.
 
+    The one alarm that survives the gate (owner decision, 2026-09-10). It
+    reports, it never blocks, and it never withholds a number: a run whose
+    prompt changed publishes exactly as a run whose prompt did not.
 
-def classify(
-    *,
-    prior_fingerprint: str | None,
-    prior_output_digest: str | None = None,
-    current_fingerprint: str,
-    current_output_digest: str | None = None,
-) -> Observation:
-    """Compare this item's stamp against the one the committed ledger carries.
+    Empty on a first run, on a run where nothing moved, and on a run where the
+    weights or the build moved too - the last of those is a model change, which
+    an operator already reads off the boundary the console draws. What is left
+    is the case nobody else can see: the same weights, the same binary, and
+    different words asked of them.
 
-    `current_output_digest` is None before the work is done - that is the normal
-    path, where a matching stamp is enough to skip. It is supplied only when a
-    run was forced, which is the only way to observe a violation at all.
+    The comparison is against one earlier manifest, handed in by the caller. It
+    costs the same on a repository of one published day and of a thousand
+    (Guardrail #12).
     """
-    if prior_fingerprint is None:
-        return Observation.FIRST_RUN
-    if prior_fingerprint != current_fingerprint:
-        return Observation.INPUTS_CHANGED
-    if current_output_digest is None or prior_output_digest is None:
-        return Observation.UNCHANGED
-    if current_output_digest != prior_output_digest:
-        return Observation.DETERMINISM_VIOLATION
-    return Observation.UNCHANGED
-
-
-def read_ledger(path: Path) -> dict[str, FingerprintRow]:
-    """Every stamp ever written, keyed by its digest. Missing file means none yet.
-
-    The whole row, for a caller that wants what a stamp recorded - when it was
-    first seen, and on which machine. A caller that only wants to know whether a
-    digest is on record wants `recorded_fingerprints` instead.
-    """
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        rows = [FingerprintRow.from_csv_row(row) for row in csv.DictReader(handle)]
-    return {row.pipeline_fingerprint: row for row in rows}
-
-
-def recorded_fingerprints(path: Path) -> set[str]:
-    """Every identity on record, by digest alone, one line at a time.
-
-    `read_ledger` builds a `FingerprintRow` per stored line and holds the whole
-    list before the first one is looked at, so its cost follows the file. This
-    read costs the distinct identities, which is the answer, and the answer stops
-    growing once the inputs stop changing (Guardrail #12).
-    """
-    if not path.exists():
-        return set()
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return {row["pipeline_fingerprint"] for row in csv.DictReader(handle)}
-
-
-def append_new(path: Path, rows: Iterable[FingerprintRow]) -> list[FingerprintRow]:
-    """Append the stamps this ledger has not seen. Never rewrites, never prunes.
-
-    Returns what was written, so a caller can log the new stamps rather than
-    re-read the file to find out.
-
-    A header that no longer matches the contract stops the run. The file is
-    append-only and its header is written once, so a new input would otherwise
-    put more cells on a row than the header names, and every reader that maps by
-    position would read one input under another input's name.
-
-    Cover: the identities on record, not the file. The one question asked of the
-    ledger is whether a digest is already there, so the read carries digests and
-    the file is streamed a line at a time. The set stops growing when the inputs
-    stop changing, and the file never does.
-    """
-    pending = list(rows)
-    if not pending:
-        return []
-
-    columns = FingerprintRow.csv_columns()
-    if path.exists():
-        require_matching_header(path, columns)
-
-    known = recorded_fingerprints(path)
-    fresh: list[FingerprintRow] = []
-    for row in pending:
-        if row.pipeline_fingerprint not in known:
-            known.add(row.pipeline_fingerprint)
-            fresh.append(row)
-    if not fresh:
-        return []
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    exists = path.exists()
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        if not exists:
-            writer.writeheader()
-        for row in fresh:
-            writer.writerow(row.csv_row())
-    return fresh
+    if previous is None:
+        return ()
+    moved = set(current.changed_inputs(previous))
+    if moved & set(MACHINE_INPUTS):
+        return ()
+    return tuple(name for name in PROSE_INPUTS if name in moved)

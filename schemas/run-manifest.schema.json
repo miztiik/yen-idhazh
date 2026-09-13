@@ -357,6 +357,116 @@
       "title": "ModelUse",
       "type": "object"
     },
+    "PipelineInputs": {
+      "additionalProperties": false,
+      "description": "Every input that can move an output, and nothing that cannot.\n\nThis is the recorded input manifest. It hangs off `RunRecord.inputs`, it is\nread by a person and by the one alarm that compares two runs, and nothing\nanywhere decides anything on it.\n\nDelete it and exactly one thing changes on the whole site: a rule disappears\nfrom two console charts. Not one figure moves and not one row vanishes. A\ngate fails that test by construction; a record passes it.\n\n`host_cpu` is deliberately absent: it is the one field that explains a\ndeterminism violation, and a run's own processor is luck rather than a\nchoice anybody made.",
+      "properties": {
+        "chat_template_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Chat Template Sha256",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "model_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Sha256",
+          "type": "string"
+        },
+        "n_batch": {
+          "minimum": 1,
+          "title": "N Batch",
+          "type": "integer"
+        },
+        "n_ctx": {
+          "minimum": 1,
+          "title": "N Ctx",
+          "type": "integer"
+        },
+        "n_threads": {
+          "minimum": 1,
+          "title": "N Threads",
+          "type": "integer"
+        },
+        "n_ubatch": {
+          "minimum": 1,
+          "title": "N Ubatch",
+          "type": "integer"
+        },
+        "output_schema_sha256": {
+          "description": "The constrained-decoding schema. Its shape is the only guard on the output.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Schema Sha256",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "runner_class": {
+          "minLength": 1,
+          "title": "Runner Class",
+          "type": "string"
+        },
+        "runtime_build": {
+          "description": "The llama.cpp build the weights were decoded by.",
+          "minLength": 1,
+          "title": "Runtime Build",
+          "type": "string"
+        },
+        "runtime_flags": {
+          "description": "One canonical spelling of the runtime knobs that move the arithmetic.",
+          "minLength": 1,
+          "title": "Runtime Flags",
+          "type": "string"
+        },
+        "sampling": {
+          "description": "One canonical spelling of the decoding parameters.",
+          "minLength": 1,
+          "title": "Sampling",
+          "type": "string"
+        },
+        "sanitizer_version": {
+          "minLength": 1,
+          "title": "Sanitizer Version",
+          "type": "string"
+        },
+        "truncation_cap_tokens": {
+          "minimum": 1,
+          "title": "Truncation Cap Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_sha256",
+        "quantisation",
+        "runtime_build",
+        "chat_template_sha256",
+        "prompt_sha256",
+        "output_schema_sha256",
+        "truncation_cap_tokens",
+        "sampling",
+        "runtime_flags",
+        "n_ctx",
+        "n_batch",
+        "n_ubatch",
+        "n_threads",
+        "runner_class",
+        "extractor_version",
+        "sanitizer_version"
+      ],
+      "title": "PipelineInputs",
+      "type": "object"
+    },
     "RunRecord": {
       "additionalProperties": false,
       "properties": {
@@ -440,6 +550,18 @@
           "description": "Whether this run was drawn at that rate. False is the third reason a run has no rows, beside switched off and failed to load, and none of the three can be read off an absence. Always true at a rate of 1.0.",
           "title": "Evaluation Sampled"
         },
+        "inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PipelineInputs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What this run summarized with, named field by field: the weights and their digest, the llama.cpp build, the chat template, the prompt, the output schema, the truncation cap, every decode and runtime setting including n_ctx, the runner class, and the extractor and sanitizer versions. Recorded, never compared to decide anything - no run, no pool, no window and no published number turns on it, so a run whose inputs moved is counted, averaged and published exactly as one whose inputs held still. Read with config_digests beside it, which says which config bytes were read. Null on a manifest written before 2026-09-12, and on a run that summarized nothing."
+        },
         "items_failed": {
           "minimum": 0,
           "title": "Items Failed",
@@ -501,7 +623,7 @@
           "title": "Note"
         },
         "pipeline_fingerprints": {
-          "description": "The distinct stamps this run wrote under.",
+          "description": "The distinct stamps this run wrote under. Empty since 2026-09-12: the stamp gated a skip nobody wired, and `inputs` records the same facts by name rather than as a digest that affords only equality.",
           "items": {
             "pattern": "^[0-9a-f]{64}$",
             "type": "string"
@@ -691,6 +813,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A run record carries `inputs`, the recorded input manifest, and stops filling `pipeline_fingerprints`.",
+      "version": "2026-09-12T21:00",
+      "why": "The stamp was one digest standing for seventeen inputs, and a digest affords equality and nothing else - which is a gate's only operation. Naming the inputs instead lets a reader see which one moved, and lets the console draw a model-change boundary that can say what changed. Additive and optional: a manifest written before today carries no key and reads as null. Measured on the committed tree 2026-09-12: about 460 compact bytes a run, so roughly 1.4 KB on a three-run day, and run.json is read at build time and never staged into the bundle (frontend/scripts/copy-visuals.mjs), so the 1 GB site cap is untouched."
+    },
+    {
       "change": "The embedded inference block gained log_verbosity, following the config contract. Additive and optional: a manifest written before today carries no key and reads as null, which is the runtime default.",
       "version": "2026-09-09T20:10",
       "why": "A manifest that named every runtime setting except the one that decides whether the run's own log can be read would leave the reader of a log unable to say why a line is missing from it. Stamped here as well as on app-config because run.json is a separate persisted document and its shape moved (CLAUDE.md section 11); it costs about 22 compact bytes per model use."
@@ -787,7 +914,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-09T20:10",
+      "default": "2026-09-12T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -799,5 +926,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-09T20:10"
+  "version": "2026-09-12T21:00"
 }

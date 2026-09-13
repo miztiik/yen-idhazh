@@ -29,9 +29,9 @@ from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 
 #: Bumped when fetch policy changes. `-2` reads robots.txt with `protego`
 #: rather than `urllib.robotparser`, which changes what some files mean - see
-#: `robots_allows`. Nothing digests this yet: `PipelineInputs` carries the
+#: `robots_allows`. Nothing records this yet: `PipelineInputs` carries the
 #: extractor and the sanitizer versions and not this one, so a fetch-policy
-#: change does not move `pipeline_fingerprint`.
+#: change leaves the run's recorded inputs where they were.
 FETCHER_VERSION: Final = "idhazh-fetch-2"
 
 #: Why a target was not asked for, written once. `telemetry` reads these back to

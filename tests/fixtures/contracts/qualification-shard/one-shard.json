@@ -43,6 +43,7 @@
   "corpus_registered_at": "2026-08-26T06:00:00Z",
   "date": "2026-08-26",
   "elapsed_seconds": 6842.0,
+  "inputs": null,
   "observations": [
     {
       "completion_tokens": 284,

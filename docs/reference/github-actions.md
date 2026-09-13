@@ -707,8 +707,8 @@ or the job failed in a way that reads as an unreachable model (Guardrail #6).
 and `/metrics` probe reads it; and `idhazh.llm.server` reads the same variable
 for the address the summarize stage posts to, so the server and its client
 cannot end up on different ports. It is not a config field. It decides nothing
-about the words, so `idhazh.fingerprint` has nothing to classify and
-`pipeline_fingerprint` does not move.
+about the words, so `idhazh.fingerprint` has nothing to classify and the run's
+recorded inputs do not move.
 
 ## Every dispatch input has a shape, and one of them decides a published address
 

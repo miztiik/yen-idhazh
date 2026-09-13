@@ -32,6 +32,7 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
 )
+from idhazh.contracts.fingerprint import PipelineInputs
 
 
 class RunStatus(StrEnum):
@@ -168,8 +169,28 @@ class RunRecord(Model):
     )
     verticals: list[VerticalCount] = Field(default_factory=list)
 
+    inputs: PipelineInputs | None = Field(
+        default=None,
+        description=(
+            "What this run summarized with, named field by field: the weights and their "
+            "digest, the llama.cpp build, the chat template, the prompt, the output "
+            "schema, the truncation cap, every decode and runtime setting including "
+            "n_ctx, the runner class, and the extractor and sanitizer versions. "
+            "Recorded, never compared to decide anything - no run, no pool, no window "
+            "and no published number turns on it, so a run whose inputs moved is "
+            "counted, averaged and published exactly as one whose inputs held still. "
+            "Read with config_digests beside it, which says which config bytes were "
+            "read. Null on a manifest written before 2026-09-12, and on a run that "
+            "summarized nothing."
+        ),
+    )
     pipeline_fingerprints: list[Sha256] = Field(
-        default_factory=list, description="The distinct stamps this run wrote under."
+        default_factory=list,
+        description=(
+            "The distinct stamps this run wrote under. Empty since 2026-09-12: the "
+            "stamp gated a skip nobody wired, and `inputs` records the same facts by "
+            "name rather than as a digest that affords only equality."
+        ),
     )
     determinism_violations: int = Field(
         default=0,
@@ -256,6 +277,24 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T21:00",
+            change=(
+                "A run record carries `inputs`, the recorded input manifest, and stops "
+                "filling `pipeline_fingerprints`."
+            ),
+            why=(
+                "The stamp was one digest standing for seventeen inputs, and a digest "
+                "affords equality and nothing else - which is a gate's only operation. "
+                "Naming the inputs instead lets a reader see which one moved, and lets "
+                "the console draw a model-change boundary that can say what changed. "
+                "Additive and optional: a manifest written before today carries no key "
+                "and reads as null. Measured on the committed tree 2026-09-12: about "
+                "460 compact bytes a run, so roughly 1.4 KB on a three-run day, and "
+                "run.json is read at build time and never staged into the bundle "
+                "(frontend/scripts/copy-visuals.mjs), so the 1 GB site cap is untouched."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T20:10",
             change=(

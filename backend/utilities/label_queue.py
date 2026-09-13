@@ -15,21 +15,17 @@ to write more than one row per prompt. Producing labels from a model would mean
 writing a second writer, which is a new module in a diff in a pull request -
 which is the point (`CLAUDE.md` section 0a).
 
-**One scorer, and the pipeline reported beside it.** A draw comes from exactly
+**One scorer, and that is the whole of the pool rule.** A draw comes from exactly
 one `scorer_version`, because the cuts being calibrated live inside that string
-and a row read by another instrument answers a different question. The pipeline
-fingerprint is a covariate: it is printed per stratum with every draw, and it is
-a filter only when `--pipeline-fingerprint` names one. Requiring both made the
-gate unreachable - the stamp moves on any of seventeen inputs, a sanitizer fix
-among them, and no pair has ever held for more than three consecutive run-days.
-A scorer the ledger does not hold prints what the ledger does hold and exits
-non-zero.
+and a row read by another instrument answers a different question. A scorer the
+ledger does not hold prints what the ledger does hold and exits non-zero.
 
-**A mixed pool is a prior, not a calibration, and this says so every time.** Rows
-several producers wrote confound between-pipeline variance into the estimate.
-The mix is printed with the draw, a stratum under
-`evaluation.label_min_stratum_rows` is marked too thin to cut on, and the report
-refuses to call the result a calibration.
+The pipeline stamp used to cut the pool a second time and the cut is what
+withheld the answer: it moved on any of seventeen inputs, a sanitizer fix among
+them, no pair of stamp and scorer ever held for more than three consecutive
+run-days, and a draw spanning two stamps was printed as a prior rather than read
+as a number. The stamp stopped being written on 2026-09-12, so a draw is one
+pool and the figure over it is a figure.
 
 **What the labeller sees and does not see.** They see the summary as published,
 the source's own headline, the date, the link, and the extracted article text -
@@ -129,30 +125,28 @@ def _live_scorer(records: Sequence[dict[str, str]]) -> str:
     return records[-1]["scorer_version"]
 
 
-def refuse(records: Sequence[dict[str, str]], *, scorer: str, pipeline: str, reason: str) -> int:
+def refuse(records: Sequence[dict[str, str]], *, scorer: str, reason: str) -> int:
     """Say the draw is empty, then say what the ledger does hold.
 
     An empty pool with no inventory beside it leaves the operator guessing
-    whether the gate is one run-day away or unreachable. Printing every pair with
-    its rows and dates answers that in one screen, and it is the only thing this
-    tool can honestly offer when the scorer it was asked for holds nothing.
+    whether the gate is one run-day away or unreachable. Printing every scorer
+    with its rows and dates answers that in one screen, and it is the only thing
+    this tool can honestly offer when the scorer it was asked for holds nothing.
     """
     print(RULE)
     print("NOTHING TO DRAW")
     print(RULE)
     print(f"scorer_version   {scorer}")
-    print(f"pipeline         {pipeline or 'every pipeline at this scorer'}")
     print("eligible rows    0")
     print(f"reason           {reason}")
     print(RULE)
     print()
-    print(f"{SCORES_RELDIR} holds these pairs. Only a pair at the scorer above can be drawn:")
+    print(f"{SCORES_RELDIR} holds these scorers. Only the scorer above can be drawn:")
     for pair in labels.pairs(records):
         here = "   <- this scorer" if pair.scorer_version == scorer else ""
         print()
         print(f"  {pair.rows} rows, {pair.first_date} to {pair.last_date}")
         print(f"    scorer    {pair.scorer_version}{here}")
-        print(f"    pipeline  {pair.pipeline_fingerprint}")
     print()
     print("Run the pipeline until the scorer above has rows.")
     return 1
@@ -164,19 +158,16 @@ def report(
     settings: config.Settings,
     *,
     scorer: str,
-    pipeline: str | None,
     archived: Sequence[str] = (),
 ) -> None:
     """What the draw holds and what is still missing, both stated plainly."""
     evaluation = settings.app.evaluation
-    pool = labels.eligible(records, scorer_version=scorer, pipeline_fingerprint=pipeline)
-    days = sorted(labels.run_days(records, scorer_version=scorer, pipeline_fingerprint=pipeline))
+    pool = labels.eligible(records, scorer_version=scorer)
+    days = sorted(labels.run_days(records, scorer_version=scorer))
     missing = labels.shortfalls(queue, per_decile=evaluation.label_draw_per_decile)
-    mix = labels.strata(queue)
 
     print(RULE)
     print(f"scorer_version   {scorer}")
-    print(f"pipeline         {pipeline or 'all at this scorer - reported, not filtered'}")
     print(f"eligible rows    {len(pool)}")
     print(f"run-days         {len(days)} of {evaluation.label_min_run_days} -> {', '.join(days)}")
     print(f"drawn            {len(queue)} of {evaluation.label_draw_per_decile * labels.DECILES}")
@@ -189,31 +180,12 @@ def report(
         print(f"aged out         {', '.join(archived)} - summarised, no row left to label")
     print(RULE)
 
-    if mix:
-        print("pipelines in this draw - report any result split by these, never pooled:")
-        for one in mix:
-            thin = (
-                "  <- too thin to cut on"
-                if one.rows < evaluation.label_min_stratum_rows
-                else ""
-            )
-            print(
-                f"  {one.rows:>4} rows  {one.first_date} to {one.last_date}  "
-                f"{one.pipeline_fingerprint[:12]}{thin}"
-            )
-        print(RULE)
-
     if len(days) < evaluation.label_min_run_days:
         # Stated rather than blocked. Labelling early is not wrong; treating a
         # one-day draw as if it spoke for the corpus would be.
         print(
             f"NOT YET RECALIBRATABLE: {evaluation.label_min_run_days - len(days)} more run-days "
             f"needed at this scorer. A day at another scorer does not count."
-        )
-    elif len(mix) > 1:
-        print(
-            f"PRIOR, NOT A CALIBRATION: {len(mix)} pipelines wrote these rows, so part of any "
-            "spread is the producer rather than the cut. Report per stratum, with wide bounds."
         )
 
 
@@ -286,11 +258,6 @@ def _prompt(
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--draw-id", default="", help="Defaults to <today>-decile-<n>.")
-    ap.add_argument(
-        "--pipeline-fingerprint",
-        default="",
-        help="Narrow the draw to one producer. Default is every pipeline at the live scorer.",
-    )
     ap.add_argument("--label", action="store_true", help="Label the queue, one row at a time.")
     ap.add_argument("--labeller", default="", help="Your name. Must be in evaluation.labellers.")
     ap.add_argument(
@@ -311,14 +278,12 @@ def main() -> int:
     archived = archive.archived_months(state_dir)
     scorer = _live_scorer(records)
 
-    pipeline = args.pipeline_fingerprint or None
-    if not labels.eligible(records, scorer_version=scorer, pipeline_fingerprint=pipeline):
-        reason = (
-            "no row carries this pair"
-            if pipeline
-            else "no row carries this scorer, which cannot happen for the live one"
+    if not labels.eligible(records, scorer_version=scorer):
+        return refuse(
+            records,
+            scorer=scorer,
+            reason="no row carries this scorer, which cannot happen for the live one",
         )
-        return refuse(records, scorer=scorer, pipeline=pipeline or "", reason=reason)
 
     draw_id = args.draw_id or f"{records[-1]['date']}-decile-{evaluation.label_draw_per_decile}"
 
@@ -326,10 +291,9 @@ def main() -> int:
         records,
         draw_id=draw_id,
         scorer_version=scorer,
-        pipeline_fingerprint=pipeline,
         per_decile=evaluation.label_draw_per_decile,
     )
-    report(queue, records, settings, scorer=scorer, pipeline=pipeline, archived=archived)
+    report(queue, records, settings, scorer=scorer, archived=archived)
 
     named = Path(args.evidence) if args.evidence else REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
     package = evidence.index(named)
@@ -372,7 +336,6 @@ def main() -> int:
                 "date": item["date"],
                 "run_id": item["run_id"],
                 "output_digest": item["output_digest"],
-                "pipeline_fingerprint": item["pipeline_fingerprint"],
                 "summary_word_count": int(item["summary_word_count"]),
                 "source_seen_word_count": int(item["source_seen_word_count"]),
                 "scorer_version": item["scorer_version"],

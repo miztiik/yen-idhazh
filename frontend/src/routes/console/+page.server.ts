@@ -621,7 +621,9 @@ export async function load() {
 		// over the whole ledger and handed to the charts a change can move. Derived
 		// per component it would be derived three times off three different day
 		// lists, and two of them would eventually disagree about when it happened.
-		modelChanges: pipelineChanges(rows),
+		// The manifests carry each run's recorded inputs; the score rows carry the
+		// digest the days before 2026-09-12 were stamped with.
+		modelChanges: pipelineChanges(rows, manifests),
 		floorPct,
 		itemCeiling,
 		siteBudgetMb,

@@ -62,6 +62,15 @@ class EvidenceItem(Contract):
     __schema_stem__: ClassVar[str] = "evidence-item"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T21:00",
+            change="pipeline_fingerprint is optional and nothing sets it.",
+            why=(
+                "The stamp stopped being a gate, so the eval row it is copied from no "
+                "longer carries one. Relaxed rather than removed so every package already "
+                "written still parses."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T18:40",
             change=(
                 "item_id accepts a second shape: sixteen Crockford base32 symbols "
@@ -97,7 +106,10 @@ class EvidenceItem(Contract):
     # `state/scores.csv` spells them. A file is named by their digest, so a
     # ledger row finds its evidence without a lookup table.
     url_key: UrlKey
-    pipeline_fingerprint: Sha256
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description="Null since 2026-09-12. The stamp gates nothing, so no writer fills it.",
+    )
     output_digest: Sha256
     scorer_version: str = Field(min_length=1)
 

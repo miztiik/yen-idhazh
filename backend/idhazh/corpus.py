@@ -316,7 +316,6 @@ def rescored(
         title=published.title,
         summary=text,
         key_points=list(published.key_points),
-        pipeline_fingerprint=recorded.pipeline_fingerprint,
         output_digest=recorded.output_digest,
         model_id=recorded.model_id,
         attempt=recorded.attempt,
