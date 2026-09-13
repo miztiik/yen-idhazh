@@ -7,7 +7,7 @@ import {
 	stepPreset,
 	windowOfDays
 } from '../src/lib/charts/viewport';
-import { readCsv } from '../src/lib/server/payload';
+import { readCsv, readDayShards } from '../src/lib/server/payload';
 
 /**
  * One window, and every section that follows it saying the same number.
@@ -112,11 +112,19 @@ function csvDates(dir: string, keep: (row: Record<string, string>) => boolean): 
 		.filter(Boolean);
 }
 
+/** The same, for a store that files `<YYYY>/<MM>/<DD>.csv` rather than by month. */
+function dayDates(dir: string, keep: (row: Record<string, string>) => boolean): string[] {
+	return readDayShards(dir, -1)
+		.rows.filter(keep)
+		.map((row) => row.date ?? '')
+		.filter(Boolean);
+}
+
 /** Every day the Summaries daily table can draw a row for, read off the two
  * committed ledgers rather than off the page it is checking. */
 function workedDays(): string[] {
 	const scored = csvDates(join(CANARY, 'state', 'scores'), () => true);
-	const ran = csvDates(
+	const ran = dayDates(
 		join(CANARY, 'state', 'item-health'),
 		(row) => Number(row.summarize_ms) > 0
 	);

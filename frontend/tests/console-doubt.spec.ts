@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { grouped } from '../src/lib/charts/series';
 import { doubted, sourceDoubts, type DayWindow } from '../src/lib/server/model-work';
+import { readDayShards, readShards } from '../src/lib/server/payload';
 
 /**
  * Which sources the checker doubts, and the rule the ranking is made of.
@@ -30,18 +31,19 @@ import { doubted, sourceDoubts, type DayWindow } from '../src/lib/server/model-w
 
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** A ledger directory, read the way the page's server reads it. */
-function shards(dir: string): Record<string, string>[] {
-	const rows: Record<string, string>[] = [];
-	for (const name of readdirSync(dir).filter((entry) => entry.endsWith('.csv')).sort()) {
-		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
-		const header = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(header.map((key, at) => [key, cells[at] ?? ''])));
-		}
-	}
-	return rows;
+/** The score ledger, which files by month, read the way the page's server reads it. */
+function scoreRows(): Record<string, string>[] {
+	return readShards(join(STATE, 'scores'), -1).rows;
+}
+
+/** The item-health ledger, which files by day, read the same way.
+ *
+ * Through the production readers rather than a copy here, so a grain change in
+ * the store cannot leave this oracle comparing the page against an empty set -
+ * which is exactly what a local `readdir` of `*.csv` did on 2026-09-13.
+ */
+function healthRows(): Record<string, string>[] {
+	return readDayShards(join(STATE, 'item-health'), -1).rows;
 }
 
 /** How deep the list goes, off the committed config rather than a literal. */
@@ -274,7 +276,7 @@ test.describe('the ranked list, on the built console', () => {
 		};
 		expect(window.from, 'the section draws a window it does not name').not.toBe('');
 
-		const expected = rankedFrom(shards(join(STATE, 'scores')), shards(join(STATE, 'item-health')), window);
+		const expected = rankedFrom(scoreRows(), healthRows(), window);
 		expect(expected.scored, 'the canary ledger scored nothing in the open window').toBeGreaterThan(0);
 
 		const rows = await drawn(page);
@@ -327,8 +329,8 @@ test.describe('the ranked list, on the built console', () => {
 			to: (await section.getAttribute('data-model-doubt-to')) ?? ''
 		};
 		const expected = rankedFrom(
-			shards(join(STATE, 'scores')),
-			shards(join(STATE, 'item-health')),
+			scoreRows(),
+			healthRows(),
 			window
 		);
 		const note = page.locator('[data-model-doubt-unattributed]');
