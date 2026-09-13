@@ -665,13 +665,15 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in `state/scores.csv`. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `runtime_counters_scrape` | `true` | The llama-server `GET /metrics` read, and so every row in `state/runtime-counters.csv`. |
-| `tracing_enabled` | `false` | Already off. True builds a span tree under `backend/var/traces/`. |
+| `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
 | `item_health_aggregate_keep_months` | `null` | Nothing by default. Null means a folded month is never removed. |
 | `feed_health_keep_months` | `14` | Nothing. It is where `state/feed-health/` stops keeping a month, and past it the month is deleted rather than summarised. |
 | `scores_full_grain_months` | `14` | Where `state/scores/` stops being kept item by item. Past it a month becomes `state/score-archive/<YYYY-MM>.json` and the shard is deleted. |
 | `score_archive_keep_months` | `null` | Nothing by default. Null means a summarised score month is never removed. |
+| `visuals_full_grain_months` | `14` | Where `state/visuals/` stops being kept attempt by attempt. Past it a month folds to the eight-term group in `state/visual-aggregate/` and the shard is deleted. |
+| `visual_aggregate_keep_months` | `null` | Nothing by default. Null means a folded visual month is never removed. |
 | `public_telemetry_keep_months` | `14` | Nothing. It is where `frontend/public/telemetry/` stops keeping a shard, and it must equal `item_health_full_grain_months`. |
 | `cost_currency` | `"USD"` | Nothing. It is the ISO 4217 code the console prints a counterfactual cost in. |
 | `cost_input_per_million` | `0.20` | Nothing. It is what a hosted provider would charge for a million prompt tokens. |
@@ -748,16 +750,19 @@ Until 2026-09-02 one knob decided when a month stopped being kept at full grain
 cleanup age at all, so three stores grew with nothing to stop them while the
 fourth was tuned by a number that said nothing about them.
 
-Twelve names replace it, each a knob and not a constant (Guardrail #6). Ten are
+Fourteen names replace it, each a knob and not a constant (Guardrail #6). Ten are
 full-grain windows, returned together by `ObservabilityConfig.full_grain_months`
 so `refuse_windows_shorter_than` can check every one of them against what a
-console read still selects; the other two are the ages that govern what a fold
-leaves behind.
+console read still selects; three are the ages that govern what a fold leaves
+behind; and one is `visuals_full_grain_months`, which is a full-grain window and
+is **not** in that mapping yet, because no console read opens one of its shards
+today ([adaptive-pruning.md](adaptive-pruning.md#the-visual-fold-key-is-eight-terms-and-it-could-not-wait)).
 
 | Store | Full grain | Summary after it |
 | --- | --- | --- |
 | `state/item-health/` | `item_health_full_grain_months` (14) | `item_health_aggregate_keep_months` (null) |
 | `state/scores/` | `scores_full_grain_months` (14) | `score_archive_keep_months` (null) |
+| `state/visuals/` | `visuals_full_grain_months` (14) | `visual_aggregate_keep_months` (null) |
 | `state/feed-health/` | `feed_health_keep_months` (14) | none - a per-feed-per-run record is not a total worth keeping |
 
 And one for each published copy, because a reader fetches those and our own disk

@@ -224,7 +224,9 @@
     "scores_full_grain_months": 24,
     "telemetry_publish": false,
     "trace_window_days": 7,
-    "tracing_enabled": true
+    "tracing_enabled": true,
+    "visual_aggregate_keep_months": 42,
+    "visuals_full_grain_months": 26
   },
   "page_weight": {
     "ceilings_bytes": {

@@ -120,7 +120,7 @@ test.describe('the asset base URL opens', () => {
 });
 
 test.describe('the valve moves the URL and not the carrier', () => {
-	test('the drawing is still fetched as text and inlined', () => {
+	test('the marks are still fetched as data and drawn here', () => {
 		const component = readFileSync(
 			join(FRONTEND, 'src', 'lib', 'components', 'ItemVisual.svelte'),
 			'utf8'
@@ -137,17 +137,20 @@ test.describe('the valve moves the URL and not the carrier', () => {
 		// that pins the argument list goes red on a change that never touched the
 		// valve, which is how a valve test stops being one.
 		expect(component).toContain('fetch(`${__ASSET_BASE_URL__ || base}/${file}`');
-		// The response is read as text and inlined. An `img` cannot be repainted
-		// from the page's tokens, which is why it was removed and why moving the
-		// bytes must not bring it back.
-		expect(component).toContain('await response.text()');
+		// The response is read as data, and the drawing is built here from it. It
+		// was markup read as text until 2026-09-13, when the reader's browser took
+		// over the drawing; an `img` was removed before that because it cannot be
+		// repainted from the page's tokens, and moving the bytes must not bring
+		// either carrier back.
+		expect(component).toContain('await response.json()');
 		expect(component).not.toContain('<img');
+		expect(component).not.toContain('@html');
 		// And the path is still refused before either half is joined onto it.
-		expect(component).toContain('if (!publishedVisual(file))');
+		expect(component).toContain('if (!publishedVisualData(file))');
 	});
 
 	test('the staging step and the fetch read the one value', () => {
-		// Two switches would let the bundle keep a copy of every drawing the page
+		// Two switches would let the bundle keep a copy of every visual the page
 		// is asking a host for, and the valve would move nothing.
 		const staging = readFileSync(join(FRONTEND, 'scripts', 'copy-visuals.mjs'), 'utf8');
 		expect(staging).toContain("import { assetBaseUrl } from '../asset-base.js'");

@@ -30,6 +30,7 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh import cli, config, day_partition, ledger, source_health
+from idhazh.classify import dag
 from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
 from idhazh.cli import main
 from idhazh.contracts import canonical_json, derive_url_key
@@ -1157,7 +1158,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
 
 
 def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """Call 1's prompt at the cap, and the whole two-call sequence behind it.
+    """Call 1's prompt at the cap, and the whole sequence behind it.
 
     A second derivation and not a widening of the one above, because the two
     paths render different prompts. The single call sends one system turn and
@@ -1166,30 +1167,46 @@ def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     date the extractor already cut - then pays for its own reply twice, once as
     a decode and once again inside call 2's prompt.
 
-    Three terms rather than one, and each reads something:
-
-    - the scaffold is fixed, and moves when a prompt file is edited;
-    - the per-word rate covers the article and its sentence addresses, and moves
-      when prose tokenizes harder;
-    - the menu is `elements.max_per_article` rows, so **the one config knob that
-      is not the cap or the window still moves this sum.**
-
-    The budgets come from `classify.calls`, which re-derives both on import from
-    the reply shapes' own bounds - so a `maxItems` that moves moves this too.
+    **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
+    It used to be written out here, which put the number the production path
+    never checked and the number this file asserts in two places - and two
+    derivations of one quantity disagree the first time a term moves. The three
+    terms of the prompt and the per-turn seam are documented where they are
+    computed; what stays here is the cap, the knob and the window, all three
+    read from `config/` (Guardrail #6).
     """
-    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
-    prompt = (
-        CALL_ONE_SCAFFOLD_TOKENS
-        + int(cut_words * CALL_ONE_BODY_TOKENS_A_WORD)
-        + int(committed.elements.max_per_article * CALL_ONE_MENU_TOKENS_A_ROW)
+    rows = committed.elements.max_per_article
+    cap = committed.extract.truncation_cap_tokens
+    return (
+        dag.first_prompt_tokens(cap, menu_rows=rows),
+        dag.sequence_tokens(cap, menu_rows=rows, prompt_config=committed.summarize),
     )
-    sequence = (
-        prompt
-        + call_one_output_tokens()
-        + CALL_TWO_SEAM_TOKENS
-        + call_two_output_tokens(committed.summarize)
+
+
+def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
+    """A third call is a design change, and this is what makes it stop being quiet.
+
+    Every node's reply is paid twice - once as its own decode, and once again
+    inside the prompt of every node behind it - so a third call does not cost a
+    third of the sequence, it costs its own budget plus a seam plus the prompt
+    it drags forward. At the committed window that is the difference between 80
+    percent full and over.
+
+    The import-time guard in `classify.dag` fires first and says the same thing.
+    This test exists because a guard inside the module a change is editing is a
+    guard that change can edit; a row that adds a node has to come here and say
+    so as well, which is the point at which ESCALATE trigger 6 of
+    `TODO/20260910-23-article-classification-plan.md` section 12a has fired.
+
+    **A labelling row does not add a node.** It adds a field to call 1's reply
+    shape, and `call_one_output_tokens` re-derives the budget from the shape's
+    own bounds on import.
+    """
+    assert len(dag.NODES) == dag.NODE_COUNT == 2
+    assert [node.name.value for node in dag.NODES] == ["label", "summarize_and_plan"]
+    assert {node.name.value for node in dag.NODES} <= {kind.value for kind in CallKind}, (
+        "a node the ledger has no CallKind for records its cost as nothing"
     )
-    return prompt, sequence
 
 
 def test_the_two_calls_fit_the_window_at_the_cap() -> None:
@@ -2916,11 +2933,11 @@ def test_no_hash_appears_in_any_published_path() -> None:
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     for item in day.items:
         assert not HEX_DIGEST.search(item.item_id)
-        if item.visual is not None and item.visual.path is not None:
-            assert not HEX_DIGEST.search(item.visual.path)
+        if item.visual is not None and item.visual.data_path is not None:
+            assert not HEX_DIGEST.search(item.visual.data_path)
     decision = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
-    assert decision.asset_path is not None
-    assert not HEX_DIGEST.search(decision.asset_path)
+    assert decision.data_path is not None
+    assert not HEX_DIGEST.search(decision.data_path)
 
 
 def test_an_item_id_reads_in_both_shapes_and_the_pattern_never_contracts() -> None:
@@ -4182,10 +4199,48 @@ def test_an_item_decided_to_nothing_carries_no_spec() -> None:
         VisualDecision.model_validate(payload)
 
 
-def test_only_a_rendered_visual_has_an_asset_path() -> None:
-    payload = mutate(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json", visual_state="absent")
-    with pytest.raises(ValueError, match="asset_path"):
-        VisualDecision.model_validate(payload)
+def test_a_day_still_carrying_the_retired_drawing_path_reads() -> None:
+    """The read-side migration `path` owes, proved by putting the key back.
+
+    Every one of the 24 committed days names a `.svg` on every rendered visual,
+    and none of them is ever rewritten. `Model` forbids a key it does not
+    declare, so without the named pop those days stop parsing the day this
+    lands - `validate-days` red, the build red, the release blocked. Driven by
+    adding the key to a fixture rather than by counting how many committed days
+    still carry it, because a count of a growing collection is a check timed to
+    go red on a date nobody chose (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    carried = 0
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"]["path"] = "digest/2026/08/21/ai-01.svg"
+            carried += 1
+    assert carried, "the fixture stopped carrying a visual, so this proves nothing"
+
+    day = DigestDay.model_validate(payload)
+
+    assert [item.visual.data_path for item in day.items if item.visual] == [
+        "digest/2026/08/21/ai-01.json"
+    ] * carried
+    assert "path" not in day.items[0].visual.model_dump() if day.items[0].visual else True
+
+
+def test_a_visual_carrying_a_data_path_must_have_rendered() -> None:
+    """One-way, and this is the direction that can hold.
+
+    The other direction cannot: 495 visuals across the 24 frozen days are
+    `rendered` and carry no data file, permanently, because back-filling one
+    would mean re-fetching 495 source pages that have since moved. So what is
+    asserted is that a path never appears without the state that produced it.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"]["state"] = "absent"
+
+    with pytest.raises(ValueError, match="data path"):
+        DigestDay.model_validate(payload)
 
 
 def test_hhem_delta_is_rebuilt_not_trusted() -> None:
@@ -4731,12 +4786,19 @@ def test_a_visual_published_before_the_data_file_reads_as_carrying_none() -> Non
     assert [item.visual.data_path for item in day.items if item.visual] == [None] * carried
 
 
-def test_a_decision_published_before_the_data_file_reads_as_carrying_none() -> None:
-    """The same sentence one stage earlier, where the run's own payloads live."""
+def test_a_rendered_decision_must_record_where_its_marks_landed() -> None:
+    """The other half of the rule, one stage earlier.
+
+    This payload is a one-day run artifact under gitignored `backend/var/`, so
+    the run that writes it is the run that reads it and no older shape is ever
+    opened. That is what lets the rule here be both ways round where the
+    published day's can only be one.
+    """
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
     payload.pop("data_path", None)
 
-    assert VisualDecision.model_validate(payload).data_path is None
+    with pytest.raises(ValueError, match="where its marks landed"):
+        VisualDecision.model_validate(payload)
 
 
 def test_only_a_rendered_visual_carries_data() -> None:

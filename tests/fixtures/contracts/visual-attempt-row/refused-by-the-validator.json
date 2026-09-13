@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-11",
+  "decision": "none",
+  "downgrade_depth": 2,
+  "elements_found": 5,
+  "family": "chart",
+  "item_id": "health-b2c4d6e8f1g3h5j7",
+  "marks": null,
+  "none_reason": "validation_failed",
+  "potential_primary": "unclassified",
+  "rejection_reason": "enough_data",
+  "run_id": "2026-09-11-17421903",
+  "state": "absent",
+  "version": "2026-09-13T23:50"
+}

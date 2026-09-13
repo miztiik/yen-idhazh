@@ -610,6 +610,24 @@ call 2's prompt - which is why the pair is 2.8 times the single call's 14,088.
 the cap, the element cap and the window from `config/` on both sides so it
 follows the next move of any of the three.
 
+**The arithmetic above is `classify.dag.sequence_tokens` and there is one copy
+of it.** The table walks `dag.NODES`, so every node's budget and one seam per
+turn boundary are added by the walk rather than by a line somebody wrote - add a
+call and the sum grows without anybody editing it. Until 2026-09-13 the
+derivation lived in the contract test alone, which put the number the test
+asserts and the number the pipeline checks in two places; two derivations of one
+quantity disagree the first time a term moves.
+
+**The running pipeline checks the same sum, before call 1 is sent.**
+`dag.fits_the_window` sizes this sequence for the article in hand - the real
+element count rather than the 256-row cap - and an article over the window lands
+as `FailureCode.CONTEXT_EXCEEDED` having cost nothing. `summarize.fits_context`
+is the other check and it is not this one: it sums the single call the
+qualification harness sends, which is 14,088 at the same cap, and using it here
+would admit articles the sequence cannot hold. Over the trailing 30 days ending
+2026-09-13 this check would have refused none of 8,938 items at 49,152, and 94
+of them at the 16,384 the window carried until that day.
+
 **The window went to 49,152 rather than to the 32,768 an owner authorised.** The
 authorisation on 2026-09-12 was given against a table that sized the pair at
 26,189 with 6,579 spare - one build, longest-first, and the mildest of the
