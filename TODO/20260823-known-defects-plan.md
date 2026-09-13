@@ -30,7 +30,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | CLOSED 2026-08-27 |
 | 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
 | 18 | The truncation flag still cannot fire, now for a different reason | 5 | **OPEN - not measurable without the scorer weights** |
-| 19 | A summarize call that failed on its reply reports no cost at all | 2 | CLOSED 2026-09-13 (PR #PENDING) |
+| 19 | A summarize call that failed on its reply reports no cost at all | 2 | CLOSED 2026-09-13 (PR #657) |
 | 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | **OPEN - found 2026-09-12 by plan 23 row #5 (PR #642)** |
 
 ## 20 - The `publishing` group dirties a file the build fingerprint hashes (OPEN)
