@@ -51,6 +51,7 @@ from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import archive, writer
 from idhazh.ledger import STATE_DIRNAME
+from idhazh.stages import common
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 #: What a table is padded to. A number nobody can line up is a number nobody reads.
@@ -529,7 +530,7 @@ def refill(
     if not queued:
         return 0
 
-    read = read_url or cli.live_fetcher(settings)
+    read = read_url or common.live_fetcher(settings)
     tiers = {feed.id: feed.tier for feed in settings.sources.feeds}
     meta = corpus.read_meta(corpus_dir)
     pending: list[corpus.Scored] = []
