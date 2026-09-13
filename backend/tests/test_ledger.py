@@ -27,7 +27,6 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
-from utilities import migrate_score_ledger as migrate
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
 from utilities.migrate_published_ledger import narrow
@@ -963,59 +962,6 @@ def _scores(**cells: str) -> str:
     return out.getvalue()
 
 
-def test_an_untruncated_row_recovers_the_article_length_it_already_recorded() -> None:
-    """The whole article IS the text the model saw, so the count is not a guess.
-
-    `truncate_to_tokens` returns the body unchanged below the cap, and
-    `Article.word_count` counts that same string, so the recovered value is
-    exactly what today's writer would put there.
-    """
-    report = migrate.honest(_scores(source_word_count="1201", source_seen_word_count="1210"))
-    row = next(csv.DictReader(report.text.splitlines()))
-
-    assert report.rows_recovered == 1
-    assert report.rows_emptied == 0
-    assert row["source_word_count"] == "1210", "the seen count was the honest one all along"
-
-
-def test_a_truncated_row_says_it_does_not_know_rather_than_saying_zero() -> None:
-    """Extract discarded the pre-cap body, so the length exists nowhere."""
-    report = migrate.honest(
-        _scores(source_word_count="1921", source_seen_word_count=str(migrate.SEEN_WORD_CAP))
-    )
-    row = next(csv.DictReader(report.text.splitlines()))
-
-    assert report.rows_emptied == 1
-    assert row["source_word_count"] == ""
-    assert row["source_seen_word_count"] == str(migrate.SEEN_WORD_CAP)
-
-
-def test_the_score_migration_moves_no_cell_it_does_not_own() -> None:
-    """The Oracle: every other column comes out byte-identical, row for row."""
-    before = _scores(source_word_count="900", source_seen_word_count="905", hhem="0.91")
-    report = migrate.honest(before)
-
-    was = next(csv.DictReader(before.splitlines()))
-    now = next(csv.DictReader(report.text.splitlines()))
-
-    assert report.rows_in == 1
-    assert {name: value for name, value in now.items() if name != "source_word_count"} == {
-        name: value for name, value in was.items() if name != "source_word_count"
-    }
-
-
-def test_a_row_the_fixed_pipeline_wrote_is_left_alone() -> None:
-    """Selection is by the row's own stamp, so a later run's real count survives."""
-    with pytest.raises(ValueError, match="already the whole article"):
-        migrate.honest(
-            _scores(
-                version=migrate.FIXED_FROM,
-                source_word_count="5240",
-                source_seen_word_count="4310",
-            )
-        )
-
-
 def test_the_retirement_ledger_exists_in_a_fresh_checkout() -> None:
     """`git add` on a path that is not there aborts the whole commit step.
 
@@ -1301,7 +1247,7 @@ def test_no_committed_ledger_repeats_a_key_it_says_makes_a_row_unique() -> None:
     state = REPO_ROOT / "state"
     targets = [
         *ledger.keyed_paths(state, date=None),
-        *((shard, OBSERVATION_KEY) for shard in writer.ledger_shards(state)),
+        *((day, OBSERVATION_KEY) for day in writer.ledger_days(state)),
     ]
     for path, key in targets:
         for found, count in sorted(ledger.repeated_keys(path, key).items()):

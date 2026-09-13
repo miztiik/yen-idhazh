@@ -1144,12 +1144,18 @@ class ScorePruneResult:
 
     archived: tuple[str, ...]
     rows_archived: int
+    #: Every `state/scores/<YYYY>/<MM>/<DD>.csv` this took, POSIX and relative to
+    #: the repository, oldest first. Carried rather than derived from `archived`,
+    #: because a month is a directory of day files now: a caller that spelled
+    #: `<month>-01` would name a file the ledger may never have held, and the
+    #: list a dry run prints has to be the list a live run removes, file for file.
+    days_removed: tuple[str, ...]
     #: Distinct measurements the archives now index. This is the number that
     #: keeps the dedupe exact after the rows are gone, so it is reported rather
     #: than left to be inferred from the row count - they differ whenever a
-    #: shard held a repeat the settlement had not yet dropped.
+    #: month held a repeat the settlement had not yet dropped.
     observations_indexed: int
-    #: What the archived shards weighed, and what their summaries weigh. Both
+    #: What the archived day files weighed, and what their summaries weigh. Both
     #: are counted in a dry run too, because the ratio between them is the
     #: measurement this policy is justified by (Guardrail #10) and a person has to be
     #: able to read it before any deletion is switched on.
@@ -1170,56 +1176,77 @@ def prune_scores(
     *,
     dry_run: bool = False,
 ) -> ScorePruneResult:
-    """Archive every out-of-window score month, prove the archive, then delete the shard.
+    """Archive every out-of-window score month, prove the archive, then delete its days.
 
     Four steps per month and the order is the whole safety argument: summarise,
     write temp-then-rename, read the written file back through its contract, and
-    reconcile it field by field against a second reading of the shard. Only then
-    is the shard unlinked. An archive that will not reconcile leaves its shard in
+    reconcile it field by field against a second reading of the day files. Only
+    then are they unlinked. An archive that will not reconcile leaves its days in
     place and stops the run, because the alternative is deleting a committed file
     on the strength of a summary nobody checked - and `prune.yml` force-pushes
     `main`, so that file does not come back.
 
+    The ledger files by day and this boundary is a month, so
+    `day_partition.days_by_month` groups the day files and a month goes whole or
+    not at all. That keeps the knob's unit the one it has always had while the
+    files below it are days, and it keeps the archive's own input at most 31
+    files. The index beside those days is not touched here:
+    `evals.writer.refresh_index` drops an index day whose month became an
+    archive, and it does that only once the archive is on disk.
+
     A dry run does the first step and none of the others. It still counts the
     bytes both ways, so the log says what the archive would weigh against what
-    the shard weighs, which is the figure Guardrail #10 asks for beside this policy.
+    the days weigh, which is the figure Guardrail #10 asks for beside this policy.
 
     `score_archive_keep_months` is applied last and defaults to null, which means
     an archive is kept for ever. Set, it must sit above
     `scores_full_grain_months`, which the config contract enforces - so a month
     is never deleted before it is archived.
 
-    Re-running changes nothing. A month already archived has no shard left to
+    Re-running changes nothing. A month already archived has no day file left to
     find, and a month whose archive was written by a run that then failed to
     unlink is summarised again to the same bytes.
     """
     keep_from = oldest_month_kept(today, config.scores_full_grain_months)
     archived: list[str] = []
+    days_removed: list[str] = []
     rows_archived = 0
     observations = 0
     source_bytes = 0
     archive_bytes = 0
 
-    for shard in score_writer.ledger_shards(state_dir):
-        if shard.stem >= keep_from:
+    by_month = day_partition.days_by_month(state_dir / score_writer.LEDGER_DIRNAME)
+    for month in sorted(by_month):
+        if month >= keep_from:
             continue
-        built = score_archive.summarise(shard, observation_key=score_writer.OBSERVATION_KEY)
-        archived.append(shard.stem)
+        days = by_month[month]
+        built = score_archive.summarise(
+            days, month=month, observation_key=score_writer.OBSERVATION_KEY
+        )
+        archived.append(month)
+        # Named and weighed before anything is written, so the dry run prints the
+        # same list the live run removes.
+        days_removed += [score_writer.ledger_relpath(f"{month}-{day.stem}") for day in days]
         rows_archived += built.source_rows
         observations += len(built.observation_digests)
-        source_bytes += shard.stat().st_size
+        source_bytes += sum(day.stat().st_size for day in days)
         archive_bytes += len(built.to_json().encode("utf-8"))
         if dry_run:
             continue
-        target = score_archive.archive_path(state_dir, shard.stem)
+        target = score_archive.archive_path(state_dir, month)
         score_archive.write(target, built)
         # Read back through the contract, then check the file that came back
-        # still describes the shard. The first catches a bad write; only the
+        # still describes the days. The first catches a bad write; only the
         # second catches a summary of the wrong month.
         score_archive.reconcile(
-            score_archive.read(target), shard, observation_key=score_writer.OBSERVATION_KEY
+            score_archive.read(target),
+            days,
+            month=month,
+            observation_key=score_writer.OBSERVATION_KEY,
         )
-        shard.unlink()
+        for day in days:
+            day.unlink()
+            _drop_empty_day_dirs(day)
 
     hard_deleted: list[str] = []
     if config.score_archive_keep_months is not None:
@@ -1234,6 +1261,7 @@ def prune_scores(
     return ScorePruneResult(
         archived=tuple(archived),
         rows_archived=rows_archived,
+        days_removed=tuple(days_removed),
         observations_indexed=observations,
         source_bytes=source_bytes,
         archive_bytes=archive_bytes,

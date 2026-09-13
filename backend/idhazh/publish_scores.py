@@ -1,9 +1,15 @@
 """Publish the browser-safe projection of the score ledger.
 
-`state/scores/<YYYY-MM>.csv` is the ledger - one row per scored item per attempt
-- and it carries the article's address twice and its fetched headline once. This
-module writes the narrow monthly projection under `frontend/public/scores/`,
-which is the only score data the console fetches.
+`state/scores/<YYYY>/<MM>/<DD>.csv` is the ledger - one row per scored item per
+attempt - and it carries the article's address twice and its fetched headline
+once. This module writes the narrow monthly projection under
+`frontend/public/scores/`, which is the only score data the console fetches.
+
+**The two grains differ and this module is the bridge.** The ledger files by day,
+because a run writes one day; the mirror files by month, because its grain
+follows what a browser fetches and the console prices a window in files
+(`docs/concepts/partitions.md`). A published month is folded from that month's
+day files, which is at most 31 opens.
 
 The shape is `PublicEvalRow` and the shape owns which cells may cross (Guardrail #3).
 What this module owns is *from what* a month is built. Where it sits, when it is
@@ -19,7 +25,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import publish_console
+from idhazh import day_partition, publish_console
 from idhazh.contracts.public_eval import FORBIDDEN_COLUMNS, PublicEvalRow
 from idhazh.evals import writer as eval_writer
 
@@ -51,7 +57,7 @@ def shard_relpath(month: str) -> str:
 
 
 def project(source: Path) -> list[PublicEvalRow]:
-    """One state shard read through the published shape.
+    """One state day file read through the published shape.
 
     `from_csv_row` takes only the columns the projection declares, so a cell on
     the ledger that this shape does not name cannot arrive by accident - the
@@ -91,16 +97,17 @@ def publish(
     ensure_month: str | None = None,
 ) -> list[Path]:
     """Write a published score shard for each ledger month that changed."""
+    by_month = day_partition.days_by_month(state_root / eval_writer.LEDGER_DIRNAME)
 
     def encode(month: str) -> bytes:
-        rows = project(state_root / eval_writer.LEDGER_DIRNAME / f"{month}{SUFFIX}")
+        rows = [row for day in by_month.get(month, ()) for row in project(day)]
         return publish_console.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
 
     return publish_console.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,
-        available=[path.stem for path in eval_writer.ledger_shards(state_root)],
+        available=sorted(by_month),
         encode=encode,
         keep_months=keep_months,
         today=today,

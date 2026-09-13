@@ -82,27 +82,27 @@ def test_reband_output_is_stable_for_operators() -> None:
 # --- Reading the sharded ledger ----------------------------------------------
 
 
-def _shard(state: Path, month: str, lines: list[str]) -> Path:
-    """One month of the ledger, in the layout `evals.writer` writes."""
-    shard = state / "scores" / f"{month}.csv"
-    shard.parent.mkdir(parents=True, exist_ok=True)
+def _day(state: Path, date: str, lines: list[str]) -> Path:
+    """One day of the ledger, in the layout `evals.writer` writes."""
+    day = state / "scores" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    day.parent.mkdir(parents=True, exist_ok=True)
     header = FIXTURE.read_text(encoding="utf-8").splitlines()[0]
-    shard.write_text("\n".join([header, *lines]) + "\n", encoding="utf-8", newline="")
-    return shard
+    day.write_text("\n".join([header, *lines]) + "\n", encoding="utf-8", newline="")
+    return day
 
 
-def test_a_report_covers_every_month_the_ledger_holds(tmp_path: Path) -> None:
+def test_a_report_covers_every_day_the_ledger_holds(tmp_path: Path) -> None:
     """The defect this replaces: it opened `state/scores.csv` by name.
 
-    Once the ledger sharded, that path stopped existing - and a tool that reads
-    one file would report on whichever slice of history that file happened to
-    be, which is worse than failing. Three months, one row each, and the count
+    Once the ledger partitioned, that path stopped existing - and a tool that
+    reads one file would report on whichever slice of history that file happened
+    to be, which is worse than failing. Three days, one row each, and the count
     has to be three.
     """
     state = tmp_path / "state"
-    _shard(state, "2026-02", ["high,0.91,0,1.0,False"])
-    _shard(state, "2026-03", ["high,0.40,0,1.0,False"])
-    _shard(state, "2026-04", ["low,0.95,0,1.0,False"])
+    _day(state, "2026-02-09", ["high,0.91,0,1.0,False"])
+    _day(state, "2026-03-11", ["high,0.40,0,1.0,False"])
+    _day(state, "2026-04-02", ["low,0.95,0,1.0,False"])
 
     report = reband(read_ledger(state), EvaluationConfig())
 
@@ -110,7 +110,7 @@ def test_a_report_covers_every_month_the_ledger_holds(tmp_path: Path) -> None:
     assert report.recorded == {"high": 2, "low": 1}
 
 
-def test_a_ledger_with_no_shard_says_so_rather_than_reporting_on_nothing(
+def test_a_ledger_with_no_day_says_so_rather_than_reporting_on_nothing(
     tmp_path: Path,
 ) -> None:
     """Zero rows is a percentage of zero, and every share would print 0.0%.
@@ -118,29 +118,29 @@ def test_a_ledger_with_no_shard_says_so_rather_than_reporting_on_nothing(
     A report that looks calm because it read nothing is the failure mode the
     absent file used to have, so the directory has to be as loud as the file was.
     """
-    with pytest.raises(ValueError, match=re.escape("holds no <YYYY-MM>.csv shard")):
+    with pytest.raises(ValueError, match=re.escape("holds no <YYYY>/<MM>/<DD>.csv day file")):
         read_ledger(tmp_path / "state")
 
 
-def test_a_shard_missing_a_column_is_named_by_its_own_filename(tmp_path: Path) -> None:
-    """A month written before a column existed fails by name, not by KeyError.
+def test_a_day_missing_a_column_is_named_by_its_own_filename(tmp_path: Path) -> None:
+    """A day written before a column existed fails by name, not by KeyError.
 
-    With many shards the operator needs to know which one, and the arithmetic
+    With many day files the operator needs to know which one, and the arithmetic
     downstream would otherwise raise somewhere that names no file at all.
     """
     state = tmp_path / "state"
-    _shard(state, "2026-02", ["high,0.91,0,1.0,False"])
-    narrow = state / "scores" / "2026-03.csv"
+    _day(state, "2026-02-09", ["high,0.91,0,1.0,False"])
+    narrow = _day(state, "2026-03-11", [])
     narrow.write_text("band,hhem\nhigh,0.91\n", encoding="utf-8", newline="")
 
-    with pytest.raises(ValueError, match=re.escape("2026-03.csv is missing columns")):
+    with pytest.raises(ValueError, match=re.escape("11.csv is missing columns")):
         read_ledger(state)
 
 
 def test_the_operator_is_told_which_directory_was_read(tmp_path: Path) -> None:
     """The first printed line names the ledger, and it is now a directory."""
     state = tmp_path / "state"
-    _shard(state, "2026-02", ["high,0.91,0,1.0,False"])
+    _day(state, "2026-02-09", ["high,0.91,0,1.0,False"])
 
     report = reband(read_ledger(state), EvaluationConfig())
 

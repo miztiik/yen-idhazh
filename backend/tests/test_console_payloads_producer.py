@@ -52,6 +52,7 @@ from idhazh.contracts.source_health_view import (
 )
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
+from idhazh.evals import writer as score_writer
 
 #: These are the published shapes and the committed digest tree, which is what
 #: the `contract` selector is for. Its three sibling producer modules are in
@@ -284,7 +285,7 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
     for index, month in enumerate(MONTHS):
         stamp = f"{month}-01"
         _write_csv(
-            state / "scores" / f"{month}.csv",
+            score_writer.ledger_path(state, stamp),
             EvalRow.csv_columns(),
             [_ledger_cells(_eval_row(month))],
         )

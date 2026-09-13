@@ -127,8 +127,8 @@ export async function load() {
 	// The widest span the control can reach. Nothing older can be drawn whatever
 	// the operator does, so nothing older is read (`CLAUDE.md` Guardrail #12), and the
 	// cover follows `console.window_presets` rather than a literal so raising a
-	// preset widens it (Guardrail #6). Two covers, because the two ledgers file at
-	// different grains: the score ledger by month, item-health by day.
+	// preset widens it (Guardrail #6). Two covers, because a `state/` ledger files
+	// by day and a published mirror by month: `shards` is the span rollup's.
 	const widestPreset = Math.max(...console_.window_presets);
 	const shards = shardMonths(widestPreset);
 	const days = shardDays(widestPreset);
@@ -310,7 +310,7 @@ export async function load() {
 		// off two different day lists, and the two would eventually disagree. The
 		// rows stop at the widest preset, which is as far back as either chart draws
 		// (`CLAUDE.md` Guardrail #12), and the manifests are bounded the same way.
-		modelChanges: pipelineChanges(evalRows(shards).rows, loadManifests(undefined, widest)),
+		modelChanges: pipelineChanges(evalRows(days).rows, loadManifests(undefined, widest)),
 		board,
 		spanBreakdown: spanView,
 		memory,

@@ -78,7 +78,7 @@ producer obeys the same three rules from the same place.
 | Producer | Writes | Reads |
 | --- | --- | --- |
 | `publish_console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, the counters file |
-| `publish_scores.py` | `scores/<YYYY-MM>.csv` | `state/scores/<YYYY-MM>.csv` |
+| `publish_scores.py` | `scores/<YYYY-MM>.csv` | `state/scores/<YYYY>/<MM>/<DD>.csv`, a month folded from its day files |
 | `publish_feed_health.py` | `feed-health/<YYYY-MM>.csv` | `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
 | `publish_run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `publish_day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |

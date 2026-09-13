@@ -44,13 +44,18 @@ function newestDirectory(at) {
  *
  * An item the scores do not name keeps its own id, which is what every row
  * here carried before. Those rows are the cut fixtures, which nothing scored.
+ *
+ * The ledger files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this walks the
+ * tree. A `readdir` of `*.csv` over the root now finds nothing, and finding
+ * nothing here is silent: every row would keep its own id and the join the
+ * console draws would quietly stop matching.
  */
 function scoredKeys() {
 	const dir = join(STATE, 'scores');
 	const found = new Map();
 	if (!existsSync(dir)) return found;
-	for (const name of readdirSync(dir).filter((entry) => entry.endsWith('.csv'))) {
-		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
+	for (const path of dayFiles(dir)) {
+		const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean);
 		const header = lines[0].split(',');
 		const itemAt = header.indexOf('item_id');
 		const keyAt = header.indexOf('url_key');
@@ -61,6 +66,21 @@ function scoredKeys() {
 		}
 	}
 	return found;
+}
+
+/** Every `<YYYY>/<MM>/<DD>.csv` under a day-filed store, oldest first. */
+function dayFiles(root) {
+	const found = [];
+	for (const year of readdirSync(root, { withFileTypes: true })) {
+		if (!year.isDirectory()) continue;
+		for (const month of readdirSync(join(root, year.name), { withFileTypes: true })) {
+			if (!month.isDirectory()) continue;
+			for (const day of readdirSync(join(root, year.name, month.name))) {
+				if (day.endsWith('.csv')) found.push(join(root, year.name, month.name, day));
+			}
+		}
+	}
+	return found.sort();
 }
 
 function writeItemHealthCanary() {

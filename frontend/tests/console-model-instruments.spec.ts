@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { readDayShards } from '../src/lib/server/payload';
 import {
 	DRAWN_BY,
 	EVAL_PANELS,
@@ -58,28 +59,15 @@ function contractColumns(): string[] {
 	return Object.keys(schema.properties ?? {}).sort();
 }
 
-/** The canary ledger, as rows of strings, exactly as the page's reader sees it. */
+/** The canary ledger, as rows of strings, exactly as the page's reader sees it.
+ *
+ * Through `readDayShards` rather than a directory listing here: the store files
+ * `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so a `readdir` of `*.csv` over the
+ * root finds nothing and leaves every assertion below passing on an empty set.
+ */
 function canaryRows(): EvalInput[] {
 	if (!existsSync(CANARY_SCORES)) return [];
-	const rows: EvalInput[] = [];
-	for (const name of readdirSync(CANARY_SCORES).filter((n) => n.endsWith('.csv')).sort()) {
-		const text = readFileSync(join(CANARY_SCORES, name), 'utf8').replace(/\r\n/g, '\n');
-		const lines = text.split('\n').filter((line) => line !== '');
-		if (lines.length === 0) continue;
-		const header = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			// The canary writes no quoted comma into a numeric column, and every
-			// column this file reads is numeric or a bare flag. A CSV parser here
-			// would be a second implementation of a thing already tested.
-			const cells = line.split(',');
-			const row: Record<string, string> = {};
-			header.forEach((column, index) => {
-				row[column] = cells[index] ?? '';
-			});
-			rows.push(row);
-		}
-	}
-	return rows;
+	return readDayShards(CANARY_SCORES, -1).rows as EvalInput[];
 }
 
 /** The value at a fraction of a sorted list, written out rather than imported. */

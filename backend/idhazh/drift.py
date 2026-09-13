@@ -27,8 +27,8 @@ from typing import Final
 from urllib.parse import urlsplit
 
 from idhazh.contracts.app_config import DriftConfig
-from idhazh.evals.writer import ledger_path
-from idhazh.ledger import shards_in_window
+from idhazh.day_partition import days_in_window
+from idhazh.evals.writer import ledger_path, ledger_relpath
 
 #: Bumped when a rule below changes, because a fired alert has to be
 #: interpretable against the rules in force when it fired.
@@ -95,7 +95,9 @@ class Windows:
     end: date
     recent: list[Observation]
     baseline: list[Observation]
-    months_read: tuple[str, ...]
+    #: The ledger days this read actually opened, oldest first. A day the ledger
+    #: never recorded has no file and is not named here.
+    days_read: tuple[str, ...]
 
 
 def _score(row: Mapping[str, str], name: str) -> float | None:
@@ -131,27 +133,37 @@ def _observation(row: Mapping[str, str]) -> Observation:
 
 
 def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_days: int) -> Windows:
-    """Read only the month shards touched by two completed-day UTC windows."""
+    """Read only the day files touched by two completed-day UTC windows.
+
+    `day_partition.days_in_window` names both ends, so a cover of `n` days opens
+    at most `n + 1` files and reads exactly those days - where the month shards
+    it replaced could hold two months of rows behind a 28-day cover and threw
+    most of them away on the `baseline_start <= when < today` test below.
+
+    A day the ledger never recorded has no file, which is not a fault: a run that
+    scored nothing that day wrote nothing that day.
+    """
     if recent_days < 1 or baseline_days < 1:
         raise ValueError("recent_days and baseline_days must each be at least one")
     recent_start = today - timedelta(days=recent_days)
     baseline_start = recent_start - timedelta(days=baseline_days)
     recent: list[Observation] = []
     baseline: list[Observation] = []
-    months_read: list[str] = []
-    stems = shards_in_window(
+    days_read: list[str] = []
+    dates = days_in_window(
         (today - timedelta(days=1)).isoformat(), recent_days + baseline_days - 1
     )
-    for stem in reversed(stems):
-        path = ledger_path(state_dir, f"{stem}-01")
+    for when_read in reversed(dates):
+        path = ledger_path(state_dir, when_read)
         if not path.is_file():
             continue
-        months_read.append(stem)
+        days_read.append(when_read)
+        where = ledger_relpath(when_read)
         with path.open(encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
             required = {"date", "source_url", "hhem", "extractiveness", "source_word_count"}
             if not required.issubset(reader.fieldnames or []):
-                raise ValueError(f"state/scores/{stem}.csv misses required drift columns")
+                raise ValueError(f"{where} misses required drift columns")
             for row in reader:
                 try:
                     when = date.fromisoformat(row["date"])
@@ -160,13 +172,13 @@ def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_day
                     observation = _observation(row)
                 except (KeyError, ValueError, AttributeError, TypeError) as error:
                     raise ValueError(
-                        f"state/scores/{stem}.csv row {reader.line_num} is invalid for drift"
+                        f"{where} row {reader.line_num} is invalid for drift"
                     ) from error
                 if when >= recent_start:
                     recent.append(observation)
                 else:
                     baseline.append(observation)
-    return Windows(baseline_start, recent_start, today, recent, baseline, tuple(months_read))
+    return Windows(baseline_start, recent_start, today, recent, baseline, tuple(days_read))
 
 
 def domain_of(url: str) -> str:
@@ -412,8 +424,8 @@ def report(
             f"{side}: {len(observations)} rows, {len(_distinct(observations))} distinct articles; "
             f"{unknown} rows do not record the article's length; recorded dates: {span}."
         )
-    if not windows.months_read:
-        lines.append("state/scores/ holds no month in the requested window - nothing was compared")
+    if not windows.days_read:
+        lines.append("state/scores/ holds no day in the requested window - nothing was compared")
         return "\n".join(lines), 1
     thin = shortfall(windows.recent, windows.baseline, config.min_window_rows)
     if thin:

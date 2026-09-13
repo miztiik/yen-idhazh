@@ -476,28 +476,34 @@ export function readCsv(path: string): CsvTable {
 
 /** One row per scored item, read from the committed ledger and never recomputed.
  *
- * The ledger is a directory of month shards, so this reads the newest `months`
- * of them oldest first and hands back one table. Pass `-1` to read every month,
- * and say beside the call why (`docs/concepts/growing-reads.md`).
+ * The ledger is a tree of day files, so this reads the newest `days` of them
+ * oldest first and hands back one table. Pass `-1` to read every day, and say
+ * beside the call why (`docs/concepts/growing-reads.md`).
+ *
+ * The mirror under `frontend/public/scores/` stays monthly and this is not it -
+ * a `state/` store files by what a run writes, a published mirror by what a
+ * browser fetches (`docs/concepts/partitions.md`).
  */
-export function evalRows(months: number = LEDGER_WINDOW_MONTHS): CsvTable {
-	return readShards(join(STATE_ROOT, 'scores'), months);
+export function evalRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
+	return readDayShards(join(STATE_ROOT, 'scores'), days);
 }
 
-/** The newest `months` `<YYYY-MM>.csv` shards of a ledger, oldest first, as one table.
+/** The newest `months` `<YYYY-MM>.csv` shards of a series, oldest first, as one table.
  *
- * Two ledgers shard by month and both wanted this loop. The columns come from
- * the first shard that has any, so an empty month cannot blank the header.
+ * The published mirrors file by month and they wanted this loop. The columns
+ * come from the first shard that has any, so an empty month cannot blank the
+ * header. Every `state/` ledger that used to come here files by day now and
+ * takes `readDayShards` instead.
  *
- * **This is where the bound has to sit.** It is exported, so bounding only
- * `evalRows` would leave the next caller reading every month a run ever wrote.
+ * **This is where the bound has to sit.** It is exported, so bounding only the
+ * callers would leave the next one reading every month a run ever wrote.
  * Adding another month adds a file this call does not open once the cover is
  * filled (`CLAUDE.md` Guardrail #12); pass `-1` to open all of them.
  *
  * The listing itself still names every shard, and that is the honest residue:
  * one directory entry a month, read to find which the newest are. Deriving the
  * newest stem from today's date instead would answer nothing at all for a
- * ledger whose last run was two months ago.
+ * series whose last run was two months ago.
  */
 export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): CsvTable {
 	if (!existsSync(dir)) return { rows: [], columns: [] };

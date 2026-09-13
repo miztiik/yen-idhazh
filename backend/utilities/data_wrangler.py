@@ -469,16 +469,16 @@ def refill(
     and named rather than left as a gap in the ledger count above.
     """
     summarised = archive.archived_months(state_dir)
-    if not writer.ledger_shards(state_dir):
+    if not writer.ledger_days(state_dir):
         where = (state_dir / writer.LEDGER_DIRNAME).as_posix()
         if summarised:
             print(
-                f"{where} holds no month shard - {', '.join(summarised)} have aged out of "
+                f"{where} holds no day file - {', '.join(summarised)} have aged out of "
                 f"the full-grain window and a summary carries no address to re-fetch. "
                 f"{archive.RAW_WINDOW_NOTE}"
             )
         else:
-            print(f"{where} holds no month shard")
+            print(f"{where} holds no day file")
         return 1
     if not digest_root.is_dir():
         print(f"{digest_root.as_posix()} is not a directory")
