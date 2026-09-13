@@ -125,7 +125,7 @@ flowchart LR
   tier["source tier"] --> s1
   fw["feed weight"] --> s1
   rel["feed reliability"] --> s1
-  carried["feeds carrying the address"] --> s1
+  carried["feeds carrying the link"] --> s1
   watch["watchlist subject"] --> s1
   front["front-page vote"] --> s1
   lens["lens weight"] --> s1
