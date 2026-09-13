@@ -97,10 +97,11 @@ why that pass walks the published tree rather than the shards it just folded.
 (`ledger.HEALTH_WINDOW_DAYS`) and the console reaches at most
 `console.max_window_days`, so no summary of a month past
 `observability.feed_health_keep_months` has a reader - and inventing one would
-persist a shape nothing consumes, for ever. `state/feed-retirements.csv` sits
-beside that directory and is never a candidate: it carries no time window at
-all, and a run that forgot a retired address would start asking a dead one
-again.
+persist a shape nothing consumes, for ever. The ledger files by day and that
+age is a month, so the prune takes a month's day files whole and names each one
+it removed. `state/feed-retirements.csv` sits beside that directory and is never
+a candidate: it carries no time window at all, and a run that forgot a retired
+address would start asking a dead one again.
 
 **The seen prune is the fifth thing, and it folds nothing on purpose.**
 `state/seen/` is a lookup rather than a measurement: `ledger.load_seen` opens
@@ -886,6 +887,13 @@ class FeedHealthPruneResult:
     deleted: tuple[str, ...]
     bytes_freed: int
     kept: tuple[str, ...]
+    #: Every `state/feed-health/<YYYY>/<MM>/<DD>.csv` this took, POSIX and
+    #: relative to the repository, oldest first. Carried rather than derived from
+    #: `deleted`, because a month is a directory of day files now: a caller that
+    #: spelled `<month>-01` would name a file the ledger may never have held, and
+    #: the list a dry run prints has to be the list a live run removes, file for
+    #: file.
+    days_removed: tuple[str, ...]
     dry_run: bool
 
     @property
@@ -909,9 +917,14 @@ def prune_feed_health(
     a feed did fourteen months ago would be a shape nothing consumes, persisted
     for ever.
 
+    The ledger files by day and this boundary is a month, so
+    `day_partition.days_by_month` groups the day files and a month goes whole or
+    not at all. That keeps the knob's unit the one it has always had while the
+    files below it are days.
+
     **Older than the oldest month kept, never merely outside a window.** The
     boundary is a floor, so a run handed a date in the past deletes less rather
-    than deleting the live shard. That is the rule `prune_seen` states at length
+    than deleting the live day. That is the rule `prune_seen` states at length
     and it is the same rule here.
 
     `state/feed-retirements.csv` is not in this directory and is never a
@@ -920,22 +933,30 @@ def prune_feed_health(
     """
     boundary = oldest_month_kept(today, config.feed_health_keep_months)
     deleted: list[str] = []
+    days_removed: list[str] = []
     kept: list[str] = []
     freed = 0
 
-    for shard in month_shards(state_dir / ledger.HEALTH_DIRNAME):
-        if shard.stem >= boundary:
-            kept.append(shard.stem)
+    by_month = day_partition.days_by_month(state_dir / ledger.HEALTH_DIRNAME)
+    for month in sorted(by_month):
+        if month >= boundary:
+            kept.append(month)
             continue
-        deleted.append(shard.stem)
-        freed += shard.stat().st_size
-        if not dry_run:
-            shard.unlink()
+        deleted.append(month)
+        for day in by_month[month]:
+            # Named and weighed before anything is unlinked, so the dry run
+            # prints the same list the live run removes.
+            days_removed.append(ledger.health_relpath(f"{month}-{day.stem}"))
+            freed += day.stat().st_size
+            if not dry_run:
+                day.unlink()
+                _drop_empty_day_dirs(day)
 
     return FeedHealthPruneResult(
         deleted=tuple(deleted),
         bytes_freed=freed,
         kept=tuple(kept),
+        days_removed=tuple(days_removed),
         dry_run=dry_run,
     )
 

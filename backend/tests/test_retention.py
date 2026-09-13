@@ -1816,10 +1816,10 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
 # --- The feed-health shards --------------------------------------------------
 
 
-def feed_health_history(state_dir: Path, months: list[str]) -> None:
-    """A real feed-health shard per month, written through the real appender."""
+def feed_health_history(state_dir: Path, months: list[str], *, day_of_month: int = 11) -> None:
+    """A real feed-health day file per month, written through the real appender."""
     for index, month in enumerate(months):
-        day = f"{month}-11"
+        day = f"{month}-{day_of_month:02d}"
         ledger.append_health(
             state_dir,
             day,
@@ -1837,6 +1837,59 @@ def feed_health_history(state_dir: Path, months: list[str]) -> None:
                 )
             ],
         )
+
+
+def feed_health_days(state_dir: Path) -> list[Path]:
+    """Every feed-health day file, oldest first, through the pipeline's own walk."""
+    return list(day_partition.day_files(state_dir / ledger.HEALTH_DIRNAME))
+
+
+def feed_health_months(state_dir: Path) -> list[str]:
+    """Which months the feed-health day tree still holds, oldest first.
+
+    The boundary the prune works on is still a month; only the files below it are
+    days, so a test about what the prune kept asks in months.
+    """
+    return sorted(day_partition.days_by_month(state_dir / ledger.HEALTH_DIRNAME))
+
+
+def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it(
+    tmp_path: Path,
+) -> None:
+    """The prune half of the row's acceptance gate, on a tree built for the two cases.
+
+    One day inside `observability.feed_health_keep_months` and one day outside
+    it, `dry_run=False` passed as the argument every prune function already
+    takes. The assertion is two-sided on purpose: "nothing failed", or "`deleted`
+    is a tuple", passes on an EMPTY result - and an empty result is exactly what
+    `retention.month_shards` returns over a day store, because it matches a
+    seven-character `YYYY-MM` stem and a day tree has none. The store would
+    silently stop being pruned and nothing would fail.
+
+    `retention.dry_run` in `config/idhazh.json` never enters this - it is read by
+    the CLI stage alone, so the pruner under test is not switched off.
+    """
+    state = tmp_path / "state"
+    config = ObservabilityConfig()
+    boundary = oldest_month_kept(TODAY, config.feed_health_keep_months)
+    expired_day = f"{months_back(TODAY, config.feed_health_keep_months + 1)[0]}-09"
+    kept_day = f"{boundary}-09"
+    assert expired_day[:7] < boundary <= kept_day[:7], "the fixture must straddle the boundary"
+    feed_health_history(state, [expired_day[:7], kept_day[:7]], day_of_month=9)
+    expired_path = ledger.health_path(state, expired_day)
+    kept_path = ledger.health_path(state, kept_day)
+    assert expired_path.exists() and kept_path.exists()
+
+    result = prune_feed_health(state, config, TODAY, dry_run=False)
+
+    assert not expired_path.exists(), "the expired day is still there, so nothing was pruned"
+    assert kept_path.exists(), "the day inside the window was deleted"
+    assert list(result.deleted) == [expired_day[:7]]
+    assert list(result.days_removed) == [ledger.health_relpath(expired_day)]
+    assert feed_health_months(state) == [kept_day[:7]]
+    # The emptied month and year directories go with their files, for the reason
+    # the item-health prune gives: `day_files` walks every directory it finds.
+    assert not expired_path.parent.exists()
 
 
 def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
@@ -1860,7 +1913,7 @@ def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
     assert list(result.deleted) == [stem for stem in months if stem < boundary]
     assert list(result.kept) == [stem for stem in months if stem >= boundary]
     assert result.bytes_freed > 0
-    assert [path.stem for path in month_shards(state / ledger.HEALTH_DIRNAME)] == list(result.kept)
+    assert feed_health_months(state) == list(result.kept)
     assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists(), (
         "feed health is deleted rather than folded; an aggregate here has no reader"
     )
@@ -1885,27 +1938,37 @@ def test_the_retirement_ledger_is_never_a_candidate(tmp_path: Path) -> None:
     assert retirements.read_text(encoding="utf-8") == "header\n"
 
 
-def test_a_feed_health_file_that_is_not_a_month_shard_is_left_alone(tmp_path: Path) -> None:
-    """A directory this deletes from names what it recognises, never the rest."""
-    directory = tmp_path / "state" / ledger.HEALTH_DIRNAME
-    directory.mkdir(parents=True)
-    strays = tuple(f"{stem}.csv" for stem in (*NOT_MONTHS, *OTHER_STRAYS))
-    for name in (*strays, "2024-01.csv"):
-        (directory / name).write_text("header\n", encoding="utf-8")
+def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path) -> None:
+    """Inside a day tree nothing is skipped, so a stray refuses the read.
 
-    result = prune_feed_health(tmp_path / "state", ObservabilityConfig(), TODAY)
+    This is where the two grains differ and the difference is deliberate. A month
+    directory is the top of its own store and may hold something that is not the
+    collection, so `month_shards` left a stray alone. Below a year directory every
+    name is written by `append_health` and by nothing else, so a name this walk
+    cannot read means something else is writing there - and a prune that skipped
+    it would delete the rows beside a file nobody can account for.
+    """
+    state = tmp_path / "state"
+    feed_health_history(state, ["2024-01"])
+    (state / ledger.HEALTH_DIRNAME / "2024-01.csv").write_text("header\n", encoding="utf-8")
 
-    assert result.deleted == ("2024-01",)
-    assert sorted(path.name for path in directory.iterdir()) == sorted(strays)
+    with pytest.raises(ValueError, match="not a YYYY/MM/DD day file"):
+        prune_feed_health(state, ObservabilityConfig(), TODAY)
+
+    assert ledger.health_path(state, "2024-01-11").exists(), "a refused read deleted a day"
 
 
-def test_a_feed_health_dry_run_names_the_shard_and_leaves_it(tmp_path: Path) -> None:
+def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> None:
     state = tmp_path / "state"
     feed_health_history(state, ["2024-01", TODAY.strftime("%Y-%m")])
 
     result = prune_feed_health(state, ObservabilityConfig(), TODAY, dry_run=True)
 
     assert result.deleted == ("2024-01",)
+    # The day file itself, never a `<month>-01` the ledger may never have held:
+    # the dry run's whole deliverable is that its list equals what a live run
+    # removes, file for file.
+    assert result.days_removed == ("state/feed-health/2024/01/11.csv",)
     assert result.dry_run
     assert ledger.health_path(state, "2024-01-11").exists()
 
@@ -1914,9 +1977,9 @@ def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: P
     """`--date` takes whatever it is given, so the boundary has to be a floor.
 
     `prune-state --date <last January>` computes a smaller window, and every
-    shard since is outside it. The rule is "older than the oldest month kept",
-    not "outside the window", so the live shard stays and only the genuinely
-    older one goes. Deleting what is outside would take the shard the next
+    day since is outside it. The rule is "older than the oldest month kept",
+    not "outside the window", so the live day stays and only the genuinely
+    older one goes. Deleting what is outside would take the file the next
     quarantine reads.
     """
     state = tmp_path / "state"
@@ -1986,7 +2049,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
 
     assert item_health_months(state) == survivors
     assert [path.stem for path in month_shards(public)] == survivors
-    assert [path.stem for path in month_shards(state / ledger.HEALTH_DIRNAME)] == survivors
+    assert feed_health_months(state) == survivors
     assert len(survivors) == 14
 
     # The expired month survives as one summary, and the summary is checked
@@ -1999,7 +2062,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
         doomed_texts
     )
     assert not publish_telemetry.shard_path(public, expired).exists()
-    assert not ledger.health_path(state, f"{expired}-01").exists()
+    assert not ledger.health_path(state, f"{expired}-11").exists()
 
     # Every window a 366-day console read can select still names a file that is
     # there. `shards_in_window` is the reader's own helper, so this is the read
@@ -2079,7 +2142,8 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     # Every day file the fold would take, named one by one. The month has two, so
     # a list that named `<month>-01` would print a path the ledger never held and
     # miss the one it did - and the dry run's whole deliverable is that its list
-    # equals what a live run removes, file for file.
+    # equals what a live run removes, file for file. Feed health is the same
+    # shape one store over: it files by day too, and the fixture writes the 11th.
     expired_days = [
         day.relative_to(state.parent).as_posix()
         for day in item_health_days(state)
@@ -2089,7 +2153,7 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     assert named == sorted(
         [
             *expired_days,
-            f"state/feed-health/{expired}.csv",
+            ledger.health_relpath(f"{expired}-11"),
             f"frontend/public/telemetry/{expired}.csv",
         ]
     )

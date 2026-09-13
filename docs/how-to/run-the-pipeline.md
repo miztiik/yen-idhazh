@@ -67,7 +67,7 @@ same variable. There is no hosted inference anywhere in this project
 | `state/fingerprints.csv` | One row per pipeline stamp | **yes** |
 | `state/seen/<YYYY-MM>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
-| `state/feed-health/<YYYY-MM>.csv` | What every feed did on every run | **yes** |
+| `state/feed-health/<YYYY>/<MM>/<DD>.csv` | What every feed did on every run | **yes** |
 | `state/feed-retirements.csv` | Every endpoint the run stopped asking, and the evidence | **yes** |
 | `state/item-health/<YYYY>/<MM>/<DD>.csv` | What every planned item did on every run | **yes** |
 
@@ -105,9 +105,9 @@ Turning live deletion on is a separate one-line commit, and this is the order:
  --log`, and grep it for `prune-state would remove`.
 3. Check the list against what you expect. On 2027-10-01 that is four stores -
  the day files under `state/item-health/2026/08/`,
- `frontend/public/telemetry/2026-08.csv`, `state/feed-health/2026-08.csv` and
- `state/scores/2026-08.csv`. A fifth name, or a month that is not the oldest,
- means a boundary is wrong and the switch
+ `frontend/public/telemetry/2026-08.csv`, the day files under
+ `state/feed-health/2026/08/` and `state/scores/2026-08.csv`. A fifth name, or
+ a month that is not the oldest, means a boundary is wrong and the switch
  waits.
 4. Confirm `state/score-archive/2026-08.json` exists and reconciles. The step
  writes and reads back every archive before it unlinks anything, so an archive

@@ -502,8 +502,8 @@ export async function load() {
 	// whatever the operator does, so every read below is covered by it and no
 	// panel loses a day (`CLAUDE.md` Guardrail #12). Read from `console.window_presets`
 	// rather than written down here, so raising the widest preset widens the
-	// reads with it (Guardrail #6). Two covers, because the two ledgers file at
-	// different grains: the score ledger by month, item-health by day.
+	// reads with it (Guardrail #6). Two covers, because the ledgers file at two
+	// grains: the score ledger by month, item-health and feed-health by day.
 	const widest = Math.max(...console.window_presets);
 	const shards = shardMonths(widest);
 	const { rows } = evalRows(shards);
@@ -551,7 +551,7 @@ export async function load() {
 		}))
 	}));
 
-	const results = feedResults(shards);
+	const results = feedResults(shardDays(widest));
 	// The list names only the feeds that broke, which is the right list and half
 	// an answer. This is the other half, read over the same shards, so the
 	// sentence it prints names those runs rather than claiming every run there

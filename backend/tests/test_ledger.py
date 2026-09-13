@@ -7,13 +7,15 @@ import csv
 import io
 import tracemalloc
 from collections.abc import Iterator
+from datetime import date as date_type
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR
 
-from idhazh import cli, config, ledger
+from idhazh import cli, config, day_partition, ledger
 from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
@@ -28,7 +30,6 @@ from idhazh.evals.writer import OBSERVATION_KEY
 from utilities import migrate_score_ledger as migrate
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
-from utilities.migrate_feed_health import NARROW_COLUMNS, WIDENED_AT, widen
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
 
@@ -1015,125 +1016,6 @@ def test_a_row_the_fixed_pipeline_wrote_is_left_alone() -> None:
         )
 
 
-def narrowed(text: str) -> str:
-    """The wide shard as it stood before 2026-09-02, built from the committed bytes.
-
-    The pre-migration file itself is gone from the working tree, so the fixture
-    for it is derived rather than pasted: drop the five appended columns off the
-    committed shard and the result is the header every scheduled run appended to
-    until this change landed.
-    """
-    out = io.StringIO(newline="")
-    writer = csv.DictWriter(out, fieldnames=NARROW_COLUMNS, lineterminator="\n")
-    writer.writeheader()
-    with io.StringIO(text, newline="") as handle:
-        for row in csv.DictReader(handle):
-            writer.writerow({name: row[name] for name in NARROW_COLUMNS})
-    return out.getvalue()
-
-
-def migrated_prefix(text: str) -> str:
-    """The committed bytes for exactly the rows this migration produced.
-
-    The stamp is the marker `migrate_feed_health.py` deliberately preserved, and
-    rows are appended in run order, so the pre-widening rows are the head of the
-    file and this is a byte-exact slice rather than a re-serialisation. That is
-    what keeps the comparison below a claim about the committed bytes.
-    """
-    lines = text.splitlines(keepends=True)
-    kept = lines[:1]
-    for line in lines[1:]:
-        if line.split(",", 1)[0] >= WIDENED_AT:
-            break
-        kept.append(line)
-    return "".join(kept)
-
-
-def test_the_committed_feed_health_shards_have_the_shape_the_contract_writes() -> None:
-    """The read-side migration for the widened row is the files themselves.
-
-    `require_matching_header` stops the append when the two disagree, so a
-    contract widened without the shards being rewritten would take down the next
-    scheduled run at its first stage (CLAUDE.md section 11). Every row is also
-    read back, because a header that matches over cells that do not parse is a
-    ledger nothing can use.
-
-    Only a row stamped below `WIDENED_AT` is held to five empty cells. The
-    changelog entry that appended them made every one nullable, so a row written
-    since may fill them or leave them; asserting every row was empty only held
-    until the next scheduled run, and that is exactly how long it held.
-    """
-    known = {entry.version for entry in FeedHealthRow.__changelog__}
-    shards = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))
-    assert shards, "no committed feed-health shard - the read is broken"
-
-    read = 0
-    for path in shards:
-        assert ledger.read_header(path) == FeedHealthRow.csv_columns(), path.name
-        assert b"\r\n" not in path.read_bytes(), f"{path.name} carries CRLF"
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            for row in csv.DictReader(handle):
-                parsed = FeedHealthRow.from_csv_row(row)
-                assert parsed.version in known, f"{path.name} carries {parsed.version}"
-                if parsed.version < WIDENED_AT:
-                    assert parsed.endpoint_key is None, "a migrated row claims an identity"
-                    assert parsed.robots_outcome is None, "a migrated row checked permission"
-                    assert parsed.target_attempted is None, "absent is not False"
-                read += 1
-    assert read > 0
-
-
-def test_the_widening_restores_the_committed_bytes_and_the_guard_forces_it(
-    tmp_path: Path,
-) -> None:
-    """The Oracle, both halves, over real shards rather than hand-written ones.
-
-    The narrow file is the committed pre-widening rows with their five appended
-    columns taken off again, so it is the exact shape every run wrote until
-    2026-09-02. Appending to it is refused, which is what put the migration in
-    the same commit as the contract; and running the migration over it
-    reproduces the committed bytes, which is what proves those bytes are the
-    migration's output and not a hand edit.
-
-    Only the pre-widening rows can carry that proof, because a row written since
-    fills cells this migration writes empty. They are a fixed set that never
-    grows, so when retention finally takes the last one the claim becomes
-    unprovable and irrelevant together, and this skips rather than reporting a
-    defect that is not there.
-    """
-    shards = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))
-    proved = 0
-    for path in shards:
-        migrated = migrated_prefix(path.read_text(encoding="utf-8"))
-        if migrated.count("\n") < 2:
-            continue
-        stale = ledger.health_path(tmp_path / str(proved), DATE)
-        stale.parent.mkdir(parents=True, exist_ok=True)
-        stale.write_text(narrowed(migrated), encoding="utf-8", newline="\n")
-
-        with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
-            ledger.append_health(tmp_path / str(proved), DATE, [health_row()])
-
-        assert widen(stale.read_text(encoding="utf-8")).text == migrated, path.name
-        proved += 1
-
-    if not proved:
-        pytest.skip("no committed row predates the widening, so there is nothing to prove")
-
-
-def test_widening_an_already_wide_feed_health_shard_is_refused() -> None:
-    """Re-running the migration on a migrated shard must not rewrite it a second time.
-
-    That is what makes it the tool for the merge conflict this change is
-    guaranteed to hit: take the upstream file whole and run this over it. A
-    utility that widened a wide file would add five more empty columns.
-    """
-    committed = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))[-1]
-
-    with pytest.raises(ValueError, match="already the wide shape"):
-        widen(committed.read_text(encoding="utf-8"))
-
-
 def test_the_retirement_ledger_exists_in_a_fresh_checkout() -> None:
     """`git add` on a path that is not there aborts the whole commit step.
 
@@ -1479,9 +1361,9 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same five ledgers on a tree with one month and one
-    cleanup day in it. What separates them is what a second month or a second day
-    would add: to the operator's pass, a file; to a run's pass, nothing.
+    Both covers name the same five ledgers on a tree with one day of each in it.
+    What separates them is what a second day would add: to the operator's pass, a
+    file; to a run's pass, nothing.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
@@ -1494,7 +1376,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
         (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
-        (f"feed-health/{DATE[:7]}.csv", ledger.FEED_HEALTH_KEY),
+        (f"feed-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.FEED_HEALTH_KEY),
         (f"item-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.ITEM_HEALTH_KEY),
     ]
 
@@ -1524,6 +1406,148 @@ def account(outcome: FetchOutcome, *, items: int = 0, at: str = "06:00:00") -> F
 
 def health_rows(state: Path) -> list[FeedHealthRow]:
     return ledger.load_health(state, today=DATE, within_days=1)
+
+
+#: Wider than `ledger.HEALTH_WINDOW_DAYS` (31), so a 31-day window has something
+#: to exclude and a grain that read too far shows up as rows the window did not
+#: name. It spans two months as well, so the month arm below really holds two.
+PARITY_DAYS: Final = 40
+
+#: One feed a reading, chosen so the three cases the reliability reduction
+#: separates are all present: one that answers, one that never reaches the
+#: address, and one that was skipped and so bears no evidence either way.
+PARITY_FEEDS: Final = {
+    "steady": FetchOutcome.OK,
+    "broken": FetchOutcome.TRANSIENT,
+    "skipped": FetchOutcome.SKIPPED,
+}
+
+
+def parity_rows(days: int = PARITY_DAYS) -> list[FeedHealthRow]:
+    """`days` consecutive days of readings, one row per feed per day, oldest first.
+
+    The steady feed answers with entries on every run but one in seven, so its
+    reliability is a fraction rather than 1.0 - a window that reached a different
+    set of days would move it, which is what makes the comparison below bite.
+    """
+    start = date_type.fromisoformat(DATE) - timedelta(days=days - 1)
+    rows: list[FeedHealthRow] = []
+    for offset in range(days):
+        day = (start + timedelta(days=offset)).isoformat()
+        for feed_id, outcome in PARITY_FEEDS.items():
+            empty = feed_id == "steady" and offset % 7 == 0
+            rows.append(
+                FeedHealthRow(
+                    version=FeedHealthRow.schema_version(),
+                    run_id=f"{day}-1",
+                    date=day,
+                    feed_id=feed_id,
+                    checked_at=f"{day}T06:00:00Z",
+                    outcome=outcome,
+                    status=200 if outcome is FetchOutcome.OK else None,
+                    items=0 if empty or outcome is not FetchOutcome.OK else 5,
+                )
+            )
+    return rows
+
+
+def month_grain_tree(root: Path, rows: list[FeedHealthRow]) -> None:
+    """The ledger as it was filed until 2026-09-13: one `<YYYY-MM>.csv` a month.
+
+    Written here rather than read from the archive, because the layout it
+    describes is not in the tree any more - and a parity claim needs both sides
+    present at once.
+    """
+    columns = FeedHealthRow.csv_columns()
+    by_month: dict[str, list[FeedHealthRow]] = {}
+    for row in rows:
+        by_month.setdefault(row.date[:7], []).append(row)
+    root.mkdir(parents=True, exist_ok=True)
+    for month, held in by_month.items():
+        body = ",".join(columns) + "\n"
+        body += "".join(
+            ",".join(str(row.csv_row()[name]) for name in columns) + "\n" for row in held
+        )
+        (root / f"{month}.csv").write_text(body, encoding="utf-8", newline="")
+
+
+def month_grain_read(root: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
+    """`load_health` as it read the month shards, spelled out so both arms exist.
+
+    A deliberate copy of the retired reader rather than a call into it: the claim
+    is that the answer did not move, and a claim about two grains needs the old
+    one written down somewhere.
+    """
+    rows: list[FeedHealthRow] = []
+    for stem in ledger.shards_in_window(today, within_days):
+        path = root / f"{stem}.csv"
+        if not path.is_file():
+            continue
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for raw in csv.DictReader(handle):
+                try:
+                    rows.append(FeedHealthRow.from_csv_row(raw))
+                except (KeyError, ValueError):
+                    continue
+    rows.sort(key=lambda row: (row.date, int(row.run_id.rsplit("-", 1)[1])))
+    return rows
+
+
+def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
+    tmp_path: Path,
+) -> None:
+    """The row Oracle. Moving the files moved no reliability figure.
+
+    Built at both grains from ONE row list, so a difference can only come from
+    the reading. Forty days against a 31-day window, so the window has eight days
+    to exclude - and the month arm is what proves the exclusion is real: two
+    month shards hold all forty days, so the old reader hands back rows the
+    window never named. The day arm hands back exactly the days it named, which
+    is the trade the grain makes - more file handles for fewer rows.
+
+    The reliability maps are compared over the SAME rows on both sides, because
+    that is the claim worth making: `feed_reliability` is untouched by this row,
+    and what could break is which rows reach it.
+
+    A 40-day tree the test builds rather than the committed ledger: the archive
+    holds 21 days, gains one every day, and could never carry the case this needs
+    (`CLAUDE.md` section 13, Guardrail #12).
+    """
+    rows = parity_rows()
+    day_tree = tmp_path / "day" / "state"
+    for row in rows:
+        ledger.append_health(day_tree, row.date, [row])
+    month_root = tmp_path / "month" / "state" / ledger.HEALTH_DIRNAME
+    month_grain_tree(month_root, rows)
+
+    window = ledger.HEALTH_WINDOW_DAYS
+    named = set(day_partition.days_in_window(DATE, window))
+    from_days = ledger.load_health(day_tree, today=DATE, within_days=window)
+    from_months = month_grain_read(month_root, today=DATE, within_days=window)
+
+    assert len(list(day_partition.day_files(day_tree / ledger.HEALTH_DIRNAME))) == PARITY_DAYS
+    assert len(named) == window + 1, "both ends are named, so a cover of n is n + 1 days"
+    assert {row.date for row in from_days} == named, "the day arm read a day the window did not name"
+    assert len(from_days) == len(named) * len(PARITY_FEEDS)
+    assert len(from_months) > len(from_days), (
+        "the month shards have to hold rows outside the window or the trade is not shown"
+    )
+    assert from_days == [row for row in from_months if row.date in named]
+
+    floor = 0.05
+    over_the_same_rows = {
+        feed_id: ledger.feed_reliability(
+            [row for row in from_months if row.feed_id == feed_id and row.date in named],
+            floor=floor,
+        )
+        for feed_id in PARITY_FEEDS
+    }
+    measured = ledger.reliability(day_tree, today=DATE, within_days=window, floor=floor)
+
+    assert measured == over_the_same_rows
+    assert 0.0 < measured["steady"] < 1.0, "the fixture has to separate the three feeds"
+    assert measured["broken"] == floor
+    assert measured["skipped"] == 1.0
 
 
 def test_a_second_attempt_at_one_run_leaves_one_row_per_feed(tmp_path: Path) -> None:
