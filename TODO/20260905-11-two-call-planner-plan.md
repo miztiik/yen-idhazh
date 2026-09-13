@@ -110,7 +110,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3d | The instrument says where every re-read token went | 3b | C3 | DONE #639 | p11-3d | #639 | worker |
 | 3c | Own the prompt bytes | 3d | C4 | DONE #640 | p11-3c | #640 | worker |
 | 3e | The instructions move in front of the article | 3c | C5 | DONE #644 | p11-3e | #644 | worker |
-| 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | DONE #PRNUM | p11-3f | #PRNUM | worker |
+| 3f | The window is sized for two calls | 3d, plan 23 row #1a | C6 | DONE #659 | p11-3f | #659 | worker |
 | 3g | Call 1's reply does not fit its own budget | - | C7 | DONE #652 | p11-3g | #652 | worker |
 | 3h | A two-call item that failed on call 1 reports no cost at all | 3g | C8 | PENDING | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
