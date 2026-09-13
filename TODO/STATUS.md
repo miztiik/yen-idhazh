@@ -36,12 +36,11 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
 | [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 0 | 13 | 3 |
 
-## In flight - 3
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #1b | 12 | B | The browser draws the chart, and the pipeline stops rendering | p12-r1b |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | p23-r7b |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
 
 ## Ready now - 22
@@ -75,7 +74,7 @@ section 3 is where it is answered.
 | #2 | 28 | A | The turn envelope moves onto the model entry | - |
 | #3 | 28 | A | Every tokenizer-shaped constant names the weights it was taken against | - |
 
-## Waiting on another row - 64
+## Waiting on another row - 65
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -120,9 +119,10 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is IN-FLIGHT |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | - |
+| #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is UNKNOWN |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
-| #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is IN-FLIGHT; 8 is PENDING |
+| #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is UNKNOWN; 8 is PENDING |
 | #9 | 23 | K | Confidence is a masked probability over the label's whole span | 8 is PENDING; 14 is PENDING; P5 is PENDING |
 | #15 | 23 | K | The console tab, at `/console/judgement/` | 14 is PENDING; plan 25 row #12 is PENDING |
 | #10 | 23 | L | Five stances, each with its own decline, behind a gate written in code | 8 is PENDING; 14 is PENDING |
