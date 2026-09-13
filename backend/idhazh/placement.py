@@ -16,15 +16,21 @@ story that fits. `rank._take` follows the same rule for the day ceiling and this
 is that rule applied to an order rather than to a selection. The day a reader
 gets is never one story shorter for the frame, because a reader cannot see what
 was left out.
+
+The same rule governs the desk floor and the desk ceiling below. They change
+which desk a story is filed under and nothing else: no story is admitted, none
+is dropped, and the day comes back exactly as long as it went in.
 """
 
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Container, Mapping, Sequence
+from dataclasses import dataclass
 
 from idhazh.contracts.app_config import PlacementConfig
 from idhazh.contracts.digest_day import DigestItem
+from idhazh.contracts.taxonomy import Taxonomy
 
 
 def stream_order(items: Sequence[DigestItem]) -> list[DigestItem]:
@@ -58,8 +64,182 @@ def _desk_of(item: DigestItem) -> str:
     return item.desk or item.vertical
 
 
-def place(items: Sequence[DigestItem], *, config: PlacementConfig) -> list[DigestItem]:
-    """The day in one order, with the frame applied to its head.
+@dataclass(frozen=True, slots=True)
+class DeskBounds:
+    """What one desk may not fall below, and what it may not rise above.
+
+    `floor` is a count and `ceiling` is a share of the published day. A count is
+    a moving share - ten stories is 1.4 percent of a 731-story day and a quarter
+    of a 40-story one - so the rule about crowding out the rest of the day is the
+    share. A floor is a count because it asks whether the desk is worth opening
+    at all, and six stories is a fragment on any size of day.
+    """
+
+    floor: int
+    ceiling: float
+
+
+def desk_bounds(taxonomy: Taxonomy) -> dict[str, DeskBounds]:
+    """The two numbers per desk, read off `config/taxonomy.json`.
+
+    Every desk the vocabulary carries, retired ones included. A day published
+    last month can still hold a desk this file has since retired, and leaving it
+    out here would hand that desk no rule rather than the rule it had.
+    """
+    return {
+        vertical.id: DeskBounds(floor=vertical.floor, ceiling=vertical.ceiling)
+        for vertical in taxonomy.verticals
+    }
+
+
+def _allowance(bounds: Mapping[str, DeskBounds], desk: str, *, day: int) -> int:
+    """The most stories this desk may hold in a day of `day` stories.
+
+    Never below the desk's own floor. A ceiling that cut a desk under the floor
+    would be two rules contradicting each other on any small day - five desks at
+    a floor of six need thirty stories, and a quarter of a twenty-story day is
+    five - and the arithmetic that resolves it is the one
+    `rank.day_source_ceiling` already uses for the per-feed case. It also means
+    the ceiling switches itself off on a day too thin to backfill, at the exact
+    point where it would have cut a desk below the breadth the floor guarantees,
+    rather than at a day size somebody guessed. Ruled by Editor, 2026-09-13.
+
+    A desk with no entry may hold the whole day. An absent rule is no rule.
+    """
+    bound = bounds.get(desk)
+    if bound is None:
+        return day
+    return max(bound.floor, int(bound.ceiling * day))
+
+
+def second_desk(item: DigestItem, *, filed_as: str, closed: Container[str]) -> str | None:
+    """The desk a story falls back to when the desk it is on has no room for it.
+
+    Today it is the feed's declared vertical, and only where something else has
+    already filed the story somewhere other than there - so on a day where
+    nothing read the article, every story's only desk IS its feed's vertical and
+    no story has a second one. Row #8 of the placement plan gives a story a
+    second desk of its own reading, and this is the function that will read it.
+
+    It reads where the story is filed NOW rather than where it arrived, so a
+    story that has already moved has no second desk left and cannot move twice.
+    That is what makes the whole re-file a single well-defined thing: it only
+    ever undoes a relabel, and it never invents a filing nothing claimed.
+
+    **A desk this run refused to render is never an answer.** `rank.desk_of`
+    already sends a story away from a below-floor desk, and a rule that sent it
+    back would publish stories under a name the same day's payload says planned
+    nothing - the page and the operator surface saying opposite things about one
+    word.
+    """
+    if item.vertical == filed_as or item.vertical in closed:
+        return None
+    return item.vertical
+
+
+def refile(
+    stream: Sequence[DigestItem],
+    *,
+    bounds: Mapping[str, DeskBounds],
+    closed: Container[str] = frozenset(),
+) -> list[DigestItem]:
+    """Hold every desk under its ceiling and every desk at or over its floor.
+
+    Takes the day already in score order and gives back the same stories in the
+    same order, with some of them filed under a different desk. **It is the only
+    thing this does.** Nothing is admitted, nothing is dropped, and the day is
+    exactly as long as it arrived - so a reader's stream is untouched and only
+    the desk pages move.
+
+    Two passes, and the ceiling runs first because its overflow is the supply
+    the floor fills from. Both move the same story - **a desk gives up its
+    lowest-scoring movable one**, so the crowded desk keeps its best - and each
+    answers a different question, so each stops somewhere different. The ceiling
+    stops when the crowded desk is inside its share, whatever that leaves the
+    desks it fed; a desk it opens with one story is a thin desk carrying a true
+    label, which `DigestVerticalRef` already says is thin. The floor is taken in
+    one piece: a desk is opened to its floor or left exactly as it was, because
+    half a floor is two thin desks where there was one full one.
+
+    Three things a floor may never do, and each one is a test.
+
+    - **It never admits a story a gate refused.** `too_old`, `below_feed_floor`,
+      a failed extraction and a failed summary all stand. The structural half is
+      that a refused story never became a `DigestItem`, so it is not in the
+      sequence this reads; the half that needs saying is `closed`, which keeps a
+      desk the run will not render from receiving anything.
+    - **It never reaches a previous day.** A day fills from its own stories.
+    - **It never files a story on a desk the story has no claim to.** A story
+      with no second desk stays where it is, and a desk it cannot fill publishes
+      thin. `DigestVerticalRef` already carries why.
+
+    A desk over its ceiling with nowhere to send the overflow stays over its
+    ceiling. A rule that dropped the surplus would shorten the day, which is the
+    one thing a frame may not buy.
+    """
+    filed = {item.item_id: _desk_of(item) for item in stream}
+    counts = Counter(filed.values())
+    day = len(stream)
+    allowed = {desk: _allowance(bounds, desk, day=day) for desk in {*filed.values(), *bounds}}
+    floors = {desk: bound.floor for desk, bound in bounds.items()}
+
+    def move(item: DigestItem, home: str, other: str) -> None:
+        filed[item.item_id] = other
+        counts[home] -= 1
+        counts[other] += 1
+
+    # The ceiling, worst-scoring first, so a crowded desk keeps its best. A desk
+    # only ever falls as far as its allowance, and an allowance is never under a
+    # floor, so this pass cannot open a hole the next one has to fill.
+    for item in reversed(stream):
+        home = filed[item.item_id]
+        if counts[home] <= allowed.get(home, day):
+            continue
+        other = second_desk(item, filed_as=home, closed=closed)
+        if other is None or counts[other] >= allowed.get(other, day):
+            continue
+        move(item, home, other)
+
+    # The floor, taken in one piece per desk.
+    for desk in sorted(floors):
+        want = floors[desk] - counts[desk]
+        if want <= 0:
+            continue
+        spare = Counter(counts)
+        taken: list[tuple[DigestItem, str]] = []
+        for item in reversed(stream):
+            if len(taken) == want:
+                break
+            home = filed[item.item_id]
+            if second_desk(item, filed_as=home, closed=closed) != desk:
+                continue
+            # A desk never dips under its own floor to lift another one over
+            # theirs. That is two thin desks where there was one full one.
+            if spare[home] - 1 < floors.get(home, 0):
+                continue
+            spare[home] -= 1
+            taken.append((item, home))
+        if len(taken) < want:
+            continue
+        for item, home in taken:
+            move(item, home, desk)
+
+    return [
+        item
+        if filed[item.item_id] == _desk_of(item)
+        else item.model_copy(update={"desk": filed[item.item_id]})
+        for item in stream
+    ]
+
+
+def place(
+    items: Sequence[DigestItem],
+    *,
+    config: PlacementConfig,
+    bounds: Mapping[str, DeskBounds] | None = None,
+    closed: Container[str] = frozenset(),
+) -> list[DigestItem]:
+    """The day in one order, with the desk rules applied and the frame on its head.
 
     Three things hold whatever the config says, and each one is a test:
 
@@ -74,9 +254,15 @@ def place(items: Sequence[DigestItem], *, config: PlacementConfig) -> list[Diges
     Where the caps cannot fill the head - a day with one desk, or a day shorter
     than the head - the best story a cap held down takes the slot back. The frame
     yields before the day does.
+
+    `refile` runs before the frame rather than after it, because the frame caps
+    how much of the head one desk may hold and the desk rules are what decide
+    which desk a story is on. A frame that ran first would cap a filing that was
+    about to change.
     """
-    stream = stream_order(items)
+    stream = refile(stream_order(items), bounds=bounds or {}, closed=closed)
     head: list[DigestItem] = []
+
     held: list[DigestItem] = []
     desks: Counter[str] = Counter()
     feeds: set[str] = set()

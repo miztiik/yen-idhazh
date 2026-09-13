@@ -4326,6 +4326,55 @@ def test_the_lens_vocabulary_may_lose_an_entry_but_never_hold_one_twice() -> Non
         Taxonomy.model_validate(payload)
 
 
+def test_every_desk_ships_with_a_floor_and_a_ceiling() -> None:
+    """A fresh clone runs on these, so they are the numbers a reader gets.
+
+    The floor is a count and the ceiling is a share, and the five ceilings sum
+    to 1.6, so they are satisfiable together rather than five rules that cannot
+    all hold. Ruled by Editor, 2026-09-13, against the 24 committed days:
+    `india` has never passed 44.7 percent of a day and `world` 37.2, so a region
+    desk sits at 0.4; `ai` reached 29.5 percent on the largest day on record, so
+    it sits at 0.35 with headroom over what supply has produced; the two subject
+    desks with 21 feeds sit at 0.25, above their worst full days of 19.3 and
+    16.7 percent.
+    """
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    bounds = {desk.id: (desk.floor, desk.ceiling) for desk in taxonomy.verticals}
+
+    assert bounds == {
+        "ai": (6, 0.35),
+        "energy": (6, 0.25),
+        "business-economy": (6, 0.25),
+        "world": (6, 0.4),
+        "india": (6, 0.4),
+    }
+    assert sum(ceiling for _, ceiling in bounds.values()) > 1.0, (
+        "five ceilings that sum below one cannot all hold on any day"
+    )
+
+
+def test_a_taxonomy_with_no_floor_and_no_ceiling_still_validates() -> None:
+    """The schema gates shape and never contents, so neither key is required.
+
+    Three taxonomy fixtures written by another plan carry no floor and no
+    ceiling. A required key would turn this row into three failing tests in
+    somebody else's, so both are optional and both default to the value that is
+    no rule at all - a desk nobody configured may hold the whole day and is
+    required to publish nothing.
+    """
+    schema = json.loads(read_text(REPO_ROOT / "schemas" / "taxonomy.schema.json"))
+    required = schema["$defs"]["VerticalDef"].get("required", [])
+
+    assert "floor" not in required
+    assert "ceiling" not in required
+
+    for stem in ("definitions-a", "definitions-b", "retired-event"):
+        for desk in taxonomy_fixture(stem).verticals:
+            assert (desk.floor, desk.ceiling) == (0, 1.0), (
+                f"{stem}.json carries no bounds, so {desk.id} must read as having no rule"
+            )
+
+
 def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:
     """The read-side half of the retype, on a record a run really wrote.
 
