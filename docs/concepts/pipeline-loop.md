@@ -102,7 +102,7 @@ ledger contract sit under `state/`:
 | --- | --- | --- |
 | `state/seen/<YYYY-MM>.csv` | Collect | How old is this article, when its feed gave no date? |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Assemble | Have we already published this address? |
-| `state/feed-health/<YYYY-MM>.csv` | Collect | What did every feed do, on every run? |
+| `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Collect | What did every feed do, on every run? |
 | `state/feed-retirements.csv` | Collect | Is this address gone for good? |
 | `state/fingerprints.csv` | not wired; intended single writer is Assemble | Which observed pipeline identities have run? The committed file currently has only its header. |
 | `state/item-health/<YYYY>/<MM>/<DD>.csv` | the worker, then Assemble | What did every planned item do in this run? |

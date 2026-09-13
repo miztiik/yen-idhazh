@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
  * The console never claims a fact it cannot have read.
  *
  * Every console panel reads a window. `feedResults` opens the newest
- * `shardMonths(90)` month shards, the source census reads at most
+ * `shardDays(90)` day files, the source census reads at most
  * `collect.source_yield_min_complete_days` complete days, and the availability
  * states come from `HEALTH_WINDOW_DAYS` of the feed ledger. So a sentence that
  * says a feed "has never failed" is not a stronger version of "did not fail in
