@@ -31,11 +31,8 @@ from idhazh.contracts.visual import (
     VisualPurpose,
     VisualType,
 )
-from idhazh.visual_validator import (
-    Rejection,
-    ValidatorCheck,
-    validate_plan,
-)
+from idhazh.contracts.visual_telemetry import ValidatorCheck
+from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import (
     DOWNGRADE_EDGES,
     DOWNGRADE_TABLE_VERSION,
@@ -414,6 +411,7 @@ def test_no_check_can_reach_a_model(module: str) -> None:
         "idhazh.contracts.app_config",
         "idhazh.contracts.element",
         "idhazh.contracts.visual",
+        "idhazh.contracts.visual_telemetry",
         "idhazh.elements",
         "idhazh.visual_vocabulary",
         "re",
