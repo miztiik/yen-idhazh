@@ -31,7 +31,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The rules, and which rule governs every file this project writes | - | A | DONE #643 | p13-1 | #643 | worker |
 | 2 | The window takes a value, and nothing is deleted yet | 1 | B | DONE #651 | p13-2 | #651 | worker |
-| 3 | The fuse comes out, and one run is watched | 2 | C | PENDING | - | - | - |
+| 3 | The fuse comes out, and one run is watched | 2, plan 12 row #1 | C | BLOCKED | - | - | - |
+
+**Row #3's `Depends-on` was `2` alone until 2026-09-13, and its own decision 1 contradicted that.** "This lands after the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound." The new renderer is [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) row #1, which is PENDING - so the queue reader was offering row #3 as ready while the row's own text refused it. The dependency is now written where a tool can read it. Corrected by the orchestrator before dispatch.
 
 ---
 
