@@ -54,6 +54,28 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T14:20",
+            change=(
+                "A summary that failed on its reply records call_1 and the five flat cost "
+                "cells, which it left at the model's defaults of zero."
+            ),
+            why=(
+                "Every gate below 'the model never answered' refuses text the server had "
+                "already read a prompt for and written an answer to, so the prefill and "
+                "the decode were spent whatever the verdict was. Recording zero made a day "
+                "that failed many replies read as a cheap day, and reconcile_prefill pooled "
+                "the ledger against the server's own counters with those calls missing from "
+                "one side, so the difference was absorbed as drift rather than named. No "
+                "field moved and no shape broke - both slots were already optional and the "
+                "cells already defaulted to zero - so nothing an earlier run wrote needs "
+                "rewriting. The read-side rule is the reason this entry exists: on a failed "
+                "payload stamped before this version a zero cost cell means never recorded, "
+                "not free, and a reader trending cost across 2026-09-13 sees a step up that "
+                "nothing else in the ledger explains. A call that never returned still "
+                "records nothing, and that null is the real zero."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
             why=(

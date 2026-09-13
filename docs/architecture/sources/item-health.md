@@ -380,6 +380,16 @@ rows (73%) and `prefill_ms` on 145 (12%), because the token columns landed on
 2026-08-24 and every earlier row is legitimately blank. A mean taken over the
 whole column with blanks read as zero is wrong by the share of blanks.
 
+**A failed row is not a free row.** A reply the summarize stage refused was
+still read and still written, so since 2026-09-13 a failed summarize row carries
+the five cost cells and the call slots exactly as an ok row does. Before that
+date it carried none of them: 93 of 93 failed summarize rows in the committed
+ledger are blank, and `reconcile_prefill` skips a blank rather than pooling it,
+so the model server counted those requests and this ledger counted none of them
+([../summarize/throughput.md](../summarize/throughput.md#a-reply-the-stage-refused-used-to-be-missing-from-one-side-of-this-check)
+has the size). The cells stay blank only where no call returned, which is the
+one failure that really was free.
+
 **Timings come from the runtime, not from us.** `prefill_ms`, `decode_ms` and
 the three token counts are copied out of the model server's own reply. A runtime
 that reports nothing leaves them null and the item still publishes. Nothing on
