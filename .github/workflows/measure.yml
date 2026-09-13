@@ -488,7 +488,7 @@ jobs:
               shutil.copytree("config", dst)
               path = dst / "idhazh.json"
               payload = json.loads(path.read_text(encoding="utf-8"))
-              payload["models"]["inference"].update(update)
+              payload["models"]["summarize"]["inference"].update(update)
               path.write_text(AppConfig.model_validate(payload).to_json(), encoding="utf-8")
               return dst
 
