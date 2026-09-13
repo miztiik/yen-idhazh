@@ -1,0 +1,7 @@
+1st September 2026
+I was poking around in my ~/.cache/ folder using OmniDiskSweeper when I spotted something interesting. The OpenAI Codex desktop app (since rebranded to just ChatGPT) has 1.7GB of stuff in there in a folder called codex-primary-runtime, including a full Python installation, a full Node.js installation, and native binaries for Poppler, git, and the LibreOffice open source office suite (which forked from OpenOffice.org in 2010):
+The ~/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/documents folder includes skills which tell Codex how to find and use those binaries.
+Recent articles
+- Generating running routes with GPT-6 Astra and ChatGPT Work - 12th September 2026
+- OpenAI agents attacked RubyGems back in May - 12th September 2026
+- Some thoughts on the Navier–Stokes Millennium Prize Problem - 8th September 2026

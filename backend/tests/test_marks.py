@@ -73,6 +73,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_qualify",
         "test_rank",
         "test_reband_scores",
+        "test_reference_dataset",
         "test_reference_set",
         "test_same_story",
         "test_search_index",

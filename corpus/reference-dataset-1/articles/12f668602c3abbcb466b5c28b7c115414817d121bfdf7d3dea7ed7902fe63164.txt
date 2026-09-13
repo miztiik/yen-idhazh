@@ -1,0 +1,49 @@
+Australia’s battery storage market has moved decisively past the point where Frequency Control Ancillary Services (FCAS) drove project revenue. That shift is now shaping developers’ approach to the choice between AC- and DC-coupled hybrid designs.
+This is according to Kashish Shah, senior strategy lead at Wärtsilä, speaking exclusively to ESN Premium on the sidelines of the Battery Asset Management Summit Australia 2026.
+Shah pushes back on the idea that DC coupling is becoming a default configuration by design choice on Wärtsilä’s part. The company has positioned itself heavily in DC-coupled hybrid projects in Australia, including its first project with Octopus Australia, the 64MW/128MWh Fulham Solar Battery Hybrid. But Shah frames the decision as one that sits with developers rather than suppliers.
+“It is not a choice that Wärtsilä makes,” he says. “It is the question of what the developers want. What kind of flexibility do they want? What their assets’ revenue strategy is.”
+Try Premium for just $1
+- Full premium access for the first month at only $1
+- Converts to an annual rate after 30 days unless cancelled
+- Cancel anytime during the trial period
+Premium Benefits
+- Expert industry analysis and interviews
+- Digital access to PV Tech Power journal
+- Exclusive event discounts
+That revenue strategy question increasingly comes down to one market.
+“One of the key objectives of actually having AC coupling, and incurring that additional cost of AC, is to access the one-second FCAS market,” Shah says, referring to the fast-response ancillary services market that has historically been a main reason developers chose AC coupling in the first place.
+But he notes that FCAS has “completely collapsed” as a revenue driver in recent years, leaving energy arbitrage as the dominant source of battery storage revenue. This perspective was shared throughout the two-day conference.
+Some contingency-driven demand for the one-second market persists, and for developers who still want that flexibility, Shah says Wärtsilä’s answer is technology rather than a fixed coupling architecture.
+The company builds a power plant controller (PPC) that can sit on top of any third-party power conversion system (PCS), functioning as a master controller, regardless of whether the underlying design is AC or DC.
+Shah also points to a configuration gaining discussion in the market called reverse DC coupling. In a conventional DC-coupled hybrid, the PCS sits on the solar side of the system. Reverse DC coupling flips that, placing the PCS on the battery side instead, so the battery itself can respond directly to the one-second FCAS market.
+“The challenge there is that the models for the inverters are still going through a development where they can support reverse DC coupling,” he says.
+Wärtsilä’s own systems, he explains, have used DC blocks and worked with established PCS suppliers such as PE and SMA, with its PPC designed to remain agnostic to whichever hardware a customer selects.
+But the company’s newer Quantum Three platform uses string inverters, which Shah identifies as “the next problem for us to solve” if the market moves further toward reverse DC coupling.
+For now, he characterises Wärtsilä’s position as one of flexibility rather than a fixed architecture.
+“As things stand right now, from what Wärtsilä contributes in the design with its PPC, it’s flexible enough to whatever the customer or the asset strategy is,” he says.
+That emphasis on flexible, full-scope integration echoes comments Shah made earlier this year, when he told ESN Premium that developers pursuing a “pick and choose” approach to inverters and PPCs risk running into operational trouble that an integrated hardware-and-software provider is better placed to avoid.
+Wärtsilä colleague Neha Sinha made a related case for DC coupling specifically in 2025, arguing that co-located battery storage has shifted from an optional add-on to essential infrastructure as curtailment and negative pricing events become more frequent across the National Electricity Market (NEM).
+That efficiency case has a connection-speed dimension too. Speaking on a separate panel at the same summit, Sungrow Australia’s Alistair Gibson said DC-coupled projects can cut grid connection approval times by up to six months compared with AC-coupled designs, since AEMO assesses the solar and battery components as a single integrated system rather than separately.
+That timeline advantage, alongside the reduced inverter count DC coupling typically requires, adds a further practical consideration for developers weighing the trade-offs Shah describes.
+Software fills the gap left by a collapsing FCAS market
+With arbitrage the primary revenue driver, Shah says the biggest opportunity for asset owners now lies in extracting more value from cycling behaviour itself, an area he says is fundamentally a software problem.
+“Given the collapse of the FCAS market, your battery storage systems would need to cycle more in the energy market to gain that energy arbitrage,” he says.
+He points to Wärtsilä’s battery analytics platform, Pulse, as the tool built to manage that shift.
+Shah describes a common industry problem. OEM performance guarantees are typically structured around fixed cycling curves, for example, one cycle per day, 1.5 cycles per day, or two cycles per day, and exceeding that baseline even marginally can push an asset onto a steeper degradation curve.
+“That’s just taking away the flexibility from the customer and the asset,” he says. Pulse, he explains, allows customers to contract for more granular cycling flexibility and gives them real-time visibility into how to exercise it, banking unused cycles during lower-opportunity periods and deploying them when arbitrage conditions improve.
+Wärtsilä also offers an auto-bidding solution called Bitcast, which Shah says supports an asset optimisation strategy through more difficult trading conditions.
+Asked how Australia compares with the rest of the Asia-Pacific region, Shah is unambiguous.
+“Australia is a market made for batteries,” he says.
+He attributes that largely to the country’s energy-only market structure, in which assets are not paid for capacity but must instead bid into five-minute settlement intervals where prices can swing from minus AU$1,000 (US$716) per megawatt-hour to AU$20,300 per megawatt-hour.
+“That market structure provides that volatility, which batteries love,” he says.
+Shah also points to the physical structure of Australia’s grid, a long, thin network prone to outages and disturbances that batteries are well-suited to help manage, as a further structural advantage.
+He contrasts this with most other APAC markets, which remain largely run by vertically integrated, government-owned entities spanning generation, transmission and distribution.
+“That means that market is very regulated, and there’s less opportunity for batteries actually to capture the volatility in the market,” he says, noting that revenues and tariffs are typically capped in those jurisdictions in a way Australia’s market structure avoids.
+That advantage comes paired with a persistent constraint around grid connection timelines.
+“Every asset that’s going to get connected to the grid has a long Generator Performance Standards (GPS) process,” Shah says, referring to the technical compliance process new projects must clear before connecting to the NEM.
+He describes the issue as effectively unique to Australia when benchmarked not just against the rest of APAC, but globally.
+“It takes a couple of years to get the asset connected to the grid,” he says. “That’s the biggest challenge.”
+In June, the Finnish power solutions company announced it would wrap its energy storage business into a 50:50 joint venture with German solar manufacturer RCT Solutions, effectively divesting a 50% stake in the unit.
+RCT Solutions CEO Peter Fath will head up the JV entity, taking over from Tamara de Gruyter, who led it since the company parted ways with industry veteran Andy Tang in 2025 (Tang then joined Chinese lithium-ion OEM and BESS integrator Rept Battero).
+In an interview with ESN Premium, Timo Heinonen, an equity analyst covering the company at Handelsbanken, noted that the move reflects the “limited synergies” and profitability challenges the energy storage division faced within Wärtsilä’s broader group, which generates the majority of its revenue from marine power solutions and wider energy systems where the storage business had limited overlap.
+Never miss an Australian energy storage story. Sign up for our Australia newsletter and get the latest project announcements, policy updates and market analysis delivered directly to you.
