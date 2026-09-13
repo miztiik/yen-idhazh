@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger, publish_console
-from idhazh.assemble import write_atomic
+from idhazh.assemble import TaxonomyVectors, nearest_label_cosines, write_atomic
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,
@@ -45,6 +45,7 @@ from idhazh.contracts.day_metrics import (
     DayDistribution,
     DayExtraction,
     DayInstrument,
+    DayLabelSimilarity,
     DayMetrics,
     DayReasons,
     DaySource,
@@ -187,13 +188,15 @@ def build(
     manifest: RunManifest,
     score_rows: Sequence[dict[str, str]],
     health_rows: Sequence[dict[str, str]],
+    taxonomy_vectors: TaxonomyVectors | None = None,
 ) -> DayMetrics:
     """The whole truth about one published day, as of the run that wrote it.
 
     `day` and `manifest` are this run's in-memory payloads; `score_rows` and
     `health_rows` are that day's committed ledger slices, so a correction reads
     the day as it now stands across every run rather than only what this run
-    touched.
+    touched. `taxonomy_vectors` is the committed label vectors, handed in
+    already read - a caller that has none records no label similarity.
     """
     model_id = _model_id(manifest, score_rows)
     scored, drifted, suspect = _scored_items(day, score_rows)
@@ -224,6 +227,45 @@ def build(
         instruments=_instruments(score_rows),
         sources=_sources(day),
         extraction=_extraction(day, health_rows),
+        label_similarity=_label_similarity(day, taxonomy_vectors),
+    )
+
+
+def _label_similarity(
+    day: DigestDay, labels: TaxonomyVectors | None
+) -> DayLabelSimilarity | None:
+    """How close the day's item vectors sat to the committed label vectors.
+
+    Reads the vectors the day payload already carries and the label vectors a
+    person committed once, so it loads no encoder and adds nothing to an item.
+    The closest label is computed and discarded: this records a level, never a
+    pick, and the two rulers travel with it so a reader can tell a change in the
+    days from a change in what measured them.
+
+    Null rather than an empty distribution when the day carried no vector or the
+    file is not committed in this checkout. Zero items compared reads as an
+    encoder that matched nothing, which is a different fact from a day nobody
+    measured.
+    """
+    if labels is None:
+        return None
+    values = sorted(nearest_label_cosines(day.embeddings, labels))
+    if not values:
+        return None
+    return DayLabelSimilarity(
+        taxonomy_digest=labels.taxonomy_digest,
+        encoder_ref=labels.encoder_ref,
+        nearest=DayDistribution(
+            count=len(values),
+            total=sum(values),
+            # Nearest-rank, as `_instruments` takes it: an interpolated quartile
+            # is a cosine no item actually scored.
+            p25=_nearest_rank(values, 0.25),
+            p50=_nearest_rank(values, 0.5),
+            p75=_nearest_rank(values, 0.75),
+            minimum=values[0],
+            maximum=values[-1],
+        ),
     )
 
 
@@ -573,11 +615,14 @@ def publish(
     date: str,
     day: DigestDay,
     manifest: RunManifest,
+    taxonomy_vectors: TaxonomyVectors | None = None,
 ) -> Path:
     """Build the day's record from its committed slice and write it.
 
     The one call the publication step and the backfill share, so the record is
-    produced one way (Fowler).
+    produced one way (Fowler). `taxonomy_vectors` is handed in rather than read
+    here, so this producer keeps reading only the day's own committed slice and
+    a caller with no label vectors simply records no label similarity.
     """
     metrics = build(
         date=date,
@@ -585,10 +630,38 @@ def publish(
         manifest=manifest,
         score_rows=read_score_rows(state_root, date),
         health_rows=read_health_rows(state_root, date),
+        taxonomy_vectors=taxonomy_vectors,
     )
     written = write(state_root, metrics)
     _log_extraction(date, metrics)
+    _log_label_similarity(date, metrics)
     return written
+
+
+def _log_label_similarity(date: str, record: DayMetrics) -> None:
+    """Say what the day read, with the two rulers it was read under.
+
+    The rulers are printed beside the figure because the figure is only
+    comparable against another taken under the same ones, and a run log that
+    printed the level alone would invite exactly the comparison that is wrong.
+    """
+    similarity = record.label_similarity
+    if similarity is None:
+        LOG.info("label similarity date=%s not measured on this day", date)
+        return
+    stat = similarity.nearest
+    LOG.info(
+        "label similarity date=%s items=%s mean=%.4f p50=%.4f min=%.4f max=%.4f "
+        "taxonomy=%s encoder=%s",
+        date,
+        stat.count,
+        stat.total / stat.count,
+        stat.p50,
+        stat.minimum,
+        stat.maximum,
+        similarity.taxonomy_digest[:12],
+        similarity.encoder_ref,
+    )
 
 
 def _log_extraction(date: str, record: DayMetrics) -> None:
