@@ -229,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         print(
             "the agreement arm needs a real model and these are not on disk: "
-            + ", ".join(str(named) for named in missing),
+            + ", ".join(named.as_posix() for named in missing),
             file=sys.stderr,
         )
         return 2
