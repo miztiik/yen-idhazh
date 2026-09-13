@@ -278,40 +278,50 @@
   "version": "2026-09-12",
   "verticals": [
     {
+      "ceiling": 0.35,
       "definition": "The story is mainly about artificial intelligence - the models, the people and companies building or selling them, the machines and data centres they run on, or the rules being written for them.",
       "display_name": "AI",
+      "floor": 6,
       "id": "ai",
       "min_feeds": 35,
       "retired_on": null,
       "status": "active"
     },
     {
+      "ceiling": 0.25,
       "definition": "The story is mainly about how energy is made, moved, stored or paid for - electricity, oil, gas, renewables, nuclear power and the grids that carry them.",
       "display_name": "Energy",
+      "floor": 6,
       "id": "energy",
       "min_feeds": 21,
       "retired_on": null,
       "status": "active"
     },
     {
+      "ceiling": 0.25,
       "definition": "The story is mainly about companies and money in general - results, deals, jobs, prices, interest rates, markets - and not about a subject another desk names.",
       "display_name": "Business and Economy",
+      "floor": 6,
       "id": "business-economy",
       "min_feeds": 21,
       "retired_on": null,
       "status": "active"
     },
     {
+      "ceiling": 0.4,
       "definition": "The story is mainly about what happens between or inside countries - governments, conflict, diplomacy, elections and disasters - rather than about one industry.",
       "display_name": "World",
+      "floor": 6,
       "id": "world",
       "min_feeds": 21,
       "retired_on": null,
       "status": "active"
     },
     {
+      "ceiling": 0.4,
       "definition": "The story is mainly about India - its government, its economy, its companies or an event inside it - and India is the subject rather than one country in a longer list.",
       "display_name": "India",
+      "floor": 6,
       "id": "india",
       "min_feeds": 21,
       "retired_on": null,

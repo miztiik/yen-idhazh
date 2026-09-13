@@ -154,8 +154,10 @@
   "version": "2026-08-21",
   "verticals": [
     {
+      "ceiling": 0.35,
       "definition": "The story is mainly about artificial intelligence - the models, the people and companies building or selling them, the machines and data centres they run on, or the rules being written for them.",
       "display_name": "AI",
+      "floor": 6,
       "id": "ai",
       "is_auto_discovered": false,
       "min_feeds": 25,
@@ -163,8 +165,10 @@
       "status": "active"
     },
     {
+      "ceiling": 0.25,
       "definition": "",
       "display_name": "Energy",
+      "floor": 6,
       "id": "energy",
       "is_auto_discovered": false,
       "min_feeds": 25,
@@ -172,8 +176,10 @@
       "status": "draft"
     },
     {
+      "ceiling": 1.0,
       "definition": "",
       "display_name": "Legacy desk",
+      "floor": 0,
       "id": "legacy-desk",
       "is_auto_discovered": false,
       "min_feeds": 25,

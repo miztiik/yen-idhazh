@@ -144,6 +144,33 @@ class VerticalDef(VocabularyEntry, Lifecycled):
         ge=1,
         description="Feed floor below which the vertical does not render at all.",
     )
+    floor: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "The fewest stories this desk publishes in a day, where the day still holds a "
+            "story whose second-best desk is this one. A count rather than a share, because "
+            "it answers whether the desk is worth opening at all and a desk page is a "
+            "fragment below six stories on a 100-story day and on a 450-story one alike. It "
+            "never admits a story a gate refused and never reaches a previous day: a desk it "
+            "cannot fill publishes thin, and DigestVerticalRef already carries why. Zero, "
+            "the default, is no rule."
+        ),
+    )
+    ceiling: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The most of a published day this desk may hold, as a share. A share rather "
+            "than a count, because a count is a moving share - ten stories is 1.4 percent of "
+            "a 731-story day and a quarter of a 40-story one. The stories over it are "
+            "re-filed onto their second-best desk and never dropped, so the day is exactly "
+            "as long either way and a desk with nowhere to send its overflow stays over its "
+            "ceiling rather than shortening the day. A desk may always hold its floor "
+            "whatever this says. 1.0, the default, is no rule."
+        ),
+    )
     is_auto_discovered: bool = Field(default=False, description=AUTO_DISCOVERED_DESCRIPTION)
 
 
@@ -186,6 +213,33 @@ class Taxonomy(Contract):
 
     __schema_stem__: ClassVar[str] = "taxonomy"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T13:49",
+            change=(
+                "Added VerticalDef.floor, the fewest stories a desk publishes in a day, and "
+                "VerticalDef.ceiling, the most of a day it may hold as a share."
+            ),
+            why=(
+                "Five desks cannot go empty today and nothing in the code guarantees it - a "
+                "feed sits on exactly one desk and min_feeds counts FEEDS rather than "
+                "stories, so the five are held up by the shape of config/sources.json and not "
+                "by a rule. The measured risk when the desk becomes what the article says it "
+                "is, is the opposite of an empty desk: three AI-adjacent stories arriving on "
+                "an Energy feed, a Business feed and a World feed are three desks today and "
+                "one desk afterwards, so a five-desk digest becomes a one-desk digest with "
+                "four thin rails on exactly the day a reader most needs the other four. The "
+                "ceiling stops that and the floor fills the gap it leaves. Both re-file a "
+                "story onto its second-best desk and neither admits or drops one, so the day "
+                "is exactly as long either way. Both sit beside min_feeds because that is "
+                "where a desk's other bound already is, and both are per-desk because ai has "
+                "35 feeds where the other four have 21. Additive with defaults that are the "
+                "identity - floor 0 and ceiling 1.0 are no rule - so a taxonomy written "
+                "before this still validates and moves nothing; no read-side migration is "
+                "needed. Optional rather than required on purpose: the schema gates shape and "
+                "never contents, and a taxonomy fixture another plan writes must still "
+                "validate without them."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change=(
