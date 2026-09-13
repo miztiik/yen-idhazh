@@ -4,55 +4,73 @@
       "definition": "Something was made available to use or buy for the first time, or a new version of it was.",
       "display_name": "Release",
       "id": "release",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "Two or more organisations agreed to work together, with neither buying the other.",
       "display_name": "Deal",
       "id": "deal",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "One organisation bought another, or a controlling share of it.",
       "display_name": "Acquisition",
       "id": "acquisition",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "An organisation raised money from investors, or was valued in the course of doing so.",
       "display_name": "Funding",
       "id": "funding",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "An organisation committed money to build or expand physical capacity - a plant, a data centre, a power connection or the land for one.",
       "display_name": "Capital spending",
       "id": "capex",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "An organisation reported its results for a trading period, or told the market what to expect from the next one.",
       "display_name": "Earnings",
       "id": "earnings",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "A government, a regulator or a court acted on what an organisation may do, or moved to.",
       "display_name": "Regulation",
       "id": "regulation",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "A study, a paper or a benchmark was published, stating a method and a result a reader could check.",
       "display_name": "Research",
       "id": "research",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     },
     {
       "definition": "Something broke, leaked or stopped working, and somebody outside the organisation was affected.",
       "display_name": "Incident",
       "id": "incident",
-      "keywords": []
+      "keywords": [],
+      "retired_on": null,
+      "status": "active"
     }
   ],
   "lenses": [
