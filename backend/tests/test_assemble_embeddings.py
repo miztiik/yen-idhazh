@@ -661,4 +661,3 @@ class TestTheArithmetic:
         )
 
         assert assemble.nearest_label_cosines(day, built_vectors(source)) == pytest.approx([1.0])
-
