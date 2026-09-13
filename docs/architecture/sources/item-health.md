@@ -41,9 +41,9 @@ this checkout on 2026-09-02, the earliest a live run would touch this ledger is
 **2027-10-01**, when `state/item-health/2026/08/` falls below the window.
 
 The 30-day window on this page is a read-side parameter and is unrelated to that
-age. Day files follow `state/published/` rather than `state/seen/` and
-`state/feed-health/`, which are still monthly - owner instruction, 2026-09-10,
-and the reason is in
+age. Day files follow `state/published/`, and `state/seen/` and
+`state/feed-health/` followed it too in the days after - owner instruction,
+2026-09-10, and the reason is in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains).
 What the fold keeps, what it costs and why fourteen is
 [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).

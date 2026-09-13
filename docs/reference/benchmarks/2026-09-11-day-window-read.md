@@ -34,6 +34,14 @@ the data. The month arm is `ledger.load_seen` itself. The day arm is the same
 reduction over `<YYYY>/<MM>/<DD>.csv`, written inside the instrument because no
 ledger files sight rows by day yet - which is the change being priced.
 
+**The two arms swapped on 2026-09-13, and the reading above did not move.**
+`state/seen/` filed by day that day, so `ledger.load_seen` is the DAY arm now and
+the month arm is the layout written out inside the instrument. Which arm is the
+ledger's own code says nothing about what either arm costs - both read the same
+rows with the same reduction, which is the property this record rests on - but a
+reader running the tool today would otherwise find the sentence above inverted.
+The numbers below stand as taken.
+
 **The arms are interleaved because a stopwatch here measures the page cache.**
 The same bounded reads over one fixture came out 16.6 percent apart minutes
 apart on this project, and every arm that writes more files makes the tree

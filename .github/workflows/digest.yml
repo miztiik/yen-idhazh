@@ -1387,10 +1387,10 @@ jobs:
       #
       # The flag covers the whole invocation, so it also suspends the seen prune
       # and the item-health fold, which had been live and had never fired. On
-      # 2026-09-02 the earliest either would have deleted anything is
-      # `state/seen/2026-08.csv` on 2026-11-30 - so removing the flag before then
-      # costs nothing that was already happening, and leaving it on costs nothing
-      # either.
+      # 2026-09-13 the earliest either would have deleted anything is
+      # `state/seen/2026/08/23.csv` on 2026-11-22 - so removing the flag before
+      # then costs nothing that was already happening, and leaving it on costs
+      # nothing either.
       #
       # It also covers the score archive, which joined this step on 2026-09-03
       # and is the one store here whose deletion is preceded by a summary that is
