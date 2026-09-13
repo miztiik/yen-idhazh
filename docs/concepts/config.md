@@ -886,8 +886,8 @@ entity in their published titles before that shared subject counts,
 previous day. None of them is handed to a browser: the block is decided before
 the page sees it, and the page draws what it is handed.
 
-Where the weight came from, and why it must stay under 0.6, is
-[../architecture/sources/discovery.md](../architecture/sources/discovery.md#where-the-weight-came-from).
+Where the weight came from, and why it must stay under `collect.carriage_step`, is
+[../architecture/sources/discovery.md](../architecture/sources/discovery.md#why-a-shared-subject-is-worth-less-than-a-second-carrier).
 
 `ui.items_per_topic` is retired. It was how many of a topic's stories the
 all-topics page showed before linking to the rest, and the leading block
@@ -1147,7 +1147,7 @@ A knob that no code path reads is worse than clutter. It reads as a control, so 
 Three were removed this way, each describing a mechanism that does not exist:
 
 - `collect.min_feeds_floor` claimed to be the default feed floor. The floor a vertical is actually held to is its own `min_feeds` in `taxonomy.json`. Nothing read the default.
-- A per-feed `weight` on a salience feed. An aggregator has no subject taxonomy to be graded on, so there was nothing for a per-feed weight to express, and what a vote was worth was one number for every aggregator rather than one per feed. That number, `collect.front_page_bonus`, was itself removed on 2026-09-13 - it fired on 8 of 5,682 published stories ([../architecture/sources/discovery.md](../architecture/sources/discovery.md#the-vote-is-thin-and-the-number-is-here-so-nobody-re-litigates-it-from-intuition)) - so a vote is now a published fact about a story and moves no score at all. **The feed weight on ordinary sources is untouched and load-bearing** - it multiplies the tier score ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)).
+- A per-feed `weight` on a salience feed. An aggregator has no subject taxonomy to be graded on, so there was nothing for a per-feed weight to express, and what a vote was worth was one number for every aggregator rather than one per feed. That number, `collect.front_page_bonus`, was itself removed on 2026-09-13 under the retirement condition it shipped with ([../architecture/sources/discovery.md](../architecture/sources/discovery.md#a-speculative-term-ships-with-the-condition-that-retires-it)) - so a vote is now a published fact about a story and moves no score at all. **The feed weight on ordinary sources is untouched and load-bearing** - it multiplies the tier score ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)).
 - `Sources.live_feeds_for`, a method with no caller that also disagreed with the code doing the job: it honoured `retired_on` and ignored `status`, so it would have read a draft feed. One concept, one home.
 
 ### Removing a config field is breaking, and its migration is the file

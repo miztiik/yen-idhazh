@@ -477,8 +477,9 @@ annotation. The warning named 33 publications from 113 source-decided
 article/date pairs, about 29 percent, against the configured 50 percent bar
 and 30-decision minimum. It was not a missing notification. The RSS reliability
 factor was still 1.0 because the feed itself kept returning entries. The
-owner's later curation decision is recorded in
-[discovery.md](discovery.md#the-2026-09-09-finance-curation).
+curation decision the alarm led to is a `config/sources.json` edit, and the rules
+that govern one are in
+[discovery.md](discovery.md#changing-the-source-set-without-breaking-history).
 
 **The alarm changes no request budget.** Same-day settled failures prevent
 another attempt at a known failed article, but a different blocked article can
