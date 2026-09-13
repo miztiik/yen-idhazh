@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 5 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 14 | 11 | 3 | 2 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 14 | 12 | 2 | 2 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -33,16 +33,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 11 | 17 | 4 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 12 | 16 | 4 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 6 | 2 | 1 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 5 | 9 | 3 |
 
-## In flight - 4
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #3f | 11 | C6 | The window is sized for two calls | p11-3f |
-| #13 | 23 | F | The encoder alarm | p23-13 |
 | #7 | 24 | E | `state/seen/` files by day | p24-7 |
 | #4 | 25 | D | Carriage becomes a tie-break | p25-4 |
 
@@ -135,7 +133,7 @@ section 3 is where it is answered.
 | #11 | 23 | M | Sentiment about one named subject | 8 is PENDING; 14 is PENDING; P3 is PENDING |
 | #18 | 23 | M | The closing measurement: is a read desk better than a declared one | P3 is PENDING; 14 is PENDING |
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
-| #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is IN-FLIGHT; 8 is PENDING |
+| #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #8 | 25 | E | A story cross-files to a second desk | 7 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
