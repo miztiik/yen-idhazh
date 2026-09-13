@@ -48,7 +48,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The runtime sweep reaches for a key that is not there | - | A | IN-FLIGHT | p28-r1 | - | worker |
 | 2 | The turn envelope moves onto the model entry | - | A | IN-FLIGHT | p28-r2 | - | worker |
-| 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | IN-FLIGHT | p28-r3 | - | worker |
+| 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | DONE | p28-r3 | #691 | worker |
 | 4 | Benchmark records lose the date from their filename | 2, 3 | B | PENDING | - | - | - |
 | 5 | Five things the server proves before the first item | 2 | C | PENDING | - | - | - |
 | 6 | One complete config file per model, selected by a pointer | 2 | C | PENDING | - | - | - |
@@ -150,20 +150,23 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 ### Row #3 - Every tokenizer-shaped constant names the weights it was taken against
 
 - **Scope:** Constants measured through one model's tokenizer carry no pin to it, so a swap leaves them silently attributed to the wrong model.
-- **Contract introduced:** `Measured.subject: Sha256 | None`, required non-null on any record whose method reads a tokenizer.
+- **Contract introduced:** `TokenizerMeasured(Measured)` with `subject: Sha256`, no default. Reworded from `Measured.subject: Sha256 | None` under decision 5 below, which ruled after the row was written.
 - **Files touched:**
   - `backend/idhazh/measured.py`
   - `backend/tests/test_measured.py`
   - `docs/reference/measurements.md`
 - **Acceptance gates:** local - ruff, mypy, `python -m pytest backend/tests/test_measured.py -q`. CI - `ci.yml`.
-- **Oracle:** a built `Measured` whose `subject` is not the configured entry's `sha256` is refused, and the refusal names both digests. Driven from a built value, never from a walk over committed data.
+- **Oracle:** a built `TokenizerMeasured` whose `subject` is not the configured entry's `sha256` is refused, and the refusal names both digests. Driven from a built value, never from a walk over committed data.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `Measured` gains a `subject` naming the weights digest a reading was taken against, and a gate asserts every tokenizer-derived record's subject equals the configured entry's `sha256`. | Fowler, 2026-09-13 |
-| 2 | `when_it_fires` on all four call-one records gains the model swap as a trigger. The field exists and already carries the other two triggers; a record that says when to retake it and omits the largest trigger is worse than one that says nothing. | Fowler, 2026-09-13 |
+| 1 | A tokenizer reading gains a `subject` naming the weights digest it was taken against, and a gate asserts every such record's subject equals the configured entry's `sha256`. Decision 5 settled where the field lives. | Fowler, 2026-09-13 |
+| 2 | `when_it_fires` on every tokenizer reading gains the model swap as a trigger. The field exists and already carries the other triggers; a record that says when to retake it and omits the largest trigger is worse than one that says nothing. **Written as the four call-one records and executed as six**: `PROMPT_OVERHEAD_TOKENS` and `WORST_TOKENS_A_WORD` are token counts too, and decision 1 says every tokenizer-derived record. Pinning four of six would have reproduced the defect inside the module that fixes it. | Fowler, 2026-09-13 |
 | 3 | Timing records do not gain a subject. A second and a resident set belong to the box that took them; a token count belongs to the tokenizer. Only tokenizer-derived records are pinned. | Carmack, 2026-09-13 |
 | 4 | **The gate names three sites outside `measured.py` that it cannot reach, and row #13 retakes them.** The taxonomy definition budget and the visual plan budgets were measured against the retired 8B, and the extractor's tokens-per-word ratio is tokenizer-shaped. The 8B-to-9B move already left all three behind, which is proof rather than risk. | Fowler, 2026-09-13 |
+| 5 | **Two types, not a flag.** `Measured` gains nothing; `TokenizerMeasured(Measured)` adds `subject: Sha256` with no default, so a tokenizer reading that omits it fails `mypy backend` and a pin on a timing record cannot be written at all. A `reads_a_tokenizer` flag makes both bad states constructible and then owes a refusal test for each; the subclass owes none. `kw_only=True` goes on the subclass alone, so the base class and all eight existing call sites are untouched. | Fowler, 2026-09-13 |
+| 6 | **A module constant in `measured.py` holds the three sites the gate cannot reach - module path and constant name for each - and both readers get it: the gate docstring cites the constant and the refusal text appends it, with row #13 named on the declaring line as the removal condition.** This gate has one trigger, the configured weights digest no longer matching a pinned reading, and that same swap is what makes all three stale, so they are the rest of the same failure rather than noise on an unrelated one. The person swapping a model is reading `config/idhazh.json` and the failing gate, not `measured.py`, and the refusal is the one moment they are provably looking. | Fowler, 2026-09-13 |
+| 7 | **The gate is a module-level function taking the expected digest and the records as arguments.** It reads no config and opens no file - `contracts/` is the bottom of the dependency graph and cannot import `idhazh.measured`, so an `AppConfig` validator is not available, and injection is what makes the refusal arm drivable from a built record. No `SHA256_PATTERN` check on `subject`: the equality gate already refuses a malformed digest, and a second check that can only fire when the first would is decoration. | Fowler, 2026-09-13 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
