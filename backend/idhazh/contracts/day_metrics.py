@@ -35,7 +35,7 @@ and it carries facts about a day and never a line of article text (section 0a).
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, Any, ClassVar, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -46,6 +46,7 @@ from idhazh.contracts.base import (
     Model,
     Sha256,
     Slug,
+    without_retired_keys,
 )
 from idhazh.contracts.item_health import ItemStage
 
@@ -383,6 +384,20 @@ class DayMetrics(Contract):
     __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprint. BREAKING.",
+            why=(
+                "The stamp gated nothing and no writer had filled it since 2026-09-12, so "
+                "the field was a question every future author of this shape had to ask and "
+                "an answer nobody could use. Removing it is breaking, because "
+                "contracts.base.Model sets extra='forbid' and 23 committed "
+                "state/day-metrics/ records and the two published month mirrors folded from "
+                "them all carry the key. The read-side migration ships in this commit and "
+                "is permanent: _drop_retired_keys pops the one named key before validation. "
+                "What would let it be deleted is written on the line that declares it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13",
             change=(
                 "Added the optional label_similarity block: the day's distribution of each "
@@ -462,15 +477,6 @@ class DayMetrics(Contract):
             "reader compares against the next day to find a model change (finding 70)."
         )
     )
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description=(
-            "The digest of the declared settings the day ran under, as EvalRow carried it. "
-            "Null on every day written after 2026-09-12: the stamp stopped being a gate "
-            "and no writer fills it. A model-change boundary is read from the run "
-            "record's recorded inputs instead."
-        ),
-    )
 
     items_published: int = Field(ge=0, description="Items in the day's published set. Additive.")
     items_planned: int = Field(ge=0, description="Items the day's runs planned. Additive.")
@@ -547,6 +553,18 @@ class DayMetrics(Contract):
             "verdict: neither end of it is better than the other."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_keys(cls, data: Any) -> Any:
+        """Read-side migration for `pipeline_fingerprint`, removed 2026-09-13T22:00.
+
+        Delete this when `git grep -l pipeline_fingerprint -- state/day-metrics
+        frontend/public/day-metrics` returns nothing. It holds today because 23
+        committed day records and both published month mirrors carry the key,
+        and `extra="forbid"` refuses a key the model does not declare.
+        """
+        return without_retired_keys(data, "pipeline_fingerprint")
 
     @model_validator(mode="after")
     def _the_parts_fit_the_day(self) -> Self:

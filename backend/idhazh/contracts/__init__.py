@@ -39,7 +39,7 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
     ModelRole,
@@ -91,7 +91,6 @@ __all__ = [
     "EventDef",
     "ExtractConfig",
     "FeedDef",
-    "FingerprintRow",
     "InferenceConfig",
     "LensDef",
     "LifecycleStatus",

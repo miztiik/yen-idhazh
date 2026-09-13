@@ -54,6 +54,17 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
+            why=(
+                "It gated a skip nothing was ever wired to, and no writer has filled it "
+                "since 2026-09-12. This payload is written under backend/var/, which is "
+                "gitignored and read only inside the run that wrote it, so nothing it was "
+                "written into survives a build - and a run whose contract moved mid-flight "
+                "is already named by StalePayloadError rather than migrated."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T14:20",
             change=(
                 "A summary that failed on its reply records call_1 and the five flat cost "
@@ -241,13 +252,6 @@ class Summary(Contract):
     summary: str | None = None
     key_points: list[str] = Field(default_factory=list)
 
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description=(
-            "Null since 2026-09-12. The stamp gated a skip nothing was ever wired to, so "
-            "no writer fills it; what produced a summary is recorded on the run record."
-        ),
-    )
     output_digest: Sha256 = Field(
         description="Digest of the words only. Recomputed on read, never trusted."
     )

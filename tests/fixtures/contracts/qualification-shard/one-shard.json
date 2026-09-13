@@ -97,7 +97,6 @@
       "think_block_words": 0
     }
   ],
-  "pipeline_fingerprint": "5555555555555555555555555555555555555555555555555555555555555555",
   "planned": 10,
   "repeats": 3,
   "runner": "ubuntu-latest",

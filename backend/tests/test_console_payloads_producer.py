@@ -229,7 +229,6 @@ def _manifest(stamp: str, *, planned: int, succeeded: int, failed: int, site_byt
                         ),
                     )
                 ],
-                pipeline_fingerprints=["a" * 64],
                 site_bytes=site_bytes,
                 site_files=10,
             )
@@ -244,7 +243,6 @@ def _record(stamp: str) -> DayMetrics:
         revision=1,
         runs=1,
         model_id="energy-model",
-        pipeline_fingerprint="a" * 64,
         items_published=3,
         items_planned=4,
         items_failed=1,
