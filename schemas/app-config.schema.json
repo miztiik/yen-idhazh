@@ -1529,6 +1529,35 @@
       "title": "PageWeightConfig",
       "type": "object"
     },
+    "PlacementConfig": {
+      "additionalProperties": false,
+      "description": "The frame a person sets over the head of the published day.\n\nNobody reads this digest before it publishes and it publishes five times a\nday, so a standing editorial decision can only reach a reader as arithmetic\nthat runs without one. These three numbers are that decision. The rule they\nexpress and the measurements behind them are in docs/concepts/placement.md.\n\nEvery cap here displaces and none of them shortens: a story a cap holds out\nof the head keeps its place in the day, lower down. A reader cannot see what\nwas left out, so leaving something out is the one thing a frame may not buy.",
+      "properties": {
+        "head_items": {
+          "default": 20,
+          "description": "How many of the day's first stories the frame governs. A COUNT and never a share: what a reader sees before deciding whether to scroll does not grow with the day, and a share of a 731-story day is a head nobody reaches (Jony, 2026-09-11). The stream pages at twelve, so 20 is the cold load plus one page action. Past this slot the order is the score's alone. 0 switches the frame off and publishes the score's order whole.",
+          "minimum": 0,
+          "title": "Head Items",
+          "type": "integer"
+        },
+        "head_no_repeat": {
+          "default": 10,
+          "description": "How far down the head one feed may not repeat. No feed holds more than one of the first this-many stories. Measured over the same 13 days, the biggest feed in the first ten ran from 3 to 8, so this is load-bearing rather than decorative. 0 switches the feed rule off and leaves the desk cap alone.",
+          "minimum": 0,
+          "title": "Head No Repeat",
+          "type": "integer"
+        },
+        "max_desk_in_head": {
+          "default": 5,
+          "description": "How many of the first head_items stories one desk may hold. 5 of 20 with five desks is the largest cap that still guarantees three different desks in the first twelve stories - the cold load - and four in the first twenty; 6 guarantees only two in the first twelve. Set on what the reader is guaranteed rather than on how often it fires, because measurement killed the alternative: over the 13 committed days carrying rank_score, read 2026-09-13 on Intel Core i7-1265U / Windows 11 / Python 3.14.2, the biggest desk in the top 20 ran at a median of 12 and reached all 20 on 2026-09-07, so EVERY cap from 4 to 10 fires on 85 percent of days or more and 'rarely binds' was not available to buy. Ruled 5 by Jony and by Editor independently. Raising it costs desks on the first screen; lowering it to 4 pins the head at four of each desk every day, which is a quota rather than a cap and cannot report a day one desk genuinely owned.",
+          "minimum": 1,
+          "title": "Max Desk In Head",
+          "type": "integer"
+        }
+      },
+      "title": "PlacementConfig",
+      "type": "object"
+    },
     "RetentionConfig": {
       "additionalProperties": false,
       "description": "Every default here deletes nothing. A default is a promise, not a placeholder.\n\nThe committed file is one step ahead of the defaults from 2026-09-13:\n`image_months` is 13 there and -1 here. `dry_run` is true in both, so the\ncommitted config names a window and still removes nothing - which is the\norder this was landed in, so that the first evidence of what the window\nselects arrives before the deletion rather than after it.",
@@ -2104,6 +2133,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added the placement block - placement.head_items 20, placement.max_desk_in_head 5 and placement.head_no_repeat 10. Additive and defaulted, so a config/idhazh.json written before this still loads and needs no read-side migration; the committed file sets all three explicitly, which is what makes the frame visible to an operator reading it.",
+      "version": "2026-09-13T12:00",
+      "why": "The published day now has one order over the whole day instead of a desk-blocked one, and these are the two standing editorial decisions that bound its head: how much of it one desk may hold, and how far down it one feed may repeat. Nobody reads the digest before it publishes and it publishes five times a day, so an editor's judgement can only reach a reader as arithmetic. Measured 2026-09-13 over the 13 committed days carrying rank_score: the biggest desk in the top 20 ran at a median of 12 and reached all 20 on 2026-09-07, and the biggest feed in the first ten ran from 3 to 8."
+    },
     {
       "change": "retention.image_months is re-valued in config/idhazh.json from -1 to 13, and its description carries the derivation. No key was added, removed or retyped, and the default on the model stays -1 - so a config written before this still loads and needs no read-side migration. retention.dry_run stays true, so nothing is deleted by this.",
       "version": "2026-09-13",
@@ -2721,6 +2755,9 @@
     "page_weight": {
       "$ref": "#/$defs/PageWeightConfig"
     },
+    "placement": {
+      "$ref": "#/$defs/PlacementConfig"
+    },
     "retention": {
       "$ref": "#/$defs/RetentionConfig"
     },
@@ -2734,7 +2771,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-13T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2748,5 +2785,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-13T12:00"
 }

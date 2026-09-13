@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
 ## The shell is deliberately thin
@@ -57,7 +57,7 @@ Six entries and five states, because Loaded is the one that is not a failure of 
 
 ## The day runs newest first, and every story carries its own time
 
-The stream orders by the time on the story, newest first. What it replaced was the published order, which is desk-blocked rather than ranked - the whole of one desk, then the whole of the next - so a reader met the same desk ninety times before the next one began. **Nothing editorial is lost by re-ordering it**: what the day thinks is important is the leading block, chosen across the whole day, and it is unchanged. Measured 2026-09-02 over the 12 committed days and 4,713 stories, the re-ordered set is the published set on every day.
+The stream orders by the time on the story, newest first. What it replaced was the published order, which until 2026-09-13 was desk-blocked rather than ranked - the whole of one desk, then the whole of the next - so a reader met the same desk ninety times before the next one began. **Nothing editorial is lost by re-ordering it**: what the day thinks is important is the leading block, chosen across the whole day, and it is unchanged. Measured 2026-09-02 over the 12 committed days and 4,713 stories, the re-ordered set is the published set on every day. **The payload now carries one scored order with a frame over its head** ([placement.md](placement.md)), so the page is re-ordering something defensible rather than rescuing something broken, and plan 25 row #10 is where the page stops re-ordering at all.
 
 **The time is beside the heading, on the story it belongs to.** It sat on a shared rail down the stream's leading edge from 2026-09-02 to 2026-09-12, and the rail is deleted. The rail grouped stories into hour-wide runs and drew one marker per run, so the time a reader could see was the time of the story that opened the group rather than the story they were looking at - and most stories carried nothing. Re-measured 2026-09-12 over the 22 committed days and 8,922 stories at the 60-minute default: **1,218 markers, so 86.3 percent of stories carried no time at all.** The choice was never "33 timestamps or 627"; it was "596 stories with no time, or every story with its own".
 

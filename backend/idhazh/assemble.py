@@ -25,7 +25,7 @@ from operator import mul
 from pathlib import Path
 from typing import Final, Literal
 
-from idhazh.contracts.app_config import AssembleConfig, UiConfig
+from idhazh.contracts.app_config import AssembleConfig, PlacementConfig, UiConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import (
     DigestDay,
@@ -62,6 +62,7 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
+from idhazh.placement import place
 from idhazh.rank import desk_of
 from idhazh.tag import tags
 
@@ -1058,6 +1059,7 @@ def build_day(
     item_health_rows: Sequence[ItemHealthRow] | None = None,
     watchlist: Watchlist | None = None,
     ui: UiConfig | None = None,
+    placement: PlacementConfig | None = None,
     duplicate_similarity_min: float = DUPLICATE_SIMILARITY_MIN,
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
@@ -1083,8 +1085,13 @@ def build_day(
     block is chosen over what that pass produced. Both run over the whole day
     and not over this run's items, because a later run can publish the same
     story an earlier one already did and can add a story the first run could
-    not weigh. Neither moves anything: `items` is still the published order,
-    appended to and never re-sorted.
+    not weigh. Neither moves anything.
+
+    `placement.place` then puts the whole day in one order. It runs last of the
+    three, over the day the other two finished, because the frame it applies is
+    a claim about what a reader meets first and the duplicate pass decides which
+    item of a group a reader meets at all. It is a re-order and never a filter:
+    the day it returns holds exactly the items it was handed.
 
     The duplicate pass is a pure function of the items, their vectors and the
     threshold, so the same day rebuilt reaches the same groups.
@@ -1101,6 +1108,7 @@ def build_day(
     # view draws. Leading first would choose against a day that no longer exists
     # by the time it renders. See docs/architecture/publishing/layout.md.
     combined = collapse_same_story(combined, merged, similarity_min=duplicate_similarity_min)
+    combined = place(combined, config=placement or PlacementConfig())
 
     runs = list(previous.runs) if previous else []
     runs = [run for run in runs if run.n != run_n]
