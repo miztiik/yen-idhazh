@@ -247,7 +247,7 @@ def test_the_committed_config_names_a_base_repo_for_every_model_we_would_tune() 
     the damage arrives later as a quality drop nobody can attribute.
     """
     config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    for role in (config.finetune.teacher, config.finetune.student):
+    for role in (config.finetune.teacher,):
         ref = getattr(config.models, role)
         assert ref.hf_base_repo, f"models.{role} is a fine-tune target with no base repository"
         assert ref.hf_base_repo != ref.repo, "the GGUF repo is not the safetensors repo"

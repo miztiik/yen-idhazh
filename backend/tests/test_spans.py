@@ -28,6 +28,7 @@ and the model is a loopback HTTP server replying with a committed completion.
 from __future__ import annotations
 
 import html
+import itertools
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -80,22 +81,31 @@ def page_carrying(sentinel: str, *, title: str) -> bytes:
     ).encode()
 
 
-def completion_carrying(sentinel: str) -> bytes:
-    """The committed OK completion, with the sentinel written into every field.
+def completion_carrying(sentinel: str) -> tuple[bytes, ...]:
+    """The committed two-call pair, with the sentinel written into every prose field.
 
-    Built from `tests/fixtures/completions/ok.json` rather than typed out here,
-    so the reply keeps the shape the decoder is actually constrained to and the
-    summarize path runs to the end instead of failing early on a bad draft.
+    Built from `tests/fixtures/completions/call-one/labelled.json` and
+    `call-two/summary-and-plan.json` rather than typed out here, so each reply
+    keeps the shape its own decoder is constrained to and the work stage runs to
+    the end instead of failing early on a reply it cannot read.
+
+    Call 1 answers in element ids and carries no prose to plant in, so the
+    sentinel goes into call 2 - which is the reply that becomes the summary, and
+    the summary is the text `summary_attributes` is one line away from sending.
     """
+    completions = CONTRACT_FIXTURES_DIR.parent / "completions"
+    one = read_text(completions / "call-one" / "labelled.json").encode("utf-8")
+
     payload: dict[str, Any] = json.loads(
-        read_text(CONTRACT_FIXTURES_DIR.parent / "completions" / "ok.json")
+        read_text(completions / "call-two" / "summary-and-plan.json")
     )
     content: dict[str, Any] = json.loads(payload["choices"][0]["message"]["content"])
-    content["title"] = "Kumquat lanternfish barometer figures restated by the regulator"
-    content["summary"] = f"{sentinel} {content['summary']}"
-    content["key_points"] = [f"{sentinel}", *content["key_points"]]
+    summary: dict[str, Any] = content["summary"]
+    summary["title"] = "Kumquat lanternfish barometer figures restated by the regulator"
+    summary["summary"] = f"{sentinel} {summary['summary']}"
+    summary["key_points"] = [f"{sentinel}", *summary["key_points"]]
     payload["choices"][0]["message"]["content"] = json.dumps(content)
-    return json.dumps(payload).encode("utf-8")
+    return (one, json.dumps(payload).encode("utf-8"))
 
 
 class RecordedCompletionEndpoint:
@@ -104,9 +114,14 @@ class RecordedCompletionEndpoint:
     A local socket rather than a patched function, because the thing under test
     is what the pipeline SENDS, and a patched `post` would let a leak hide in the
     code the patch replaced.
+
+    It cycles the bodies it was given, so one item's two calls each get the reply
+    their own decoder can read.
     """
 
-    def __init__(self, body: bytes) -> None:
+    def __init__(self, *bodies: bytes) -> None:
+        replies = itertools.cycle(bodies)
+
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
 
@@ -122,7 +137,7 @@ class RecordedCompletionEndpoint:
 
             def do_POST(self) -> None:
                 self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                self._reply(body)
+                self._reply(next(replies))
 
             def log_message(self, *_args: Any) -> None:
                 return None
@@ -200,14 +215,14 @@ def trace_a_run(
     monkeypatch: MonkeyPatch,
     *,
     page: bytes,
-    reply: bytes,
+    reply: tuple[bytes, ...],
 ) -> list[dict[str, Any]]:
     """One real work stage over one planted page, and every span it produced."""
     run_plan = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "EVIDENCE_ROOT", tmp_path / "evidence")
 
-    with RecordedCompletionEndpoint(reply) as server:
+    with RecordedCompletionEndpoint(*reply) as server:
         cli.stage_work(
             run_plan,
             settings=traced_settings(),
@@ -324,7 +339,7 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
     settings = untraced_settings()
     assert not settings.app.observability.tracing_enabled
 
-    with RecordedCompletionEndpoint(completion_carrying(SENTINEL_REPLY)) as server:
+    with RecordedCompletionEndpoint(*completion_carrying(SENTINEL_REPLY)) as server:
         cli.stage_work(
             run_plan,
             settings=settings,

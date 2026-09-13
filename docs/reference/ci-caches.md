@@ -25,10 +25,12 @@ sample, so there is no spread.
 | The two model weight entries alone | 7.50 GB | 75% |
 | Everything else (pip, npm) | 1.11 GB | 11% |
 
-**Three quarters of the ceiling is two files of model weights, and both are
-live.** `Qwen3.5-9B-Q4_K_M.gguf` is the summariser and `Qwen3-4B-Q4_K_M.gguf`
-is the visual planner, both named in `config/idhazh.json`, both restored by the
-daily pipeline. Neither is stale and neither can be deleted.
+**Three quarters of the ceiling was two files of model weights.**
+`Qwen3.5-9B-Q4_K_M.gguf` is the summariser, named in `config/idhazh.json` and
+restored by the daily pipeline. `Qwen3-4B-Q4_K_M.gguf` served the visual planner
+until plan 11 row #6 retired it on 2026-09-13; nothing restores that entry any
+more, so GitHub evicts it once it is the least recently used and about 2.3 GB of
+the ceiling comes back on its own.
 
 So the headroom for anything new is about 1.4 GB, and an addition that pushes
 past 10 GB does not fail loudly. GitHub evicts the least recently used entry -

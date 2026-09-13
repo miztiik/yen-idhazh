@@ -66,7 +66,6 @@ from idhazh.evals.score import band, to_eval_row, verdict
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import prose_changed_alone, text_digest
 from idhazh.ledger import STATE_DIRNAME
-from idhazh.llm.server import parse_completion
 from idhazh.render.write import asset_relpath
 
 pytestmark = pytest.mark.slow
@@ -1331,25 +1330,6 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     replayed = DigestDay.from_json(read_text(day_path))
     assert [item.item_id for item in replayed.items] == [item.item_id for item in published.items]
     assert {item.introduced_by_run for item in replayed.items} == {1}
-    assert cli.already_published(run_plan.date) == {item.item_id for item in replayed.items}
-
-
-class SteppingClock:
-    """A monotonic clock that advances a fixed number of seconds on every read.
-
-    The visual planner is bounded by wall-clock, and a bound that can only be
-    proved by waiting for it is a bound nobody tests. This spends the budget in
-    zero real seconds and makes which items survive it deterministic.
-    """
-
-    def __init__(self, step_seconds: float) -> None:
-        self._step = step_seconds
-        self._now = 0.0
-
-    def __call__(self) -> float:
-        now = self._now
-        self._now += self._step
-        return now
 
 
 def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> None:
@@ -1377,104 +1357,6 @@ def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> N
             base_summary.to_json(), encoding="utf-8"
         )
 
-
-# No quantity in here survives `numeric_facts`, so no enabled kind is reachable
-# and the planner decides every item without a model. That is what keeps this an
-# offline test of the bound rather than a test of the model (Guardrail #7).
-FACT_FREE_TEXT = (
-    "The laboratory said the work continues and gave no figures. A spokesperson "
-    "declined to describe the schedule, and no comparison against the previous "
-    "release was offered."
-)
-
-
-def test_the_visual_planner_stops_at_its_budget_instead_of_being_killed(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """The defect this replaces: the job was cancelled at 60 minutes, a cancelled
-    job skips its upload step, and the whole hour's decisions were thrown away.
-    """
-    run_plan = plan()
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    items_dir = tmp_path / "run" / run_plan.date / "items"
-    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
-    settings = config.load(CONFIG_DIR)
-    one_minute = config.Settings(
-        app=settings.app.model_copy(
-            update={"run": settings.app.run.model_copy(update={"visual_planner_budget_minutes": 1})}
-        ),
-        appearance=settings.appearance,
-        sources=settings.sources,
-        taxonomy=settings.taxonomy,
-        watchlist=settings.watchlist,
-        digests=settings.digests,
-    )
-
-    cli.stage_visual_planner(run_plan, settings=one_minute, clock=SteppingClock(10.0))
-
-    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.visual.json"))
-    assert decided == ["ai-01", "ai-02"], "the budget stopped the stage part-way, by rank"
-    decision = VisualDecision.from_json(read_text(items_dir / "ai-01.visual.json"))
-    assert decision.decision_ms == 10_000
-    assert decision.asked_the_model is False
-
-
-def test_a_stage_inside_its_budget_decides_every_item(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    run_plan = plan()
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    items_dir = tmp_path / "run" / run_plan.date / "items"
-    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
-
-    cli.stage_visual_planner(run_plan, settings=config.load(CONFIG_DIR), clock=SteppingClock(0.0))
-
-    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.visual.json"))
-    assert decided == [item.item_id for item in run_plan.items]
-
-
-def test_the_planner_visits_the_best_story_first(tmp_path: Path) -> None:
-    """Plan order is vertical-major, so a suffix cut would cost whole verticals."""
-    run_plan = plan()
-    items_dir = tmp_path / "items"
-    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
-
-    ordered = cli.plannable_items(run_plan, items_dir, published=frozenset())
-
-    assert [entry.item.item_id for entry in ordered] == ["ai-01", "ai-02", "ai-03", "ai-04", "ai-05"]
-    assert [entry.item.rank_score for entry in ordered] == sorted(
-        (item.rank_score for item in run_plan.items), reverse=True
-    )
-
-
-def test_an_item_the_day_already_published_is_never_decided_again(tmp_path: Path) -> None:
-    """`build_day` keeps the published copy and discards the new one, so deciding
-    it again is 20 to 40 measured seconds spent on an answer nobody can read.
-    """
-    run_plan = plan()
-    items_dir = tmp_path / "items"
-    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
-
-    ordered = cli.plannable_items(run_plan, items_dir, published=frozenset({"ai-01", "ai-03"}))
-
-    assert [entry.item.item_id for entry in ordered] == ["ai-02", "ai-04", "ai-05"]
-
-
-def test_an_item_without_a_usable_summary_is_never_plannable(tmp_path: Path) -> None:
-    run_plan = plan()
-    items_dir = tmp_path / "items"
-    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
-    failed = Summary.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "summary" / "failed.json")
-    ).model_copy(update={"item_id": "ai-01", "url_key": run_plan.items[0].url_key})
-    (items_dir / "ai-01.summary.json").write_text(failed.to_json(), encoding="utf-8")
-
-    ordered = cli.plannable_items(run_plan, items_dir, published=frozenset())
-
-    assert failed.status is not SummaryStatus.OK
-    assert "ai-01" not in [entry.item.item_id for entry in ordered]
 
 
 def test_a_retired_feed_still_labels_the_items_it_published() -> None:
@@ -3395,7 +3277,7 @@ def test_a_day_nothing_relabelled_publishes_the_same_two_numbers() -> None:
         assert ref.desk_count == ref.count
 
 
-# --- The two calls, in the pipeline, behind one flag --------------------------
+# --- The two calls, in the pipeline ------------------------------------------
 
 #: What a `Summary` carries that is a clock rather than a decision. Two runs of
 #: one recorded reply agree on everything else, and these five are why "the same
@@ -3413,26 +3295,10 @@ DRAWS_CALL_ONE: Final = FIXTURES_DIR / "completions" / "call-one" / "wind-labell
 DRAWS_CALL_TWO: Final = FIXTURES_DIR / "completions" / "call-two" / "wind-summary-and-plan.json"
 
 
-def two_call_settings(on: bool) -> config.Settings:
-    """The committed config with the flag moved and nothing else."""
-    settings = config.load(CONFIG_DIR)
-    return config.Settings(
-        app=settings.app.model_copy(
-            update={"run": settings.app.run.model_copy(update={"two_calls_per_item": on})}
-        ),
-        appearance=settings.appearance,
-        sources=settings.sources,
-        taxonomy=settings.taxonomy,
-        watchlist=settings.watchlist,
-        digests=settings.digests,
-    )
-
-
 def worked(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     *,
-    on: bool,
     replies: tuple[bytes, ...],
     fetcher: Callable[[str], FetchResult] = captured_article_fetch,
 ) -> tuple[RunPlan, Path, int]:
@@ -3440,8 +3306,8 @@ def worked(
 
     No network and nothing mocked: the pages come off disk and the replies are
     played back by a real loopback server (Guardrail #7). The third value is how
-    many requests the stage sent, which is the only way to tell one call an item
-    from two without reading a payload that both paths can produce.
+    many requests the stage sent, which is what tells two calls an item from one
+    without reading a payload either could produce.
     """
     run_plan = plan()
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
@@ -3449,7 +3315,7 @@ def worked(
     with RecordedEndpoint(200, *replies) as server:
         cli.stage_work(
             run_plan,
-            settings=two_call_settings(on),
+            settings=config.load(CONFIG_DIR),
             scorer=None,
             fetcher=fetcher,
             model_endpoint=server.endpoint,
@@ -3477,77 +3343,7 @@ def recorded_inputs(items: Path) -> PipelineInputs:
     return recorded
 
 
-class TestTheFlagOffLeavesTodaysPipelineWhereItWas:
-    """The acceptance gate. This row lands with the flag off, so the whole of
-    what a reader gets on the day it merges is what the flag-off path produces -
-    and the change that could move it is invisible in a diff, because the
-    recorded inputs are observed once a shard and written once for the run."""
-
-    def test_one_request_an_item_and_no_second_one(
-        self, tmp_path: Path, monkeypatch: MonkeyPatch
-    ) -> None:
-        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
-
-        run_plan, _items, served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
-
-        assert served == len(run_plan.items), "the flag off is one summarizer call an item"
-
-    def test_the_stage_writes_the_summary_the_library_builds(
-        self, tmp_path: Path, monkeypatch: MonkeyPatch
-    ) -> None:
-        """Same bytes, and the comparison is against `summarize.to_summary` rather
-        than against an earlier copy of itself. That is what can fail: the stage
-        picks the prompt config and the evaluation bounds, and a two-call path
-        wired into the wrong branch would change one of the two while every
-        payload still validated."""
-        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
-        completion = parse_completion(reply.decode("utf-8"))
-        settings = two_call_settings(False)
-
-        run_plan, items, _served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
-
-        for item in run_plan.items:
-            written = Summary.from_json(read_text(items / f"{item.item_id}.summary.json"))
-            article = Article.read(items / f"{item.item_id}.article.json")
-            expected = summarize.to_summary(
-                article,
-                completion,
-                model_id=settings.app.models.summarize.id,
-                generated_at=written.generated_at,
-                prompt_config=settings.app.summarize,
-                evaluation=settings.app.evaluation,
-            )
-            assert without_clocks(written) == without_clocks(expected)
-
-    def test_the_stamp_still_digests_the_single_call_prompt(
-        self, tmp_path: Path, monkeypatch: MonkeyPatch
-    ) -> None:
-        """The recorded prompt digest is what `prose_changed_alone` compares, so
-        pointing it at the wrong builder with the flag off would report a prose
-        change on every run and never on the one that moved."""
-        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
-        settings = two_call_settings(False)
-
-        _run_plan, items, _served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
-
-        assert recorded_inputs(items).prompt_sha256 == text_digest(
-            summarize.prompt_inputs(settings.app.summarize)
-        )
-
-    def test_the_work_stage_writes_no_decision(
-        self, tmp_path: Path, monkeypatch: MonkeyPatch
-    ) -> None:
-        """With the flag off nothing in `work` writes a decision, so the separate
-        stage is still the only producer - which is what makes the flag
-        reversible right up until row #6 deletes the old path."""
-        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
-
-        _run_plan, items, _served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
-
-        assert not list(items.glob(f"*{PAYLOAD_SUFFIX}"))
-
-
-class TestTheFlagOnDispatchesBothCalls:
+class TestTheWorkStageDispatchesBothCalls:
     def test_two_requests_an_item_and_the_cost_is_split_between_them(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
@@ -3557,7 +3353,6 @@ class TestTheFlagOnDispatchesBothCalls:
         run_plan, items, served = worked(
             tmp_path,
             monkeypatch,
-            on=True,
             replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
         )
 
@@ -3579,7 +3374,6 @@ class TestTheFlagOnDispatchesBothCalls:
         run_plan, items, _served = worked(
             tmp_path,
             monkeypatch,
-            on=True,
             replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
         )
 
@@ -3619,7 +3413,6 @@ class TestTheFlagOnDispatchesBothCalls:
         run_plan, items, _served = worked(
             tmp_path,
             monkeypatch,
-            on=True,
             replies=(DRAWS_CALL_ONE.read_bytes(), DRAWS_CALL_TWO.read_bytes()),
             fetcher=drawable_article_fetch,
         )
@@ -3658,12 +3451,11 @@ class TestTheFlagOnDispatchesBothCalls:
         """The two calls render their own bytes, so the turn markers decide what
         the model reads and nothing else in the record reaches them. A marker edit
         would move every reply while the record said the ask held still."""
-        settings = two_call_settings(True)
+        settings = config.load(CONFIG_DIR)
 
         _run_plan, items, _served = worked(
             tmp_path,
             monkeypatch,
-            on=True,
             replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
         )
 
@@ -3692,7 +3484,6 @@ class TestTheFlagOnDispatchesBothCalls:
         run_plan, items, served = worked(
             tmp_path,
             monkeypatch,
-            on=True,
             replies=(json.dumps(cut).encode("utf-8"),),
         )
 
@@ -3721,7 +3512,6 @@ class TestTheFlagOnDispatchesBothCalls:
         run_plan, items, served = worked(
             tmp_path,
             monkeypatch,
-            on=True,
             replies=(json.dumps(broken).encode("utf-8"),),
         )
 
@@ -3734,26 +3524,51 @@ class TestTheFlagOnDispatchesBothCalls:
         assert {summary.failure_code for summary in written} == {FailureCode.BAD_SHAPE}
         assert not list(items.glob(f"*{PAYLOAD_SUFFIX}")), "a lost item gets no decision"
 
-
-class TestTheOldPlannerStandsDownWhenTheWorkStageDecided:
-    def test_it_decides_nothing_and_overwrites_nothing(
+    def test_an_item_lost_after_call_one_still_reports_what_call_one_spent(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
-        """Without this the separate job re-decides every item on the small model
-        and overwrites a decision drawn from the article with one drawn from a
-        summary of it - silently, because both payloads validate."""
-        run_plan, items, _served = worked(
+        """Plan 11 row #3h. The expensive items are the ones that die here.
+
+        Three of the four ways this item can be lost happen after call 1 has
+        answered and been paid for, and each used to write five zeros. A cut
+        labelling reply is the worst of the three to lose: it decoded its whole
+        output budget, and it was cut precisely because the article was long -
+        so the day that costs the most reads as the day that cost nothing.
+
+        Slot 2 stays empty rather than being stamped with zeros. Call 2 was
+        never sent, and an empty slot says that where a zeroed one would say it
+        was free.
+
+        The cost block is written here rather than into the fixture. The
+        recorded reply is shared by every two-call test and none of the others
+        reads a number off it, so a `usage` block committed there would be a
+        value nothing checks - and a real llama-server reply carries one.
+        """
+        cut = json.loads(read_text(CALL_ONE_REPLY))
+        cut["choices"][0]["message"]["content"] = '{"labels": [{"element_id": "quan'
+        cut["choices"][0]["finish_reason"] = "length"
+        cut["usage"] = {"prompt_tokens": 2143, "completion_tokens": 6491}
+        cut["timings"] = {"prompt_ms": 217_580.0, "predicted_ms": 659_020.0, "cache_n": 12}
+        spent = cut["usage"]
+
+        _run_plan, items, _served = worked(
             tmp_path,
             monkeypatch,
-            on=True,
-            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+            replies=(json.dumps(cut).encode("utf-8"),),
         )
-        before = {
-            path.name: path.read_bytes() for path in sorted(items.glob(f"*{PAYLOAD_SUFFIX}"))
-        }
-        assert before, "the two-call path has to have written something to overwrite"
 
-        cli.stage_visual_planner(run_plan, settings=two_call_settings(True))
-
-        after = {path.name: path.read_bytes() for path in sorted(items.glob(f"*{PAYLOAD_SUFFIX}"))}
-        assert after == before
+        written = [
+            Summary.from_json(read_text(path)) for path in sorted(items.glob("*.summary.json"))
+        ]
+        assert written, "the stage summarized nothing, so this asserts nothing"
+        for summary in written:
+            assert summary.status is SummaryStatus.FAILED
+            assert summary.call_1 is not None, "call 1 ran and the ledger has to say so"
+            assert summary.call_1.kind is CallKind.LABEL
+            assert summary.call_1.input_tokens == spent["prompt_tokens"]
+            assert summary.call_1.output_tokens == spent["completion_tokens"]
+            assert summary.call_1.prefill_ms == 217_580
+            assert summary.call_1.decode_ms == 659_020
+            assert summary.call_2 is None, "call 2 was never sent"
+            assert summary.input_tokens == spent["prompt_tokens"]
+            assert summary.output_tokens == spent["completion_tokens"]
