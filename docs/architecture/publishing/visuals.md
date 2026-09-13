@@ -866,7 +866,56 @@ predicate above exact rather than approximate.
 **A caption written about dropped bars is discarded.** If any bar was removed, the model's caption
 described a chart that no longer exists.
 
-## Rendering runs without a browser
+## Where a drawing becomes pixels, ruled
+
+**The reader's browser draws the chart. The pipeline never draws one.** Owner ruling,
+2026-09-13, under `CLAUDE.md` section 0.
+
+**The chain, end to end.** Code reads the article and finds every quantity it can, with the
+offsets that prove where each one came from. The model labels those quantities, names the
+chart type and selects which elements it is drawn from. Code compiles that into a spec -
+the data and its shape, and nothing else. **The day payload carries that spec**, and the
+reader's browser draws the SVG from it with d3. Nothing renders at build time and no
+drawing is committed.
+
+**This closes a question three documents answered three different ways**, which is why a
+worker scoping plan 12 row #1 stopped rather than guess. In
+[`../../../TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md),
+row 22 ruled build-time SVG with hydration on point-or-focus, and row 37 ruled that the
+compiled spec travels in the day payload and the browser draws it. The proposal behind both
+still records the question as open. The code follows row 22. **Row 37 was right, and it is
+now the whole rule rather than the tail of it**: there is one drawing path and it is the
+browser's.
+
+**What the ruling costs, named rather than implied.** A reader with JavaScript off gets no
+chart, where today they get one, because today the drawing is markup inside the document
+itself. That is the reason row 22 chose build-time SVG and it is a real loss. And the
+drawing stops being an archival artefact: a committed SVG is a fixed record of what a reader
+saw on a given day, where a spec plus drawing code can be redrawn differently by a later
+change with nothing in the payload to show it moved. `renderer_version` travelling on the
+payload is what makes that visible, and it is why it is minted before anything draws.
+
+**What it buys.** The 495 committed drawings - 6.01 MB, mean 12.4 KB each, measured
+2026-09-13 - stop being published bytes, and their growing tail stops counting against the
+1 GB site cap (Guardrail #2). The chart takes the width the reader's screen actually has,
+which a fixed build-time canvas cannot do and which is the whole of plan 12's complaint. The
+two-runs-one-path race that `drop_raced_assets.py` exists to clean up has nothing left to
+race over. And the build-time renderer's own non-determinism goes with it - the clip-path
+counter recorded below - because determinism moves to the spec, which is where the
+architecture record already argued it belongs.
+
+**What this ruling does NOT change, because each has been read as following from it.** The
+pages stay prerendered; prerendering a route and prerendering a chart are different acts and
+only the second one ends. The model still never writes a number - it labels, names and
+selects, and code cuts every character a reader sees. The validator, the downgrade ladder
+and the sufficiency bar all stay; what moves is only where the spec becomes pixels. The
+console keeps its own chart engine and is not migrated.
+
+## The build-time renderer, which the ruling above retires
+
+**This section describes what runs today, and the ruling above ends it.** It stays until
+the drawing moves to the browser, because a page that describes a renderer we deleted is
+as wrong as one that hides a renderer we still run.
 
 | Kind | Persisted spec | Renderer |
 | --- | --- | --- |
@@ -906,6 +955,12 @@ began. Deleted 2026-09-05 on the same scan: zero committed items carry a diagram
 The renderer writes SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, beside the
 payload that references it. A render failure records why and the item publishes without a
 picture. No failure path raises.
+
+**The spec is compiled and then thrown away, which is the gap the ruling above closes.**
+`VisualDecision.spec` lands under gitignored `backend/var/`, travels as a one-day artifact,
+and the published `DigestVisual` carries only `kind`, `state`, `path` and `alt` - so the data
+the drawing was made from is unreachable 24 hours after a run. The browser is handed a
+finished picture and no way to redraw it at the size the reader's screen actually has.
 
 ### One plan becomes one picture, and `compile_bar` is the only thing that draws it
 
