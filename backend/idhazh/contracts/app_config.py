@@ -1940,6 +1940,58 @@ class ObservabilityConfig(Model):
 ModelRole = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:_[a-z0-9]+)*$")]
 
 
+class ReferenceDatasetConfig(Model):
+    """The floors `corpus/reference-dataset-1/` is built to, and the manners it is built with.
+
+    Every number here is a floor or a cap rather than a measurement, and the
+    builder refuses loudly rather than emitting a set that misses one. They are
+    config because a dataset whose floors are literals cannot be rebuilt at a
+    different size without a code change (Guardrail #6).
+
+    Nothing here runs on the runner. `build_reference_dataset.py` reads the open
+    web once, by hand, off the daily path.
+    """
+
+    rows_per_split_min: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "The floor each side must clear. A disjointness test passes on an empty set, "
+            "so a builder that wrote every article to one side would satisfy 'no domain on "
+            "both sides' perfectly. This is what it cannot satisfy."
+        ),
+    )
+    domains_per_split_min: int = Field(
+        default=20,
+        ge=1,
+        description=(
+            "Distinct registrable domains each side must carry. A side drawn from three "
+            "outlets measures those three outlets."
+        ),
+    )
+    rows_per_domain_max: int = Field(
+        default=7,
+        ge=1,
+        description=(
+            "How many articles one outlet may contribute. Without a cap the set is the "
+            "two largest wire services and a tail."
+        ),
+    )
+    article_words_min: int = Field(
+        default=120,
+        ge=1,
+        description=(
+            "Shorter than this and there is not enough article for a person to label, so "
+            "the disagreement it produces is about the stub rather than about the words."
+        ),
+    )
+    request_delay_seconds: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Pause between fetches. A measurement is not a licence to hammer a server.",
+    )
+
+
 class FinetuneConfig(Model):
     """The training corpus and the schedules that maintain it.
 
@@ -3490,6 +3542,24 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T14:00",
+            change=(
+                "Added the reference_dataset block - rows_per_split_min 200, "
+                "domains_per_split_min 20, rows_per_domain_max 7, article_words_min 120 "
+                "and request_delay_seconds 1.0. Additive and defaulted, so a "
+                "config/idhazh.json written before this still loads and needs no "
+                "read-side migration."
+            ),
+            why=(
+                "corpus/reference-dataset-1/ is the frozen set every classification "
+                "accuracy number in plan 23 is measured on, and the floors that keep it "
+                "honest are what stop a lopsided split passing a disjointness test. A "
+                "floor written as a literal cannot be rebuilt at another size without a "
+                "code change (Guardrail #6), and the whole point of these five is that "
+                "somebody can raise one and rebuild."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T12:00",
             change=(
@@ -5856,6 +5926,7 @@ class AppConfig(Contract):
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
     finetune: FinetuneConfig = Field(default_factory=FinetuneConfig)
+    reference_dataset: ReferenceDatasetConfig = Field(default_factory=ReferenceDatasetConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 

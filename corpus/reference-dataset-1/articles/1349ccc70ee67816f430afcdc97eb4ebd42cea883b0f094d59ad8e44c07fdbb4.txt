@@ -1,0 +1,48 @@
+Google Pixel 11
+Pros & Cons
+- Brighter display is a welcome upgrade.
+- Similar camera setup and features as the $1,899 Pro Fold.
+- Qi2 25W wireless charging is easy to appreciate.
+- Pricier baseline at 256GB.
+- Possibly too much AI for some people.
+Follow ZDNET: Add us as a preferred source on Google.
+Confession: I’ve spent the past two weeks speed-dating. Not people, but phones. Some were overly luxurious, offering flashy features and bold promises that were simply too lavish for my lifestyle. Others were quietly compelling.
+The new Pixel 11 is a bit of both camps. It’s like the classic movie trope: the quiet nerd who takes off their glasses, puts on a swipe of hibiscus-pink lipstick, and suddenly has everyone’s full attention.
+That’s what it felt like when I first unboxed the handset, with its magenta hues making the most of golden hour by my living room window. I’ve seen this story play out for years now, as Google often treats its base model Pixel with the “fun” colors, but to my surprise again, the Pixel 11 quickly became my favorite of the four that launched this summer.
+Google Pixel 11
+
+Pros & Cons
+
+- Brighter display is a welcome upgrade.
+- Similar camera setup and features as the $1,899 Pro Fold.
+- Qi2 25W wireless charging is easy to appreciate.
+- Pricier baseline at 256GB.
+- Possibly too much AI for some people.
+Get it now
+
+Expert Take
+
+The latest base model Pixel features a Tensor G6 chip, an improved camera sensor, and more.
+A slimmed-down affair
+Besides the fancy new Hibiscus color, there actually isn’t much that’s new to the base Pixel’s hardware this year. You’re still getting a 6.3-inch AMOLED display, a nearly symmetrical design (from the bezels to the bottom-firing speaker), and a blend of polished glass and matte-treated side rails.
+Let me geek out for a moment: I’m a big fan of the material choice for the Pixel 11 because the glossy back glass has the unintentional effect of becoming grippier as your fingers build up sweat (naturally) throughout the day. So, unlike the Pro models, which have a matte finish on the back, the Pixel 11 is less slippery to use one-handed — to the point that I feel comfortable using it without a case.
+Google has also slimmed down the camera bar to nearly half the size of last year’s, making it feel even sleeker. So, if you do decide to slap on a case, the camera bar should now fit beneath the protective layer, rather than potentially being exposed still to drops and scratches. It’s quite an impressive feat, considering the company upgraded the main sensor to improve light-gathering. More on that later.
+Not quite Pro, and that’s okay
+Opting for the non-Pro Pixel means settling for some limitations. That holds true this year, even with Google bumping up the starting price to $899 (from $799) for the 256GB storage configuration.
+Here are some key differentiators that you should be aware of:
+- The display maxes out at 3,000 nits of brightness (compared to 3,600 nits) and only supports 60Hz and 120Hz refresh rates (instead of down to 1Hz).
+- All three cameras are inferior to their Pro counterparts, from the main sensor (48MP vs. 50MP) to the telephoto (10.8MP vs. 48MP).
+- Memory and storage cap out at 12GB of RAM and 512GB of storage. That’s compared to the Pro models, which can field 16GB of RAM and up to 1TB of storage.
+- Wired charging is limited to 30W, while the Pro models support a faster 45W rating.
+AI truly shines with the base model
+Based on my week with the Pixel 11 — and my even more extensive experience with the Pro models — most people will be totally fine with the aforementioned caveats. In fact, there’s something about Google’s various Gemini/AI enhancements across its devices that shines particularly brightly on a more minimal phone like the Pixel 11.
+After all, the company seems motivated to introduce AI features that enhance the user experience, rather than replace it.
+For example, dictating my text messages with the new Rambler feature was just as smooth and reliable on the Pixel 11 as it was on the Pixel 11 Pro XL. I’ve found myself responding to text messages more proactively when driving now because it’s become that much easier to talk freely, narrate any adjustments, and send messages without worrying about my phone misinterpreting anything.
+The same applies to the new Magic Capture feature, which intelligently captures stills as you record a video. It’s practically a photographer assistant; they’ll take way too many photos in fear of missing “the shot,” but they’ll get you more than enough good ones to make up for it.
+With the new main sensor, I’ve actually been quite satisfied with how quickly the phone captures and processes images, especially in dimmer environments. The output is still not as vibrant and saturated as what you’d get from a Samsung phone, though, so it ultimately depends on your preference for how realistic and ideal photos come out.
+Lastly, it helps that the Pixel 11 runs on the same Tensor G6 processor and Android 17 software as the Pro models, putting it on near equal footing when it comes to day-to-day performance. I’ve only noticed a difference in power management when it comes to gaming, with the Pixel 11 not supporting certain graphics-intensive settings in titles like “Genshin Impact”. It’s made me curious to see exactly how the 12GB of RAM will hold up over time.
+ZDNET’s buying advice
+That’s to say, of all the phones Google released this year, the new Pixel 11 might be the biggest victim of the global memory chip shortage.
+It used to be much easier to justify buying the baseline Pixel; it was a value-driven flagship with features that nearly matched its Pro siblings. In 2026, I’m finding it harder to back the now $899 handset, especially when its biggest new upgrade might just be a larger camera sensor that takes slightly better photos. (You can also make the argument for an improved suite of Gemini features, but those may eventually trickle down to older Pixel models.)
+Comparatively, Pro customers, whether they favor the standard and XL sizes or the foldable, may already be accustomed to the $1,000+ price range and enter their buying cycles expecting to pay a premium.
+But if you find just the right trade-in offer, sign-in promotion, or holiday deal, the Pixel 11 is your safest option of the four. And, if history repeats itself, you may even score a new Pixel for hundreds of dollars less if you wait until Black Friday.

@@ -1,0 +1,38 @@
+Junichi Kashino
+Platform Business Strategy Department, KDDI
+Miki Katsuragi
+AI Consultant, Google Cloud Japan
+When building consumer-facing generative AI applications, balancing high generation quality with fast response times across diverse media types, can be challenging. KDDI, a major telecommunications carrier in Japan, tackled this challenge head-on when they developed Buffmee, their consumer Retrieval-Augmented Generation (RAG) app.
+Buffmee is an interactive AI service built on the concept of 'AI that helps you grow.' By grounding responses in over 100 sources — including books, magazines, and web media — it helps users search for information, summarize key points, and explore personalized learning and hobby interests. By citing sources, Buffmee alleviates concerns about information reliability, allowing users to safely deepen their knowledge. To achieve this, KDDI collaborated closely with their development partner KDDI iret, Google Cloud Consulting and our specialized AI engineers.
+As part of their app launch, the engineer team needed to ground a massive variety of proprietary content, including books and magazines. However, they struggled with latency issues that prevented them from meeting their target response times, and they needed a reliable way to ensure hallucination-free results.
+Buffmee App Description and Images
+To meet these performance targets, organizations need a systematic approach to AI evaluation and real-time bottleneck identification. That is why we are sharing the automated evaluation framework and performance optimization techniques that helped KDDI successfully launch their application.
+The results were inspiring: KDDI reduced total application response latency by 38%, successfully hitting their target response performance. They also achieved a nearly 18% improvement in TTFT.
+"Our vision hinged on a platform where content, once ingested, would instantly function as a working RAG system. Google's careful, hands-on guidance made that a reality — we're sincerely grateful for their support." — Shunya Onoda, AI Product Department, KDDI.
+With these performance and accuracy improvements, Buffmee now empowers users to safely explore their favorite media through interactive Q&A and deep-dive analysis, delivering a highly personalized experience while maintaining strict trust and compliance for content providers.
+Let’s deep dive into how they achieved these results.
+Establish automated evaluation for diverse content
+Traditional manual testing requires immense effort and cannot scale to accommodate a large content library. To solve this, the development team designed a systematic AI evaluation process using Gemini Enterprise Agent Platform Evaluation Service.
+By implementing automated evaluation frameworks like LLM-as-a-Judge and the Rule of Hundreds, the team replaced labor-intensive manual testing with a data-driven process. They ingested their extensive document corpus, constructed hundreds of automated evaluation tests, and built a comprehensive benchmark dataset to measure the reliability of answers for each use case. As a result, the team improved their groundedness scores by 25%, helping deliver highly accurate and reliable outputs.
+KDDI's automated evaluation loop: AI generates questions and scores answers, while humans calibrate thresholds and analyze edge-case failures.
+Identify bottlenecks and optimize performance with an agentic loop
+To improve response speeds, the team implemented BigQuery Agent Analytics and the Agent Development Kit (ADK) log analysis agent. By analyzing actual production logs, they visualized how skill division and prompt bloat—especially with highly complex, multi-page system prompts — impacted the Time To First Token (TTFT).
+The team optimized the system prompt, including the inline integration of skills, and reviewed the sub-agent routing. This allowed them to identify and resolve deep-stack bottlenecks in real time without sacrificing response accuracy.
+Four core principles for reliable evaluation
+To achieve these results, the team implemented four core technical practices:
+-
+Transitioning to binary evaluation: By selectively moving away from ambiguous 1–5 ratings to a binary "pass (1) / fail (0)" system for critical metrics, the team minimized variance and noise, helping improve automation accuracy.
+-
+Strategic content sampling: Rather than attempting to evaluate every single document, the team classified their entire corpus along a two-dimensional grid: File Format (Web articles, EPUBs, PDFs, structured data) and Media Composition (Text-heavy, image-heavy, or mixed). By selecting representative samples from each cell of this difficulty grid, they reduced the evaluation workload by 75% while maintaining comprehensive test coverage.
+-
+Thresholds grounded in product judgment: Instead of relying solely on default tool parameters, the product owner reviewed randomly sampled answers alongside their automated scores to calibrate and establish what "good enough to ship" actually meant for the user experience.
+-
+Modular splitting of massive prompts into ADK Skills: Because massive system prompts exceeding 800 lines can cause LLM attention drift and latency degradation, the team split prompts by function into Agent Development Kit (ADK) Skills, dynamically loading only the required logic to optimize response times.
+Get started
+Building scalable, reliable generative AI applications requires both automated evaluation and deep performance analytics. To apply these techniques to your own applications:
+-
+Measure quality systematically with the Gen AI evaluation service
+-
+Structure your agents with Agent Development Kit and apply progressive disclosure deliberately
+-
+Ground your agents with Agent Search and inspect your retrieval queries

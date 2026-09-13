@@ -1,0 +1,15 @@
+Google Maps and Apple Maps followed federal directives to rebrand Lake Ontario as “Lake America” for users across the US but one app stood out for ‘not yielding’ – pushing it to No. 1 overall ranking on the US App Store, jumping up from the eighth position just a day earlier. The veteran digital navigation platform MapQuest drew a firm line in the sand, helping it return to prominence.
+The sudden surge in installations follows an August 27 executive order by President
+Donald Trump
+. Both Apple and
+Google
+quickly updated their platforms to reflect the change.
+“The U.S. Geographic Names Information System (GNIS) has formally changed the name for ‘Lake Ontario’ to ‘Lake America’ in the United States. Since we update Google Maps to reflect name changes in official government sources, which is GNIS for the U.S., people using Maps in the U.S. will see ‘Lake America,’ those in Canada will continue to see ‘Lake Ontario,’ and those outside of the U.S. and Canada will see both names. These updates follow our long-standing policy for bodies of water with names that vary from country to country, and are starting to roll out now,” said the company in a blog update.
+MapQuest, however, posted an announcement on X declaring that it would not comply with the rename. The company posted three different posts on the same:
+“We’re not changing it”, “We're not changing the name of Lake Ontario.
+Name it whatever you want at your leisure”, and “We are aware that Lake Ontario is being correctly labeled on our map.”
+The public pushback immediately resonated with mobile users looking for an alternative to Big Tech platforms. MapQuest sat at No. 128 on the US App Store on August 28 before jumping to No. 92 on August 29. By Monday, August 31, the platform surged to No. 3 overall while seizing the No. 1 rank in the Navigation category. By Tuesday (September 1), it sat on the top of the chart, holding the top spot across all applications and mobile games nationwide.
+Record downloads and active user engagement
+Estimates from analytics provider Sensor Tower show the app gained roughly 632,000 US downloads in the days following the presidential directive. In a direct statement, MapQuest stated total adoption was even higher, topping 1.5 million downloads across Canada and the US combined.
+“What’s been incredible is that people aren’t just installing our app — they care enough to communicate directly with us — making feature requests and submitting bug reports on social, and in our app reviews. Our small team has been working around the clock to build features people are asking for. We are aiming for everyone to have a great experience with the app,” MapQuest GM Doug Berger told TechCrunch.
+In the latest post on X, the app MapQuest said, “The people have spoken. We are working” and “MapQuest Engineers working overnight to release Android Auto ASAP”

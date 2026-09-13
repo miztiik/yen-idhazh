@@ -1,0 +1,82 @@
+The regulator has proposed two options for determining expiry-day settlement prices for index and stock derivatives, changes to the timing of the continuous trading session (CTS), CAS and derivatives trading, and additional measures aimed at improving the functioning of the auction.
+SEBI has invited public comments on seven proposals by October 3, 2026.
+Two options for expiry-day settlement
+SEBI has proposed two alternatives for determining the settlement price of index and stock derivatives on expiry days.
+Option 1: Blended VWAP
+Under the first option, the settlement price would be based on trades executed during the last 30 minutes of CTS and the 10-minute CAS.
+SEBI has described this as the proposed eventual settlement methodology.
+Option 2: CTS VWAP
+Under the second option, the expiry-day settlement price for both index and single-stock derivatives would be based only on trades executed during the last 30 minutes of CTS.
+Transactions executed during CAS would not form part of the settlement calculation during the interim period.
+SEBI has described this as an interim methodology, providing continuity with the pre-CAS framework.
+After at least one year, the regulator proposes to consider transitioning to the Blended VWAP methodology. The transition would not be automatic and would depend on experience with CAS, including liquidity and participation, familiarity of market participants with the auction mechanism and how CAS functions under different market conditions.
+SEBI is seeking comments on whether Option 1 should be the preferred methodology, or whether Option 2 should be used before ultimately transitioning to Option 1.
+IEP is not an executed price
+SEBI has also sought to clarify the difference between the Indicative Equilibrium Price (IEP) displayed during CAS and an actual traded price.
+During CTS, compatible buy and sell orders are matched and a transaction is executed at the corresponding price.
+During CAS, buy and sell orders are accumulated in the auction book. Based on orders received up to a particular point, the exchange calculates the price at which the maximum possible quantity could currently be executed.
+As orders are entered, modified or cancelled, the IEP may change.
+SEBI said the IEP is therefore “indicative and evolving during CAS and does not denote a price at which transactions have taken place.”
+The final CAS price is the price at which transactions are executed pursuant to the auction.
+For example, an IEP of ₹100 shortly after the start of CAS means that, based on the orders available at that point, ₹100 is the price at which the maximum possible quantity could currently be executed. If more orders enter the book or existing orders are modified or cancelled, the IEP may change.
+Therefore, a movement in the IEP from ₹100 to ₹103 does not by itself mean that the security's traded price has moved to ₹103. It reflects the ongoing price discovery process and the price at which a transaction could execute if the auction ended at that point.
+Why SEBI wants to stop IEP-derived index values during CAS
+SEBI has also proposed stopping the dissemination of the Indicative Index Value (IIV) derived from IEPs during CAS, while continuing to provide security-level IEPs.
+The regulator said an index itself is not subject to an auction. Its indicative value during CAS is derived from the continuously evolving IEPs of its constituent securities.
+The final index value is established only after the auction concludes and the final prices of the relevant constituent securities are determined.
+SEBI said movement in the IEP-derived IIV during CAS should therefore not be interpreted as the index having actually reached that level, since no actual transactions have taken place at that index value.
+For example, if the pre-CAS index value is 50,000 and the IIV during CAS is displayed at 48,500 points, this does not mean that the index has actually traded or reached 48,500 points.
+Such values, SEBI said, “may be misconstrued by market participants as actual levels reached by the index.”
+The regulator has therefore proposed that security-level IEPs continue to be disseminated while the IEP-derived IIV is not disseminated during CAS.
+Two options for market timings
+The regulator has also proposed two alternatives for the timing of CTS, CAS and derivatives trading.
+Option A: CAS after 3:30 pm
+Under Option A, CTS for all stocks would continue until 3:30 pm.
+After a transition period of about one minute, CAS for CAS stocks would run from 3:31 pm to 3:40 pm.
+Derivatives trading would continue until 3:45 pm, providing a five-minute window after CAS concludes.
+SEBI said this option would provide greater continuity between CTS and CAS, with a longer CTS period.
+Option B: CAS after 3:15 pm
+Under Option B, CTS for CAS stocks would continue until 3:15 pm, while non-CAS stocks would continue to trade until 3:30 pm.
+CAS would run from 3:15 pm to 3:25 pm, including a transition period of about one minute.
+Derivatives trading would continue until 3:30 pm, giving participants five minutes after CAS concludes.
+SEBI said this option would retain the existing CTS duration for CAS stocks and align the close of derivatives markets with 3:30 pm.
+Transition period to be cut to one minute
+Under the current CAS framework, exchanges were given a five-minute transition period between CTS and CAS.
+SEBI has proposed reducing this to up to one minute.
+The regulator said this would reduce the substantive transition period while retaining sufficient time for exchanges to complete the operational processes required to commence CAS.
+It would also provide greater continuity between continuous trading and auction-based price discovery, while increasing the CTS period by about four minutes.
+F&O window after CAS to be cut to five minutes
+Under the existing framework, derivatives trading continues for 10 minutes after CAS.
+SEBI has proposed reducing this post-CAS derivatives trading window to five minutes.
+The regulator noted that the existing additional window allows participants to achieve intended end-of-day exposures and enables arbitrageurs to square off unmatched positions.
+For single-stock derivatives, the additional period also allows participants to take offsetting positions to manage physical delivery obligations.
+However, based on feedback from market participants, SEBI said a shorter window may be sufficient once price discovery in the underlying security or index is complete.
+The regulator also noted that participants may not be able to complete all desired transactions during CAS and may therefore need a window after CAS to manage their positions.
+CAS price band to remain at ±3%
+SEBI has proposed retaining the existing ±3% price band for CAS.
+Instead of narrowing the overall band, it has proposed restrictions on cancellation of orders placed beyond ±1% of the reference price.
+Under the proposal:
+- Orders placed within ±1% of the reference price could continue to be cancelled during CAS.
+- Orders placed at, or modified to, prices beyond ±1% and up to ±3% of the reference price could not be cancelled during CAS.
+- Such orders could, however, be modified to improve the price, subject to the overall ±3% band.
+- The overall CAS price band would remain at ±3%.
+SEBI said the approach is intended to preserve the flexibility of the existing ±3% band while reducing the scope for significant withdrawal of trading interest at prices materially away from the reference price.
+The regulator said the proposal could also improve the stability and credibility of the auction order book while retaining flexibility for participants to improve their orders as demand and supply conditions evolve.
+Iceberg orders may move into CAS
+SEBI has also proposed allowing unexecuted Iceberg orders at the end of CTS to participate in CAS.
+Under the existing framework, Iceberg orders placed during CTS divide the total quantity into smaller disclosed quantities, with only the applicable disclosed portion visible in the order book.
+SEBI proposes that the pending quantity of an unexecuted Iceberg order at the commencement of CAS be converted into a normal limit order.
+The entire unexecuted quantity would then be disclosed in the CAS order book and made available for execution under the CAS matching mechanism.
+For example, if an Iceberg order has a total quantity of 10,000 shares, with 1,000 shares visible at a time, and 6,000 shares have been executed during CTS, the remaining 4,000 shares would move into CAS as a normal limit order, with the entire 4,000-share quantity disclosed.
+SEBI said this would ensure that eligible trading interest remaining at the end of CTS is not excluded from closing-price discovery because of the manner in which the order was originally placed.
+It would also make the quantity actually available for execution fully visible in the CAS order book.
+What happens next?
+SEBI has invited public comments on all seven proposals.
+Comments and suggestions have to be submitted by October 3, 2026.
+The proposals cover:
+- Expiry-day settlement methodology — Blended VWAP or CTS VWAP;
+- Market timings — Option A or Option B;
+- Dissemination of IEP-derived Indicative Index Value during CAS;
+- Restrictions on cancellation of orders beyond ±1% of the reference price; and
+- Transition of unexecuted Iceberg quantities from CTS to CAS.
+This article has been written by Kumar Gaurav, who is not a SEBI-registered Research Analyst or an Investment Adviser. Gaurav and his/her ‘relative(s)’ (as defined under Section 2(77) of the Companies Act, 2013) do not hold any financial interest in the companies mentioned in this article as of the date of publication. The views/recommendations mentioned in this article, wherever applicable, are those of the respective SEBI-registered Research Analyst/brokerage and have been reproduced/reported with due attribution. They should not be construed as the views or recommendations of The Economic Times Digital or the journalist. Readers are advised to consider the original research report and make their investment decisions based on their own assessment.

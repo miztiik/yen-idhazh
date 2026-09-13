@@ -1551,6 +1551,49 @@
       "title": "PlacementConfig",
       "type": "object"
     },
+    "ReferenceDatasetConfig": {
+      "additionalProperties": false,
+      "description": "The floors `corpus/reference-dataset-1/` is built to, and the manners it is built with.\n\nEvery number here is a floor or a cap rather than a measurement, and the\nbuilder refuses loudly rather than emitting a set that misses one. They are\nconfig because a dataset whose floors are literals cannot be rebuilt at a\ndifferent size without a code change (Guardrail #6).\n\nNothing here runs on the runner. `build_reference_dataset.py` reads the open\nweb once, by hand, off the daily path.",
+      "properties": {
+        "article_words_min": {
+          "default": 120,
+          "description": "Shorter than this and there is not enough article for a person to label, so the disagreement it produces is about the stub rather than about the words.",
+          "minimum": 1,
+          "title": "Article Words Min",
+          "type": "integer"
+        },
+        "domains_per_split_min": {
+          "default": 20,
+          "description": "Distinct registrable domains each side must carry. A side drawn from three outlets measures those three outlets.",
+          "minimum": 1,
+          "title": "Domains Per Split Min",
+          "type": "integer"
+        },
+        "request_delay_seconds": {
+          "default": 1.0,
+          "description": "Pause between fetches. A measurement is not a licence to hammer a server.",
+          "minimum": 0.0,
+          "title": "Request Delay Seconds",
+          "type": "number"
+        },
+        "rows_per_domain_max": {
+          "default": 7,
+          "description": "How many articles one outlet may contribute. Without a cap the set is the two largest wire services and a tail.",
+          "minimum": 1,
+          "title": "Rows Per Domain Max",
+          "type": "integer"
+        },
+        "rows_per_split_min": {
+          "default": 200,
+          "description": "The floor each side must clear. A disjointness test passes on an empty set, so a builder that wrote every article to one side would satisfy 'no domain on both sides' perfectly. This is what it cannot satisfy.",
+          "minimum": 1,
+          "title": "Rows Per Split Min",
+          "type": "integer"
+        }
+      },
+      "title": "ReferenceDatasetConfig",
+      "type": "object"
+    },
     "RetentionConfig": {
       "additionalProperties": false,
       "description": "Every default here deletes nothing. A default is a promise, not a placeholder.\n\nThe committed file is one step ahead of the defaults from 2026-09-13:\n`image_months` is 13 there and -1 here. `dry_run` is true in both, so the\ncommitted config names a window and still removes nothing - which is the\norder this was landed in, so that the first evidence of what the window\nselects arrives before the deletion rather than after it.",
@@ -2126,6 +2169,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added the reference_dataset block - rows_per_split_min 200, domains_per_split_min 20, rows_per_domain_max 7, article_words_min 120 and request_delay_seconds 1.0. Additive and defaulted, so a config/idhazh.json written before this still loads and needs no read-side migration.",
+      "version": "2026-09-13T14:00",
+      "why": "corpus/reference-dataset-1/ is the frozen set every classification accuracy number in plan 23 is measured on, and the floors that keep it honest are what stop a lopsided split passing a disjointness test. A floor written as a literal cannot be rebuilt at another size without a code change (Guardrail #6), and the whole point of these five is that somebody can raise one and rebuild."
+    },
     {
       "change": "Added the placement block - placement.head_items 20, placement.max_desk_in_head 5 and placement.head_no_repeat 10. Additive and defaulted, so a config/idhazh.json written before this still loads and needs no read-side migration; the committed file sets all three explicitly, which is what makes the frame visible to an operator reading it.",
       "version": "2026-09-13T12:00",
@@ -2756,6 +2804,9 @@
     "placement": {
       "$ref": "#/$defs/PlacementConfig"
     },
+    "reference_dataset": {
+      "$ref": "#/$defs/ReferenceDatasetConfig"
+    },
     "retention": {
       "$ref": "#/$defs/RetentionConfig"
     },
@@ -2769,7 +2820,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-13T12:00",
+      "default": "2026-09-13T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2783,5 +2834,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-13T12:00"
+  "version": "2026-09-13T14:00"
 }

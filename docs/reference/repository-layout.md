@@ -30,7 +30,7 @@ question, and the four answers do not mix.
 | Path | Holds | Written by | Reaches a reader |
 | --- | --- | --- | --- |
 | `config/` | The tunable knobs: `idhazh.json`, `appearance.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
-| `corpus/` | The rolling training window: source text as training samples, its census and its holdout | a run, in CI | **never** |
+| `corpus/` | The rolling training window: source text as training samples, its census and its holdout. **`corpus/reference-dataset-1/` is a second collection in the same directory and a different thing entirely**: a frozen, hand-labelled set for measuring the article classifier, written once by hand and never by a run. The two must not share an article, and `build_reference_dataset.py verify` is what says so | a run, in CI; `reference-dataset-1/` by a person | **never** |
 | `schemas/` | One generated JSON Schema per contract | `python -m idhazh.contracts.export` | no |
 | `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |

@@ -1,0 +1,50 @@
+Follow ZDNET: Add us as a preferred source on Google.
+ZDNET’s key takeaways
+- The adorable iPhone 4 still powers on, but the battery barely lasts.
+- Modern security leaves iCloud, Safari, and apps unusable.
+- The best use may be as an iPod, but recycling makes more sense.
+As someone with both a career that requires me to constantly bring in new gear, and a well-honed personal habit of doing so, I am constantly fighting a battle over electronic clutter.
+Sometimes, clutter wins, and I ignore it. But every so often, I summon my inner Marie Kondo, gut up, and do a gear edit.
+Last weekend, in another decluttering run, I came upon what might be a precious artifact: my old iPhone 4 from 2011. I have fond memories of this tiny phone. The App Store was available on the iPhone 3G. The iPhone 4 was the first iPhone that let us move beyond AT&T as the sole carrier. In my mind, it was the first iPhone that truly felt like the iPhones we have today.
+Of course, with hindsight, it was tiny and slow. The device only worked on 3G networks, which were effectively dial-up speeds. It wasn’t until LTE that we started getting broadband-like speeds on phones. The phone had a super-slow A8 processor and 8GB of storage.
+And yet, I really did love it. The device was my constant companion for four years, until I bought a 6s back in 2015. Since then, it has lived at the bottom of a bin, unseen until a few days ago.
+Does it work?
+My first question was whether the little device works. I had to find the old-style 30-pin dock connector. This connector debuted on the old original-style iPods. It lasted until the Lightning connector’s debut in 2012.
+Fortunately, a bunch of years back I built the Ultimate Cable Organizer, which has a dedicated bin for Apple cables. In there, I found the requisite cable, the only one remaining in my collection.
+I plugged one end into a USB charger, plugged the other end into the iPhone 4, and waited. At first I got the empty battery indicator. After leaving it overnight, I woke up to a full charge. I could actually use the phone.
+I found out quickly that the “full charge” was only worth 15 minutes of use. The battery did work. But not for long. Still, as you can see from the photo at the top of this article, the phone is alive…ish.
+What about wireless connectivity?
+As mentioned, the iPhone 4 is a 3G device. Third-generation networks were fully phased out in the United States in 2022, and this phone is a US device. If you are in other countries, some still have 3G. France, for example, expects to have 3G operational until the end of 2028.
+The iPhone 4 has Wi-Fi connectivity, but only on a 2.4Ghz hotspot. My router supports 5GHz and 2.4GHz bands, which meant the device could connect to the network.
+What about iCloud and App Store?
+However, I couldn’t get the phone to connect to iCloud. Apparently, the authentication mechanisms that existed at the beginning of the last decade are obsolete, and the phone wouldn’t authenticate. That issue also meant that I couldn’t factory reset the device via iCloud.
+I could not get Safari to connect to much of anything. The old iOS doesn’t support modern security certificates or current HTML and CSS. Safari couldn’t display ZDNET or any of my own sites.
+Since I couldn’t sign into iCloud, the App Store was off-limits. That means I was limited to apps already on the phone or, possibly, side-loading software.
+Can it connect to my Mac?
+Actually, yes. You’ll need that dock cable, of course. Interestingly, vendors that claim compatibility are still selling the cables on Amazon. I had my old one, so I didn’t need to try the Amazon route, but they exist. Apple no longer sells these cables.
+If you’re running a modern Mac, obviously iTunes doesn’t exist anymore. But I found that when I connected the iPhone 4 to my M4 Mac Studio, the iPhone indicator showed up in my Finder sidebar. What’s more, the entire phone management interface was there as well.
+That capability means you could use the iPhone 4 as a dedicated iPod-like media player. Bonus tip: the device supports the headphone jack, so if you miss connecting your old headsets or earbuds via a physical connection, this will do it.
+You could also use the phone as a spare camera, but don’t expect much quality. You can’t really use it as an extra baby monitor, because network connectivity and app compatibility are fairly nonexistent.
+You also could potentially use the phone to play small retro games. If you have a very simple HTTP interface, you might be able to control some home networking devices. The device is delightfully small.
+I did find one video that describes how to jailbreak an old iPhone 4 to use sideloaded apps from circa 2011. As curious as I was about this approach, it just didn’t seem worth my time. That said, here’s the video in case you’re super-intrepid.
+Does an iPhone 4 have resale value?
+No, not really. I found a few on eBay from $5 to $30, but no real evidence of sales. The sellers were heavily touting that the devices were carrier unlocked. As I mentioned above, that’s really a moot point. Carriers no longer support 3G phones.
+Even buying a device that claims to be unlocked for iCloud won’t do much for you, because it can’t connect to iCloud as iCloud’s security mechanisms are different now.
+I imagine collectors might be interested in the device. For example, people who collect vintage iPhones might want them, but they would more likely want a new one, in a box. If a movie or TV show were set around that time period, a prop department might be looking for them. The phone has ancient firmware, so if someone really wanted to try running an obsolete iOS, this device could probably do it. And it is cute, so someone might want to display it.
+Still, the phone is probably something destined for your recycling center.
+How to factory reset
+If you do decide to recycle your phone, it’s a good idea to reset it first. While there’s little chance of going into your iCloud and extracting anything, the phone might still contain personal data.
+While some recycling services offer device scrubbing or crushing, it’s good to know your phone is “safed” before letting it go.
+To zero and reset the device, connect as shown in the screenshot above, then hit the Restore iPhone button. The system will ask you if you want to reset your phone. When you say yes, it will. Slowly. Very, very slowly.
+Make sure you keep the device plugged in through the whole process. My battery wouldn’t have had enough life left to complete the reset.
+What old iPhone still has value?
+Two answers, as of late August 2026: the iPhone 5s and the iPhone 8/iPhone X.
+The 2013 iPhone 5s can run iOS 12.5.7 and supports Apple’s current two-factor authentication. Basic iCloud syncing also works. You can share photos and connect over 2.4Ghz Wi-Fi. The iPhone 5s supported LTE. However, the device used an old data chip. It doesn’t have VoLTE (voice over LTE), so it’s unlikely to connect to any carriers.
+I found some sale listings, but only for $5 to $15. It was odd that these listings were less expensive, but the iPhone 5s was considered a “cheap model” and wasn’t nearly as iconic as the iPhone 4. As always, eBay values vary day by day.
+Both the 2017 vintage iPhone 8 and iPhone X can run up to iOS 16, and support most iPhone features. They can connect to iCloud and to most carriers. I found resale listings for about $30 to $60.
+Anything newer can generally run most iPhone software, connect to networks, add apps, and so on. Resale prices rise (but not by much) from generation to generation, until you get near current models. For anything after 2024, eBay resale prices seem overpriced (at least to me).
+My final decision
+As adorable as this old iPhone is, as attached to it as I used to be, and as hard as it is to say goodbye, I’m delivering it to the electronic recycling center in my town.
+I have way too much stuff. I can’t keep everything, or I’ll drown in the clutter. Sometimes, as one of my old editors used to say, “You have to dump your darlings.”
+Do you have any old hardware you’re still deciding whether to keep? Let us know in the comments below.
+You can follow my day-to-day project updates on social media. Be sure to subscribe to my weekly update newsletter, and follow me on Twitter/X at @DavidGewirtz, on Facebook at Facebook.com/DavidGewirtz, on Instagram at Instagram.com/DavidGewirtz, on Bluesky at @DavidGewirtz.com, and on YouTube at YouTube.com/DavidGewirtzTV.

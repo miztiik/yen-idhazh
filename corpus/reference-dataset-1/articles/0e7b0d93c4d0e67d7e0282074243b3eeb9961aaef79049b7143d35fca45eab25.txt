@@ -1,0 +1,69 @@
+As data centers and other large users drove demand higher, U.S. power plants increased their output by 2.1 percent in the first half of the year compared to the first half of 2025.
+This week, I looked at which states rose and fell the most and which power sources drove those changes, based on figures from the U.S. Energy Information Administration.
+The states that saw the largest increases in utility-scale electricity generation were, in order: Texas, Washington, Tennessee, Ohio and New Mexico. Each has its own story, with solar surging in Texas and different technologies rising in the other states, from hydropower in Washington and nuclear in Tennessee to natural gas in Ohio and a coal-solar combo in New Mexico.
+At the other extreme was California, where utility-scale generation plummeted, thanks in part to batteries that allowed the state to store solar power that otherwise would have gone to waste and helped reduce the need for natural gas.
+For context, here are some of the national numbers to show which states are moving in step with broader U.S. trends and which are headed in a different direction: Natural gas power plants remained the country’s electricity generation leader, with 38.4 percent of the total in the first half of the year, followed by renewables with 28.5 percent, nuclear with 17.1 percent and coal with 14.4 percent and about 1 percent for “other.”
+Gas and nuclear market shares were essentially flat compared to the first half of 2025. Renewables were up by 2.2 percentage points, which, coincidentally, was the same share that coal lost.
+Coal declined despite Trump administration policies that forced some coal plants to remain open against their owners’ wishes. Those plants remain available during periods of high demand, but there is little reason to use them on a typical day, when most other options cost less.
+But I don’t want to focus too much on coal, which is very much in its “Weekend at Bernie’s” stage, as Michigan’s attorney general has noted.
+Texas’ Solar Moment
+It’s not surprising that Texas had the largest increase in utility-scale generation. The state is a hotbed of data-center development and other large electricity users, while its population continues to grow.
+What surprised me is how much renewables contributed to growth.
+The state’s power plants generated 293,151 gigawatt-hours in the first half of the year, the most of any state, and 9,086 gigawatt-hours more than in the same period last year.
+While the state is on the cusp of a boom in natural gas plant construction, few new plants have gone online this year. This helps to explain why output from natural gas power plants was flat.
+Coal-fired power was down, to the point that it got passed by utility-scale solar in five of the first six months of the year. Solar is on pace to exceed coal for the year as a whole, which would be the first time that’s happened in Texas, the country’s leading producer of coal power.
+“Five years ago, coal still generated more than seven times as much electricity as solar in Texas,” said Nicolas Fulghum, senior energy and climate data analyst for Ember, the research and advocacy nonprofit. “That gap closing so fast tells you this isn’t all about policy. Solar is winning on cost and deployment speed.”
+Utility-scale solar in Texas generated 35,992 gigawatt-hours, an increase of 9,373 or 35 percent.
+Let’s step back to appreciate those numbers, which I double-checked several times because they seemed almost unreal. Solar grew enough to offset the decrease in other resources.
+For perspective, an average U.S. household consumes about 10,800 kilowatt-hours per year (0.0108 gigawatt-hours). So, the increase in utility-scale solar in Texas in the first half of the year was enough to meet the needs of about 870,000 houses for a year.
+Hydropower Rises in Washington
+Washington is the national leader in hydropower, which helps explain why the state has some of the least expensive electricity in the country.
+Hydropower had a strong first half in Washington, Oregon and Idaho, following a poor performance the last few years. Hydropower depends on water flows, which vary based on snowpack levels.
+Maryam Habibi, a spokeswoman for Bonneville Power Administration, the federally run nonprofit that sells hydropower in the Pacific Northwest, said that heavy rains in December 2025 led to an increase in generation in early 2026.
+Washington got 45,143 gigawatt-hours from hydropower in the first half of the year, an increase of 10,925 gigawatt-hours. This accounted for the large majority of the state’s electricity generation.
+With ample hydropower, the state’s natural gas power plants sat idle much of the time, with generation down 44 percent.
+Tennessee Boosts Nuclear Use
+Looking at Tennessee’s numbers, you might assume the state added a nuclear plant, but instead it increased its nuclear output by using its two existing plants more often.
+Tennessee generated nearly half of its electricity from the two plants, Sequoyah and Watts Bar, both owned by the Tennessee Valley Authority.
+This story is funded by readers like you.
+Our nonprofit newsroom provides award-winning climate coverage free of charge and advertising. We rely on donations from readers like you to keep going. Please donate now to support our work.
+Donate Now
+Sequoyah nearly doubled its output in the first half of the year compared to last year, in part because one of its two generating units was offline for part of last year for a generator replacement. Watts Bar was up more than 50 percent.
+“It’s not that generation ‘went up,’” said Scott Brooks, a TVA spokesman, explaining that the nuclear plants are designed to run 24-7, and do so except for when they’re offline for maintenance.
+In other words, the increase in nuclear generation in 2026 is a return to normal.
+Gas Drives Ohio’s Increase
+Ohio had one of the largest new gas-fired power plants to open in the first half of the year, Trumbull Energy Center, which helps to explain why gas was the main driver of the state’s increase in electricity generation.
+Ohio sits on the Marcellus and Utica shale formations, so it has easy access to gas. As with Texas, Ohio is on track for a significant increase in gas-fired electricity in the next few years as new plants come online to serve data centers.
+Utility-scale solar gets an honorable mention in Ohio. It grew by more than 30 percent, but remains a relatively small source of electricity, producing about one-ninth as much as the state’s gas plants.
+New Mexico’s Odd Couple
+New Mexico’s electricity generation shot up, with coal and utility-scale solar leading the way.
+No other state has the same combination of substantial growth in some of the dirtiest energy sources, like coal, alongside gains in renewable energy from solar and, to a lesser extent, wind.
+The increase in coal power was entirely attributable to higher output from one plant, Four Corners, which is in the state’s northwest corner and operated by Arizona Public Service. The plant ran much more in the first half of this year compared to the first half of 2025.
+The plant is running much more this year because parts of it were offline for maintenance in 2024 and 2025, so the recent performance is a return to normal, according to an APS spokeswoman.
+Four Corners is not among the plants forced to remain open by the federal government.
+Solar and wind power grew because of new plants coming online, including solar plants of all sizes and the gigantic SunZia wind farm, the largest of its kind in the country.
+Wow, California
+While many other states increased their electricity generation, California went in the opposite direction, with an overall decrease mostly attributable to a drop in usage of gas-fired power plants.
+How could California do this at a time of rising electricity demand? The answer is a combination of factors, including vast amounts of solar power and battery storage to capture power for use at peak evening hours, and a reliance on power imported from other states.
+This is a good place to mention one of the main caveats of this data, which is that I’m focusing on utility-scale power, which doesn’t include customer-owned generation from rooftop solar and other sources.
+California leads the country in small-scale solar, most of which is customer-owned, and as more people generate their own electricity, they need less of it from the grid. That said, California leaders have done plenty to jeopardize the state’s leadership in rooftop solar, including changes in net metering policy that reduce the income potential for panel owners.
+The Bigger Picture
+I began with the national increase in electricity generation of 2.1 percent, which begs the question: Is that a lot?
+The increase was significant, but the pace of growth was lower than in the first halves of 2025 and 2024, compared with their respective prior-year periods.
+And it’s important to remember that U.S. electricity generation typically peaks in the third quarter, when the hottest days of summer ramp up demand. That limits what we can glean from a partial year of data that doesn’t include the peak months.
+Still, I expect many of the state-level trends I’ve highlighted from the first half of the year to continue. The one I’ll be watching most closely is utility-scale solar’s rise in Texas.
+I wrote in March about how Texas had surpassed California for the national lead in utility-scale solar power generation; in April about how Texas had gained the national lead in battery storage, measured by megawatts of capacity; and in August about how the state led the country in new solar and battery capacity.
+The upshot is that writing about renewable energy and batteries in 2026 means writing often about Texas.
+Other stories about the energy transition to take note of this week:
+Solar Passes Coal in China as Leading Source of Generating Capacity: China has now installed enough solar-generating capacity to surpass its coal-fired capacity, as Felix Tam reports for Bloomberg. Solar is now the country’s leading source of generating capacity. But there is a big difference between capacity, which is the maximum a plant can generate at any one moment in gigawatts, and electricity generation, which is the output in gigawatt-hours. Coal remains far ahead of solar and every energy source in China in electricity generation because coal plants can run around the clock.
+New Jersey Adopts Plug-in Solar Law; California May Be Next: New Jersey Gov. Mikie Sherrill signed a bill this week that clears the regulatory path for residents to buy plug-in solar panels, which are inexpensive and can use a standard household outlet, as Kelly Pickerel reports for Solar Power World. I wrote in June about the pluses and minuses of plug-in solar, which is sometimes called balcony solar. California lawmakers passed a plug-in solar bill last week that awaits action from Gov. Gavin Newsom, as Alison F. Takemura reports for Canary Media. The legislative actions clarify that plug-in solar is legal at a time when some consumers have gotten ahead of officials by installing the systems.
+Clean Energy Companies Continue Their ‘Revenge Tour’ This Election Season: The Invest in Tomorrow Coalition is a super PAC that has spent money to fund attack ads against Republican lawmakers who voted to cancel clean energy tax credits. The organization’s latest casualty was U.S. Rep. Ralph Norman of South Carolina, who lost in the Republican primary for U.S. Senate to Sen. Darline Graham. The PAC’s ads focus on issues likely to concern Republican primary voters and don’t address energy policy, signaling an aggressive approach that’s new and unusual for renewable energy industries, as my colleague Gabriel Matias Castilho reports.
+BYD Reports Rising Sales, Fueled By Exports: BYD, the Chinese electric vehicle manufacturer, reported a fourth consecutive month of rising global sales as exports help to offset the effects of slow demand in China, as Qiaoyi Li, Zhang Yan and Ju-min Park report for Reuters. Sales rose 17.8 percent in August compared to August 2025. BYD is looking for growth through exports as competitors crowd the Chinese market. My colleague Katie Surma and I recently wrote about BYD’s arrival and success in Argentina.
+Inside Clean Energy is ICN’s weekly bulletin of news and analysis about the energy transition. Send news tips and questions to [email protected].
+About This Story
+Perhaps you noticed: This story, like all the news we publish, is free to read. That’s because Inside Climate News is a 501c3 nonprofit organization. We do not charge a subscription fee, lock our news behind a paywall, or clutter our website with ads. We make our news on climate and the environment freely available to you and anyone who wants it.
+That’s not all. We also share our news for free with scores of other media organizations around the country. Many of them can’t afford to do environmental journalism of their own. We’ve built bureaus from coast to coast to report local stories, collaborate with local newsrooms and co-publish articles so that this vital work is shared as widely as possible.
+Two of us launched ICN in 2007. Six years later we earned a Pulitzer Prize for National Reporting, and now we run the oldest and largest dedicated climate newsroom in the nation. We tell the story in all its complexity. We hold polluters accountable. We expose environmental injustice. We debunk misinformation. We scrutinize solutions and inspire action.
+Donations from readers like you fund every aspect of what we do. If you don’t already, will you support our ongoing work, our reporting on the biggest crisis facing our planet, and help us reach even more readers in more places?
+Please take a moment to make a tax-deductible donation. Every one of them makes a difference.
+Thank you,

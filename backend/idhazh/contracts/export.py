@@ -36,6 +36,7 @@ from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.qualification import QualificationReport, QualificationShard
+from idhazh.contracts.reference_dataset import ReferenceDatasetRow
 from idhazh.contracts.review_queue import ReviewQueue
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
@@ -82,6 +83,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublicTelemetryRow,
     QualificationReport,
     QualificationShard,
+    ReferenceDatasetRow,
     ReviewQueue,
     VisualDecision,
     RunManifest,

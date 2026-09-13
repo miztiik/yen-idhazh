@@ -260,6 +260,13 @@
     "head_no_repeat": 10,
     "max_desk_in_head": 5
   },
+  "reference_dataset": {
+    "article_words_min": 120,
+    "domains_per_split_min": 20,
+    "request_delay_seconds": 1.0,
+    "rows_per_domain_max": 7,
+    "rows_per_split_min": 200
+  },
   "retention": {
     "dry_run": true,
     "image_months": 13,

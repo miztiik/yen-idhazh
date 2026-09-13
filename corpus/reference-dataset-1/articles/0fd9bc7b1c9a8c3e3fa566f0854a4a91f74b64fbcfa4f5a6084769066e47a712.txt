@@ -1,0 +1,7 @@
+Google Deepmind's new chief says frontier AI leadership is the only thing that matters
+Some people have speculated that Google doesn't care about leading the AI model race, since reach is more about price-to-performance. Google Deepmind chief Koray Kavukcuoglu pushed back hard: "To put it very bluntly, there's nothing other than being at the frontier that is important for us. I'm 100% certain that we will be at the frontier." He admits Google's current models are "a little bit below the frontier" but says the team, resources, and full stack are there to close the gap.
+He didn't share any concrete frontier news, though. On Gemini 4, he repeated it's "the most ambitious run" so far and "touch wood, it's going well." That was already known. No update on Gemini 3.5 Pro either, which is apparently still in the works, although it's now months late. Instead, Kavukcuoglu pointed to the Flash series' rapid progress, describing the jump from 3.5 through 3.6 to 3.7 as a shift from language model to coding agent. "Basically, turn this whole thing into an agent, from a model to an agent," he said. "Software engineering is the most critical domain and environment that you want your systems to be successful at."
+AI News Without the Hype – Curated by Humans
+
+Subscribe to THE DECODER for ad-free reading, a weekly AI newsletter, our exclusive "AI Radar" frontier report six times a year, full archive access, and access to our comment section.
+Subscribe now

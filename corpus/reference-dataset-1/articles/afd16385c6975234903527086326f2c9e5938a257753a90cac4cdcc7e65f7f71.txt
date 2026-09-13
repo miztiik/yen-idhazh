@@ -1,0 +1,56 @@
+Sachin Mathapati
+Application Engineer
+When Google's Finance Engineering team needed to modernize their legacy data layer, they chose Spanner, a globally distributed, strongly consistent, multi-model database with high availability capabilities. But migrating to Spanner without taking production services offline was a daunting engineering challenge: As the internal team responsible for the application, we needed to manually rewrite dual-write logic across dozens of Data Access Objects (DAOs), a process that is slow and prone to human error. Further, doing so without disruption would have required implementing multi-phase dual-write architectures across every DAO in our codebase.
+To solve this, we took an alternative approach: We built an automated refactoring pipeline powered by Antigravity CLI in headless mode. This helped us accelerate our migration velocity significantly while maintaining strict data parity in our staging environments as we prepare for production.
+The challenge: Anatomy of a dual-write migration
+When migrating high-throughput production services where financial accuracy is essential, simple cutover scripts do not work. You must verify that both the legacy datastore and Spanner receive identical writes simultaneously until all the historical data backfills and verifications are complete.
+We structured our migration across three distinct phases:
+-
+Historical backfill: Copying existing historical records to Spanner while maintaining referential integrity.
+-
+Dual-write / dual-read implementation: Modifying every DAO to write mutations to both the primary store and Cloud Spanner in parallel during the migration window.
+-
+Automated API verification and parity checking: Intercepting RPC traffic and verifying end-to-end that every write lands with byte-for-byte equivalence across both stores.
+The architectural pattern is clean, but at our scale, we began to encounter friction. That’s because each DAO requires:
+-
+A dedicated MutationConverter class mapping complex domain models to Spanner schema columns
+-
+Dual-write branch handling and rollback or error-reporting logic
+-
+A suite of unit tests verifying both primary and Spanner writes using fake time sources and test doubles (FakeTimeSource)
+Performing these identical, high-precision code changes across 30+ DAOs by hand would have taken months of engineering time.
+The solution: Standardized mutation converter patterns
+To verify that our automation pipeline could reliably generate clean code, we first standardized our DAO refactoring pattern around a decoupled MutationConverter interface.
+Instead of embedding raw Spanner table names and column assignments directly inside core DAO business logic, we isolate Spanner schema translation into dedicated converter units:
+By establishing a rigid, deterministic contract between the DAO and the Spanner SDK (spanner.Mutation), we created an exact target specification that an AI coding agent could reason about and generate reliably.
+Why use Antigravity CLI in headless mode?
+Interactive AI chat interfaces in IDEs work well for exploratory coding, but they are poorly suited for systematic, multi-file code updates across an entire codebase. When you need to apply repeatable refactoring to dozens of targets without missing edge cases, you need automated workflows.
+We addressed this by building an orchestration script (migration_ui.py) that runs Antigravity CLI in headless mode (-p).
+Headless mode lets Antigravity run directly inside shell scripts, continuous integration pipelines, and background automation jobs without requiring manual terminal prompts. This approach helped us scale our work in three key ways:
+-
+Deterministic prompt architectures: We treated our prompts as version-controlled engineering artifacts. We codified precise rules handling common Spanner edge cases — such as timestamp serialization, nullability conversions, mutation ambiguity, and FakeTimeSource test injection — directly into reusable prompt templates.
+-
+Batch execution and automated verification: Our orchestration script takes a target DAO name as input, retrieves the existing single-write source code and schema, and feeds it to headless Antigravity alongside our structural conventions. Antigravity generates the new converter, the refactored dual-write DAO, and corresponding unit tests. The script then runs blaze test. If a linter error or test assertion fails, the error log feeds directly back into Antigravity for self-correction.
+-
+Overnight execution at scale: Because the loop runs unattended, engineers can queue up 10 DAOs at the end of the day. By morning, the pipeline generates, tests, and validates 10 clean changelists ready for human code review.
+Results and key takeaways for cloud engineers
+Combining Spanner's distributed database primitives with Antigravity CLI's headless automation produced clear benefits across our engineering organization:
+-
+Significant reduction in migration effort: DAO dual-write migrations that previously required extensive manual coding and testing were completed and reviewed in a fraction of the time
+-
+Highly reliable data migration: Because every generated DAO adhered to the exact same tested MutationConverter pattern and underwent automated unit testing against Spanner test doubles, we sustained high data fidelity during our extensive migration testing.
+-
+Focus on higher-value engineering: Engineers avoided repetitive boilerplate refactoring, giving them time to focus on data modeling, architectural resilience, and performance optimization.
+Three tips for your next database migration
+-
+Decouple schema translation first: Before writing migration scripts, define a strict interface (like our MutationConverter) that isolates your new cloud database SDK requirements from your existing business logic. AI agents work best when given clear, bounded design patterns.
+-
+Move from interactive chat to headless automation: When executing repetitive refactoring across more than three or four files, invest in scripted, headless workflows. Treating prompt inputs and test verifications as automated build steps help maintain quality and consistency.
+-
+Let the build system act as your guardrail: Connect your AI generation loop directly to your build and test harness (bazel test or go test). This lets the model fix compile and assertion errors before a developer reviews the code.
+Get started
+Whether you’re migrating financial systems or building cloud-native applications from scratch, Spanner and Antigravity provide a foundation for scalable software development.
+-
+Explore Cloud Spanner: Learn more about Spanner's distributed architecture Google Cloud Spanner documentation.
+-
+Discover Gemini for Developers: See how AI-assisted coding and headless CLI automation can assist your engineering workflows at Google Cloud AI for Developers.

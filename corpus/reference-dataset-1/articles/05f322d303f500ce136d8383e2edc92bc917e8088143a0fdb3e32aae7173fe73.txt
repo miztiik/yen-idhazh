@@ -1,0 +1,40 @@
+The skull has traditionally been regarded largely as armor for the brain. New research from the United States suggests it may have another role: proactively helping to defend what lies beneath it.
+Researchers at Washington University School of Medicine in St. Louis identified previously unknown immune "security stations" in the bone marrow of mouse skulls.
+What the mouse experiments revealed
+The lymph node-like structures responded to brain tumors before more distant lymph nodes in the neck did. When researchers disrupted the structures in mice with glioblastoma, an aggressive brain cancer, the tumors grew faster and the animals died sooner.
+"The skull should no longer be viewed simply as a protective shell around the brain," senior study author Jonathan Kipnis told DW.
+"It contains specialized immune environments that appear capable of responding locally to changes within the brain."
+The discovery, published in the journal "Nature," comes with an important caveat: The researchers have so far only demonstrated how the structures function in mice, not humans.
+Kipnis cautioned that the human evidence remains preliminary: "We found similar immune cells in human skull marrow, suggesting that related structures may exist, but we have not yet demonstrated that they are organized or function in the same way as those in mice," he said.
+How scientists' view of brain immunity changed
+For much of the 20th century, the brain was described as "immune privileged" — unusually protected from immune activity because inflammation that is useful elsewhere can damage delicate brain tissue.
+The blood-brain barrier, which tightly controls what can pass from the bloodstream into brain tissue, reinforced the idea that the brain was largely isolated from the body's conventional immune system.
+That picture has changed dramatically.
+Researchers now know that the brain communicates continuously with the immune system, particularly through tissues surrounding the brain.
+Kipnis' lab helped drive that rethink in previous work, first by identifying lymphatic vessels in the membranes surrounding the brain and later by showing tiny channels connecting those membranes to the skull's bone marrow.
+"The traditional concept of immune privilege has already changed substantially," Kipnis said. "Our findings add another layer by showing that specialized immune structures exist within the skull bone marrow, immediately adjacent to the brain."
+How the skull's immune hubs are organized
+The researchers tracked proteins moving from mouse brains through microscopic skull channels and into the bone marrow.
+There they found organized clusters of so-called B cells and T-cells. T cells help B cells in "creating large amounts of powerful antibodies that help fight disease and infection."
+Finding immune cells in bone marrow was not unusual. The surprise was their organization into structures resembling lymph nodes elsewhere in the body. These immune hubs are where immune cells work together to respond to threats.
+Being so close to the brain could allow the immune hubs a faster, more specialized immune response.
+"The lymph nodes in the neck are 'shared' with tissues such as the mouth, throat and skin," Kipnis said.
+"The skull structures may provide the brain with something resembling its own dedicated lymph nodes, allowing immune responses to be coordinated locally."
+Why the skull immune hubs are significant
+"We have never seen such structures in healthy bone marrow before," study co-author Jang Hyun Park said. "It is an exciting discovery that points out that a complex brain requires its own specialized immune structures to defend it."
+Marco Prinz, a neuroimmunologist at the University of Freiburg who was not involved in the study, described the discovery as a "milestone finding."
+Prinz said what made the finding significant was the unexpected organization of the immune cells.
+"I think nobody expected to find these lymph node-like structures in the skull," he told DW.
+But Prinz stressed that researchers have yet to demonstrate that the hubs themselves exist and function in humans.
+"The major challenge, however, will be to see them in the human skull as well and to show that they are functional there. This would then indeed change how we view the central nervous system's immune response in humans," Prinz said.
+How the immune hubs affected brain tumors
+After finding that disrupting the skull immune hubs made brain tumors grow faster, the researchers tested whether strengthening the response could help. They stimulated the skull marrow with immune-boosting proteins. The treated animals rejected tumors more effectively and survived longer.
+The experiment raises the possibility of one day targeting the skull's bone marrow to influence the brain's immune defenses, without delivering treatment directly into the brain.
+Any such treatment in humans remains a distant prospect.
+"We first need to confirm their organization and function in humans, understand how they change across different diseases, and determine how to manipulate them without causing harmful inflammation," Kipnis said.
+What this could mean for other brain diseases
+The potential implications extend beyond cancer.
+Prinz said the structures may be especially important in brain tumors and infections, where the protective blood-brain barrier can become leaky. Their importance in Alzheimer's and Parkinson's, where changes to that barrier are generally less pronounced, "has to be shown," he said.
+Kipnis expects that, if similar functioning structures are found in humans, their role could be much broader.
+"If I had to bet, I would bet that these structures play a role in any brain disease that has an immune component to it," he said.
+Edited by: Rosalie Delaney

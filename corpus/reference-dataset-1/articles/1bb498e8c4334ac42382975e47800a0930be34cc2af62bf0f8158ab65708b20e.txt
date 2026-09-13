@@ -1,0 +1,6 @@
+Nextpower was issued a patent for its NX PowerMerge, a trunk bus that consolidates multiple field connections on ground-mounted solar projects onto one device.
+In utility-scale solar plants, DC collection systems connect power from multiple solar panel strings to larger trunk conductors across thousands of locations. The Nextpower electrical balance of systems (eBOS) portfolio includes both trunk bus and combiner box DC collection methods..
+“[Customers] point to the single trunk cable connection point and an installation tool that verifies pressure every time, so there is no more guesswork in the field. The connector body is universal across trunk cable sizes, giving EPC teams the flexibility to handle design changes as projects evolve,” said Ryan Schofield, vice president, electrical – eBOS at Nextpower.
+BUILD Renewables has ordered NX PowerMerge for a pipeline of PV projects, increasing Nextpower backlog for the product to over 2 GW.
+“BUILD Renewables is excited to be partnering with Nextpower on their NX PowerMerge eBOS product, which provides exemplary safety, installation velocity and performance features. We also appreciate the integrated design with the tracker and other solar power plant components,” said Craig Sandeen, president and CEO of BUILD Renewables.
+News item from Nextpower

@@ -1,0 +1,170 @@
+Securing Amazon Quick from POC to production: Agents, Flows, and Spaces
+Amazon Quick proof of concept (POC) projects often succeed with a small pilot team, then stall when security and compliance teams review the production plan. A permission model that works for ten pilot users often breaks when you add five departments. Agents can return data outside their intended scope, and compliance teams struggle to audit how datasets, agents, and Spaces connect.
+Amazon Quick combines dashboards, Chat Agents, Flows, and Spaces with knowledge bases. Each capability introduces security surfaces that standard dashboard controls do not cover.
+This post walks through designing Dashboards, Spaces, knowledge bases, Agents, and Flows for the AnyCompany scenario, with security controls that hold as you add users and departments. The walkthrough covers four patterns: dataset shaping, agent isolation, document classification, and approval gates. It also includes a governance framework and a production readiness checklist.
+Use case overview
+Consider AnyCompany: 5,000 employees, 5 departments, 5 locations. Three audiences need the same data at different levels:
+- HR leadership: full workforce data including salaries and attrition risk.
+- Department managers: their team’s operational metrics only.
+- All employees: company policies and anonymized trends.
+Exposing one dataset to all three audiences and relying on permissions alone leaves too much room for misconfiguration.
+Solution overview
+The solution shapes one source dataset into three authorization-aligned views and connects each to a purpose-built Agent. It publishes a corresponding Dashboard per audience, scopes Spaces to content ownership, and gates outbound actions through a Flow with human-in-the-loop controls.
+The following screenshot shows the HR Leadership Dashboard, which provides full workforce visibility including salary, attrition risk, and position-level breakdowns across all employees.
+The following screenshot shows the Department Manager Dashboard, which displays operational metrics scoped to a single department through Row-Level Security.
+The following screenshot shows the Company Trends Dashboard, which displays only aggregated department-by-location summaries. No individual employee records are accessible from this view.
+Create and publish dashboards: To create dashboards from these datasets, navigate to Analyses, then Create analysis, select one of the three datasets, build your visualizations, then select Share, then Publish dashboard. Share each dashboard with the appropriate group. For detailed guidance, see Publishing dashboards.
+Validated patterns
+This post demonstrates four validated patterns that work together to enforce security through data architecture:
+Each pattern removes data before it reaches users, rather than relying on permission settings to block access. The following walkthrough implements all four.
+Prerequisites
+Before you begin, make sure you have the following in place:
+- An AWS account with Amazon Quick turned on (Enterprise plan)
+- At least three Amazon Quick user accounts representing different personas (or one user that can switch roles)
+- A sample employee dataset (5,000 rows, 30 columns). Use the generation steps in Step 1 that follows, or use your own HR dataset with similar columns.
+- AWS CloudTrail trail configured in your account.
+- AWS Secrets Manager access if your Flows connect to external systems.
+Note: This walkthrough uses Amazon Quick managed identity (non-IDC). Group creation and user management are performed directly in the Amazon Quick console. If your account uses AWS IAM Identity Center (IDC) for identity federation, group management is handled in the AWS IAM Identity Center console rather than within Amazon Quick. The security patterns (dataset shaping, RLS, agent isolation) still apply, but group assignment steps will differ.
+Solution walkthrough
+The following nine steps walk you through each layer of the solution, from shaping datasets and applying row-level security to configuring Agents, Spaces, Flows, and audit logging.
+Step 1: Shape datasets to match authorization
+One of the most important security decisions in Amazon Quick is how you shape datasets. A dataset’s columns define the ceiling of what anyone connected to it can see. Removing columns from the dataset is structurally stronger than hiding columns behind permissions.
+Generate a synthetic employee dataset with 5,000 rows and 30 columns (Employee ID, Gender, Age, Department, Job Role, Position Level, Location, Annual Salary, Engagement Score, Attrition Flag, and so on). Use five departments (Sales, Engineering, Operations, Finance, HR), five locations, and realistic value ranges. The accompanying GitHub repository includes the full column list and a sample generation script, or you can substitute your own HR dataset with similar structure.
+Upload your generated employee_data.csv to Data (Datasets, then New dataset, then Upload file) to create three datasets:
+The following screenshot shows the Datasets console after creating the three datasets.
+For the aggregated dataset, use the data prep grouping UI or pre-aggregate the CSV before upload:
+To create the aggregated dataset, group your source data by Department and Location, then calculate: employee count, average Engagement Score, and average Satisfaction Score per group. This produces a 25-row summary (5 departments × 5 locations). Upload the result as a separate dataset.
+Why this matters: permissions-only compared to data architecture:
+If you exposed the full dataset to all audiences and relied solely on permissions, a single misconfiguration (incorrect group assignment, overly broad sharing rule) could expose salary data to all employees. With dataset shaping, the salary column does not exist in downstream datasets. No permission error can expose what isn’t there.
+Step 2: Apply Row-Level Security
+Amazon Quick Row-Level Security (RLS) restricts data access, so users only see specific rows based on their identity. You set up RLS at the dataset level by creating a mapping dataset that associates users or groups with specific column values, which then propagates to all linked analyses and dashboards.
+Create an RLS rules CSV and upload it as a permission dataset:
+Create a permissions CSV (rls-rules.csv) with two columns: UserName and Department. Add one row per user-department combination (for example, the HR admin gets five rows for full access. A Sales manager gets one row).
+Tip: To find your exact RLS username, add a calculated field username() to any analysis. The format varies by identity provider. Even one character mismatch returns zero rows.
+Upload rls-rules.csv as a new dataset (name it anycompany-rls-rules), then open the anycompany-employees-manager dataset, then Row-level security tab, then select the rules dataset, then map UserName and Department, then Save.
+Verify: Log in as hr-admin, then should see 5,000 rows. Log in as manager, then should see only their department (~1,000 rows). Zero rows mean the username string doesn’t match.
+Step 3: Create three groups and assign users
+Create three groups in Manage Amazon Quick, then Manage Groups:
+To simplify sharing at an enterprise scale, share datasets with groups rather than individual users. For more details, see Sharing datasets in the Amazon Quick documentation.
+The following screenshot shows the three groups created in the Manage Groups console.
+Step 4: Create a Space, upload knowledge base documents, and set permissions
+A Space organizes documents and provides document-grounded question answering through a knowledge base. All three agents connect to this Space, so create it before configuring the agents.
+Create the Space:
+- Navigate to Spaces, then Create Space in the Amazon Quick console.
+- In the Space name field, enter: AnyCompany HR.
+- Select Create.
+Upload documents:
+- Inside the AnyCompany HR Space, select File uploads, then Upload files.
+- Classify each document before uploading. Only include documents appropriate for the intended audience.
+- Upload the following documents from the sample files you downloaded from the accompanying GitHub repository:
+The employee_feedback_full_dataset.pdf file is deliberately excluded rather than permission restricted. All documents in a knowledge base are queryable by anyone with Viewer access, so the only way to prevent access to sensitive content is to keep it out entirely. If HR leadership needs this data, create a separate Space shared only with hr-leadership.
+The following screenshot shows the knowledge base document list after uploading the files.
+Share the Space with groups:
+Spaces use a two-tier model: Owners can view, query, and upload. Viewers can view and query only. Users not added have no access.
+- Select Share on the AnyCompany HR Space.
+- Assign each group to the appropriate tier:
+The following screenshot shows the Space permissions panel with the group assignments configured.
+Step 5: Configure three purpose-built Chat Agents
+Amazon Quick Chat Agents are artificial intelligence (AI) assistants that answer natural-language questions by querying a connected dataset or knowledge base, scoped by the permissions and data sources you configure.
+To create each agent, navigate to Chat Agents, then Create a chat agent (select + Blank) in the Amazon Quick console.
+Executive Insights Agent (full example):
+- Instructions (persona prompt): In the instructions field, enter the following persona prompt:
+“You are AnyCompany’s executive analytics assistant. You answer questions about workforce trends using department and location-level summaries only. Rules:
+- You have access to aggregated data grouped by Department and Location.
+- You can report on averages for engagement, satisfaction, training hours, and employee headcount.
+- You do NOT have access to individual employee records, salaries, or names.
+- If asked about a specific employee, respond: “I only have access to department-level summaries. For individual employee details, please contact HR.”
+- Select Generate.
+Step 6: Verify Agent boundaries with adversarial queries
+Before declaring any agent production-ready, test that security boundaries hold. For each agent, open the agent chat, log in as the appropriate test user, and submit the following queries.
+Executive Insights Agent: test as your hr-leadership user:
+Manager Assistant Agent: test as your dept-managers user (for example, a Sales manager):
+Employee Self-Service Agent: test as your all-employees user:
+If an agent returns data outside its intended scope, check the dataset columns, topic exclusions, and RLS rules for that agent.
+Step 7: Share Agents with the correct groups
+After creating and testing all three agents, restrict access so each audience sees only its designated agent.
+- Open the agent you want to share and select Share.
+- Assign the following permissions:
+Remove any default sharing that grants access beyond the intended audience.
+Each agent is now locked to the group whose dataset permissions align with the agent’s connected data source. A department manager cannot open the Executive Insights Agent, and an all-employees user cannot access the Manager Assistant Agent.
+The following screenshots show the Executive Insights Agent tested as the hr-leadership user.
+The following screenshot shows the agent refusing an individual employee data query.
+The following screenshots show the Employee Self-Service Agent tested as the all-employees user. It answers policy questions from uploaded documents and refuses individual data requests.
+The following screenshot shows the agent refusing multiple adversarial queries in sequence.
+Step 8: Build a Flow with human-in-the-loop controls
+Flows chain multiple steps together and can pause for human review before continuing. Create a Flow named Weekly Attrition Risk Alert. It identifies high-attrition employees and notifies their managers, but only after human review.
+To create the Flow:
+- Navigate to Flows, then Create Flow in the Amazon Quick console.
+- Flow name: Weekly Attrition Risk Alert.
+- Flow description: Enter:
+Identifies employees with high attrition risk from company data, requires human approval, and sends notifications to department managers.
+- Connect to Space: Link the Flow to the AnyCompany HR Space.
+- Configure four steps:
+- Publish the Flow and set the trigger to run on a weekly schedule.
+The following screenshot shows the Flow execution paused at the human approval step during a test run.
+To verify: trigger a manual test run and confirm the Flow pauses at Step 3 (Human Approval) until explicitly approved. After approval, confirm Step 4 sends the notification to dept-managers.
+Step 9: Turn on AWS CloudTrail and verify events
+AWS CloudTrail automatically logs Amazon Quick management events (API calls) without added configuration. If you have an active trail in your account, you can verify that agent queries, dataset access, Flow executions, and permission changes appear in the event history.
+In the AWS Console, navigate to AWS CloudTrail, then your trail, then Edit, then turn on management events and data events for AWS::QuickSight::Dashboard. Alternatively, use the AWS Command Line Interface (AWS CLI) put-event-selectors command with ReadWriteType: All and the Quick dashboard resource type.
+To verify events are being logged:
+- Navigate to AWS CloudTrail, then Event history in the AWS Console.
+- Filter by Event source: quicksight.amazonaws.com (the service endpoint for Amazon Quick).
+- After running the agent tests and Flow execution from previous steps, confirm you see events including:
+
+- User identity (who performed the action)
+- Timestamp
+- Event name (such as DescribeDataSet ,CreateAnalysis )
+- Resource ARN
+If no events appear, confirm that your account has at least one active AWS CloudTrail trail. For more information, see Creating a trail.
+The following screenshot shows AWS CloudTrail event history with Amazon Quick events logged.
+How security scales with adoption
+You can add users, departments, and datasets without changing the underlying security model. The group-based model means that adding a new employee is a group membership change, not an access reconfiguration. At pilot stage, one dataset and one agent per audience is enough. When you expand to 50 or more teams, you only add new datasets or Spaces when a genuinely new confidentiality boundary appears.
+Governance framework
+Enterprise deployments need explicit ownership and review cadences. The following table is a starting point. Ownership and review frequency will vary depending on your team structure and compliance requirements.
+How to apply this framework:
+Assign an owner and reviewer for each asset type, schedule reviews matching the cadence column, and document any exceptions with justification.
+Phased rollout
+The following is a proposed rollout schedule. Adjust timelines to match your organization’s size, compliance requirements, and adoption pace:
+Production readiness checklist
+Run through this before any new asset goes to production. These are boolean checks anyone on the team can verify.
+Datasets
+☐ Dataset is scoped to a single audience
+☐ Sensitive columns are removed from the dataset, not only hidden
+☐ RLS is applied and tested with at least two user accounts
+☐ Permissions assigned to groups, not individuals
+Chat Agents
+☐ Agent connects to exactly one dataset
+☐ Topic excludes columns that should not be queryable
+☐ Agent refuses queries for individual records when the dataset has none
+☐ Agent refuses queries for excluded columns
+Spaces and knowledge bases
+☐ Every document classified before upload
+☐ No document contains individual personally identifiable information (PII) unless required for the audience
+☐ View, query, and upload permissions set separately
+☐ Upload restricted to content owners only
+Flows
+☐ Flow uses an RLS-protected, column-pruned dataset
+☐ Human approval step exists before any outbound action
+☐ External credentials live in AWS Secrets Manager, not in the Flow definition
+☐ AWS CloudTrail turned on and capturing Flow events
+Clean up
+To avoid ongoing charges, delete these resources when no longer needed:
+- The Flow
+- Three Chat Agents
+- Knowledge base documents
+- The HR Space
+- The three employee datasets
+- The RLS rules dataset
+- The groups
+- The AWS CloudTrail trail (if created only for this walkthrough)
+Conclusion
+This walkthrough covered how shaping datasets, isolating agents, classifying documents, and adding approval gates work together to enforce security at the data layer. Dataset shaping and single-dataset agent connections form the foundation. Flow gates add a human review step before any data leaves the system. Document classification keeps sensitive content out of shared knowledge bases from the start. The governance framework and production checklist help you maintain these controls as the deployment grows. Because the security boundaries live in the dataset structure rather than in permission settings, you can add users and teams without reconfiguring access.
+To learn more, see the following resources:
+- Amazon Quick Suite service overview
+- Amazon Quick documentation
+- Row-level security in Amazon Quick
+- Managing groups
+- AWS CloudTrail User Guide
+- AWS Secrets Manager User Guide
+- Amazon Bedrock Guardrails for AI safety controls.
+- Create centralized monitoring for Amazon Quick Suite administration for AWS CloudTrail-based audit dashboards.

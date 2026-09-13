@@ -1,0 +1,11 @@
+As concerns around data privacy in machine learning grow, the ability to unlearn, or remove, specific data points from trained models becomes increasingly important. While state of the art unlearning methods have emerged in response, they typically treat all points in the forget set equally. In this work, we challenge this approach by asking whether points that have a negligible impact on the model’s learning need to be removed. Through a comparative analysis of influence functions across language and vision tasks, we identify subsets of training data with negligible impact on model outputs. Leveraging this insight, we propose an efficient unlearning framework that reduces the size of datasets before unlearning leading to significant computational savings (up to approximately 50 percent) on real world empirical examples.
+- † Harvard
+- ** Work done while at Apple
+Related readings and updates.
+When Unlearning Is Free: Leveraging Low Influence Points to Reduce Computational Costs
+July 17, 2026research area Data Science and Annotation, research area Privacy
+As concerns around data privacy in machine learning grow, the ability to unlearn—or remove—specific data points from trained models becomes increasingly important. While state-of-the-art unlearning methods have emerged in response, they typically treat all points in the forget set equally. In this work, we challenge this approach by asking: do points that have a negligible impact on the model’s learning need to be removed? Through a comparative…
+Subspace Recovery from Heterogeneous Data with Non-isotropic Noise
+November 10, 2022research area Methods and Algorithms, research area Privacyconference NeurIPS
+*= Equal Contributions
+Recovering linear subspaces from data is a fundamental and important task in statistics and machine learning. Motivated by heterogeneity in Federated Learning settings, we study a basic formulation of this problem: the principal component analysis (PCA), with a focus on dealing with irregular noise. Our data come from users with user contributing data samples from a -dimensional distribution with mean …

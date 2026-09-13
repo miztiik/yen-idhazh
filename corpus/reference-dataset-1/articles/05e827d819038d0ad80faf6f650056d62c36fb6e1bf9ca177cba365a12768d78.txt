@@ -1,0 +1,16 @@
+Quick Read
+- Nvidia (NVDA) closed its $12.9B Hugging Face deal, but Jensen Huang's openness pledge lacks binding neutrality terms covering rival chips like AMD and Groq.
+- Three triggers will reveal whether Nvidia bought an asset or a liability: top model debut locations, rival registry funding, and senior maintainer departures.
+- Just released. Our analysts combed the entire stock market and named the ten best stocks to buy right now, and NVIDIA made the cut. Enter your email to see the other nine names and why NVDA earned its spot. The report is free. Enter your email and see the full list.
+NVIDIA (NASDAQ:NVDA) has closed on its purchase of Hugging Face, and the interesting work begins now. The New York Times reported the transaction at $12.9 billion, a figure WIRED framed as a $12.9 billion bet on open-source AI. The check has cleared. The community's trust has not.
+That is the asset Nvidia cannot wire-transfer for. Hugging Face is the default distribution point for open weights, datasets, and model cards. Owning the hub while also selling the silicon those models run on creates a structural conflict every rival accelerator program can now cite when courting maintainers.
+What the Platform Owner Actually Said
+Nvidia has not disclosed binding governance commitments in an 8-K tied to the deal. What is on the record is Jensen Huang's positioning on the Q2 FY2027 call. He argued that "the world will need both closed models and open models. and both closed models and open models are skyrocketing in use" and that "nearly all open models run on NVIDIA". He added: "Our position in open models is very good, because the CUDA ecosystem is literally everywhere."
+Those remain strategic statements rather than binding covenants. Until Nvidia publishes model-hosting neutrality terms, contributor governance, and a policy on AMD, Groq, and Trainium optimizations shipped through the hub, the openness pledge is a talking point.
+Free Report, Just Released
+Why NVDA Made Our Top 10 List
+24/7 Wall St has helped investors make money for over two decades, and our top analysts just finished ranking the definitive Top 10 Stocks To Buy Now. Not the ten biggest companies. Not the ten everyone is arguing about. The ten best stocks to buy right now.
+And NVDA made the cut. See who else did.
+The report is free, and you can see why we think each stock is a top investment today.
+Why Neutrality Is the Whole Ballgame
+Nvidia posted Q2 FY2027 revenue of $96.22 billion, up 105.85% year over year, with Data Center revenue of $89.02 billion and non-GAAP EPS of $2.22. Shares closed at $230.36 on September 4, 2026, up 23.67% year to date, against a market cap of roughly $5.56 trillion and a P/E near 46.

@@ -1,0 +1,17 @@
+ChatGPT now faces stricter EU oversight as a very large search engine
+Key Points
+- The EU Commission is classifying ChatGPT as a very large search engine because of its built-in web search and more than 45 million EU users, while Reddit and Roblox are classified as very large online platforms.
+- The three services have four months to meet strict oversight rules, including assessing risks from illegal content, dangers to minors, or election interference.
+- The new requirements include data access for researchers. It's disputed among legal experts whether that access also has to cover training data or model weights to evaluate systemic risks.
+The EU Commission is classifying ChatGPT as a very large search engine for the first time, putting the chatbot under stricter oversight rules. The Commission announced the move Monday in Brussels.
+OpenAI's chatbot can search the web and answer user queries. That makes it a search engine under the Digital Services Act (DSA). ChatGPT reaches at least 45 million monthly users in the EU, the threshold for this classification.
+The Commission is also reclassifying Reddit and Roblox as very large online platforms. Both count as platforms because users can share content from other users there.
+All three services now have four months, until the end of December 2026, to meet extra obligations. That includes assessing risks to users, such as illegal content, dangers to minors, or election interference. The Commission gains more audit powers as a result, working with authorities in Ireland and the Netherlands.
+Henna Virkkunen, vice president of the EU Commission, said the services would have to submit to stricter oversight. In total, 28 platforms and search engines are now classified under the DSA.
+What the new rules require, and where the law gets murky
+With ChatGPT, the EU Commission mainly gains audit rights over its risks and how it works. The operational requirements include a publicly viewable ad archive, data access for approved researchers, semiannual transparency reports, reporting mechanisms for illegal content along with a complaints process, and a crisis response mechanism.
+Whether that data access also covers training data or model weights is disputed among legal experts. Natali Helberger, a law professor at the University of Amsterdam, told Tech Policy Press that it "will raise interesting questions regarding the extent of data access rights, and whether the access obligation under Article 40 could potentially also include access to training data or model weights if such access is necessary to identify systemic risk or assess mitigation measures." The classification doesn't explicitly allow the Commission to test the models directly.
+AI News Without the Hype – Curated by Humans
+
+Subscribe to THE DECODER for ad-free reading, a weekly AI newsletter, our exclusive "AI Radar" frontier report six times a year, full archive access, and access to our comment section.
+Subscribe now

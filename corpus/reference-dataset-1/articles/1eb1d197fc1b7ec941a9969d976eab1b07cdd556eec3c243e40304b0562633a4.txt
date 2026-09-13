@@ -1,0 +1,176 @@
+Featured projects
+TL;DR
+PyTorch Conference North America 2026 features vLLM across sessions on KV cache management and disaggregated serving, hardware portability, kernel optimization, PyTorch integration, Mixture-of-Experts inference, attention, and production serving.
+vLLM at #PyTorchCon NA
+PyTorch Conference North America 2026 comes to San Jose, CA, October 20–21, with technical talks, live demos, lightning talks, sponsored sessions, a keynote, and a Birds of a Feather discussion featuring vLLM.
+Across the program, vLLM appears in sessions on serving architecture and KV cache work, hardware portability, kernel and performance optimization, and PyTorch integration. Additional sessions cover Mixture-of-Experts inference, attention, production deployment, broader application stacks, and open source contribution.
+Serving Architecture, KV Cache, and Production Inference
+A Developer’s Guide to Attention in vLLM
+Lucas Wilkinson, Red Hat; Matthew Bonanni, Red Hat
+October 20, 11:45 a.m.–12:10 p.m. | LL20AB | Breakout Session
+This session explains how vLLM represents, serves, and optimizes attention as models adopt approaches including sliding windows, sparsity, compression, linear variants, and hybrid attention.
+The speakers cover attention backends, KV-cache connectors, and the hybrid memory allocator, along with a recent overhaul of vLLM’s attention abstractions, what changed, and how the new design makes emerging architectures easier and cleaner to support.
+State-of-the-Art KV Transfer for Disaggregated LLM Serving in vLLM
+Nicolò Lucchesi, Mistral AI; Sunita Nadampalli, Amazon; Zhanqiu Hu, Red Hat
+October 20, 2:15–2:40 p.m. | LL20CD | Breakout Session
+This session covers developments in vLLM’s disaggregated serving stack for transferring KV cache between prefill and decode. Topics include hybrid-model transfer with heterogeneous tensor parallelism, bidirectional KV transfer, the KV Push connector, and KV cache leases for reliability.
+The speakers report that KV Push reduces time to first token and that, on Nemotron, disaggregated prefill/decode Pareto-dominates co-located serving across concurrency levels.
+Native Tiered KV Cache Offloading in vLLM: From Storage Offloading to Disaggregated Serving
+Or Ozeri, IBM
+October 20, 2:50–3:15 p.m. | LL20CD | Breakout Session
+This talk presents vLLM’s native tiered KV cache offloading framework, newly integrated upstream with no external dependencies.
+The framework routes transfers through CPU memory as a universal transport hub. The design minimizes GPU transfer overhead, consolidates I/O through a CPU buffer, avoids specialized transfer APIs, and remains independent of KV cache memory layout across hardware, attention backends, parallelism schemes, and model architectures.
+LMCache: a cluster-wide open source solution for LLM prompt caching
+Kuntai Du, Tensormesh, Inc.
+October 20, 3:40–3:50 p.m. | LL20CD | Lightning Talk
+LMCache provides prompt caching across inference engines including vLLM, SGLang, and TensorRT-LLM and storage systems including Mooncake, Redis, and AWS S3.
+The session includes a tutorial on deploying LMCache in Kubernetes along with the techniques and research behind its prompt-caching approach.
+vLLM KV Cache Management for Model-Specific Requirements
+Mengqing Cao, Huawei
+October 20, 5:30–5:40 p.m. | LL20CD | Lightning Talk
+This session addresses KV cache requirements that vary across model architectures including MLA, SWA, Eagle, and DeepSeek-V4.
+It proposes a model-customized KV Cache Planner built around a default planner plus model-specific planners for requirements such as spec grouping, block-size derivation, cache tensor creation, and max_model_len adjustment.
+Elastic Expert Parallelism in vLLM
+Itay Alroy, NVIDIA
+October 21, 2:50–3:15 p.m. | LL20CD | Breakout Session
+Elastic Expert Parallelism enables vLLM deployments to add or remove workers at runtime and redistribute experts across the updated worker set with minimal interruption to serving.
+The session covers communication reconfiguration, CUDA Graph recapture, expert rebalancing through the EP Load Balancer, weight transfer to new GPUs, and coordination with model forward execution. It also covers how NIXL EP enables grow and shrink operations under live traffic, fault detection, reporting, and recovery.
+Prefix Caching for Autoregressive Stages in Multi-Stage Pipelines
+Ricardo Noriega, Red Hat; Alex Brooks, Red Hat
+October 21, 4:20–4:45 p.m. | LL20AB | Breakout Session
+This talk explores Automatic Prefix Caching for Stage Outputs in vLLM-Omni, an approach for extending vLLM’s prefix caching to multi-stage models while minimizing GPU memory cost.
+The approach aligns external CPU tensor caches with vLLM’s native block management. The speakers also describe how vLLM-Omni dynamically discovers cacheable tensors without requiring manual configuration.
+Hardware Portability and Accelerator Backends
+Sponsored: Unifying Open Source LLM Serving on Google Cloud TPUs with TorchTPU
+Rob Mulla, Google
+October 20, 10:40–10:50 a.m. | Community Expo | Demo Theater
+This 10-minute demo shows TorchTPU’s native, high-performance compilation path for PyTorch models on Cloud TPUs.
+The demo highlights TorchTPU as a unified backend for inference engines including vLLM and SGLang, enabling model deployment through those serving engines with minimal code modifications.
+Sponsored: PyTorch Ecosystem Running Natively on Trainium
+Maen Suleiman, Amazon Web Services
+October 20, 10:55–11:05 a.m. | Community Expo | Demo Theater
+This live demo covers PyTorch workflows on Trainium through TorchNeuron, including training with TorchTitan or Hugging Face Transformers v5, serving with vLLM-Neuron, profiling with Neuron Explorer, and adding NKI kernels directly to PyTorch code.
+The session also demonstrates Neuron Agentic Development, AI-assisted tooling for kernel authoring and optimization.
+One Model Definition, Many Accelerators: Scaling vLLM Across Hardware Without Forks
+Thomas Parnell, IBM; Richard Zou, Meta
+October 20, 4:20–4:45 p.m. | LL20CD | Breakout Session
+This talk presents hardware-agnostic model definitions for vLLM, an approach that separates model logic from hardware execution paths so the same model definition can run across accelerators without forks or per-platform maintenance.
+The design relies on compatibility with torch.compile, well-defined extensibility hooks, and isolation from hardware-specific paths. The speakers show how the approach supports Intel Gaudi/HPU and IBM Spyre without hardware-specific modeling code.
+Portable PyTorch Across AI Accelerators: A Triton Operator Stack from Eager Mode to vLLM
+Yonghua Lin, Beijing Academy of Artificial Intelligence
+October 20, 4:55–5:20 p.m. | LL20CD | Breakout Session
+This session presents FlagOS, an open source system stack using a Triton-based operator, compiler, and runtime layer for PyTorch.
+FlagGems implements PyTorch eager-mode operators and LLM-critical kernels in Triton, while the same operator layer connects to vLLM through the vllm-plugin-fl multi-backend plugin.
+The speakers report testing FlagOS on 20+ AI chips and architectures and say it has enabled Day-0 adaptation of models including Qwen3.5, MiniMax-M3, MiniCPM-5, and DeepSeek-V4. They report 5–40% inference performance improvement over original vendor adaptation.
+Efficient MoE LLM Inference on Arm with vLLM and OpenVINO
+Abhishek Jain, Fujitsu Research of India; N Maajid Khan, Fujitsu Research of India
+October 20, 4:55–5:05 p.m. | LL21ABC | Lightning Talk
+This talk presents a vLLM and OpenVINO inference stack optimized for Arm CPUs, including SVE-optimized SDPA and Paged Attention, U8 KV-cache quantization, operator fusion, KleidiAI integration, and optimized threading for 8-bit and 4-bit inference.
+For Mixture-of-Experts models, the speakers introduce a NUMA-aware GatherMatMul operator that combines dynamic token and expert selection with matrix multiplication. Benchmarks on AWS Graviton3e show approximately 2x throughput on GPTOSS/Llama models.
+Integrating the IBM Spyre Accelerator
+David Grove, IBM; Antoni Viros i Martin, IBM Research; Avery Blanchard, IBM Research
+October 20, 4:55–5:20 p.m. | LL21DEF | Breakout Session
+Torch-Spyre is an open source project that provides a PyTorch PrivateUse1 device with OpenReg, including an Inductor backend, for the IBM Spyre Accelerator.
+The speakers report that the IBM Spyre Accelerator can now run thousands of models from Hugging Face and vLLM through its PyTorch integration. The session covers the state of Torch-Spyre, functional enablement and performance improvements made in 2026, contributions back to PyTorch, device-specific tensor layouts, and scratchpad-optimized tiling.
+Keynote: Workload Fungibility in the Age of Agents
+Bill Jia, Google Cloud
+October 21, 9:15–9:25 a.m. | Grand Ballroom | Keynote
+This keynote uses TorchTPU to show PyTorch workflows across model development, training, and serving, including serving through vLLM and SGLang.
+The session also demonstrates agentic workflows for moving model workloads from GPUs to TPUs and explores their use for performance optimization tasks including quantization, custom kernel generation, and sharding strategies.
+PyTorch-Native LLM Serving on TPU: SGLang and vLLM
+Colin Taylor, Meta; Qi Zhou, Google; Angela Yi, Meta
+October 21, 2:15–2:40 p.m. | LL20CD | Breakout Session
+This session presents SGLang and vLLM running on TPUs through a new PyTorch-native TPU backend while preserving the serving engines’ schedulers, batching systems, OpenAI-compatible APIs, and torch.compile workflows.
+The speakers cover torch.compile lowering to TPU, Pallas attention, tensor and expert parallelism, Mixture-of-Experts execution, FP8 for large MoE models including Qwen3-Coder-480B, multimodal encoders, prefill/decode disaggregation, and speculative decoding. The speakers say both platforms will be open sourced as of the talk.
+Kernel and Performance Optimization
+High-Velocity GPU Kernel Authoring with CUTLASS Python
+Michael Goldfarb, NVIDIA; Guray Ozen, NVIDIA
+October 20, 12:20–12:45 p.m. | 210BF | Breakout Session
+This talk presents new Python-first capabilities for CUTLASS CuTe DSL, which the speakers report has delivered high-performance GPU kernels in projects including FlashAttention 4, TRT-LLM, vLLM, and FlashInfer.
+The session introduces CuTe DSL extensions, CUTLASS Python Primitives for direct access to low-level hardware instructions, and the Resource and Task Scheduler, a zero-cost metaprogramming framework for static verification of asynchronous primitives.
+Faster LLM Serving Startup with fastsafetensors
+Takeshi Yoshimura, IBM
+October 20, 3:25–3:35 p.m. | LL20CD | Lightning Talk
+This talk presents fastsafetensors, an open source library for accelerating safetensors checkpoint loading in PyTorch inference systems including vLLM.
+fastsafetensors removes per-tensor copies, coalesces fragmented I/O, and skips host staging. The speakers report 4.8x to 7.5x faster model loading and up to 28 GB/s of NVMe read throughput.
+The session also covers contributions including parallel loading, 3FS integration, ROCm support, a universal wheel with runtime CUDA/ROCm detection, Windows DirectStorage exploration, and unified-memory support.
+Sponsored: Quantization Showdown: PyTorch Inference Optimization
+Markell Rawls, Red Hat
+October 20, 4:10–4:20 p.m. | Community Expo | Demo Theater
+This live demo examines quantization and speculative decoding using tools including LLM Compressor and vLLM.
+The session stress-tests the techniques under load to examine the performance, cost, and quality tradeoffs involved in production deployments.
+From Weeks to Overnight: Autonomous Day-0 Kernel Bring-Up with Agent Pipelines
+Xiaogang Gu, Intel; Qun Yang, Intel
+October 20, 5:30–5:40 p.m. | 210BF | Lightning Talk
+This session presents a pipeline-driven autonomous system for GPU kernel optimization, with specialized agents handling profiling, analysis, code generation, verification, fixes, benchmarking, and evaluation in isolated contexts.
+Using real vLLM inference workloads, the speakers report reducing kernel bring-up and optimization cycles from weeks to overnight unattended runs.
+Making vLLM Faster on Intel GPUs with Triton Kernels
+Whitney Tsang, Intel; Artur Fierka, Intel
+October 21, 12:20–12:30 p.m. | 210BF | Lightning Talk
+This talk examines Triton kernels for vLLM on Intel GPUs and where Triton can outperform SYCL on inference workloads.
+The speakers focus on unified attention, fused MoE, batched MoE, autotuning, tensor-descriptor-oriented kernel structure, and fusion opportunities. They also discuss where these choices improve end-to-end vLLM throughput and latency and where SYCL remains competitive.
+HiFloat: Democratizing Ultra-Low Precision Training and Inference in PyTorch Ecosystems
+Yun Zhao, Huawei; Haonan Zhang, Huawei
+October 21, 2:50–3:00 p.m. | LL20AB | Lightning Talk
+This session introduces HiFloat8 and HiFloat4 and demonstrates HiFloat-accelerated LLM workflows within DeepSpeed and vLLM.
+The implementation uses PyTorch custom ops, Triton-based kernels, and torch.compile. In the benchmarks presented, the speakers report that HiF8 achieves final-loss parity with FP16 while delivering a 1.5x–1.7x GEMM speedup.
+Portable Paged Attention: From Triton to Helion
+Burkhard Ringlein, IBM Research
+October 21, 3:25–3:50 p.m. | 210BF | Breakout Session
+This session compares Triton and Helion implementations of Paged Attention and presents an experimental Helion attention backend for vLLM.
+The speaker covers differences between the two implementations, algorithm changes needed to achieve matching performance, and optimizations enabled by Helion. Early results indicate that the experimental Helion backend can reduce latency by up to 50% and improve end-to-end throughput versus Triton by up to 10%.
+PyTorch Integration and Compatibility
+Shipping PyTorch and Its Ecosystem: A Modern Release Story
+Andrey Talman, Meta
+October 20, 11:45–11:55 a.m. | LL21DEF | Lightning Talk
+This talk covers changes to PyTorch release engineering, including continuous validation of Triton and vLLM against PyTorch nightlies so ecosystem breakage can surface upstream before the release branch is cut.
+The session also covers a faster, more predictable release process and the use of AI agents to triage CI, separate noise from regressions, and draft fixes, while leaving final decisions with people.
+Sponsored: Making Enterprise Agentic Inference Production-Ready with PyTorch and vLLM
+Joseph Groenenboom, Red Hat; Tyler Michael Smith, Red Hat
+October 20, 3:25–3:50 p.m. | LL21ABC | Sponsored Session
+This session examines reliability, observability, KV cache management, and concurrency requirements for enterprise inference systems.
+The speakers cover a sample of upstream work across PyTorch, vLLM, other Foundation projects, and the broader ecosystem, from core PyTorch build infrastructure to model-serving improvements for tool calling and long-context, multi-turn chat.
+Clearing the Path Towards an ABI Stable PyTorch C++ Extension Ecosystem
+Sean McGovern, Red Hat; Chris Leonard, Red Hat; Jane Xu, Meta
+October 21, 2:15–2:40 p.m. | LL21ABC | Breakout Session
+PyTorch’s stable ABI provides a binary-compatible C interface that extensions can target across PyTorch versions without recompilation.
+This session presents tools for identifying and inventorying unstable API usage and applying source-to-source conversion with LLM-assisted follow-up. The speakers demonstrate the process on libraries including vLLM and SGLang.
+From Backed to Unbacked: Sound, Predictable, and Controllable Dynamic Shapes in PyTorch
+Laith Sakka, Meta
+October 21, 4:20–4:45 p.m. | LL21ABC | Breakout Session
+This talk covers unbacked dynamic shapes for explicit graph-capture workflows including vLLM, export, and pre-compilation, as well as JIT deployments where dynamic-shape recompilation is not acceptable.
+The session covers data-dependent errors and branching, work to close the performance gap with backed shapes across TorchBench and vLLM, and APIs for shape constraints and dispatch across compiled artifacts.
+vLLM in Broader Applications and Infrastructure
+Understanding Modern Vision Language Models
+Aastha Jhunjhunwala, NVIDIA; Mark Moyou, NVIDIA
+October 20, 12:20–12:45 p.m. | LL20AB | Breakout Session
+This session deconstructs five open source vision-language model architectures, covering image tokenization, vision-language fusion, differences between training and inference, fine-tuning, and multi-GPU training.
+For production serving, the speakers cover image-token growth, KV-cache pressure, throughput, and where tools including vLLM fit.
+Sponsored: Hardware-Aware AI: Building Agentic Systems from Cloud to Edge with PyTorch, ExecuTorch
+Kavya Sri Chennoju, Arm
+October 20, 12:20–12:45 p.m. | LL20CD | Sponsored Session
+This session presents a cloud-to-edge workflow combining PyTorch for model development, ExecuTorch for on-device inference, vLLM for scalable LLM serving, and Arm Device Connect for interaction with heterogeneous hardware.
+The live workflow shows foundation models reasoning about tasks, invoking edge models, retrieving live sensor data, and coordinating physical devices.
+Keeping GPUs Busy: High-Speed Storage for PyTorch via fsspec
+Ankita Luthra, Google; Trinadh Kotturu, Google
+October 20, 3:40–3:50 p.m. | LL21DEF | Lightning Talk
+This talk presents Rapid Storage, which brings Google’s Colossus stateful protocol to PyTorch through fsspec and uses persistent gRPC streams to the storage layer.
+The speakers report less than 1 ms random read/write latency, 20x faster data access, 6 TB/s of aggregate throughput, and 10x lower tail latency for random I/O. The integration extends through gcsfs and the broader fsspec ecosystem, including vLLM alongside other data and AI frameworks.
+Sponsored: From Prompt to Physical Action: A Live Hardware-Aware AI Demo with PyTorch, ExecuTorch
+Kavya Sri Chennoju, Arm
+October 20, 3:55–4:05 p.m. | Community Expo | Demo Theater
+This live demonstration combines PyTorch, ExecuTorch, vLLM, and Arm Device Connect in a workflow spanning cloud, edge, and embedded devices.
+Starting with a natural-language request, a large language model reasons about the task, discovers available devices, invokes edge AI models, retrieves live sensor data, and coordinates hardware through a unified programming model.
+From PyTorch to Production: Serving a Physics-Constrained Generative Model with ONNX, Ray, and vLLM
+Arun Sharma, University of Minnesota
+October 21, 2:50–3:15 p.m. | 210AE | Breakout Session
+This session follows a physics-constrained generative downscaling model from PyTorch training into a served stack.
+The talk covers model export through torch.onnx and AOTInductor, rectified-flow sampling, physics constraints at inference, and a Ray Train recipe for scaling. The serving path combines ONNX Runtime in Rust, Temporal in Go, and a vLLM agent that calls the downscaler as a tool.
+vLLM Community and Contribution
+Contributing to Inference OSS That Won’t Stand Still: A BoF on vLLM, llm-d, and the Moving Target
+Maroon Ayoub, Red Hat; Nili Guy, IBM
+October 21, 10:35–11:05 a.m. | Community Expo | Birds of a Feather
+This Birds of a Feather session focuses on contributing to fast-moving inference projects including vLLM and llm-d.
+Contributors, maintainers, and prospective contributors will compare approaches to landing a first pull request, onboarding contributors, following technical decisions across project channels, and participating in cross-company open source development.
+Explore the Full Program
+These sessions include both talks centered directly on vLLM and broader sessions where vLLM is part of the serving stack, implementation, hardware integration, optimization work, or application workflow.

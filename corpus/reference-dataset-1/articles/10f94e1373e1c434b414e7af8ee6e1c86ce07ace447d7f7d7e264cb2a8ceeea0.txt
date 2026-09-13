@@ -1,0 +1,31 @@
+Tech giant Google, Tesla, utility Pacific Gas and Electric (PG&E), and distributed energy resource (DER)-focused company Sunrun are launching a new virtual power plant (VPP) in California, US.
+Announced 3 September, the companies are joined by electrification nonprofit Rewiring America, HVAC company Carrier Global, energy management platform Renew Home, consulting firm Demand Side Analytics, software company encoord, and others.
+PG&E’s Smart Home Assets for Reliability and Efficiency (SHARE) is a new VPP of home battery energy storage systems (BESS), smart devices, and battery-enabled heat pumps that reduce energy use during periods of high demand in Santa Clara and Alameda counties. It will be fully funded by Google.
+According to PG&E, “The model is designed to create additional capacity, support reliability and help put downward pressure on rates while participating households save money through smarter energy management with next-generation home technology. SHARE is a first-of-its-kind VPP proof-of-concept that combines enrollment of existing home energy devices with regional deployment of privately funded new electrification technologies to address growing electric demand.”
+Try Premium for just $1
+- Full premium access for the first month at only $1
+- Converts to an annual rate after 30 days unless cancelled
+- Cancel anytime during the trial period
+Premium Benefits
+- Expert industry analysis and interviews
+- Digital access to PV Tech Power journal
+- Exclusive event discounts
+The utility further explained that SHARE works as a proof-of-concept VPP that will demonstrate how targeted investments can help improve reliability, expand capacity, support new energy users, and make better use of home energy resources with continued grid investment.
+PG&E is working with Tesla, Sunrun, and Renew Home to enroll approximately 21,000 existing flexible energy devices into the programme.
+The goal being that this will allow participating households to gain new ways to manage energy costs and earn rewards for the smart features they already use, while shifting demand during peak periods, helping make better use of existing infrastructure.
+The resource is expected to begin supporting the grid as early as this fall, running through 2027, with initial findings expected to be shared either late this year or early 2027.
+Carrier serves as the initiative’s launch partner for the deployments, supplying its battery-enabled heat pump solution. This includes the Carrier Performance Series Variable-Speed Heat Pump with EnerSync, which automatically stores and shifts energy consumption to reduce customer costs, maintain comfort levels, and support grid stability during peak demand periods.
+According to the programme website, through SHARE, customers can receive US$5,000 off the Carrier system, but 25 households will receive US$10,000 off.
+Rewiring America will work directly with households to deploy and enroll technologies into SHARE that can “serve as flexible grid resources while improving the customer experience.”
+The company claimed it will also work closely with local installers to ensure projects meet high quality and performance standards.
+While the information is not included in PG&E’s announcement or the SHARE programme website, a spokesperson did note that the programme can deploy 12MW during periods of peak electricity demand, and that “participating Sunrun customers benefit from US$200-per-battery enrolled in the programme.”
+Sunrun, Tesla, and Renew Home have announced similar programmes outside of California. In June, the companies announced an agreement to deliver more than 16GW of flexible energy capacity to PJM hyperscalers and utilities.
+In the same month, VPP operator and DER platform Voltus and Google signed a partnership agreement. Voltus will aggregate up to 100MW of DERs annually from local businesses and residences into a Google-funded VPP.
+Voltus will compensate customers who participate in the programme, “transforming Google’s capacity demand into tangible economic benefits for PJM customers.”
+Sunrun and Tesla also collaborated to expand VPP enrollment in Puerto Rico earlier this year, when the two companies, alongside residential solar installer SunStrong Management, received approval from the Puerto Rico Energy Bureau (PREB) for their motion to auto-enroll participants in an emergency capacity resource programme.
+This month, two VPP bills passed California’s legislature. Senate Bill (SB) 905 would establish a grid utilisation metric measuring the load factor across each segment of the state’s distribution network.
+SB 913 would require the California Public Utilities Commission (CPUC) to develop a valuation methodology for customer-sited BESS to export electricity onto the grid during periods of system strain.
+The bills are expected to receive Governor Gavin Newsom’s signature; however, Newsom’s administration also blocked an effort to continue funding the Demand Side Grid Support (DSGS) programme.
+DSGS is the state’s current VPP programme, which achieved more than 1GW of participation from customer batteries in 2025, including Sunrun and Tesla-installed systems. Newsom previously proposed redirecting funds from a separate expiring programme to maintain DSGS operations through the end of 2026.
+Participants will transition to the CPUC’s Emergency Load Reduction Programme (ELRP), “a five-year pilot programme designed to compensate electricity consumers for reducing energy consumption or increasing electricity supply during electrical grid emergencies.”
+Battery Asset Management Summit USA 2026 will be held 15-16 September in Garden Grove, California, hosted by Energy-Storage.news publisher Solar Media (part of the Informa Group). The agenda emphasises addressing the roles of AI, cybersecurity, and second-life applications, broken down into two tracks: Technical Asset Management and Commercial Asset Management. This year, the conference is also co-located with Solar & Storage Finance Summit USA. Visit the official site for more details.

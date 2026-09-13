@@ -1,0 +1,12 @@
+CHAPEL HILL, North Carolina, Sept 2 : The U.S. urged G20 countries on Wednesday to develop rules governing how AI companies use copyrighted material to train their systems, as major American technology firms face mounting lawsuits over the practice.
+Companies including Anthropic, OpenAI, Google and Meta have been sued in the U.S. by authors, publishers, media organizations and other creators who allege that the firms misused their work to develop their AI products.
+Tech firms train their AI models to generate images and text by feeding them vast amounts of data, often including books, music and art. They have argued that using that work to build their AI tools is legal.
+U.S. Commerce Secretary Howard Lutnick told the G20 officials at a tech-focused meeting in North Carolina that they should allow AI companies to train their models on creators' work, while finding a way to "protect artists."
+He said the countries should embrace "fair use," a principle that allows the unauthorized use of copyright-protected works under certain circumstances.
+"We need frameworks that protect creators and inventors whose ingenuity drives our economies without creating the barriers that prevent the next generation of innovators," Lutnick told the gathering of officials representing G20 countries.
+Lutnick did not offer specifics on how to accomplish that.
+The U.S. Justice Department separately on Wednesday filed a brief supporting OpenAI in its dispute with the New York Times and several other newspapers over the company's use of their work to train the large language models behind ChatGPT, saying AI training generally makes fair use of copyrighted material.
+Nvidia CEO Jensen Huang appeared alongside Lutnick ahead of the Commerce secretary's speech on Wednesday.
+Huang urged the G20 officials to avoid writing regulations for AI that focus on "theoretical harms," and instead develop rules governing real-world problems connected to the technology. His message echoed those of the Trump administration and other American tech executives who addressed the gathering on Tuesday.
+Government requirements could hurt the industry's profits if they slow the release of new models or prompt the companies to change how their products perform to address security concerns.
+Anthropic co-founder Tom Brown also addressed the gathering on Wednesday morning. Palantir's Alex Karp and OpenAI's Sam Altman are on the speaker schedule for the afternoon.
