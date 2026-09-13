@@ -16,7 +16,6 @@
   "model_id": "qwen3-4b",
   "new_fact_rate": 0.08,
   "output_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "pipeline_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "run_id": "2026-09-09-3",
   "score_ms": 412,
   "scored_at": "2026-09-09T06:11:02Z",

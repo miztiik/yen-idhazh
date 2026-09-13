@@ -7,8 +7,10 @@
 	 * had its search at the very bottom - the control behind the answer.
 	 *
 	 * **The pills are visible at rest.** Never behind the field, never collapsed
-	 * as a set. The only thing the disclosure holds is the topics past
-	 * `pillsMax`, and its summary says how many.
+	 * as a set. The row leads with the desk holding most of the day, and the only
+	 * thing the disclosure holds is an auto-created topic past `pillsMax` - a desk
+	 * a person put in `config/taxonomy.json` is never folded away. Its summary
+	 * says how many are inside.
 	 *
 	 * **Sticky at 1024px and up, and nowhere else.** There the pills and the
 	 * field share one band. Below it the panel can run to four wrapped lines
@@ -46,6 +48,7 @@
 		active,
 		total,
 		pillsMax,
+		pillMoveMin,
 		datePrefix = '',
 		linked = true,
 		onTopic = null,
@@ -69,6 +72,9 @@
 		 * of whatever list happens to be in hand. */
 		total: number;
 		pillsMax: number;
+		/** How many stories ahead a desk must be before it passes another on the
+		 * row. `digest.pill_move_min`, never a literal here. */
+		pillMoveMin: number;
 		datePrefix?: string;
 		/** Pills are links to prerendered routes. False makes them buttons. */
 		linked?: boolean;
@@ -95,7 +101,7 @@
 	} = $props();
 
 	const root = $derived(dayRoot(base, datePrefix));
-	const split = $derived(splitPills(verticals, active, pillsMax));
+	const split = $derived(splitPills(verticals, active, pillsMax, pillMoveMin));
 	// The desk the reader is on, and only that one. On the all-topics view there
 	// is no desk being read, and one sentence per desk would be five.
 	const shortfall = $derived(

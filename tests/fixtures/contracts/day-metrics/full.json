@@ -65,7 +65,6 @@
   "items_truncated": 2,
   "label_similarity": null,
   "model_id": "qwen35-9b",
-  "pipeline_fingerprint": "e74bcca07c77808e469ad574d01a823763a13fa34a397caf177c07fa236f348b",
   "reasons": {
     "faithfulness": 1,
     "hedge_dropped": 0,

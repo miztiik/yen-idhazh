@@ -145,14 +145,18 @@ class Moment(Model):
 
 
 class ScoreCohort(Model):
-    """One (date, run, row version, model, pipeline, scorer) group of scored items.
+    """One (date, run, row version, model, scorer) group of scored items.
 
-    Six fields of key, because every one of them changes what a number over the
+    Five fields of key, because every one of them changes what a number over the
     group means. A day and a run separate two executions that published the same
     date. The row version says which columns the rows carried at all. The model
-    and the pipeline fingerprint say what produced the words, and the scorer
-    version says which instrument read them - and the scorer version is the one
-    that makes a rate from two cohorts unmixable rather than merely awkward.
+    says what produced the words, and the scorer version says which instrument
+    read them - and the scorer version is the one that makes a rate from two
+    cohorts unmixable rather than merely awkward.
+
+    It was six until 2026-09-12, when the pipeline fingerprint left the key:
+    splitting a month on a stamp that moved on any of seventeen inputs turned
+    one day into several cohorts of a handful of rows each.
     """
 
     date: DateStamp
@@ -165,13 +169,6 @@ class ScoreCohort(Model):
         )
     )
     model_id: Slug
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description=(
-            "Null on a cohort summarised from rows written after 2026-09-12. It stopped "
-            "being part of what makes a cohort one cohort on the same date."
-        ),
-    )
     scorer_version: str = Field(min_length=1)
 
     rows: int = Field(ge=1, description="Rows the shard held for this group, counted as written.")
@@ -278,7 +275,7 @@ class ScoreArchive(Contract):
     __schema_stem__: ClassVar[str] = "score-archive"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-13",
+            version="2026-09-13T23:00",
             change=(
                 "source_sha256 digests the month's day files in day order, where it "
                 "digested one month shard. No field moved and no type changed."
@@ -289,6 +286,16 @@ class ScoreArchive(Contract):
                 "WHICH bytes this summarises has to name all of them. No read side "
                 "migrates: state/score-archive/ has never been written, because the "
                 "prune that writes it takes --dry-run from the workflow step."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprint from a cohort. BREAKING, and nothing to migrate.",
+            why=(
+                "It left the cohort key on 2026-09-12 and no writer has filled it since. No "
+                "archive exists to migrate: state/score-archive/ is absent from this "
+                "checkout, and the first month prune_scores can fold is 2026-08 on "
+                "2027-10-01, so the shape moves before any payload of it was ever written."
             ),
         ),
         ChangelogEntry(

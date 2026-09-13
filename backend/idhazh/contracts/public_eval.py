@@ -55,6 +55,20 @@ class PublicEvalRow(Contract):
     __schema_stem__: ClassVar[str] = "public-eval"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprint, and the published column with it. BREAKING.",
+            why=(
+                "Nothing under frontend/src/ reads this file - measured 2026-09-13, the "
+                "console's own score read is payload.ts evalRows over state/scores/, and "
+                "the only readers of the published mirror are the backend's own "
+                "publish_scores.read_shard and publish_console_band. Both compare the "
+                "header tuple exactly, so a narrowing is a breaking CSV change and the two "
+                "committed months are rewritten one column narrower in this commit. That "
+                "rewrite is the read-side migration; no popper is owed, because "
+                "from_csv_row only ever reads the columns the shape declares."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
             why=(
@@ -106,13 +120,6 @@ class PublicEvalRow(Contract):
     source_word_count: int | None = Field(default=None, ge=0)
     source_seen_word_count: int = Field(default=0, ge=0)
     summary_word_count: int = Field(ge=0)
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description=(
-            "Null on every row written after 2026-09-12. It stays a column of the "
-            "published file because the committed months carry values in it."
-        ),
-    )
     output_digest: Sha256
     determinism_violation: bool = False
     scorer_version: str = Field(min_length=1)

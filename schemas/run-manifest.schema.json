@@ -622,15 +622,6 @@
           "default": null,
           "title": "Note"
         },
-        "pipeline_fingerprints": {
-          "description": "The distinct stamps this run wrote under. Empty since 2026-09-12: the stamp gated a skip nobody wired, and `inputs` records the same facts by name rather than as a digest that affords only equality.",
-          "items": {
-            "pattern": "^[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "title": "Pipeline Fingerprints",
-          "type": "array"
-        },
         "rank_version": {
           "anyOf": [
             {
@@ -813,6 +804,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed pipeline_fingerprints from a run record. BREAKING.",
+      "version": "2026-09-13T22:00",
+      "why": "`inputs` has recorded the same seventeen facts by name since 2026-09-12 and nothing has filled the list since, so it was a shape every future author of this manifest had to ask about. Removing it is breaking, because contracts.base.Model sets extra='forbid' and all 23 committed frontend/public/digest/**/run.json files carry the key. The read-side migration ships in this commit and is expected to be permanent: a published day is frozen, so `_drop_retired_keys` pops the one named key before validation and the condition that would let it go is written on the line that declares it."
+    },
+    {
       "change": "A run record carries `inputs`, the recorded input manifest, and stops filling `pipeline_fingerprints`.",
       "version": "2026-09-12T21:00",
       "why": "The stamp was one digest standing for seventeen inputs, and a digest affords equality and nothing else - which is a gate's only operation. Naming the inputs instead lets a reader see which one moved, and lets the console draw a model-change boundary that can say what changed. Additive and optional: a manifest written before today carries no key and reads as null. Measured on the committed tree 2026-09-12: about 460 compact bytes a run, so roughly 1.4 KB on a three-run day, and run.json is read at build time and never staged into the bundle (frontend/scripts/copy-visuals.mjs), so the 1 GB site cap is untouched."
@@ -914,7 +910,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-12T21:00",
+      "default": "2026-09-13T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -926,5 +922,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-12T21:00"
+  "version": "2026-09-13T22:00"
 }

@@ -99,7 +99,6 @@ def a_ledger_row(
 ) -> dict[str, object]:
     payload = EvalRow.from_json(read_text(ROW_FIXTURE)).model_dump(mode="json")
     payload["url_key"] = item.url_key
-    payload["pipeline_fingerprint"] = item.pipeline_fingerprint
     payload["output_digest"] = item.output_digest
     payload["scorer_version"] = item.scorer_version
     payload["source_word_count"] = "" if full_words is None else full_words

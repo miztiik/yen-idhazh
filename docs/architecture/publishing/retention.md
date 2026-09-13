@@ -331,9 +331,10 @@ varies**:
 `scorer_version` alone is a 99-character string repeated 3,544 times to say one
 of five things, and `RunRecord` **already carries** `scorer_version`, so one of
 the four is duplicated onto a committed manifest today. It carried
-`pipeline_fingerprints` as well until 2026-09-12; that list is empty now and the
-column beside it is blank on every row written since, so this table's second row
-measures a cost the ledger stopped paying rather than one it still pays. `date`
+`pipeline_fingerprints` until 2026-09-13, when that list was removed from the
+shape; the column beside it has been blank on every row written since
+2026-09-12, so this table's second row measures a cost the ledger stopped paying
+rather than one it still pays. `date`
 is a strict prefix of `run_id` on 3,544 of 3,544 rows, for
 another 38,984 bytes. Together: **663,406 bytes, 24.3 percent, 111 MB a year to
 84 MB.**

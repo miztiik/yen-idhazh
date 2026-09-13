@@ -230,6 +230,7 @@
 			active={vertical}
 			{total}
 			pillsMax={ui.topic_pills_max}
+			pillMoveMin={ui.pill_move_min}
 			{datePrefix}
 			bind:query
 			fieldId="page-filter"

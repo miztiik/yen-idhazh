@@ -2841,7 +2841,6 @@ def stage_qualify_decide(
         runner=runner,
         candidate=shards[0].candidate,
         scorer=shards[0].scorer,
-        pipeline_fingerprint=shards[0].pipeline_fingerprint,
         corpus_digest=corpus_digest(frozen.items),
         corpus_items=len(frozen.items),
         planned=frozen.planned,

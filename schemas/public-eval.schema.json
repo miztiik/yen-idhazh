@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed pipeline_fingerprint, and the published column with it. BREAKING.",
+      "version": "2026-09-13T22:00",
+      "why": "Nothing under frontend/src/ reads this file - measured 2026-09-13, the console's own score read is payload.ts evalRows over state/scores/, and the only readers of the published mirror are the backend's own publish_scores.read_shard and publish_console_band. Both compare the header tuple exactly, so a narrowing is a breaking CSV change and the two committed months are rewritten one column narrower in this commit. That rewrite is the read-side migration; no popper is owed, because from_csv_row only ever reads the columns the shape declares."
+    },
+    {
       "change": "pipeline_fingerprint is optional and nothing sets it.",
       "version": "2026-09-12T21:00",
       "why": "The stamp stopped being a gate, so the ledger row this mirrors no longer carries one. The column stays, because the two committed months hold values in it and a published file is never rewritten."
@@ -132,20 +137,6 @@
       "title": "Output Digest",
       "type": "string"
     },
-    "pipeline_fingerprint": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Null on every row written after 2026-09-12. It stays a column of the published file because the committed months carry values in it.",
-      "title": "Pipeline Fingerprint"
-    },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
       "title": "Run Id",
@@ -249,7 +240,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-09-12T21:00",
+      "default": "2026-09-13T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -282,5 +273,5 @@
   ],
   "title": "PublicEvalRow",
   "type": "object",
-  "version": "2026-09-12T21:00"
+  "version": "2026-09-13T22:00"
 }
