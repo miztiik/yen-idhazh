@@ -4596,8 +4596,17 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
 
     `months` names the months this run touched, which is what the day workflow
     passes. None means every month still on disk, which is the sweep `ci.yml`
-    takes on a change that can move a contract. Either way the read is bounded:
-    a payload directory holds at most its own `public_*_keep_months` files.
+    takes on a change that can move a contract - and reading everything is the
+    point of that arm, because a contract change can invalidate any file.
+
+    Six of the seven directories are trimmed on every assemble by
+    `publish_console.prune_months`, so the sweep opens at most their own
+    `public_*_keep_months` files. `telemetry` is the exception and says so here
+    rather than in a sentence that would be wrong: its deletion lives in
+    `retention.prune_telemetry`, inside the workflow step that ships
+    `--dry-run`, so `public_telemetry_keep_months` is declared and not yet
+    enforced and that directory gains one file a month. The daily arm is
+    unaffected - it opens only the months the run wrote.
 
     The band is checked every time whatever `months` says. It is one small file
     and it is the first thing the console asks for, so a band that will not load
@@ -4615,6 +4624,7 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
             publish_day_metrics.read_public_shard,
         ),
         (publish_run_days.DIRNAME, publish_run_days.SUFFIX, publish_run_days.read_shard),
+        (publish_telemetry.PUBLIC_TELEMETRY_DIRNAME, ".csv", publish_telemetry.read_shard),
     )
     for dirname, suffix, read in readers:
         for month in publish_console.published_months(root, dirname, suffix):
