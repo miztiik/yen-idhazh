@@ -120,6 +120,29 @@ export function shardMonths(windowDays: number): number {
  */
 export const LEDGER_WINDOW_MONTHS = shardMonths(ARCHIVE_WINDOW_DAYS);
 
+/** The day files a span of days can touch, both ends named.
+ *
+ * The day-grain twin of `shardMonths`, and it needs no rounding at all: a day
+ * tree files one file a recorded day, so a span of `windowDays` reaches the day
+ * `windowDays` ago and reads it - `n + 1` files for a cover of `n`. That is the
+ * same arithmetic `day_partition.days_in_window` uses on the backend, and the two
+ * agree on purpose.
+ *
+ * `-1` in, `-1` out - a cover of everything in days is a cover of everything in
+ * files.
+ */
+export function shardDays(windowDays: number): number {
+	return unbounded(windowDays) ? -1 : windowDays + 1;
+}
+
+/** The day files that cover `ARCHIVE_WINDOW_DAYS`.
+ *
+ * Derived rather than written down, for the reason `LEDGER_WINDOW_MONTHS` is:
+ * a surface that widens its day window widens its ledger window by the same
+ * rule.
+ */
+export const LEDGER_WINDOW_DAYS = shardDays(ARCHIVE_WINDOW_DAYS);
+
 /** `-1` and nothing else means "every one of them" (`docs/concepts/growing-reads.md`).
  *
  * Not `0`, not `null`, and not a very large number - a large number is a cover
@@ -463,14 +486,13 @@ export function evalRows(months: number = LEDGER_WINDOW_MONTHS): CsvTable {
 
 /** The newest `months` `<YYYY-MM>.csv` shards of a ledger, oldest first, as one table.
  *
- * Three ledgers shard by month and all three wanted this loop. The columns come
- * from the first shard that has any, so an empty month cannot blank the header.
+ * Two ledgers shard by month and both wanted this loop. The columns come from
+ * the first shard that has any, so an empty month cannot blank the header.
  *
  * **This is where the bound has to sit.** It is exported, so bounding only
- * `evalRows` and `itemHealthRows` would leave the next caller reading every
- * month a run ever wrote. Adding another month adds a file this call does not
- * open once the cover is filled (`CLAUDE.md` Guardrail #12); pass `-1` to open all of
- * them.
+ * `evalRows` would leave the next caller reading every month a run ever wrote.
+ * Adding another month adds a file this call does not open once the cover is
+ * filled (`CLAUDE.md` Guardrail #12); pass `-1` to open all of them.
  *
  * The listing itself still names every shard, and that is the honest residue:
  * one directory entry a month, read to find which the newest are. Deriving the
@@ -493,20 +515,68 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
 	return { rows, columns };
 }
 
-/** One row per planned item per run, read from the newest `months` shards. */
-export function itemHealthRows(months: number = LEDGER_WINDOW_MONTHS): CsvTable {
-	return readShards(join(STATE_ROOT, 'item-health'), months);
+/** The newest `days` `<YYYY>/<MM>/<DD>.csv` files of a ledger, oldest first, as one table.
+ *
+ * The day-grain twin of `readShards`, and the bound sits here for the same
+ * reason: it is exported, so bounding only `itemHealthRows` would leave the next
+ * caller reading every day a run ever wrote. Pass `-1` to open all of them and
+ * say beside the call why (`docs/concepts/growing-reads.md`).
+ *
+ * The newest `days` RECORDED days, not the newest `days` calendar days. A day
+ * nothing ran on has no file, so counting files never starves a panel of a day
+ * it should have drawn - which is the property `shardMonths` bought by rounding
+ * up, obtained here for nothing.
+ *
+ * The listing is the honest residue, and it is bigger than it was: the walk names
+ * one entry a recorded day where the month tree named one a month. It opens no
+ * file it does not need, and deriving the newest day from today's date instead
+ * would answer nothing at all for a ledger whose last run was two months ago.
+ *
+ * A name it cannot place is skipped rather than refused, which is where this
+ * differs from `day_partition.day_files`. The producer refuses one at write time
+ * and at every backend read, so nothing reaches here that CI has not already
+ * stopped - and a refusal here would white-screen a page over a stray file.
+ */
+export function readDayShards(dir: string, days: number = LEDGER_WINDOW_DAYS): CsvTable {
+	if (!existsSync(dir)) return { rows: [], columns: [] };
+	const named = (at: string, pattern: RegExp): string[] =>
+		readdirSync(at, { withFileTypes: true })
+			.filter((entry) => pattern.test(entry.name))
+			.map((entry) => entry.name)
+			.sort();
+	const found: string[] = [];
+	for (const year of named(dir, /^\d{4}$/)) {
+		for (const month of named(join(dir, year), /^\d{2}$/)) {
+			for (const day of named(join(dir, year, month), /^\d{2}\.csv$/)) {
+				found.push(join(dir, year, month, day));
+			}
+		}
+	}
+	const kept = unbounded(days) ? found : found.slice(Math.max(0, found.length - days));
+	const rows: Record<string, string>[] = [];
+	let columns: string[] = [];
+	for (const path of kept) {
+		const table = readCsv(path);
+		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
+		rows.push(...table.rows);
+	}
+	return { rows, columns };
 }
 
-/** One published day's item-health rows, from that month's shard alone.
+/** One row per planned item per run, read from the newest `days` day files. */
+export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
+	return readDayShards(join(STATE_ROOT, 'item-health'), days);
+}
+
+/** One published day's item-health rows, from that day's own file alone.
  *
- * Opens only `state/item-health/<YYYY-MM>.csv` for the one date handed in -
- * never a listing of the directory, never an older month - so the cost is one
+ * Opens only `state/item-health/<YYYY>/<MM>/<DD>.csv` for the one date handed in
+ * - never a listing of the tree, never a neighbouring day - so the cost is one
  * file whatever the archive holds behind it (`CLAUDE.md` Guardrail #12). The console
- * band reads the newest published day this way instead of walking every month
- * shard through `readShards` to keep only that one day. A month with no shard
- * yet returns no rows, and the caller shows the day no health fact rather than
- * reaching for the whole tree (section 1a).
+ * band reads the newest published day this way instead of walking the ledger
+ * through `readDayShards` to keep only that one day. A date with no file returns
+ * no rows, and the caller shows the day no health fact rather than reaching for
+ * the whole tree (section 1a).
  *
  * `root` is overridable for the same reason `dayMetrics`' is: the canary suite
  * points it at a fixture state that must never reach the real ledger.
@@ -515,9 +585,8 @@ export function itemHealthForDay(
 	date: string,
 	root: string = STATE_ROOT
 ): Record<string, string>[] {
-	const month = date.slice(0, 7);
-	if (!/^\d{4}-\d{2}$/.test(month)) return [];
-	const path = join(root, 'item-health', `${month}.csv`);
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+	const path = join(root, 'item-health', date.slice(0, 4), date.slice(5, 7), `${date.slice(8, 10)}.csv`);
 	if (!existsSync(path)) return [];
 	return readCsv(path).rows.filter((row) => (row.date ?? '') === date);
 }

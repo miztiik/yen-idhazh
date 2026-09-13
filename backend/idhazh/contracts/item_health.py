@@ -1,8 +1,9 @@
 """What happened to one planned item on one run.
 
 One row per planned item per run, appended to
-`state/item-health/<YYYY-MM>.csv`. The row is a census: successes and failures
-share one file, because a rate needs its denominator beside its numerator.
+`state/item-health/<YYYY>/<MM>/<DD>.csv`. The row is a census: successes and
+failures share one file, because a rate needs its denominator beside its
+numerator.
 """
 
 from __future__ import annotations

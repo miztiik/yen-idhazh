@@ -397,30 +397,31 @@ function writeItemHealthCanary() {
 	// five plots exists to show, and two plots on two scales would draw the
 	// same shape twice.
 	//
-	// These rows are dated a month before the rest, so they are a telemetry
-	// shard of their own - the file a run in that month would have written,
-	// which is how the real ledger shards item-health. A browser that widens the
-	// window fetches this file, and `console-telemetry-heal.spec.ts` fails that
-	// fetch to prove a retry heals it.
+	// These rows are dated a month before the rest, so their own day files sit a
+	// month behind the others - and the month mirror the publisher folds from them
+	// is a file only the widest preset reaches. A browser that widens the window
+	// fetches it, and `console-telemetry-heal.spec.ts` fails that fetch to prove a
+	// retry heals it.
 	const longAgoRows = [
 		...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
 		...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900])
 	];
-	const currentMonth = `${year}-${month}`;
-	const longAgoMonth = longAgo.slice(0, 7);
-	const shards = new Map([[currentMonth, currentRows]]);
-	// The back-dated run stands alone in its month on this fixture. The guard is
-	// only there so a fixture edit that moved it into the current month could not
-	// write one file twice and lose the rows above.
-	shards.set(
-		longAgoMonth,
-		longAgoMonth === currentMonth ? [...currentRows, ...longAgoRows] : longAgoRows
-	);
-	for (const [shardMonth, shardRows] of shards) {
-		writeFileSync(
-			join(dir, `${shardMonth}.csv`),
-			[COLUMNS.join(','), ...shardRows].join('\n') + '\n'
-		);
+	// The ledger files one CSV a day (`docs/concepts/partitions.md`), so each row
+	// goes where its own date cell sends it. The index is read off `COLUMNS` rather
+	// than written down, and only `version` precedes it - a schema date, which
+	// carries no comma.
+	const dateAt = COLUMNS.indexOf('date');
+	const byDay = new Map();
+	for (const row of [...currentRows, ...longAgoRows]) {
+		const day = row.split(',')[dateAt];
+		const held = byDay.get(day);
+		if (held === undefined) byDay.set(day, [row]);
+		else held.push(row);
+	}
+	for (const [day, dayRows] of byDay) {
+		const target = join(dir, day.slice(0, 4), day.slice(5, 7), `${day.slice(8, 10)}.csv`);
+		mkdirSync(join(dir, day.slice(0, 4), day.slice(5, 7)), { recursive: true });
+		writeFileSync(target, [COLUMNS.join(','), ...dayRows].join('\n') + '\n');
 	}
 }
 

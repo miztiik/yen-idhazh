@@ -10,7 +10,7 @@ import {
 import { axisLabels, centreOffset, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
-import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
+import { readCsv, readDayShards, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
 import { telemetryRow } from './support/telemetry-row';
 
@@ -571,11 +571,9 @@ test('the run that read only the start of an article says so on its own square',
 	// Per run, and only here. Measured 2026-08-29 over 19 committed runs the
 	// count is 1 to 12 articles of 160 to 200 - which is the article mix on that
 	// run, so a published figure would read as the cap moving when nothing did.
-	const dir = join(CANARY, 'state', 'item-health');
-	const rows = readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(dir, name)).rows)
-		.filter((row) => row.date === DAY);
+	const rows = readDayShards(join(CANARY, 'state', 'item-health'), -1).rows.filter(
+		(row) => row.date === DAY
+	);
 	const cutByRun = new Map<string, Set<string>>();
 	for (const row of rows) {
 		if (row.source_words_before_cap === '' || row.source_words === '') continue;
@@ -1730,17 +1728,24 @@ function shardRows(dir: string): Record<string, string>[] {
 		.flatMap((name) => readCsv(join(dir, name)).rows);
 }
 
+/** Every item-health row the canary wrote.
+ *
+ * `state/item-health/` files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this
+ * goes through `readDayShards` - the reader the page's own server uses - rather
+ * than a directory listing here. The comment above `shardRows` names the failure
+ * this avoids: a spec whose fixture silently empties passes for the wrong reason.
+ */
+function healthRows(): Record<string, string>[] {
+	return readDayShards(join(CANARY, 'state', 'item-health'), -1).rows;
+}
+
 function ledgers(date: string): {
 	scores: Record<string, string>[];
 	health: Record<string, string>[];
 } {
-	const health = join(CANARY, 'state', 'item-health');
 	return {
 		scores: shardRows(join(CANARY, 'state', 'scores')).filter((row) => row.date === date),
-		health: readdirSync(health)
-			.filter((name) => name.endsWith('.csv'))
-			.flatMap((name) => readCsv(join(health, name)).rows)
-			.filter((row) => row.date === date)
+		health: healthRows().filter((row) => row.date === date)
 	};
 }
 
@@ -1752,11 +1757,8 @@ function middle(values: number[]): number {
 
 /** Every day the fixture gave the model work on, newest first. */
 function modelDays(): string[] {
-	const health = join(CANARY, 'state', 'item-health');
 	const scored = shardRows(join(CANARY, 'state', 'scores')).map((row) => row.date);
-	const ran = readdirSync(health)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(health, name)).rows)
+	const ran = healthRows()
 		.filter((row) => Number(row.summarize_ms) > 0)
 		.map((row) => row.date);
 	return [...new Set([...scored, ...ran])].sort().reverse();

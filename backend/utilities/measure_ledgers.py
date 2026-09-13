@@ -79,6 +79,7 @@ from typing import Final
 
 from idhazh import config, ledger
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.day_partition import day_files
 from idhazh.extract import TOKENS_PER_WORD
 
 #: The percentile the residual is reported at, beside the median and the two
@@ -121,10 +122,10 @@ def _cell(row: dict[str, str], name: str) -> int | None:
 
 
 def read_items(state_dir: Path) -> list[Item]:
-    """Every committed item-health row, from every month shard."""
+    """Every committed item-health row, from every day file."""
     directory = state_dir / ledger.ITEM_HEALTH_DIRNAME
     items: list[Item] = []
-    for path in sorted(directory.glob("*.csv")):
+    for path in day_files(directory):
         with path.open("r", encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):
                 items.append(

@@ -104,6 +104,32 @@ def day_files(root: Path) -> Iterator[Path]:
                 yield day
 
 
+def month_of(day_file: Path) -> str:
+    """The `<YYYY-MM>` a day file falls in, read off its own path.
+
+    The path is the record, so a caller that has walked the tree never has to
+    open a file to learn which month it belongs to.
+    """
+    return f"{day_file.parent.parent.name}-{day_file.parent.name}"
+
+
+def days_by_month(root: Path) -> dict[str, list[Path]]:
+    """Every day file under `root`, grouped by its month, oldest month first.
+
+    What a monthly consumer of a day-filed store needs: a published mirror and a
+    fold both keep a month boundary while the ledger below them files by day
+    (`docs/concepts/partitions.md`). The grouping is the whole of the bridge, so
+    it is written once here rather than once per consumer.
+
+    `day_files` refuses a name it cannot place, so a store this returns a month
+    for is a store that walked clean.
+    """
+    months: dict[str, list[Path]] = {}
+    for day in day_files(root):
+        months.setdefault(month_of(day), []).append(day)
+    return months
+
+
 def days_in_window(today: str, within_days: int) -> list[str]:
     """The dates a cover of `within_days` names, newest first.
 

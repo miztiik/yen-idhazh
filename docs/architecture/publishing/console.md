@@ -694,7 +694,7 @@ Nothing under `state/` is ever served - the browser reads only the narrow
 projection that drops `canonical_url`, `url_key` and `detail`
 ([telemetry-series.md](telemetry-series.md)).
 
-Stage timing medians read from `state/item-health/<YYYY-MM>.csv`, not from
+Stage timing medians read from `state/item-health/<YYYY>/<MM>/<DD>.csv`, not from
 `state/scores.csv`. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run. The score
 ledger still owns faithfulness and scorer time for the scored subset.

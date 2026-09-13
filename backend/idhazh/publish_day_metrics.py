@@ -119,7 +119,7 @@ def read_score_rows(state_root: Path, date: str) -> list[dict[str, str]]:
 
 
 def read_health_rows(state_root: Path, date: str) -> list[dict[str, str]]:
-    """The committed item-health rows for one day, from that day's month shard alone."""
+    """The committed item-health rows for one day, from that day's own file alone."""
     return _rows_for_date(ledger.item_health_path(state_root, date), date)
 
 

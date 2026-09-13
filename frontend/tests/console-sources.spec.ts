@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { rangeMarks } from '../src/lib/charts/series';
 import { sourceCuts, SOURCE_CUT_ROWS } from '../src/lib/server/model-work';
-import { readCsv } from '../src/lib/server/payload';
+import { readCsv, readDayShards } from '../src/lib/server/payload';
 
 /**
  * Sources cut short, drawn against the cap that cuts them.
@@ -29,12 +29,14 @@ const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
  * and the oracle would be reading whichever came first. */
 const PLOT = '[data-source-cuts="range"]';
 
-/** Every item-health row the canary wrote. */
+/** Every item-health row the canary wrote.
+ *
+ * Through `readDayShards`, the reader the page's own server uses, so a grain
+ * change in the store cannot leave this oracle comparing the page against an
+ * empty set. The ledger files `<YYYY>/<MM>/<DD>.csv`.
+ */
 function ledger(): Record<string, string>[] {
-	const dir = join(CANARY, 'state', 'item-health');
-	return readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(dir, name)).rows);
+	return readDayShards(join(CANARY, 'state', 'item-health'), -1).rows;
 }
 
 interface Article {

@@ -1,9 +1,9 @@
 """One day of one pipeline stage, after the full-grain rows are gone.
 
-`state/item-health/<YYYY-MM>.csv` is the census: one row per planned item per
-run, and the denominator under every rate this project publishes. It is also the
-fastest-growing thing under `state/` - measured 2026-08-30, 1,270,452 bytes for
-six published days, which is 211,742 bytes a day and about 77 MB a year.
+`state/item-health/<YYYY>/<MM>/<DD>.csv` is the census: one row per planned item
+per run, and the denominator under every rate this project publishes. It is also
+the fastest-growing thing under `state/` - measured 2026-08-30, 1,270,452 bytes
+for six published days, which is 211,742 bytes a day and about 77 MB a year.
 
 `observability.item_health_full_grain_months` decides how long that stays
 readable item by item. Past it, a month is folded into this shape and the
@@ -47,7 +47,7 @@ def percentile(sorted_values: list[int], quantile: float) -> int:
 
 
 class TelemetryAggregateRow(Contract):
-    """One `(date, stage)` pair, summarised from the item-health shard."""
+    """One `(date, stage)` pair, summarised from one month of item-health rows."""
 
     __schema_stem__: ClassVar[str] = "telemetry-aggregate-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (

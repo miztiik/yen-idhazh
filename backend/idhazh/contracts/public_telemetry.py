@@ -1,9 +1,11 @@
 """The browser-safe projection of the item-health census.
 
-`state/item-health/<YYYY-MM>.csv` is the census - one row per planned item per
-run - and it carries three cells a reader must never receive. This is the narrow
-shape that does cross, written to `frontend/public/telemetry/<YYYY-MM>.csv` and
-fetched a month at a time as the console pans its viewport.
+`state/item-health/<YYYY>/<MM>/<DD>.csv` is the census - one row per planned item
+per run - and it carries three cells a reader must never receive. This is the
+narrow shape that does cross, written to `frontend/public/telemetry/<YYYY-MM>.csv`
+and fetched a month at a time as the console pans its viewport. The two grains
+differ on purpose: the ledger files by what a run writes, the mirror by what a
+browser fetches (`docs/concepts/partitions.md`).
 
 It is a contract rather than a tuple of names in the writer because the list is
 a trust boundary (Guardrail #11). A projection spelled as strings gains a cell by a

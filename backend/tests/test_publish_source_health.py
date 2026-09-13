@@ -692,6 +692,11 @@ _GAP_OLDER = ("2026-04-10", "2026-05-10", "2026-06-10")
 _GAP_SHORT = COLLECT.model_copy(update={"source_yield_min_complete_days": _GAP_KEEP})
 
 
+def _day_relpath(date: str) -> str:
+    """`<YYYY>/<MM>/<DD>.csv`, relative to the store - what the ledger files by."""
+    return f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+
+
 def _gap_items() -> list[ItemHealthRow]:
     """One source over six recorded dates: the newest three, then older history.
 
@@ -712,7 +717,7 @@ def _gap_items() -> list[ItemHealthRow]:
 
 
 def _write_item_health(state: Path, rows: Sequence[ItemHealthRow]) -> None:
-    """Append each row to the month shard its own date names."""
+    """Append each row to the day file its own date names."""
     by_date: dict[str, list[ItemHealthRow]] = defaultdict(list)
     for row in rows:
         by_date[row.date].append(row)
@@ -772,15 +777,20 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
 
     The bounded-read half of the row: the cost of publishing the view is the same
     on a run whether the project has recorded for three months or for years, so
-    the months older than the selected dates must not be opened at all.
+    the days older than the selected dates must not be opened at all.
+
+    **The day grain makes this exact where it used to be generous.** A month shard
+    held whole months to get at three dates; the ledger now files one CSV a day,
+    so the read opens exactly the `keep` files the selection names.
     """
     state = tmp_path / "state"
     _write_item_health(state, _gap_items())
     opened: list[str] = []
     real = ledger.load_item_health_shard
+    root = state / ledger.ITEM_HEALTH_DIRNAME
 
     def spy(shard: Path) -> list[ItemHealthRow]:
-        opened.append(shard.name)
+        opened.append(shard.relative_to(root).as_posix())
         return real(shard)
 
     monkeypatch.setattr(ledger, "load_item_health_shard", spy)
@@ -795,9 +805,12 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
         state_root=state,
         path=tmp_path / "public" / publish_source_health.PUBLIC_FILENAME,
     )
-    assert set(opened) == {"2026-09.csv", "2026-08.csv", "2026-07.csv"}
-    for older in ("2026-06.csv", "2026-05.csv", "2026-04.csv"):
-        assert older not in opened, f"{older} is behind the window and may not be opened"
+    assert set(opened) == {_day_relpath(date) for date in _GAP_SELECTED}
+    assert len(opened) == _GAP_KEEP, "one file a selected date, and not one more"
+    for older in _GAP_OLDER:
+        assert _day_relpath(older) not in opened, (
+            f"{older} is behind the window and may not be opened"
+        )
 
 
 def test_a_calendar_window_undercounts_the_census_a_recorded_selection_restores(

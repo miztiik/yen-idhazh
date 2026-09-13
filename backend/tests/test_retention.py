@@ -25,7 +25,7 @@ import io
 import json
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Final
@@ -33,7 +33,7 @@ from typing import Any, Final
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import ledger, publish_telemetry, retention, telemetry
+from idhazh import day_partition, ledger, publish_telemetry, retention, telemetry
 from idhazh.cli import main, stage_prune_state, stage_site_weight
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
@@ -1323,21 +1323,37 @@ def item_health_history(state_dir: Path, months: list[str]) -> None:
             ledger.append_item_health(state_dir, day, rows)
 
 
-def totals_from_shard(text: str) -> dict[tuple[str, str], tuple[int, int, int]]:
-    """Rows, failures and total milliseconds per (date, stage), read off the CSV.
+def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, int, int]]:
+    """Rows, failures and total milliseconds per (date, stage), read off the CSVs.
 
     Recomputed here from the raw text rather than by calling `fold_month`, so the
-    oracle cannot pass by agreeing with the code it is checking.
+    oracle cannot pass by agreeing with the code it is checking. It takes a
+    month's day files together, because a month is what one aggregate covers.
     """
     totals: dict[tuple[str, str], tuple[int, int, int]] = {}
-    for row in csv.DictReader(io.StringIO(text)):
-        key = (row["date"], row["stage"])
-        rows, failures, elapsed = totals.get(key, (0, 0, 0))
-        spent = sum(
-            int(row[name]) for name in ("fetch_ms", "extract_ms", "summarize_ms") if row[name]
-        )
-        totals[key] = (rows + 1, failures + (row["outcome"] != "ok"), elapsed + spent)
+    for text in texts:
+        for row in csv.DictReader(io.StringIO(text)):
+            key = (row["date"], row["stage"])
+            rows, failures, elapsed = totals.get(key, (0, 0, 0))
+            spent = sum(
+                int(row[name]) for name in ("fetch_ms", "extract_ms", "summarize_ms") if row[name]
+            )
+            totals[key] = (rows + 1, failures + (row["outcome"] != "ok"), elapsed + spent)
     return totals
+
+
+def item_health_days(state_dir: Path) -> list[Path]:
+    """Every item-health day file, oldest first, through the pipeline's own walk."""
+    return list(day_partition.day_files(state_dir / ledger.ITEM_HEALTH_DIRNAME))
+
+
+def item_health_months(state_dir: Path) -> list[str]:
+    """Which months the item-health day tree still holds, oldest first.
+
+    The boundary the prune works on is still a month; only the files below it are
+    days, so a test about what the prune kept asks in months.
+    """
+    return sorted(day_partition.days_by_month(state_dir / ledger.ITEM_HEALTH_DIRNAME))
 
 
 def totals_from_aggregate(
@@ -1353,13 +1369,18 @@ def a_state_tree(tmp_path: Path) -> Path:
 
 
 def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> None:
-    """Every shard inside the window is byte-identical, and every shard outside is gone."""
+    """Every day inside the window is byte-identical, and every day outside is gone.
+
+    Two-sided on the day files themselves, because that is what the prune now
+    unlinks: an assertion only about months would pass on a month directory left
+    behind holding rows nobody deleted.
+    """
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig()
-    before = {
-        path.stem: path.read_bytes() for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
-    }
-    assert len(before) == HISTORY_MONTHS
+    before = {day: day.read_bytes() for day in item_health_days(state)}
+    assert sorted({day_partition.month_of(day) for day in before}) == months_back(
+        TODAY, HISTORY_MONTHS
+    )
 
     result = prune_telemetry(state, config, TODAY)
 
@@ -1368,14 +1389,23 @@ def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> N
         "a 366-day console read can open fourteen month shards"
     )
     assert kept == "2025-07", "fourteen months ending in August 2026 starts in July 2025"
-    assert list(result.folded) == sorted(stem for stem in before if stem < kept)
+    assert list(result.folded) == sorted(
+        {month for month in months_back(TODAY, HISTORY_MONTHS) if month < kept}
+    )
     assert len(result.folded) == HISTORY_MONTHS - config.item_health_full_grain_months
-    for stem, bytes_before in before.items():
-        shard = ledger.item_health_path(state, f"{stem}-01")
-        if stem < kept:
-            assert not shard.exists(), f"{stem} is past the window and must be gone"
+    expired = [day for day in before if day_partition.month_of(day) < kept]
+    assert expired, "the fixture has to reach past the window or this proves nothing"
+    for day, bytes_before in before.items():
+        if day_partition.month_of(day) < kept:
+            assert not day.exists(), f"{day.name} is past the window and must be gone"
         else:
-            assert shard.read_bytes() == bytes_before, f"{stem} is inside the window"
+            assert day.read_bytes() == bytes_before, f"{day.name} is inside the window"
+    assert item_health_months(state) == [
+        month for month in months_back(TODAY, HISTORY_MONTHS) if month >= kept
+    ]
+    # The emptied month and year directories go with their files. A walk that
+    # kept them would cost more every year while the rows it reads are deleted.
+    assert not expired[0].parent.exists()
 
 
 def test_the_fold_loses_no_total(tmp_path: Path) -> None:
@@ -1383,19 +1413,19 @@ def test_the_fold_loses_no_total(tmp_path: Path) -> None:
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig()
     kept = oldest_month_kept(TODAY, config.item_health_full_grain_months)
-    doomed = {
-        path.stem: path.read_text(encoding="utf-8")
-        for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
-        if path.stem < kept
-    }
+    doomed: dict[str, list[str]] = {}
+    for day in item_health_days(state):
+        month = day_partition.month_of(day)
+        if month < kept:
+            doomed.setdefault(month, []).append(day.read_text(encoding="utf-8"))
     assert doomed, "the fixture has to reach past the window or this proves nothing"
 
     prune_telemetry(state, config, TODAY)
 
-    for stem, text in doomed.items():
-        folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, stem))
-        assert totals_from_aggregate(folded) == totals_from_shard(text), (
-            f"{stem} lost a total in the fold"
+    for month, texts in doomed.items():
+        folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, month))
+        assert totals_from_aggregate(folded) == totals_from_shard(texts), (
+            f"{month} lost a total in the fold"
         )
 
 
@@ -1552,6 +1582,49 @@ NOT_MONTHS: Final = (
 OTHER_STRAYS: Final = ("notes", "2025-1", "README", "2025-01.csv")
 
 
+def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: Path) -> None:
+    """The row's oracle, on a tree built to hold exactly the two cases.
+
+    One day inside `observability.item_health_full_grain_months` and one day
+    outside it, `dry_run=False` passed as the argument every prune function
+    already takes. The assertion is two-sided on purpose: "nothing failed", or
+    "`folded` is a tuple", passes on an EMPTY tree - and an empty tree is exactly
+    what `retention.month_shards` returns over a day store, because it matches a
+    seven-character `YYYY-MM` stem and a day tree has none. The store would
+    silently stop being pruned and nothing would fail.
+
+    The fold is the other half: the aggregate is written and read back before a
+    day file is unlinked, so the expired day's rows survive as totals rather than
+    being deleted on the strength of a write nobody checked.
+
+    `retention.dry_run` in `config/idhazh.json` never enters this - it is read by
+    the CLI stage alone, so the pruner under test is not switched off.
+    """
+    state = tmp_path / "state"
+    config = ObservabilityConfig()
+    keep_from = oldest_month_kept(TODAY, config.item_health_full_grain_months)
+    expired_day = f"{months_back(TODAY, config.item_health_full_grain_months + 1)[0]}-09"
+    kept_day = f"{keep_from}-09"
+    assert expired_day[:7] < keep_from <= kept_day[:7], "the fixture must straddle the boundary"
+    for day in (expired_day, kept_day):
+        ledger.append_item_health(
+            state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
+        )
+    expired_path = ledger.item_health_path(state, expired_day)
+    kept_path = ledger.item_health_path(state, kept_day)
+    expired_text = expired_path.read_text(encoding="utf-8")
+    assert expired_path.exists() and kept_path.exists()
+
+    result = prune_telemetry(state, config, TODAY, dry_run=False)
+
+    assert not expired_path.exists(), "the expired day is still there, so nothing was pruned"
+    assert kept_path.exists(), "the day inside the window was deleted"
+    assert list(result.folded) == [expired_day[:7]]
+    assert item_health_months(state) == [kept_day[:7]]
+    folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, expired_day[:7]))
+    assert totals_from_aggregate(folded) == totals_from_shard([expired_text])
+
+
 def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
     """One rule for four directories. They used to carry three.
 
@@ -1562,9 +1635,9 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
     state = tmp_path / "state"
     readers: dict[str, tuple[Path, str, Callable[[], list[Path]]]] = {
         "retention.month_shards": (
-            state / ledger.ITEM_HEALTH_DIRNAME,
+            state / ledger.TELEMETRY_AGGREGATE_DIRNAME,
             ".csv",
-            lambda: month_shards(state / ledger.ITEM_HEALTH_DIRNAME),
+            lambda: month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME),
         ),
         "evals.writer.ledger_shards": (
             state / score_writer.LEDGER_DIRNAME,
@@ -1594,7 +1667,7 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
 
 def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
     """A directory this deletes from names what it recognises, never the rest."""
-    directory = tmp_path / "state" / ledger.ITEM_HEALTH_DIRNAME
+    directory = tmp_path / "state" / ledger.TELEMETRY_AGGREGATE_DIRNAME
     directory.mkdir(parents=True)
     for stem in ("2025-01", *NOT_MONTHS, *OTHER_STRAYS):
         (directory / f"{stem}.csv").write_text("header\n", encoding="utf-8")
@@ -1724,9 +1797,10 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
     state, public = a_published_tree(tmp_path)
     config = ObservabilityConfig()
     doomed = [
-        path
-        for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
-        if path.stem < oldest_month_kept(TODAY, config.item_health_full_grain_months)
+        day
+        for day in item_health_days(state)
+        if day_partition.month_of(day)
+        < oldest_month_kept(TODAY, config.item_health_full_grain_months)
     ]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
     monkeypatch.setattr(ledger, "load_telemetry_aggregate", lambda _path: [])
@@ -1734,8 +1808,8 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
     with pytest.raises(ValueError, match="did not read back"):
         prune_telemetry(state, config, TODAY, public_root=public)
 
-    assert doomed[0].exists(), "the first shard was unlinked after an unverified write"
-    assert publish_telemetry.shard_path(public, doomed[0].stem).exists()
+    assert doomed[0].exists(), "the first day file was unlinked after an unverified write"
+    assert publish_telemetry.shard_path(public, day_partition.month_of(doomed[0])).exists()
     assert len(month_shards(public)) == HISTORY_MONTHS
 
 
@@ -1893,7 +1967,11 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     feed_health_history(state, months)
     public = tmp_path / "frontend" / "public" / "telemetry"
     publish_telemetry.publish(state_root=state, public_root=public)
-    doomed_text = ledger.item_health_path(state, f"{expired}-01").read_text(encoding="utf-8")
+    doomed_texts = [
+        day.read_text(encoding="utf-8")
+        for day in item_health_days(state)
+        if day_partition.month_of(day) == expired
+    ]
 
     first = stage_prune_state(
         observability=config,
@@ -1906,7 +1984,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     )
     assert first == 0
 
-    assert [path.stem for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)] == survivors
+    assert item_health_months(state) == survivors
     assert [path.stem for path in month_shards(public)] == survivors
     assert [path.stem for path in month_shards(state / ledger.HEALTH_DIRNAME)] == survivors
     assert len(survivors) == 14
@@ -1918,7 +1996,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
         expired
     ]
     assert totals_from_aggregate(ledger.load_telemetry_aggregate(aggregate)) == totals_from_shard(
-        doomed_text
+        doomed_texts
     )
     assert not publish_telemetry.shard_path(public, expired).exists()
     assert not ledger.health_path(state, f"{expired}-01").exists()
@@ -1998,15 +2076,25 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
         for line in caplog.text.splitlines()
         if "prune-state would remove " in line and not line.endswith("files:")
     )
+    # Every day file the fold would take, named one by one. The month has two, so
+    # a list that named `<month>-01` would print a path the ledger never held and
+    # miss the one it did - and the dry run's whole deliverable is that its list
+    # equals what a live run removes, file for file.
+    expired_days = [
+        day.relative_to(state.parent).as_posix()
+        for day in item_health_days(state)
+        if day_partition.month_of(day) == expired
+    ]
+    assert len(expired_days) == 2, "the fixture writes two days a month"
     assert named == sorted(
         [
-            f"state/item-health/{expired}.csv",
+            *expired_days,
             f"state/feed-health/{expired}.csv",
             f"frontend/public/telemetry/{expired}.csv",
         ]
     )
     assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
-    assert ledger.item_health_path(state, f"{expired}-01").exists()
+    assert all((state.parent / relpath).exists() for relpath in expired_days)
     assert publish_telemetry.shard_path(public, expired).exists()
     assert ledger.health_path(state, f"{expired}-11").exists()
 

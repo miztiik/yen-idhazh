@@ -40,9 +40,12 @@ See
 `state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
 row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
 
-`state/item-health/<YYYY-MM>.csv` answers "what did every planned item do?" One
-row per planned item per run - the fastest-growing of the four. The console
-reads it a month at a time through the published projection, so it shards.
+`state/item-health/<YYYY>/<MM>/<DD>.csv` answers "what did every planned item
+do?" One row per planned item per run - the fastest-growing of the four. It
+files by day, because a run writes one day and taking a day back is one `rm`.
+The console reads it a month at a time through the published projection, which
+stays monthly: `publish_telemetry.publish` folds a month from that month's day
+files.
 
 `state/runtime-counters.csv` answers "what did the model server itself count?"
 One row per model-server job per shard per run - the `work` job files one for
@@ -54,11 +57,10 @@ a year is about 16,400.
 
 `state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health
 month once `observability.item_health_full_grain_months` has passed: one row per
-(date, stage), folded by `retention.fold_month`. It shards by month because the
-shard it replaces did, so the two file by the same stem and a reader looking for
-a month looks in one of two places rather than in a directory and a lookup
-table. It is the one file here that is rewritten rather than appended, because
-every row in it is derived from the shard it summarises.
+(date, stage), folded by `retention.fold_month`. It files by month because it
+summarises a month - a day file of a month's totals is a shape nothing consumes.
+It is the one file here that is rewritten rather than appended, because every row
+in it is derived from the days it summarises.
 
 `state/feed-retirements.csv` answers "is this address gone for good?" One row
 per retired feed endpoint, read whole because a retirement has no time bound -
@@ -222,12 +224,21 @@ def health_path(state_dir: Path, date: str) -> Path:
 
 
 def item_health_relpath(date: str) -> str:
-    """`state/item-health/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{ITEM_HEALTH_DIRNAME}/{date[:7]}.csv"
+    """`state/item-health/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{ITEM_HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
 
 
 def item_health_path(state_dir: Path, date: str) -> Path:
-    return state_dir / ITEM_HEALTH_DIRNAME / f"{date[:7]}.csv"
+    """The day file a run on this date appends to.
+
+    A day rather than a month, for the reason `published_path` gives: a run
+    writes one day, two runs collide on a file only when they are the same day,
+    and taking a day back is one `rm` rather than an edit inside a shared shard,
+    which `merge=union` cannot express. The mirror under
+    `frontend/public/telemetry/` stays monthly, because its grain follows what a
+    browser fetches - see `docs/concepts/partitions.md`.
+    """
+    return state_dir / ITEM_HEALTH_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def telemetry_aggregate_relpath(month: str) -> str:
@@ -238,10 +249,11 @@ def telemetry_aggregate_relpath(month: str) -> str:
 def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
     """Where the folded summary of one item-health month lives.
 
-    Its own directory rather than a second filename inside `item-health/`,
-    because `publish_telemetry.publish` globs that directory for month shards
-    and reads every file it finds as a full-grain row - the aggregate is a
-    different shape and would fail that read.
+    Its own directory rather than a second name inside `item-health/`, because
+    `day_partition.day_files` refuses anything that is not a `<YYYY>/<MM>/<DD>.csv`
+    - a month file beside the day tree would stop every read of the store rather
+    than be skipped. The shape differs too: the aggregate is a fold, not a census
+    row.
     """
     return state_dir / TELEMETRY_AGGREGATE_DIRNAME / f"{month}.csv"
 
@@ -254,10 +266,10 @@ def span_rollup_relpath(month: str) -> str:
 def span_rollup_path(state_dir: Path, month: str) -> Path:
     """Where one month's folded span counts live.
 
-    Its own directory rather than a filename beside the item-health shards, for
-    the reason `telemetry_aggregate_path` gives: a reader that globs a directory
-    for month shards reads every file it finds as that directory's shape, and the
-    rollup is a different shape from a census row.
+    Its own directory rather than a filename beside another store's shards, for
+    the reason `telemetry_aggregate_path` gives: a reader that walks a directory
+    reads every file it finds as that directory's shape, and the rollup is a
+    different shape from a census row.
     """
     return state_dir / SPAN_ROLLUP_DIRNAME / f"{month}.csv"
 
@@ -606,10 +618,10 @@ def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]
 
 
 def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
-    """Every planned item this month's shard already has a verdict for.
+    """Every planned item this day's file already has a verdict for.
 
-    A missing file is a shard with no history, which is what the first run of a
-    month has.
+    A missing file is a day with no history, which is what the first run of a
+    day has.
     """
     return {tuple(row[name] for name in ITEM_HEALTH_KEY) for row in _read_rows(path)}
 
@@ -814,7 +826,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
         *((path, FEED_HEALTH_KEY) for path in sorted((state_dir / HEALTH_DIRNAME).glob("*.csv"))),
         *(
             (path, ITEM_HEALTH_KEY)
-            for path in sorted((state_dir / ITEM_HEALTH_DIRNAME).glob("*.csv"))
+            for path in day_partition.day_files(state_dir / ITEM_HEALTH_DIRNAME)
         ),
     ]
 
@@ -903,18 +915,23 @@ def repeated_keys(path: Path, key: tuple[str, ...]) -> dict[tuple[str, ...], int
 
 
 def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
-    """Every row of one month's full-grain shard. Empty for a month never written."""
+    """Every row of one full-grain partition. Empty for a day never written."""
     return [ItemHealthRow.from_csv_row(row) for row in _read_rows(path)]
 
 
 def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[ItemHealthRow]:
-    """Every item-health row in the window, oldest shard first.
+    """Every item-health row in the window, oldest day first.
 
     Bounded for the same reason `load_health` is (Guardrail #12): this is the
     fastest-growing ledger in the repository and a run appends to it five times
-    a day, so a reader that globbed every shard would cost more every run for an
-    answer about the last few weeks. `shards_in_window` is the pruner's own
-    helper, so a shard this opens is a shard the pruner keeps.
+    a day, so a reader that walked every partition would cost more every run for
+    an answer about the last few weeks. `day_partition.days_in_window` names both
+    ends, so a cover of `n` days opens at most `n + 1` files and reads exactly
+    those days - where the month shards it replaced could hold up to 120 days of
+    rows behind a 90-day cover.
+
+    A day the ledger never recorded has no file, which is not a fault: a run that
+    planned nothing that day wrote nothing that day.
 
     A row that no longer parses is fatal here rather than skipped, which is the
     opposite of `load_health` and deliberate: a census divides by these rows, so
@@ -922,8 +939,8 @@ def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[I
     evidence.
     """
     rows: list[ItemHealthRow] = []
-    for stem in reversed(shards_in_window(today, within_days)):
-        rows.extend(load_item_health_shard(state_dir / ITEM_HEALTH_DIRNAME / f"{stem}.csv"))
+    for day in reversed(day_partition.days_in_window(today, within_days)):
+        rows.extend(load_item_health_shard(item_health_path(state_dir, day)))
     return rows
 
 

@@ -56,7 +56,7 @@ The shapes, and where each one lives once written:
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
-| `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
+| `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY>/<MM>/<DD>.csv` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
@@ -141,7 +141,7 @@ mirrors the digest tree its rows are derived from.
 | --- | --- | --- | --- |
 | `state/seen/` | monthly shards | how old is this address? | yes, `collect.seen_window_days` |
 | `state/feed-health/` | monthly shards | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
-| `state/item-health/` | monthly shards | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and fetches month shards |
+| `state/item-health/` | day files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and the read opens the days it names |
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
 | `state/fingerprints.csv` | one file | what did this run open? - retired 2026-09-12; the run record answers it | no |
@@ -156,10 +156,19 @@ mirrors the digest tree its rows are derived from.
 
 A window turns a shard into a skipped file open. `ledger.shards_in_window`
 walks the days the window can touch and opens only those stems, so a plan run
-reads one or two files instead of every month the project has ever written. The
-item-health shard boundary survives all the way to the browser: the projection
-under `frontend/public/telemetry/` is written one file per month, so the console
-fetches the months its window covers and no more.
+reads one or two files instead of every month the project has ever written.
+`day_partition.days_in_window` is the same rule one grain down, and it is exact
+where the month version is generous: a 90-day cover over `state/item-health/`
+opens 91 day files and reads 90 days of rows, where four month shards could hold
+up to 120 days of them.
+
+**A store and its published mirror may file at different grains, and
+`state/item-health/` is the worked example.** The ledger files by day because a
+run writes one day; the projection under `frontend/public/telemetry/` stays
+monthly because the console prices a window in the files a browser fetches. The
+publisher is the bridge: it folds a month from that month's day files, reading at
+most 31. Both rules and what the bridge costs are in
+[../../concepts/partitions.md](../../concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains).
 
 Without a window, sharding is a cost with no matching saving. A question with no
 time bound has to read every row, so every shard gets opened anyway - the same
@@ -175,9 +184,10 @@ Two consequences worth stating so nobody re-derives them:
  neither does.
 - **A monthly shard is not the only shard period available.** A ledger whose
  month file grows past what a reader should download moves to a shorter period
- (`YYYY-Www.csv`) rather than losing rows - see
- [../sources/item-health.md](../sources/item-health.md). The readers glob the
- directory, so the period is a layout change and not a contract change.
+ rather than losing rows - `state/item-health/` did exactly that on 2026-09-13,
+ from `<YYYY-MM>.csv` to `<YYYY>/<MM>/<DD>.csv`. The readers walk the tree, so
+ the period is a layout change and not a contract change; see
+ [../sources/item-health.md](../sources/item-health.md).
 
 **The four single files above are deliberately unsharded, and the burden is on a
 change that shards one.** `state/fingerprints.csv`, `state/runtime-counters.csv`,

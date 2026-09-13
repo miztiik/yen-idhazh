@@ -113,13 +113,14 @@ def rebuild(root: Path, date: str) -> None:
 
     # Two of the three ledgers append blind, as `ledger._append` does: a row is
     # a fact about a run, and a run that runs twice records twice. The published
-    # one is filed under the day it names, as `ledger.append_published` does.
+    # one and the item-health one are filed under the day they name, as
+    # `ledger.append_published` and `ledger.append_item_health` do.
     published_path = root / "state" / "published" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
     published = _read_rows(published_path)
     published += [{"item_id": item, "published_on": date} for item in mine]
     _write_rows(published_path, PUBLISHED_COLUMNS, published)
 
-    health_path = root / "state" / "item-health" / f"{month}.csv"
+    health_path = root / "state" / "item-health" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
     health = _read_rows(health_path)
     health += [{"date": date, "item_id": item, "outcome": "published"} for item in mine]
     _write_rows(health_path, HEALTH_COLUMNS, health)
@@ -131,10 +132,13 @@ def rebuild(root: Path, date: str) -> None:
     scores += [{"item_id": item, "hhem": "0.900"} for item in mine if item not in already]
     _write_rows(root / "state" / "scores" / "2026-08.csv", SCORE_COLUMNS, scores)
 
-    # The public projection is a full rewrite of the item-health ledger, never a
-    # merge of two of them.
+    # The public projection is a full rewrite of the month the day falls in,
+    # folded from that month's day files, never a merge of two of them.
+    month_days = sorted((root / "state" / "item-health" / date[:4] / date[5:7]).glob("*.csv"))
     _write_rows(
-        root / "frontend" / "public" / "telemetry" / f"{month}.csv", HEALTH_COLUMNS, health
+        root / "frontend" / "public" / "telemetry" / f"{month}.csv",
+        HEALTH_COLUMNS,
+        [row for day in month_days for row in _read_rows(day)],
     )
 
     # The month search index is derived from the days on disk, so it is rebuilt

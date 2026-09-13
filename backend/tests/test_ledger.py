@@ -1495,7 +1495,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
         (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
         (f"feed-health/{DATE[:7]}.csv", ledger.FEED_HEALTH_KEY),
-        (f"item-health/{DATE[:7]}.csv", ledger.ITEM_HEALTH_KEY),
+        (f"item-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.ITEM_HEALTH_KEY),
     ]
 
     every = ledger.keyed_paths(tmp_path, date=None)

@@ -164,11 +164,11 @@ Authority: owner, 2026-09-06.
 | Collection | Path pattern | Writer | What makes a partition closed |
 | --- | --- | --- | --- |
 | Eval ledger | `state/scores/<YYYY-MM>.csv` | `evals.writer.append` | It files each row by the row's own `date`, so a month is closed once no row being written names a date inside it. A run either side of midnight writes two shards and neither is wrong. |
-| Item health | `state/item-health/<YYYY-MM>.csv` | `ledger.append_item_health` | It takes one date and appends to that month alone, filtering against `ITEM_HEALTH_KEY` in that one shard. Closed once the run's date leaves the month. |
+| Item health | `state/item-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_item_health` | Partitioned by **day** since 2026-09-13. It takes one date and appends to that day alone, filtering against `ITEM_HEALTH_KEY` in that one file. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which `merge=union` cannot express. |
 | Feed health | `state/feed-health/<YYYY-MM>.csv` | `ledger.append_health` | The same one-date append, then it settles that one shard against `FEED_HEALTH_KEY`. The current month is the only file it rewrites. |
 | Seen addresses | `state/seen/<YYYY-MM>.csv` | `ledger.append_seen` | The same one-date append. Closed once the run's date leaves the month. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
-| Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.fold_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). Closed the moment it is written - the shard it summarises is gone, so there is nothing left to append. No file is committed yet. |
+| Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.fold_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the fold is where the two grains meet, reading at most 31 day files and writing one. Closed the moment it is written; the days it summarises are gone, so there is nothing left to append. No file is committed yet. |
 | Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of the shard. Closed the moment it is written. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `cli.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
@@ -191,6 +191,37 @@ closed it in #484: the writer now takes the row above, writing only the months a
 caller names as changed and rewriting a named month only when its bytes differ.
 What it writes, and how the two freezes compose, is
 [in the telemetry doc](../architecture/publishing/telemetry-series.md#published-shards).
+
+## A store and its mirror may file at different grains
+
+**`state/item-health/` files by day and `frontend/public/telemetry/` files by
+month, and neither is a mistake.** They answer different questions, so they take
+their grain from different things.
+
+- **A `state/` store's grain follows what a run writes and what a removal takes
+ away.** A run writes one day, two runs collide on a file only when they are the
+ same day, and taking a day back is one `rm` rather than an edit inside a shared
+ shard - which `merge=union` cannot express.
+- **A `frontend/public/` mirror's grain follows what a browser fetches.** The
+ console prices a window in files: `console.window_presets` ends at 90, and
+ `WindowControl.svelte` tells the operator how many files a preset costs. At
+ month grain the widest preset fetches five; at day grain it would fetch ninety.
+
+**So somebody has to bridge them, and it is the publisher.**
+`publish_telemetry.publish` folds a month from that month's day files through
+`day_partition.days_by_month`, and `retention.prune_telemetry` folds and deletes
+on the same boundary. A month's input is at most 31 files, so the bridge is a
+store-bounded read rather than a growing one.
+
+What the day grain costs, stated rather than implied: the unbounded arm of
+`publish_telemetry.publish` opens about thirty times as many file handles for the
+same rows, and every listing of the store names one entry a recorded day instead
+of one a month. What it buys is the two properties in the first bullet, and a
+windowed read that opens exactly the days it names - where a 90-day cover over
+month shards opened files holding up to 120 days of rows.
+
+Authority: owner, 2026-09-10; [`20260910-24-day-sharded-ledgers-plan.md`](../../TODO/20260910-24-day-sharded-ledgers-plan.md)
+section 0.2.
 
 ## The four cases an append-only pattern gets wrong
 

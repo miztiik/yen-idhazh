@@ -27,7 +27,7 @@ import {
 	frame,
 	readoutCapStyle
 } from '../src/lib/charts/frame';
-import { readCsv } from '../src/lib/server/payload';
+import { readCsv, readDayShards } from '../src/lib/server/payload';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -433,12 +433,13 @@ test.describe('the coverage sentence', () => {
 	});
 });
 
-/** Every item-health row the canary wrote. */
+/** Every item-health row the canary wrote.
+ *
+ * Through `readDayShards`, the reader the page's own server uses, so a grain
+ * change in the store cannot leave this comparing the page against an empty set.
+ */
 function ledger(): Record<string, string>[] {
-	const dir = join(REPO, 'backend', 'var', 'canary', 'state', 'item-health');
-	return readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(dir, name)).rows);
+	return readDayShards(join(REPO, 'backend', 'var', 'canary', 'state', 'item-health'), -1).rows;
 }
 
 const STAGES = ['fetch_ms', 'extract_ms', 'summarize_ms'] as const;

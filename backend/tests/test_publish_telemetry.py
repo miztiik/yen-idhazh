@@ -60,12 +60,23 @@ def _row(**overrides: object) -> ItemHealthRow:
 
 
 def _write_item_health(state: Path, rows: list[ItemHealthRow]) -> None:
-    path = state / "item-health" / "2026-08.csv"
-    path.parent.mkdir(parents=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=ItemHealthRow.csv_columns(), lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(row.csv_row() for row in rows)
+    """File each row in its own day's file, the way `append_item_health` does.
+
+    A day already written is replaced whole, so a fixture that re-states a day is
+    a correction rather than a second copy of it.
+    """
+    by_day: dict[str, list[ItemHealthRow]] = {}
+    for row in rows:
+        by_day.setdefault(row.date, []).append(row)
+    for date, day_rows in by_day.items():
+        path = state / "item-health" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=ItemHealthRow.csv_columns(), lineterminator="\n"
+            )
+            writer.writeheader()
+            writer.writerows(row.csv_row() for row in day_rows)
 
 
 def test_publish_telemetry_drops_url_keys_urls_and_detail(tmp_path: Path) -> None:
@@ -312,12 +323,15 @@ def test_a_published_failure_without_a_reason_is_refused() -> None:
 
 
 def _month_shard(state: Path, month: str, rows: list[ItemHealthRow]) -> None:
-    path = state / "item-health" / f"{month}.csv"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=ItemHealthRow.csv_columns(), lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(row.csv_row() for row in rows)
+    """One month of the ledger, as the day files that month really holds.
+
+    Named for the month because the mirror this feeds is still monthly: the
+    publisher folds a month from its day files, so a test about which months are
+    written states its fixture in months and the writer spreads it (`month` is
+    asserted against the rows so a fixture cannot drift from its own name).
+    """
+    assert all(row.date[:7] == month for row in rows), "a row outside the month it is filed under"
+    _write_item_health(state, rows)
 
 
 _OPENED: list[str] = []
@@ -357,7 +371,13 @@ def _partitions_opened(source_dir: Path) -> Iterator[list[str]]:
     finally:
         _WATCHING = False
         prefix = str(source_dir)
-        names.extend(sorted(Path(path).name for path in _OPENED if path.startswith(prefix)))
+        names.extend(
+            sorted(
+                Path(path).relative_to(source_dir).as_posix()
+                for path in _OPENED
+                if path.startswith(prefix)
+            )
+        )
         _OPENED.clear()
 
 
@@ -365,10 +385,16 @@ def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
     """The two arms of the cover, counted in file handles rather than timed.
 
     The daily caller passes the one month it appended to, so the ordinary pass
-    opens one partition whatever the ledger holds - twelve here. `months=None`
-    opens all twelve, which is the unbounded arm the module's own docstring
-    declares, and it is unbounded on purpose: a fresh clone has to rebuild a
-    mirror it never published.
+    opens that month's days and nothing else - one day file here, out of twelve
+    months of them. `months=None` opens all twelve, which is the unbounded arm the
+    module's own docstring declares, and it is unbounded on purpose: a fresh clone
+    has to rebuild a mirror it never published.
+
+    **This is the count the day grain moves**, and the test states it rather than
+    hiding it: a month is now a directory of day files, so the backfill's handle
+    count is the ledger's DAY count where it used to be its month count. The
+    fixture gives each month one day so the two numbers can still be compared; the
+    committed ledger gives a month about thirty.
 
     The backfill has to run first, because a month whose mirror is missing is
     read whatever the caller asked for. That is the same escape the fresh clone
@@ -386,8 +412,8 @@ def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
     with _partitions_opened(source_dir) as daily:
         publish(state_root=state, public_root=public, months={"2026-09"})
 
-    assert backfill == [f"{month}.csv" for month in months]
-    assert daily == ["2026-09.csv"]
+    assert backfill == [f"2026/{month:02d}/05.csv" for month in range(1, 13)]
+    assert daily == ["2026/09/05.csv"]
 
 
 def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path) -> None:

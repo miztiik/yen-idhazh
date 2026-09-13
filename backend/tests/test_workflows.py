@@ -3238,9 +3238,11 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     is the file that decides, and a second implementation of its globbing could
     agree with this test and disagree with the merge.
     """
-    # The file each staged path resolves to. A directory is monthly shards.
+    # The file each staged path resolves to. `state/item-health/` files by day
+    # and the other two directories by month, so the union driver has to reach
+    # both shapes - `state/**/*.csv` is the attribute line that does it.
     written = {
-        "state/item-health": f"state/item-health/{SUBSTITUTED_DATE[:7]}.csv",
+        "state/item-health": ledger.item_health_relpath(SUBSTITUTED_DATE),
         "state/scores": f"state/scores/{SUBSTITUTED_DATE[:7]}.csv",
         "state/score-index": f"state/score-index/{SUBSTITUTED_DATE[:7]}.csv",
         "state/runtime-counters.csv": "state/runtime-counters.csv",
@@ -3783,7 +3785,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
 
     published = _rows(_git(origin, env, "show", f"main:{ledger.published_relpath(date)}"))
     scores = _rows(_git(origin, env, "show", f"main:state/scores/{month}.csv"))
-    health = _rows(_git(origin, env, "show", f"main:state/item-health/{month}.csv"))
+    health = _rows(_git(origin, env, "show", f"main:{ledger.item_health_relpath(date)}"))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
     # Exactly once each. Two of these ledgers append blind, so a rebuild against
     # a base that already held this run's rows would show five items and seven

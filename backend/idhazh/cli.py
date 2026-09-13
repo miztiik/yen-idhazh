@@ -3175,12 +3175,12 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
     `DROP_REPEATED_ROWS_COMMAND`, between the rebase and the push.
 
     **`date` names the run, and that is the whole cover.** A run appends only to
-    the shard its own date routes to, so a repeat the merge left can only be in a
+    the file its own date routes to, so a repeat the merge left can only be in a
     file this run wrote - and the ordinary pass reads six files whether the
     archive holds one month or sixty. It used to glob every feed-health shard,
-    every item-health shard and every score shard, which charged each run for
+    every item-health partition and every score shard, which charged each run for
     every month the pipeline had ever recorded and found nothing, because a
-    finished month was settled when it was written and cannot change again
+    finished partition was settled when it was written and cannot change again
     (Guardrail #12).
 
     **`date=None` is the operator's full pass, and it is the one that pays for
@@ -3303,6 +3303,10 @@ def stage_prune_state(
     and every score month past its full-grain window. Then clean the rendered
     visuals the archive policy has aged out, and record what that pass found.
 
+    The item-health boundary is still a month, and only the files below it are
+    days: `retention.prune_telemetry` folds a month whole from that month's day
+    files and then unlinks them.
+
     Six stores, one step, because they share the one property that makes this
     safe: all of it runs after the day is committed, and none of it can cost a
     reader anything it has not already been given.
@@ -3377,7 +3381,7 @@ def stage_prune_state(
             ", ".join(result.public_deleted) or "no month",
             ", ".join(result.hard_deleted) or "no month",
         )
-        removed += [ledger.item_health_relpath(f"{stem}-01") for stem in result.folded]
+        removed += list(result.days_removed)
         removed += [publish_telemetry.shard_relpath(stem) for stem in result.public_deleted]
         removed += [
             ledger.telemetry_aggregate_relpath(stem) for stem in result.hard_deleted

@@ -682,7 +682,7 @@ row is a judgement.
 
 **The source is a join, and the join is printed when it fails.** The eval ledger
 records the address and the title and never the feed, so a summary reaches a
-source through `url_key` on `state/item-health/<YYYY-MM>.csv`. Measured
+source through `url_key` on `state/item-health/<YYYY>/<MM>/<DD>.csv`. Measured
 2026-09-01 over the committed ledgers, 3,959 of 4,110 scored rows join, and every
 day from 2026-08-24 joins at 100 percent - the 151 that do not are the two oldest
 scored days, written before item-health carried them. Rows that do not join are
@@ -1562,7 +1562,7 @@ summaries the checker doubted, the three doubt signals apart, summaries outside
 the length the prompt asked for, and the two token rates.
 
 **A measure only one side recorded is named, never drawn.** Both token rates
-arrived on `state/item-health/<YYYY-MM>.csv` part way through its life, so a
+arrived on `state/item-health/<YYYY>/<MM>/<DD>.csv` part way through its life, so a
 boundary older than that has nothing on the left. Drawing a track from an absent
 value would be a claim about a run nobody instrumented, so those rows print as a
 sentence under the plot saying which side is missing. Zero and absent are not

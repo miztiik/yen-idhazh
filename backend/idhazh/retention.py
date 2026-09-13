@@ -133,7 +133,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NoReturn
 
-from idhazh import ledger, month_partition, publish_telemetry, telemetry
+from idhazh import day_partition, ledger, month_partition, publish_telemetry, telemetry
 from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
@@ -727,6 +727,13 @@ class TelemetryPruneResult:
     rows_folded: int
     aggregate_rows: int
     hard_deleted: tuple[str, ...]
+    #: Every `state/item-health/<YYYY>/<MM>/<DD>.csv` the fold took, POSIX and
+    #: relative to the repository, oldest first. Carried rather than derived from
+    #: `folded`, because a month is a directory of day files now: a caller that
+    #: spelled `<month>-01` would name a file the ledger may never have held, and
+    #: the list a dry run prints has to be the list a live run removes, file for
+    #: file.
+    days_removed: tuple[str, ...]
     #: Months whose browser copy under `frontend/public/telemetry/` went. Named
     #: apart from `folded` because the two sets come apart: a copy whose source
     #: month an earlier interrupted run already folded away is deleted here with
@@ -755,6 +762,20 @@ def _expired_public_copies(public_root: Path | None, boundary: str) -> tuple[str
     return tuple(copy.stem for copy in month_shards(public_root) if copy.stem < boundary)
 
 
+def _drop_empty_day_dirs(day: Path) -> None:
+    """Remove the month and year directory a deleted day file leaves behind.
+
+    Not tidiness: `day_partition.day_files` walks every year and month directory
+    it finds, so a prune that left them would make the walk cost more each year
+    while deleting the rows that walk exists to read.
+    """
+    for directory in (day.parent, day.parent.parent):
+        try:
+            directory.rmdir()
+        except OSError:
+            return
+
+
 def prune_telemetry(
     state_dir: Path,
     config: ObservabilityConfig,
@@ -763,12 +784,17 @@ def prune_telemetry(
     public_root: Path | None = None,
     dry_run: bool = False,
 ) -> TelemetryPruneResult:
-    """Fold every out-of-window item-health month, then delete the shard and its copy.
+    """Fold every out-of-window item-health month, then delete its days and its copy.
+
+    The ledger files by day and the aggregate that replaces it files by month, so
+    this is where the two grains meet: `day_partition.days_by_month` groups the
+    day files, and a month is folded whole or not at all. A month's input is at
+    most 31 files, so the fold stays a store-bounded read.
 
     Order matters and it is the whole safety argument: the aggregate is written
-    and read back before the full-grain shard is unlinked, and the browser's copy
-    of that month is unlinked only after the shard it copies. Nothing is deleted
-    on the strength of a write nobody checked.
+    and read back before a single day file is unlinked, and the browser's copy of
+    that month is unlinked only after the days it copies. Nothing is deleted on
+    the strength of a write nobody checked.
 
     `public_root` is `frontend/public/telemetry/`. None means there is no site
     beside this state tree, so there is no copy to consider - and it is the
@@ -785,34 +811,42 @@ def prune_telemetry(
         public_root, oldest_month_kept(today, config.public_telemetry_keep_months)
     )
     folded: list[str] = []
+    days_removed: list[str] = []
     rows_folded = 0
     aggregate_rows = 0
 
-    for shard in month_shards(state_dir / ledger.ITEM_HEALTH_DIRNAME):
-        if shard.stem >= keep_from:
+    by_month = day_partition.days_by_month(state_dir / ledger.ITEM_HEALTH_DIRNAME)
+    for month in sorted(by_month):
+        if month >= keep_from:
             continue
-        rows = ledger.load_item_health_shard(shard)
+        days = by_month[month]
+        rows = [row for day in days for row in ledger.load_item_health_shard(day)]
         summary = fold_month(rows)
-        folded.append(shard.stem)
+        folded.append(month)
+        # Named before anything is written, so the dry run prints the same list
+        # the live run removes.
+        days_removed += [ledger.item_health_relpath(f"{month}-{day.stem}") for day in days]
         rows_folded += len(rows)
         aggregate_rows += len(summary)
         if dry_run:
             continue
-        target = ledger.telemetry_aggregate_path(state_dir, shard.stem)
+        target = ledger.telemetry_aggregate_path(state_dir, month)
         ledger.write_telemetry_aggregate(target, summary)
-        # Read back before the shard goes. A fold nobody verified is a deletion
+        # Read back before the days go. A fold nobody verified is a deletion
         # nobody can undo.
         if ledger.load_telemetry_aggregate(target) != summary:
             raise ValueError(
-                f"{ledger.telemetry_aggregate_relpath(shard.stem)} did not read back as it "
-                f"was written, so {shard.name} stays"
+                f"{ledger.telemetry_aggregate_relpath(month)} did not read back as it "
+                f"was written, so the {len(days)} day files of {month} stay"
             )
-        shard.unlink()
+        for day in days:
+            day.unlink()
+            _drop_empty_day_dirs(day)
         # Only a copy below its own configured age, so the set deleted is exactly
         # the set named above and never a month the published tree still owes a
         # reader.
-        if public_root is not None and shard.stem in public_deleted:
-            publish_telemetry.shard_path(public_root, shard.stem).unlink(missing_ok=True)
+        if public_root is not None and month in public_deleted:
+            publish_telemetry.shard_path(public_root, month).unlink(missing_ok=True)
 
     # Whatever the loop above did not reach. On the scheduled path this is empty:
     # every copy below the boundary has a shard beside it, and the pair went
@@ -836,6 +870,7 @@ def prune_telemetry(
         rows_folded=rows_folded,
         aggregate_rows=aggregate_rows,
         hard_deleted=tuple(hard_deleted),
+        days_removed=tuple(days_removed),
         public_deleted=public_deleted,
         dry_run=dry_run,
     )
