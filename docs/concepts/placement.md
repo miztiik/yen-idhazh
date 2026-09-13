@@ -40,16 +40,24 @@ Every story gets a number, and the number decides the order. It is worked out
 before any model has read the article, and it is our best guess at how likely
 the story is to be worth your time.
 
-Start with how much we trust the feed that carried it. Multiply that by the
-number of feeds that carried the same link. Then add a set amount for each of
-three things: it names a company or a person we follow, it matches a subject we
-weight (we call one of those a **lens**), and it is recent. The day is then
-sorted, best first, and the three settings at the top of this page reshuffle the
-first twenty stories, so that one subject area (we call one a **desk**) cannot
-fill the whole first screen. On the days we measured, most of those twenty slots
-moved.
+Start with how much we trust the feed that carried it. Then add a set amount for
+each of four things: more than one of our feeds carried the same link, it names a
+company or a person we follow, it matches a subject we weight (we call one of
+those a **lens**), and it is recent. The day is then sorted, best first, and the
+three settings at the top of this page reshuffle the first twenty stories, so
+that one subject area (we call one a **desk**) cannot fill the whole first
+screen. On the days we measured, most of those twenty slots moved.
 
-**A fourth thing used to add to it and no longer does.** If an aggregator's
+**Being carried by several feeds used to multiply the trust rather than add to
+it, and it stopped on 2026-09-13.** Two feeds doubled a story's score and three
+tripled it, with no upper limit. It is now one small fixed amount that is paid
+once, whether two feeds carried the link or six - because three feeds carrying
+the same link is not three times the story. What the count measures is the same
+article reaching us twice, not two newsrooms each deciding it mattered: two
+outlets writing their own piece produce two different links and both count as
+one. The design rationale below has what that changed.
+
+**A fifth thing used to add to it and no longer does.** If an aggregator's front
 front page carried the story, that was worth a set amount until 2026-09-13. It
 happened to 8 stories out of 5,682, so almost nobody ever saw it change an
 order, and a number that rare cannot be checked. We still record that it
@@ -76,7 +84,6 @@ headline and the time of publication, and nothing else - which is why a re-run
 over the same feeds produces the same list. Stage 2 runs once the day is
 finished and adds one step for a subject several sources named, to choose the
 block at the top of the page.
-
 **The exact formula is
 [discovery.md](../architecture/sources/discovery.md#ranking-is-arithmetic-not-judgement),
 in the code block it already carries, and it is not repeated here.** That page
@@ -96,7 +103,7 @@ quietly going stale.
 | Trust in an institution publishing about itself | `collect.tier_weights.institution` | 1.0 |
 | Trust in the trade press | `collect.tier_weights.trade_press` | 0.6 |
 | Trust in a community feed | `collect.tier_weights.community` | 0.3 |
-| What one more feed carrying the same link is worth | `collect.repetition_weight` | 1.0 |
+| What one more feed carrying the same link is worth | `collect.carriage_step` | 0.25 |
 | Naming a company or person we follow | `collect.watchlist_bonus` | 0.5 |
 | How far freshness may move a score | `collect.recency_weight` | 0.6 |
 | The hours in which that freshness halves | `collect.recency_half_life_hours` | 18.0 |
@@ -166,35 +173,45 @@ Everything is measured against a clock reading 12:00 on 2026-09-13.
 
 | Story | How its number is built | Score |
 | --- | --- | ---: |
-| A ministry statement a wire service also carried | trust 1.0, doubled by the second feed, plus 0.48 for being six hours old | 2.47622 |
 | A trade-press scoop on a watchlist company | trust 0.6, one feed, plus 0.8 of bonuses, plus 0.58 for being one hour old | 1.977334 |
+| A ministry statement a wire service also carried | trust 1.0, plus 0.25 because a second feed carried it, plus 0.48 for being six hours old | 1.72622 |
 | A community post on a feed we turned down | trust 0.3, cut to 0.12 by the feed's own weight and its record, plus 0.28 for being twenty hours old | 0.397762 |
 
-**The second story collects every bonus this project can pay, and still loses by
-a fifth of the winner's score.** Its watchlist company and its lens are worth 0.8
-together, and being five hours fresher adds 0.1011 more - 0.9011 in all. The
-first story collects no bonus at all. What it has instead is a more trusted feed,
-worth 0.4, and a second feed carrying the same link, worth 1.0 - 1.4 together. It
-wins by 0.498886, which is 20.1 percent of its own score.
+**The second story has the better source and loses anyway, because the first one
+collects every bonus this project can pay.** Its watchlist company and its lens
+are worth 0.8 together and being five hours fresher adds 0.1011 more - 0.9011 in
+all. The ministry statement collects 0.25, for the wire service that repeated
+it. A more trusted feed is worth 0.4 of that gap and the second feed is worth
+0.25, which is 0.65 against 0.9011. It loses by 0.251114, a seventh of the
+winner's score.
 
-**The lesson is the multiply, not the size of any one bonus.** A bonus adds the
-same fixed amount whatever the story is. A second feed carrying the same link
-doubles whatever trust the story already had: worth 1.0 to this institution and
-only 0.6 to the trade-press story. **So the same signal pays more to the stories
-that already score well** - which is how one subject area comes to own a whole
-first screen, and it is the defect the design rationale below owns.
+**This example ran the other way until 2026-09-13, and that is the change worth
+understanding.** The wire service used to DOUBLE the ministry statement's trust
+rather than add a step to it, which took it from 1.0 to 2.0 and put it first by
+0.498886 - twenty percent clear of a story carrying every bonus we have. The
+same signal paid 1.0 to the institution and would have paid only 0.6 to the
+trade-press story, **so the fact that another feed repeated an article paid most
+to whatever already scored highest**. That is the opposite of what a tie-break
+does, and it is why the term is now a flat step.
 
-**The gap was 0.0989 until 2026-09-13**, when the front-page term was removed and
-the second story lost 0.4 of its bonuses. Two stories that were four percent
-apart are now twenty percent apart, and nothing about the two stories changed.
-That is the size of a term nobody could attribute a move to.
+**The lesson is what a repeat is evidence of.** A second feed carrying the same
+link means the article reached us twice. It does not mean two newsrooms each
+judged the story important - for that they would have to write their own piece,
+which produces a second link and leaves both reading 1. So the repeat is worth
+something, and it is worth less than one step down the trust ladder.
+
+**The gap was 0.0989 the other way until 2026-09-13**, when the front-page term
+was removed and the scoop lost 0.4 of its bonuses. Two rewrites later the same
+three stories are in the reverse order. Nothing about the stories changed; two
+terms did.
 
 Scores are printed to six decimal places because a test compares them with what
 the code returns. Nothing about the day turns on the sixth.
 
-**Stage 2 would take the first story to 2.68** if three different sources named
-the same company or person in their headlines. That changes which stories open
-the page, and changes the order of the stream not at all.
+**Stage 2 would take the ministry statement to 1.93** if three different sources
+named the same company or person in their headlines - still behind the scoop.
+That changes which stories open the page, and changes the order of the stream
+not at all.
 
 ## One order over the whole day
 
@@ -234,6 +251,148 @@ read the article and the feed's declared `vertical` where nothing has. Counting
 anything else would cap a grouping nobody is shown.
 
 ## Design rationale
+
+### Carriage became a tie-break, and it moved the lead on 8 days in 13 (2026-09-13)
+
+Being carried by several of our feeds multiplied a story's authority until this
+date. `1 + collect.repetition_weight * (carried_by - 1)` at a weight of 1.0
+**doubled** the authority term at two feeds and tripled it at three, and nothing
+capped it. It is now `collect.carriage_step`, a flat 0.25 paid once at two
+carriers.
+
+Three things were wrong with the multiplier and only the third is obvious.
+
+- **It paid in proportion to what a story already had.** A second feed bought
+  1.0 on an institution and 0.3 on a community feed - the same signal worth
+  three times as much to the story that needed it least. A tie-break pays one
+  amount.
+- **It was unbounded.** A story on six feeds took the day, and no rule said
+  otherwise.
+- **It priced syndication as agreement.** `carried_by` counts feeds carrying
+  **one address** ([layout.md](../architecture/publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is)),
+  so it counts the same article arriving twice.
+  [digest.md](digest.md) already refuses to print "three sources covered this"
+  because the number does not support the claim, while the ranker was making
+  that claim in arithmetic.
+
+Measured over the 13 committed days that carry `rank_score`, 5,682 stories, on
+Intel Core i7-1265U / Windows 11 / Python 3.14.2, 2026-09-13. Each story's
+authority term was recovered from the published payload and `config/`; the
+recovery self-checks, because the recency bonus it leaves over has to land
+inside its own 0 to 0.6 range, and it does for all 323 carried stories at a
+median of 0.5774.
+
+| The head a reader meets, with the frame applied | Today | At a step of 0.25 |
+| --- | ---: | ---: |
+| Stories that more than one feed carried | 323 of 5,682 - **5.7 percent** | unchanged |
+| Head slots they hold | 54 of 260 - **20.8 percent** | 20 of 260 - **7.7 percent** |
+| Stories entering or leaving the head | - | 48 of 260 |
+| Head slots whose story changes | - | **179 of 260** |
+| Days whose lead changes | - | **8 of 13** |
+| Distinct desks in the head, median | 5 | 5 |
+| Distinct feeds in the head, median | 16 | 16 |
+| Biggest desk's share of the head, median | 25 percent | 25 percent |
+
+**The day does not move; the top of it does.** Four readings say the desk mix is
+flat, so neither of this plan's ESCALATE triggers fires - the first is about
+day-over-day desk churn a weight change caused, and the second about one desk
+taking a third of the day.
+
+**All eight lead changes are the same swap, in the same direction**: wire copy
+two or three of our feeds repeated, replaced by one feed carrying the story from
+the organisation it is about. A term doing several things would give a mixed
+table. One direction eight times says one term was doing one thing wrong.
+
+**What the reader loses, said plainly.** On those eight days the top slot moves
+off a story that changes what they pay - CNG prices on 2026-08-31, LPG refill
+intervals on 09-07, coal supply on 09-05 and 09-10 - and onto AI and chip
+infrastructure. Those stories keep their place in the day and a reader who
+scrolls still reaches them. A reader who reads only the top slot does not, and
+that is most readers. What they gain is the account from the people it happened
+to instead of the fourth copy of it: on 2026-09-11 the RBI Governor on the
+monetary policy committee rather than a state broadcaster's pledge, and on 09-12
+a former RBI Governor on UPI.
+
+**The step's size is set by two rules, not by a measurement, and that is on
+purpose.** It may not reach the smallest gap between two tier weights - 0.3
+today - or carriage would promote a community story past a trade-press one. It
+may not fall to `ui.lead_shared_subject_weight` - 0.2 today - or a subject that
+recurs across a week would outrank a story two feeds carried today. Across the
+whole of the 0.1 those two leave, **6 of 260 head slots move and no lead does**,
+so nothing inside the window is measurable and the only thing worth buying is
+margin: both bounds are estimates a person can edit, and 0.25 is the value that
+stays legal when either moves.
+`backend/tests/test_rank.py::test_the_carriage_step_cannot_outrank_one_tier_step`
+reads both walls off `config/`, so the build says the day one is crossed.
+
+**The frequency method this project uses elsewhere was tried and refused.**
+[discovery.md](../architecture/sources/discovery.md#where-the-weight-came-from)
+prices a signal by how often it fires, and a shared subject fires 2.25 times as
+often as a second carrier, which prices carriage at 0.45. The tier-step rule
+refuses anything at or above 0.3. The rule wins, because it is a ruling about
+what may outrank what and the other is an estimate. Ruled by Editor, 2026-09-13.
+
+**Carriage was not removed, and this is what removing it would have cost.** At a
+step of 0.0 carried stories hold 6 of 260 head slots - **below** their 5.7
+percent base rate, because carried stories skew to the trade press - and the
+lead changes on 9 days rather than 8. So removing the term moves the day more
+than re-shaping it does, and in a direction nobody measured. It is also one of
+the four reasons the leading block can print, and the only cross-check we have
+that somebody else spent a slot on the story.
+
+### The lead opens on an organisation talking about itself, on 8 days in 13 (2026-09-13)
+
+**This is a defect of the published digest and no row owns it.** It is written
+here with its count so that nobody meets it by surprise.
+
+A story leads the day when the feed that carried it sits at `institution` tier
+and declares its kind as `announcement` or `research` - an organisation
+publishing about its own work - on **8 of the 13 committed days** that carry
+`rank_score`, up from **4 of 13** before carriage became a tie-break. Both
+figures are measured against the feed list as `config/sources.json` holds it
+today, so a day whose lead was on a since-retired feed is recomputed rather than
+counted.
+
+| The lead slot, 13 days | Before | After |
+| --- | ---: | ---: |
+| An organisation publishing about itself | **4 of 13** | **8 of 13** |
+| Desk `ai` | 4 | **8** |
+| Desk `india` | 7 | 4 |
+| Desk `world` | 2 | 0 |
+
+**Four of the eight are already there and carriage never touched them.** IBM and
+Confluent on 2026-09-02, NVIDIA and Hugging Face on 09-03, NVIDIA Jetson on
+09-04, Mistral's funding round on 09-08. All four are single-feed institution
+stories that win on the trust ladder alone, and all four lead the day before and
+after.
+
+**The defect is not carriage and the step cannot fix it.** Nothing in the score
+separates an institution reporting a fact about the world from an institution
+announcing its own product. The institution tier is 1.0 because one institution
+saying a thing makes it true - an argument about whether a fact is **reliable** -
+and it is being spent on whether a story is **important**. A vendor is maximally
+reliable about its own launch, which is exactly why the launch is a weak lead:
+nobody but the vendor decided it was worth publishing. Every value in the step's
+legal window leaves all 8 of those leads exactly where they are.
+
+**What the reader loses is the first thing they see.** A reader who opens the
+digest to find out what happened yesterday is handed a product launch and has to
+scroll to reach the day.
+
+**Where the fix belongs.** Not with the desk floor and ceiling, which bound a
+desk's share of the **day** and cannot reach one slot - the day's desk mix does
+not move at all here. It belongs beside `ui.lead_max_yesterday`, which is
+already a bound on the lead slot keyed off something other than the score.
+Named by Editor, 2026-09-13, who accepted it for a bounded period on the
+condition that it is written down with its count.
+
+**Two feeds of one organisation are two feeds to the frame**, which is the
+adjacent gap. `placement.head_no_repeat` stops one `source_id` repeating in the
+first ten stories, and `nvidia-newsroom` and `nvidia-technical-blog` are two
+`source_id`s. A reader reads brand names rather than feed ids, so a head with
+three NVIDIA stories in eight reads as one voice however many feeds supplied it.
+`config/sources.json` carries no field saying two feeds belong to one
+organisation, which is the same missing relation the wire-syndication gap names.
 
 ### The score's terms are ranked, and one of them was retired (2026-09-13)
 
@@ -281,8 +440,9 @@ changes is which of them is first. These are the two days:
 different term.** Each is a single-feed story from the organisation it is about;
 each story that replaces it is a three-feed wire story that wins because carriage
 multiplies authority. The property worth keeping is "one feed, and it is the
-primary source" - not "a community upvoted it". Row #4 of this plan is the row
-that turns carriage into a flat step, and these two days are the case for it.
+primary source" - not "a community upvoted it". **Carriage stopped multiplying on
+the same day** and the section above is that change, measured: those two days are
+two of the eight whose lead moves back to a single-feed primary source.
 `on_front_page` is still published, so restoring the term costs one weight the
 day an aggregator and a news digest start reading the same internet.
 
@@ -306,19 +466,26 @@ It was not applied, because the measurement refused it. Over the same 13 days:
 
 **A watchlist subject is not informative because it is rare. It is informative
 because a person chose it**, so a frequency method is the wrong instrument for
-it. And while carriage still multiplies, this is the only additive term that can
-lift an un-syndicated story from a second desk into the head - so cutting it
-hands the head to the wires. **What the reader loses at 0.15 is the story nobody
-else carried, on a subject the desk said matters**, which is the one story they
-cannot get anywhere else.
+it. The reading above was taken while carriage still multiplied, when this was
+the only additive term that could lift an un-syndicated story from a second desk
+into the head - so cutting it would have handed the head to the wires. **What
+the reader loses at 0.15 is the story nobody else carried, on a subject the desk
+said matters**, which is the one story they cannot get anywhere else.
 
 The frame would still cap the biggest desk at 5 of 20, so a reader would not see
 the 95 percent. They would see slots 6 to 20 filled from further down a tail the
 score ranked lower: **a frame that holds the shape does not hold the quality.**
 
-Ruled by Editor, 2026-09-13. Re-measure when plan 25 row #4 turns carriage into a
-flat step, and set the weight then by what it puts in the head rather than by how
-often it fires.
+Ruled by Editor, 2026-09-13. **The re-measurement this section asked for has
+been taken and the weight still does not move.** Carriage became a flat step the
+same day, so the reason above - that this is the only term able to lift an
+un-syndicated story - has weakened: carriage now holds 7.7 percent of the head
+rather than 20.8, so the wires it was holding out are already held out by
+something else. What has not changed is the argument that killed the 0.15 in the
+first place, which is that a frequency method cannot price a signal a person
+chose. Re-pricing this weight against the new step would move the leading
+block's order, which nothing measured here covers, and it belongs to plan 23 row
+#17's per-run loop.
 
 ### Recency is nearly a constant, and no row owns the fix (2026-09-13)
 
@@ -402,13 +569,15 @@ binding has stopped being needed. Ruled by Jony and by Editor independently,
 2026-09-13; Editor's first ruling of 8 was withdrawn when the measurement above
 replaced the estimate it rested on.
 
-**Why the head is lopsided at all is a different defect, and it is owned.**
-`rank_score` today multiplies authority by carriage, which doubles it at two
-carriers, so a desk whose stories get syndicated sweeps the head. Plan 25 row #3
-ranked the score's terms and retired the one nobody could attribute a move to,
-and it took no story out of the first twenty on any committed day - the
-lopsidedness is the multiplier, and row #4 is the row that turns carriage into a
-single tie-break worth less than one tier step.
+**Why the head is lopsided at all is a different defect, and it is now closed.**
+`rank_score` multiplied authority by carriage until 2026-09-13, which doubled it
+at two carriers, so a desk whose stories get syndicated swept the head. Plan 25
+row #3 ranked the score's terms and retired the one nobody could attribute a
+move to, and it took no story out of the first twenty on any committed day - the
+lopsidedness was the multiplier, and the section at the top of this rationale is
+the row that replaced it with a tie-break worth less than one tier step. The cap
+is set on what the reader is guaranteed either way, because a cap set on how
+often it fires would have to be re-set every time a weight moved.
 
 ### Stage 3 is proposed, and the research answer to our constraint is a target distribution (2026-09-13)
 

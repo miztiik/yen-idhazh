@@ -501,6 +501,28 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "digest.lead_shared_subject_weight is reworded and keeps its value of "
+                "0.2. Its ceiling was collect.tier_weights.trade_press times "
+                "collect.repetition_weight and is now collect.carriage_step. No key is "
+                "added or removed here and no value moves, so nothing that validates "
+                "today stops validating. It is `UiConfig`, which this document and "
+                "`AppConfig` share, so the wording lands in both generated schemas and "
+                "app-config is restamped with its own version on the same day."
+            ),
+            why=(
+                "Carriage stopped multiplying a tier on 2026-09-13 and became a flat "
+                "step, so a ceiling that multiplied a tier could not survive it. The "
+                "rule the ceiling carries is unchanged - a subject that recurs across "
+                "a week may not outrank a story two independent feeds carried today - "
+                "and it is the arithmetic underneath that moved, from 0.6 to 0.25. "
+                "Re-deriving 0.2 itself against the new step would move the leading "
+                "block's order, which nothing in that change measured, so it is named "
+                "as plan 23 row #17's per-run loop rather than done here."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12",
             change=(
                 "frame.zone_time_rem is REMOVED, and so are its bounds "

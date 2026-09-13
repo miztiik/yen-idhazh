@@ -122,7 +122,7 @@ A headline is eight to twelve words and the matcher has no surrounding context t
 
 **One fact earns one bonus.** No lens keyword may repeat a watchlist alias. ASML, Nvidia, Intel, Samsung and Huawei are entities carrying `watchlist_bonus`; putting them in the `chips` keywords would pay twice for a single fact. The lens names the thing, the watchlist names the company.
 
-**A theme takes the largest weight it earned, never the sum.** Two themes in one headline is not twice the story, and summing would let a keyword list outweigh the fact that three independent feeds carried it. The shipped weight of 0.3 is deliberately half of what one more trade-press feed is worth (0.6), so a themed single-sourced story ranks below the same story two feeds carried. `backend/tests/test_discover.py::test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story` is what stops a later edit inverting that.
+**A theme takes the largest weight it earned, never the sum.** Two themes in one headline is not twice the story, and summing would let a keyword list outweigh the fact that another feed carried it too. The shipped weight of 0.3 is above `collect.carriage_step` (0.25) rather than half of it, because carriage stopped multiplying a tier on 2026-09-13 and a theme is now worth slightly more than the bare fact of a repeat. What a second feed still brings with it is a second tier's authority, and `backend/tests/test_discover.py::test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story` asserts a themed single-sourced story ranks below the same story a better-trusted second feed carried.
 
 ### Measured coverage
 
@@ -243,18 +243,21 @@ item from it has been observed to fail (Guardrail #10).
 
 ## Ranking is arithmetic, not judgement
 
-The day is decided before any model loads, by a score with four terms:
+The day is decided before any model loads, by a score with four terms and one tie-break:
 
 ```
-(tier weight * feed weight * reliability) * (1 + repetition_weight * (carriers - 1))
+(tier weight * feed weight * reliability)
+ + carriage_step        if more than one feed carried this address
  + watchlist_bonus
  + max(LensDef.weight over the story's lenses)
  + recency_weight * 0.5 ^ (hours old / recency_half_life_hours)
 ```
 
-The authority of the source - its tier, scaled by that feed's own hand-set weight and again by the reliability its recent record earned - multiplied by how widely the story is carried, plus a bonus for naming a watchlist entity, plus the heaviest theme it matched, plus a bonus for being recent. A story three independent sources carried today is the day's story.
+The authority of the source - its tier, scaled by that feed's own hand-set weight and again by the reliability its recent record earned - plus a step if more than one of our feeds carried the same address, plus a bonus for naming a watchlist entity, plus the heaviest theme it matched, plus a bonus for being recent. A story the best-trusted source carried is the day's story.
 
 **Until 2026-09-13 this block said "five terms", printed four lines, and left out both the reliability multiplier and the lens.** It has been rewritten term for term against `rank.score`, and `backend/tests/test_rank.py` now asserts each term moves the order on its own and that a field the score does not read moves nothing.
+
+**Carriage multiplied that first line until 2026-09-13 and is a step under it now.** The term was `1 + repetition_weight * (carriers - 1)` at a weight of 1.0, so a second feed DOUBLED a story's authority and a third tripled it, uncapped - a story on six feeds took the day. It also paid in proportion to what the story already had, so the same signal bought 1.0 on an institution and 0.3 on a community feed: the more a story needed the help, the less it got. `collect.carriage_step` fires once, at two carriers, and never grows, because three carriers is not three times the story. The section below has the measurement.
 
 ### The terms, in the order an editor set them
 
@@ -267,7 +270,7 @@ A score that only admitted stories needed its terms to point the right way. Sinc
 | 3 | the feed's reliability | `(1 - reliability_floor)` times the best tier | 0.5 |
 | 4 | a watchlist subject | `watchlist_bonus` | 0.5 |
 
-Two terms are not in that ranking and each has a different reason. **Carriage** is a multiplier rather than a term with a ceiling, and plan 25 row #4 turns it into a single step. **The lens** is ranked by nothing here because the weight that pays it is per lens in `config/taxonomy.json`; the heaviest today is 0.3, which sits between rows 3 and 4.
+Two terms are not in that ranking and each has a different reason. **Carriage** is a tie-break rather than a ranked term: it is bounded from both sides rather than ranked against the four, and `backend/tests/test_rank.py::test_the_carriage_step_cannot_outrank_one_tier_step` reads both walls off `config/`. It may not reach the smallest gap between two tier weights - 0.3 today - or it would promote a community story past a trade-press one, and it may not fall to `ui.lead_shared_subject_weight` - 0.2 today - or a subject that recurs across a week would outrank a story two independent feeds carried today. It sits at **0.25**, the middle of what those two rules leave, and the middle is the point: both bounds are themselves estimates a person can edit, so a step pressed against either inverts a written rule the day somebody nudges the other. **The lens** is ranked by nothing here because the weight that pays it is per lens in `config/taxonomy.json`; the heaviest today is 0.3, which sits between rows 3 and 4.
 
 **The four rows above are not the four lines of the formula**, and the difference is deliberate. The ranking splits the formula's first line in two - the authority a tier sets, and the reliability a feed's own record earns - because a person sets those from different config keys and tunes them apart. It then leaves out the two the paragraph above names.
 
@@ -392,14 +395,29 @@ Measured 2026-09-01 on this checkout, over the 11 committed days under
 
 | Signal | How often it fires | What it is worth |
 | --- | --- | --- |
-| A second feed carrying one address | 22 of 490 stories, **4.49 percent** | **0.6** - `tier_weights.trade_press` times `repetition_weight` |
+| A second feed carrying one address | 22 of 490 stories, **4.49 percent** | `collect.carriage_step`, **0.25** |
 | A shared subject at a floor of 3 sources | 525 of 4,086 stories, **12.85 percent** | `ui.lead_shared_subject_weight`, **0.2** |
 
 The shared subject is **2.9 times commoner** than a second carrier, so it has to
-be worth less: 0.6 divided by 2.9 is 0.21, rounded to 0.2.
+be worth less.
 `backend/tests/test_contracts.py::test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story`
-holds it under 0.6, derived from the two collect knobs rather than spelled, so a
-tier-weight edit moves the bound with it.
+holds it under `collect.carriage_step`, read off the config rather than spelled,
+so an edit to the step moves the bound with it.
+
+**That ceiling was 0.6 until 2026-09-13 and it is 0.25 now.** A second carrier
+used to multiply a story's authority, so what it was worth depended on the tier
+that carried it and the bound had to name one - `tier_weights.trade_press` times
+`repetition_weight`. Carriage is a flat step now and is worth the same to every
+tier, so the bound is the step itself. **The rule did not change**: a subject
+that recurs across a week may not outrank a story two independent feeds carried
+today. Only the arithmetic under it did, and it tightened.
+
+**The derivation that produced 0.2 went with the old 0.6**, and 0.2 stays. It
+came from dividing 0.6 by 2.9, and re-running that division against 0.25 would
+move the leading block's order, which nothing in the change that retired the
+multiplier measured. The two firing rates above are still facts about the
+corpus. Re-deriving the weight belongs to plan 23 row #17's per-run loop, which
+is the thing that moves a weight on evidence.
 
 What 0.2 buys on a real day: on 2026-08-31, 601 stories, the gap from the day's
 highest `rank_score` to its fifth is 0.31 and to its fifteenth is 0.60. So a
@@ -408,8 +426,8 @@ qualifying subject moves a story about five places at the top of the day, and
 
 The floor of 3 was measured the same way. At two distinct sources 598 of 4,086
 stories (14.64 percent) sit in a cluster and at three it is 525 (12.85 percent),
-so the stronger claim costs 73 stories in 11 days - and "three independent
-sources carried it" is the standard the rest of this page already uses.
+so the stronger claim costs 73 stories in 11 days - and a story several sources
+carried is a stronger claim than a story one did.
 
 ## Changing the source set without breaking history
 
@@ -713,13 +731,15 @@ itself. Measured over six runs, **73 to 78 of the roughly 85 working feeds sat
 exactly on the cap**, and the fifteen largest contributors each published
 exactly two per run for eleven runs running.
 
-So "a story three independent feeds carried is the day's story" describes the
+So "a story several independent feeds carried is the day's story" described the
 score, and the score has not been deciding much: the cap fills the list and the
 ranking only chooses which few feeds miss out. This is a supply result, not a
 ranking defect. The cap stops binding as soon as the pool of *working* feeds is
 comfortably larger than 80, which is what this sweep is for. Re-read the cap
 column in the measurements page after a week of the new list before changing any
-ranking code.
+ranking code. **That sentence stopped describing the score on 2026-09-13**, when
+carriage became a tie-break worth less than one step down the trust ladder; what
+decides the day now is the tier the source sits on.
 
 ### The feed floor counts feeds, not working feeds
 

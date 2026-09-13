@@ -268,7 +268,7 @@ What the numbers mean, measured 2026-08-26 on the fixtures in `backend/tests/tes
 
 **It did not move `metrics-3`.** The scorer version folds `METRICS_VERSION` in, and this page requires ten distinct run-days at one `scorer_version` before any threshold moves. A column that no band and no derived column reads changes nothing a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. `compression` is the precedent: recorded, diagnostic, and not a pass/fail input.
 
-**This is not the ranker's `repetition_weight`, and the names collide.** `collect.repetition_weight` in [config.md](config.md) is a *ranking* knob: `backend/idhazh/rank.py` multiplies a story's authority by `1 + repetition_weight * (carriers - 1)`, so it rewards a story that **several sources** carried. That is repetition across the web. `self_repetition` is repetition inside one summary we wrote. They share a word and nothing else.
+**This is not the ranker's carriage step, and the names used to collide.** `collect.carriage_step` in [config.md](config.md) is a *ranking* knob: `backend/idhazh/rank.py` adds it once to a story more than one of our feeds carried, so it rewards a story that **several sources** carried. That is repetition across the web. `self_repetition` is repetition inside one summary we wrote. They shared a word until 2026-09-13, when the ranking knob was renamed from `collect.repetition_weight` with the multiplier it weighted, and they now share nothing at all.
 
 ## Two columns that score the article, not the summary
 

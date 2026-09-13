@@ -626,7 +626,7 @@
         },
         "lead_shared_subject_weight": {
           "default": 0.2,
-          "description": "What a qualifying shared subject adds to a story's rank inside the leading block. It is a step and not a ramp: no measurement supports a shape, and a shape nobody measured may not justify a design (Guardrail #10). It must stay below what one more trade-press carrier is worth, which is collect.tier_weights.trade_press times collect.repetition_weight - 0.6 on the committed config - so a recurring subject cannot outrank a story two independent feeds carried today. Measured 2026-09-01: a second carrier fires on 4.49 percent of the stories that record it and a shared subject on 12.85 percent, 2.9 times as often, and 0.6 divided by 2.9 is 0.21.",
+          "description": "What a qualifying shared subject adds to a story's rank inside the leading block. It is a step and not a ramp: no measurement supports a shape, and a shape nobody measured may not justify a design (Guardrail #10). It must stay below what one more feed carrying the same address is worth, which is collect.carriage_step - 0.25 on the committed config - so a recurring subject cannot outrank a story two independent feeds carried today. Until 2026-09-13 that bound was collect.tier_weights.trade_press times collect.repetition_weight, 0.6, because carriage multiplied a tier; it no longer multiplies anything, so the bound cannot either. Measured 2026-09-01: a second carrier fires on 4.49 percent of the stories that record it and a shared subject on 12.85 percent, 2.9 times as often. The derivation that divided 0.6 by 2.9 went with the 0.6; re-deriving this weight against the new step would move the leading block's order and belongs to plan 23 row #17's per-run loop.",
           "minimum": 0.0,
           "title": "Lead Shared Subject Weight",
           "type": "number"
@@ -779,6 +779,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "digest.lead_shared_subject_weight is reworded and keeps its value of 0.2. Its ceiling was collect.tier_weights.trade_press times collect.repetition_weight and is now collect.carriage_step. No key is added or removed here and no value moves, so nothing that validates today stops validating. It is `UiConfig`, which this document and `AppConfig` share, so the wording lands in both generated schemas and app-config is restamped with its own version on the same day.",
+      "version": "2026-09-13",
+      "why": "Carriage stopped multiplying a tier on 2026-09-13 and became a flat step, so a ceiling that multiplied a tier could not survive it. The rule the ceiling carries is unchanged - a subject that recurs across a week may not outrank a story two independent feeds carried today - and it is the arithmetic underneath that moved, from 0.6 to 0.25. Re-deriving 0.2 itself against the new step would move the leading block's order, which nothing in that change measured, so it is named as plan 23 row #17's per-run loop rather than done here."
+    },
     {
       "change": "frame.zone_time_rem is REMOVED, and so are its bounds ZONE_TIME_MIN_REM and ZONE_TIME_MAX_REM. ui.rail_group_minutes is removed too; it is `UiConfig`, which this document and `AppConfig` share, so app-config is restamped with the same version. config/appearance.json drops both keys. BREAKING for a file that sets either - the read-side migration is that both keys are dropped rather than defaulted, and an appearance file carrying one is refused rather than silently ignored.",
       "version": "2026-09-12",
@@ -950,7 +955,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-12",
+      "default": "2026-09-13",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -958,5 +963,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-12"
+  "version": "2026-09-13"
 }
