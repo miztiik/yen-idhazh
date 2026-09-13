@@ -4,9 +4,9 @@ The plan job reads feeds, deduplicates and ranks - all deterministic
 arithmetic, no model - then writes this. Workers read it and never re-decide
 what to work on, which is what makes a shard replayable and a re-run cheap.
 
-Ranking lives here rather than in a worker for a reason: a story carried by
-three independent feeds is the day's story, and only something holding the
-whole day can see that.
+Ranking lives here rather than in a worker for a reason: how many of our feeds
+carried one address is a fact only something holding the whole day can see, and
+so is where a story sits against every other story of the day.
 """
 
 from __future__ import annotations

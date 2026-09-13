@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import replace
+from itertools import pairwise
 from typing import Final
 
 import pytest
@@ -402,6 +403,108 @@ def test_the_terms_rank_in_the_order_the_editor_set() -> None:
     assert reliability_ceiling >= config.watchlist_bonus, (
         f"reliability may move a story {reliability_ceiling} and a watchlist subject "
         f"{config.watchlist_bonus}. A watchlist subject is the fourth term, not the third."
+    )
+
+
+def test_the_carriage_step_cannot_outrank_one_tier_step() -> None:
+    """The window `collect.carriage_step` has to sit in, read off `config/`.
+
+    Both walls, in one test, because a number bounded on one side reads like a
+    number with one rule. The ceiling is the smallest gap between two tier
+    weights: at or above it, carriage promotes a community story past a
+    trade-press one, and a tie-break that can jump a tier is a term. The floor
+    is `ui.lead_shared_subject_weight`: at or below it, a subject that recurs
+    across a week outranks a story two independent feeds carried today, which
+    inverts the rule `discovery.md` already holds that weight under.
+
+    Both bounds are other people's config values and both are estimates, so the
+    step is set to the middle of what they leave rather than pressed against
+    either. Measured 2026-09-13 over the 13 committed days that carry
+    `rank_score`: across the whole of that window 6 of 260 head slots move and
+    no lead does, so nothing inside it is measurable and the margin is the only
+    thing worth buying.
+    """
+    config = load().app
+    tiers = sorted(
+        (
+            config.collect.tier_weights.community,
+            config.collect.tier_weights.trade_press,
+            config.collect.tier_weights.institution,
+        )
+    )
+    smallest_tier_step = min(high - low for low, high in pairwise(tiers))
+    step = config.collect.carriage_step
+
+    assert step < smallest_tier_step, (
+        f"carriage is worth {step} and the smallest step between two tiers is "
+        f"{smallest_tier_step}. A tie-break may not promote a story past a tier."
+    )
+    assert step > config.ui.lead_shared_subject_weight, (
+        f"carriage is worth {step} and a shared subject {config.ui.lead_shared_subject_weight}. "
+        "A subject that recurs across a week may not outrank a story two feeds carried today."
+    )
+
+
+def test_one_feed_from_the_source_beats_the_wire_copy_that_repeated_it() -> None:
+    """The case the step exists for, built rather than sampled.
+
+    Measured 2026-09-13 over the 13 committed days that carry `rank_score`: the
+    lead changes on 8 of them and every one of the eight is this swap - wire
+    copy three of our feeds repeated, replaced by one feed carrying the story
+    from the organisation it is about. `carried_by` counts feeds carrying ONE
+    address, so it measures syndication and not agreement, and the third copy
+    adds no fact to the first.
+
+    **The first assertion fails against the base tree and the second does not.**
+    There the multiplier makes trade press at three carriers worth 0.6 x 3 =
+    1.8, which beats an institution's 1.0; here it is 0.6 + 0.25 = 0.85, which
+    does not. The community pair is a guard rather than a discriminator - 0.3 x
+    2 = 0.6 never beat 1.0 - and this row's own text claimed it was the half
+    that fails. Corrected on execution, per the plan's section 0.1.
+    """
+    institution = _story("primary", tier=SourceTier.INSTITUTION, carriers=1)
+    wire = _story("wire", tier=SourceTier.TRADE_PRESS, carriers=3)
+    assert institution > wire, (
+        f"the source's own account scores {institution} and wire copy three feeds "
+        f"repeated scores {wire}. Repetition is our distribution, not the world's "
+        "judgement."
+    )
+
+    community = _story("forum", tier=SourceTier.COMMUNITY, carriers=2)
+    assert institution > community
+
+
+def test_carriage_is_a_step_and_never_a_count() -> None:
+    """Three carriers is not three times the story, and six is not six times.
+
+    It multiplied until 2026-09-13, so this was false: two carriers doubled the
+    authority term and the term was uncapped, which is why a story on six feeds
+    took the day. Measured over the same 13 days, 24 of 5,682 stories reached
+    three carriers or more, so what the count bought was rare and unbounded at
+    once - the worst shape a ranking term can have.
+    """
+    one = _story("solo", carriers=1)
+    two = _story("pair", carriers=2)
+    six = _story("many", carriers=6)
+
+    assert two == pytest.approx(one + CONFIG.carriage_step)
+    assert six == pytest.approx(two), "the step fires once and never grows"
+
+
+def test_the_step_is_flat_and_does_not_scale_with_the_tier() -> None:
+    """The defect a multiplier had: it paid most to whatever already scored best.
+
+    A second feed used to buy 1.0 on an institution and 0.3 on a community feed
+    - the same signal worth three times as much to the story that needed it
+    least. A tie-break pays the same to both.
+    """
+    gains = [
+        _story(f"t{tier.value}", tier=tier, carriers=2)
+        - _story(f"t{tier.value}", tier=tier, carriers=1)
+        for tier in (SourceTier.INSTITUTION, SourceTier.TRADE_PRESS, SourceTier.COMMUNITY)
+    ]
+    assert all(gain == pytest.approx(CONFIG.carriage_step) for gain in gains), (
+        f"carriage paid {gains} across the three tiers and a tie-break pays one amount"
     )
 
 
