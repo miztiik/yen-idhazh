@@ -34,16 +34,15 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 14 | 14 | 4 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 2 | 11 | 0 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 3 | 10 | 3 |
 
-## In flight - 2
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
-| #2 | 28 | A | The turn envelope moves onto the model entry | p28-r2 |
 
-## Ready now - 23
+## Ready now - 26
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -74,8 +73,11 @@ section 3 is where it is answered.
 | #8a | 25 | J | The second desk reaches the reader | 8 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
+| #4 | 28 | B | Benchmark records lose the date from their filename | 2, 3 |
+| #5 | 28 | C | Five things the server proves before the first item | 2 |
+| #6 | 28 | C | One complete config file per model, selected by a pointer | 2 |
 
-## Waiting on another row - 60
+## Waiting on another row - 57
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -129,9 +131,6 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #4 | 28 | B | Benchmark records lose the date from their filename | 2 is IN-FLIGHT |
-| #5 | 28 | C | Five things the server proves before the first item | 2 is IN-FLIGHT |
-| #6 | 28 | C | One complete config file per model, selected by a pointer | 2 is IN-FLIGHT |
 | #7 | 28 | D | The model dossier, and the index that points at every one | 4 is PENDING |
 | #11 | 28 | D | Where the system text goes, and which keyword the runtime is told | 5 is PENDING; 6 is PENDING |
 | #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 is PENDING |
