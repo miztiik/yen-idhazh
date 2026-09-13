@@ -33,11 +33,12 @@ Every event is one flat, serializable payload with a fixed envelope:
 
 ## Event names
 
-One name is emitted:
+Two names are emitted:
 
 - `item.summarize.failed` - the model was asked and did not answer. `ctx` carries the item, the source and the model reference; `data` carries the typed failure code and the exception type.
+- `item.visual.failed` - the marks compiled and the file did not land. `ctx` carries the item, its content address and the model reference; `data` carries the visual state and the exception type. The item publishes without its picture, so nothing else records this: a planner that correctly found nothing to draw and a disk that would not take the file look identical on the page, and `VisualDecision.none_reason` only separates them for a reader who already has the day's payload open.
 
-`telemetry.EventName` holds that name and nothing else, and a test fails when this list and that vocabulary disagree in either direction. A name is added in the commit that emits it.
+`telemetry.EventName` holds those names and nothing else, and a test fails when this list and that vocabulary disagree in either direction. A name is added in the commit that emits it.
 
 **This list held 20 names until 2026-08-30, and 19 of them had no emitter.** They were not a backlog and they were not lost by accident - see [Rejected alternatives](#rejected-alternatives).
 
