@@ -254,6 +254,7 @@ def to_digest_visual(decision: VisualDecision | None) -> DigestVisual | None:
         kind=decision.kind,
         state=decision.visual_state,
         path=decision.asset_path,
+        data_path=decision.data_path,
         alt=decision.alt_text,
     )
 
@@ -1293,13 +1294,13 @@ def build_day(
 
     An item already published keeps its published copy, and this run's copy of it
     is discarded. The reason is crash consistency rather than the order a reader
-    sees: `cli.stage_assemble` writes `digest.json` tens of lines before it
+    sees: `stages.assemble.stage_assemble` writes `digest.json` tens of lines before it
     appends the published ledger, and the plan-time guard reads that ledger. A
     run that dies between the two leaves a day whose items the guard cannot see,
     so the next run plans every one of them again - and `already` is what makes
     that replay cost nothing.
 
-    A run can come back as itself. `cli.stage_assemble` writes the day, then
+    A run can come back as itself. `stages.assemble.stage_assemble` writes the day, then
     builds the manifest, then writes it, so a run that dies in that gap leaves a
     day holding its items and a manifest that never heard of it - and the next
     run reads the same number off the manifest. Replacing the reference rather

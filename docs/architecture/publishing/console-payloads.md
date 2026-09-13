@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-13
 
 The operator console reads twelve datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
@@ -71,7 +71,7 @@ label.
 ## The producers
 
 Seven modules under `backend/idhazh/`, one dataset each, all called from
-`cli.stage_assemble` at the publication step. None of them spells a path, a
+`stages.assemble.stage_assemble` at the publication step. None of them spells a path, a
 write rule or a prune of its own: `publish_console.py` owns those and every
 producer obeys the same three rules from the same place.
 

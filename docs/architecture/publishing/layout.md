@@ -20,7 +20,8 @@ Coupling them means a change of mind about URL aesthetics rewrites every committ
 ```
 frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json the whole day, every item
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json append-only runs[] for that date
-frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg optional visual
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg optional visual, drawn at build time
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json that visual's data, for a browser to draw
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
 state/scores/<YYYY>/<MM>/<DD>.csv the ledger - one row per measurement, never published twice
@@ -47,6 +48,8 @@ state/score-archive/<YYYY-MM>.json a score month past its full-grain window, as 
 **The asset name was `<vertical>-<NN>` until 2026-08-27, and both shapes are live in committed data.** The ordinal came from a counter, a counter has to be seeded from something a process can observe, and two runs of one day observed different things - which cost a finished day ([visuals.md](visuals.md)). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories. **No old address broke and none had to be migrated**: `assemble` copies `VisualDecision.asset_path` into the day payload verbatim, the page renders that stored string, and the build stages by file suffix - so a name is data the day carries, never a rule the reader re-derives. That is the same property that makes the two contracts at the top of this page separable, applied one level down.
 
 **`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
+
+**A visual's data file is the drawing's own path with a different extension, and nothing recomputes it.** From 2026-09-13 a rendered visual publishes `<item_id>.json` beside `<item_id>.svg`, and the day payload points at it with `DigestVisual.data_path` ([visuals.md](visuals.md)). The name is taken from the drawing rather than rebuilt from the date and the item, because a second copy of the naming rule is a second chance to file one story's picture under another story's name - which is the failure that cost a day on 2026-08-25. `digest.json` and `run.json` sit in the same directory and belong to the day rather than to a story; neither can collide, because an item id ends in a hyphen and a run of digits or sixteen base32 symbols, so no item is called `digest` or `run`.
 
 ## The day is one artifact, shared by everyone
 
@@ -303,7 +306,7 @@ The obligation that does need stating: **every writer of a committed day payload
 
 The writer was right from its first commit and the shard on `main` was not. It held **one** entry - `ai-01`, "Example Lab releases a smaller model" - against six committed days holding 2,237 items, and no published day holds that item at all. A rebuild over the committed tree produces 2,237 entries and 2,235 vectors, so the arithmetic was never in question.
 
-The cause was the path. `cli.stage_assemble` took the index root from a module constant while every pipeline test redirects `PUBLIC_ROOT` at a temporary tree, so **running the backend suite rebuilt the published shard out of fixture days**, on any machine that ran it. Nothing failed; the file was simply wrong afterwards, and it was committed that way.
+The cause was the path. `stages.assemble.stage_assemble` took the index root from a module constant while every pipeline test redirects `PUBLIC_ROOT` at a temporary tree, so **running the backend suite rebuilt the published shard out of fixture days**, on any machine that ran it. Nothing failed; the file was simply wrong afterwards, and it was committed that way.
 
 The fix is the shape `publish_telemetry` already had: the index root is derived from the digest root at the call site rather than kept as a constant of its own, so a caller that moves the days moves the index with them. Two tests hold it - one that the derived root follows a redirected `PUBLIC_ROOT` out of the repository, and one that the shard on disk names exactly the days on disk. The second is the reader-facing half: the archive lists what that file holds, so a shard that disagrees with the tree is a page listing the wrong stories.
 
@@ -582,7 +585,7 @@ So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes
 
 So the blind path stays blind, and each caller that owns a repeat is now named next to it. Two of the four ledgers absorb a repeat at read time: `load_seen` and `load_published` keep the earliest of two rows, so a duplicate costs bytes and never moves a date. The health pair does not, and that is stated rather than guarded: `discover.resting` counts failures to decide a quarantine, so a duplicated failure counts twice. Measured on this checkout 2026-08-27, the published ledger held 2,097 rows and 2,097 distinct addresses in the flat file it has since moved off.
 
-**Where the code was already safe, the fix was a sentence and not a guard.** A guard that can never fire is untested branch weight, and it hides which file the guarantee actually lives in. `cli._published_rows` reads as "everything the day holds" and behaves as "what this run added", and it does that because the plan a later run built has already dropped every published address. Its comment used to claim the filter itself; it now names the upstream facts it depends on, so the next person to widen the plan sees what they would break.
+**Where the code was already safe, the fix was a sentence and not a guard.** A guard that can never fire is untested branch weight, and it hides which file the guarantee actually lives in. `stages.assemble._published_rows` reads as "everything the day holds" and behaves as "what this run added", and it does that because the plan a later run built has already dropped every published address. Its comment used to claim the filter itself; it now names the upstream facts it depends on, so the next person to widen the plan sees what they would break.
 
 **One path was not safe, and that one was fixed.** The day's run reference counted what the current attempt added rather than what the number introduced, so a replay after a lost manifest write built a payload its own contract rejects - `run 1 items_added disagrees with the items it introduced` - and the day was lost rather than doubled. The count now comes from the assembled day, which is the definition the contract validates against.
 

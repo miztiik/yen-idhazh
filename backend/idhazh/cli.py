@@ -18,6 +18,13 @@ publishes still keeps what it measured.
     idhazh backfill-vectors   re-encode closed days whose vectors are short
 
 That last one is a repair, not a stage. Nothing schedules it.
+
+Each stage is a module under `idhazh.stages`, and this router imports the
+module rather than the names inside it. So `cli.stage_work` does not resolve,
+and the only way to a stage is the module that defines it. A router that also
+republished its workers' names would be a second import path nobody declared,
+and every caller reaching through it would name the router as the home of code
+the router does not contain.
 """
 
 from __future__ import annotations
@@ -50,125 +57,31 @@ from idhazh.fingerprint import (
     file_digest,
     runtime_build,
 )
-from idhazh.stages import common
-from idhazh.stages.assemble import _index_root, _published_rows, _recorded_inputs, stage_assemble
-from idhazh.stages.backfill_vectors import (
-    earns_a_vector,
-    is_closed,
-    needs_backfill,
-    stage_backfill_vectors,
+from idhazh.stages import (
+    assemble as assemble_stage,
 )
-from idhazh.stages.common import (
-    INPUTS_PAYLOAD,
-    LOG,
-    Fetcher,
-    _canary_article,
-    _item_payloads,
-    _load_day,
-    _load_manifest,
-    _load_plan,
-    _log_no_reply,
-    _plan_path,
-    published_days,
-    shard_of,
+from idhazh.stages import (
+    backfill_vectors,
+    common,
+    counters,
+    decide,
+    dedupe_ledgers,
+    harvest,
+    prune_stamp,
+    prune_state,
+    qualify,
+    qualify_canaries,
+    qualify_decide,
+    rebuild_score_index,
+    record,
+    site_weight,
+    validate,
+    validate_days,
+    work,
 )
-from idhazh.stages.counters import stage_counters
-from idhazh.stages.decide import stage_decide
-from idhazh.stages.dedupe_ledgers import stage_dedupe_ledgers
-from idhazh.stages.harvest import stage_harvest
-from idhazh.stages.plan import (
-    RETIRED_DETAIL,
-    _next_run_n,
-    _record_plan_duplicates,
-    _run_id,
-    _within_ceiling,
-    stage_plan,
+from idhazh.stages import (
+    plan as plan_stage,
 )
-from idhazh.stages.prune_stamp import stage_prune_stamp
-from idhazh.stages.prune_state import stage_prune_state
-from idhazh.stages.qualify import _freeze, corpus_share, stage_qualify
-from idhazh.stages.qualify_canaries import _canary_report, stage_qualify_canaries
-from idhazh.stages.qualify_decide import stage_qualify_decide
-from idhazh.stages.rebuild_score_index import stage_rebuild_score_index
-from idhazh.stages.record import stage_record
-from idhazh.stages.site_weight import stage_site_weight
-from idhazh.stages.validate import _summarize_one, stage_validate
-from idhazh.stages.validate_days import (
-    _day_faults,
-    _picture_faults,
-    _proved,
-    _receipts_for,
-    _validator_identity,
-    day_validations_path,
-    stage_validate_days,
-)
-from idhazh.stages.work import (
-    _FetchedWorkItem,
-    _summarize_band_sort_key,
-    _write_evidence,
-    stage_work,
-    trace_sink,
-)
-
-# Every name the rest of the repository reaches through `idhazh.cli` still
-# resolves here, so a caller and a test name what they always named. A root
-# a test redirects is deliberately absent: a redirect left on this module
-# has to raise rather than bind a copy nothing reads. Naming them here also
-# says the re-export is deliberate rather than an import nobody noticed.
-__all__ = [
-    "INPUTS_PAYLOAD",
-    "RETIRED_DETAIL",
-    "Fetcher",
-    "_FetchedWorkItem",
-    "_canary_article",
-    "_canary_report",
-    "_day_faults",
-    "_freeze",
-    "_index_root",
-    "_item_payloads",
-    "_load_day",
-    "_load_manifest",
-    "_log_no_reply",
-    "_next_run_n",
-    "_picture_faults",
-    "_proved",
-    "_published_rows",
-    "_receipts_for",
-    "_record_plan_duplicates",
-    "_recorded_inputs",
-    "_summarize_band_sort_key",
-    "_summarize_one",
-    "_validator_identity",
-    "_within_ceiling",
-    "_write_evidence",
-    "corpus_share",
-    "day_validations_path",
-    "earns_a_vector",
-    "is_closed",
-    "main",
-    "needs_backfill",
-    "published_days",
-    "shard_of",
-    "stage_assemble",
-    "stage_backfill_vectors",
-    "stage_counters",
-    "stage_decide",
-    "stage_dedupe_ledgers",
-    "stage_harvest",
-    "stage_plan",
-    "stage_prune_stamp",
-    "stage_prune_state",
-    "stage_qualify",
-    "stage_qualify_canaries",
-    "stage_qualify_decide",
-    "stage_rebuild_score_index",
-    "stage_record",
-    "stage_site_weight",
-    "stage_validate",
-    "stage_validate_days",
-    "stage_work",
-    "trace_sink",
-]
 
 
 def _today() -> str:
@@ -232,13 +145,13 @@ def _scorer(enabled: bool) -> object | None:
     and all four workers exited before summarizing a single article.
     """
     if not enabled:
-        LOG.warning("faithfulness scoring disabled - no eval rows will be written")
+        common.LOG.warning("faithfulness scoring disabled - no eval rows will be written")
         return None
     scorer = HhemScorer()
     try:
         scorer.load()
     except Exception as error:
-        LOG.error(
+        common.LOG.error(
             "the faithfulness scorer did not load, so this run writes no eval rows: %s: %s",
             type(error).__name__,
             error,
@@ -261,12 +174,12 @@ def _scores_this_run(
     a run scores everything or nothing (`evals/sampling.py`).
     """
     if not observability.evaluation_enabled:
-        LOG.info("faithfulness scoring is off in config")
+        common.LOG.info("faithfulness scoring is off in config")
         return False
     if not flag_allows:
         return False
     if not sampling.run_is_sampled(run_id, observability.sample_rate):
-        LOG.info(
+        common.LOG.info(
             "run not drawn for scoring run_id=%s sample_rate=%s",
             run_id,
             observability.sample_rate,
@@ -557,7 +470,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # and starting one to do it would read every host's robots.txt for nothing.
         if args.site_tree is None:
             parser.error("site-weight needs --site-tree: the built bundle to measure")
-        return stage_site_weight(
+        return site_weight.stage_site_weight(
             args.site_tree,
             settings.app.retention,
             items_per_day=settings.app.run.safety_ceiling_per_run,
@@ -586,11 +499,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "Name --state-root as well, or read the committed tree."
             )
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
-        return stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
+        return validate_days.stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
 
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
-        return stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
+        return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
 
     if args.stage == "dedupe-ledgers":
         # Above the fetcher because it reads and rewrites committed files only.
@@ -608,7 +521,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "dedupe-ledgers needs --date (the run whose shards it settles) "
                 "or --every-shard (the operator's full pass), and not both"
             )
-        return stage_dedupe_ledgers(date=None if args.every_shard else args.date)
+        return dedupe_ledgers.stage_dedupe_ledgers(date=None if args.every_shard else args.date)
 
     if args.stage == "rebuild-score-index":
         # Above the fetcher for the same reason dedupe-ledgers is: it reads and
@@ -622,17 +535,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "rebuild-score-index needs --month (the months to rewrite) "
                 "or --every-shard (the operator's full pass), and not both"
             )
-        return stage_rebuild_score_index(months=None if args.every_shard else args.month)
+        return rebuild_score_index.stage_rebuild_score_index(
+            months=None if args.every_shard else args.month
+        )
 
     if args.stage == "prune-state":
         # And this one only reads and deletes committed files. A fold that opened
         # a socket would be reading the open web to decide what to delete.
         pruned_on = args.date or _today()
-        return stage_prune_state(
+        return prune_state.stage_prune_state(
             observability=settings.app.observability,
             collect=settings.app.collect,
             retention_config=settings.app.retention,
-            run_id=_run_id(pruned_on, args.execution),
+            run_id=plan_stage._run_id(pruned_on, args.execution),
             today=date_type.fromisoformat(pruned_on),
             dry_run=args.dry_run,
         )
@@ -643,7 +558,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     read_url = common.live_fetcher(settings)
 
     if args.stage == "validate":
-        stage_validate(
+        validate.stage_validate(
             settings=settings,
             date=date,
             leaderboard=args.leaderboard,
@@ -653,12 +568,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage == "decide":
-        return stage_decide(
+        return decide.stage_decide(
             settings=settings, date=date, commit_sha=args.commit, runner=args.runner
         )
 
     if args.stage == "qualify":
-        stage_qualify(
+        qualify.stage_qualify(
             settings=settings,
             date=date,
             shard=args.shard,
@@ -674,21 +589,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage == "qualify-canaries":
-        return stage_qualify_canaries(settings=settings, date=date)
+        return qualify_canaries.stage_qualify_canaries(settings=settings, date=date)
 
     if args.stage == "backfill-vectors":
         # `--date` names the day this treats as still open, and it is clamped to
         # today so a future date cannot bring the live day into scope. The live
         # day is the one the scheduled pipeline is appending to.
-        return stage_backfill_vectors(
+        return backfill_vectors.stage_backfill_vectors(
             root=common.PUBLIC_ROOT,
-            index_root=_index_root(),
+            index_root=assemble_stage._index_root(),
             today=min(date, _today()),
             embedder=Embedder(config.REPO_ROOT, settings.app.assist),
         )
 
     if args.stage == "qualify-decide":
-        return stage_qualify_decide(
+        return qualify_decide.stage_qualify_decide(
             settings=settings,
             date=date,
             job_budget_minutes=args.job_budget_minutes,
@@ -698,19 +613,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "shards":
         # stdout carries the answer and stderr carries the logs, so a caller
         # reads one number without parsing a log line.
-        print(shard_count(len(_load_plan(date).items), run=settings.app.run))
+        print(shard_count(len(common._load_plan(date).items), run=settings.app.run))
         return 0
 
     if args.stage in ("plan", "run"):
-        plan = stage_plan(
+        plan = plan_stage.stage_plan(
             date, settings=settings, fetcher=read_url, cap=args.cap, execution=args.execution
         )
-        assemble.write_atomic(_plan_path(date), plan.to_json())
-        LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
+        assemble.write_atomic(common._plan_path(date), plan.to_json())
+        common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
     if args.stage in ("work", "run"):
-        work_plan = _load_plan(date)
-        stage_work(
+        work_plan = common._load_plan(date)
+        work.stage_work(
             work_plan,
             settings=settings,
             scorer=_scorer(
@@ -726,12 +641,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.stage == "record":
-        stage_record(_load_plan(date), settings=settings, shard=args.shard, shards=args.shards)
+        record.stage_record(
+            common._load_plan(date), settings=settings, shard=args.shard, shards=args.shards
+        )
         return 0
 
     if args.stage == "counters":
-        stage_counters(
-            _load_plan(date),
+        counters.stage_counters(
+            common._load_plan(date),
             metrics_path=args.counters_file,
             shard=args.shard,
             shards=args.shards,
@@ -747,12 +664,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage in ("assemble", "run"):
-        stage_assemble(
-            _load_plan(date), settings=settings, commit_sha=args.commit, runner=args.runner
+        assemble_stage.stage_assemble(
+            common._load_plan(date), settings=settings, commit_sha=args.commit, runner=args.runner
         )
 
     if args.stage == "harvest":
-        stage_harvest(
+        harvest.stage_harvest(
             date,
             settings=settings,
             corpus_dir=args.corpus_dir,

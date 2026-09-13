@@ -17,7 +17,7 @@ from collections.abc import Callable
 
 import pytest
 
-from idhazh import cli, config, extract
+from idhazh import config, extract
 from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
@@ -26,6 +26,8 @@ from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import qualify
 from idhazh.fetch import FetchResult
+from idhazh.stages.common import shard_of
+from idhazh.stages.qualify import _freeze, corpus_share
 
 SETTINGS = config.load()
 SUMMARIZE = SETTINGS.app.summarize
@@ -173,8 +175,8 @@ def test_every_tier_is_filled_when_the_slice_can_supply_it() -> None:
     so one shard alone clears it and the union has room to spare."""
     keep = BANDS * qualify.MIN_PER_BAND
     items, layout = a_plan(dict.fromkeys(range(BANDS), 4))
-    chosen, attempted, unmet = cli._freeze(
-        items, SETTINGS, fetcher_for(layout), keep=keep, share=cli.corpus_share()
+    chosen, attempted, unmet = _freeze(
+        items, SETTINGS, fetcher_for(layout), keep=keep, share=corpus_share()
     )
     assert unmet == []
     assert attempted <= len(items)
@@ -188,8 +190,8 @@ def test_a_tier_the_slice_cannot_supply_is_named(caplog: pytest.LogCaptureFixtur
     counts[BANDS - 1] = 0
     items, layout = a_plan(counts)
     with caplog.at_level(logging.ERROR):
-        chosen, _, unmet = cli._freeze(
-            items, SETTINGS, fetcher_for(layout), keep=10, share=cli.corpus_share()
+        chosen, _, unmet = _freeze(
+            items, SETTINGS, fetcher_for(layout), keep=10, share=corpus_share()
         )
     assert any(f"band {BANDS - 1}" in line for line in unmet)
     assert not any(entry.row.band_index == BANDS - 1 for entry in chosen)
@@ -203,8 +205,8 @@ def test_the_walk_continues_past_the_pool_floor_to_reach_a_scarce_tier() -> None
     scarce = [planned(index, BANDS - 1) for index in range(floor + 4, floor + 7)]
     layout = {item.canonical_url: words_for_band(1) for item in common}
     layout |= {item.canonical_url: words_for_band(BANDS - 1) for item in scarce}
-    chosen, attempted, _ = cli._freeze(
-        [*common, *scarce], SETTINGS, fetcher_for(layout), keep=keep, share=cli.corpus_share()
+    chosen, attempted, _ = _freeze(
+        [*common, *scarce], SETTINGS, fetcher_for(layout), keep=keep, share=corpus_share()
     )
     assert attempted > floor
     assert any(entry.row.band_index == BANDS - 1 for entry in chosen)
@@ -214,8 +216,8 @@ def test_the_scarce_tier_is_not_crowded_out_by_the_common_one() -> None:
     """`keep` is small and the common tier is large, so the order decides."""
     counts = {0: 0, 1: 20, 2: 0, BANDS - 1: 2}
     items, layout = a_plan(counts)
-    chosen, _, _ = cli._freeze(
-        items, SETTINGS, fetcher_for(layout), keep=4, share=cli.corpus_share()
+    chosen, _, _ = _freeze(
+        items, SETTINGS, fetcher_for(layout), keep=4, share=corpus_share()
     )
     assert sum(1 for entry in chosen if entry.row.band_index == BANDS - 1) == 2
 
@@ -267,12 +269,12 @@ def test_a_tier_that_falls_in_one_shard_survives_the_split() -> None:
     # `test_the_scarce_tier_is_not_crowded_out_by_the_common_one`'s job.
     keep = -(-len(ordered) // shards)
     for shard in range(shards):
-        chosen, _, _ = cli._freeze(
-            cli.shard_of(plan, shard=shard, shards=shards),
+        chosen, _, _ = _freeze(
+            shard_of(plan, shard=shard, shards=shards),
             SETTINGS,
             fetcher_for(layout),
             keep=keep,
-            share=cli.corpus_share(),
+            share=corpus_share(),
         )
         union.extend(entry.row for entry in chosen)
     assert len({row.url_key for row in union}) == len(union)
@@ -282,11 +284,11 @@ def test_a_tier_that_falls_in_one_shard_survives_the_split() -> None:
 def test_the_selection_does_not_move_when_the_pool_is_reordered() -> None:
     """Registered by hash before any output is read, so it cannot be re-rolled."""
     items, layout = a_plan(dict.fromkeys(range(BANDS), 4))
-    first, _, _ = cli._freeze(
-        items, SETTINGS, fetcher_for(layout), keep=8, share=cli.corpus_share()
+    first, _, _ = _freeze(
+        items, SETTINGS, fetcher_for(layout), keep=8, share=corpus_share()
     )
-    again, _, _ = cli._freeze(
-        items, SETTINGS, fetcher_for(layout), keep=8, share=cli.corpus_share()
+    again, _, _ = _freeze(
+        items, SETTINGS, fetcher_for(layout), keep=8, share=corpus_share()
     )
     assert [entry.row.url_key for entry in first] == [entry.row.url_key for entry in again]
 

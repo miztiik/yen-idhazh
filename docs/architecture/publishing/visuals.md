@@ -33,7 +33,7 @@ each shard has to hand its drawn bytes to `assemble` itself, which is the `shard
 artifact in `digest.yml`. The decisions travel inside `items-<n>`, which is rooted at the items
 directory and therefore cannot carry a file written under `frontend/public/digest/`. Without the
 second artifact the day publishes a payload naming an asset nobody uploaded, which
-`cli._picture_faults` reports as "names a picture file that is not there".
+`stages.validate_days._picture_faults` reports as "names a picture file that is not there".
 
 **The flag is the first of two commits** (plan 11 rows #5b and #6). The second deletes the flag,
 the small model, this stage and its job together. Until then the flag off leaves the pipeline
@@ -866,7 +866,254 @@ predicate above exact rather than approximate.
 **A caption written about dropped bars is discarded.** If any bar was removed, the model's caption
 described a chart that no longer exists.
 
-## Rendering runs without a browser
+## Where a drawing becomes pixels, ruled
+
+**The reader's browser draws the chart. The pipeline never draws one.** Owner ruling,
+2026-09-13, under `CLAUDE.md` section 0.
+
+**The chain, end to end.** Code reads the article and finds every quantity it can, with the
+offsets that prove where each one came from. The model labels those quantities, names the
+chart type and selects which elements it is drawn from. Code compiles that into a spec -
+the data and its shape, and nothing else. **The day payload carries that spec**, and the
+reader's browser draws the SVG from it with d3. Nothing renders at build time and no
+drawing is committed.
+
+**This closes a question three documents answered three different ways**, which is why a
+worker scoping plan 12 row #1 stopped rather than guess. In
+[`../../../TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md),
+row 22 ruled build-time SVG with hydration on point-or-focus, and row 37 ruled that the
+compiled spec travels in the day payload and the browser draws it. The proposal behind both
+still records the question as open. The code follows row 22. **Row 37 was right, and it is
+now the whole rule rather than the tail of it**: there is one drawing path and it is the
+browser's.
+
+**What the ruling costs, named rather than implied.** A reader with JavaScript off gets no
+chart, where today they get one, because today the drawing is markup inside the document
+itself. That is the reason row 22 chose build-time SVG and it is a real loss. And the
+drawing stops being an archival artefact: a committed SVG is a fixed record of what a reader
+saw on a given day, where a spec plus drawing code can be redrawn differently by a later
+change with nothing in the payload to show it moved. `renderer_version` travelling on the
+payload is what makes that visible, and it is why it is minted before anything draws.
+
+**What it buys.** The 495 committed drawings - 6.01 MB, mean 12.4 KB each, measured
+2026-09-13 - stop being published bytes, and their growing tail stops counting against the
+1 GB site cap (Guardrail #2). The chart takes the width the reader's screen actually has,
+which a fixed build-time canvas cannot do and which is the whole of plan 12's complaint. The
+two-runs-one-path race that `drop_raced_assets.py` exists to clean up has nothing left to
+race over. And the build-time renderer's own non-determinism goes with it - the clip-path
+counter recorded below - because determinism moves to the spec, which is where the
+architecture record already argued it belongs.
+
+**What this ruling does NOT change, because each has been read as following from it.** The
+pages stay prerendered; prerendering a route and prerendering a chart are different acts and
+only the second one ends. The model still never writes a number - it labels, names and
+selects, and code cuts every character a reader sees. The validator, the downgrade ladder
+and the sufficiency bar all stay; what moves is only where the spec becomes pixels. The
+console keeps its own chart engine and is not migrated.
+
+### The whole flow, drawn, so nobody has to infer it again
+
+**This is the target state and it is drawn because inferring it is what went wrong.** The two
+drawings it extends are in
+[`../../../TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md):
+section 1a draws the pipeline end to end, and section 10.1b-m zooms into stage 1, where code and the
+model divide the work. Neither drawing reached the reader's browser, because when they were made the
+pipeline still drew the picture. This one carries the chain all the way to the screen. Same
+conventions: **a box carries a name and the one assertion an arrow cannot carry**, and every field
+list lives in the table below, keyed by node id.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","background":"#ffffff","mainBkg":"#ffffff","edgeLabelBackground":"#ffffff","labelBackground":"#ffffff","textColor":"#0b1020","titleColor":"#0b1020","nodeTextColor":"#0b1020","secondaryTextColor":"#0b1020","tertiaryTextColor":"#0b1020","lineColor":"#6e7781","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%
+flowchart TD
+
+  subgraph BE["BUILD TIME - the pipeline, in CI.  NOTHING IS DRAWN HERE."]
+    direction TB
+    ART["<b>ARTICLE</b><br/>sanitized text; every span indexes these bytes"]
+    CP["<b>CANDIDATE PASS</b> - code<br/>finds every quantity the number pattern matches<br/>mints element_id, span_start, span_end"]
+    C1["<b>CALL 1</b> - model<br/>labels what each number MEANS<br/>no schema field accepts a value, a unit or an offset"]
+    ANC["<b>ANCHORING</b> - code<br/>one rule per shape<br/>what will not anchor is dropped"]
+    TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, cut from the article<br/>TIER 2 model-assigned, span-anchored")]
+    C2["<b>CALL 2</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles"]
+    VP["<b>VISUAL PLAN</b><br/>type + role -&gt; element_ids<br/>no geometry, no literal value, no authored text"]
+    VV{"<b>VALIDATOR</b> - deterministic, no model<br/>is this type drawable from these elements?"}
+    DL["<b>DOWNGRADE LADDER</b><br/>depth 1, depth 2, then refuse"]
+    VC["<b>COMPILER</b> - code<br/>plan + elements =&gt; THE DATA AND ITS SHAPE<br/>every number traced to an element or a derived value"]
+    ART --> CP --> C1 --> ANC --> TE --> C2 --> VP --> VV
+    VV -->|"drawable"| VC
+    VV -->|"not drawable"| DL
+    DL -->|"re-enters the SAME validator"| VV
+  end
+
+  subgraph PUB["PUBLISHED - committed files, sharded by day"]
+    direction TB
+    DJ[("<b>digest.json</b> - the day's TEXT<br/>carries a POINTER to the visual, never its data<br/><b>never deleted</b>")]
+    VJ[("<b>&lt;item_id&gt;.json</b> - ONE VISUAL, ONE FILE<br/>the data, its shape, renderer_version<br/><b>pruned on its own clock</b>")]
+  end
+
+  subgraph FE["READ TIME - the reader's browser.  EVERY DRAWING HAPPENS HERE."]
+    direction TB
+    PG["<b>THE PAGE</b><br/>reads digest.json and renders the text<br/>the text never waits on a drawing"]
+    FJ["<b>FETCH</b> the visual file<br/>when the story comes near"]
+    SC{"<b>SHAPE CHECK</b> - the frontend contract<br/>does this data fit the type it names?"}
+    D3["<b>d3 DRAWS</b> the SVG into the document<br/>at the width the screen actually has"]
+    DEG(["<b>DEGRADE</b> - the story is simply shorter<br/>no broken glyph, no grey box, no skeleton"])
+    PG --> FJ --> SC
+    SC -->|"fits"| D3
+    SC -->|"does not fit"| DEG
+  end
+
+  VC -->|"the pointer"| DJ
+  VC -->|"the data"| VJ
+  DJ --> PG
+  VJ --> FJ
+
+  subgraph KEY["KEY"]
+    direction LR
+    K1["code"]
+    K2["model"]
+    K3{"a gate that can refuse"}
+    K4[("persisted")]
+    K5(["a refusal"])
+  end
+
+  classDef code fill:#eef2ff,stroke:#4c6ef5,stroke-width:2px,color:#0b1020;
+  classDef model fill:#fff4e6,stroke:#f08c00,stroke-width:2px,color:#0b1020;
+  classDef gate fill:#f3f0ff,stroke:#7048e8,stroke-width:2px,color:#0b1020;
+  classDef store fill:#e6fcf5,stroke:#0ca678,stroke-width:2px,color:#0b1020;
+  classDef none fill:#fff5f5,stroke:#e03131,stroke-width:1.5px,color:#0b1020;
+  classDef plain fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#0b1020;
+
+  class ART,PG,FJ plain;
+  class CP,ANC,VP,DL,VC,D3,K1 code;
+  class C1,C2,K2 model;
+  class VV,SC,K3 gate;
+  class TE,DJ,VJ,K4 store;
+  class DEG,K5 none;
+```
+
+**What the boxes do not carry.**
+
+| Node | What it holds |
+|---|---|
+| `CP` | Code reads first and the model never sees a raw article without a candidate table beside it. It emits `element_id`, `kind`, `surface`, `span_start`, `span_end`, `value`, `unit`, `sentence_index`, `extractor` |
+| `C1` | The model's whole numeric vocabulary is `0..len(candidates)-1`. **It cannot write a number because no field of the schema accepts one**, which is a property of the grammar rather than a check somebody remembered to add |
+| `VP` | `decision`, `purpose`, `type`, `encodings`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal value, no authored text, no `alt_text` |
+| `VV` | Eight checks: elements exist; semantically compatible; units compatible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched |
+| `VC` | The one place the picture's numbers come into being, and every one of them is arithmetic over Tier 1 elements through a closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |
+| `DJ` | The day's text, and for each item a pointer: the visual's `kind`, its `state`, and where its file is. **No chart data, ever** |
+| `VJ` | One visual, as `VisualData`: `item_id`, `type`, `renderer_version`, a flat `marks` pool each carrying `text`, `value`, `unit` and its provenance, and an `encoding` saying which marks fill which channel |
+| `SC` | The frontend contract. It refuses rather than guesses, and a refusal costs the story its picture and nothing else |
+
+**Three things this drawing rules out, and a plan-doc may not relax any of them.**
+
+**The model names the type; it never draws and never writes a number.** It selects by id into roles. Every displayed value is cut by code from the article's own bytes, or derived from those by the allow-list.
+
+**Nothing is drawn at build time.** There is no SVG on disk, no headless browser, and no Node in the pipeline. `BE` ends at data.
+
+**The text never waits on a drawing.** `digest.json` is a complete page on its own. The visual file is a separate fetch, and a reader who never scrolls to a chart never pays for one.
+
+### Where the data lives, and why it is not in the day payload
+
+**Published location, ruled 2026-09-13.** One visual is one file, in the day's own directory, beside
+the payload that points at it:
+
+```
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json
+```
+
+That is the path the drawing already occupies with a `.svg` extension, so the shape does not move -
+only what is inside it. **The shard is the day directory**, which is what every other published
+store uses, and the day is also what a reader fetches.
+
+**The chart data is kept out of `digest.json`, and the prune is the reason rather than the size.**
+The day payload is never deleted - it is the record that a day happened. Chart data inside it would
+therefore be undeletable, and `retention.image_months` would have nothing to act on. A separate file
+per visual keeps the two clocks apart: the text is permanent, the drawing ages out, and the prune
+granularity stays exactly what it is today rather than coarsening to a whole day.
+
+**The size argument is real but it is the second reason.** Measured 2026-09-13 over all 24 committed
+days: `digest.json` totals 23.30 MB, mean 994.3 KB a day, largest 1.88 MB. Only 495 of 9,353 items
+carry a drawing - **5.3 percent** - so folding chart data into the payload would make every reader
+download data for charts that 94.7 percent of stories do not have, and would push the largest day
+further up against the 1 GB site cap.
+
+### The contract, and the one field the day payload gains
+
+`VisualData` in `backend/idhazh/contracts/visual_data.py` is the shape of that file, and
+`schemas/visual-data.schema.json` is generated from it. Three parts.
+
+| Part | What it is |
+| --- | --- |
+| `item_id`, `type` | Which story, and which of the declarable forms. A new type costs an enum member, never a new document format. |
+| `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Exactly one of the two, checked. |
+| `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
+
+**The pool is flat because a row is a geometry decision.** A bar is a name and a length, a scatter
+point is two measured axes, a histogram bar is a bin - shape them into rows here and this contract
+grows a case per type and stops being data. A flat pool with an encoding over it can also express
+the thing a row list cannot: four names against three figures, which is exactly the mis-shaped
+payload the reader's page has to refuse rather than draw short.
+
+The day payload gains **one** field, `DigestVisual.data_path`, and gains nothing else. It stays what
+the flow's node table says it is - a pointer - and the chart data never enters it.
+
+### `renderer_version` has one home, and this is why it has one
+
+`VisualData.renderer_version` is the one place a drawing contract's version is stated. Not on a
+mark, not on the decision, not in the day payload.
+
+**Two homes is a failure this subsystem has already had.** `spec_format` carried the same idea in a
+second place, the two disagreed on 2026-09-05T18:00, and what disagreeing looks like from a reader's
+seat is a page drawing yesterday's numbers under today's rules. A version in one place can be wrong.
+A version in two places can be *inconsistent*, and nothing downstream can tell which one to believe.
+
+The reader's page holds the set of renderers it knows and refuses anything else. That is what lets
+the shape move at all: a later build publishes a later stamp, an older cached page does not draw it,
+and nobody gets a chart whose data means something other than what the picture says.
+
+### The degrade rule, stated once
+
+**A visual that cannot be drawn leaves the story shorter, and costs nothing else.** Four things
+degrade, and every one of them degrades to the same place.
+
+| What went wrong | What the reader gets |
+| --- | --- |
+| The day predates this file, so `data_path` is absent | The story, with no chart. Absent reads as no data carried. |
+| The drawing was published and the data write failed | The story, with no chart. `data_path` stays null; nothing half-written is pointed at. |
+| The file does not fetch, or is not a `visual-data` document | The story, with no chart. |
+| The document names a renderer or a type this page does not know, or its channels do not pair | The story, with no chart, and a console line naming the file. |
+
+**It refuses rather than guesses, and refusing is free.** A degrade path that draws something
+approximate is how a wrong chart reaches a reader, and the product is trust. 94.7 percent of stories
+already have no visual, so a story without one is the ordinary shape of the page rather than a hole
+in it - there is no placeholder to design and no layout to hold open.
+
+`refusedVisualData` in `frontend/src/lib/payload/drawing.ts` is where that check lives, beside
+`refusedDrawing`, and for the same reason: both the build and the browser import that module, and
+two copies of one refusal is how the two drift.
+
+### Two things this row did not move, and the row that owns them
+
+**`retention.py` still prunes by image suffix.** `_VISUAL_SUFFIXES` is `.png`, `.webp`, `.jpg`,
+`.jpeg` and `.svg`, so a pruned day now leaves its `.json` files behind. Adding `.json` to that set
+without first excluding the day's own payloads would delete `digest.json` and `run.json`, which is a
+much worse failure than an orphan, so it is not a one-line change and it is not this row's.
+`retention.image_months` is 13 and the oldest committed visual is weeks old, so nothing prunes
+before 2027.
+
+**`frontend/scripts/copy-visuals.mjs` stages by image suffix too**, so the data file is not copied
+into the bundle. Nothing fetches it yet, so nothing is broken by that today.
+
+Both belong to the row that makes the browser draw, which is the row that first needs the file to be
+there. They are listed here rather than in a plan-doc alone because this page is what somebody reads
+before changing either file.
+
+
+## The build-time renderer, which the ruling above retires
+
+**This section describes what runs today, and the ruling above ends it.** It stays until
+the drawing moves to the browser, because a page that describes a renderer we deleted is
+as wrong as one that hides a renderer we still run.
 
 | Kind | Persisted spec | Renderer |
 | --- | --- | --- |
@@ -907,11 +1154,26 @@ The renderer writes SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.
 payload that references it. A render failure records why and the item publishes without a
 picture. No failure path raises.
 
+**The spec is compiled and then thrown away, which is the gap the ruling above closes.**
+`VisualDecision.spec` lands under gitignored `backend/var/`, travels as a one-day artifact,
+and the published `DigestVisual` carries only `kind`, `state`, `path` and `alt` - so the data
+the drawing was made from is unreachable 24 hours after a run. The browser is handed a
+finished picture and no way to redraw it at the size the reader's screen actually has.
+
 ### One plan becomes one picture, and `compile_bar` is the only thing that draws it
 
 `backend/idhazh/render/chart.py` holds the compiler the plan contract was written for. It takes one
 validated `VisualPlan` and one article's `ElementTable`, resolves every mark through
-`resolve_displayed_values`, and returns the Vega-Lite spec and the alt text together.
+`resolve_displayed_values`, and returns the Vega-Lite spec, the alt text and the published data
+together.
+
+**One resolution, three outputs.** The spec, the sentence and the wire data are built from the same
+resolved marks in one pass, so the picture a reader sees, the sentence a screen reader reads and the
+data a browser will draw cannot disagree about what the article said. Resolving twice is how they
+would. `TestPublishedData` in `backend/tests/test_render.py` is the oracle: it renders the spec,
+measures the bars out of the drawn SVG, and asserts the published marks are the same names in the
+same order at one scale. **That comparison is only possible while both exist**, which is why it is
+written now rather than in the row that deletes the renderer.
 
 **Every number in that spec came out of the article, by construction.** The plan carries element
 references and no figure at all - the shape refuses one - so a bar can only be as long as an element

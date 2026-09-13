@@ -21,24 +21,29 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 8 | 6 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 0 |
+| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 1 | 6 | 0 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-17-infographic-vocabulary-plan.md](20260905-17-infographic-vocabulary-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-18-diagram-vocabulary-plan.md](20260905-18-diagram-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-19-visual-telemetry-plan.md](20260905-19-visual-telemetry-plan.md) | 4 | 0 | 4 | 1 |
+| [20260905-19-visual-telemetry-plan.md](20260905-19-visual-telemetry-plan.md) | 4 | 0 | 4 | 0 |
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 4 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 4 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 3 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 0 | 13 | 3 |
 
-## In flight - 0
+## In flight - 4
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #1b | 12 | B | The browser draws the chart, and the pipeline stops rendering | p12-r1b |
+| #1 | 19 | A | The fold key, decided before anything writes a row | p19-r1 |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | p23-r7b |
+| #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
 
 ## Ready now - 21
 
@@ -57,20 +62,20 @@ section 3 is where it is answered.
 | #2 | 16 | B | The four ways code may reach a number the article did not write | 1 |
 | #1 | 17 | A | A real sentence made to fit, without anyone re-writing it | - |
 | #1 | 18 | A | The words that mean "then", and the words that mean "against" | - |
-| #1 | 19 | A | The fold key, decided before anything writes a row | - |
 | #1 | 20 | A | The two funnels | - |
 | #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 |
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | 7a, P4, 6, plan 11 row 6 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #8a | 25 | J | The second desk reaches the reader | 8 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
-| #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
+| #1 | 28 | A | The runtime sweep reaches for a key that is not there | - |
+| #2 | 28 | A | The turn envelope moves onto the model entry | - |
+| #3 | 28 | A | Every tokenizer-shaped constant names the weights it was taken against | - |
 
-## Waiting on another row - 56
+## Waiting on another row - 65
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -79,13 +84,12 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #1 | 12 | A | A new engine behind the same seam | - |
-| #2 | 12 | B | The drawing takes the width it is given | 1 is BLOCKED |
-| #3 | 12 | B | Numbers a reader can say out loud | 1 is BLOCKED |
-| #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
-| #5 | 12 | D | A caption, and one mark that lands first | 4 is PENDING |
-| #6 | 12 | E | A whole day, again | 5 is PENDING |
-| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1 is BLOCKED |
+| #2 | 12 | C | The drawing takes the width it is given | 1b is IN-FLIGHT |
+| #3 | 12 | C | Numbers a reader can say out loud | 1b is IN-FLIGHT |
+| #4 | 12 | D | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
+| #5 | 12 | E | A caption, and one mark that lands first | 4 is PENDING |
+| #6 | 12 | F | A whole day, again | 5 is PENDING |
+| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1b is IN-FLIGHT |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
@@ -105,7 +109,7 @@ section 3 is where it is answered.
 | #4 | 18 | D | A layout that draws the same twice | 3 is PENDING |
 | #5 | 18 | E | Trees, states and branches | 4 is PENDING |
 | #6 | 18 | F | A whole day, once more | 5 is PENDING |
-| #2 | 19 | B | A stage of its own | 1 is PENDING |
+| #2 | 19 | B | A stage of its own | 1 is IN-FLIGHT |
 | #3 | 19 | C | One row per attempt, and a reason for every refusal | 2 is PENDING |
 | #4 | 19 | D | What a re-render needs, and where a rejected plan lives | 3 is PENDING |
 | #2 | 20 | B | Why it was refused, and what happened when it stepped down | 1 is PENDING |
@@ -117,9 +121,9 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
+| #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is IN-FLIGHT |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
-| #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is PENDING; 8 is PENDING |
+| #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is IN-FLIGHT; 8 is PENDING |
 | #9 | 23 | K | Confidence is a masked probability over the label's whole span | 8 is PENDING; 14 is PENDING; P5 is PENDING |
 | #15 | 23 | K | The console tab, at `/console/judgement/` | 14 is PENDING; plan 25 row #12 is PENDING |
 | #10 | 23 | L | Five stances, each with its own decline, behind a gate written in code | 8 is PENDING; 14 is PENDING |
@@ -130,6 +134,16 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
+| #4 | 28 | B | Benchmark records lose the date from their filename | 2 is PENDING; 3 is PENDING |
+| #5 | 28 | C | Five things the server proves before the first item | 2 is PENDING |
+| #6 | 28 | C | One complete config file per model, selected by a pointer | 2 is PENDING |
+| #7 | 28 | D | The model dossier, and the index that points at every one | 3 is PENDING; 4 is PENDING |
+| #11 | 28 | D | Where the system text goes, and which keyword the runtime is told | 5 is PENDING; 6 is PENDING |
+| #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 is PENDING |
+| #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 3 is PENDING; 7 is PENDING |
+| #8 | 28 | F | Both bench arms in one workflow, emitting a page ready to paste | 1 is PENDING; 6 is PENDING; 7 is PENDING |
+| #9 | 28 | G | The runbook: swap and revert in one line each | 6 is PENDING; 8 is PENDING; 12 is PENDING |
+| #10 | 28 | H | Two spans on one call, so the model can think | 5 is PENDING; 6 is PENDING; 11 is PENDING |
 
 ## Finished - 17 plans with no live row
 

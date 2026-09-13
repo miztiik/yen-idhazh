@@ -3,7 +3,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { keepDrawings } from '../src/lib/day-shape';
-import { publishedVisual, refusedDrawing } from '../src/lib/payload/drawing';
+import { publishedVisual, refusedDrawing, refusedVisualData } from '../src/lib/payload/drawing';
 import { projectDay } from '../src/lib/payload/project';
 import { whenNear } from '../src/lib/reveal';
 import { dayShell, publishedDates } from '../src/lib/server/payload';
@@ -439,6 +439,118 @@ test.describe('what may not be drawn, on either side of the move', () => {
 			).not.toBeNull();
 		});
 	}
+});
+
+test.describe('what may not be drawn from, once the browser is the one drawing', () => {
+	/** The one fitting case, compiled from the committed plan by the real compiler.
+	 *
+	 * **The mis-shaped cases are built here rather than committed beside it, and
+	 * that is a constraint rather than a preference.** Every file under
+	 * `tests/fixtures/contracts/` is round-tripped through its model by
+	 * `test_fixture_round_trips_byte_identically`, and a document that is
+	 * mis-shaped by definition will not load - so a committed mis-shaped case
+	 * would fail the backend suite before it ever reached this one. Building each
+	 * from the fitting case has the better property anyway: every case below
+	 * differs from the control in exactly one named place, and the diff is the
+	 * line of code you are reading rather than a diff between two files.
+	 */
+	function fitting(): Record<string, unknown> {
+		return JSON.parse(
+			readFileSync(
+				resolve(ROOT, 'tests/fixtures/contracts/visual-data/bars-from-the-committed-plan.json'),
+				'utf8'
+			)
+		);
+	}
+
+	/** The fitting case with one thing changed. */
+	function mutated(change: (data: any) => void): unknown {
+		const data = fitting();
+		change(data);
+		return data;
+	}
+
+	test('the compiled data is accepted, so the refusals below mean something', () => {
+		// The control. Without it every case below could be passing because the
+		// check refuses everything, which is the failure mode a list of negative
+		// assertions cannot see.
+		expect(
+			refusedVisualData(fitting()),
+			'the page refused data its own compiler wrote'
+		).toBeNull();
+	});
+
+	for (const [name, change] of [
+		[
+			'a renderer this page does not know',
+			(data: any) => {
+				data.renderer_version = '2026-09-14';
+			}
+		],
+		[
+			'a type this page cannot draw',
+			(data: any) => {
+				data.type = 'pie';
+			}
+		],
+		[
+			'channels that do not pair into bars',
+			(data: any) => {
+				data.encoding.quantity = data.encoding.quantity.slice(0, -1);
+			}
+		],
+		[
+			'a bar whose figure is absent',
+			(data: any) => {
+				const figure = data.encoding.quantity[0];
+				data.marks.find((mark: any) => mark.mark_id === figure).value = null;
+			}
+		],
+		[
+			'a bar whose name is absent',
+			(data: any) => {
+				const named = data.encoding.category[0];
+				data.marks.find((mark: any) => mark.mark_id === named).text = null;
+			}
+		],
+		[
+			'a channel naming a mark the document does not carry',
+			(data: any) => {
+				data.encoding.category = [...data.encoding.category.slice(0, -1), 'm99'];
+			}
+		],
+		[
+			'no marks at all',
+			(data: any) => {
+				data.marks = [];
+			}
+		],
+		[
+			'no encoding at all',
+			(data: any) => {
+				delete data.encoding;
+			}
+		]
+	] as const) {
+		test(`${name} is refused rather than drawn`, () => {
+			// **It refuses rather than guesses, and refusing is free.** A degrade path
+			// that draws something approximate is how a wrong chart reaches a reader,
+			// and a story with no visual is simply shorter - already the shape 94.7
+			// percent of stories have, so the refusal costs no layout at all.
+			const refusal = refusedVisualData(mutated(change));
+			expect(refusal, `${name} would have been drawn`).not.toBeNull();
+			expect(refusal, 'a refusal nobody can read is half a refusal').toMatch(/[a-z]{3}/);
+		});
+	}
+
+	test('a document that is not one at all is refused', () => {
+		// What a 404 page, an empty file or a truncated fetch parses to. The browser
+		// fetches this file from our own origin, and the origin is still not a
+		// promise (Guardrail #11).
+		for (const nothing of [null, [], 'a string', 42]) {
+			expect(refusedVisualData(nothing), `${JSON.stringify(nothing)} was accepted`).not.toBeNull();
+		}
+	});
 });
 
 /** A stand-in for the browser's watcher that counts what the page built.

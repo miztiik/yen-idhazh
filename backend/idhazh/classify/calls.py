@@ -16,7 +16,7 @@ everything behind the break is read again - 100 tokens an item, measured on the
 configured weights 2026-09-12. Call 2's reply carries the summary first and the
 plan second, and that order is the recovery: a decode the output budget cuts is
 cut in the plan, and the summary behind it is already closed. Both calls are
-built here and `idhazh.cli.stage_work` dispatches them, adjacently per item;
+built here and `idhazh.stages.work.stage_work` dispatches them, adjacently per item;
 the gate in front of them and the picture they lead to are wired at that same
 call site.
 

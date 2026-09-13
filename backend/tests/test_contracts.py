@@ -29,9 +29,9 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import day_partition, ledger, source_health
+from idhazh import cli, day_partition, ledger, source_health
 from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
-from idhazh.cli import main, stage_validate_days
+from idhazh.cli import main
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
@@ -123,6 +123,7 @@ from idhazh.contracts.visual import (
     unbounded_leaves,
     worst_case_reply_characters,
 )
+from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.extract import TOKENS_PER_WORD
@@ -135,6 +136,7 @@ from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
 from idhazh.retention import oldest_month_kept
+from idhazh.stages.validate_days import stage_validate_days
 from utilities import build_canary_day
 
 pytestmark = pytest.mark.contract
@@ -2162,44 +2164,46 @@ def test_the_rest_rule_reads_the_knob_the_committed_config_spells() -> None:
     assert "after_failures=collect.availability_strikes_before_rest" in source
 
 
-def test_no_test_redirects_a_name_the_router_only_re_exports() -> None:
-    """A redirect has to reach the module the stage reads the name from.
+def test_the_router_exposes_no_name_a_stage_owns() -> None:
+    """`idhazh.cli` picks which stage runs. It is never a second name for one.
 
-    `idhazh.cli` re-exports every stage and several of their helpers so a caller
-    keeps naming what it always named. That makes one shape of redirect silent:
-    `setattr(cli, "_picture_faults", ...)` rebinds the router's name, the stage
-    goes on calling the shipped rule out of its own module, and the test passes
-    against the thing it meant to replace. So a redirect must name the module
-    that defines the name.
+    A re-export reads as convenience and costs two things. It is an import path
+    nobody declared - a caller writes `cli.stage_work` and the router becomes
+    the listed home of code it does not contain, so the next reader looks for
+    the work in the wrong file. And it makes one shape of redirect silent:
+    `setattr(cli, "_picture_faults", ...)` rebinds the router's copy while the
+    stage goes on calling the shipped rule out of its own module, so the test
+    passes against the thing it meant to replace.
 
-    The roots are covered another way - `cli` does not re-export them at all, so
-    a redirect left on one raises. This is the half of the rule a re-export can
-    still hide.
+    So the router imports stage modules and never the names inside them. This
+    reads the imported module rather than its source, because an import written
+    anywhere in the chain republishes a name just as effectively as one written
+    in `cli.py`.
     """
-    router = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
-    declared = {
-        node.name
-        for node in router.body
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
-    }
+    owned: dict[str, str] = {}
+    for path in sorted((REPO_ROOT / "backend" / "idhazh" / "stages").glob("*.py")):
+        if path.stem == "__init__":
+            continue
+        for node in ast.parse(read_text(path)).body:
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                owned.setdefault(node.name, path.stem)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                owned.setdefault(node.target.id, path.stem)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        owned.setdefault(target.id, path.stem)
+    assert owned, "no stage modules were read, so this test proves nothing"
 
-    stale: list[str] = []
-    for path in sorted((REPO_ROOT / "backend" / "tests").glob("*.py")):
-        for node in ast.walk(ast.parse(read_text(path))):
-            if not isinstance(node, ast.Call) or len(node.args) < 2:
-                continue
-            if not isinstance(node.func, ast.Attribute) or node.func.attr != "setattr":
-                continue
-            target, attribute = node.args[0], node.args[1]
-            if not isinstance(target, ast.Name) or target.id != "cli":
-                continue
-            if not isinstance(attribute, ast.Constant) or not isinstance(attribute.value, str):
-                continue
-            if attribute.value not in declared:
-                stale.append(f"{path.name}:{node.lineno} redirects cli.{attribute.value}")
-
-    assert not stale, "redirect the module that defines the name, not the router: " + "; ".join(
-        stale
+    leaked = sorted(
+        f"cli.{name} is really idhazh.stages.{stem}.{name}"
+        for name, stem in owned.items()
+        if not name.startswith("__") and hasattr(cli, name)
+    )
+    assert not leaked, (
+        "the router re-exports a name a stage owns, so a caller can reach the stage "
+        "through cli and a redirect left on cli would bind a copy nothing reads. "
+        "Import the module, not the name: " + "; ".join(leaked)
     )
 
 
@@ -4585,6 +4589,179 @@ def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> 
     absent = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json"))
     del absent["drafted_chart"]
     assert VisualDecision.model_validate(absent).drafted_chart is False
+
+
+def test_a_visual_published_before_the_data_file_reads_as_carrying_none() -> None:
+    """The read-side migration, proved by removing the key rather than by waiting.
+
+    Every day in the archive was published before a browser drew anything, so
+    every committed `visual` block lacks `data_path` entirely. Absent has to read
+    as no data carried - one sentence, and it is the sentence that decides
+    whether 24 days keep rendering. Asserting it against a fixture with the key
+    cut out is what makes it provable today; counting how many committed days
+    still lack it would be a check timed to go red on a date nobody chose
+    (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    carried = 0
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"].pop("data_path", None)
+            carried += 1
+    assert carried, "the fixture stopped carrying a visual, so this proves nothing"
+
+    day = DigestDay.model_validate(payload)
+
+    assert [item.visual.data_path for item in day.items if item.visual] == [None] * carried
+
+
+def test_a_decision_published_before_the_data_file_reads_as_carrying_none() -> None:
+    """The same sentence one stage earlier, where the run's own payloads live."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
+    payload.pop("data_path", None)
+
+    assert VisualDecision.model_validate(payload).data_path is None
+
+
+def test_only_a_rendered_visual_carries_data() -> None:
+    """A path to a file the renderer never wrote is a 404 the payload asked for."""
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json",
+        data_path="digest/2026/08/22/ai-01.json",
+    )
+    with pytest.raises(ValueError, match="rendered visual"):
+        VisualDecision.model_validate(payload)
+
+
+VISUAL_DATA_FIXTURE: Final = (
+    CONTRACT_FIXTURES_DIR / "visual-data" / "bars-from-the-committed-plan.json"
+)
+
+
+def _visual_data() -> dict[str, Any]:
+    """The one fitting case, compiled from the committed plan by the real compiler."""
+    payload: dict[str, Any] = json.loads(read_text(VISUAL_DATA_FIXTURE))
+    return payload
+
+
+def test_a_visual_data_document_states_the_renderer_it_was_compiled_for() -> None:
+    """One home for the version, and this is it.
+
+    `spec_format` carried the same idea in two places and the two disagreed on
+    2026-09-05T18:00. So a mark never states a version, a decision never states
+    one, and the day payload never states one - the document a browser reads
+    states it, because that is the document whose shape can move.
+    """
+    data = VisualData.model_validate(_visual_data())
+
+    assert data.renderer_version == RENDERER_VERSION
+    assert "renderer_version" not in data.marks[0].model_dump()
+
+
+def _derived(payload: dict[str, Any], value: str, unit: str | None) -> dict[str, Any]:
+    """A chain of the shape `DerivedValue` declares, over elements the article has.
+
+    A `sum` reads at least two elements and no unit table, so the inputs are the
+    fixture's own quantity elements rather than invented ids - a chain naming an
+    element nobody extracted would be refused for that instead, and the test
+    would pass while proving something else.
+    """
+    reads = [mark["element_id"] for mark in payload["marks"] if mark["element_id"]]
+    return {
+        "version": "2026-08-21",
+        "function": "sum",
+        "inputs": [read for read in reads if read.startswith("quantity-")][:2],
+        "value": value,
+        "unit": unit,
+        "source_unit": None,
+        "unit_table_version": None,
+        "bin_lower": None,
+        "bin_upper": None,
+    }
+
+
+def test_a_mark_came_from_the_article_or_from_a_chain_and_never_from_neither() -> None:
+    """A drawn number with no provenance is the thing this subsystem exists to refuse."""
+    payload = _visual_data()
+    payload["marks"][0]["element_id"] = None
+
+    with pytest.raises(ValueError, match="never both, and never neither"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_may_not_claim_two_provenances_at_once() -> None:
+    payload = _visual_data()
+    payload["marks"][0]["derived"] = _derived(payload, "1200", "mw")
+
+    with pytest.raises(ValueError, match="never both, and never neither"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_that_says_nothing_and_measures_nothing_is_refused() -> None:
+    """It would draw a bar with no name and no length. Nothing to look at."""
+    payload = _visual_data()
+    payload["marks"][0]["text"] = None
+
+    with pytest.raises(ValueError, match="names something or measures something"):
+        VisualData.model_validate(payload)
+
+
+def test_a_unit_with_no_figure_beside_it_is_refused() -> None:
+    payload = _visual_data()
+    payload["marks"][0]["unit"] = "mw"
+
+    with pytest.raises(ValueError, match="unit"):
+        VisualData.model_validate(payload)
+
+
+def test_a_channel_that_names_a_mark_the_document_lacks_is_refused() -> None:
+    """The browser would draw a bar short, and be right to."""
+    payload = _visual_data()
+    payload["encoding"]["category"].append("m99")
+
+    with pytest.raises(ValueError, match="does not carry"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_nothing_draws_is_refused_rather_than_shipped() -> None:
+    """Bytes on the wire that reach no pixel. Either the plan or the channel is wrong."""
+    payload = _visual_data()
+    payload["encoding"]["category"] = payload["encoding"]["category"][:-1]
+
+    with pytest.raises(ValueError, match="no channel draws"):
+        VisualData.model_validate(payload)
+
+
+def test_one_mark_may_not_be_drawn_in_two_channels() -> None:
+    """A name that is also a length draws a bar whose label is its own size."""
+    payload = _visual_data()
+    payload["encoding"]["entity"] = [payload["encoding"]["category"][0]]
+
+    with pytest.raises(ValueError, match="two channels"):
+        VisualData.model_validate(payload)
+
+
+def test_two_marks_may_not_share_an_id() -> None:
+    """The channels address marks by id, so a repeat makes a channel ambiguous."""
+    payload = _visual_data()
+    payload["marks"][1]["mark_id"] = payload["marks"][0]["mark_id"]
+
+    with pytest.raises(ValueError, match="share one id"):
+        VisualData.model_validate(payload)
+
+
+def test_a_derived_mark_is_drawn_at_the_figure_its_chain_computed() -> None:
+    """Otherwise the bar and the provenance under it are two different numbers."""
+    payload = _visual_data()
+    figure = payload["encoding"]["quantity"][0]
+    chain = _derived(payload, "99", "mw")
+    for mark in payload["marks"]:
+        if mark["mark_id"] == figure:
+            mark["element_id"] = None
+            mark["derived"] = chain
+
+    with pytest.raises(ValueError, match="chain computed"):
+        VisualData.model_validate(payload)
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:

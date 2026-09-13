@@ -547,7 +547,7 @@ stays legal when either moves.
 reads both walls off `config/`, so the build says the day one is crossed.
 
 **The frequency method this project uses elsewhere was tried and refused.**
-[discovery.md](../architecture/sources/discovery.md#where-the-weight-came-from)
+[discovery.md](../architecture/sources/discovery.md#why-a-shared-subject-is-worth-less-than-a-second-carrier)
 prices a signal by how often it fires, and a shared subject fires 2.25 times as
 often as a second carrier, which prices carriage at 0.45. The tier-step rule
 refuses anything at or above 0.3. The rule wins, because it is a ruling about
@@ -644,7 +644,7 @@ and trade-press tiers. Measured over the 13 committed days that carry
 A term that moves nothing 99.9 percent of the time and then decides the lead is
 a lottery rather than a ranking term, and nobody could attribute a move to it
 either way.
-[discovery.md](../architecture/sources/discovery.md#the-vote-is-thin-and-the-number-is-here-so-nobody-re-litigates-it-from-intuition)
+[discovery.md](../architecture/sources/discovery.md#a-speculative-term-ships-with-the-condition-that-retires-it)
 had already written the condition down on 2026-08-30 - retire it if it fires on
 under 1 percent - so this is that condition honoured rather than a new decision.
 
