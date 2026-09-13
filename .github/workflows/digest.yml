@@ -300,7 +300,7 @@ jobs:
       # costs the two ledgers beside it. The file ships with its header for that
       # reason.
       #
-      # `append_health` settles the shard it wrote, but against the checkout,
+      # `append_health` settles the day file it wrote, but against the checkout,
       # which is frozen at the commit this run was triggered at - so a SECOND
       # ATTEMPT at this same plan cannot see the rows the first attempt pushed
       # and appends its own verdict for every feed. The union merge then keeps
@@ -311,9 +311,9 @@ jobs:
       # reading the same five 410 results would otherwise retire one address
       # twice.
       #
-      # `--date` is what it settles. This run appended to one feed-health shard,
-      # so that shard is the only one a repeat can be in, and naming it is what
-      # keeps the pass costing the same on a five-year archive as on a fresh
+      # `--date` is what it settles. This run appended to one feed-health day
+      # file, so that file is the only one a repeat can be in, and naming it is
+      # what keeps the pass costing the same on a five-year archive as on a fresh
       # clone (Guardrail #12).
       - name: Commit what the plan saw
         env:

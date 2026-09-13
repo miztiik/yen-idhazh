@@ -13,6 +13,7 @@ import {
 	type FeedRead
 } from '../src/lib/feed-health';
 import { axisLabels, denseCellFor, ROW_STRIP_PX } from '../src/lib/charts/run-history';
+import { readDayShards } from '../src/lib/server/payload';
 
 /**
  * The feed section answers one question: which feed is about to be dropped.
@@ -64,31 +65,24 @@ function tickDensity(): number {
 }
 
 /** The ledger the page read, read again independently. Nothing is mocked:
- * these are the CSVs `build_canary_day.py` wrote. */
+ * these are the CSVs `build_canary_day.py` wrote.
+ *
+ * Through `readDayShards`, the reader the page's own server uses, so a grain
+ * change cannot pass here and fail there. `-1` is the whole canary tree, which
+ * is a fixture of fixed size rather than a collection a run appends to.
+ */
 type LedgerRow = FeedEvent;
 
 function ledger(): LedgerRow[] {
 	const dir = join(CANARY, 'state', 'feed-health');
-	const rows: LedgerRow[] = [];
-	for (const shard of readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.sort()) {
-		const lines = readFileSync(join(dir, shard), 'utf8').trim().split(/\r?\n/);
-		const head = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cell = line.split(',');
-			const row = new Map(head.map((name, index) => [name, cell[index] ?? '']));
-			rows.push({
-				date: row.get('date') ?? '',
-				runId: row.get('run_id') ?? '',
-				checkedAt: row.get('checked_at') ?? '',
-				outcome: row.get('outcome') ?? '',
-				items: Number(row.get('items') ?? 0) || 0,
-				feedId: row.get('feed_id') ?? ''
-			});
-		}
-	}
-	return rows;
+	return readDayShards(dir, -1).rows.map((row) => ({
+		date: row.date ?? '',
+		runId: row.run_id ?? '',
+		checkedAt: row.checked_at ?? '',
+		outcome: row.outcome ?? '',
+		items: Number(row.items ?? 0) || 0,
+		feedId: row.feed_id ?? ''
+	}));
 }
 
 /** One result per feed per run, then oldest run first - the order the rules

@@ -847,20 +847,21 @@ export interface FeedResult {
 	detail: string;
 }
 
-/** Feed results from the newest `months` shards, one per feed per run, oldest first.
+/** Feed results from the newest `days` day files, one per feed per run, oldest first.
  *
- * Sharded by month under `state/feed-health/`, so this reads a directory rather
- * than a file - through `readShards`, so the cover is the one every month-sharded
- * ledger takes. Absent is the ordinary state of a fresh clone: no run has
- * written a record yet, and no record is exactly what an empty list says.
+ * Filed by day under `state/feed-health/<YYYY>/<MM>/<DD>.csv`, so this reads a
+ * tree rather than a file - through `readDayShards`, so the cover is the one
+ * every day-filed ledger takes. Absent is the ordinary state of a fresh clone:
+ * no run has written a record yet, and no record is exactly what an empty list
+ * says.
  *
  * Settled here, at the one read every console panel shares, rather than in each
  * panel. A repeat is a second attempt at one run writing a second account of
  * one event, and a panel that counted both would count that run twice. Doing it
  * once is also what stops two panels disagreeing about the same feed.
  */
-export function feedResults(months: number = LEDGER_WINDOW_MONTHS): FeedResult[] {
-	const found: FeedResult[] = readShards(join(STATE_ROOT, 'feed-health'), months).rows.map(
+export function feedResults(days: number = LEDGER_WINDOW_DAYS): FeedResult[] {
+	const found: FeedResult[] = readDayShards(join(STATE_ROOT, 'feed-health'), days).rows.map(
 		(row) => ({
 			runId: row.run_id ?? '',
 			date: row.date ?? '',

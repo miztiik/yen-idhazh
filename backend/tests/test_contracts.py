@@ -29,7 +29,7 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import ledger, source_health
+from idhazh import day_partition, ledger, source_health
 from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
@@ -2283,9 +2283,22 @@ def newest_health_date(state: Path) -> str:
     A window ending at today would make this test's answer depend on when it
     ran, and the question it asks is about committed evidence rather than about
     the hour.
+
+    Three listings - newest year, newest month, newest day - rather than a walk
+    of the tree. The ledger files by day, so the newest file's own path IS the
+    date, and the cost stays at most twelve plus thirty-one entries however long
+    the project runs (`CLAUDE.md` section 13, Guardrail #12). It used to glob the
+    month shards and hand back `<stem>-28`, which at day grain names a file the
+    ledger may never have held.
     """
-    stems = sorted(path.stem for path in (state / "feed-health").glob("*.csv"))
-    return f"{stems[-1]}-28" if stems else "1970-01-01"
+    root = state / ledger.HEALTH_DIRNAME
+    years = [path for path in root.iterdir() if path.is_dir()] if root.is_dir() else []
+    if not years:
+        return "1970-01-01"
+    year = max(years)
+    month = max(path for path in year.iterdir() if path.is_dir())
+    day = max(path for path in month.iterdir() if path.suffix == ".csv")
+    return f"{year.name}-{month.name}-{day.stem}"
 
 
 def desk(**overrides: Any) -> dict[str, Any]:
@@ -2868,13 +2881,20 @@ def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path:
     The browser suite runs against this ledger, so a column no canary row fills
     is a console state that suite cannot reach - which is how the five columns
     added on 2026-09-02 would ship drawn only in their empty state.
+
+    The walk is over a tree this call just built - two day files - rather than
+    over anything a run appends to (`CLAUDE.md` section 13).
     """
     build_canary_day.health(tmp_path)
-    path = tmp_path / "feed-health" / f"{build_canary_day.DATE[:7]}.csv"
-    with path.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
+    days = list(day_partition.day_files(tmp_path / ledger.HEALTH_DIRNAME))
+    assert days, "the canary wrote no feed-health day file"
+    rows: list[dict[str, str]] = []
+    for path in days:
+        with path.open(encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            assert tuple(reader.fieldnames or ()) == FeedHealthRow.csv_columns(), path.name
+            rows.extend(reader)
 
-    assert tuple(rows[0]) == FeedHealthRow.csv_columns()
     unfilled = [name for name in FeedHealthRow.csv_columns() if not any(row[name] for row in rows)]
     assert unfilled == [], "a canary column nothing fills is a console state no test can reach"
     assert {row["robots_outcome"] for row in rows} == {"allowed", "denied", "unreachable", ""}

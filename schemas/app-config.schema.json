@@ -1349,7 +1349,7 @@
         },
         "feed_health_keep_months": {
           "default": 14,
-          "description": "How long state/feed-health/ keeps a month. It is a per-feed-per-run record rather than a measurement worth summarising, so its retention is one number and there is no aggregate under it. Fourteen for the same reason the item-health window is: the console reaches 367 inclusive days and those days can fall in fourteen month shards.",
+          "description": "How long state/feed-health/ keeps a month. It is a per-feed-per-run record rather than a measurement worth summarising, so its retention is one number and there is no aggregate under it. Fourteen for the same reason the item-health window is: the console reaches 367 inclusive days and those days can fall in fourteen calendar months. The ledger files by day and this age is still a month, so the prune takes a month's day files whole.",
           "minimum": 1,
           "title": "Feed Health Keep Months",
           "type": "integer"

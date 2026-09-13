@@ -3305,7 +3305,10 @@ def stage_prune_state(
 
     The item-health boundary is still a month, and only the files below it are
     days: `retention.prune_telemetry` folds a month whole from that month's day
-    files and then unlinks them.
+    files and then unlinks them. Feed health files by day too and its boundary is
+    a month for the same reason, so `retention.prune_feed_health` takes a month's
+    day files whole - it just folds nothing first, because a total of what a feed
+    did fourteen months ago has no reader.
 
     Six stores, one step, because they share the one property that makes this
     safe: all of it runs after the day is committed, and none of it can cost a
@@ -3457,6 +3460,10 @@ def _prune_feed_health_shards(
 
     Deleted rather than folded: a row here is one feed's result on one run, and
     a total over a month fourteen months back answers nothing anybody asks.
+
+    Returns the day files it removed, taken from the result rather than spelled
+    from the month stems: the ledger files by day, so a synthesised `<month>-01`
+    would name a file it may never have held.
     """
     feed = retention.prune_feed_health(state, observability, today, dry_run=dry_run)
     if not feed.changed:
@@ -3473,7 +3480,7 @@ def _prune_feed_health_shards(
         feed.bytes_freed,
         ", ".join(feed.kept) or "no shard",
     )
-    return [ledger.health_relpath(f"{stem}-01") for stem in feed.deleted]
+    return list(feed.days_removed)
 
 
 def _prune_seen_shards(

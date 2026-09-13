@@ -37,8 +37,12 @@ number to remember before reading any wall clock here as a property of the file.
 See
 `docs/reference/measurements.md`.
 
-`state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
-row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
+`state/feed-health/<YYYY>/<MM>/<DD>.csv` answers "is this source still
+working?" One row per feed per run, read through `HEALTH_WINDOW_DAYS`. It files
+by day, because a run writes one day and taking a day back is one `rm`. The
+console reads it a month at a time through the published projection, which stays
+monthly: `publish_feed_health.publish` folds a month from that month's day
+files.
 
 `state/item-health/<YYYY>/<MM>/<DD>.csv` answers "what did every planned item
 do?" One row per planned item per run - the fastest-growing of the four. It
@@ -215,12 +219,21 @@ def seen_path(state_dir: Path, date: str) -> Path:
 
 
 def health_relpath(date: str) -> str:
-    """`state/feed-health/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{HEALTH_DIRNAME}/{date[:7]}.csv"
+    """`state/feed-health/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
 
 
 def health_path(state_dir: Path, date: str) -> Path:
-    return state_dir / HEALTH_DIRNAME / f"{date[:7]}.csv"
+    """The day file a run on this date appends to.
+
+    A day rather than a month, for the reason `item_health_path` gives: a run
+    writes one day, two runs collide on a file only when they are the same day,
+    and taking a day back is one `rm` rather than an edit inside a shared shard,
+    which `merge=union` cannot express. The mirror under
+    `frontend/public/feed-health/` stays monthly, because its grain follows what
+    a browser fetches - see `docs/concepts/partitions.md`.
+    """
+    return state_dir / HEALTH_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def item_health_relpath(date: str) -> str:
@@ -771,12 +784,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
 
     `date` says which files. A run appends only to the shard its own date routes
     to, so a repeat the union merge left behind can only be in a file that run
-    wrote - and the two month-partitioned ledgers here contribute one shard each
-    whatever the archive holds. `date=None` is the operator's full pass and names
-    every shard; it is the only cover that costs more every month, and Guardrail #12
+    wrote - and all three dated ledgers here contribute one file each whatever
+    the archive holds. `date=None` is the operator's full pass and names every
+    file; it is the only cover that costs more every day, and Guardrail #12
     is why a person has to ask for it by name.
 
-    Nothing here is a clock. An older month is skipped because this run did not
+    Nothing here is a clock. An older day is skipped because this run did not
     write it, not because it is old, so the bound does not weaken as a run gets
     slower or crosses midnight.
 
@@ -790,7 +803,10 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
     `state/feed-health/` was absent too until 2026-09-02, on the reading that two
     runs are entitled to write a verdict each. They are - and they get different
     run ids, so they never repeat this key. What repeats it is one run written
-    down twice, which is one event with two accounts (`FEED_HEALTH_KEY`).
+    down twice, which is one event with two accounts (`FEED_HEALTH_KEY`). It
+    moved to a day tree on 2026-09-13 and the cover above did not move with it:
+    a run wrote only its own day before and only its own day now, so the full
+    pass names one file a recorded day where it named one a month.
 
     `state/feed-retirements.csv` is listed before anything writes it, because the
     settlement runs over whatever it finds and a missing file settles to nothing.
@@ -823,7 +839,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
             (path, VISUAL_PRUNE_KEY)
             for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)
         ),
-        *((path, FEED_HEALTH_KEY) for path in sorted((state_dir / HEALTH_DIRNAME).glob("*.csv"))),
+        *((path, FEED_HEALTH_KEY) for path in day_partition.day_files(state_dir / HEALTH_DIRNAME)),
         *(
             (path, ITEM_HEALTH_KEY)
             for path in day_partition.day_files(state_dir / ITEM_HEALTH_DIRNAME)
@@ -1004,10 +1020,15 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     A row that no longer parses is skipped rather than fatal. This ledger is
     diagnostic: losing a stale row costs a quarantine decision some evidence,
     and refusing to start costs the reader the whole day.
+
+    `day_partition.days_in_window` names both ends, so a cover of `n` days opens
+    at most `n + 1` files and reads exactly those days - where the month shards
+    it replaced could hold up to 62 days of rows behind a 31-day cover. A day the
+    ledger never recorded has no file, which is not a fault.
     """
     rows: list[FeedHealthRow] = []
-    for stem in shards_in_window(today, within_days):
-        for raw in _read_rows(state_dir / HEALTH_DIRNAME / f"{stem}.csv"):
+    for day in reversed(day_partition.days_in_window(today, within_days)):
+        for raw in _read_rows(health_path(state_dir, day)):
             try:
                 rows.append(FeedHealthRow.from_csv_row(raw))
             except (KeyError, ValueError):

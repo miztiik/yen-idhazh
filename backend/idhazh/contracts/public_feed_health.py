@@ -1,9 +1,10 @@
 """The browser-safe projection of the feed-health ledger.
 
-`state/feed-health/<YYYY-MM>.csv` is the ledger - one row per feed per run - and
-it carries one cell a reader must never receive. This is the narrow shape that
-does cross, written to `frontend/public/feed-health/<YYYY-MM>.csv` and fetched a
-month at a time.
+`state/feed-health/<YYYY>/<MM>/<DD>.csv` is the ledger - one row per feed per
+run - and it carries one cell a reader must never receive. This is the narrow
+shape that does cross, written to `frontend/public/feed-health/<YYYY-MM>.csv` and
+fetched a month at a time - the mirror keeps the month grain because its grain
+follows what a browser fetches (`docs/concepts/partitions.md`).
 
 `detail` crosses, and that is deliberate rather than an oversight. On
 `ItemHealthRow` the same name holds a diagnostic that can quote fetched article

@@ -854,10 +854,10 @@ history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning the deletion on is a one-line
 commit of its own. Measured on this checkout on 2026-09-03: a live run today
 removes nothing, the first file any store loses is `state/seen/2026-08.csv` on
-**2026-11-30**, and the first files the fourteen-month rules take are
-`state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`,
-`state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`, together, on
-**2027-10-01**. Reading committed
+**2026-11-30**, and the first files the fourteen-month rules take are the day
+files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`,
+the day files under `state/feed-health/2026/08/` and `state/scores/2026-08.csv`,
+together, on **2027-10-01**. Reading committed
 files against a fixed calendar is deterministic, so the spread is zero.
 
 ## Reader surface

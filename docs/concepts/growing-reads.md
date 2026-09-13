@@ -214,9 +214,9 @@ listed: its cover is its argument. These are `backend/`'s;
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `ledger.load_seen` | month shards of `state/seen/` | `collect.seen_window_days`, committed at 90 |
-| `ledger.load_health` | month shards of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
+| `ledger.load_health` | day files of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
 | `ledger.load_item_health` | day files of `state/item-health/` | the caller's `within_days` |
-| `ledger.reliability` | the feed-health shards in range | `collect.reliability_window_days` |
+| `ledger.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
 
 ### A cover that is not a clock
@@ -405,7 +405,8 @@ the last day there was.
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded ledger | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `payload.readDayShards`, `payload.itemHealthRows` | the newest `days` day files of `state/item-health/` | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91 |
-| `payload.evalRows`, `payload.feedResults` | through `readShards`, over `state/scores/` and `state/feed-health/` | the same 5 |
+| `payload.evalRows` | through `readShards`, over `state/scores/` | the same 5 |
+| `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
 | `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
 | `runtime-counters.loadMachineCounters` | one file, plus item-health through `readDayShards` | the day cover, and `state/runtime-counters.csv` is one file |
 | `payload.itemHealthForDay` | one item-health day file | one date |

@@ -1,9 +1,15 @@
 """Publish the browser-safe projection of the feed-health ledger.
 
-`state/feed-health/<YYYY-MM>.csv` is the ledger - one row per feed per run - and
-it carries the configured feed URL hashed. This module writes the narrow monthly
-projection under `frontend/public/feed-health/`, which is the only feed data the
-console fetches.
+`state/feed-health/<YYYY>/<MM>/<DD>.csv` is the ledger - one row per feed per
+run - and it carries the configured feed URL hashed. This module writes the
+narrow monthly projection under `frontend/public/feed-health/`, which is the only
+feed data the console fetches.
+
+**The two grains differ on purpose.** The ledger files by day, because a run
+writes one day and a removal takes one day. The mirror files by month, because
+its grain follows what a browser fetches and the console prices a window in month
+files. So a month here is folded from that month's day files - at most 31 of them
+- and `docs/concepts/partitions.md` owns both rules.
 
 The shape is `PublicFeedRow`. It keeps `detail`, which is our own one-line reason
 and never the response body, because a failing feed a reader can see but not
@@ -19,7 +25,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger, month_partition, publish_console
+from idhazh import day_partition, ledger, publish_console
 from idhazh.contracts.public_feed_health import FORBIDDEN_COLUMNS, PublicFeedRow
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = PublicFeedRow.csv_columns()
@@ -50,7 +56,7 @@ def shard_relpath(month: str) -> str:
 
 
 def project(source: Path) -> list[PublicFeedRow]:
-    """One state shard read through the published shape."""
+    """One state day file read through the published shape."""
     if not source.is_file():
         return []
     with source.open("r", encoding="utf-8", newline="") as handle:
@@ -79,18 +85,24 @@ def publish(
     months: Collection[str] | None = None,
     ensure_month: str | None = None,
 ) -> list[Path]:
-    """Write a published feed-health shard for each ledger month that changed."""
+    """Write a published feed-health shard for each ledger month that changed.
+
+    **The ledger files by day and this mirror files by month**, so a month is
+    folded from that month's day files through `day_partition.days_by_month`. Its
+    input is one month, so a named month opens at most 31 files.
+    """
     source_dir = state_root / ledger.HEALTH_DIRNAME
+    by_month = day_partition.days_by_month(source_dir)
 
     def encode(month: str) -> bytes:
-        rows = project(source_dir / f"{month}{SUFFIX}")
+        rows = [row for day in by_month.get(month, ()) for row in project(day)]
         return publish_console.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
 
     return publish_console.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,
-        available=[path.stem for path in month_partition.month_files(source_dir, SUFFIX)],
+        available=sorted(by_month),
         encode=encode,
         keep_months=keep_months,
         today=today,

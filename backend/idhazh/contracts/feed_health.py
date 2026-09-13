@@ -1,8 +1,8 @@
 """What every feed did, on every run.
 
-One row per feed per run, appended to `state/feed-health/<YYYY-MM>.csv`. It is
-written whether the run publishes or not, because the days a source is worth
-measuring on are the days the run went badly.
+One row per feed per run, appended to `state/feed-health/<YYYY>/<MM>/<DD>.csv`.
+It is written whether the run publishes or not, because the days a source is
+worth measuring on are the days the run went badly.
 
 Two readers depend on it. The plan stage reads the recent tail to decide
 whether a feed has failed often enough to be skipped - a quarantine that lives

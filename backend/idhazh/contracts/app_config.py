@@ -1698,7 +1698,9 @@ class ObservabilityConfig(Model):
             "record rather than a measurement worth summarising, so its retention is "
             "one number and there is no aggregate under it. Fourteen for the same "
             "reason the item-health window is: the console reaches 367 inclusive days "
-            "and those days can fall in fourteen month shards."
+            "and those days can fall in fourteen calendar months. The ledger files by "
+            "day and this age is still a month, so the prune takes a month's day files "
+            "whole."
         ),
     )
     scores_full_grain_months: int = Field(

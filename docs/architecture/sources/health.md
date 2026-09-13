@@ -48,7 +48,7 @@ HUMAN SOURCE REVIEW (after at least 30 days of evidence)
 
 ## Every feed, every run, one row
 
-`state/feed-health/<YYYY-MM>.csv`, appended by the Collect stage. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
+`state/feed-health/<YYYY>/<MM>/<DD>.csv`, appended by the Collect stage. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
 
 It is written **whether the run publishes or not**. The days a source is worth measuring on are the days the run went badly, and a ledger that only records good runs measures nothing.
 
@@ -62,7 +62,7 @@ Monthly shards, because a read looks back 31 days - just enough that a quarantin
 
 **`state/feed-retirements.csv` is never a candidate.** It sits beside this directory rather than in it, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in shards this prune is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
 
-**The step ships in dry run.** It logs every file a live run would remove and removes none of them, because `.github/workflows/prune.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit taken after a scheduled run has printed the list. Measured on this checkout on 2026-09-02: a live run removes nothing today, and the first shard it would take is `state/feed-health/2026-08.csv` on **2027-10-01**. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
+**The step ships in dry run.** It logs every file a live run would remove and removes none of them, because `.github/workflows/prune.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit taken after a scheduled run has printed the list. Measured on this checkout on 2026-09-02: a live run removes nothing today, and the first files it would take are the day files under `state/feed-health/2026/08/` on **2027-10-01**. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
 ## One row per feed per run, enforced rather than assumed
 
@@ -116,16 +116,21 @@ therefore live and unfired, which is the state it should be in - a lifecycle
 rule that retires something on the day it ships was not measuring, it was
 guessing.
 
-The rewrite is `backend/utilities/migrate_feed_health.py`, and it ran in the same
+The rewrite was `backend/utilities/migrate_feed_health.py`, and it ran in the same
 commit as the contract change because `ledger.require_matching_header` compares
 the committed header to the contract's column list exactly - a widened contract
 against an unmigrated shard stops the next scheduled run at its first append. It
-is safe to re-run: a shard already on the wide header is reported and skipped.
-That is not a nicety. `state/**/*.csv` is `merge=union`, so an append that lands
-while the migration is in review does not conflict - it concatenates, and the
-result is one file with two headers. Taking the upstream shards whole and running
-the utility over them again is the resolution, and re-running it is how that is
-done.
+was safe to re-run: a shard already on the wide header was reported and skipped.
+That was not a nicety. `state/**/*.csv` is `merge=union`, so an append that landed
+while the migration was in review did not conflict - it concatenated, and the
+result was one file with two headers. Taking the upstream shards whole and running
+the utility over them again was the resolution.
+
+**The utility was deleted on 2026-09-13**, when the ledger moved to
+`state/feed-health/<YYYY>/<MM>/<DD>.csv`. It read month shards, so after the move
+there was no file it could ever open again - and every committed row already
+carries the wide header. `git show` on the 2026-09-02 commit holds the tool and
+its output together.
 
 Measured on this Windows developer checkout, 2026-09-02, over the shards this
 change committed: 6,577 rows across two shards, 599,497 bytes before the widening
