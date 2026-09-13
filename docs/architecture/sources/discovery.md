@@ -563,6 +563,23 @@ political commentary, serial writing and image posts. Its six-word result is
 not evidence of a readable article, even though the probe reported `ok`.
 The two substantive articles establish its current access pass.
 
+Three further feeds were probed at 12:35 UTC on the same date and platform,
+with the same three-page sample. Each returned HTTP 200 with 20 dated entries,
+no parser warning and robots permission for the configured user agent.
+
+| Feed | Address | Decision | Article sample |
+| --- | --- | --- | --- |
+| MTS | `https://mtslive.substack.com/feed` | Added to `ai`, tier 3, `community` | 3 readable articles; 645 to 790 words |
+| Oligarch Watch | `https://oligarchwatch.substack.com/feed` | Not added: paid article in the sample | 2 readable articles, 2,458 to 2,568 words; 1 publisher-declared paywall |
+| Getting Out of Control | `https://outofcontrol.substack.com/feed` | Added to `ai`, tier 3, `analysis` | 3 readable articles; 344 to 6,291 words |
+
+Both additions start at weight 1.0. MTS publishes AI news roundups; Getting
+Out of Control's sampled posts discuss AI policy. Oligarch Watch passed the
+utility's any-one-success check but stays out under the existing rule against
+paywalled sources. This gives up its free articles to avoid known paid-page
+failures. The paywall detector refused the paid page and extracted no text
+from it. No access control was bypassed.
+
 This checks access from a developer machine, not from the GitHub runner or
 the accuracy of the writing. Admission does not promise every post is suitable
 for a summary. The existing freshness and article-processing rules are unchanged.

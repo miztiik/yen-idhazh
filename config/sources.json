@@ -1057,6 +1057,17 @@
       "weight": 1.0
     },
     {
+      "id": "mts-live",
+      "kind": "community",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "MTS",
+      "url": "https://mtslive.substack.com/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
       "id": "naked-capitalism",
       "kind": "analysis",
       "retired_on": null,
@@ -1219,6 +1230,17 @@
       "tier": 2,
       "title": "O'Reilly Radar",
       "url": "https://www.oreilly.com/radar/feed/index.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "out-of-control",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Getting Out of Control",
+      "url": "https://outofcontrol.substack.com/feed",
       "vertical": "ai",
       "weight": 1.0
     },
