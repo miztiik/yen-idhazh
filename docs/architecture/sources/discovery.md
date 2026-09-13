@@ -196,7 +196,9 @@ The cause is that **an aggregator and a news digest do not read the same interne
 
 So the vote is kept because it costs one request and occasionally lands, `hn-best` is added because it doubles the sample for a second request, and neither is expected to move a day much. **If the vote still fires on under 1 percent of planned items after a week of both feeds, retire them both** - a bonus nothing earns is a moving part that has to be read and maintained for nothing.
 
-Raising `front_page_bonus` is not the answer and would be the wrong instrument. A story on an aggregator's front page *and* in our pool is by definition well carried, and `reach` already scores it.
+**That condition fired, and half of it has been honoured.** Re-measured 2026-09-13 over the 13 committed days that carry `rank_score` - 5,682 published stories - the vote fired on **8 of them, 0.14 percent**, and on 2 of 260 head slots. So `collect.front_page_bonus` is gone and the vote no longer moves the order. The other half is open: `hn-frontpage` and `hn-best` still cost one request each per run, and retiring a feed is a `config/sources.json` decision nobody has taken. **The number is published rather than planned items**, which is the population the sentence above names; published is a subset of planned, so the planned rate can only be the same or higher, and the two-week gap between measurements is the week the sentence asks for and more. `on_front_page` is still computed and still published, so a later row can restore the term the day the signal is actually supplied.
+
+Raising a weight was never the answer here and would have been the wrong instrument. A story on an aggregator's front page *and* in our pool is by definition well carried, and `reach` already scores it.
 
 `backend/tests/test_discover.py::test_a_vote_is_for_the_article_and_never_for_the_discussion_page` pins the half that is easy to break: `hnrss.org` also offers a `?link=article` form whose `link` is the discussion page, and reading that would cast every vote for an address no feed can offer. It would fail silently, because a vote for a URL we do not hold looks exactly like no vote.
 
@@ -241,16 +243,41 @@ item from it has been observed to fail (Guardrail #10).
 
 ## Ranking is arithmetic, not judgement
 
-The day is decided before any model loads, by a score with five terms:
+The day is decided before any model loads, by a score with four terms:
 
 ```
-(tier weight * feed weight) * (1 + repetition_weight * (carriers - 1))
+(tier weight * feed weight * reliability) * (1 + repetition_weight * (carriers - 1))
  + watchlist_bonus
- + front_page_bonus
- + recency_bonus
+ + max(LensDef.weight over the story's lenses)
+ + recency_weight * 0.5 ^ (hours old / recency_half_life_hours)
 ```
 
-The authority of the source, scaled by that feed's own weight, multiplied by how widely the story is carried, plus a bonus for naming a watchlist entity, plus a bonus for an aggregator vote, plus a bonus for being recent. A story three independent sources carried today is the day's story.
+The authority of the source - its tier, scaled by that feed's own hand-set weight and again by the reliability its recent record earned - multiplied by how widely the story is carried, plus a bonus for naming a watchlist entity, plus the heaviest theme it matched, plus a bonus for being recent. A story three independent sources carried today is the day's story.
+
+**Until 2026-09-13 this block said "five terms", printed four lines, and left out both the reliability multiplier and the lens.** It has been rewritten term for term against `rank.score`, and `backend/tests/test_rank.py` now asserts each term moves the order on its own and that a field the score does not read moves nothing.
+
+### The terms, in the order an editor set them
+
+A score that only admitted stories needed its terms to point the right way. Since 2026-09-13 the same number also decides the order a reader meets ([../../concepts/placement.md](../../concepts/placement.md)), so the terms are ranked, and the ranking is the editor's. Each row's bound is the most that term can move one story, which is the only comparison available between a multiplier and an addition. `backend/tests/test_rank.py::test_the_terms_rank_in_the_order_the_editor_set` reads all four off `config/`, so a weight edit moves the bound rather than leaving this table stale.
+
+| # | Term | The most it may move a story | Today |
+| ---: | --- | --- | ---: |
+| 1 | authority, times the feed's own weight | the tier span, `institution` minus `community` | 0.7 |
+| 2 | decayed recency | `recency_weight` | 0.6 |
+| 3 | the feed's reliability | `(1 - reliability_floor)` times the best tier | 0.5 |
+| 4 | a watchlist subject | `watchlist_bonus` | 0.5 |
+
+Two terms are not in that ranking and each has a different reason. **Carriage** is a multiplier rather than a term with a ceiling, and plan 25 row #4 turns it into a single step. **The lens** is ranked by nothing here because the weight that pays it is per lens in `config/taxonomy.json`; the heaviest today is 0.3, which sits between rows 3 and 4.
+
+**The four rows above are not the four lines of the formula**, and the difference is deliberate. The ranking splits the formula's first line in two - the authority a tier sets, and the reliability a feed's own record earns - because a person sets those from different config keys and tunes them apart. It then leaves out the two the paragraph above names.
+
+**Row 1 is the term that decides the head, and this is what says so.** Measured 2026-09-13 over the 13 committed days that carry `rank_score`, 5,682 stories: flatten every tier to 1.0 and the story sitting in a median of 19 of the 20 head slots changes, and the lead story changes on 6 of the 13 days. Of those stories, 5,456 are on a feed `config/sources.json` still names and 231 of the 260 head slots are; over that population the 40 institution feeds supply 5.5 percent of the stream and hold 22.1 percent of the head - a 4.0x lift - while the 11 community feeds supply 1.8 percent and have held **none of it**. That last figure is what would overturn the 0.3: a weight that has never put a story in the head is not yet distinguishable from zero there.
+
+**Every number above is an estimate and each says what would overturn it** (Guardrail #10). All four carry their measurement in the field description on `CollectConfig`, which is where a config key's comment lives in this project - `config/idhazh.json` is JSON and holds no comments.
+
+**A term may reorder; it may never admit.** No weight, at any value, can pull a story past a gate it failed: `too_old` runs before anything is scored, and `max_per_source` and the day ceiling are counts rather than thresholds on the score. `backend/tests/test_rank.py::test_no_weight_can_admit_a_story_the_age_gate_refused` is that promise, driven with every bonus at once against a stale story.
+
+**An aggregator's front-page vote was a fifth term until 2026-09-13** and is not one now. It fired on 8 of 5,682 published stories while being worth 0.4, more than the 0.3 step between two tiers, and a move nobody can attribute to a term is not a ranking term. The section above has the measurement. `on_front_page` is still published.
 
 Three details in that carry weight:
 
@@ -260,7 +287,7 @@ Three details in that carry weight:
 
 The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
 
-**Three of those terms and the score itself now reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` were computed here and thrown away at the end of the plan job until 2026-08-31, so the published page could not say why a story is in the digest. They are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is).
+**Three of those terms and the score itself now reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` were computed here and thrown away at the end of the plan job until 2026-08-31, so the published page could not say why a story is in the digest. They are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is). **`on_front_page` stopped being one of the terms on 2026-09-13 and is still one of the four published facts**, so a reader can still be told another desk led with a story that our own arithmetic placed on its own merits.
 
 **And since 2026-09-01 the run manifest records which shape produced the order.** `rank.RANK_VERSION` is bumped whenever the scoring shape changes, and until that date nothing read it - so no run had ever recorded the shape its order came from, and a bump would have recorded nothing. `RunRecord.rank_version` is where it lands. It is null on every manifest written before then, which reads as unknown.
 

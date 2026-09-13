@@ -86,7 +86,7 @@
     },
     "SalienceFeedDef": {
       "additionalProperties": false,
-      "description": "A ranking signal. It adds weight to a URL already in the pool; it never discovers.\n\nWhat a vote is worth is `collect.front_page_bonus` - one number for every\naggregator, not one per feed. An aggregator has no subject taxonomy to be\ngraded on, so there is nothing for a per-feed weight to express.",
+      "description": "A published fact about a URL already in the pool. It never discovers.\n\nA vote sets `on_front_page` on the item, so the page can say another desk\nled with this story. It was also worth `collect.front_page_bonus` in the\nselection score until 2026-09-13, when the term was removed: it fired on 8\nof 5,682 published stories - 0.1 percent - while being worth more than the\nstep between two source tiers, and a move nobody can attribute to a term is\nnot a ranking term. The vote is still recorded, so restoring the term costs\none weight once the signal is actually being supplied.\n\nThere is no per-feed weight here and there never was a use for one. An\naggregator has no subject taxonomy to be graded on.",
       "properties": {
         "id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -167,6 +167,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A salience feed's description no longer says a vote is worth collect.front_page_bonus. No field was added, removed or retyped, so a config/sources.json written before this still loads and needs no read-side migration.",
+      "version": "2026-09-13T18:00",
+      "why": "collect.front_page_bonus was removed in the same commit, so the sentence named a config key that no longer exists. A vote is now a published fact about the item rather than a term of the score, and the description says which of the two it is."
+    },
+    {
       "change": "Added feed form with an abstract value.",
       "version": "2026-08-23T18:47",
       "why": "A reader must be told when the summary is of an abstract, but detecting that from page text would turn a stranger's words into control data. The form is declared per feed instead."
@@ -218,7 +223,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-23T18:47",
+      "default": "2026-09-13T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -230,5 +235,5 @@
   ],
   "title": "Sources",
   "type": "object",
-  "version": "2026-08-23T18:47"
+  "version": "2026-09-13T18:00"
 }
