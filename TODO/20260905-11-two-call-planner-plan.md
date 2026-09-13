@@ -595,4 +595,3 @@ Adding call 1's 140-token label budget and call 2's 176-token plan half, plus th
 - [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) - the previous plan.
 - [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - the next plan.
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - spawned from this plan; it spends these calls on labels, and it amends O43 from two calls to as many as the DAG needs, adjacent per item. Its labelling rows are gated on rows 4, 5 and 6 above.
-

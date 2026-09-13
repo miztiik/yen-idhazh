@@ -6126,4 +6126,3 @@ class AppConfig(Contract):
             window_days=self.console.max_window_days,
         )
         return self
-
