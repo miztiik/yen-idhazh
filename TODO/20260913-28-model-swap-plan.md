@@ -47,7 +47,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The runtime sweep reaches for a key that is not there | - | A | PENDING | - | - | - |
-| 2 | The turn envelope moves onto the model entry | - | A | DONE | p28-r2 | - | Fowler (Architecture and Engineering) |
+| 2 | The turn envelope moves onto the model entry | - | A | DONE | p28-r2 | #692 | Fowler (Architecture and Engineering) |
 | 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | PENDING | - | - | - |
 | 4 | Benchmark records lose the date from their filename | 2, 3 | B | PENDING | - | - | - |
 | 5 | Five things the server proves before the first item | 2 | C | PENDING | - | - | - |
