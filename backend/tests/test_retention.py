@@ -47,7 +47,13 @@ from idhazh.contracts.app_config import (
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    TERMINAL_STAGES,
+    FailureCode,
+    ItemHealthRow,
+    ItemOutcome,
+    ItemStage,
+)
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -1306,6 +1312,12 @@ STAGE_FAILURE: Final = {
     ItemStage.SUMMARIZE: FailureCode.BAD_SHAPE,
     ItemStage.PUBLISH: None,
 }
+#: The same stages in funnel order. `TERMINAL_STAGES` is a set, and a row's item
+#: number is derived from a stage's position, so the census fixture needs the
+#: order the enum declares. Deriving it from the enum rather than restating it
+#: means a stage added to the terminal set lands here and fails on the two maps
+#: above, which is the question a new terminal stage owes an answer to.
+TERMINAL_ORDER: Final = tuple(stage for stage in ItemStage if stage in TERMINAL_STAGES)
 
 
 def months_back(today: date, count: int) -> list[str]:
@@ -1352,7 +1364,7 @@ def item_health_history(state_dir: Path, months: list[str]) -> None:
             day = f"{month}-{day_of_month:02d}"
             rows = [
                 health_row(day=day, run=1, number=index * 100 + position, stage=stage)
-                for position, stage in enumerate(ItemStage)
+                for position, stage in enumerate(TERMINAL_ORDER)
             ]
             # A second run of the same day, so the fold meets the repeated
             # `(date, run_id, item_id)` keys the committed ledger really carries.

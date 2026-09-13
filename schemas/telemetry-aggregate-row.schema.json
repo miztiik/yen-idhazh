@@ -1,7 +1,7 @@
 {
   "$defs": {
     "ItemStage": {
-      "description": "The terminal stage for an item.",
+      "description": "The pipeline's stage vocabulary - one name per step an item passes through.\n\n**Three contracts take this type and only one of them means \"terminal\".**\n`ItemHealthRow.stage` is the census column and records where an item\nSTOPPED, so it takes `TERMINAL_STAGES` and refuses anything else.\n`DayStageTiming.stage` names the step a clock was read at, and\n`telemetry.event(src=...)` names the step that logged a line. Neither of\nthose two is an ending, and neither is exhaustive - `publish_day_metrics`\ntimes three of these names and one emitter writes one of them.\n\nDeclaration order is the funnel a person reads down, and\n`retention.fold_month` sorts a month's groups by it. The order is free to\nchange: this is a `StrEnum`, so the wire value is the string and never the\nposition.",
       "enum": [
         "plan",
         "fetch",

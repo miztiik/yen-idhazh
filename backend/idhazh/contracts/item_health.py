@@ -31,13 +31,42 @@ ItemHealthDetail = Annotated[str, StringConstraints(min_length=1, max_length=200
 
 
 class ItemStage(StrEnum):
-    """The terminal stage for an item."""
+    """The pipeline's stage vocabulary - one name per step an item passes through.
+
+    **Three contracts take this type and only one of them means "terminal".**
+    `ItemHealthRow.stage` is the census column and records where an item
+    STOPPED, so it takes `TERMINAL_STAGES` and refuses anything else.
+    `DayStageTiming.stage` names the step a clock was read at, and
+    `telemetry.event(src=...)` names the step that logged a line. Neither of
+    those two is an ending, and neither is exhaustive - `publish_day_metrics`
+    times three of these names and one emitter writes one of them.
+
+    Declaration order is the funnel a person reads down, and
+    `retention.fold_month` sorts a month's groups by it. The order is free to
+    change: this is a `StrEnum`, so the wire value is the string and never the
+    position.
+    """
 
     PLAN = "plan"
     FETCH = "fetch"
     EXTRACT = "extract"
     SUMMARIZE = "summarize"
     PUBLISH = "publish"
+
+
+#: The stages an item can STOP at, and the only values `ItemHealthRow.stage`
+#: accepts. Spelled out rather than derived from the enum, so a stage added for
+#: the event envelope or for a clock has to say whether it is terminal instead
+#: of inheriting the answer from `frozenset(ItemStage)`.
+TERMINAL_STAGES: Final[frozenset[ItemStage]] = frozenset(
+    {
+        ItemStage.PLAN,
+        ItemStage.FETCH,
+        ItemStage.EXTRACT,
+        ItemStage.SUMMARIZE,
+        ItemStage.PUBLISH,
+    }
+)
 
 
 class ItemOutcome(StrEnum):
@@ -142,7 +171,11 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.LENGTH_OUT_OF_RANGE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.COPIED_SOURCE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LEAKED_ADDRESS: frozenset({ItemStage.SUMMARIZE}),
-        FailureCode.UNKNOWN: frozenset(ItemStage),
+        # The catch-all covers every stage an item can stop at, and no more. It
+        # read `frozenset(ItemStage)` until 2026-09-14, which meant a stage
+        # added for any other reason became a legal census row the day it was
+        # declared - the one line that would have let a new member in silently.
+        FailureCode.UNKNOWN: TERMINAL_STAGES,
     }
 )
 
