@@ -995,6 +995,21 @@ each rebase attempt the commit step lists the asset paths the tip already publis
 deletes this run's copy of any of them. The decision payload is left naming the same path, because after
 the rebase the tip's file is sitting at it.
 
+**The bytes disagree for a second reason, and it has nothing to do with the race.** `render_chart` is not
+deterministic inside one process. Vega's clip-path id counter is global to the process, so the first render
+of a titled plan emits `clip1` to `clip4`, the second emits `clip5` to `clip8`, and at `clip10` the id gains
+a digit and the file gains a byte. `_drawn` runs once per item inside one shard process, so **an asset's
+bytes depend on where its item sat in the render order**. Measured 2026-09-13 on the development box against
+`tests/fixtures/visual-validator/plans/passes.json`: three renders of one plan in one process gave three
+different byte strings, the third 6 bytes longer than the first. The committed evidence agrees - 495
+drawings carry 3,256 clip ids running from `clip1` to `clip67`, which a per-render counter could not
+produce. Across **fresh** processes the first render is stable, which is why the race control above is still
+the right fix for the race and does not reach this. The determinism test in `backend/tests/test_render.py`
+cannot see it: its inline `SPEC` carries no title, so it emits no clip path at all and passes for a reason
+other than the property it names. Found while scoping plan 12 row #1, which retires this renderer, so it is
+recorded rather than patched - a fix inside a module being deleted is the temporary kind `CLAUDE.md`
+Guardrail #5 refuses.
+
 **Neither control repairs the day it already happened on.** Both stop a run standing on a path
 another run published; neither revisits a payload that already names one file twice. 2026-08-24 kept
 its 32 declared visuals over 18 files until it was repaired by hand on 2026-08-27, and it is the only
