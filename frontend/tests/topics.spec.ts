@@ -106,7 +106,7 @@ test('a day with no block asks for nothing to be drawn', () => {
 	expect(leadingStories([], [item('ai-1', 'ai')])).toEqual([]);
 });
 
-test('the topic pills fold by story count, and the active topic always stays out', () => {
+test('the topic row reads biggest first, and the active topic never folds away', () => {
 	const verticals = [ref('ai', 9), ref('world', 4), ref('energy', 1)];
 	const auto = new Set(['energy']);
 
