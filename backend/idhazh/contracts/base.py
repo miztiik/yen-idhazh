@@ -157,6 +157,35 @@ class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_default=True, frozen=False)
 
 
+def without_retired_keys(data: Any, *keys: str) -> Any:
+    """Drop named retired keys from an incoming payload, and nothing else.
+
+    The read-side migration `CLAUDE.md` section 11 owes when a field leaves a
+    shape whose older payloads are never rewritten. `extra="forbid"` above is
+    what makes it necessary: a key the model no longer declares is refused
+    rather than ignored, so a frozen published day stops parsing the day the
+    field goes.
+
+    **Named keys only, and that is the whole of the design.** A helper that
+    filtered the payload down to the model's own fields would pass every test a
+    named popper passes and silently turn `extra="forbid"` into `extra="ignore"`
+    for the model it sits on - every future misspelling in every hand-written
+    fixture would then parse, carrying none of the value it was meant to carry.
+    For the same reason this is a plain function a model opts into rather than a
+    validator on `Model` or `Contract`: inherited, it would open all fifty
+    contracts to a key only two of them ever held.
+
+    It returns a new mapping. A `mode="before"` validator is handed the caller's
+    own dict, so popping in place would take the key out from under a caller
+    that still holds it.
+    """
+    if not isinstance(data, dict):
+        return data
+    if not any(key in data for key in keys):
+        return data
+    return {name: value for name, value in data.items() if name not in keys}
+
+
 class ChangelogEntry(Model):
     """One recorded change to a persisted shape."""
 

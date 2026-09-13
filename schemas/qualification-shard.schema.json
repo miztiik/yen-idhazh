@@ -591,6 +591,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
+      "version": "2026-09-13T22:00",
+      "why": "`inputs` beside it records the same facts by name and no writer has built a stamp since 2026-09-12. A shard is a workflow artifact uploaded by one qualification job and merged by the next; none is committed, so the shape moves with no payload of it on disk."
+    },
+    {
       "change": "A shard and a report carry `inputs`, the recorded input manifest, and pipeline_fingerprint is optional on both.",
       "version": "2026-09-12T21:00",
       "why": "A qualification run stamped its controls so two candidates could be shown to have run under one pipeline. The stamp stopped being built, so the field is recorded when a caller has one and absent otherwise."
@@ -671,20 +676,6 @@
       "title": "Observations",
       "type": "array"
     },
-    "pipeline_fingerprint": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Null since 2026-09-12. The stamp gates nothing and no writer fills it.",
-      "title": "Pipeline Fingerprint"
-    },
     "planned": {
       "description": "Addresses this shard was handed.",
       "minimum": 0,
@@ -722,7 +713,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-09-12T21:00",
+      "default": "2026-09-13T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -743,5 +734,5 @@
   ],
   "title": "QualificationShard",
   "type": "object",
-  "version": "2026-09-12T21:00"
+  "version": "2026-09-13T22:00"
 }

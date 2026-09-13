@@ -98,9 +98,6 @@
       ],
       "n": 1,
       "note": null,
-      "pipeline_fingerprints": [
-        "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
-      ],
       "rank_version": null,
       "route_ms": null,
       "run_id": "2026-08-21-1",
@@ -199,9 +196,6 @@
       ],
       "n": 2,
       "note": "Evening run. Two items matched their stamp and did no work; the third was forced and returned different words under the same stamp.",
-      "pipeline_fingerprints": [
-        "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
-      ],
       "rank_version": "idhazh-rank-2",
       "route_ms": null,
       "run_id": "2026-08-21-2",

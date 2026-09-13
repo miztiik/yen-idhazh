@@ -445,6 +445,18 @@ declares it. What retiring it costs: the nine boundaries the committed months
 hold become unreachable from the console, and an operator who wants them reads
 the CSV.
 
+**Today the historical branch is the only branch that draws anything, and that
+is why the column outlived the field.** Measured 2026-09-13 over all 23
+committed `run.json` files: **0 of them carry a recorded input manifest**, so the
+branch on and after the cutover contributes no identity on any day the archive
+holds. The pipeline has not published since `inputs` started being written. The
+commit that dropped `pipeline_fingerprint` from nine contracts therefore left it
+on `EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build
+time and hands to this module - rather than on `PublicEvalRow`, which nothing
+under `frontend/src/` opens. Dropping it would have made this panel report that
+nothing moved across nine days on which something did, which is a wrong answer
+where the whole design asks for a missing one.
+
 **A day is a boundary when it ran an identity the previous recorded day did not
 run.** A day that only stopped using one of yesterday's started nothing, so it
 is not one. A day carrying several is one boundary, because a day is one

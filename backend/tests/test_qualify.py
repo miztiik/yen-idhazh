@@ -173,7 +173,6 @@ def a_passing_shard(**overrides: Any) -> QualificationShard:
         "repeats": 3,
         "candidate": CANDIDATE,
         "scorer": SCORER,
-        "pipeline_fingerprint": "5" * 64,
         "corpus_registered_at": "2026-08-26T06:00:00Z",
         "planned": len(items),
         "corpus": items,

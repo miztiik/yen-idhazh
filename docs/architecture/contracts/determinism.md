@@ -164,14 +164,14 @@ It is a diagnostic, outside `PipelineInputs`, so exclusion is structural rather 
 
 Including it would make every runner a different record, which would hide the one failure this exists to catch: the same inputs producing different words on different hardware. It is the only field that *explains* a violation, so it has to be recorded and it must not be part of the identity.
 
-## The ledger is retired
+## The ledger is gone
 
 `state/fingerprints.csv` held one row the first time a digest was seen, expanding
-it into every component that produced it. Nothing has written it since
-2026-09-12: a digest with nothing to expand it into is meaningless hex three
-years from now, and once the digest went the expansion had nothing left to
-explain. The ten rows it holds still read back. `FingerprintRow`, its schema and
-the file go together in the commit that drops the field from every contract.
+it into every component that produced it. Nothing wrote it after 2026-09-12: a
+digest with nothing to expand it into is meaningless hex three years from now,
+and once the digest went the expansion had nothing left to explain. The file,
+`FingerprintRow` and `schemas/fingerprint-row.schema.json` were deleted together
+on 2026-09-13, in the commit that dropped the field. Git holds the ten rows.
 
 What replaced it is the same enumeration on the run record, which a reader
 already opens for everything else a run did, and which needs no join.

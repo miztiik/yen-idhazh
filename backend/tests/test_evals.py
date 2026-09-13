@@ -908,14 +908,14 @@ def test_a_prompt_change_inside_a_month_no_longer_withholds_the_month_figure(
 
 
 def test_the_archived_cohort_no_longer_knows_what_produced_it() -> None:
-    """The stamp leaves the cohort key, and the field stays on the shape.
+    """The stamp left the cohort key on 2026-09-12 and left the shape on 2026-09-13.
 
-    Relaxing rather than removing is what lets an archive written before today
-    still validate. The field is dropped, with its read-side migration, in its
-    own commit.
+    Nothing had to migrate: `state/score-archive/` does not exist in this
+    checkout and the first month `prune_scores` can fold is 2026-08, on
+    2027-10-01, so the shape moved before any payload of it was ever written.
     """
     assert "pipeline_fingerprint" not in score_archive.COHORT_KEY
-    assert "pipeline_fingerprint" in ScoreCohort.model_fields
+    assert "pipeline_fingerprint" not in ScoreCohort.model_fields
 
 
 def test_every_column_of_the_eval_row_is_filed_somewhere_in_the_archive() -> None:

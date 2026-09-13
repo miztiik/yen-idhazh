@@ -13,8 +13,11 @@ The closed-world block is contract tier (`CLAUDE.md` section 13). It holds the
 stamp and `InferenceConfig` to one another, so a knob added to config is either
 digested or written down as undigested, and never simply forgotten.
 
-No mocks and no network (Guardrail #7): the stamp under test is the committed
-fixture, so the test and the fixture cannot drift apart.
+No mocks and no network (Guardrail #7): the stamp under test is built by the
+module's own `build_inputs` from values named in this file, so the test and the
+builder cannot drift apart. It read a committed `FingerprintRow` fixture until
+2026-09-13, when that contract, its schema and `state/fingerprints.csv` were
+deleted with the field - a record nothing wrote and nothing read.
 """
 
 from __future__ import annotations
@@ -26,11 +29,11 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig, InferenceConfig, ModelRef
 from idhazh.contracts.base import Contract
-from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
     MACHINE_INPUTS,
@@ -51,7 +54,7 @@ from idhazh.ledger import load_retirements
 
 pytestmark = pytest.mark.contract
 
-FIXTURE = CONTRACT_FIXTURES_DIR / "fingerprint-row" / "first-seen.json"
+FIXTURE_MODEL_SHA256: Final = "b" * 64
 HEX64 = re.compile(r"[0-9a-f]{64}")
 
 #: Ruled on 2026-08-25: these five change the arithmetic, so leaving them out
@@ -90,8 +93,9 @@ def stamp_with(model_sha256: str | None) -> PipelineInputs:
     )
 
 
-def committed_row() -> FingerprintRow:
-    return FingerprintRow.from_json(read_text(FIXTURE))
+def recorded_inputs() -> PipelineInputs:
+    """One recorded input manifest, every value named here rather than read off disk."""
+    return stamp_with(FIXTURE_MODEL_SHA256)
 
 
 def a_different_value(value: object) -> object:
@@ -109,35 +113,30 @@ def a_different_value(value: object) -> object:
 @pytest.mark.parametrize("field", sorted(PipelineInputs.model_fields))
 def test_every_declared_input_moves_the_fingerprint(field: str) -> None:
     """A declared input that does not move the digest is a silent drift source."""
-    inputs = committed_row().inputs
+    inputs = recorded_inputs()
     moved = inputs.model_copy(update={field: a_different_value(getattr(inputs, field))})
     assert moved.fingerprint() != inputs.fingerprint(), f"{field} does not reach the digest"
 
 
 def test_the_truncation_cap_alone_moves_the_fingerprint() -> None:
     """The named trap: a cap change is a config edit that rewrites every summary."""
-    inputs = committed_row().inputs
+    inputs = recorded_inputs()
     widened = inputs.model_copy(update={"truncation_cap_tokens": inputs.truncation_cap_tokens * 2})
     assert widened.fingerprint() != inputs.fingerprint()
 
 
 def test_host_cpu_is_recorded_but_never_digested() -> None:
-    """Including it would make every runner a different stamp, hiding the violation."""
+    """Including it would make every runner a different stamp, hiding the violation.
+
+    Structural rather than filtered: it is not a field of the manifest at all, so
+    there is no code path on which it could reach the digest.
+    """
     assert "host_cpu" not in PipelineInputs.model_fields
-    row = committed_row()
-    elsewhere = row.model_copy(update={"host_cpu": "Intel Xeon Platinum 8370C"})
-    assert elsewhere.pipeline_fingerprint == row.pipeline_fingerprint
-
-
-def test_the_fingerprint_is_rebuilt_not_trusted() -> None:
-    payload = committed_row().model_dump(mode="json")
-    payload["pipeline_fingerprint"] = "0" * 64
-    with pytest.raises(ValueError, match="rebuilt on read"):
-        FingerprintRow.model_validate(payload)
+    assert "host_cpu" not in recorded_inputs().model_dump(mode="json")
 
 
 def test_the_digest_is_stable_across_construction_order() -> None:
-    inputs = committed_row().inputs
+    inputs = recorded_inputs()
     rebuilt = PipelineInputs.model_validate(
         dict(reversed(list(inputs.model_dump(mode="json").items())))
     )
@@ -254,14 +253,14 @@ def moved(inputs: PipelineInputs, *names: str) -> PipelineInputs:
 def test_a_prose_input_moving_alone_is_the_alarm(prose: str) -> None:
     """The case nobody else can see: the same weights, the same binary, and
     different words asked of them."""
-    before = committed_row().inputs
+    before = recorded_inputs()
 
     assert prose_changed_alone(before, moved(before, prose)) == (prose,)
 
 
 def test_every_prose_input_that_moved_is_named() -> None:
     """Naming them is the whole of the report, so one of three is not an answer."""
-    before = committed_row().inputs
+    before = recorded_inputs()
 
     assert set(prose_changed_alone(before, moved(before, *PROSE_INPUTS))) == set(PROSE_INPUTS)
 
@@ -272,7 +271,7 @@ def test_a_machine_input_moving_too_is_a_model_change_and_not_this_alarm(machine
 
     Reporting it here as well would bury the one reading nothing else carries.
     """
-    before = committed_row().inputs
+    before = recorded_inputs()
 
     assert prose_changed_alone(before, moved(before, "prompt_sha256", machine)) == ()
 
@@ -280,11 +279,11 @@ def test_a_machine_input_moving_too_is_a_model_change_and_not_this_alarm(machine
 def test_a_first_run_has_nothing_to_compare_against() -> None:
     """No earlier manifest is not a change, and reporting one would cry wolf
     on the first run after every model swap."""
-    assert prose_changed_alone(None, committed_row().inputs) == ()
+    assert prose_changed_alone(None, recorded_inputs()) == ()
 
 
 def test_a_run_that_moved_nothing_is_silent() -> None:
-    inputs = committed_row().inputs
+    inputs = recorded_inputs()
 
     assert prose_changed_alone(inputs, inputs) == ()
 
@@ -296,7 +295,7 @@ def test_the_change_names_the_input_that_moved_rather_than_saying_one_did() -> N
     operation. The names come back in declaration order, so two runs compared
     twice read the same way round.
     """
-    before = committed_row().inputs
+    before = recorded_inputs()
 
     assert moved(before, "n_ctx").changed_inputs(before) == ("n_ctx",)
     assert before.changed_inputs(before) == ()
@@ -339,12 +338,6 @@ def test_a_deliberately_unbounded_read_declares_its_cover(
     assert cover in doc, f"{name} declares a cover that does not name {cover!r}"
 
 
-def test_every_column_is_a_scalar() -> None:
-    row = committed_row()
-    assert set(row.csv_row()) == set(FingerprintRow.csv_columns())
-    assert all(isinstance(value, str) for value in row.csv_row().values())
-
-
 # --- Building the stamp -----------------------------------------------------
 
 
@@ -385,7 +378,7 @@ def test_the_committed_config_records_a_measured_digest_for_every_model(role: st
 
 def test_the_prompt_and_the_schema_are_digested_not_stored() -> None:
     """A prompt reaching a persisted payload would put untrusted text in the ledger."""
-    inputs = committed_row().inputs
+    inputs = recorded_inputs()
     assert HEX64.fullmatch(inputs.prompt_sha256)
     assert HEX64.fullmatch(inputs.output_schema_sha256)
     assert HEX64.fullmatch(inputs.chat_template_sha256)
@@ -409,7 +402,7 @@ def test_an_unpinned_build_records_the_absence_rather_than_inventing_a_tag(
 
 def test_an_unpinned_build_stamps_apart_from_a_pinned_one() -> None:
     """Degrading honestly is only honest if the degraded run is distinguishable."""
-    inputs = committed_row().inputs
+    inputs = recorded_inputs()
     unpinned = inputs.model_copy(update={"runtime_build": UNRECORDED_BUILD})
     pinned = inputs.model_copy(update={"runtime_build": "b10598"})
     assert unpinned.fingerprint() != pinned.fingerprint()

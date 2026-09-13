@@ -1423,7 +1423,9 @@ def test_a_well_formed_reply_becomes_a_summary() -> None:
     assert result.status is SummaryStatus.OK
     assert result.summary
     assert len(result.key_points) == 3
-    assert result.pipeline_fingerprint is None, "the stamp was retired and no writer fills it"
+    assert "pipeline_fingerprint" not in type(result).model_fields, (
+        "the stamp was retired, and the shape stopped carrying it on 2026-09-13"
+    )
     assert result.output_digest == derive_output_digest(
         result.summary, result.key_points, title=result.title
     )

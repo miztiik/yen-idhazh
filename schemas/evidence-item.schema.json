@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
+      "version": "2026-09-13T22:00",
+      "why": "The stamp gated nothing and no writer had filled it since 2026-09-12. This shape is deliberately not a migration surface: the oldest EvidenceItem that can exist is a 14-day workflow artifact, so nothing it was written into survives and a shape change here owes a re-run rather than a popper (docs/architecture/contracts/schemas.md)."
+    },
+    {
       "change": "pipeline_fingerprint is optional and nothing sets it.",
       "version": "2026-09-12T21:00",
       "why": "The stamp stopped being a gate, so the eval row it is copied from no longer carries one. Relaxed rather than removed so every package already written still parses."
@@ -35,20 +40,6 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Output Digest",
       "type": "string"
-    },
-    "pipeline_fingerprint": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Null since 2026-09-12. The stamp gates nothing, so no writer fills it.",
-      "title": "Pipeline Fingerprint"
     },
     "premise": {
       "description": "The article after extraction, sanitizing and the truncation cap - the text the scorer read, byte for byte. Untrusted (Guardrail #11): it prints as inert terminal text and never becomes a prompt, a path or a URL.",
@@ -102,7 +93,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-12T21:00",
+      "default": "2026-09-13T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -122,5 +113,5 @@
   ],
   "title": "EvidenceItem",
   "type": "object",
-  "version": "2026-09-12T21:00"
+  "version": "2026-09-13T22:00"
 }

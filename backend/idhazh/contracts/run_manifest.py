@@ -15,7 +15,7 @@ trees differed by eighteen times.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -31,6 +31,7 @@ from idhazh.contracts.base import (
     Sha256,
     Slug,
     Timestamp,
+    without_retired_keys,
 )
 from idhazh.contracts.fingerprint import PipelineInputs
 
@@ -184,14 +185,6 @@ class RunRecord(Model):
             "summarized nothing."
         ),
     )
-    pipeline_fingerprints: list[Sha256] = Field(
-        default_factory=list,
-        description=(
-            "The distinct stamps this run wrote under. Empty since 2026-09-12: the "
-            "stamp gated a skip nobody wired, and `inputs` records the same facts by "
-            "name rather than as a digest that affords only equality."
-        ),
-    )
     determinism_violations: int = Field(
         default=0,
         ge=0,
@@ -262,6 +255,19 @@ class RunRecord(Model):
     config_digests: list[ConfigDigest] = Field(default_factory=list)
     note: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_keys(cls, data: Any) -> Any:
+        """Read-side migration for `pipeline_fingerprints`, removed 2026-09-13T22:00.
+
+        Delete this when `git grep -l pipeline_fingerprints -- frontend/public/digest`
+        returns nothing. That may never be true: all 23 committed `run.json`
+        files carry the key and a published day is never rewritten, so the
+        condition is written down as a fact somebody can check rather than as a
+        date somebody guessed.
+        """
+        return without_retired_keys(data, "pipeline_fingerprints")
+
     @model_validator(mode="after")
     def _counts_reconcile(self) -> Self:
         accounted = self.items_succeeded + self.items_failed + self.items_skipped
@@ -277,6 +283,21 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprints from a run record. BREAKING.",
+            why=(
+                "`inputs` has recorded the same seventeen facts by name since 2026-09-12 "
+                "and nothing has filled the list since, so it was a shape every future "
+                "author of this manifest had to ask about. Removing it is breaking, "
+                "because contracts.base.Model sets extra='forbid' and all 23 committed "
+                "frontend/public/digest/**/run.json files carry the key. The read-side "
+                "migration ships in this commit and is expected to be permanent: a "
+                "published day is frozen, so `_drop_retired_keys` pops the one named key "
+                "before validation and the condition that would let it go is written on "
+                "the line that declares it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T21:00",
             change=(

@@ -53,10 +53,9 @@ qualifies on one proof, and it is committed data:
   costs: a run whose articles were all shorter than the ceiling now has no proof
   at all and is excluded, where the stamp used to admit it.
 
-Neither alone is enough. A run whose eval rows have not been committed yet has
-no stamp; a run whose longest article never reached the ceiling cut nothing.
-Where both apply they must agree, and the report says which proof admitted each
-run so a reader can check the population rather than trust it.
+There is no second proof to agree with, and that is the whole of the change. The
+report still says which proof admitted each run - there is one value it can
+print - so a reader can check the population rather than trust it.
 
 Usage, from the root of a checkout:
 

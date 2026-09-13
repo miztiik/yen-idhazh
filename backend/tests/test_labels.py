@@ -567,9 +567,8 @@ class TestTheLoopStaysOpen:
                     }
 
         assert {"unsupported_numbers", "hedge_dropped", "extraction_suspect"} <= filled
-        assert filled == set(LabelRow.model_fields) - {"version", "pipeline_fingerprint"}, (
-            "the queue fills every column but the schema stamp, which defaults, and the "
-            "retired pipeline stamp, which no writer fills any more"
+        assert filled == set(LabelRow.model_fields) - {"version"}, (
+            "the queue fills every column but the schema stamp, which defaults"
         )
 
     def test_the_queue_says_which_months_a_draw_can_no_longer_reach(self) -> None:

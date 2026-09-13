@@ -136,7 +136,6 @@
         }
       },
       "model_id": "qwen3-8b-q4-k-m",
-      "pipeline_fingerprint": "3090231ddecd1ea99f053ebdd59456210f800c6d246fa6632f157afb58321513",
       "premise_distinct": 0,
       "premise_recorded": 0,
       "row_version": "2026-08-21T03:00",

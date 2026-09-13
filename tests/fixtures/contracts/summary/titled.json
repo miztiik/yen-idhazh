@@ -21,7 +21,6 @@
   "model_id": "qwen3-8b-q4-k-m",
   "output_digest": "90a6ab14b51fb2505870401a614dce0c4456ddd459ecafaccea65e92ac7ec1e1",
   "output_tokens": 214,
-  "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "prefill_ms": 0,
   "source_truncated": false,
   "status": "ok",

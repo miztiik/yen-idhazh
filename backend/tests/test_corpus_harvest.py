@@ -389,7 +389,6 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
             title=REFILL_PUBLISHED.title,
             summary=REFILL_PUBLISHED.summary,
             key_points=list(REFILL_PUBLISHED.key_points),
-            pipeline_fingerprint=recorded.pipeline_fingerprint,
             output_digest=recorded.output_digest,
             model_id=recorded.model_id,
             attempt=recorded.attempt,

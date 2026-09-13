@@ -148,7 +148,6 @@ def _run(n: int, *, planned: int, succeeded: int, failed: int, skipped: int) -> 
                 ),
             )
         ],
-        pipeline_fingerprints=["a" * 64],
         site_bytes=1000 * n,
         site_files=10 * n,
     )
@@ -344,7 +343,9 @@ def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
 
     # Model, off the newest score row (finding 70).
     assert metrics.model_id == "energy-model"
-    assert metrics.pipeline_fingerprint is None, "the stamp was retired and no producer fills it"
+    assert "pipeline_fingerprint" not in DayMetrics.model_fields, (
+        "the stamp was retired, and the shape stopped carrying it on 2026-09-13"
+    )
 
     # The published day.
     assert metrics.items_published == 4

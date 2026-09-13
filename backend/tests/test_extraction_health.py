@@ -232,7 +232,6 @@ def _manifest() -> RunManifest:
                         ),
                     )
                 ],
-                pipeline_fingerprints=["a" * 64],
                 site_bytes=1000,
                 site_files=10,
             )

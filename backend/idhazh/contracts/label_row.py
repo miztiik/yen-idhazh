@@ -100,6 +100,16 @@ class LabelRow(Contract):
     __schema_stem__: ClassVar[str] = "label-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
+            why=(
+                "It was the covariate a draw reported per stratum, and the stamp stopped "
+                "being written on 2026-09-12. No row is migrated because none exists: "
+                "state/labels.csv has never been written, which is the same reason the "
+                "two entries below it migrate nothing either."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
             why=(
@@ -179,13 +189,6 @@ class LabelRow(Contract):
             "The exact summary that was judged. The load-bearing field: a mismatch means "
             "the label is about different words."
         )
-    )
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description=(
-            "Null since 2026-09-12. It was the covariate a draw reported per stratum; "
-            "the stamp stopped being written, so a draw is one pool at one scorer."
-        ),
     )
     summary_word_count: int = Field(ge=0)
     source_seen_word_count: int = Field(

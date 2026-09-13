@@ -77,7 +77,6 @@
     "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
   },
   "model_id": "qwen35-9b",
-  "pipeline_fingerprint": "e74bcca07c77808e469ad574d01a823763a13fa34a397caf177c07fa236f348b",
   "reasons": {
     "faithfulness": 1,
     "hedge_dropped": 0,

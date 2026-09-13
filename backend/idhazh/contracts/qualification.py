@@ -260,6 +260,16 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
+            why=(
+                "`inputs` beside it records the same facts by name and no writer has built "
+                "a stamp since 2026-09-12. A shard is a workflow artifact uploaded by one "
+                "qualification job and merged by the next; none is committed, so the shape "
+                "moves with no payload of it on disk."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T21:00",
             change=(
                 "A shard and a report carry `inputs`, the recorded input manifest, and "
@@ -325,10 +335,6 @@ class QualificationShard(Contract):
             "Recorded and never compared to decide anything."
         ),
     )
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description="Null since 2026-09-12. The stamp gates nothing and no writer fills it.",
-    )
     corpus_registered_at: Timestamp = Field(
         description="When the hashes were written. Before any output was viewed."
     )
@@ -356,6 +362,22 @@ class QualificationReport(Contract):
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change=(
+                "Added inputs, the recorded input manifest, and removed "
+                "pipeline_fingerprint. BREAKING, and nothing to migrate."
+            ),
+            why=(
+                "Both halves land in one entry because the first was never stamped. "
+                "`inputs` and the relaxed stamp arrived here on 2026-09-12 with this "
+                "changelog left at 2026-08-26, so the generated schema has been reporting "
+                "a shape older than itself - found and corrected 2026-09-13 (CLAUDE.md "
+                "section 11). Removing the stamp is breaking and owes no read-side "
+                "migration: a report is a workflow artifact merged from shards in the job "
+                "that wrote them, and none is committed."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-26",
             change="Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
             why=(
@@ -373,10 +395,6 @@ class QualificationReport(Contract):
     inputs: PipelineInputs | None = Field(
         default=None,
         description="What the controls ran under, as every shard recorded it.",
-    )
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description="Null since 2026-09-12. The stamp gates nothing and no writer fills it.",
     )
     corpus_digest: Sha256 = Field(
         description="Digest over the frozen item hashes. Two runs on one corpus share it."

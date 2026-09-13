@@ -68,6 +68,23 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change=(
+                "pipeline_fingerprint stays on this one shape after leaving the other "
+                "nine, and its description now carries the condition that removes it."
+            ),
+            why=(
+                "It is still read. Measured 2026-09-13: frontend/src/lib/server/payload.ts "
+                "reads state/scores/ at build time and hands the rows to model-work.ts, "
+                "whose pipelineChanges draws the operator console's model-change "
+                "boundaries from this column for every day before RECORDED_INPUTS_FROM. "
+                "All 23 committed run.json files carry no recorded inputs at all, so that "
+                "column is the only source of those boundaries and dropping it would make "
+                "the panel report that nothing moved across nine days on which something "
+                "did. No field moved; the description did, so the schema moves with it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
             why=(
@@ -430,7 +447,12 @@ class EvalRow(Contract):
         default=None,
         description=(
             "Null on every row written after 2026-09-12. The stamp stopped being a gate "
-            "and stopped keying the eval window, so no writer fills it."
+            "and stopped keying the eval window, so no writer fills it. The field and its "
+            "ledger column survive here alone, because the console reads this column for "
+            "every day before model-work.ts RECORDED_INPUTS_FROM and it is the only "
+            "source of the model-change boundaries drawn over those days. Remove it, and "
+            "the column from state/scores/, once no shard the widest console window can "
+            "reach holds a row dated before that constant."
         ),
     )
     output_digest: Sha256
