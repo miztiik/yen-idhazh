@@ -33,19 +33,20 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 10 | 18 | 6 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 10 | 18 | 5 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 5 | 3 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 4 | 10 | 3 |
 
-## In flight - 3
+## In flight - 4
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #3f | 11 | C6 | The window is sized for two calls | p11-3f |
+| #4 | 23 | F | An event gets a lifecycle | p23-4 |
 | #6 | 24 | D | `state/feed-health/` files by day | p24-6 |
 | #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | p25-3 |
 
-## Ready now - 27
+## Ready now - 26
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -71,7 +72,6 @@ section 3 is where it is answered.
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 |
-| #4 | 23 | F | An event gets a lifecycle | 3 |
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a |
