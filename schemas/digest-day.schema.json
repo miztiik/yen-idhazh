@@ -509,6 +509,7 @@
     },
     "DigestVisual": {
       "additionalProperties": false,
+      "description": "Where a story's picture is, and never the picture's own data.\n\nTwo pointers and no chart data, ever. The day payload is the record that a\nday happened and is never deleted, so anything held inside it could not age\nout and `retention.image_months` would have nothing to act on - which is why\nthe marks live in their own file and this says where (owner, 2026-09-13).",
       "properties": {
         "alt": {
           "anyOf": [
@@ -523,6 +524,21 @@
           ],
           "default": null,
           "title": "Alt"
+        },
+        "data_path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where this visual's data landed, relative to frontend/public/, as digest/<Y>/<M>/<D>/<item_id>.json beside the drawing. Null on a day published before the file existed and on a visual whose data could not be written - absent reads as no data carried, never as an empty chart.",
+          "title": "Data Path"
         },
         "kind": {
           "$ref": "#/$defs/VisualKind"
@@ -606,6 +622,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added DigestVisual.data_path - where this visual's data file landed, beside the drawing it was compiled with. Optional and null by default. No chart data enters this payload.",
+      "version": "2026-09-13T20:00",
+      "why": "The owner ruled on 2026-09-13 that the reader's browser draws the chart, so the compiled data has to be published - and it may not be published here. This payload is never deleted, so data inside it could never age out and retention.image_months would have nothing to act on; one file per visual keeps the prune granularity exactly where it is. So the day carries a pointer and visual-data.schema.json carries the marks. The read-side migration is the default: null on every one of the 24 committed days, which is the honest reading - no data was written for them - and a page that finds none draws none, which is already the shape 94.7 percent of stories have."
+    },
     {
       "change": "Added DigestItem.secondary_desk - the one other desk a story has a claim to. A story names at most two desks and the second never equals the first. count and desk_count both keep their meanings.",
       "version": "2026-09-13",
@@ -761,7 +782,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-13T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -786,5 +807,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-13T20:00"
 }

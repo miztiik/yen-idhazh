@@ -27,6 +27,12 @@ from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.derived import DisplayedValue
 from idhazh.contracts.element import Element, ElementId, ElementTable
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
+from idhazh.contracts.visual_data import (
+    RENDERER_VERSION,
+    VisualData,
+    VisualEncoding,
+    VisualMark,
+)
 from idhazh.derived_values import resolve_displayed_values
 from idhazh.sanitize import sanitize
 
@@ -71,16 +77,26 @@ class CompileError(RenderError):
 
 
 class CompiledChart(NamedTuple):
-    """What a plan becomes: the spec that is drawn, and the words a reader hears.
+    """What a plan becomes: the spec that is drawn, the words a reader hears, and
+    the data a reader's browser will draw from.
 
-    Both, from one call. The alt text is assembled from the same figures the
-    spec carries, so the sentence and the picture cannot disagree - which is the
-    reason `alt_text` is not a field the model may write
-    (`docs/architecture/publishing/visuals.md`).
+    All three, from one call and one resolution of the plan. The alt text is
+    assembled from the same figures the spec carries, so the sentence and the
+    picture cannot disagree - which is the reason `alt_text` is not a field the
+    model may write (`docs/architecture/publishing/visuals.md`).
+
+    **`data` is the same three figures a third time, and that is the point.**
+    The owner ruled on 2026-09-13 that the reader's browser draws the chart, so
+    the data has to be published; compiled in a second pass it could resolve the
+    plan differently from the spec and the picture a reader gets would stop
+    being the picture this build checked. One resolution, three outputs, and
+    `backend/tests/test_render.py` measures the drawn SVG against `data` to say
+    so while there is still a drawn SVG to measure.
     """
 
     spec: dict[str, Any]
     alt_text: str
+    data: VisualData
 
 
 def render_chart(spec: str | dict[str, Any]) -> bytes:
@@ -102,8 +118,16 @@ def render_chart(spec: str | dict[str, Any]) -> bytes:
 
 
 class _Figure(NamedTuple):
-    """One bar's length and what it measures, read off a resolved plan."""
+    """One bar's length and what it measures, read off a resolved plan.
 
+    `stated` is the characters the source writes and `value` is the number they
+    mean. Both, from one branch, because the drawing is made from the number and
+    the published data carries the characters - and a second function reaching
+    for the same figure is the drift that would let the picture and its data
+    disagree.
+    """
+
+    stated: str
     value: Decimal
     unit: str | None
 
@@ -145,18 +169,19 @@ def compile_bar(
         raise CompileError(f"{resolved.refusal.check.value}: {resolved.refusal.detail}")
 
     known = {element.element_id: element for element in table.elements}
-    names = [
-        _mark_name(value, known)
-        for value in resolved.values
-        if value.role is EncodingRole.CATEGORY
-    ]
-    figures = [
-        _figure(value, known) for value in resolved.values if value.role is EncodingRole.QUANTITY
-    ]
+    naming = [value for value in resolved.values if value.role is EncodingRole.CATEGORY]
+    measuring = [value for value in resolved.values if value.role is EncodingRole.QUANTITY]
+    names = [_mark_name(value, known) for value in naming]
+    figures = [_figure(value, known) for value in measuring]
     if not names or len(names) != len(figures):
         raise CompileError(
             f"{len(names)} names and {len(figures)} figures do not pair into bars"
         )
+    # A bar nobody can name is a bar nobody can read, and it is a real route
+    # rather than a defensive one: a span excerpt that is only a comment, only
+    # invisible characters or only a fence marker sanitizes to nothing.
+    if not all(names):
+        raise CompileError("a bar whose name is nothing after sanitizing cannot be drawn")
 
     # The channel is one scale by construction - `_channel` converts anything
     # that is not - so any spelling in it names the same axis, and the first is
@@ -197,7 +222,73 @@ def compile_bar(
     title = sanitize(plan.title)[:TITLE_MAX] if plan.title else ""
     if title:
         spec["title"] = {"text": title, "anchor": "start", "fontSize": 14}
-    return CompiledChart(spec, _alt_text(names, figures, unit))
+    data = _bar_data(table.item_id, names, naming, figures, measuring)
+    return CompiledChart(spec, _alt_text(names, figures, unit), data)
+
+
+def _bar_data(
+    item_id: str,
+    names: Sequence[str],
+    naming: Sequence[DisplayedValue],
+    figures: Sequence[_Figure],
+    measuring: Sequence[DisplayedValue],
+) -> VisualData:
+    """The same bars as data: one mark a name, one mark a length, and the channels.
+
+    Marks are a flat pool and the encoding says which fill which channel, so the
+    two channels have lengths of their own - which is the only shape in which "a
+    chart with four names and three figures" can be said at all, and the drawing
+    code has to be able to refuse one.
+
+    Nothing here is drawn. No width, no colour, no font and no title: the plan
+    carries none of those and publishing the compiled result must not become the
+    hole one gets through (owner, 2026-09-13).
+    """
+    marks: list[VisualMark] = []
+    category: list[str] = []
+    quantity: list[str] = []
+    for name, value in zip(names, naming, strict=True):
+        marks.append(
+            VisualMark(
+                mark_id=f"m{len(marks)}",
+                text=name,
+                value=None,
+                unit=None,
+                element_id=value.element_id,
+                derived=value.derived,
+            )
+        )
+        category.append(marks[-1].mark_id)
+    for figure, value in zip(figures, measuring, strict=True):
+        marks.append(
+            VisualMark(
+                mark_id=f"m{len(marks)}",
+                text=None,
+                value=figure.stated,
+                unit=figure.unit,
+                element_id=value.element_id,
+                derived=value.derived,
+            )
+        )
+        quantity.append(marks[-1].mark_id)
+    return VisualData(
+        version=VisualData.schema_version(),
+        item_id=item_id,
+        type=VisualType.BAR,
+        renderer_version=RENDERER_VERSION,
+        marks=marks,
+        encoding=VisualEncoding(
+            category=category,
+            quantity=quantity,
+            quantity_x=[],
+            time=[],
+            series=[],
+            size=[],
+            bins=[],
+            entity=[],
+            event_label=[],
+        ),
+    )
 
 
 def _mark_name(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str:
@@ -215,11 +306,11 @@ def _mark_name(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str
 def _figure(value: DisplayedValue, known: Mapping[ElementId, Element]) -> _Figure:
     """How long one bar is: the element's stated figure, or the converted one."""
     if value.derived is not None:
-        return _Figure(Decimal(value.derived.value), value.derived.unit)
+        return _Figure(value.derived.value, Decimal(value.derived.value), value.derived.unit)
     element = known[value.element_id] if value.element_id is not None else None
     if element is None or element.value is None:  # pragma: no cover - the resolver refuses first
         raise CompileError("a bar's length has to be a figure the article states")
-    return _Figure(Decimal(element.value), element.unit)
+    return _Figure(element.value, Decimal(element.value), element.unit)
 
 
 def _alt_text(names: Sequence[str], figures: Sequence[_Figure], unit: str | None) -> str:

@@ -1001,7 +1001,7 @@ flowchart TD
 | `VV` | Eight checks: elements exist; semantically compatible; units compatible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched |
 | `VC` | The one place the picture's numbers come into being, and every one of them is arithmetic over Tier 1 elements through a closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |
 | `DJ` | The day's text, and for each item a pointer: the visual's `kind`, its `state`, and where its file is. **No chart data, ever** |
-| `VJ` | One visual. Its marks with their values and provenance, its encoding, its type, and `renderer_version` |
+| `VJ` | One visual, as `VisualData`: `item_id`, `type`, `renderer_version`, a flat `marks` pool each carrying `text`, `value`, `unit` and its provenance, and an `encoding` saying which marks fill which channel |
 | `SC` | The frontend contract. It refuses rather than guesses, and a refusal costs the story its picture and nothing else |
 
 **Three things this drawing rules out, and a plan-doc may not relax any of them.**
@@ -1036,6 +1036,77 @@ days: `digest.json` totals 23.30 MB, mean 994.3 KB a day, largest 1.88 MB. Only 
 carry a drawing - **5.3 percent** - so folding chart data into the payload would make every reader
 download data for charts that 94.7 percent of stories do not have, and would push the largest day
 further up against the 1 GB site cap.
+
+### The contract, and the one field the day payload gains
+
+`VisualData` in `backend/idhazh/contracts/visual_data.py` is the shape of that file, and
+`schemas/visual-data.schema.json` is generated from it. Three parts.
+
+| Part | What it is |
+| --- | --- |
+| `item_id`, `type` | Which story, and which of the declarable forms. A new type costs an enum member, never a new document format. |
+| `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Exactly one of the two, checked. |
+| `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
+
+**The pool is flat because a row is a geometry decision.** A bar is a name and a length, a scatter
+point is two measured axes, a histogram bar is a bin - shape them into rows here and this contract
+grows a case per type and stops being data. A flat pool with an encoding over it can also express
+the thing a row list cannot: four names against three figures, which is exactly the mis-shaped
+payload the reader's page has to refuse rather than draw short.
+
+The day payload gains **one** field, `DigestVisual.data_path`, and gains nothing else. It stays what
+the flow's node table says it is - a pointer - and the chart data never enters it.
+
+### `renderer_version` has one home, and this is why it has one
+
+`VisualData.renderer_version` is the one place a drawing contract's version is stated. Not on a
+mark, not on the decision, not in the day payload.
+
+**Two homes is a failure this subsystem has already had.** `spec_format` carried the same idea in a
+second place, the two disagreed on 2026-09-05T18:00, and what disagreeing looks like from a reader's
+seat is a page drawing yesterday's numbers under today's rules. A version in one place can be wrong.
+A version in two places can be *inconsistent*, and nothing downstream can tell which one to believe.
+
+The reader's page holds the set of renderers it knows and refuses anything else. That is what lets
+the shape move at all: a later build publishes a later stamp, an older cached page does not draw it,
+and nobody gets a chart whose data means something other than what the picture says.
+
+### The degrade rule, stated once
+
+**A visual that cannot be drawn leaves the story shorter, and costs nothing else.** Four things
+degrade, and every one of them degrades to the same place.
+
+| What went wrong | What the reader gets |
+| --- | --- |
+| The day predates this file, so `data_path` is absent | The story, with no chart. Absent reads as no data carried. |
+| The drawing was published and the data write failed | The story, with no chart. `data_path` stays null; nothing half-written is pointed at. |
+| The file does not fetch, or is not a `visual-data` document | The story, with no chart. |
+| The document names a renderer or a type this page does not know, or its channels do not pair | The story, with no chart, and a console line naming the file. |
+
+**It refuses rather than guesses, and refusing is free.** A degrade path that draws something
+approximate is how a wrong chart reaches a reader, and the product is trust. 94.7 percent of stories
+already have no visual, so a story without one is the ordinary shape of the page rather than a hole
+in it - there is no placeholder to design and no layout to hold open.
+
+`refusedVisualData` in `frontend/src/lib/payload/drawing.ts` is where that check lives, beside
+`refusedDrawing`, and for the same reason: both the build and the browser import that module, and
+two copies of one refusal is how the two drift.
+
+### Two things this row did not move, and the row that owns them
+
+**`retention.py` still prunes by image suffix.** `_VISUAL_SUFFIXES` is `.png`, `.webp`, `.jpg`,
+`.jpeg` and `.svg`, so a pruned day now leaves its `.json` files behind. Adding `.json` to that set
+without first excluding the day's own payloads would delete `digest.json` and `run.json`, which is a
+much worse failure than an orphan, so it is not a one-line change and it is not this row's.
+`retention.image_months` is 13 and the oldest committed visual is weeks old, so nothing prunes
+before 2027.
+
+**`frontend/scripts/copy-visuals.mjs` stages by image suffix too**, so the data file is not copied
+into the bundle. Nothing fetches it yet, so nothing is broken by that today.
+
+Both belong to the row that makes the browser draw, which is the row that first needs the file to be
+there. They are listed here rather than in a plan-doc alone because this page is what somebody reads
+before changing either file.
 
 
 ## The build-time renderer, which the ruling above retires
@@ -1093,7 +1164,16 @@ finished picture and no way to redraw it at the size the reader's screen actuall
 
 `backend/idhazh/render/chart.py` holds the compiler the plan contract was written for. It takes one
 validated `VisualPlan` and one article's `ElementTable`, resolves every mark through
-`resolve_displayed_values`, and returns the Vega-Lite spec and the alt text together.
+`resolve_displayed_values`, and returns the Vega-Lite spec, the alt text and the published data
+together.
+
+**One resolution, three outputs.** The spec, the sentence and the wire data are built from the same
+resolved marks in one pass, so the picture a reader sees, the sentence a screen reader reads and the
+data a browser will draw cannot disagree about what the article said. Resolving twice is how they
+would. `TestPublishedData` in `backend/tests/test_render.py` is the oracle: it renders the spec,
+measures the bars out of the drawn SVG, and asserts the published marks are the same names in the
+same order at one scale. **That comparison is only possible while both exist**, which is why it is
+written now rather than in the row that deletes the renderer.
 
 **Every number in that spec came out of the article, by construction.** The plan carries element
 references and no figure at all - the shape refuses one - so a bar can only be as long as an element

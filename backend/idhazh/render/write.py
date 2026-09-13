@@ -8,14 +8,17 @@ about without an index.
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.app_config import VisualsConfig
+from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.visual import VisualPlan
+from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -27,6 +30,10 @@ from idhazh.render.chart import compile_bar, render_chart
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 SUFFIX: Final = ".svg"
+#: What a visual's published data is filed as, beside the drawing compiled with
+#: it. The day payload points at it and the reader's browser draws from it
+#: (`docs/architecture/publishing/visuals.md`).
+DATA_SUFFIX: Final = ".json"
 
 
 def asset_relpath(date: str, item_id: str) -> str:
@@ -48,15 +55,42 @@ def asset_relpath(date: str, item_id: str) -> str:
     return f"digest/{year}/{month}/{day}/{item_id}{SUFFIX}"
 
 
-def assets_in_day(public_root: Path, date: str) -> set[str]:
-    """Every asset sitting in this day's directory, as `asset_relpath` writes it.
+def data_relpath(asset: str) -> str:
+    """Where this drawing's data goes: the same directory, the same stem, `.json`.
 
-    The inverse of `asset_relpath`: that one asks what a path an item should
-    have, this one asks what is actually on disk. Reading the directory is no
-    longer allowed to decide a *name* - that is what raced two runs onto one
-    path - but a caller that needs to compare the directory against a payload
-    has to read it. `idhazh validate-days` is that caller: a file no item names
-    is a picture the reader paid for and will never see.
+    Derived from the drawing's own path rather than recomputed from the date and
+    the item, so two call sites cannot put the pair in two places. The identity
+    is still the item's - `asset_relpath` minted it and this only changes the
+    extension - so no two runs and no two shards can choose one data path for two
+    stories either.
+
+    `digest.json` and `run.json` are the day's own payloads and sit in the same
+    directory. Neither can ever collide with one of these: an item id has to end
+    in a hyphen and a run of digits or sixteen base32 symbols, so no item is
+    called `digest` or `run`.
+    """
+    if not asset.endswith(SUFFIX):
+        raise ValueError(f"a drawing's path ends in {SUFFIX}, and this one is {asset!r}")
+    return f"{asset.removesuffix(SUFFIX)}{DATA_SUFFIX}"
+
+
+def assets_in_day(public_root: Path, date: str) -> set[str]:
+    """Every file this day's directory holds for its items, as the writers file them.
+
+    The inverse of `asset_relpath` and `data_relpath`: those ask what path an
+    item should have, this one asks what is actually on disk. Reading the
+    directory is no longer allowed to decide a *name* - that is what raced two
+    runs onto one path - but a caller that needs to compare the directory against
+    a payload has to read it. `idhazh validate-days` is that caller: a file no
+    item names is weight the reader pays for and will never see.
+
+    **What makes a file one of these is that it is named for an item**, which is
+    also what tells it apart from the day's own payloads. `digest.json` and
+    `run.json` sit in this directory and belong to the day rather than to any
+    story, and naming them here to exclude them would be a list that rots: it
+    was written when `digest.json` was the only one, and `run.json` walked
+    straight through it. An item id ends in a hyphen and a run of digits or
+    sixteen base32 symbols, so no day-level payload can ever look like one.
 
     Relative to `public_root`, matching the strings a payload carries.
     """
@@ -64,7 +98,12 @@ def assets_in_day(public_root: Path, date: str) -> set[str]:
     folder = public_root / "digest" / year / month / day
     if not folder.is_dir():
         return set()
-    return {f"digest/{year}/{month}/{day}/{path.name}" for path in folder.glob(f"*{SUFFIX}")}
+    return {
+        f"digest/{year}/{month}/{day}/{path.name}"
+        for suffix in (SUFFIX, DATA_SUFFIX)
+        for path in folder.glob(f"*{suffix}")
+        if re.match(ITEM_ID_PATTERN, path.stem)
+    }
 
 
 def write_bytes_atomic(path: Path, payload: bytes) -> None:
@@ -101,6 +140,11 @@ def drop_raced_assets(
     point somewhere else is how an item ends up with a picture that is not
     filed under its own name.
 
+    **A visual's data file races exactly like its drawing**, for the same reason
+    and with the same answer: it is filed under the item's own id, so a path both
+    sides hold is one story compiled twice, and git cannot rebase two adds of one
+    path any better here than there.
+
     `published` names what the tip holds, relative to `public_root`. Returns the
     paths it dropped, so the run log can name them.
     """
@@ -108,16 +152,16 @@ def drop_raced_assets(
     dropped: list[str] = []
     for decision_path in sorted(items_dir.glob(f"*{PAYLOAD_SUFFIX}")):
         decision = VisualDecision.read(decision_path)
-        relpath = decision.asset_path
-        if relpath is None or relpath not in already:
-            continue
-        source = public_root / relpath
-        # A payload naming a file this checkout does not hold cannot collide
-        # with anything: nothing here would commit that path.
-        if not source.is_file():
-            continue
-        source.unlink()
-        dropped.append(relpath)
+        for relpath in (decision.asset_path, decision.data_path):
+            if relpath is None or relpath not in already:
+                continue
+            source = public_root / relpath
+            # A payload naming a file this checkout does not hold cannot collide
+            # with anything: nothing here would commit that path.
+            if not source.is_file():
+                continue
+            source.unlink()
+            dropped.append(relpath)
     return dropped
 
 
@@ -187,6 +231,15 @@ def render_planned_visual(
     the drawing failed; a plan that never became a spec has no spec to record,
     and the shape will not hold one. Which gate refused it is `none_reason`'s to
     say, and the caller sets it.
+
+    **The data is published after the drawing has landed, and never instead of
+    it.** The reader's browser is what draws the chart from 2026-09-13
+    ([`docs/architecture/publishing/visuals.md`](../../../docs/architecture/publishing/visuals.md)),
+    so the compiled marks are a published file rather than a run artifact. A
+    drawing with no data file is the honest record of a write that did not
+    happen and a reader of that day simply gets the drawing; a data file with no
+    drawing would be a file nothing points at, which is why the order is this way
+    round and not the other.
     """
     if decision.kind is not VisualKind.NONE:
         raise ValueError("a planned visual starts as an item decided to nothing")
@@ -203,4 +256,28 @@ def render_planned_visual(
             "alt_text": drawn.alt_text,
         }
     )
-    return render_visual(planned, public_root=public_root, relpath=relpath)
+    rendered = render_visual(planned, public_root=public_root, relpath=relpath)
+    if rendered.visual_state is not VisualState.RENDERED:
+        return rendered
+    return _with_published_data(rendered, drawn.data, public_root=public_root, relpath=relpath)
+
+
+def _with_published_data(
+    decision: VisualDecision,
+    data: VisualData,
+    *,
+    public_root: Path,
+    relpath: str,
+) -> VisualDecision:
+    """Write the marks beside the drawing, and record where - or record nothing.
+
+    An unwritable data file degrades the data and never the item: the story
+    still publishes, the drawing is still there, and `data_path` stays null,
+    which every reader of the payload is required to read as no data carried.
+    """
+    data_path = data_relpath(relpath)
+    try:
+        write_bytes_atomic(public_root / data_path, data.to_json().encode("utf-8"))
+    except OSError:
+        return decision
+    return decision.model_copy(update={"data_path": data_path})

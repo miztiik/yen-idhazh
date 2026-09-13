@@ -9,6 +9,7 @@ from __future__ import annotations
 from idhazh.render.chart import CompiledChart, CompileError, compile_bar, render_chart
 from idhazh.render.write import (
     asset_relpath,
+    data_relpath,
     drop_raced_assets,
     render_planned_visual,
     render_visual,
@@ -19,6 +20,7 @@ __all__ = [
     "CompiledChart",
     "asset_relpath",
     "compile_bar",
+    "data_relpath",
     "drop_raced_assets",
     "render_chart",
     "render_planned_visual",

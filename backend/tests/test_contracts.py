@@ -123,6 +123,7 @@ from idhazh.contracts.visual import (
     unbounded_leaves,
     worst_case_reply_characters,
 )
+from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.extract import TOKENS_PER_WORD
@@ -4588,6 +4589,179 @@ def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> 
     absent = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json"))
     del absent["drafted_chart"]
     assert VisualDecision.model_validate(absent).drafted_chart is False
+
+
+def test_a_visual_published_before_the_data_file_reads_as_carrying_none() -> None:
+    """The read-side migration, proved by removing the key rather than by waiting.
+
+    Every day in the archive was published before a browser drew anything, so
+    every committed `visual` block lacks `data_path` entirely. Absent has to read
+    as no data carried - one sentence, and it is the sentence that decides
+    whether 24 days keep rendering. Asserting it against a fixture with the key
+    cut out is what makes it provable today; counting how many committed days
+    still lack it would be a check timed to go red on a date nobody chose
+    (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    carried = 0
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"].pop("data_path", None)
+            carried += 1
+    assert carried, "the fixture stopped carrying a visual, so this proves nothing"
+
+    day = DigestDay.model_validate(payload)
+
+    assert [item.visual.data_path for item in day.items if item.visual] == [None] * carried
+
+
+def test_a_decision_published_before_the_data_file_reads_as_carrying_none() -> None:
+    """The same sentence one stage earlier, where the run's own payloads live."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
+    payload.pop("data_path", None)
+
+    assert VisualDecision.model_validate(payload).data_path is None
+
+
+def test_only_a_rendered_visual_carries_data() -> None:
+    """A path to a file the renderer never wrote is a 404 the payload asked for."""
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json",
+        data_path="digest/2026/08/22/ai-01.json",
+    )
+    with pytest.raises(ValueError, match="rendered visual"):
+        VisualDecision.model_validate(payload)
+
+
+VISUAL_DATA_FIXTURE: Final = (
+    CONTRACT_FIXTURES_DIR / "visual-data" / "bars-from-the-committed-plan.json"
+)
+
+
+def _visual_data() -> dict[str, Any]:
+    """The one fitting case, compiled from the committed plan by the real compiler."""
+    payload: dict[str, Any] = json.loads(read_text(VISUAL_DATA_FIXTURE))
+    return payload
+
+
+def test_a_visual_data_document_states_the_renderer_it_was_compiled_for() -> None:
+    """One home for the version, and this is it.
+
+    `spec_format` carried the same idea in two places and the two disagreed on
+    2026-09-05T18:00. So a mark never states a version, a decision never states
+    one, and the day payload never states one - the document a browser reads
+    states it, because that is the document whose shape can move.
+    """
+    data = VisualData.model_validate(_visual_data())
+
+    assert data.renderer_version == RENDERER_VERSION
+    assert "renderer_version" not in data.marks[0].model_dump()
+
+
+def _derived(payload: dict[str, Any], value: str, unit: str | None) -> dict[str, Any]:
+    """A chain of the shape `DerivedValue` declares, over elements the article has.
+
+    A `sum` reads at least two elements and no unit table, so the inputs are the
+    fixture's own quantity elements rather than invented ids - a chain naming an
+    element nobody extracted would be refused for that instead, and the test
+    would pass while proving something else.
+    """
+    reads = [mark["element_id"] for mark in payload["marks"] if mark["element_id"]]
+    return {
+        "version": "2026-08-21",
+        "function": "sum",
+        "inputs": [read for read in reads if read.startswith("quantity-")][:2],
+        "value": value,
+        "unit": unit,
+        "source_unit": None,
+        "unit_table_version": None,
+        "bin_lower": None,
+        "bin_upper": None,
+    }
+
+
+def test_a_mark_came_from_the_article_or_from_a_chain_and_never_from_neither() -> None:
+    """A drawn number with no provenance is the thing this subsystem exists to refuse."""
+    payload = _visual_data()
+    payload["marks"][0]["element_id"] = None
+
+    with pytest.raises(ValueError, match="never both, and never neither"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_may_not_claim_two_provenances_at_once() -> None:
+    payload = _visual_data()
+    payload["marks"][0]["derived"] = _derived(payload, "1200", "mw")
+
+    with pytest.raises(ValueError, match="never both, and never neither"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_that_says_nothing_and_measures_nothing_is_refused() -> None:
+    """It would draw a bar with no name and no length. Nothing to look at."""
+    payload = _visual_data()
+    payload["marks"][0]["text"] = None
+
+    with pytest.raises(ValueError, match="names something or measures something"):
+        VisualData.model_validate(payload)
+
+
+def test_a_unit_with_no_figure_beside_it_is_refused() -> None:
+    payload = _visual_data()
+    payload["marks"][0]["unit"] = "mw"
+
+    with pytest.raises(ValueError, match="unit"):
+        VisualData.model_validate(payload)
+
+
+def test_a_channel_that_names_a_mark_the_document_lacks_is_refused() -> None:
+    """The browser would draw a bar short, and be right to."""
+    payload = _visual_data()
+    payload["encoding"]["category"].append("m99")
+
+    with pytest.raises(ValueError, match="does not carry"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_nothing_draws_is_refused_rather_than_shipped() -> None:
+    """Bytes on the wire that reach no pixel. Either the plan or the channel is wrong."""
+    payload = _visual_data()
+    payload["encoding"]["category"] = payload["encoding"]["category"][:-1]
+
+    with pytest.raises(ValueError, match="no channel draws"):
+        VisualData.model_validate(payload)
+
+
+def test_one_mark_may_not_be_drawn_in_two_channels() -> None:
+    """A name that is also a length draws a bar whose label is its own size."""
+    payload = _visual_data()
+    payload["encoding"]["entity"] = [payload["encoding"]["category"][0]]
+
+    with pytest.raises(ValueError, match="two channels"):
+        VisualData.model_validate(payload)
+
+
+def test_two_marks_may_not_share_an_id() -> None:
+    """The channels address marks by id, so a repeat makes a channel ambiguous."""
+    payload = _visual_data()
+    payload["marks"][1]["mark_id"] = payload["marks"][0]["mark_id"]
+
+    with pytest.raises(ValueError, match="share one id"):
+        VisualData.model_validate(payload)
+
+
+def test_a_derived_mark_is_drawn_at_the_figure_its_chain_computed() -> None:
+    """Otherwise the bar and the provenance under it are two different numbers."""
+    payload = _visual_data()
+    figure = payload["encoding"]["quantity"][0]
+    chain = _derived(payload, "99", "mw")
+    for mark in payload["marks"]:
+        if mark["mark_id"] == figure:
+            mark["element_id"] = None
+            mark["derived"] = chain
+
+    with pytest.raises(ValueError, match="chain computed"):
+        VisualData.model_validate(payload)
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:

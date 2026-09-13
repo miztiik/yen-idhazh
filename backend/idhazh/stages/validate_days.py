@@ -53,15 +53,22 @@ def _picture_faults(public_root: Path, day: DigestDay) -> list[str]:
     A file no story names is weight against the 1 GB Pages cap (Guardrail #2) that
     renders nowhere, and it is what a repaired collision leaves behind.
 
+    **A visual's data file is held to the same three**, because it is published
+    beside the drawing, filed under the same item id, and fetched by the reader's
+    browser - so every way a drawing and its payload can disagree is a way these
+    can (2026-09-13).
+
     It is checked here rather than by a test per committed day because the day
     that can still be wrong is the one being written. A day already published is
     frozen, and re-checking every one of them costs more every day the pipeline
     runs (Guardrail #12).
     """
     declared = [
-        item.visual.path
+        path
         for item in day.items
-        if item.visual is not None and item.visual.path is not None
+        if item.visual is not None
+        for path in (item.visual.path, item.visual.data_path)
+        if path is not None
     ]
     faults: list[str] = []
     shared = sorted(name for name, claims in Counter(declared).items() if claims > 1)

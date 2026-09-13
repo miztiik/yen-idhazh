@@ -79,9 +79,26 @@ from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 
 class DigestVisual(Model):
+    """Where a story's picture is, and never the picture's own data.
+
+    Two pointers and no chart data, ever. The day payload is the record that a
+    day happened and is never deleted, so anything held inside it could not age
+    out and `retention.image_months` would have nothing to act on - which is why
+    the marks live in their own file and this says where (owner, 2026-09-13).
+    """
+
     kind: VisualKind
     state: VisualState
     path: RelPath | None = None
+    data_path: RelPath | None = Field(
+        default=None,
+        description=(
+            "Where this visual's data landed, relative to frontend/public/, as "
+            "digest/<Y>/<M>/<D>/<item_id>.json beside the drawing. Null on a day "
+            "published before the file existed and on a visual whose data could not "
+            "be written - absent reads as no data carried, never as an empty chart."
+        ),
+    )
     alt: UntrustedLine | None = None
 
     @model_validator(mode="after")
@@ -425,6 +442,26 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T20:00",
+            change=(
+                "Added DigestVisual.data_path - where this visual's data file landed, "
+                "beside the drawing it was compiled with. Optional and null by default. "
+                "No chart data enters this payload."
+            ),
+            why=(
+                "The owner ruled on 2026-09-13 that the reader's browser draws the "
+                "chart, so the compiled data has to be published - and it may not be "
+                "published here. This payload is never deleted, so data inside it could "
+                "never age out and retention.image_months would have nothing to act on; "
+                "one file per visual keeps the prune granularity exactly where it is. "
+                "So the day carries a pointer and visual-data.schema.json carries the "
+                "marks. The read-side migration is the default: null on every one of "
+                "the 24 committed days, which is the honest reading - no data was "
+                "written for them - and a page that finds none draws none, which is "
+                "already the shape 94.7 percent of stories have."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change=(

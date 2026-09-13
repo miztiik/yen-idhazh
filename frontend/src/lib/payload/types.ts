@@ -26,7 +26,55 @@ export interface DigestVisual {
 	kind: string;
 	state: string;
 	path: string | null;
+	/** Where this visual's data is, relative to `frontend/public/`. Null where the
+	 * drawing landed and its data did not, and **absent** on a day published
+	 * before the file existed - the 24 committed days carry no key at all, and
+	 * both readings are the same one: no data carried, never an empty chart. */
+	data_path?: string | null;
 	alt: string | null;
+}
+
+/** One thing a drawing puts on the page, mirroring `schemas/visual-data.schema.json`.
+ *
+ * A mark is one entry in one channel - a bar's name or a bar's length, never
+ * both halves of a bar - which is what gives a channel a length of its own.
+ * `element_id` and `derived` are the provenance and exactly one of them is set;
+ * the browser draws `text` and `value` and never reads inside the chain. */
+export interface VisualMark {
+	mark_id: string;
+	text: string | null;
+	value: string | null;
+	unit: string | null;
+	element_id: string | null;
+	derived: unknown | null;
+}
+
+/** Which marks fill which channel. Every role a key, an unused one empty. */
+export interface VisualEncoding {
+	category: string[];
+	quantity: string[];
+	quantity_x: string[];
+	time: string[];
+	series: string[];
+	size: string[];
+	bins: string[];
+	entity: string[];
+	event_label: string[];
+}
+
+/** One published visual's data, as `digest/<Y>/<M>/<D>/<item_id>.json` holds it.
+ *
+ * Fetched rather than inlined, and checked by `refusedVisualData` in
+ * `./drawing` before anything is drawn from it. `renderer_version` is what the
+ * page checks it knows: the drawing contract can move, and a page that guessed
+ * at a later one would draw a chart from data that means something else. */
+export interface VisualData {
+	version: string;
+	item_id: string;
+	type: string;
+	renderer_version: string;
+	marks: VisualMark[];
+	encoding: VisualEncoding;
 }
 
 /** A visual as the build hands it to a component: the committed fields, plus
