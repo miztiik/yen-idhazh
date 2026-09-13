@@ -34,7 +34,6 @@
     "dedup_enforce": false,
     "dedup_similarity_min": 0.94,
     "feed_http_410_runs_before_retirement": 5,
-    "front_page_bonus": 0.4,
     "max_age_hours": 24.0,
     "max_future_hours": 6.0,
     "max_per_source": 2,

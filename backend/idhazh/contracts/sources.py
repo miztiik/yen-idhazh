@@ -57,11 +57,18 @@ class FeedDef(Lifecycled):
 
 
 class SalienceFeedDef(Lifecycled):
-    """A ranking signal. It adds weight to a URL already in the pool; it never discovers.
+    """A published fact about a URL already in the pool. It never discovers.
 
-    What a vote is worth is `collect.front_page_bonus` - one number for every
-    aggregator, not one per feed. An aggregator has no subject taxonomy to be
-    graded on, so there is nothing for a per-feed weight to express.
+    A vote sets `on_front_page` on the item, so the page can say another desk
+    led with this story. It was also worth `collect.front_page_bonus` in the
+    selection score until 2026-09-13, when the term was removed: it fired on 8
+    of 5,682 published stories - 0.1 percent - while being worth more than the
+    step between two source tiers, and a move nobody can attribute to a term is
+    not a ranking term. The vote is still recorded, so restoring the term costs
+    one weight once the signal is actually being supplied.
+
+    There is no per-feed weight here and there never was a use for one. An
+    aggregator has no subject taxonomy to be graded on.
     """
 
     id: Slug
@@ -74,6 +81,21 @@ class Sources(Contract):
 
     __schema_stem__: ClassVar[str] = "sources"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T18:00",
+            change=(
+                "A salience feed's description no longer says a vote is worth "
+                "collect.front_page_bonus. No field was added, removed or retyped, so a "
+                "config/sources.json written before this still loads and needs no "
+                "read-side migration."
+            ),
+            why=(
+                "collect.front_page_bonus was removed in the same commit, so the "
+                "sentence named a config key that no longer exists. A vote is now a "
+                "published fact about the item rather than a term of the score, and the "
+                "description says which of the two it is."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T18:47",
             change="Added feed form with an abstract value.",

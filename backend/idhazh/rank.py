@@ -6,9 +6,16 @@ time - which means the plan job finishes in seconds and produces the same
 answer on every re-run.
 
 The score is: how far the source is trusted, times how widely the story is
-carried, plus a bonus for the watchlist, for an aggregator's vote, and for
-being new. Nothing is ever dropped for being old. A cutoff cannot tell a strong
-old story from a weak fresh one; a bonus lets the rest of the score answer that.
+carried, plus a bonus for the watchlist, for a theme we weight, and for being
+new. Its terms are ordered, and the order is the editor's: authority times the
+feed's weight, then decayed recency, then the feed's reliability, then a
+watchlist subject.
+
+**Age is decided twice, and only the first decision drops anything.** `too_old`
+refuses a story older than `max_age_hours` before it is scored at all, so a
+story can be dropped for being old. What the score never does is drop one: the
+recency term is a bonus over what already passed that gate, because a second
+cutoff could not tell a strong old story from a weak fresh one.
 
 Nothing bounds how many items a vertical contributes except supply, the score,
 and `max_per_source`. What bounds one feed across the whole day - every desk,
@@ -41,7 +48,10 @@ from idhazh.embed import cosine
 #: and adds to it. `-4` moved no score at all: it is the day every item started
 #: carrying a base32 address instead of a decimal one, and this string is the
 #: only place a later reader can see that two days were addressed differently.
-RANK_VERSION: Final = "idhazh-rank-4"
+#: `-5` removed a term: an aggregator's front-page vote no longer moves the
+#: order. `on_front_page` is still published, so the page can still say another
+#: desk led with the story - the vote stopped being worth a number, not a fact.
+RANK_VERSION: Final = "idhazh-rank-5"
 
 #: Crockford base32, lowercased. `i`, `l`, `o` and `u` are out, so no id can be
 #: misread aloud and none can spell a word. The 32 symbols left are a subset of
@@ -203,13 +213,12 @@ def score(
     *,
     config: CollectConfig,
     watchlist_hit: bool,
-    on_front_page: bool,
     lens_bonus: float = 0.0,
     appeared: str | None,
     now: str,
     reliability: Mapping[str, float] | None = None,
 ) -> float:
-    """Authority times reach, plus the bonuses.
+    """Authority times reach, plus the bonuses. Every term is one a person named.
 
     Authority is the best-trusted source that carried the story, not the
     average: one institution saying it makes it true regardless of how many
@@ -218,14 +227,21 @@ def score(
     A lens bonus is the weight of one lens, never the sum of several. Two
     themes in one headline is not twice the story, and summing would let a
     keyword list outweigh the fact that three independent feeds carried it.
+
+    An aggregator's front-page vote was a term here until 2026-09-13 and is
+    not one now. It fired on 8 of 5,682 published stories - 0.1 percent - and
+    was worth 0.4, more than the smallest step between two tiers. A term nobody
+    can attribute a move to is not a ranking term. Removing it takes no story
+    out of the first twenty on any of the 13 committed days that carry a score,
+    and it does change which of those twenty leads on 2 of them - a term that is
+    silent 99.9 percent of the time and then decides the lead is a lottery. The
+    vote is still published on the item; it just no longer buys a place.
     """
     best = max(authority(candidate, config, reliability) for candidate in carried)
     reach = 1.0 + config.repetition_weight * (len(carried) - 1)
     total = best * reach
     if watchlist_hit:
         total += config.watchlist_bonus
-    if on_front_page:
-        total += config.front_page_bonus
     total += lens_bonus
     total += recency_bonus(appeared, now=now, config=config)
     return round(total, 6)
@@ -490,7 +506,6 @@ def plan_vertical(
                     carried,
                     config=config,
                     watchlist_hit=watchlist_hit,
-                    on_front_page=on_front_page,
                     lens_bonus=theme,
                     appeared=appeared.at,
                     now=now,

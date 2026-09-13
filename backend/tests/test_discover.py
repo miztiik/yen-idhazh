@@ -112,7 +112,6 @@ def rate(
     carried: list[Candidate],
     *,
     watchlist_hit: bool = False,
-    front_page: bool = False,
     lens_bonus: float = 0.0,
 ) -> float:
     """Score with the clock and the appearance time held still."""
@@ -120,7 +119,6 @@ def rate(
         carried,
         config=CollectConfig(),
         watchlist_hit=watchlist_hit,
-        on_front_page=front_page,
         lens_bonus=lens_bonus,
         appeared=None,
         now=NOW,
@@ -716,11 +714,10 @@ def test_authority_is_the_best_tier_that_carried_it_not_the_average() -> None:
     assert rate(institution + community) > rate(community)
 
 
-def test_a_watchlist_hit_and_a_front_page_vote_both_lift_the_score() -> None:
+def test_a_watchlist_hit_lifts_the_score() -> None:
     carried = all_candidates()[:1]
     base = rate(carried)
     assert rate(carried, watchlist_hit=True) > base
-    assert rate(carried, front_page=True) > base
 
 
 def test_a_theme_lifts_a_story_by_exactly_its_lens_weight() -> None:
@@ -788,9 +785,9 @@ def test_the_scoring_formula_is_exactly_its_four_terms() -> None:
     base = rate(one)
 
     assert rate(one, watchlist_hit=True) == pytest.approx(base + config.watchlist_bonus)
-    assert rate(one, front_page=True) == pytest.approx(base + config.front_page_bonus)
-    assert rate(one, watchlist_hit=True, front_page=True) == pytest.approx(
-        base + config.watchlist_bonus + config.front_page_bonus
+    assert rate(one, lens_bonus=0.3) == pytest.approx(base + 0.3)
+    assert rate(one, watchlist_hit=True, lens_bonus=0.3) == pytest.approx(
+        base + config.watchlist_bonus + 0.3
     )
 
     # Reach multiplies authority; the bonuses are added after, never scaled by it.

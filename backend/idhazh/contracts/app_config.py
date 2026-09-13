@@ -573,7 +573,27 @@ class CollectConfig(Model):
             "tighten the per-desk rule, which is a different decision and was refused."
         ),
     )
-    tier_weights: TierWeights = Field(default_factory=TierWeights)
+    tier_weights: TierWeights = Field(
+        default_factory=TierWeights,
+        description=(
+            "The first and heaviest of the four terms the order is built from - what a "
+            "source tier is worth, before the feed's own weight and its recent record "
+            "scale it. The ladder spans 0.7, institution 1.0 down to community 0.3, "
+            "which is wider than any other term's ceiling and is why it is term one. An "
+            "estimate, and this is the measurement that would overturn it. Measured "
+            "2026-09-13 over the 13 committed days that carry rank_score, 5,682 "
+            "stories: flatten every tier to 1.0 and the story sitting in a median of "
+            "19 of the 20 head slots changes, and the lead story changes on 6 of the "
+            "13 days - so the ladder, not any bonus, is what decides the head. Of "
+            "those stories 5,456 are on a feed config/sources.json still names, and "
+            "231 of the 260 head slots are; over that population the 40 institution "
+            "feeds supply 5.5 percent of the stream and hold 22.1 percent of the head, "
+            "a 4.0x lift, while the 11 community feeds supply 1.8 percent and have "
+            "held none of it. So 0.3 is not yet distinguishable from 0 there; raising "
+            "it, or saying that tier admits rather than ranks, is the open question. "
+            "Named by Editor, 2026-09-13."
+        ),
+    )
     reliability_window_days: int = Field(
         default=30,
         ge=30,
@@ -596,19 +616,63 @@ class CollectConfig(Model):
             "reduces a score and never removes a feed. At 0.5 the worst a feed's "
             "record can do is halve its authority - a two-to-one cut, never more - so "
             "a reliable feed of a lower tier can still be caught but a single desk is "
-            "never emptied by this alone."
+            "never emptied by this alone. Third of the four terms the order is built "
+            "from, and its ceiling is (1 - floor) times the best tier, which is 0.5 "
+            "today. An estimate, and this is the measurement that would overturn it. "
+            "Measured 2026-09-13 over the trailing 30 days of committed feed health: of "
+            "the 149 feeds carrying evidence, 19 score below 1.0 and the floor clamps "
+            "exactly 2 of them - bruegel, whose raw ratio is 0.0, and swarajya at 0.16. "
+            "At a floor of 0 bruegel would score no authority at all and leave the day, "
+            "which is the removal this clamp refuses."
         ),
     )
     repetition_weight: float = Field(default=1.0, ge=0.0)
-    watchlist_bonus: float = Field(default=0.5, ge=0.0)
-    front_page_bonus: float = Field(default=0.4, ge=0.0)
+    watchlist_bonus: float = Field(
+        default=0.5,
+        ge=0.0,
+        description=(
+            "What a story about a subject on config/watchlist.json is worth, added "
+            "once however many watchlist entries it names. It is the fourth and "
+            "smallest of the four terms the order is built from - authority times the "
+            "feed's weight, then decayed recency, then the feed's reliability, then "
+            "this. An estimate, and this is the measurement that would overturn it. "
+            "Measured 2026-09-13 over the 13 committed days that carry rank_score, "
+            "5,682 stories: a watchlist subject fires on 22.1 percent of the stream, "
+            "3.88 times as often as a second feed carrying one address, so the "
+            "firing-rate method discovery.md uses for a content signal would price it "
+            "at 0.6 / 3.88 = 0.15. That method is the wrong instrument here and the "
+            "measurement says so: a watchlist subject is not informative because it is "
+            "rare, it is informative because a person chose it. Cutting it to 0.15 "
+            "takes the biggest desk's share of the raw top 20 from a median of 80 "
+            "percent to 95, distinct desks in that top 20 from 4 to 3, and institution "
+            "stories in it from 51 to 16 over the same 13 days. The reason is that "
+            "carriage still MULTIPLIES authority, so this is the only additive term "
+            "that can lift an un-syndicated story from a second desk into the head. "
+            "Re-measure when plan 25 row #4 turns carriage into a flat step, and set "
+            "the weight then by what it puts in the head rather than by how often it "
+            "fires. Ruled by Editor, 2026-09-13."
+        ),
+    )
     recency_weight: float = Field(
         default=0.6,
         ge=0.0,
         description=(
             "How much freshness may move a score, inside the window max_age_hours "
             "allows. It orders what is already fresh enough to publish; it is "
-            "max_age_hours, not this, that decides what is too old to add at all."
+            "max_age_hours, not this, that decides what is too old to add at all. "
+            "Second of the four terms the order is built from, by ceiling - and the "
+            "ceiling is most of what it is. An estimate, and this is the measurement "
+            "that would overturn it. Measured 2026-09-13 over the 13 committed days "
+            "that carry rank_score: the bonus is not published, so it is recovered from "
+            "the published score, which leaves 5,442 of the day's 5,682 stories "
+            "answerable. It fires on every one of them, paying a median of 0.5656 "
+            "against a ceiling of 0.6 - 94 percent of the most it can ever pay - and "
+            "the middle half of the stream spans 0.5053 to 0.5874, a spread of 0.08 "
+            "that is a quarter of the smallest step between two tiers. The median story "
+            "is 1.5 hours old when it is scored and three quarters are under 4.5 hours, "
+            "so an 18-hour half-life over a 24-hour admission window adds nearly the "
+            "same amount to everything. Raising this weight does not fix that - it "
+            "scales a flat term. The half-life is what would, and no row owns it yet."
         ),
     )
     recency_half_life_hours: float = Field(
@@ -3544,6 +3608,37 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T18:00",
+            change=(
+                "collect.front_page_bonus removed. An aggregator's front-page vote no "
+                "longer moves the order, and the four terms the order is now built "
+                "from - collect.tier_weights, collect.recency_weight, "
+                "collect.reliability_floor and collect.watchlist_bonus - each gained "
+                "the measurement behind its size. This removes a key, so a "
+                "config/idhazh.json still carrying front_page_bonus "
+                "is refused on read rather than silently ignored - the committed file "
+                "drops it in this commit, and nothing a run writes carries it, so there "
+                "is no payload to migrate."
+            ),
+            why=(
+                "rank_score used to decide only what was admitted; since 2026-09-13 it "
+                "also decides the order a reader meets. A term that moves an order has "
+                "to fire often enough that a move can be attributed to it. Measured "
+                "2026-09-13 over the 13 committed days that carry rank_score, 5,682 "
+                "stories: an aggregator front page fired on 8 of them - 0.1 percent, "
+                "and 2 of 260 head slots - while being worth 0.4, more than the 0.3 "
+                "step between the community and trade-press tiers. Removing it takes no "
+                "story out of the first twenty on any of the 13 days, and it does change "
+                "which of those twenty leads on 2 of them: a term that is silent 99.9 "
+                "percent of the time and then decides the lead is a lottery rather than "
+                "a ranking term. "
+                "on_front_page is still computed and still "
+                "published, so the page can still say another desk led with the story "
+                "and a later row can restore the term once the signal is actually "
+                "being supplied. Ruled by Editor, 2026-09-13."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T14:00",
             change=(
