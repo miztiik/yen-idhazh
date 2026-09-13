@@ -5,10 +5,39 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh.measured import EVERY_MEASURED, Measured
+from idhazh.contracts.app_config import AppConfig
+from idhazh.measured import (
+    EVERY_MEASURED,
+    UNREACHED_BY_THIS_GATE,
+    Measured,
+    TokenizerMeasured,
+    refuse_a_reading_taken_against_other_weights,
+)
 
 pytestmark = pytest.mark.contract
+
+
+def configured_weights() -> str:
+    """The sha256 of the weights `config/idhazh.json` currently names for summarizing."""
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    declared = committed.models.summarize.sha256
+    assert declared is not None, "the configured summarizer names no weights digest"
+    return declared
+
+
+def a_tokenizer_reading(subject: str) -> TokenizerMeasured:
+    """A built reading, so the gate is never driven off the committed records."""
+    return TokenizerMeasured(
+        value=1234,
+        measures="a built reading that exists only inside this test",
+        taken_on=date(2026, 9, 13),
+        subject=subject,
+        method="tokenized a built string",
+        when_it_fires="tokenize it again",
+        why_a_number="nothing else answers it",
+    )
 
 
 def test_every_measured_number_says_what_it_is_of_and_what_to_do() -> None:
@@ -75,3 +104,88 @@ def test_no_two_records_measure_the_same_thing() -> None:
     """Two records of one quantity is the drift this module exists to remove."""
     subjects = [record.measures for record in EVERY_MEASURED]
     assert len(subjects) == len(set(subjects))
+
+
+def test_every_tokenizer_reading_names_the_weights_the_config_still_names() -> None:
+    """The whole row in one line: a token count belongs to the vocabulary that counted it.
+
+    There is no arm here for a tokenizer reading that omits its subject, and no
+    arm for a timing record that carries one. `TokenizerMeasured.subject` has no
+    default and `Measured` has no such field, so `mypy backend` refuses both and
+    a runtime test would only repeat it (Fowler, 2026-09-13).
+    """
+    pinned = [record for record in EVERY_MEASURED if isinstance(record, TokenizerMeasured)]
+    assert len(pinned) == 6, (
+        "six of the eight records are token counts. If a record moved between the two "
+        "classes, say which and why here; if row #13 added one, raise this count"
+    )
+
+    refuse_a_reading_taken_against_other_weights(
+        configured_sha256=configured_weights(), records=EVERY_MEASURED
+    )
+
+
+def test_a_reading_taken_against_other_weights_is_refused_and_names_both_digests() -> None:
+    """The arm that proves the gate can fail for the reason it exists.
+
+    Driven from a built record rather than from the committed ones, so it stays
+    true on the day somebody retakes a reading (`CLAUDE.md` section 13).
+    """
+    configured = configured_weights()
+    stale = "f" * 64
+    assert stale != configured
+
+    with pytest.raises(ValueError) as refusal:
+        refuse_a_reading_taken_against_other_weights(
+            configured_sha256=configured, records=[a_tokenizer_reading(stale)]
+        )
+
+    said = str(refusal.value)
+    assert configured in said, "the refusal does not say which weights are configured"
+    assert stale in said, "the refusal does not say which weights the reading was taken against"
+
+
+def test_the_refusal_hands_over_the_three_sites_the_gate_cannot_reach() -> None:
+    """A model swap makes all three stale at the same instant, so they ride on the refusal.
+
+    The person swapping a model is reading `config/idhazh.json` and a failing
+    gate, not `measured.py`, and the refusal is the one moment they are provably
+    looking (Fowler, 2026-09-13).
+    """
+    with pytest.raises(ValueError) as refusal:
+        refuse_a_reading_taken_against_other_weights(
+            configured_sha256="a" * 64, records=[a_tokenizer_reading("b" * 64)]
+        )
+
+    said = str(refusal.value)
+    for site in UNREACHED_BY_THIS_GATE:
+        assert site.module in said
+        assert site.constant in said
+
+
+def test_each_site_the_gate_names_still_exists_and_still_declares_its_constant() -> None:
+    """A list of what to retake is worth nothing once a rename has made it a lie."""
+    for site in UNREACHED_BY_THIS_GATE:
+        module = REPO_ROOT / site.module
+        assert module.is_file(), f"{site.module} has moved and the list now points at nothing"
+        assert site.constant in read_text(module), (
+            f"{site.module} no longer declares {site.constant}"
+        )
+
+
+def test_a_timing_record_is_not_filtered_into_the_gate() -> None:
+    """Only a token count is pinned - a second and a resident set belong to the box.
+
+    Carmack, 2026-09-13. A plain `Measured` travels through the gate untouched
+    whatever the configured digest is, which is what lets the site growth rate
+    and the warning-days judgement sit in the same tuple.
+    """
+    timing = Measured(
+        value=1,
+        measures="a built timing that exists only inside this test",
+        taken_on=date(2026, 9, 13),
+        method="read a clock",
+        when_it_fires="read it again",
+        why_a_number="nothing else answers it",
+    )
+    refuse_a_reading_taken_against_other_weights(configured_sha256="c" * 64, records=[timing])

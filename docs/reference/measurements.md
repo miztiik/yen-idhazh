@@ -29,7 +29,7 @@ which governs - and ordering is what a reader arriving by search never sees. The
 naming rule and what a record has to carry are in
 [documentation-structure.md](documentation-structure.md).
 
-Two rules govern this page:
+Three rules govern this page:
 
 - A figure is either **measured** - and then it carries hardware, date and
  spread - or it is listed under [Still unmeasured](#still-unmeasured) with the
@@ -43,6 +43,16 @@ Two rules govern this page:
  a 72 percent regression from four Playwright workers that the runner measured
  as a 40 percent gain. Nothing here substitutes for
  `.github/workflows/measure.yml` on `ubuntu-latest`.
+- **A token count belongs to the tokenizer, so it names the weights it was
+ taken against.** The rule above frees it from the hardware and does not free
+ it from the vocabulary: the same prompt through different weights is a
+ different number. A swap therefore retires every token count on this page at
+ one stroke, while leaving each one looking exactly as good as it did. The
+ 8B-to-9B move on 2026-08-27 did that and it was not noticed for seventeen
+ days. A token count a gate or a test reads is pinned in code instead, as
+ `TokenizerMeasured.subject` in
+ [`../../backend/idhazh/measured.py`](../../backend/idhazh/measured.py), and
+ that module refuses a reading whose weights the configuration no longer names.
 
 **This page holds the reading, never the decision.** The value in force lives in
 `config/idhazh.json` and the rule that acts on it lives in the doc it impacts,
@@ -416,7 +426,10 @@ documents the prerender step used to write before any spec ran.
 whole per-item record. One file, named here, because a walk over every shard
 costs more every month for an answer one month already gives (Guardrail #12).
 **Hardware:** the stock GitHub-hosted `ubuntu-latest` runners those rows were
-written on - 4 vCPU, no GPU. Nothing here was taken on a laptop.
+written on - 4 vCPU, no GPU. Nothing here was taken on a laptop. **Weights:**
+`Qwen3.5-9B-Q4_K_M`, sha256 `03b74727...b7e8`, which has been the configured
+summarizer since 2026-08-27 and so served every row on this shard. Every token
+count below is that vocabulary's and no other.
 
 **The cap cut 36 of 4,117 published items, which is 0.87 percent.** At a cap of
 5,000 tokens the cut point is `int(5000 / 1.3)` = 3,846 words, and those 36 rows
@@ -447,6 +460,13 @@ the cut, and that is what the rows above use.
 data twice: the shortest items on the shard are 3 words each and measured 980 to
 985 tokens. So 997 tokens is the system prompt, the fence and the instructions -
 everything before a word of the article arrives.
+
+**997 and the 1.585 below are the two figures on this page that a gate reads, so
+they are pinned in code rather than only written here.** They are
+`PROMPT_OVERHEAD_TOKENS` and `WORST_TOKENS_A_WORD` in
+[../../backend/idhazh/measured.py](../../backend/idhazh/measured.py), each
+carrying the weights above as its `subject`, and that module refuses either one
+the day `config/idhazh.json` names different weights.
 
 **1.306 tokens a word is the median, and the spread is what the window has to
 cover.** Over the 36 rows the cap cut, where the word count is fixed at 3,846,
@@ -2129,6 +2149,13 @@ to justify a design decision.
 Run the measurement, then record the quantity, the value, the spread, the
 hardware and the date. If a number arrives without those four, it is an
 estimate and belongs in the table above rather than in the tables below it.
+
+**A token count records a fifth thing: which weights counted it**, by the third
+rule at the top of this page. Name the file and, where the row backs a config
+key or a gate, the sha256 - `config/idhazh.json` carries the digest in force and
+[The configured summarizer](#the-configured-summarizer-qwen35-9b-q4_k_m) repeats
+it. A row that does not say which vocabulary produced its tokens is a row nobody
+can retake, and the next swap silently re-attributes it.
 
 When a measurement contradicts a design, the design changes - that has already
 happened three times on this page.
