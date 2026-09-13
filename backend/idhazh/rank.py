@@ -1,15 +1,16 @@
 """Decide the day, with arithmetic rather than a model.
 
-A story carried by three independent feeds is the day's story. That is the
-whole idea, and it needs no weights, no classifier and no judgement at run
-time - which means the plan job finishes in seconds and produces the same
-answer on every re-run.
+A story the best-trusted source carried is the day's story. That is the whole
+idea, and it needs no weights, no classifier and no judgement at run time -
+which means the plan job finishes in seconds and produces the same answer on
+every re-run.
 
-The score is: how far the source is trusted, times how widely the story is
-carried, plus a bonus for the watchlist, for a theme we weight, and for being
-new. Its terms are ordered, and the order is the editor's: authority times the
-feed's weight, then decayed recency, then the feed's reliability, then a
-watchlist subject.
+The score is: how far the source is trusted, plus a step if more than one of
+our feeds carried the same address, plus a bonus for the watchlist, for a theme
+we weight, and for being new. Its terms are ordered, and the order is the
+editor's: authority times the feed's weight, then decayed recency, then the
+feed's reliability, then a watchlist subject. Carriage is under all four - it
+breaks a tie and never decides one.
 
 **Age is decided twice, and only the first decision drops anything.** `too_old`
 refuses a story older than `max_age_hours` before it is scored at all, so a
@@ -51,7 +52,12 @@ from idhazh.embed import cosine
 #: `-5` removed a term: an aggregator's front-page vote no longer moves the
 #: order. `on_front_page` is still published, so the page can still say another
 #: desk led with the story - the vote stopped being worth a number, not a fact.
-RANK_VERSION: Final = "idhazh-rank-5"
+#: `-6` changed the shape of a term rather than removing one: carriage stopped
+#: multiplying authority and became `collect.carriage_step`, a flat step that
+#: fires once at two carriers. That moves the order of every carried story, so
+#: two days on either side of it were ordered by different arithmetic and this
+#: string is the only place a later reader can see it.
+RANK_VERSION: Final = "idhazh-rank-6"
 
 #: Crockford base32, lowercased. `i`, `l`, `o` and `u` are out, so no id can be
 #: misread aloud and none can spell a word. The 32 symbols left are a subset of
@@ -218,7 +224,7 @@ def score(
     now: str,
     reliability: Mapping[str, float] | None = None,
 ) -> float:
-    """Authority times reach, plus the bonuses. Every term is one a person named.
+    """Authority, plus the bonuses. Every term is one a person named.
 
     Authority is the best-trusted source that carried the story, not the
     average: one institution saying it makes it true regardless of how many
@@ -226,7 +232,20 @@ def score(
 
     A lens bonus is the weight of one lens, never the sum of several. Two
     themes in one headline is not twice the story, and summing would let a
-    keyword list outweigh the fact that three independent feeds carried it.
+    keyword list outweigh the fact that another feed carried it too.
+
+    **Carriage was a multiplier here until 2026-09-13 and is a flat step now.**
+    `1 + repetition_weight * (carriers - 1)` at a weight of 1.0 DOUBLED the
+    authority term at two carriers and tripled it at three, which is a bigger
+    move than any bonus on this page and uncapped besides - a story on six
+    feeds took the day. Worse, a multiplier pays most to whatever already
+    scored highest, so the same signal bought 1.0 for an institution and 0.6
+    for the trade press: the opposite of what a tie-break does. `carriage_step`
+    fires once at two carriers and never grows, because three carriers is not
+    three times the story. What the count measures is syndication rather than
+    agreement - `carried_by` counts feeds carrying ONE address, so two outlets
+    writing their own piece produce two addresses and both read 1 - and
+    `docs/concepts/digest.md` already refuses to print that claim in words.
 
     An aggregator's front-page vote was a term here until 2026-09-13 and is
     not one now. It fired on 8 of 5,682 published stories - 0.1 percent - and
@@ -238,8 +257,9 @@ def score(
     vote is still published on the item; it just no longer buys a place.
     """
     best = max(authority(candidate, config, reliability) for candidate in carried)
-    reach = 1.0 + config.repetition_weight * (len(carried) - 1)
-    total = best * reach
+    total = best
+    if len(carried) > 1:
+        total += config.carriage_step
     if watchlist_hit:
         total += config.watchlist_bonus
     total += lens_bonus

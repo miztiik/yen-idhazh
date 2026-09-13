@@ -630,7 +630,35 @@ class CollectConfig(Model):
             "which is the removal this clamp refuses."
         ),
     )
-    repetition_weight: float = Field(default=1.0, ge=0.0)
+    carriage_step: float = Field(
+        default=0.25,
+        ge=0.0,
+        description=(
+            "What one more of our feeds carrying the same address is worth. A flat step "
+            "that fires once at two carriers and never grows - three carriers is not "
+            "three times the story. It multiplied authority until 2026-09-13, so a "
+            "second carrier DOUBLED the term and a story on six feeds took the day; a "
+            "multiplier also paid most to whatever already scored highest, which is the "
+            "opposite of what a tie-break does. What it counts is syndication rather "
+            "than agreement: carried_by counts feeds carrying one address, so two "
+            "outlets writing their own piece produce two addresses and both read 1 "
+            "(docs/architecture/publishing/layout.md). An estimate, and it is set by "
+            "two written rules rather than by a measurement, because nothing inside "
+            "the window they leave is measurable. It may not reach the smallest gap "
+            "between two collect.tier_weights values - 0.3 today - or carriage would "
+            "promote a community story past a trade-press one; and it may not fall to "
+            "ui.lead_shared_subject_weight - 0.2 today - or a recurring subject would "
+            "outrank a story two independent feeds carried today. Measured 2026-09-13 "
+            "over the 13 committed days that carry rank_score, 5,682 stories: across "
+            "the whole of that window 6 of 260 head slots move and no lead does, so "
+            "0.25 is the midpoint, which is the value that stays legal when either "
+            "bound is edited. Carriage holds 20.8 percent of the framed head today on "
+            "5.7 percent of the stream; at 0.25 it holds 7.7 percent, a 1.4x lift. "
+            "Row #9a's pricing and then plan 23 row #17's per-run loop are what would "
+            "overturn it, with the tier step as a hard bound. Ruled by Editor, "
+            "2026-09-13."
+        ),
+    )
     watchlist_bonus: float = Field(
         default=0.5,
         ge=0.0,
@@ -649,12 +677,15 @@ class CollectConfig(Model):
             "rare, it is informative because a person chose it. Cutting it to 0.15 "
             "takes the biggest desk's share of the raw top 20 from a median of 80 "
             "percent to 95, distinct desks in that top 20 from 4 to 3, and institution "
-            "stories in it from 51 to 16 over the same 13 days. The reason is that "
-            "carriage still MULTIPLIES authority, so this is the only additive term "
-            "that can lift an un-syndicated story from a second desk into the head. "
-            "Re-measure when plan 25 row #4 turns carriage into a flat step, and set "
-            "the weight then by what it puts in the head rather than by how often it "
-            "fires. Ruled by Editor, 2026-09-13."
+            "stories in it from 51 to 16 over the same 13 days. The reason was that "
+            "carriage still MULTIPLIED authority when this was read, so it was the "
+            "only additive term that could lift an un-syndicated story from a second "
+            "desk into the head. Carriage became a flat step later the same day and "
+            "now holds 7.7 percent of the head rather than 20.8, so that reason has "
+            "weakened - but the argument that killed the 0.15 has not: a frequency "
+            "method cannot price a signal a person chose. Re-pricing this against the "
+            "new step would move the leading block's order and belongs to plan 23 row "
+            "#17's per-run loop. Ruled by Editor, 2026-09-13."
         ),
     )
     recency_weight: float = Field(
@@ -2924,12 +2955,17 @@ class UiConfig(Model):
             "What a qualifying shared subject adds to a story's rank inside the leading "
             "block. It is a step and not a ramp: no measurement supports a shape, and a "
             "shape nobody measured may not justify a design (Guardrail #10). It must stay "
-            "below what one more trade-press carrier is worth, which is "
-            "collect.tier_weights.trade_press times collect.repetition_weight - 0.6 on "
-            "the committed config - so a recurring subject cannot outrank a story two "
-            "independent feeds carried today. Measured 2026-09-01: a second carrier "
-            "fires on 4.49 percent of the stories that record it and a shared subject "
-            "on 12.85 percent, 2.9 times as often, and 0.6 divided by 2.9 is 0.21."
+            "below what one more feed carrying the same address is worth, which is "
+            "collect.carriage_step - 0.25 on the committed config - so a recurring "
+            "subject cannot outrank a story two independent feeds carried today. Until "
+            "2026-09-13 that bound was collect.tier_weights.trade_press times "
+            "collect.repetition_weight, 0.6, because carriage multiplied a tier; it no "
+            "longer multiplies anything, so the bound cannot either. Measured 2026-09-01: "
+            "a second carrier fires on 4.49 percent of the stories that record it and a "
+            "shared subject on 12.85 percent, 2.9 times as often. The derivation that "
+            "divided 0.6 by 2.9 went with the 0.6; re-deriving this weight against the "
+            "new step would move the leading block's order and belongs to plan 23 row "
+            "#17's per-run loop."
         ),
     )
     lead_max_yesterday: int = Field(
@@ -3618,6 +3654,40 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T22:00",
+            change=(
+                "collect.repetition_weight removed and collect.carriage_step added at "
+                "0.25. Carriage stops multiplying a story's authority and becomes one "
+                "flat step that fires at two carriers and never grows. "
+                "ui.lead_shared_subject_weight's bound moves with it: it was "
+                "collect.tier_weights.trade_press times collect.repetition_weight, and "
+                "it is now collect.carriage_step, because the term it bounds no longer "
+                "multiplies a tier. This removes a key, so a config/idhazh.json still "
+                "carrying repetition_weight is refused on read rather than silently "
+                "ignored - the committed file drops it in this commit. No published "
+                "payload schema moves: carried_by is written and read exactly as "
+                "before, and only what the ranker pays for it has changed."
+            ),
+            why=(
+                "A multiplier pays most to whatever already scored highest, which is "
+                "the opposite of what a tie-break does, and it was uncapped - a story "
+                "on six feeds took the day. What the number counts is syndication "
+                "rather than agreement, which docs/concepts/digest.md already refuses "
+                "to print in words while the ranker made the claim in arithmetic. "
+                "Measured 2026-09-13 over the 13 committed days that carry rank_score, "
+                "5,682 stories: a second feed carries 323 of them - 5.7 percent - and "
+                "they held 54 of the 260 framed head slots, 20.8 percent. At a flat "
+                "0.25 they hold 20, 7.7 percent, which is the base rate and a bit. The "
+                "day's shape does not move - 5 desks, a median 16 feeds in the head, "
+                "the biggest desk still a median quarter of it - and 179 of 260 head "
+                "slots change occupant, with the lead changing on 8 of 13 days. Every "
+                "one of those eight swaps replaces wire copy two or three of our feeds "
+                "repeated with a story one feed carried from the organisation it is "
+                "about. Ruled by Editor, 2026-09-13; the measurements and the cost to "
+                "the reader are in docs/concepts/placement.md."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T21:00",
             change=(

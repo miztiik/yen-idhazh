@@ -1608,22 +1608,24 @@ def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> 
 def test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
     """Decision 3's ceiling, derived rather than spelled.
 
-    A second trade-press carrier of one address multiplies that story's
-    authority by `1 + repetition_weight`, which on the committed config is a
-    flat 0.6 added to the score. A recurring subject must not outrank a story
-    two independent feeds carried today, so the shared-subject term stays under
-    it. Measured 2026-09-01 over 11 committed days: a second carrier fires on
-    4.49 percent of the stories that record one and a shared subject on 12.85
-    percent, so the commoner signal is the one that has to be worth less.
+    A second feed carrying one address adds `collect.carriage_step` to that
+    story's score, flat and whatever tier carried it. A recurring subject must
+    not outrank a story two independent feeds carried today, so the
+    shared-subject term stays under it. The ceiling was
+    `tier_weights.trade_press * repetition_weight` until 2026-09-13 because the
+    term multiplied a tier; it multiplies nothing now, so the bound cannot
+    either, and it tightened from 0.6 to 0.25. Measured 2026-09-01 over 11
+    committed days: a second carrier fires on 4.49 percent of the stories that
+    record one and a shared subject on 12.85 percent, so the commoner signal is
+    the one that has to be worth less.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    collect = committed.collect
-    second_carrier = collect.tier_weights.trade_press * collect.repetition_weight
+    second_carrier = committed.collect.carriage_step
     assert committed.ui.lead_shared_subject_weight < second_carrier, (
         f"a shared subject is worth {committed.ui.lead_shared_subject_weight} against "
-        f"{second_carrier} for a second trade-press carrier"
+        f"{second_carrier} for a second feed carrying the story"
     )
-    assert UiConfig().lead_shared_subject_weight < second_carrier
+    assert UiConfig().lead_shared_subject_weight < CollectConfig().carriage_step
 
 
 def test_a_leading_block_that_could_never_draw_is_refused() -> None:
