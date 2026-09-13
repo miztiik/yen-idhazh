@@ -186,7 +186,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 11 | The console strip takes five tabs | - | G | DONE #616 | p25-r11 | #616 | worker |
 | 14 | A target distribution, and the day's distance from it | 7 | G | PENDING | - | - | - |
 | 12 | `Judgement` - what the model made of each article | 11, plan 23 row #14 | H | PENDING | - | - | - |
-| 13 | `Voices` - who supplied the day, and what it is worth | 11 | I | PENDING | - | - | - |
+| 13 | `Voices` - who supplied the day, and what it is worth | 11 | I | IN-FLIGHT | p25-r13 | - | worker |
 
 **What a parallel group means, stated so a worker can check it.** **Within one group, no two rows may write the same file.** A glob counts as every file it covers, so `backend/tests/**` and `schemas/**` collide with any named file underneath them - and a row that edits any model under `backend/idhazh/contracts/` counts as writing every schema its edit regenerates, because the drift gate fails on a byte. **So there are no globs in this plan.** Every row's `Files touched` list names files. **A row that widens its file list during execution re-checks its own group before it opens a pull request**, and section 0.1 expects that widening to happen.
 
@@ -516,6 +516,8 @@ Ruled by Susan, 2026-09-11, with Jony on what may leave the page.
 ### Row #8a - The second desk reaches the reader. Created on execution, 2026-09-13
 
 Decision 6 above put the reader-facing half in the row that can test it, so this is that row. It is written here rather than in a section of its own because it is one half of row #8 and a reader of row #8 is the person who needs it.
+
+**Its heading is one level down, and that makes a collision reader blind to it** (found 2026-09-13). A tool that picks rows off `## <n>. Row #<id> - ` headings does not see this one, reports it as not found, and then reports it as colliding with nothing - which reads as a green light. Its real list overlaps **plan 12 row #1a** on four files: `backend/idhazh/contracts/digest_day.py`, `schemas/digest-day.schema.json`, `frontend/src/lib/payload/types.ts` and `docs/architecture/publishing/layout.md`. So the two may not share a block, and any verdict about this row is read off the list below rather than off a tool.
 
 - **Scope:** A desk's page lists every story naming that desk either way, and its pill counts the same set. One commit, because a pill is a promise about what its page lists and widening one side alone is the defect row #8's Oracle names.
 - **Depends on:** row #8. **Not blocked on plan 23**: the branch is driven by a fixture, exactly as row #7's was. What plan 23 row #8 changes is whether any real day exercises it.
