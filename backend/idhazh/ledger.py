@@ -12,8 +12,11 @@ every file is opened anyway and splitting the ledger buys nothing. The rule is
 in `docs/architecture/contracts/schemas.md`. `state/visual-prunes/` is the one
 exception here, and the paragraph that describes it says what it bought instead.
 
-`state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
-carried no date. Read through `collect.seen_window_days`, so it shards.
+`state/seen/<YYYY>/<MM>/<DD>.csv` answers "how old is this?" for an article
+whose feed carried no date. Read through `collect.seen_window_days`. It files by
+day, because a run writes one day and taking a day back is one `rm`. It has no
+published mirror at all, so unlike the two health ledgers there is no second
+grain anywhere near it.
 
 `state/published/YYYY/MM/DD.csv` answers "have we already run this?" It is the
 grain the published tree itself uses, and a run appends to the day its own rows
@@ -209,13 +212,21 @@ _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {FEED_HEALTH_KEY: FEED_
 
 
 def seen_relpath(date: str) -> str:
-    """`state/seen/<YYYY-MM>.csv` - the POSIX form, for a log line or a manifest."""
-    return f"{STATE_DIRNAME}/{SEEN_DIRNAME}/{date[:7]}.csv"
+    """`state/seen/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line or a manifest."""
+    return f"{STATE_DIRNAME}/{SEEN_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
 
 
 def seen_path(state_dir: Path, date: str) -> Path:
-    """The month shard a run on this date appends to."""
-    return state_dir / SEEN_DIRNAME / f"{date[:7]}.csv"
+    """The day file a run on this date appends to.
+
+    A day rather than a month, for the reason `published_path` gives: a run
+    writes one day, two runs collide on a file only when they are the same day,
+    and taking a day back is one `rm` rather than an edit inside a shared shard,
+    which `merge=union` cannot express. The caller hands the run's own digest
+    date, so `first_seen_run[:10]` names this file for every row inside it - see
+    `docs/concepts/partitions.md`.
+    """
+    return state_dir / SEEN_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def health_relpath(date: str) -> str:
@@ -342,9 +353,11 @@ def visual_prunes_path(state_dir: Path, date: str) -> Path:
 def shards_in_window(today: str, within_days: int) -> list[str]:
     """The month stems a window of days can touch, newest first.
 
-    Public because the pruner keeps exactly what this returns. Deriving the
-    keep-set from the reader's own helper is what makes it impossible to delete
-    a shard a later read would have opened.
+    Public because `drift.read_windows` names the `state/scores/` shards it
+    opens with it. That is the last month-grained ledger a window reaches, and
+    plan 24 row #8 moves it; `prune_seen` used to keep exactly what this returns
+    and moved to `day_partition.days_in_window` on 2026-09-13 with the ledger it
+    guards.
 
     Walking days rather than subtracting months keeps the arithmetic honest
     across a year boundary and needs no calendar table.
@@ -472,14 +485,19 @@ def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -
 def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str]:
     """Address -> the timestamp we first saw it, over the window only.
 
-    Older shards stay committed and stay readable; they are simply not
-    consulted, because an address first seen four months ago is not evidence
-    about today. The earliest sight wins when two shards disagree, which is
-    what "first" means.
+    Older days stay committed and stay readable; they are simply not consulted,
+    because an address first seen four months ago is not evidence about today.
+    The earliest sight wins when two days disagree, which is what "first" means.
+
+    `day_partition.days_in_window` names both ends, so a cover of `n` days opens
+    at most `n + 1` files and reads exactly those days - where the month shards
+    it replaced could hold up to 120 days of rows behind a 90-day cover. A day
+    the ledger never recorded has no file, which is not a fault: a run that met
+    no new address that day wrote nothing that day.
     """
     first_seen: dict[str, str] = {}
-    for stem in shards_in_window(today, within_days):
-        for row in _read_rows(state_dir / SEEN_DIRNAME / f"{stem}.csv"):
+    for day in day_partition.days_in_window(today, within_days):
+        for row in _read_rows(seen_path(state_dir, day)):
             url_key, at = row["url_key"], row["first_seen_at"]
             if url_key not in first_seen or at < first_seen[url_key]:
                 first_seen[url_key] = at

@@ -100,7 +100,7 @@ ledger contract sit under `state/`:
 
 | File | Written by | Answers |
 | --- | --- | --- |
-| `state/seen/<YYYY-MM>.csv` | Collect | How old is this article, when its feed gave no date? |
+| `state/seen/<YYYY>/<MM>/<DD>.csv` | Collect | How old is this article, when its feed gave no date? |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Assemble | Have we already published this address? |
 | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Collect | What did every feed do, on every run? |
 | `state/feed-retirements.csv` | Collect | Is this address gone for good? |

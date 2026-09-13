@@ -164,7 +164,7 @@ is the count of month shards a console read opens, and no read opens a visual
 
 | Artefact | Policy | Age | Why that policy |
 | --- | --- | --- | --- |
-| `state/seen/` | Delete (lookup) | `collect.seen_window_days` | `ledger.load_seen` opens the shards that window names and nothing else, so an older shard answers no question anybody asks |
+| `state/seen/` | Delete (lookup) | `collect.seen_window_days` | `ledger.load_seen` opens the day files that window names and nothing else, so an older day answers no question anybody asks. The one age here counted in days, so the prune keeps exactly the files the read opens |
 | `state/feed-health/` | Delete (lookup) | `observability.feed_health_keep_months` | a per-feed-per-run record, not a total worth keeping. The quarantine reads 31 days and the console reaches 367 inclusive days, a year and a day |
 | `state/traces/` | Delete (lookup) | `observability.trace_window_days` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
 | `state/item-health/` | **Fold** -> `state/telemetry-aggregate/` | `observability.item_health_full_grain_months` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |

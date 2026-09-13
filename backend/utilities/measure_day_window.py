@@ -3,13 +3,20 @@
 The one figure `TODO/20260910-24-day-sharded-ledgers-plan.md` is priced against.
 Five `state/` ledgers are moving from one file a month to one file a day, and
 the windowed read trades **more file handles for fewer bytes**:
-`collect.seen_window_days` is 90, so `ledger.load_seen` opens at most 4 month
-files today and would open at most 91 day files - while 4 month shards can hold
-up to 120 days of rows where 91 day files hold exactly 90. Which way that lands
-on a runner is a measurement, and nobody had taken it.
+`collect.seen_window_days` is 90, so `ledger.load_seen` opens at most 91 day
+files and used to open at most 4 month files - while 4 month shards can hold up
+to 120 days of rows where 91 day files hold exactly 90. Which way that lands on
+a runner is a measurement, and nobody had taken it.
 
 Read-only, offline, and not a stage. It builds its own tree in a temporary
 directory, reads it, and deletes it. It touches nothing under `state/`.
+
+**One arm is always the ledger's own code and the other is always written out
+here.** Which is which changed on 2026-09-13, when `state/seen/` moved to day
+files: the day arm is `ledger.append_seen` and `ledger.load_seen` now, and the
+month arm is the layout spelled out below. The arm that is not the ledger reads
+the same columns with the same reduction, so the only difference between the
+two is which files each one opens.
 
 **Both arms read one row list, written twice.** The rows are identical; only the
 layout differs. So a difference between the arms is the layout and cannot be the
@@ -111,32 +118,35 @@ def _rows(date: str, count: int) -> list[SeenRow]:
 
 
 def _write_month_tree(state: Path, days: Iterable[str], rows_a_day: int) -> None:
-    """`state/seen/<YYYY-MM>.csv`, through the ledger's own writer."""
-    for date in days:
-        ledger.append_seen(state, date, _rows(date, rows_a_day))
-
-
-def _write_day_tree(state: Path, days: Iterable[str], rows_a_day: int) -> None:
-    """`state/seen/<YYYY>/<MM>/<DD>.csv`, the same rows one layout over.
+    """`state/seen/<YYYY-MM>.csv`, the same rows one layout over.
 
     Written here rather than by the ledger because no ledger files sight rows by
-    day yet - that is the change this measurement exists to price. The columns
-    come from the contract, so the bytes are the bytes a moved ledger would
-    hold.
+    month any more - that is the change this measurement priced. The columns come
+    from the contract, so the bytes are the bytes the ledger held before it moved.
     """
     columns = SeenRow.csv_columns()
+    written: set[Path] = set()
     for date in days:
-        path = state / ledger.SEEN_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+        path = state / ledger.SEEN_DIRNAME / f"{date[:7]}.csv"
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8", newline="") as handle:
+        first = path not in written
+        with path.open("a", encoding="utf-8", newline="") as handle:
             out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-            out.writeheader()
+            if first:
+                out.writeheader()
+                written.add(path)
             for row in _rows(date, rows_a_day):
                 payload = row.model_dump(mode="json")
                 out.writerow({name: payload[name] for name in columns})
 
 
-def _read_by_day(state: Path, *, today: str, within_days: int) -> dict[str, str]:
+def _write_day_tree(state: Path, days: Iterable[str], rows_a_day: int) -> None:
+    """`state/seen/<YYYY>/<MM>/<DD>.csv`, through the ledger's own writer."""
+    for date in days:
+        ledger.append_seen(state, date, _rows(date, rows_a_day))
+
+
+def _read_by_month(state: Path, *, today: str, within_days: int) -> dict[str, str]:
     """`ledger.load_seen`, one layout over.
 
     The same reduction against the same columns - earliest sight wins - so the
@@ -144,8 +154,8 @@ def _read_by_day(state: Path, *, today: str, within_days: int) -> dict[str, str]
     """
     first_seen: dict[str, str] = {}
     root = state / ledger.SEEN_DIRNAME
-    for date in day_partition.days_in_window(today, within_days):
-        path = root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    for stem in ledger.shards_in_window(today, within_days):
+        path = root / f"{stem}.csv"
         if not path.exists():
             continue
         with path.open("r", encoding="utf-8", newline="") as handle:
@@ -198,11 +208,11 @@ def measure(*, days: int, window: int, rows_a_day: int, repeats: int) -> tuple[A
         day_ms: list[float] = []
         for _ in range(repeats):
             start = time.perf_counter()
-            month_answer = ledger.load_seen(by_month, today=ANCHOR, within_days=window)
+            month_answer = _read_by_month(by_month, today=ANCHOR, within_days=window)
             month_ms.append((time.perf_counter() - start) * 1000)
 
             start = time.perf_counter()
-            day_answer = _read_by_day(by_day, today=ANCHOR, within_days=window)
+            day_answer = ledger.load_seen(by_day, today=ANCHOR, within_days=window)
             day_ms.append((time.perf_counter() - start) * 1000)
 
             if len(day_answer) > len(month_answer):

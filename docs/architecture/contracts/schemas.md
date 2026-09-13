@@ -52,7 +52,7 @@ The shapes, and where each one lives once written:
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
 | `FingerprintRow` | `fingerprint-row` | one appended row of the retired `state/fingerprints.csv`; nothing writes it |
-| `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
+| `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
@@ -139,7 +139,7 @@ mirrors the digest tree its rows are derived from.
 
 | Ledger | Layout | The question it answers | Windowed on read |
 | --- | --- | --- | --- |
-| `state/seen/` | monthly shards | how old is this address? | yes, `collect.seen_window_days` |
+| `state/seen/` | day files | how old is this address? | yes, `collect.seen_window_days` - and it is the one window here counted in days, so the prune keeps exactly the files the read opens |
 | `state/feed-health/` | day files | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
 | `state/item-health/` | day files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and the read opens the days it names |
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |

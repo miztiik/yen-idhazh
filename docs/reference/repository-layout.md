@@ -37,7 +37,7 @@ question, and the four answers do not mix.
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Four of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/` and `state/scores/` by month, `state/published/` by day | a run, in CI | **never** |
+| `state/` | The append-only ledgers one run leaves for the next. Five of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/` and `state/published/` by day, `state/scores/` by month | a run, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
 | `notebooks/` | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Guardrail #2) | a person | no |

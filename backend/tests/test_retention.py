@@ -2233,19 +2233,18 @@ def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
     assert ledger.item_health_path(state, day).exists()
 
 
-# --- The seen shards ---------------------------------------------------------
+# --- The seen day files ------------------------------------------------------
 
 
-def _seen_shard(state: Path, stem: str, rows: int = 1) -> Path:
-    """One month of the seen ledger, written by the real appender."""
-    day = f"{stem}-15"
+def _seen_day(state: Path, day: str, rows: int = 1) -> Path:
+    """One day of the seen ledger, written by the real appender."""
     ledger.append_seen(
         state,
         day,
         [
             SeenRow(
                 version=SeenRow.schema_version(),
-                url_key=hashlib.sha256(f"{stem}-{n}".encode()).hexdigest(),
+                url_key=hashlib.sha256(f"{day}-{n}".encode()).hexdigest(),
                 first_seen_at=f"{day}T06:00:00Z",
                 first_seen_run=f"{day}-1",
             )
@@ -2255,69 +2254,123 @@ def _seen_shard(state: Path, stem: str, rows: int = 1) -> Path:
     return ledger.seen_path(state, day)
 
 
-def test_a_seen_shard_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> None:
+def test_a_seen_day_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> None:
     """The keep-set is the reader's own, so this is a property rather than a list.
 
-    Every stem `load_seen` would open is asserted to survive, for the window the
+    Every date `load_seen` would open is asserted to survive, for the window the
     committed config actually sets - not for a window the test picked.
     """
     state = tmp_path / "state"
     window = CollectConfig().seen_window_days
     today = TODAY.isoformat()
-    inside = ledger.shards_in_window(today, window)
-    for stem in inside:
-        _seen_shard(state, stem)
+    inside = day_partition.days_in_window(today, window)
+    for day in inside:
+        _seen_day(state, day)
 
     result = prune_seen(state, today=today, within_days=window)
 
     assert result.deleted == ()
-    assert sorted(result.kept) == sorted(inside)
-    assert all(ledger.seen_path(state, f"{stem}-15").exists() for stem in inside)
+    assert sorted(result.kept) == sorted(ledger.seen_relpath(day) for day in inside)
+    assert all(ledger.seen_path(state, day).exists() for day in inside)
 
 
-def test_a_seen_shard_outside_the_window_goes_and_says_what_it_weighed(
+def test_what_the_pruner_keeps_covers_what_the_reader_opens_at_a_past_anchor(
     tmp_path: Path,
 ) -> None:
-    """A shard no read can reach is bytes answering no question.
+    """The whole safety claim, at the date that would break it.
 
-    `2024-01` is far outside any window this config can name, and the assertion
-    is that `load_seen` cannot see it either - the two have to agree, or the
-    prune is deleting something the planner wanted.
+    A 140-day tree read at an anchor 40 days before its newest file. The tree is
+    wider than the anchor plus the window on purpose - at 120 days the window's
+    floor falls before the oldest file and eleven of the days the reader names
+    have no file at all, which makes "every file the reader opens survived" pass
+    on an absence. Here every day the reader names has a file, so the assertion
+    is about what the prune did.
+
+    Two-sided: every file the reader opens at that anchor has to survive, and
+    every file below the window has to go. Neither half passes on an empty tree.
+
+    The past anchor is not decoration. `--date` takes whatever it is handed, so
+    a prune that deleted everything OUTSIDE the window rather than everything
+    BELOW it would eat the forty days of live files the next run appends to.
+    """
+    state = tmp_path / "state"
+    window = CollectConfig().seen_window_days
+    newest = date(2026, 8, 30)
+    built = sorted((newest - timedelta(days=offset)).isoformat() for offset in range(140))
+    for day in built:
+        _seen_day(state, day)
+    anchor = (newest - timedelta(days=40)).isoformat()
+
+    read_at_anchor = day_partition.days_in_window(anchor, window)
+    floor = min(read_at_anchor)
+    assert built[0] < floor, "the tree has to reach below the window or nothing is deleted"
+    assert built[-1] > anchor, "the tree has to reach above the anchor or nothing tests the rule"
+    before = ledger.load_seen(state, today=anchor, within_days=window)
+    result = prune_seen(state, today=anchor, within_days=window, dry_run=False)
+    after = ledger.load_seen(state, today=anchor, within_days=window)
+
+    # Every file the reader opens at that anchor is still there.
+    assert all(ledger.seen_path(state, day).exists() for day in read_at_anchor)
+    # And so is every file NEWER than the anchor, which the window never names.
+    assert all(ledger.seen_path(state, day).exists() for day in built if day > anchor)
+    # Exactly the days below the window went, and nothing else did.
+    below = [day for day in built if day < floor]
+    assert sorted(result.deleted) == [ledger.seen_relpath(day) for day in below]
+    assert sorted(result.kept) == [
+        ledger.seen_relpath(day) for day in built if day >= floor
+    ]
+    assert not any(ledger.seen_path(state, day).exists() for day in below)
+    # The reader's answer is the same before and after, which is the claim as data.
+    assert after == before
+    assert before, "an empty answer would pass the line above on any tree"
+
+
+def test_a_seen_day_outside_the_window_goes_and_says_what_it_weighed(
+    tmp_path: Path,
+) -> None:
+    """A day no read can reach is bytes answering no question.
+
+    `2024-01-15` is far outside any window this config can name, and the
+    assertion is that `load_seen` cannot see it either - the two have to agree,
+    or the prune is deleting something the planner wanted.
     """
     state = tmp_path / "state"
     window = CollectConfig().seen_window_days
     today = TODAY.isoformat()
-    stale = _seen_shard(state, "2024-01", rows=3)
+    stale = _seen_day(state, "2024-01-15", rows=3)
     weight = stale.stat().st_size
-    kept = _seen_shard(state, TODAY.strftime("%Y-%m"))
+    kept = _seen_day(state, today)
 
     before = ledger.load_seen(state, today=today, within_days=window)
     result = prune_seen(state, today=today, within_days=window)
     after = ledger.load_seen(state, today=today, within_days=window)
 
-    assert result.deleted == ("2024-01",)
+    assert result.deleted == ("state/seen/2024/01/15.csv",)
     assert result.bytes_freed == weight
     assert not stale.exists()
     assert kept.exists()
+    # The year and month directories go with the last day inside them, or the
+    # walk would cost more every year while deleting the rows it exists to read.
+    assert not (state / ledger.SEEN_DIRNAME / "2024").exists()
     # What the prune removed was already invisible: the reader's answer is
     # unchanged, which is the whole safety claim stated as data.
     assert after == before
 
 
-def test_a_dry_run_names_the_shard_and_leaves_it(tmp_path: Path) -> None:
+def test_a_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
     state = tmp_path / "state"
-    stale = _seen_shard(state, "2024-01")
+    stale = _seen_day(state, "2024-01-15")
 
     result = prune_seen(
         state, today=TODAY.isoformat(), within_days=CollectConfig().seen_window_days, dry_run=True
     )
 
-    assert result.deleted == ("2024-01",)
+    assert result.deleted == ("state/seen/2024/01/15.csv",)
     assert result.dry_run
     assert stale.exists()
 
 
-def test_the_stage_says_so_when_every_seen_shard_is_inside_the_window(
+def test_the_stage_says_so_when_every_seen_day_is_inside_the_window(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A prune that deleted nothing has to say which window it measured against.
@@ -2326,7 +2379,7 @@ def test_the_stage_says_so_when_every_seen_shard_is_inside_the_window(
     is 90 days or the config went missing.
     """
     state = tmp_path / "state"
-    _seen_shard(state, TODAY.strftime("%Y-%m"))
+    _seen_day(state, TODAY.isoformat())
 
     with caplog.at_level(logging.INFO):
         assert (
@@ -2341,63 +2394,86 @@ def test_the_stage_says_so_when_every_seen_shard_is_inside_the_window(
             == 0
         )
 
-    assert "seen prune: every shard is inside the" in caplog.text
+    assert "seen prune: every day file is inside the" in caplog.text
     assert str(CollectConfig().seen_window_days) in caplog.text
 
 
-def test_what_is_kept_reaches_further_back_than_the_planner_ever_reads() -> None:
+def test_the_stage_names_every_seen_day_it_removed_and_counts_what_it_kept(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The day grain moved what this line may say, and this is that difference.
+
+    `kept` was at most four month stems and the line named every one. The window
+    is 90 days, so it is now up to 91 paths - a line that joined them would be a
+    wall nobody reads. The count and the oldest kept go in the line; the paths
+    themselves are what `_report_removals` prints, one to a line, and that list
+    is the deliverable of a dry run.
+    """
+    state = tmp_path / "state"
+    _seen_day(state, "2024-01-15")
+    _seen_day(state, TODAY.isoformat())
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
+                today=TODAY,
+                state_dir=state,
+                dry_run=True,
+            )
+            == 0
+        )
+
+    assert "seen prune (dry run): deleted 1 day files" in caplog.text
+    assert f"kept 1 back to {ledger.seen_relpath(TODAY.isoformat())}" in caplog.text
+    assert "would remove state/seen/2024/01/15.csv" in caplog.text
+
+
+def test_what_is_kept_is_exactly_what_the_planner_reads() -> None:
     """The margin, in days, over every anchor date a year can offer.
 
-    The prune keeps whole month files and the reader asks for a span of days, so
-    the two are only comparable in days: what survives is every row on or after
-    the first of the oldest month the reader opens. This walks a year of anchor
-    dates and asserts that span is never shorter than `seen_window_days` - the
-    property the whole design rests on, stated as arithmetic rather than as a
-    claim about one date.
+    At month grain the two were only comparable in days: the prune kept whole
+    month files and the reader asked for a span of days, so what survived ran 90
+    to 120 days against a 90-day window. At day grain they are the same unit and
+    the margin is zero on every date - which is a stronger property than the one
+    it replaces, and the reason the grain moved.
 
-    Measured over the 366 dates from 2026-01-01, at the committed window of 90
-    days: the retained span runs 90 to 120 days, so the margin is 0 to 30. It is
-    zero on the dates where the window's oldest day is already the first of a
-    month, and thirty where it is the last - the whole shard is kept either way.
+    Arithmetic over 366 built anchor dates, so it opens no file and reads nothing
+    the archive holds.
     """
     window = CollectConfig().seen_window_days
-    margins = []
     for offset in range(366):
         anchor = date(2026, 1, 1) + timedelta(days=offset)
-        oldest_kept = min(ledger.shards_in_window(anchor.isoformat(), window))
-        first_row_kept = date.fromisoformat(f"{oldest_kept}-01")
-        retained_days = (anchor - first_row_kept).days
-        assert retained_days >= window, (
-            f"on {anchor} the prune keeps back to {first_row_kept}, which is "
+        oldest_kept = min(day_partition.days_in_window(anchor.isoformat(), window))
+        retained_days = (anchor - date.fromisoformat(oldest_kept)).days
+        assert retained_days == window, (
+            f"on {anchor} the prune keeps back to {oldest_kept}, which is "
             f"{retained_days} days - the planner reads {window}"
         )
-        margins.append(retained_days - window)
-
-    assert min(margins) >= 0
-    # Never wider than one whole shard, or the prune is keeping a month the
-    # reader cannot reach through any date.
-    assert max(margins) < 31, f"margin ran to {max(margins)} days"
 
 
-def test_a_shard_newer_than_the_date_it_was_handed_is_never_deleted(
+def test_a_day_newer_than_the_date_it_was_handed_is_never_deleted(
     tmp_path: Path,
 ) -> None:
-    """A back-dated invocation must not delete the shard every later plan opens.
+    """A back-dated invocation must not delete the file every later plan opens.
 
     `--date` takes whatever it is handed, so `prune-state --date <last January>`
-    computes a window around last January. Every shard since is outside it. The
-    rule is "older than the oldest month the reader opens", not "outside the
-    window", so those shards stay and only the genuinely older one goes.
+    computes a window around last January. Every day since is outside it. The
+    rule is "older than the oldest day the reader opens", not "outside the
+    window", so those days stay and only the genuinely older one goes.
     """
     state = tmp_path / "state"
     window = CollectConfig().seen_window_days
-    live = _seen_shard(state, "2026-08")
-    stale = _seen_shard(state, "2024-01")
+    live = _seen_day(state, "2026-08-15")
+    stale = _seen_day(state, "2024-01-15")
 
     result = prune_seen(state, today="2026-01-05", within_days=window)
 
-    assert result.deleted == ("2024-01",)
-    assert live.exists(), "the live shard was deleted by a run given an older date"
+    assert result.deleted == ("state/seen/2024/01/15.csv",)
+    assert live.exists(), "the live day file was deleted by a run given an older date"
     assert not stale.exists()
     # And the planner reading at its own date still finds the rows it wants.
     assert ledger.load_seen(state, today="2026-08-31", within_days=window)

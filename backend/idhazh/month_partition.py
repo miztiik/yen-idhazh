@@ -12,11 +12,13 @@ DELETED in `state/scores/` - one name, two dispositions, and the destructive one
 landing on the store that holds the evidence behind every published quality
 claim.
 
-**`state/item-health/` and `state/feed-health/` file by day now**, so they walk
-through `day_partition` instead and the month rule no longer reaches them. Their
-prunes still take a month at a time, because a keep-months knob is a month
-boundary whatever the files below it are - and that boundary is arithmetic on a
-date rather than a filename, so it needs nothing from here.
+**`state/item-health/`, `state/feed-health/` and `state/seen/` file by day
+now**, so they walk through `day_partition` instead and the month rule no longer
+reaches them. The two health prunes still take a month at a time, because a
+keep-months knob is a month boundary whatever the files below it are - and that
+boundary is arithmetic on a date rather than a filename, so it needs nothing
+from here. The seen prune has no month in it at all: its knob is counted in
+days.
 
 **The rule is a real calendar month, spelled in ASCII, seven characters wide.**
 `str.isdigit` and `int` both accept another script's numerals, so a stem in

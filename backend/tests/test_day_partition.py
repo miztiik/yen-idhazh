@@ -112,10 +112,7 @@ def _days_pruned(state: Path) -> list[str]:
 
 def _days_walked(state: Path) -> list[str]:
     root = state / ledger.PUBLISHED_DIRNAME
-    return sorted(
-        f"{path.parent.parent.name}-{path.parent.name}-{path.stem}"
-        for path in day_partition.day_files(root)
-    )
+    return sorted(day_partition.date_of(path) for path in day_partition.day_files(root))
 
 
 Writer = Callable[[Path, str], None]
@@ -234,6 +231,23 @@ def test_the_refusal_names_the_tree_and_the_entry_in_posix_form(tmp_path: Path) 
 def test_a_fresh_clone_reads_no_days_and_is_not_a_fault(tmp_path: Path) -> None:
     """No history is what a new checkout has, and every reader answers it empty."""
     assert list(day_partition.day_files(tmp_path / "state" / ledger.PUBLISHED_DIRNAME)) == []
+
+
+def test_the_path_says_which_day_and_which_month_a_file_holds(tmp_path: Path) -> None:
+    """`date_of` and `month_of` read the record, so nothing opens a file to ask.
+
+    Both, in one test, because they are the same claim at two widths and a
+    boundary is either a day or a month: `prune_seen` compares a day,
+    `prune_telemetry` and `prune_feed_health` compare a month. Driven over the
+    tree the walk returns rather than over a path the test spelled, so a layout
+    change breaks this before it breaks a pruner.
+    """
+    state = _tree(tmp_path, ledger.PUBLISHED_DIRNAME, _write_published, ())
+    day = next(iter(day_partition.day_files(state / ledger.PUBLISHED_DIRNAME)))
+
+    assert day_partition.date_of(day) == DAY
+    assert day_partition.month_of(day) == DAY[:7]
+    assert day_partition.date_of(day).startswith(day_partition.month_of(day))
 
 
 def test_a_window_names_both_of_its_ends(tmp_path: Path) -> None:

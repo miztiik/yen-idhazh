@@ -14,7 +14,7 @@
       "why": "An undated article has no age we can trust. First sight is the only honest one, and it has to survive the run that observed it."
     }
   ],
-  "description": "One row of `state/seen/<YYYY-MM>.csv`, appended the first time an address is a candidate.\n\nIt carries no address, for the reason `PublishedRow` carries none: nothing on\nthe read path opens one. `ledger.load_seen` reads `url_key` and\n`first_seen_at` and returns a map of the two.",
+  "description": "One row of `state/seen/<YYYY>/<MM>/<DD>.csv`, appended the first time an address\nis a candidate.\n\nIt carries no address, for the reason `PublishedRow` carries none: nothing on\nthe read path opens one. `ledger.load_seen` reads `url_key` and\n`first_seen_at` and returns a map of the two.\n\n`first_seen_run` is what says which file the row lives in. A run id is\n`<date>-<n>`, so its first ten characters are the run's digest date, which is\nthe date `ledger.append_seen` files by. `first_seen_at` is a wall clock and\ncrosses midnight independently of the run it belongs to, so it names the day\na row was written and not the day the row is filed under.",
   "properties": {
     "first_seen_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
