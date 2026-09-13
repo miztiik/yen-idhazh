@@ -53,6 +53,14 @@ from idhazh.contracts.item_health import ItemStage
 # kebab-case Slug. This is the identifier the reducer joins an instrument on.
 EvalColumn = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:_[a-z0-9]+)*$")]
 
+# `<embedder id>/<encoder directory>`, the one string that says which weights
+# produced a vector. Spelled out here rather than imported, because a contract
+# may not import the rest of `idhazh` (CLAUDE.md section 4); a test pins this
+# pattern against `idhazh.embed.ENCODER_REF` so the two cannot drift.
+EncoderRef = Annotated[
+    str, StringConstraints(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*/\d{4}-\d{2}-\d{2}$")
+]
+
 # The measured eval-row columns this record aggregates one at a time in
 # `instruments`, matching the frontend's `DRAWN_BY` map. Recorded here so the
 # model documents which columns row 23 pairs against; the set is not validated,
@@ -234,6 +242,55 @@ class DayInstrument(Model):
     stat: DayDistribution
 
 
+class DayLabelSimilarity(Model):
+    """How close the day's own item vectors sat to the committed label vectors.
+
+    **Neither end of this is better than the other, and nothing here is a
+    grade.** The cosine between a 384-dimension int8 item vector and a label
+    vector is uncalibrated - one encodes a news sentence and the other a
+    definitional one - so a fixed threshold would be a number somebody picked
+    (Carmack). Only a change says anything, and a day file cannot hold a change:
+    it holds the level, and a reducer over a window is what reads a change out
+    of two of them.
+
+    **No label is picked and no per-item value survives.** The closest label is
+    computed and thrown away; `nearest` is the aggregate and nothing anywhere
+    says what one item scored. A verdict that reaches no reader and selects
+    nothing to publish is not a `CLAUDE.md` section 0a deviation, and the
+    moment either half of that stopped being true this would need everything a
+    classifier needs.
+
+    **The two rulers travel with the reading**, because a number is only
+    comparable against another number taken under the same ones. `taxonomy_digest`
+    pins the words that were encoded; `encoder_ref` pins the weights that
+    encoded them. Two different values of either inside one window is a step in
+    the ruler and not a change in the days, so a reducer refuses the comparison
+    rather than drawing it.
+    """
+
+    taxonomy_digest: Sha256 = Field(
+        description=(
+            "The digest of the label sentences the vectors were built from, exactly as "
+            "`config/taxonomy-vectors.bin` carries it. A vocabulary edit moves it."
+        )
+    )
+    encoder_ref: EncoderRef = Field(
+        description=(
+            "Which weights encoded both sides, as `<embedder id>/<encoder directory>`. "
+            "The id alone does not move when the weights move, so it is not an encoder "
+            "identity on its own."
+        )
+    )
+    nearest: DayDistribution = Field(
+        description=(
+            "The day's distribution of each item's cosine to its closest label vector. "
+            "`count` and `total` are additive, so a window mean is a sum over items and "
+            "never a mean of daily means; `count` is also the denominator, and it moves "
+            "on its own when the share of items the encoder could read moves."
+        )
+    )
+
+
 class DaySource(Model):
     """One source's day, counted so the reader can rank and combine without a re-walk.
 
@@ -325,6 +382,26 @@ class DayMetrics(Contract):
 
     __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "Added the optional label_similarity block: the day's distribution of each "
+                "item's cosine to its closest committed label vector, with the vocabulary "
+                "digest and the encoder reference it was taken under."
+            ),
+            why=(
+                "Nothing said whether the encoder's geometry had moved. The item vectors are "
+                "already on the day payload and the label vectors are committed once, so the "
+                "reading costs no encoder pass and no byte on an item - and a day that reads "
+                "differently from the days around it is the only signal there is, because the "
+                "cosine is uncalibrated in absolute terms and a fixed threshold would be a "
+                "number somebody picked (Carmack). Optional, because the 23 day records "
+                "already on disk carry no such block and a block of zeros there would report "
+                "an encoder that matched nothing rather than a day that measured nothing. It "
+                "picks no label and keeps no per-item value, so it reaches no reader and "
+                "selects nothing to publish (CLAUDE.md section 0a)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
@@ -459,6 +536,15 @@ class DayMetrics(Contract):
         description=(
             "What the candidate pass found and what the page drew from it, or null on a "
             "record written before 2026-09-08. Additive parts."
+        ),
+    )
+    label_similarity: DayLabelSimilarity | None = Field(
+        default=None,
+        description=(
+            "How close the day's item vectors sat to the committed label vectors, or null "
+            "when the day carried no vectors, the label vectors are not committed in this "
+            "checkout, or the record was written before 2026-09-13. Not a grade and not a "
+            "verdict: neither end of it is better than the other."
         ),
     )
 

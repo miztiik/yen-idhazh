@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import logging
 import math
+import struct
 import tempfile
 from array import array
 from collections.abc import Container, Mapping, Sequence
@@ -27,6 +29,7 @@ from typing import Final, Literal
 
 from idhazh.contracts.app_config import AssembleConfig, PlacementConfig, UiConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import (
     DigestDay,
     DigestEmbeddings,
@@ -58,8 +61,10 @@ from idhazh.embed import (
     DIMENSIONS,
     DTYPE,
     EMBEDDER_ID,
+    ENCODER_REF,
     VECTOR_SCALE,
     Embedder,
+    quantise,
     text_for,
     to_base64,
 )
@@ -71,6 +76,11 @@ LOG: Final = logging.getLogger("idhazh")
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 INDEX_ROOT: Final = Path("frontend/public/assist/index")
+#: The committed label vectors, relative to the repository root. `config/`
+#: rather than `state/`: a person builds this file and commits it, exactly like
+#: the `config/taxonomy.json` it is derived from, and `state/` is what a run
+#: appends (CLAUDE.md section 3).
+TAXONOMY_VECTORS_RELPATH: Final = "config/taxonomy-vectors.bin"
 #: The threshold a run uses when nobody configured one, read off the contract so
 #: the number exists once. The knob is `assemble.duplicate_similarity_min`.
 DUPLICATE_SIMILARITY_MIN: Final = AssembleConfig().duplicate_similarity_min
@@ -336,6 +346,211 @@ def cosine_int8(
     """
     dot: int = sum(map(mul, left, right))
     return dot / (left_norm * right_norm)
+
+
+# --- the label vectors, and the one number the run takes from them -----------
+#
+# `config/taxonomy-vectors.bin` holds one vector for each label the vocabulary
+# still offers, encoded once by a person and committed. The run compares them
+# against the item vectors the day payload already carries, and records how
+# close the day sat. It encodes nothing, it writes no field on an item, and it
+# picks no label: an alarm that costs an encoder pass an item is a second
+# classifier wearing an alarm's name.
+#
+# The file carries no label ids on purpose. A reader of this file cannot map a
+# cosine back to a word, so the nearest-label pick this row refuses is not
+# merely unwritten, it is unbuildable from the committed bytes.
+
+_VECTORS_MAGIC: Final = b"IDZVEC01"
+#: magic, dimensions, vector count, the raw taxonomy digest, the encoder ref's length.
+_VECTORS_HEADER: Final = "<8sHH32sH"
+_VECTORS_HEADER_BYTES: Final = struct.calcsize(_VECTORS_HEADER)
+
+
+@dataclass(frozen=True, slots=True)
+class TaxonomyVectors:
+    """The committed label vectors, with the two rulers they were taken under.
+
+    `taxonomy_digest` pins the words that were encoded and `encoder_ref` pins
+    the weights that encoded them. Both travel onto the day record, because a
+    reader comparing two days has to be able to tell a change in the day from a
+    change in the ruler.
+    """
+
+    dimensions: int
+    taxonomy_digest: str
+    encoder_ref: str
+    vectors: tuple[array[int], ...]
+    norms: tuple[float, ...]
+
+
+def label_vector_texts(taxonomy: Taxonomy) -> tuple[str, ...]:
+    """What gets encoded into a label vector, in the order the file stores it.
+
+    Active verticals first, then active lenses, each in vocabulary order. A
+    retired entry is not offered to a prompt and is not encoded here either.
+
+    The display name is prepended because seven of the eleven display words do
+    not occur in their own definition - `ai` spells out "artificial
+    intelligence" and never says AI, `cyber` says "an attack on a computer
+    system", `chips` says "semiconductors" - so the definition alone drops the
+    most discriminating token the vocabulary has. The shape is `text_for`'s,
+    which is one composition rule for both sides of the comparison: a change to
+    either side would otherwise move the number with nothing saying which.
+
+    The definition is used verbatim. The shared opening - "The story is mainly
+    about", "The story turns on" - lifts every label by about the same amount
+    and cancels out of a comparison between days, and a builder that rewrote it
+    would make two different strings both claim to be the definition.
+    """
+    offered = [
+        entry
+        for group in (taxonomy.verticals, taxonomy.lenses)
+        for entry in group
+        if entry.status is LifecycleStatus.ACTIVE
+    ]
+    return tuple(f"{entry.display_name}. {entry.definition}" for entry in offered)
+
+
+def taxonomy_digest(texts: Sequence[str]) -> str:
+    """The digest of exactly the strings that were encoded, in encoding order.
+
+    A change that would move a vector moves this, and a change that would not
+    does not: editing a retired lens changes nothing here because a retired lens
+    is not encoded. Digested through `canonical_json` rather than by joining on
+    a separator, because a definition may legally hold any character and a
+    separator a value can contain is a digest two different vocabularies can
+    share.
+    """
+    return hashlib.sha256(canonical_json(list(texts)).encode("utf-8")).hexdigest()
+
+
+def pack_taxonomy_vectors(vectors: Sequence[list[float]], *, digest: str) -> bytes:
+    """The committed file's bytes: a fixed header, the encoder ref, then the vectors.
+
+    One int8 vector per label, `DIMENSIONS` bytes each, in the order
+    `label_vector_texts` returned. No label ids and no padding.
+    """
+    reference = ENCODER_REF.encode("ascii")
+    header = struct.pack(
+        _VECTORS_HEADER,
+        _VECTORS_MAGIC,
+        DIMENSIONS,
+        len(vectors),
+        bytes.fromhex(digest),
+        len(reference),
+    )
+    return header + reference + b"".join(quantise(vector) for vector in vectors)
+
+
+def read_taxonomy_vectors(root: Path, taxonomy: Taxonomy) -> TaxonomyVectors | None:
+    """The committed label vectors, or nothing when the file is not there.
+
+    Absent is not stale: a checkout without the file simply records no figure,
+    the same way a day without an encoder records no vectors. A file that IS
+    there and names a different vocabulary or different weights raises, naming
+    the path. That is the one way this comparison is allowed to fail, and it
+    has to be loud: a stale file compares today's items against last month's
+    lenses and produces a number that looks exactly like a real one.
+    """
+    path = root / TAXONOMY_VECTORS_RELPATH
+    if not path.is_file():
+        return None
+    raw = path.read_bytes()
+    # The relative form, never the resolved one: it is what leaves the process
+    # (CLAUDE.md section 2) and it is also the path an operator rebuilds.
+    name = TAXONOMY_VECTORS_RELPATH
+    if len(raw) < _VECTORS_HEADER_BYTES:
+        raise ValueError(f"{name} is too short to carry a header")
+    magic, dimensions, count, digest, reference_length = struct.unpack(
+        _VECTORS_HEADER, raw[:_VECTORS_HEADER_BYTES]
+    )
+    if magic != _VECTORS_MAGIC:
+        raise ValueError(f"{name} does not start with the label-vector marker")
+
+    start = _VECTORS_HEADER_BYTES + reference_length
+    reference = raw[_VECTORS_HEADER_BYTES:start].decode("ascii", errors="replace")
+    expected = taxonomy_digest(label_vector_texts(taxonomy))
+    if digest.hex() != expected:
+        raise ValueError(
+            f"{name} was built from a different vocabulary than the one committed - "
+            f"it names {digest.hex()[:12]} and config/taxonomy.json digests to "
+            f"{expected[:12]}. Rebuild it with backend/utilities/build_taxonomy_vectors.py."
+        )
+    if reference != ENCODER_REF:
+        raise ValueError(
+            f"{name} was built by {reference} and this build encodes with {ENCODER_REF}. "
+            f"Rebuild it with backend/utilities/build_taxonomy_vectors.py."
+        )
+    if dimensions != DIMENSIONS:
+        raise ValueError(
+            f"{name} stores {dimensions}-wide vectors and this build reads {DIMENSIONS}"
+        )
+    if len(raw) - start != count * dimensions:
+        raise ValueError(
+            f"{name} claims {count} vectors of {dimensions} bytes and carries "
+            f"{len(raw) - start} bytes of them"
+        )
+
+    stored = tuple(
+        array("b", raw[start + index * dimensions : start + (index + 1) * dimensions])
+        for index in range(count)
+    )
+    return TaxonomyVectors(
+        dimensions=dimensions,
+        taxonomy_digest=digest.hex(),
+        encoder_ref=reference,
+        vectors=stored,
+        norms=tuple(_norm(vector) for vector in stored),
+    )
+
+
+def nearest_label_cosines(
+    embeddings: DigestEmbeddings | None, labels: TaxonomyVectors | None
+) -> list[float]:
+    """For each item vector the day carries, its cosine to the closest label vector.
+
+    Which label was closest is thrown away and never written down. The value is
+    what a later reader compares against another day; the pick is a
+    classification, and a classification needs everything a classification needs.
+
+    Neither end of this number is better than the other. It is uncalibrated in
+    absolute terms - an item vector encodes a news sentence and a label vector a
+    definitional one - so only a change in it says anything.
+
+    Bounded by the day: eleven dot products an item over vectors the payload
+    already holds, and no encoder is loaded to produce any of it.
+    """
+    if embeddings is None or labels is None or not labels.vectors:
+        return []
+    if embeddings.dimensions != labels.dimensions:
+        LOG.warning(
+            "the day stores %s-wide vectors and the label vectors are %s wide, so the "
+            "day records no label similarity",
+            embeddings.dimensions,
+            labels.dimensions,
+        )
+        return []
+    found: list[float] = []
+    for item_id, encoded in sorted(embeddings.vectors.items()):
+        raw = _vector_bytes(encoded, embeddings.dimensions)
+        if raw is None:
+            LOG.warning(
+                "item %s stores a vector that is not %s bytes wide, so it is left out "
+                "of the day's label similarity",
+                item_id,
+                embeddings.dimensions,
+            )
+            continue
+        vector = array("b", raw)
+        length = _norm(vector)
+        found.append(
+            max(
+                cosine_int8(vector, label, left_norm=length, right_norm=label_norm)
+                for label, label_norm in zip(labels.vectors, labels.norms, strict=True)
+            )
+        )
+    return found
 
 
 def _strength_order(item: DigestItem) -> tuple[float, float, int, str]:
