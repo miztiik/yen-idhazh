@@ -1,0 +1,22 @@
+{
+  "article_sha256": "a10c2a804c7bc30b53f754e3690073bc8b3b9ad5c339fd7a56950eb444ab22b4",
+  "article_words": 31,
+  "canonical_url": "https://chipbriefing.substack.com/p/the-lithography-squeeze",
+  "extracted_at": "2026-09-13T09:14:03Z",
+  "extractor_version": "trafilatura-2.0.0-idhazh-2",
+  "failure_code": null,
+  "failure_detail": null,
+  "fetched_at": "2026-09-13T09:14:02Z",
+  "host": "chipbriefing.substack.com",
+  "publisher": "chipbriefing",
+  "quality_flags": [],
+  "sanitizer_version": "idhazh-sanitize-3",
+  "source_domain": "substack.com",
+  "source_line": 412,
+  "source_url": "https://chipbriefing.substack.com/p/the-lithography-squeeze",
+  "status": "ok",
+  "text": "The tool maker said it shipped nine machines in the quarter.\n\nTwo went to a customer it declined to name, and the rest went to foundries already running the previous generation.",
+  "url_key": "b62665c98cfa4ce67154c833e560955312c15bf7f57254b84bb53a3942767967",
+  "version": "2026-09-13T13:05",
+  "vertical": null
+}

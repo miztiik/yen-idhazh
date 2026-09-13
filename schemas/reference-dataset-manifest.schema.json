@@ -1,0 +1,107 @@
+{
+  "$id": "reference-dataset-manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the input position, the three addresses, the registered domain, the host, the frozen publisher key, and the optional source id and vertical.",
+      "version": "2026-09-13",
+      "why": "The import needs a declared row before it writes one (Guardrail #3). `publisher` is stored rather than derived on read because its length depends on which other hosts are in the pool, so recomputing it over a later pool could rename an outlet that nothing changed."
+    }
+  ],
+  "description": "One line of the supplied URL list, as one element of `manifest.json`.\n\n`source_line` is here because the list is the deliverable's input and a\nperson reading a refusal needs the line to look at. Two lines carrying\nequivalent addresses keep both rows and share one `url_key`, so the count of\nrows and the count of identities are different numbers on purpose.",
+  "properties": {
+    "canonical_url": {
+      "description": "What `url_key` is derived from, never trusted from a payload.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "host": {
+      "description": "The host, lower case.",
+      "maxLength": 253,
+      "minLength": 3,
+      "title": "Host",
+      "type": "string"
+    },
+    "publisher": {
+      "description": "The outlet key a balanced sample groups on, frozen at import. Derived from the host rather than the registered domain, and lengthened only where two hosts would otherwise share it.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Publisher",
+      "type": "string"
+    },
+    "source_domain": {
+      "description": "The registered domain, which is the unit the frozen set separates on.",
+      "maxLength": 253,
+      "minLength": 3,
+      "title": "Source Domain",
+      "type": "string"
+    },
+    "source_id": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which feed in `config/sources.json` this host is, when exactly one is. Null is 'we do not know', and a host shared by feeds in two verticals stays null.",
+      "title": "Source Id"
+    },
+    "source_line": {
+      "description": "The 1-based line of the input file this row came from.",
+      "minimum": 1,
+      "title": "Source Line",
+      "type": "integer"
+    },
+    "source_url": {
+      "description": "The address as supplied, kept so a person can open it.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "url_key": {
+      "description": "sha256 of the canonical URL, recomputed on read.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-13",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Source context from the feed's declaration, never a reading of the article. Null rather than a word invented for the taxonomy.",
+      "title": "Vertical"
+    }
+  },
+  "required": [
+    "source_line",
+    "source_url",
+    "canonical_url",
+    "url_key",
+    "source_domain",
+    "host",
+    "publisher"
+  ],
+  "title": "ReferenceManifestRow",
+  "type": "object",
+  "version": "2026-09-13"
+}

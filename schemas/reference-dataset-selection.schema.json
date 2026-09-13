@@ -1,0 +1,93 @@
+{
+  "$id": "reference-dataset-selection.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the identity, the grouping fields and the text digest.",
+      "version": "2026-09-13",
+      "why": "The sample needs a declared row before one is written (Guardrail #3). The text is not copied: two copies of an article in one collection are two things that can disagree, and the digest is what proves they have not."
+    }
+  ],
+  "description": "One chosen article, as one element of `urls.json`.\n\nIt holds the identity and the text digest, never the text. The sample points\nat one named extraction through its metadata, so an article edited after the\nsample was drawn stops matching instead of quietly becoming what was chosen.",
+  "properties": {
+    "article_sha256": {
+      "description": "sha256 of the chosen article's text, as the named extraction holds it.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Article Sha256",
+      "type": "string"
+    },
+    "canonical_url": {
+      "description": "What `url_key` is derived from.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "host": {
+      "description": "The host, lower case.",
+      "maxLength": 253,
+      "minLength": 3,
+      "title": "Host",
+      "type": "string"
+    },
+    "publisher": {
+      "description": "The frozen outlet key this row was allocated under.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Publisher",
+      "type": "string"
+    },
+    "source_domain": {
+      "description": "The registered domain.",
+      "maxLength": 253,
+      "minLength": 3,
+      "title": "Source Domain",
+      "type": "string"
+    },
+    "source_url": {
+      "description": "The address as supplied.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "url_key": {
+      "description": "sha256 of the canonical URL, recomputed on read.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-13",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Source context, or null.",
+      "title": "Vertical"
+    }
+  },
+  "required": [
+    "url_key",
+    "source_url",
+    "canonical_url",
+    "source_domain",
+    "host",
+    "publisher",
+    "article_sha256"
+  ],
+  "title": "ReferenceSelectionRow",
+  "type": "object",
+  "version": "2026-09-13"
+}

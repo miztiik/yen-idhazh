@@ -1,0 +1,638 @@
+{
+  "cleaning_totals": {
+    "articles_dropped": 34,
+    "articles_in": 1345,
+    "articles_out": 1311,
+    "dropped_by_flag": {
+      "fragmented": 3,
+      "near_duplicate": 11,
+      "no_sentence": 9,
+      "short": 19,
+      "video_or_podcast": 9
+    },
+    "extraction_sha256": "ee2551415611e9666261914b0d07e467b4910f2f5e13733e90d6677494831493",
+    "flagged_by_flag": {
+      "fragmented": 3,
+      "near_duplicate": 11,
+      "no_sentence": 9,
+      "short": 19,
+      "video_or_podcast": 9
+    },
+    "lines_removed": 4759,
+    "over_cleaned": 0,
+    "removed_lines": {
+      "alwaysbecurious": [
+        "Always Be Curious is the personal newsletter of Sander Hofman, Communications Manager at ASML. Opinions expressed in the introduction of this curated newsletter are my own and do not necessarily reflect those of my employer.",
+        "Have a good week, stay safe and sound,",
+        "\u2764\ufe0fFor the love of tech\u2764\ufe0f",
+        "\ud83d\udc68\ud83d\udcbbThe round-up in sci-tech\ud83d\udca1",
+        "\ud83d\udcc8By the numbers\ud83d\udcc9",
+        "\ud83e\udd13This week in chips\u26a0"
+      ],
+      "aswathdamodaran": [
+        "YouTube Video"
+      ],
+      "baiguan": [
+        "\u201cCharts of the Week\u201d is Baiguan\u2019s series that features key data points to help you quickly grasp the general state of affairs in China in just a few minutes. We handpick the highlights of the data charts from a variety of sources, analyzing and delivering insights trusted by 100+ top institutional and corporate clients worldwide at BigOne Lab. Don\u2019t forget to subscribe before you continue reading!"
+      ],
+      "bharatnama": [
+        "And if you want to understand where China stands and what it means for India, do check out my companion newsletter, Decoding the Dragon: [link]",
+        "And well that is it for today's edition. That said, do check out my core WhatsApp community Biz News+ where I share 4-5 deepdives from the world of business, economics & public economics daily: [link]",
+        "And, do check out my work on the following platforms as well: Instagram, LinkedIn and Youtube",
+        "Best,",
+        "Jayant",
+        "References",
+        "The one line",
+        "What to watch"
+      ],
+      "capitalonchain": [
+        "1. Key Takeaways",
+        "2. The Weekly Breakdown",
+        "2.1 Institutional Moves",
+        "2.2 Regulation and Policy",
+        "3. Closing",
+        "The Signal:"
+      ],
+      "chipbriefing": [
+        "1. Policy and Geopolitics",
+        "1.1",
+        "1.2",
+        "2. Economy, Finance, and Business",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3. Technology",
+        "3.1",
+        "3.2",
+        "3.3",
+        "Highlights",
+        "Thanks for reading.",
+        "\u2013"
+      ],
+      "decodingthedragon": [
+        "And well that is it for today's edition. That said, do check out my core WhatsApp community Biz News+ where I share 4-5 deepdives from the world of business, economics & public economics daily: [link]",
+        "And, do check out my work on the following platforms as well: Instagram, LinkedIn and Youtube",
+        "Best,",
+        "Jayant",
+        "References",
+        "What to watch"
+      ],
+      "explainx": [
+        "Hand Picked Video",
+        "Paper Of the day",
+        "Read this whole paper \ud83d\udc49 here",
+        "This week in AI",
+        "Top AI Products from this week"
+      ],
+      "humanityredefined": [
+        "A big thank you to my paid subscribers, to my Patrons: whmr, Florian, dux, Eric, Preppikoma and Andrew, and to everyone who supports my work on Ko-Fi. Thank you for the support!",
+        "Enjoy!",
+        "Humanity Redefined sheds light on the bleeding edge of technology and how advancements in AI, robotics, and biotech can usher in abundance, expand humanity's horizons, and redefine what it means to be human.",
+        "If you enjoy this post, please click the \u2764\ufe0f button and share it.",
+        "My DMs are open to all subscribers. Feel free to drop me a message, share feedback, or just say \"hi!\"",
+        "Thanks for reading. If you enjoyed this post, please click the \u2764\ufe0f button and share it!",
+        "\ud83d\udca1Tangents",
+        "\ud83e\udd16 Robotics",
+        "\ud83e\uddbe More than a human",
+        "\ud83e\udde0 Artificial Intelligence",
+        "\ud83e\uddec Biotechnology"
+      ],
+      "latestincyber": [
+        "Sources: [link]",
+        "[link]"
+      ],
+      "metatrends": [
+        "If you\u2019ve enjoyed Metatrends, here are more ways to stay connected:",
+        "More From Peter",
+        "Peter"
+      ],
+      "mtslive": [
+        "Today\u2019s Experts",
+        "Today\u2019s Situations"
+      ],
+      "murphcapital": [
+        "Hey folks,",
+        "In Partnership With"
+      ],
+      "oldmennewmoney": [
+        "Presented by The Bridge. Weekly institutional research on blockchain, agentics, and tokenization, written for hedge funds, asset managers, and corporates. Because you read OMNM, the retail edition is yours for $349 (normally $399): thebridgenewsletter.com/signup?ref=omnm. OMNM co-host Douglas Borthwick co-founded The Bridge with Steve Kraus; we may earn a commission.",
+        "What to Watch Next"
+      ],
+      "p2p": [
+        "What else we\u2019re reading"
+      ],
+      "pefuncast": [
+        "This material is provided for informational purposes only, and should not be relied upon as legal, business, investment, or tax advice. Furthermore, this content is not investment advice, nor is it intended for use by any investors or prospective investors in any ParkerGale Fund. Articles may link to other websites or contain other information obtained from third-party sources - ParkerGale has not independently verified nor makes any representations about the current or enduring accuracy of such information. Any investments or portfolio companies mentioned, referred to, or described are not representative of all investments in vehicles managed by ParkerGale; visit [link] for a full list of investments. Other important information can be found at [link] For additional information regarding ParkerGale, please refer to ParkerGale\u2019s Form ADV, available at adviserinfo.sec.gov."
+      ],
+      "sagarikas1": [
+        "And that is it for today's edition. Thanks for reading Tech for Commons, where we look at what technology is actually doing to people.",
+        "Best,",
+        "References",
+        "Sagarika",
+        "What it means for you",
+        "What to watch"
+      ],
+      "thecryptoalarm": [
+        "Adam Atlantic",
+        "Source:",
+        "Trust in crypto,"
+      ],
+      "themarketdispatch": [
+        "By reading this newsletter or using any related materials, you acknowledge and agree that The Market Dispatch and its team will not be held liable for any loss, damage, or expense incurred as a result of reliance on the information provided.",
+        "Disclaimer:",
+        "Investing involves risk, including the potential loss of principal and capital. Past performance does not guarantee future results. Before making any financial decisions or investments, you should consult with a qualified financial advisor or other professional who understands your personal circumstances.",
+        "Subscribe for free to receive our FREE Retirement Calculator and Guide",
+        "The Market Dispatch, its authors, and contributors are not financial advisors, brokers, or attorneys. Any opinions, analyses, or projections expressed are solely those of the authors and do not constitute specific recommendations for any individual.",
+        "The information provided by The Market Dispatch is for educational and informational purposes only and should not be construed as financial, legal, or investment advice."
+      ],
+      "thevcstack": [
+        "- Community \u2014 building a global LP\u2013GP network through community partnerships to put Indian fund managers on the map",
+        "- Exclusive deals \u2014 we work directly with leading tool providers in the VC stack and have negotiated yearly-plan partnerships for our community. Reply to any issue if you\u2019d like access",
+        "- Products \u2014 building operating tools for VC tech teams, helping them do more with less. More dedicated products for IR and platform teams are coming soon",
+        "About Indian VCs",
+        "Indian VCs is a community building common infrastructure for VC funds in India. Three things we\u2019re focused on right now:"
+      ],
+      "thewolfden": [
+        "Arch Public - It\u2019s a hedge fund in your pocket. Built for retail traders, designed to outperform Wall Street. Try emotionless algorithmic trading at Arch Public today.",
+        "My Platforms And Sponsors",
+        "Promote your brand with The Wolf of All Streets. For sponsorship and partnership opportunities, contact info@thewolfofallstreets.io.",
+        "Thanks for reading The Wolf Den! Subscribe for free to receive new posts and support my work.",
+        "The Wolf Pack - My Telegram group where I share daily market updates, real-time observations, and ongoing discussions with the community. There\u2019s a dedicated channel and group chat, and it\u2019s completely free to join.",
+        "The views and opinions expressed here are solely my own and should in no way be interpreted as financial advice. Every investment and trading move involves risk. You should conduct your own research when making a decision. I am not a financial advisor. Nothing contained in this e-mail constitutes or shall be construed as an offering of financial instruments or as investment advice or recommendations of an investment strategy or whether or not to \"Buy,\" \"Sell,\" or \"Hold\" an investment.",
+        "X - I spend most of my time on X, contributing to CryptoTownHall every weekday morning, sharing random charts, and responding to as many of you as I can.",
+        "YouTube - Home of the Wolf Of All Streets Podcast and daily livestreams. Market updates, charts, and analysis!"
+      ],
+      "thinkbrics": [
+        "The author\u2019s views are their own and do not necessarily reflect the blog\u2019s.",
+        "\ud83d\udccc Subscribe to Think BRICS for weekly geopolitical video analysis beyond Western narratives. Follow also our new channels BRICS Business and Think BRICS Chronicles."
+      ],
+      "threatswithoutborders": [
+        "Cool Jobs",
+        "Cool Tools",
+        "Feedback",
+        "Irrelevant",
+        "Legal: I am not compensated by any entity for writing this newsletter. Obviously, anything written in this space is my own nonsensical opinions and doesn\u2019t represent the official viewpoint of my employer or any associated organization. Blame me, not them.",
+        "Matt",
+        "Published every Tuesday, Threats Without Borders offers original commentary and educational pieces related to cybercrime investigations and information security topics. We also summarize and comment on news articles concerning active threat intelligence for the financial industry. The newsletter interests everyone tasked with cybersecurity or involved in preventing or investigating technology-enabled fraud, theft, or money laundering.",
+        "Send Feedback to matt(at)threatswithoutborders.com",
+        "Sign Off",
+        "The News",
+        "dfir"
+      ],
+      "venturecurator": [
+        "(Subscribe to Venture Curator Premium and get 20% off forever.)",
+        "- Senior Associate - ICONIQUE CAPITAL | USA - Apply Here",
+        "Big idea + report of the week :",
+        "FEATURED POSTS",
+        "Frameworks & insightful posts :",
+        "Get access to 150+ premium archive posts, 100+ startup & VC resources, investor databases, fundraising templates, and exclusive startup research - all in one place.",
+        "Get your product in front of over 125,000+ audience - Our newsletter is read by thousands of tech professionals, founders, investors and managers worldwide. Get in touch today.",
+        "NEWS RECAP",
+        "New In VC",
+        "New Startup Deals",
+        "Partnership With Us",
+        "SOMETHING MORE",
+        "START WITH",
+        "TODAY\u2019S JOB OPPORTUNITIES",
+        "Upgrade to Venture Curator Premium",
+        "WORK WITH US",
+        "\ud83d\udc4b Hey, Sahil here - welcome back to Venture Curator, where we explore how top investors think, how real founders build, and the strategies shaping tomorrow\u2019s companies.",
+        "\ud83d\udcbc Venture capital & startup jobs",
+        "\ud83d\udcc4 Must Read Post",
+        "\ud83d\udcec Upgrade to Venture Curator Premium",
+        "\ud83d\uddde\ufe0f This week in startups & VC",
+        "\ud83e\udd1d Partnership With Us",
+        "\ud83e\udde0 Big idea + report of the week",
+        "\ud83e\udde9 Frameworks & insightful posts"
+      ],
+      "venturedailydigest": [
+        "- Associate or Senior Associate - Bessemer Partner | USA - Apply Here",
+        "- Build Your Pitch Deck: We write, design and model your pitch deck into a storyteller book within 4-5 days.",
+        "- Reach 125,000+ Founders & Investors: Partner with our newsletter to reach a highly engaged audience.",
+        "Breaking News",
+        "DAILY PICKS",
+        "Do you have any news to share about your Startup or VC fund? Please email us.",
+        "GROWTH",
+        "HIRING ALERT: STARTUPS & VC ROLES",
+        "KEY STORIES IN TECH",
+        "LAST COFFEE SIP",
+        "Most aspiring VCs struggle with interviews, unclear expectations, no structured prep, and generic advice that doesn\u2019t actually help. So we partnered with a leading investor group to build an all-in-one VC Interview Preparation Guide that gives you real clarity and frameworks. (Access Here)",
+        "NEW VCs IN THE MARKET",
+        "Our newsletter is read by 125,000+ of founders, CEOs, investors (VCs / Angel Investors) and senior operators. Get in touch today.",
+        "PARTNERSHIP WITH US",
+        "PRE-SEED",
+        "SEED",
+        "STARTUPS RAISING MILLIONS",
+        "WHEN YOU\u2019RE READY, HERE\u2019S HOW I CAN HELP:",
+        "We\u2019ll be back in your inbox on Tomorrow.",
+        "\u2615 Other News",
+        "\ud83c\udfe6 Venture Capital Updates.",
+        "\ud83d\udc81 You might need our help!",
+        "\ud83d\udcb0 Startup Funding Updates",
+        "\ud83d\udcbc Today\u2019s VC & Startup Job Opportunities",
+        "\ud83d\udcdc Latest In Tech",
+        "\ud83e\udd1d Get your brand in front of 125,000+ decision makers."
+      ]
+    },
+    "removed_words_by_publisher": {
+      "alwaysbecurious": 236,
+      "aswathdamodaran": 38,
+      "baiguan": 198,
+      "bharatnama": 2084,
+      "capitalonchain": 510,
+      "chipbriefing": 998,
+      "decodingthedragon": 1387,
+      "explainx": 989,
+      "humanityredefined": 4208,
+      "latestincyber": 452,
+      "metatrends": 445,
+      "mtslive": 128,
+      "murphcapital": 81,
+      "oldmennewmoney": 416,
+      "p2p": 28,
+      "pefuncast": 3072,
+      "sagarikas1": 227,
+      "thecryptoalarm": 137,
+      "themarketdispatch": 6237,
+      "thevcstack": 323,
+      "thewolfden": 4857,
+      "thinkbrics": 1670,
+      "threatswithoutborders": 2729,
+      "venturecurator": 3492,
+      "venturedailydigest": 9438
+    },
+    "words_in": 2435190,
+    "words_out": 2390810
+  },
+  "collection_schema": "reference-dataset-extractions",
+  "domains": {
+    "babylonburns.com": 10,
+    "baiguan.news": 7,
+    "coincenter.org": 10,
+    "economicforces.xyz": 43,
+    "globaltimes.cn": 55,
+    "humanityredefined.com": 43,
+    "latent.space": 18,
+    "semianalysis.com": 2,
+    "substack.com": 960,
+    "themarketdispatch.com": 36,
+    "thevccorner.com": 33,
+    "threatswithoutborders.com": 25,
+    "venturecurator.com": 19,
+    "venturedailydigest.com": 50
+  },
+  "extraction_totals": null,
+  "generated_at": "2026-09-13T20:20:52Z",
+  "hosts": {
+    "aleximas.substack.com": 12,
+    "alwaysbecurious.substack.com": 5,
+    "aswathdamodaran.substack.com": 22,
+    "babylonburns.com": 10,
+    "baiguan.news": 7,
+    "bengoertzel.substack.com": 49,
+    "bharatnama.substack.com": 25,
+    "capitalonchain.substack.com": 37,
+    "catherinemcbride.substack.com": 10,
+    "chipbriefing.substack.com": 50,
+    "ctexp.substack.com": 10,
+    "culturecapitalist.substack.com": 3,
+    "decodingthedragon.substack.com": 25,
+    "economicforces.xyz": 43,
+    "econovis.substack.com": 10,
+    "edofarina.substack.com": 6,
+    "explainx.substack.com": 47,
+    "geopolitics24hradar.substack.com": 5,
+    "globaltimes.cn": 55,
+    "humanityredefined.com": 43,
+    "ilyastrebulaev.substack.com": 31,
+    "josephaaron.substack.com": 2,
+    "latent.space": 18,
+    "latestincyber.substack.com": 25,
+    "meridiandealpartner.substack.com": 5,
+    "metatrends.substack.com": 47,
+    "mtslive.substack.com": 50,
+    "murphcapital.substack.com": 28,
+    "neiscenter.substack.com": 25,
+    "newsletter.semianalysis.com": 2,
+    "nicholasdecker.substack.com": 19,
+    "nicolocaiti.substack.com": 34,
+    "oldmennewmoney.substack.com": 13,
+    "oligarchwatch.substack.com": 49,
+    "outofcontrol.substack.com": 6,
+    "p2p.coincenter.org": 10,
+    "pefuncast.substack.com": 26,
+    "peinsights.substack.com": 17,
+    "roberteringer.substack.com": 44,
+    "sagarikas1.substack.com": 9,
+    "sharmilakantha.substack.com": 40,
+    "thecryptoalarm.substack.com": 25,
+    "thefusionreport.substack.com": 50,
+    "themarketdispatch.com": 36,
+    "thesovereignai.substack.com": 20,
+    "thevccorner.com": 33,
+    "thevcstack.substack.com": 4,
+    "thewolfden.substack.com": 25,
+    "thinkbrics.substack.com": 50,
+    "threatswithoutborders.com": 25,
+    "venturecurator.com": 19,
+    "venturedailydigest.com": 50
+  },
+  "import_totals": null,
+  "input_path": "corpus/reference-dataset-2/extractions/2026-09-13-1/articles.json",
+  "input_sha256": "ee2551415611e9666261914b0d07e467b4910f2f5e13733e90d6677494831493",
+  "lengthened_publishers": {},
+  "output_path": "corpus/reference-dataset-2/cleaned/2026-09-13-a/articles.json",
+  "output_sha256": "41d3102c4f3366e23745ea6cedf6b88687c563c3492a8804da3b6de4f9248605",
+  "phase": "cleaning",
+  "publisher_hosts": {
+    "aleximas": [
+      "aleximas.substack.com"
+    ],
+    "alwaysbecurious": [
+      "alwaysbecurious.substack.com"
+    ],
+    "aswathdamodaran": [
+      "aswathdamodaran.substack.com"
+    ],
+    "babylonburns": [
+      "babylonburns.com"
+    ],
+    "baiguan": [
+      "baiguan.news"
+    ],
+    "bengoertzel": [
+      "bengoertzel.substack.com"
+    ],
+    "bharatnama": [
+      "bharatnama.substack.com"
+    ],
+    "capitalonchain": [
+      "capitalonchain.substack.com"
+    ],
+    "catherinemcbride": [
+      "catherinemcbride.substack.com"
+    ],
+    "chipbriefing": [
+      "chipbriefing.substack.com"
+    ],
+    "ctexp": [
+      "ctexp.substack.com"
+    ],
+    "culturecapitalist": [
+      "culturecapitalist.substack.com"
+    ],
+    "decodingthedragon": [
+      "decodingthedragon.substack.com"
+    ],
+    "economicforces": [
+      "economicforces.xyz"
+    ],
+    "econovis": [
+      "econovis.substack.com"
+    ],
+    "edofarina": [
+      "edofarina.substack.com"
+    ],
+    "explainx": [
+      "explainx.substack.com"
+    ],
+    "geopolitics24hradar": [
+      "geopolitics24hradar.substack.com"
+    ],
+    "globaltimes": [
+      "globaltimes.cn"
+    ],
+    "humanityredefined": [
+      "humanityredefined.com"
+    ],
+    "ilyastrebulaev": [
+      "ilyastrebulaev.substack.com"
+    ],
+    "josephaaron": [
+      "josephaaron.substack.com"
+    ],
+    "latent": [
+      "latent.space"
+    ],
+    "latestincyber": [
+      "latestincyber.substack.com"
+    ],
+    "meridiandealpartner": [
+      "meridiandealpartner.substack.com"
+    ],
+    "metatrends": [
+      "metatrends.substack.com"
+    ],
+    "mtslive": [
+      "mtslive.substack.com"
+    ],
+    "murphcapital": [
+      "murphcapital.substack.com"
+    ],
+    "neiscenter": [
+      "neiscenter.substack.com"
+    ],
+    "nicholasdecker": [
+      "nicholasdecker.substack.com"
+    ],
+    "nicolocaiti": [
+      "nicolocaiti.substack.com"
+    ],
+    "oldmennewmoney": [
+      "oldmennewmoney.substack.com"
+    ],
+    "oligarchwatch": [
+      "oligarchwatch.substack.com"
+    ],
+    "outofcontrol": [
+      "outofcontrol.substack.com"
+    ],
+    "p2p": [
+      "p2p.coincenter.org"
+    ],
+    "pefuncast": [
+      "pefuncast.substack.com"
+    ],
+    "peinsights": [
+      "peinsights.substack.com"
+    ],
+    "roberteringer": [
+      "roberteringer.substack.com"
+    ],
+    "sagarikas1": [
+      "sagarikas1.substack.com"
+    ],
+    "semianalysis": [
+      "newsletter.semianalysis.com"
+    ],
+    "sharmilakantha": [
+      "sharmilakantha.substack.com"
+    ],
+    "thecryptoalarm": [
+      "thecryptoalarm.substack.com"
+    ],
+    "thefusionreport": [
+      "thefusionreport.substack.com"
+    ],
+    "themarketdispatch": [
+      "themarketdispatch.com"
+    ],
+    "thesovereignai": [
+      "thesovereignai.substack.com"
+    ],
+    "thevccorner": [
+      "thevccorner.com"
+    ],
+    "thevcstack": [
+      "thevcstack.substack.com"
+    ],
+    "thewolfden": [
+      "thewolfden.substack.com"
+    ],
+    "thinkbrics": [
+      "thinkbrics.substack.com"
+    ],
+    "threatswithoutborders": [
+      "threatswithoutborders.com"
+    ],
+    "venturecurator": [
+      "venturecurator.com"
+    ],
+    "venturedailydigest": [
+      "venturedailydigest.com"
+    ]
+  },
+  "publishers": {
+    "aleximas": 12,
+    "alwaysbecurious": 5,
+    "aswathdamodaran": 22,
+    "babylonburns": 10,
+    "baiguan": 7,
+    "bengoertzel": 49,
+    "bharatnama": 25,
+    "capitalonchain": 37,
+    "catherinemcbride": 10,
+    "chipbriefing": 50,
+    "ctexp": 10,
+    "culturecapitalist": 3,
+    "decodingthedragon": 25,
+    "economicforces": 43,
+    "econovis": 10,
+    "edofarina": 6,
+    "explainx": 47,
+    "geopolitics24hradar": 5,
+    "globaltimes": 55,
+    "humanityredefined": 43,
+    "ilyastrebulaev": 31,
+    "josephaaron": 2,
+    "latent": 18,
+    "latestincyber": 25,
+    "meridiandealpartner": 5,
+    "metatrends": 47,
+    "mtslive": 50,
+    "murphcapital": 28,
+    "neiscenter": 25,
+    "nicholasdecker": 19,
+    "nicolocaiti": 34,
+    "oldmennewmoney": 13,
+    "oligarchwatch": 49,
+    "outofcontrol": 6,
+    "p2p": 10,
+    "pefuncast": 26,
+    "peinsights": 17,
+    "roberteringer": 44,
+    "sagarikas1": 9,
+    "semianalysis": 2,
+    "sharmilakantha": 40,
+    "thecryptoalarm": 25,
+    "thefusionreport": 50,
+    "themarketdispatch": 36,
+    "thesovereignai": 20,
+    "thevccorner": 33,
+    "thevcstack": 4,
+    "thewolfden": 25,
+    "thinkbrics": 50,
+    "threatswithoutborders": 25,
+    "venturecurator": 19,
+    "venturedailydigest": 50
+  },
+  "rows": 1311,
+  "selection_totals": null,
+  "settings": {
+    "cleaning": {
+      "drop_flags": [
+        "short",
+        "no_sentence",
+        "fragmented",
+        "near_duplicate",
+        "video_or_podcast"
+      ],
+      "fragment_ratio_min": 0.35,
+      "max_removed_share": 0.4,
+      "near_duplicate_jaccard": 0.7,
+      "promo_hits": 2,
+      "publisher_min_articles": 4,
+      "repeat_min_count": 3,
+      "repeat_min_share": 0.5,
+      "sentence_words_min": 8,
+      "words_min": 120
+    },
+    "extract": {
+      "backoff_initial_seconds": 1.0,
+      "backoff_multiplier": 2.0,
+      "boilerplate_ratio_max": 0.4,
+      "max_body_bytes": 2000000,
+      "max_retries": 3,
+      "min_source_words": 60,
+      "paywall_markers": [
+        "isaccessibleforfree\":false",
+        "isaccessibleforfree\": false",
+        "subscribe to continue reading",
+        "register or subscribe to continue"
+      ],
+      "prose_line_count_min": 12,
+      "prose_line_ratio_min": 0.5,
+      "prose_sentence_min": 3,
+      "prose_sentence_words_min": 8,
+      "reject_boilerplate": false,
+      "reject_not_prose": false,
+      "request_timeout_seconds": 20.0,
+      "truncation_cap_tokens": 2500,
+      "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+    },
+    "input_file": "corpus/reference-dataset-2/urls.txt",
+    "request_delay_seconds": 1.0,
+    "selection": {
+      "fill_shortfall": true,
+      "generic_host_labels": [
+        "blog",
+        "feed",
+        "feeds",
+        "mail",
+        "news",
+        "newsletter",
+        "rss",
+        "stories",
+        "web",
+        "www2"
+      ],
+      "group_by": "publisher",
+      "publisher_disambiguation": [
+        "registered_name",
+        "public_suffix",
+        "host"
+      ],
+      "rows_max": 1000,
+      "rows_per_domain_target": 20
+    },
+    "sources_file": "config/sources.json",
+    "taxonomy_file": "config/taxonomy.json",
+    "version": "2026-09-13T13:05"
+  },
+  "version": "2026-09-13T13:05",
+  "verticals": {
+    "ai": 105,
+    "world": 94
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "cleaning_totals": null,
+  "collection_schema": "reference-dataset-selection",
+  "domains": {
+    "substack.com": 1
+  },
+  "extraction_totals": null,
+  "generated_at": "2026-09-13T09:40:07Z",
+  "hosts": {
+    "chipbriefing.substack.com": 1
+  },
+  "import_totals": null,
+  "input_path": "corpus/reference-dataset-2/extractions/2026-09-13-1/articles.json",
+  "input_sha256": "b7ac7263f593fe8232df587a41db99cfee20db7cf274643337be1051f8fa42cf",
+  "lengthened_publishers": {},
+  "output_path": "corpus/reference-dataset-2/selections/2026-09-13-1/urls.json",
+  "output_sha256": "adc7646c6c09ee652fdd8d15faa0a8565bac16bde38ebb33336a6cba2733125f",
+  "phase": "selection",
+  "publisher_hosts": {
+    "chipbriefing": [
+      "chipbriefing.substack.com"
+    ],
+    "globaltimes": [
+      "www.globaltimes.cn"
+    ]
+  },
+  "publishers": {
+    "chipbriefing": 1
+  },
+  "rows": 1,
+  "selection_totals": {
+    "available_by_group": {
+      "chipbriefing": 1,
+      "globaltimes": 0
+    },
+    "extra_by_group": {},
+    "extraction_sha256": "b7ac7263f593fe8232df587a41db99cfee20db7cf274643337be1051f8fa42cf",
+    "group_by": "publisher",
+    "groups": 2,
+    "requested": 2,
+    "selected": 1,
+    "selected_by_group": {
+      "chipbriefing": 1,
+      "globaltimes": 0
+    },
+    "shortfall": 1,
+    "shortfall_by_group": {
+      "globaltimes": 1
+    }
+  },
+  "settings": {
+    "cleaning": {
+      "drop_flags": [
+        "short",
+        "no_sentence",
+        "fragmented",
+        "near_duplicate",
+        "video_or_podcast"
+      ],
+      "fragment_ratio_min": 0.35,
+      "max_removed_share": 0.4,
+      "near_duplicate_jaccard": 0.7,
+      "promo_hits": 2,
+      "publisher_min_articles": 4,
+      "repeat_min_count": 3,
+      "repeat_min_share": 0.5,
+      "sentence_words_min": 8,
+      "words_min": 120
+    },
+    "extract": {
+      "backoff_initial_seconds": 1.0,
+      "backoff_multiplier": 2.0,
+      "boilerplate_ratio_max": 0.4,
+      "max_body_bytes": 2000000,
+      "max_retries": 3,
+      "min_source_words": 60,
+      "paywall_markers": [
+        "isaccessibleforfree\":false",
+        "isaccessibleforfree\": false",
+        "subscribe to continue reading",
+        "register or subscribe to continue"
+      ],
+      "prose_line_count_min": 12,
+      "prose_line_ratio_min": 0.5,
+      "prose_sentence_min": 3,
+      "prose_sentence_words_min": 8,
+      "reject_boilerplate": false,
+      "reject_not_prose": false,
+      "request_timeout_seconds": 20.0,
+      "truncation_cap_tokens": 2500,
+      "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+    },
+    "input_file": "corpus/reference-dataset-2/urls.txt",
+    "request_delay_seconds": 1.0,
+    "selection": {
+      "fill_shortfall": true,
+      "generic_host_labels": [
+        "blog",
+        "feed",
+        "feeds",
+        "mail",
+        "news",
+        "newsletter",
+        "rss",
+        "stories",
+        "web",
+        "www2"
+      ],
+      "group_by": "publisher",
+      "publisher_disambiguation": [
+        "registered_name",
+        "public_suffix",
+        "host"
+      ],
+      "rows_max": 1000,
+      "rows_per_domain_target": 20
+    },
+    "sources_file": "config/sources.json",
+    "taxonomy_file": "config/taxonomy.json",
+    "version": "2026-09-13T13:05"
+  },
+  "version": "2026-09-13T13:05",
+  "verticals": {}
+}

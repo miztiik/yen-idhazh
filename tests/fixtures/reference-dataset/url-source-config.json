@@ -1,0 +1,40 @@
+{
+  "feeds": [
+    {
+      "id": "bbc-world",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "BBC World",
+      "url": "https://www.bbc.co.uk/news/world/rss.xml",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "shared-host-world",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Shared host, world desk",
+      "url": "https://www.globaltimes.cn/rss/world.xml",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "shared-host-business",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Shared host, business desk",
+      "url": "https://www.globaltimes.cn/rss/business.xml",
+      "vertical": "business-economy",
+      "weight": 1.0
+    }
+  ],
+  "retired": [],
+  "salience": {},
+  "version": "2026-09-13"
+}

@@ -1,0 +1,935 @@
+{
+  "$defs": {
+    "ExtractConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "backoff_initial_seconds": {
+          "default": 1.0,
+          "minimum": 0.0,
+          "title": "Backoff Initial Seconds",
+          "type": "number"
+        },
+        "backoff_multiplier": {
+          "default": 2.0,
+          "minimum": 1.0,
+          "title": "Backoff Multiplier",
+          "type": "number"
+        },
+        "boilerplate_ratio_max": {
+          "default": 0.4,
+          "description": "Share of an item's lines also seen on sibling items from the same host.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Boilerplate Ratio Max",
+          "type": "number"
+        },
+        "max_body_bytes": {
+          "default": 2000000,
+          "minimum": 1024,
+          "title": "Max Body Bytes",
+          "type": "integer"
+        },
+        "max_retries": {
+          "default": 3,
+          "minimum": 0,
+          "title": "Max Retries",
+          "type": "integer"
+        },
+        "min_source_words": {
+          "default": 60,
+          "description": "Below this the item publishes through the brief tier. It is derived in AppConfig from summarize.bands[0].target_words_min divided by evaluation.brief_compression_ceiling.",
+          "minimum": 1,
+          "title": "Min Source Words",
+          "type": "integer"
+        },
+        "paywall_markers": {
+          "description": "Fallback markers used only when publisher JSON-LD does not declare the paywall.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Paywall Markers",
+          "type": "array"
+        },
+        "prose_line_count_min": {
+          "default": 12,
+          "description": "Lines needed before the line-shape guard runs.",
+          "minimum": 1,
+          "title": "Prose Line Count Min",
+          "type": "integer"
+        },
+        "prose_line_ratio_min": {
+          "default": 0.5,
+          "description": "Minimum share of lines that must look like prose on a line-heavy page.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Prose Line Ratio Min",
+          "type": "number"
+        },
+        "prose_sentence_min": {
+          "default": 3,
+          "description": "Sentences of prose needed before a page stops carrying the not_prose signal.",
+          "minimum": 1,
+          "title": "Prose Sentence Min",
+          "type": "integer"
+        },
+        "prose_sentence_words_min": {
+          "default": 8,
+          "description": "Words a sentence needs before it counts as prose for the shape signal.",
+          "minimum": 1,
+          "title": "Prose Sentence Words Min",
+          "type": "integer"
+        },
+        "reject_boilerplate": {
+          "default": false,
+          "description": "If true, a boilerplate signal rejects the item. Default records and publishes.",
+          "title": "Reject Boilerplate",
+          "type": "boolean"
+        },
+        "reject_not_prose": {
+          "default": false,
+          "description": "If true, a not_prose signal rejects the item. Default records and publishes.",
+          "title": "Reject Not Prose",
+          "type": "boolean"
+        },
+        "request_timeout_seconds": {
+          "default": 20.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Request Timeout Seconds",
+          "type": "number"
+        },
+        "truncation_cap_tokens": {
+          "default": 2500,
+          "description": "A performance lever, not only a safety cap: prefill degrades with length.",
+          "minimum": 256,
+          "title": "Truncation Cap Tokens",
+          "type": "integer"
+        },
+        "user_agent": {
+          "default": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)",
+          "title": "User Agent",
+          "type": "string"
+        }
+      },
+      "title": "ExtractConfig",
+      "type": "object"
+    },
+    "ReferenceCleaningSettings": {
+      "additionalProperties": false,
+      "description": "How the cleaning phase decides what is furniture and what is an article.\n\nThe furniture rule is one sentence: a line a publisher puts on most of its\nown articles is furniture, not news. It is per-publisher because the\nextractor has already removed the furniture that looks like markup, and what\nsurvives - a disclaimer, a standing newsletter blurb, a sponsor slot - reads\nexactly like prose until you notice it appears forty times in a row.",
+      "properties": {
+        "drop_flags": {
+          "description": "Which flags keep an article out of the cleaned collection. A flagged article is still written with its flags when it is not on this list.",
+          "items": {
+            "$ref": "#/$defs/ReferenceQualityFlag"
+          },
+          "title": "Drop Flags",
+          "type": "array"
+        },
+        "fragment_ratio_min": {
+          "default": 0.35,
+          "description": "Below this share of real sentences, the text is a list rather than prose.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Fragment Ratio Min",
+          "type": "number"
+        },
+        "max_removed_share": {
+          "default": 0.4,
+          "description": "The safety valve. An article that would lose more than this keeps its text and is flagged instead, because a rule that can empty an article should say so rather than do it quietly.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Max Removed Share",
+          "type": "number"
+        },
+        "near_duplicate_jaccard": {
+          "default": 0.7,
+          "description": "Shared five-word phrases before two articles are one story. Measured on the real corpus: 0.7, 0.5 and 0.35 all found the same 11, so these are near-exact repeats rather than a threshold to tune.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Near Duplicate Jaccard",
+          "type": "number"
+        },
+        "promo_hits": {
+          "default": 2,
+          "description": "Sales phrases before an article reads as an advertisement. Two, not one: one hit flags 82 real articles that merely carry a subscription line.",
+          "minimum": 1,
+          "title": "Promo Hits",
+          "type": "integer"
+        },
+        "publisher_min_articles": {
+          "default": 4,
+          "description": "Articles a publisher needs before the rule runs. Two samples decide nothing.",
+          "minimum": 2,
+          "title": "Publisher Min Articles",
+          "type": "integer"
+        },
+        "repeat_min_count": {
+          "default": 3,
+          "description": "And the least number of times. A phrase used twice is not a habit.",
+          "minimum": 2,
+          "title": "Repeat Min Count",
+          "type": "integer"
+        },
+        "repeat_min_share": {
+          "default": 0.5,
+          "description": "The share of a publisher's articles a line must appear on to be furniture.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Repeat Min Share",
+          "type": "number"
+        },
+        "sentence_words_min": {
+          "default": 8,
+          "description": "Words a line needs before it counts as a sentence.",
+          "minimum": 1,
+          "title": "Sentence Words Min",
+          "type": "integer"
+        },
+        "words_min": {
+          "default": 120,
+          "description": "Below this an article is flagged short.",
+          "minimum": 1,
+          "title": "Words Min",
+          "type": "integer"
+        }
+      },
+      "title": "ReferenceCleaningSettings",
+      "type": "object"
+    },
+    "ReferenceCleaningTotals": {
+      "additionalProperties": false,
+      "description": "What one cleaning pass removed, dropped and kept.\n\n`removed_lines` is the point of this block: it names every line the pass took\nout, per publisher. This is the only step that changes an article's text, and\na removal nobody can read is a removal nobody can argue with.",
+      "properties": {
+        "articles_dropped": {
+          "description": "Articles a drop flag kept out.",
+          "minimum": 0,
+          "title": "Articles Dropped",
+          "type": "integer"
+        },
+        "articles_in": {
+          "description": "Articles with text in the extraction.",
+          "minimum": 0,
+          "title": "Articles In",
+          "type": "integer"
+        },
+        "articles_out": {
+          "description": "Articles written to the cleaned collection.",
+          "minimum": 0,
+          "title": "Articles Out",
+          "type": "integer"
+        },
+        "dropped_by_flag": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "How many articles each drop flag kept out.",
+          "propertyNames": {
+            "$ref": "#/$defs/ReferenceQualityFlag"
+          },
+          "title": "Dropped By Flag",
+          "type": "object"
+        },
+        "extraction_sha256": {
+          "description": "Which extraction bytes this pass read.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Sha256",
+          "type": "string"
+        },
+        "flagged_by_flag": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "How many articles raised each flag, dropped or not.",
+          "propertyNames": {
+            "$ref": "#/$defs/ReferenceQualityFlag"
+          },
+          "title": "Flagged By Flag",
+          "type": "object"
+        },
+        "lines_removed": {
+          "description": "Furniture lines taken out, counting repeats.",
+          "minimum": 0,
+          "title": "Lines Removed",
+          "type": "integer"
+        },
+        "over_cleaned": {
+          "description": "Articles the safety valve saved: flagged and left whole, never trimmed.",
+          "minimum": 0,
+          "title": "Over Cleaned",
+          "type": "integer"
+        },
+        "removed_lines": {
+          "description": "Every distinct line removed, per outlet, so a person can check the rule.",
+          "patternProperties": {
+            "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "title": "Removed Lines",
+          "type": "object"
+        },
+        "removed_words_by_publisher": {
+          "description": "Furniture words removed, per outlet.",
+          "patternProperties": {
+            "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+              "type": "integer"
+            }
+          },
+          "title": "Removed Words By Publisher",
+          "type": "object"
+        },
+        "words_in": {
+          "description": "Words before cleaning, over the articles kept.",
+          "minimum": 0,
+          "title": "Words In",
+          "type": "integer"
+        },
+        "words_out": {
+          "description": "Words after.",
+          "minimum": 0,
+          "title": "Words Out",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "extraction_sha256",
+        "articles_in",
+        "articles_out",
+        "articles_dropped",
+        "words_in",
+        "words_out",
+        "lines_removed",
+        "over_cleaned"
+      ],
+      "title": "ReferenceCleaningTotals",
+      "type": "object"
+    },
+    "ReferenceDatasetLocalConfig": {
+      "additionalProperties": false,
+      "description": "Every setting `corpus/reference-dataset-2/` is built with, and it reads no other.\n\nIt is deliberately not a block of `config/idhazh.json`. This collection is\nbuilt by hand once or twice a year and the pipeline runs every day, so a\nknob that only this tool reads does not belong in the file every stage\nloads (owner decision, 2026-09-13).\n\nPaths are relative to the repository root, POSIX-separated, with no `..`\nsegment (`CLAUDE.md` section 2). A path relative to this file would have to\nclimb out of the collection to name the taxonomy, and a stored `..` is the\none form that stops meaning the same thing when a file moves.",
+      "properties": {
+        "cleaning": {
+          "$ref": "#/$defs/ReferenceCleaningSettings",
+          "description": "How publisher furniture is removed and which articles are dropped."
+        },
+        "extract": {
+          "$ref": "#/$defs/ExtractConfig",
+          "description": "The settings `fetch.fetch` already consumes. `truncation_cap_tokens` caps what a model reads and is never applied to saved text."
+        },
+        "input_file": {
+          "default": "corpus/reference-dataset-2/urls.txt",
+          "description": "The snapshotted URL list, one address a line.",
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+          "title": "Input File",
+          "type": "string"
+        },
+        "request_delay_seconds": {
+          "default": 1.0,
+          "description": "Seconds between two requests to one host. The existing builder's name.",
+          "minimum": 0.0,
+          "title": "Request Delay Seconds",
+          "type": "number"
+        },
+        "selection": {
+          "$ref": "#/$defs/ReferenceSelectionSettings",
+          "description": "How a balanced sample is drawn from the finished extraction."
+        },
+        "sources_file": {
+          "default": "config/sources.json",
+          "description": "Read-only. What a host has to match before a row claims a source id.",
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+          "title": "Sources File",
+          "type": "string"
+        },
+        "taxonomy_file": {
+          "default": "config/taxonomy.json",
+          "description": "Read-only. The vertical vocabulary, never copied into this file.",
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+          "title": "Taxonomy File",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "ReferenceDatasetLocalConfig",
+      "type": "object"
+    },
+    "ReferenceExtractionTotals": {
+      "additionalProperties": false,
+      "description": "What the extraction attempted and what it got.",
+      "properties": {
+        "extractor_version": {
+          "description": "The extractor.",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "failed": {
+          "description": "Distinct identities that produced a typed reason.",
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "failure_codes": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "How many identities ended on each reason.",
+          "propertyNames": {
+            "$ref": "#/$defs/ReferenceFailureCode"
+          },
+          "title": "Failure Codes",
+          "type": "object"
+        },
+        "finished_at": {
+          "description": "When it stopped.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Finished At",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "description": "Which manifest bytes this run read.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "pending": {
+          "description": "Distinct identities with no final result yet.",
+          "minimum": 0,
+          "title": "Pending",
+          "type": "integer"
+        },
+        "rows_failed": {
+          "description": "Input rows covered by a failure.",
+          "minimum": 0,
+          "title": "Rows Failed",
+          "type": "integer"
+        },
+        "rows_succeeded": {
+          "description": "Input rows covered by a success.",
+          "minimum": 0,
+          "title": "Rows Succeeded",
+          "type": "integer"
+        },
+        "sanitizer_version": {
+          "description": "The sanitizer.",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Sanitizer Version",
+          "type": "string"
+        },
+        "started_at": {
+          "description": "When the run began.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Started At",
+          "type": "string"
+        },
+        "succeeded": {
+          "description": "Distinct identities that produced text.",
+          "minimum": 0,
+          "title": "Succeeded",
+          "type": "integer"
+        },
+        "succeeded_by_publisher": {
+          "description": "Successes per outlet, which is the sampling pool.",
+          "patternProperties": {
+            "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+              "type": "integer"
+            }
+          },
+          "title": "Succeeded By Publisher",
+          "type": "object"
+        },
+        "unique_attempted": {
+          "description": "Distinct identities that reached a final result. This collection makes one request per identity, so there is no separate attempt count to carry - a second number derived from this one could never disagree with it.",
+          "minimum": 0,
+          "title": "Unique Attempted",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "started_at",
+        "finished_at",
+        "manifest_sha256",
+        "extractor_version",
+        "sanitizer_version",
+        "unique_attempted",
+        "succeeded",
+        "failed",
+        "pending",
+        "rows_succeeded",
+        "rows_failed"
+      ],
+      "title": "ReferenceExtractionTotals",
+      "type": "object"
+    },
+    "ReferenceFailureCode": {
+      "description": "Why one URL produced no article text.\n\n`ArticleStatus` says which stage ended it; this says what happened there. A\ntruncated body is its own member rather than a success with less text,\nbecause a download stopped by its byte limit looks exactly like a short\narticle once the reason is thrown away.",
+      "enum": [
+        "robots_denied",
+        "robots_unreachable",
+        "blocked_address",
+        "fetch_permanent",
+        "fetch_transient",
+        "body_truncated",
+        "paywalled",
+        "empty_text"
+      ],
+      "title": "ReferenceFailureCode",
+      "type": "string"
+    },
+    "ReferenceGroupBy": {
+      "description": "Which field a balanced sample counts as one outlet.\n\n`PUBLISHER` is the default because the registered domain merges every\nnewsletter on a shared platform into one allocation: 50 articles from\n`bengoertzel.substack.com` and 50 from `chipbriefing.substack.com` are two\noutlets to a reader and one `substack.com` to the public suffix list.",
+      "enum": [
+        "publisher",
+        "source_domain",
+        "host"
+      ],
+      "title": "ReferenceGroupBy",
+      "type": "string"
+    },
+    "ReferenceImportTotals": {
+      "additionalProperties": false,
+      "description": "What the input held, counted at import.",
+      "properties": {
+        "blank_lines": {
+          "description": "Lines that held no address.",
+          "minimum": 0,
+          "title": "Blank Lines",
+          "type": "integer"
+        },
+        "equivalent_urls": {
+          "description": "Rows whose identity another row already carried.",
+          "minimum": 0,
+          "title": "Equivalent Urls",
+          "type": "integer"
+        },
+        "input_lines": {
+          "description": "Lines in the input file, blank ones included.",
+          "minimum": 0,
+          "title": "Input Lines",
+          "type": "integer"
+        },
+        "invalid_lines": {
+          "description": "Lines that held something else. They block the manifest.",
+          "minimum": 0,
+          "title": "Invalid Lines",
+          "type": "integer"
+        },
+        "unassigned_vertical": {
+          "description": "Rows whose vertical stayed null.",
+          "minimum": 0,
+          "title": "Unassigned Vertical",
+          "type": "integer"
+        },
+        "unique_urls": {
+          "description": "Distinct `url_key` values among them.",
+          "minimum": 0,
+          "title": "Unique Urls",
+          "type": "integer"
+        },
+        "valid_urls": {
+          "description": "Lines that held a usable http or https address.",
+          "minimum": 0,
+          "title": "Valid Urls",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_lines",
+        "blank_lines",
+        "valid_urls",
+        "unique_urls",
+        "equivalent_urls",
+        "invalid_lines",
+        "unassigned_vertical"
+      ],
+      "title": "ReferenceImportTotals",
+      "type": "object"
+    },
+    "ReferencePhase": {
+      "description": "Which of the four writers produced a metadata file.",
+      "enum": [
+        "import",
+        "extraction",
+        "cleaning",
+        "selection"
+      ],
+      "title": "ReferencePhase",
+      "type": "string"
+    },
+    "ReferencePublisherPart": {
+      "description": "What a publisher key is lengthened with when two hosts produce the same one.\n\nTried in the configured order and no further than uniqueness needs, so a key\nnobody collides with keeps its short form.",
+      "enum": [
+        "registered_name",
+        "public_suffix",
+        "host"
+      ],
+      "title": "ReferencePublisherPart",
+      "type": "string"
+    },
+    "ReferenceQualityFlag": {
+      "description": "Why one article is not worth putting in front of a classifier.\n\nEvery member here was measured on a real extraction before it was written\ndown. Two candidates were tried and deleted instead: a global unique-word\nratio, which only ever flagged long essays for being long, and an ending\nwithout a full stop, which called 198 complete articles truncated.",
+      "enum": [
+        "short",
+        "no_sentence",
+        "fragmented",
+        "near_duplicate",
+        "video_or_podcast",
+        "promotional",
+        "over_cleaned"
+      ],
+      "title": "ReferenceQualityFlag",
+      "type": "string"
+    },
+    "ReferenceSelectionSettings": {
+      "additionalProperties": false,
+      "description": "How many articles a sample takes, and what it counts as one outlet.\n\nEvery number here is a knob rather than a literal in the selection loop\n(Guardrail #6): changing the file changes the sample with no source edit.",
+      "properties": {
+        "fill_shortfall": {
+          "default": true,
+          "description": "Whether places a short group cannot use move to groups with articles left.",
+          "title": "Fill Shortfall",
+          "type": "boolean"
+        },
+        "generic_host_labels": {
+          "description": "Leftmost labels that name a subdomain rather than an outlet. `newsletter.semianalysis.com` is `semianalysis`, not `newsletter`.",
+          "items": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "title": "Generic Host Labels",
+          "type": "array"
+        },
+        "group_by": {
+          "$ref": "#/$defs/ReferenceGroupBy",
+          "default": "publisher",
+          "description": "Which field counts as one outlet."
+        },
+        "publisher_disambiguation": {
+          "description": "The parts a colliding publisher key is lengthened with, in order.",
+          "items": {
+            "$ref": "#/$defs/ReferencePublisherPart"
+          },
+          "minItems": 1,
+          "title": "Publisher Disambiguation",
+          "type": "array"
+        },
+        "rows_max": {
+          "default": 1000,
+          "description": "A hard total cap, and never a promise to produce this many rows.",
+          "minimum": 1,
+          "title": "Rows Max",
+          "type": "integer"
+        },
+        "rows_per_domain_target": {
+          "default": 20,
+          "description": "Articles wanted per group. An initial allocation, not a ceiling - a deep group may pass it while filling places a short group cannot use.",
+          "minimum": 1,
+          "title": "Rows Per Domain Target",
+          "type": "integer"
+        }
+      },
+      "title": "ReferenceSelectionSettings",
+      "type": "object"
+    },
+    "ReferenceSelectionTotals": {
+      "additionalProperties": false,
+      "description": "What a sample asked for and what it got, per group and overall.",
+      "properties": {
+        "available_by_group": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Usable articles each group held.",
+          "title": "Available By Group",
+          "type": "object"
+        },
+        "extra_by_group": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Allocations above the target, so a fill is visible.",
+          "title": "Extra By Group",
+          "type": "object"
+        },
+        "extraction_sha256": {
+          "description": "Which extraction bytes this sample read.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Extraction Sha256",
+          "type": "string"
+        },
+        "group_by": {
+          "$ref": "#/$defs/ReferenceGroupBy",
+          "description": "Which field counted as one outlet."
+        },
+        "groups": {
+          "description": "Groups the pool held, empty ones included.",
+          "minimum": 0,
+          "title": "Groups",
+          "type": "integer"
+        },
+        "requested": {
+          "description": "min(rows_max, target * groups).",
+          "minimum": 0,
+          "title": "Requested",
+          "type": "integer"
+        },
+        "selected": {
+          "description": "Distinct articles chosen.",
+          "minimum": 0,
+          "title": "Selected",
+          "type": "integer"
+        },
+        "selected_by_group": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Articles each group contributed, zeros included.",
+          "title": "Selected By Group",
+          "type": "object"
+        },
+        "shortfall": {
+          "description": "Requested places nothing could fill.",
+          "minimum": 0,
+          "title": "Shortfall",
+          "type": "integer"
+        },
+        "shortfall_by_group": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Target places a group could not fill.",
+          "title": "Shortfall By Group",
+          "type": "object"
+        }
+      },
+      "required": [
+        "extraction_sha256",
+        "group_by",
+        "groups",
+        "requested",
+        "selected",
+        "shortfall"
+      ],
+      "title": "ReferenceSelectionTotals",
+      "type": "object"
+    }
+  },
+  "$id": "reference-dataset-metadata.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Added the cleaning phase and its totals.",
+      "version": "2026-09-13T13:05",
+      "why": "Cleaning writes a new collection rather than editing the frozen extraction, so it needs its own phase and its own totals. removed_lines carries every line the pass took out, because this is the one step that changes an article's text."
+    },
+    {
+      "change": "Removed extraction_totals.attempts.",
+      "version": "2026-09-13T11:40",
+      "why": "The extraction makes one request per identity, so attempts and unique_attempted were computed from the same set and could never disagree. A number that cannot disagree with its neighbour reads as a check and is decoration (Guardrail #10)."
+    },
+    {
+      "change": "Initial shape: the phase, the input and output identity, the count maps, the frozen publisher map, the resolved settings, and one totals block per phase.",
+      "version": "2026-09-13",
+      "why": "A collection file is a bare JSON array, so the provenance it cannot carry lives beside it (Guardrail #3). The resolved settings are recorded per run because a later edit to `config.json` must not change what an earlier result claims to have been built with."
+    }
+  ],
+  "description": "The `.meta.json` beside one collection file: what wrote it, from what, and how much.\n\nOne model for the three phases, with one block each and a refusal when the\nblock does not match the phase. Three near-identical models would drift, and\na single flat model would let an import file carry a selection's counts.\n\nEvery count here is read back off the written file rather than carried from\nthe loop that produced it: two numbers computed from one variable agree by\nconstruction and prove nothing (Guardrail #10).",
+  "properties": {
+    "cleaning_totals": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceCleaningTotals"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Present on a cleaned file, absent on the others."
+    },
+    "collection_schema": {
+      "description": "The `schemas/<stem>.schema.json` the file beside this one validates against.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Collection Schema",
+      "type": "string"
+    },
+    "domains": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "Rows per registered domain.",
+      "title": "Domains",
+      "type": "object"
+    },
+    "extraction_totals": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceExtractionTotals"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Present on an extraction file, absent on the others."
+    },
+    "generated_at": {
+      "description": "When the file beside this one was written.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "hosts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "Rows per host.",
+      "title": "Hosts",
+      "type": "object"
+    },
+    "import_totals": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceImportTotals"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Present on an import file, absent on the other two."
+    },
+    "input_path": {
+      "description": "What this phase read.",
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+      "title": "Input Path",
+      "type": "string"
+    },
+    "input_sha256": {
+      "description": "The bytes it read.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "lengthened_publishers": {
+      "description": "Keys that collided and what settled them. Empty means every key stayed short, which is the common case and worth being able to see.",
+      "patternProperties": {
+        "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+          "$ref": "#/$defs/ReferencePublisherPart"
+        }
+      },
+      "title": "Lengthened Publishers",
+      "type": "object"
+    },
+    "output_path": {
+      "description": "What it wrote.",
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+      "title": "Output Path",
+      "type": "string"
+    },
+    "output_sha256": {
+      "description": "The bytes it wrote, digested after writing.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Sha256",
+      "type": "string"
+    },
+    "phase": {
+      "$ref": "#/$defs/ReferencePhase",
+      "description": "Which writer produced this file."
+    },
+    "publisher_hosts": {
+      "description": "The frozen key-to-hosts map. Every later phase reads this rather than deriving a key again over a pool that may have changed.",
+      "patternProperties": {
+        "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "title": "Publisher Hosts",
+      "type": "object"
+    },
+    "publishers": {
+      "description": "Rows per outlet key.",
+      "patternProperties": {
+        "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+          "type": "integer"
+        }
+      },
+      "title": "Publishers",
+      "type": "object"
+    },
+    "rows": {
+      "description": "Elements in the file beside this one.",
+      "minimum": 0,
+      "title": "Rows",
+      "type": "integer"
+    },
+    "selection_totals": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceSelectionTotals"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Present on a selection file, absent on the others."
+    },
+    "settings": {
+      "$ref": "#/$defs/ReferenceDatasetLocalConfig",
+      "description": "The fully resolved settings this phase ran with."
+    },
+    "version": {
+      "default": "2026-09-13T13:05",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "verticals": {
+      "description": "Rows per vertical. The project's existing count map.",
+      "patternProperties": {
+        "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+          "type": "integer"
+        }
+      },
+      "title": "Verticals",
+      "type": "object"
+    }
+  },
+  "required": [
+    "phase",
+    "generated_at",
+    "collection_schema",
+    "input_path",
+    "input_sha256",
+    "output_path",
+    "output_sha256",
+    "rows",
+    "settings"
+  ],
+  "title": "ReferenceCollectionMetadata",
+  "type": "object",
+  "version": "2026-09-13T13:05"
+}

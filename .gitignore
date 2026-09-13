@@ -55,6 +55,11 @@ backend/var/
 .tmp_*
 *.log
 
+# Resume checkpoints and trial runs for the supplied-URL collection. The durable
+# outputs beside it - the manifest, the extractions and the selections - are not
+# ignored, and nothing depends on this subtree surviving.
+corpus/reference-dataset-2/scratch/
+
 # Vite writes this beside vite.config.ts while it loads the config, and leaves
 # it behind when the process is killed rather than stopped.
 frontend/vite.config.ts.timestamp-*.mjs
