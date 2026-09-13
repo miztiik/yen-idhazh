@@ -176,7 +176,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 2 | One order over the whole day, inside a frame a person set | 1 | B | DONE #653 | p25-2 | #653 | worker |
 | 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | DONE #664 | p25-3 | #664 | worker |
 | 6 | The topic pills order by what is running | 2 | C | PENDING | - | - | - |
-| 4 | Carriage becomes a tie-break | 3 | D | PENDING | - | - | - |
+| 4 | Carriage becomes a tie-break | 3 | D | IN-FLIGHT | p25-4 | - | worker |
 | 7 | A desk floor and a desk ceiling | 2 | D | PENDING | - | - | - |
 | 8 | A story cross-files to a second desk | 7 | E | PENDING | - | - | - |
 | 9a | The placement terms on the counterfactual ledger plan 23 creates | 3, plan 23 row #21 | E | PENDING | - | - | - |
