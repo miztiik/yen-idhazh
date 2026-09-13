@@ -28,9 +28,9 @@ describes. Over the same 7,636 measurements that is 566.8 KB against 6,111.8 KB,
 so the read is 10.8 times smaller and 90.7 percent of it is gone.
 
 Nothing is forgotten and there is no clock. `OBSERVATION_KEY` carries no date on
-purpose - re-measuring an article a year later under an unchanged pipeline is
-the same measurement - so a window would be the wrong shape here as well as a
-cheaper one (`idhazh.contracts.observation_index`).
+purpose - re-measuring an article a year later is the same measurement - so a
+window would be the wrong shape here as well as a cheaper one
+(`idhazh.contracts.observation_index`).
 """
 
 from __future__ import annotations
@@ -55,11 +55,12 @@ INDEX_DIRNAME: Final = "score-index"
 INDEX_RELDIR: Final = f"{STATE_DIRNAME}/{INDEX_DIRNAME}"
 
 #: What makes two rows the same measurement. The address says which article, the
-#: fingerprint says which inputs produced it, the digest says which words came
-#: out, and the scorer version says which instrument read them. Change any one
-#: and the row is a new measurement worth keeping. `item_id` is deliberately
-#: absent: it is a slot on a page, not an identity.
-OBSERVATION_KEY: Final = ("url_key", "pipeline_fingerprint", "output_digest", "scorer_version")
+#: digest says which words came out, and the scorer version says which instrument
+#: read them. Change any one and the row is a new measurement worth keeping.
+#: `item_id` is deliberately absent: it is a slot on a page, not an identity. The
+#: pipeline stamp left this key on 2026-09-12 - it stopped being written, so
+#: keeping it would have left a constant empty component in every digest.
+OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
 
 
 def ledger_relpath(date: str) -> str:

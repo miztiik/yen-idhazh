@@ -79,7 +79,6 @@ COMPLETIONS = FIXTURES_DIR / "completions"
 LLM_ERRORS = COMPLETIONS / "errors"
 #: One reply off the rendered-completion route, which names its fields its own way.
 RENDERED_REPLY = COMPLETIONS / "rendered" / "call-one.json"
-FINGERPRINT = "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
 GENERATED_AT = "2026-08-21T06:12:53Z"
 
 
@@ -115,7 +114,6 @@ def replied(text: str, source: str = "ok", **kwargs: object) -> Summary:
         article(source),
         Completion(content=text, prompt_tokens=10, completion_tokens=10),
         model_id="m",
-        pipeline_fingerprint=FINGERPRINT,
         generated_at=GENERATED_AT,
         **kwargs,  # type: ignore[arg-type]
     )
@@ -126,7 +124,6 @@ def summarised(name: str, source: str = "ok") -> Summary:
         article(source),
         completion(name),
         model_id="qwen3-8b-q4-k-m",
-        pipeline_fingerprint=FINGERPRINT,
         generated_at=GENERATED_AT,
     )
 
@@ -637,7 +634,7 @@ def test_the_decoder_holds_each_band_to_its_own_key_point_count() -> None:
     A note is held to one key point and a long read to five, so the shortest
     band cannot emit the five key points that only restate a 40-word summary.
     With no article named the rail is the union across the ladder, the permissive
-    envelope the fingerprint and the offline harnesses hold a reply to.
+    envelope the recorded input manifest and the offline harnesses hold a reply to.
     """
     ask = SummarizeConfig()
     brief = ask.bands[0]
@@ -763,7 +760,7 @@ def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
 
 
 def test_the_stamp_holds_still_while_the_rendered_prompt_moves() -> None:
-    """The ledger is keyed by it, so it means "which pipeline", not "which item"."""
+    """The record names the ask, so it means "which pipeline", not "which item"."""
     ask = SummarizeConfig()
     assert system_prompt(ask, source_words=0) != system_prompt(ask, source_words=4000)
     assert prompt_inputs(ask) == prompt_inputs(ask)
@@ -1276,7 +1273,6 @@ def test_a_reply_claiming_more_cache_than_prompt_is_refused() -> None:
             url_key="9" * 64,
             summary="word " * 60,
             key_points=["one point here", "two points here"],
-            pipeline_fingerprint=FINGERPRINT,
             output_digest=derive_output_digest("word " * 60, ["one point here", "two points here"]),
             model_id="m",
             input_tokens=100,
@@ -1294,7 +1290,7 @@ def test_a_well_formed_reply_becomes_a_summary() -> None:
     assert result.status is SummaryStatus.OK
     assert result.summary
     assert len(result.key_points) == 3
-    assert result.pipeline_fingerprint == FINGERPRINT
+    assert result.pipeline_fingerprint is None, "the stamp was retired and no writer fills it"
     assert result.output_digest == derive_output_digest(
         result.summary, result.key_points, title=result.title
     )
@@ -1856,7 +1852,7 @@ def refused_endpoint() -> str:
 
 def summarize_against(endpoint: str) -> Summary:
     return cli._summarize_one(
-        article(), config.load(CONFIG_DIR), FINGERPRINT, endpoint=endpoint, run_id="2026-08-25-1"
+        article(), config.load(CONFIG_DIR), endpoint=endpoint, run_id="2026-08-25-1"
     )
 
 

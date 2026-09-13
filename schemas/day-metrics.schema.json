@@ -431,6 +431,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "pipeline_fingerprint is optional and nothing sets it.",
+      "version": "2026-09-12T21:00",
+      "why": "The stamp stopped being a gate and stopped being the eval window's key, so no writer fills it. Relaxing rather than removing: every payload already on disk still validates, and the field is dropped in its own commit with the read-side migration that lets an older payload parse."
+    },
+    {
       "change": "Added the nullable extraction block.",
       "version": "2026-09-08T21:00",
       "why": "Nothing said whether an article the planner drew nothing for had anything to draw, so a fall in published charts read the same whether the planner stopped choosing them or the extractor stopped finding numbers. The block is the day's join of the item-health census, which carries the class, against the published day, which carries the chart - both bounded by the day and neither by the archive (Guardrail #12). Nullable, because a record an earlier run wrote carries no such block and the console reads it leniently rather than dropping the whole day."
@@ -528,10 +533,18 @@
       "type": "string"
     },
     "pipeline_fingerprint": {
-      "description": "The digest of the declared settings the day ran under, as EvalRow carries it. Not additive - the boundary a model-change reading is drawn on (finding 70).",
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Pipeline Fingerprint",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The digest of the declared settings the day ran under, as EvalRow carried it. Null on every day written after 2026-09-12: the stamp stopped being a gate and no writer fills it. A model-change boundary is read from the run record's recorded inputs instead.",
+      "title": "Pipeline Fingerprint"
     },
     "reasons": {
       "$ref": "#/$defs/DayReasons"
@@ -589,7 +602,7 @@
       "description": "The day's token clock, or null when no item timed a token. Additive parts."
     },
     "version": {
-      "default": "2026-09-08T21:00",
+      "default": "2026-09-12T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -606,7 +619,6 @@
     "revision",
     "runs",
     "model_id",
-    "pipeline_fingerprint",
     "items_published",
     "items_planned",
     "items_failed",
@@ -621,5 +633,5 @@
   ],
   "title": "DayMetrics",
   "type": "object",
-  "version": "2026-09-08T21:00"
+  "version": "2026-09-12T21:00"
 }

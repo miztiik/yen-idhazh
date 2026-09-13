@@ -165,7 +165,13 @@ class ScoreCohort(Model):
         )
     )
     model_id: Slug
-    pipeline_fingerprint: Sha256
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description=(
+            "Null on a cohort summarised from rows written after 2026-09-12. It stopped "
+            "being part of what makes a cohort one cohort on the same date."
+        ),
+    )
     scorer_version: str = Field(min_length=1)
 
     rows: int = Field(ge=1, description="Rows the shard held for this group, counted as written.")
@@ -255,14 +261,13 @@ class ScoreCohort(Model):
         return self
 
     @property
-    def key(self) -> tuple[str, str, str, str, str, str]:
+    def key(self) -> tuple[str, str, str, str, str]:
         """What makes this cohort one cohort. The sort order of the archive, too."""
         return (
             self.date,
             self.run_id,
             self.row_version,
             self.model_id,
-            self.pipeline_fingerprint,
             self.scorer_version,
         )
 
@@ -272,6 +277,19 @@ class ScoreArchive(Contract):
 
     __schema_stem__: ClassVar[str] = "score-archive"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T21:00",
+            change=(
+                "pipeline_fingerprint is optional and leaves the cohort key, which is now "
+                "(date, run, row version, model, scorer)."
+            ),
+            why=(
+                "Splitting a month's rows on a stamp that moved on any of seventeen inputs "
+                "turned one day into several cohorts of a handful of rows each, which is "
+                "how a monthly figure stopped being readable. The field stays on the "
+                "cohort so an archive written before today still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-03",
             change=(

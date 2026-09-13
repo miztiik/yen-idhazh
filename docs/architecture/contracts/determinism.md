@@ -1,8 +1,10 @@
-# Determinism and the Pipeline Fingerprint
+# Determinism and the Recorded Input Manifest
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-12
 
-How the pipeline proves a re-run changed nothing, and how it records the times that claim turns out to be false. This page owns the stamp, the ledger that expands it, the skip rule built on it, and the violation policy.
+What a run records about its own inputs, the one alarm built on that record, and how the pipeline notes the times "nothing changed" turns out to be false. This page owns the enumeration, where each input is read from, and the violation policy.
+
+**It records and it gates nothing.** Owner decision, 2026-09-10. Until 2026-09-12 the same enumeration was reduced to one digest, `pipeline_fingerprint`, which did two jobs and did neither. The skip-if-unchanged half was never wired to a caller. The eval-window half withheld a quality number until N consecutive run-days ran at one digest - and the digest moves on any of seventeen inputs, so measured over the whole committed ledger on 2026-08-27 the longest unbroken run at one digest was three days against a requirement of ten, reached zero times. It turned evolution into a fault. What is left is the reading: `RunRecord.inputs` on each day's `run.json`, read by a person and by the console's model-change boundary, and by nothing that decides anything.
 
 The shapes themselves are contracts like any other; see [schemas.md](schemas.md) for how they are authored and generated.
 
@@ -20,24 +22,45 @@ It is determinism *given identical logits*. Everything that changes the logits c
 
 `seed` is *dead code under greedy decoding*. It is enumerated as an input so a future move off greedy cannot change an output silently, and it is never cited as the determinism control.
 
-## The stamp is the enumeration
+## The record is the enumeration
 
-`PipelineInputs` is a model whose fields **are** the fingerprint, and the digest is taken over that model's own canonical serialization:
+`PipelineInputs` is a model whose fields **are** the record. It hangs off
+`RunRecord.inputs`, one per run, and every value is named rather than hashed.
 
-```
-pipeline_fingerprint = sha256(canonical_json(PipelineInputs))
-```
+Two properties fall out of declaring the model rather than assembling a string,
+and both are the point:
 
-Two properties fall out of digesting the model rather than a hand-assembled string, and both are the point:
-
-- A field added to the model changes every fingerprint, automatically. There is no second list to remember to update.
+- A field added to the model is recorded by every run from that commit on. There is no second list to remember to update.
 - A field that is not declared cannot be forgotten, because it was never claimed to be covered.
 
-The declared inputs are the weights digest, the quantisation, the runtime build, the chat-template / prompt / output-schema digests, the truncation cap, the sampling spelling, `n_ctx` / `n_batch` / `n_ubatch` / `n_threads`, the runner class, and the extractor and sanitizer versions.
+**Named values rather than one digest, and that is what makes it a record.** One
+opaque hex token affords exactly one operation - equality - which is a gate's
+operation and the only one. A set of named values affords reading, so a reader
+can see *which* input moved and the console's boundary can say so. Ruled by
+Fowler, 2026-09-12.
 
-**The weights digest is of the file the runtime opened, not the one config named.** `ModelRef.sha256` is an expectation; the stamp is an observation. The two disagreeing is precisely the event this exists to expose.
+The declared inputs are the weights digest, the quantisation, the runtime build, the chat-template / prompt / output-schema digests, the truncation cap, the sampling spelling, `n_ctx` / `n_batch` / `n_ubatch` / `n_threads`, the runner class, and the extractor and sanitizer versions. `RunRecord.config_digests` sits beside it and says which config bytes the run read.
 
-**Prompts and templates are digested, never stored.** A prompt in a committed ledger would put text into a persisted payload that nothing downstream needs, and the digest answers the only question anyone asks of it: did it move?
+**The weights digest is of the file the runtime opened, not the one config named.** `ModelRef.sha256` is an expectation; the record is an observation. The two disagreeing is precisely the event this exists to expose.
+
+**Prompts and templates are digested, never stored.** A prompt in a committed payload would put text into a permanent record that nothing downstream needs, and the digest answers the only question anyone asks of it: did it move?
+
+## The one alarm
+
+`prose_changed_alone` compares this run's record against the newest earlier run
+on the same manifest and answers one question: **did the words we ask for move
+while the model and the binary held still?**
+
+It is empty on a first run, on a run where nothing moved, and on a run where the
+weights or the build moved too - the last of those is a model change, which an
+operator already reads off the boundary the console draws. What is left is the
+case nothing else can see: the same weights, the same binary, and different
+words asked of them.
+
+**It reports and it never blocks.** The run publishes, every number is read, and
+the warning names which input moved. Owner decision, 2026-09-10. The comparison
+is against one earlier payload the caller already holds, so it costs the same on
+a repository of one published day and of a thousand (Guardrail #12).
 
 ### Where each input comes from
 
@@ -68,25 +91,25 @@ would replace. The qualification path does digest the file it is about to run
 (`_candidate_identity`), so the observation exists and production has not adopted
 it.
 
-The five blind spots below are still outside the stamp.
+The five blind spots below are still outside the record.
 
 Article input is deliberately not a `PipelineInputs` field: that model answers
-"which pipeline configuration", and the same value must group many items. The
-missing article digest belongs in a separate per-item work identity used by a
-future skip key.
+"which pipeline configuration", and the same value must group many items.
 
-The skip path is not wired. `stage_work` computes a fingerprint and records it,
-and nothing reads `state/fingerprints.csv` back to call `classify`. That is
-deliberate: a safe skip needs a separate typed per-item work identity carrying
-both the article-input digest and the pipeline fingerprint, and article identity
-does not belong inside the configuration fingerprint.
+**There is no skip, and there is no longer a plan for one.** `classify`,
+`SKIPPABLE` and the four-way `Observation` enum were deleted on 2026-09-12 along
+with the digest, because nothing had ever called them and nothing had asked.
+A run re-summarizes every item it plans, which is what it already did. A safe
+skip would need a per-item work identity carrying the article bytes as well as
+the configuration; that identity was never written, and writing one is a design
+somebody would have to argue on its own evidence.
 
-Fetch policy is outside the stamp, and unlike the two above that is an omission
+Fetch policy is outside the record, and unlike the two above that is an omission
 rather than a decision. `FETCHER_VERSION` in `backend/idhazh/fetch.py` is bumped
-when fetch behaviour changes, and nothing digests it - `PipelineInputs` carries
+when fetch behaviour changes, and nothing records it - `PipelineInputs` carries
 the extractor and the sanitizer versions and not this one. Changing which pages a
-run is allowed to read therefore leaves `pipeline_fingerprint` still, so two runs
-under different fetch policies group as one. The constant was bumped to
+run is allowed to read therefore leaves the record where it was, so two runs
+under different fetch policies read as one. The constant was bumped to
 `idhazh-fetch-2` on 2026-09-02 when `protego` replaced `urllib.robotparser`
 ([../sources/trust-boundary.md](../sources/trust-boundary.md)), which is the
 change that showed the gap. Adding it is one field and one changelog entry; it is
@@ -137,48 +160,33 @@ The five blind spots are real. Move one and a summary can change while the stamp
 
 ## `host_cpu` is recorded and never digested
 
-It sits on the ledger row, outside `PipelineInputs`, so exclusion is structural rather than a filter someone can forget.
+It is a diagnostic, outside `PipelineInputs`, so exclusion is structural rather than a filter someone can forget.
 
-Including it would make every runner a different fingerprint, which would hide the one failure the stamp exists to catch: the same inputs producing different words on different hardware. It is the only field that *explains* a violation, so it has to be recorded and it must not be digested.
+Including it would make every runner a different record, which would hide the one failure this exists to catch: the same inputs producing different words on different hardware. It is the only field that *explains* a violation, so it has to be recorded and it must not be part of the identity.
 
-## The ledger contract
+## The ledger is retired
 
-`state/fingerprints.csv` is **append-only and never pruned**, one row the first
-time a stamp is seen. Each row expands the digest into every component that
-produced it, plus the host.
+`state/fingerprints.csv` held one row the first time a digest was seen, expanding
+it into every component that produced it. Nothing has written it since
+2026-09-12: a digest with nothing to expand it into is meaningless hex three
+years from now, and once the digest went the expansion had nothing left to
+explain. The ten rows it holds still read back. `FingerprintRow`, its schema and
+the file go together in the commit that drops the field from every contract.
 
-Without it a fingerprint is meaningless hex three years from now - it would prove two runs differed while saying nothing about how.
+What replaced it is the same enumeration on the run record, which a reader
+already opens for everything else a run did, and which needs no join.
 
-The column order is defined once, by the contract, and flattened one level so every cell is a scalar. The committed header is asserted against that definition, because a hand-edited header would silently reorder every future row. `append_new` re-checks that header before it writes, so a contract that gained an input and a ledger that did not stops the run instead of putting the new input in the previous input's column.
+### Two stages, one record
 
-### Two stages, one row
+The inputs are observed in `work` and committed in `assemble`:
 
-The stamp is observed in `work` and committed in `assemble`:
+1. `stage_work` is the only stage that can see the runtime, so it writes the record into the run's items directory as `inputs.json`.
+2. That directory is what a shard uploads, so the record survives a runner whose checkout is thrown away when the job ends.
+3. `stage_assemble` reads it and hangs it on the run record it is about to write.
 
-1. `stage_work` is the only stage that can see the runtime, so it builds the row and writes it into the run's items directory as `<fingerprint>.fingerprint.json`.
-2. That directory is what a shard uploads, so the row survives a runner whose checkout is thrown away when the job ends.
-3. `stage_assemble` reads whatever stamps the shards left and calls `append_new`, which drops the ones the ledger already holds. Every shard of a run observes the same inputs, so a run of eight shards contributes one row.
-
-A second run over unchanged inputs writes nothing at all. The ledger records what a stamp meant, never how often the job ran.
-
-## Future skip uses work identity, not fingerprint alone
-
-A safe skip compares a future per-item `WorkIdentity` containing both pipeline
-fingerprint and article-input digest:
-
-| Prior work identity | Then | Meaning |
-| --- | --- | --- |
-| absent | `first_run` | run the work |
-| different pipeline or article digest | `inputs_changed` | run the work |
-| same | `unchanged` | do nothing, and write no eval row |
-| same, forced run, different words | `determinism_violation` | record it |
-
-The current `classify` helper compares only pipeline fingerprint. It is not wired
-and is insufficient for skip because a publisher can change article bytes at
-the same URL. Replace or expand it with `WorkIdentity` before use.
-
-Under the future safe path, an unchanged item writes no eval row. The violation
-case is observable only when a matching work identity is forced to run.
+One name rather than one per shard. Every shard of a run observes the same
+configuration and writes the same bytes, so the atomic rename settles it and
+there is nothing to reconcile.
 
 ## Intended violation handling
 
@@ -193,6 +201,27 @@ wall-clock or token count does not read as drift.
 
 ## Design rationale
 
+**The digest was deleted as a gate and as the eval-window key, and the
+enumeration was kept (2026-09-12).** Owner decision, 2026-09-10, under
+`CLAUDE.md` section 0. The enumeration is the part that was worth its cost: it
+is what makes "nothing changed" checkable rather than asserted. The digest over
+it was worth nothing at all, because both jobs it was built for failed. The skip
+was never wired - no `skip_if_unchanged` key, no caller, no branch - and the
+window never opened, because the digest moved faster than the window was wide.
+
+What that cost, stated rather than implied. The skip is gone as a design, not
+deferred: a safe skip needed a per-item work identity carrying the article bytes
+as well as the configuration, that identity was never written, and nothing has
+asked for it since. The `classify` helper, `SKIPPABLE` and the four-way
+`Observation` enum went with it rather than sitting unwired for another quarter.
+A run now re-summarizes every item it plans, which is what it already did.
+
+What it bought. A quality number over a window that spans a reworded prompt is a
+number again: measured on the base commit `0e049ed8` over
+`tests/fixtures/evals/prompt-changed-window.csv`, three rows of one day summarised
+as two cohorts of two rows and one row, so the day had no faithfulness figure
+over its own window; after, one cohort of three rows at 0.80.
+
 Enumerating sixteen ways an output can move and finding that eleven are silent is what makes the stamp worth its cost. The alternative is trusting `temperature=0`, which is not a claim about the pipeline at all - it is a claim about the sampler, and the sampler is not where drift comes from. The cost is one model, one module and one CSV; the benefit is that "nothing changed" becomes checkable rather than asserted. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
 
 Digesting the model's own serialization rather than a hand-written concatenation is the same move as generating schemas from models: it removes a second list that has to be kept in step by hand, and the class of bug where someone adds an input and forgets to stamp it stops existing. Authority: Fowler.
@@ -203,7 +232,7 @@ The three identity fields were a literal, a model slug and a second literal, and
 
 The chat template is read from the running server rather than reconstructed. The template ships inside the GGUF and the server applies it, so the pipeline never renders one and had nothing local to digest that was not either the model id, which never moves, or an invented restatement of the request shape. `GET /props` returns the Jinja source the server will use, which is the same doctrine as the weights digest: the stamp is an observation of the runtime, and the runtime disagreeing with config is the event the stamp exists to expose. Authority: Andre.
 
-The row is written in `work` and appended in `assemble` because a work shard's checkout does not survive its job. Four to eight shards run the same inputs on disposable runners and upload one directory each; only `assemble` has a checkout that is committed. An `append_new` inside `stage_work` would write a row that is thrown away with the runner, and the oracle - every fingerprint in `state/scores.csv` resolves to a row in `state/fingerprints.csv` - would fail in CI while passing on a laptop. Carrying the row as a payload keeps the observation where it is observable and the commit where commits happen (section 1a). Authority: Fowler.
+The record is written in `work` and committed in `assemble` because a work shard's checkout does not survive its job. Four to eight shards run the same inputs on disposable runners and upload one directory each; only `assemble` has a checkout that is committed. Writing the run record inside `stage_work` would write it into a directory thrown away with the runner. Carrying it as a payload keeps the observation where it is observable and the commit where commits happen (section 1a). Authority: Fowler.
 
 ## Rejected alternatives
 
@@ -222,7 +251,7 @@ The row is written in `work` and appended in `assemble` because a work shard's c
 | Keep `model_id` as the attribution key and leave the three identity fields alone | A slug does not move when the prompt, the truncation cap or the runtime build moves, and all three move the score. | Andre |
 | Digest the request envelope instead of asking the server for its template | The envelope is our own shape and the prompt and output-schema digests already carry it. Reconstructing a template the server owns restates config under a name that promises an observation. | Andre |
 | Raise when `LLAMA_CPP_BUILD` is absent, the way a missing weights digest raises | It would stop every developer run and every test that composes the stages, to protect a field that explains a run rather than gating one. A recorded absence stamps apart from every pinned run, says the same thing, and still runs. | Carmack |
-| Call `append_new` from `stage_work` | A shard's checkout is discarded when the job ends, so the row would never reach the committed ledger and the oracle would fail in CI while passing locally. | Fowler |
+| Write the run record from `stage_work` | A shard's checkout is discarded when the job ends, so the record would never reach a committed file. | Fowler |
 | Have `assemble` rebuild the stamp from config | It runs on another machine after the server is gone, so it would record its own runner class and its own host as the ones that summarized nothing. | Carmack |
 | Backfill the stamps already in `state/scores.csv` | They predate any recorded runtime, so expanding them means manufacturing a measurement nobody took (Guardrail #10). They stay unexpandable, and that is the honest record. | Andre |
 | A `reason` or `superseded_by` column on the ledger row | Nothing parses a sentence in a CSV, and the machine-readable "why" already lives in `state/validation-<date>.csv`. | Fowler |
@@ -230,7 +259,7 @@ The row is written in `work` and appended in `assemble` because a work shard's c
 ## See also
 
 - [schemas.md](schemas.md) - how these shapes are authored, versioned and generated.
-- [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the skip rule in the context of the run.
+- [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the run, which measures every item it produces because nothing skips.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what an eval row measures, and why an empty re-run must not write one.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the identity and replay requirements for a model change.
 - [../../reference/measurements.md](../../reference/measurements.md) - where a measured number carries its hardware and date.

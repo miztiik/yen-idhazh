@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "pipeline_fingerprint is optional and nothing sets it.",
+      "version": "2026-09-12T21:00",
+      "why": "It keyed the eval window - a quality number counted only after N run-days at one stamp - and the stamp moves on any of seventeen inputs, so the window never opened. Relaxing rather than removing keeps every committed row valid; the drop and its read-side migration are their own commit."
+    },
+    {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
       "version": "2026-09-12T18:40",
       "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
@@ -199,9 +204,18 @@
       "type": "string"
     },
     "pipeline_fingerprint": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Pipeline Fingerprint",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Null on every row written after 2026-09-12. The stamp stopped being a gate and stopped keying the eval window, so no writer fills it.",
+      "title": "Pipeline Fingerprint"
     },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
@@ -334,7 +348,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-09-12T18:40",
+      "default": "2026-09-12T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -364,12 +378,11 @@
     "extractiveness",
     "band",
     "summary_word_count",
-    "pipeline_fingerprint",
     "output_digest",
     "scorer_version",
     "scored_at"
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-09-12T18:40"
+  "version": "2026-09-12T21:00"
 }

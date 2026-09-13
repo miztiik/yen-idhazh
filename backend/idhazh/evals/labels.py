@@ -18,10 +18,12 @@ The strata are how the rows are chosen and never how they are ordered. The queue
 comes back in one global `label_id` order, so the sequence says nothing about
 which decile a row came from.
 
-One scorer version defines a pool; the pipeline fingerprint is a covariate the
-pool reports rather than a filter it applies. `strata()` is what makes that
-honest, and reading a rate off a mixed pool without printing the mix beside it
-is the thing this design trades away.
+One scorer version defines a pool, and that is the whole of the pool rule. The
+pipeline stamp used to split it further and the split withheld the answer: the
+stamp moved on any of seventeen inputs, no pair of stamp and scorer ever held
+for more than three consecutive run-days, and a pool cut that finely was
+reported as a prior rather than read as a number. The stamp went on 2026-09-10;
+what produced a run is recorded on its run record, where it decides nothing.
 """
 
 from __future__ import annotations
@@ -50,16 +52,14 @@ LEDGER_RELPATH: Final = "state/labels.csv"
 def label_id(record: Mapping[str, str], *, draw_id: str) -> str:
     """The draw key, and the shuffle key, in one value.
 
-    Hashed over the full identity - the address, the inputs that produced the
-    words, the instrument that read them, and the draw - so a re-draw under a new
-    scorer is genuinely a new draw and can never silently reuse the old one's
-    rows.
+    Hashed over the full identity - the address, the words, the instrument that
+    read them, and the draw - so a re-draw under a new scorer is genuinely a new
+    draw and can never silently reuse the old one's rows.
     """
     material = "|".join(
         (
             draw_id,
             record["url_key"],
-            record["pipeline_fingerprint"],
             record["output_digest"],
             record["scorer_version"],
         )
@@ -71,20 +71,12 @@ def eligible(
     records: Iterable[Mapping[str, str]],
     *,
     scorer_version: str,
-    pipeline_fingerprint: str | None = None,
 ) -> list[dict[str, str]]:
-    """Ledger rows one instrument read, optionally narrowed to one producer.
+    """Ledger rows one instrument read.
 
-    `scorer_version` is required and is the stratum that matters: the cuts being
-    calibrated live inside that string, so a row read by a different instrument
-    answers a different question and can never join this one.
-
-    `pipeline_fingerprint` is optional, and leaving it out is the normal case.
-    Requiring it made the gate unreachable - the stamp moves on any of seventeen
-    inputs, including a sanitizer fix, and no pair has ever held for more than
-    three consecutive run-days. Pass it to narrow a pool to one producer;
-    otherwise every row carries its own stamp and `strata()` reports the mix,
-    which is a covariate to report rather than a reason to discard a row.
+    `scorer_version` is required and is the only stratum that matters: the cuts
+    being calibrated live inside that string, so a row read by a different
+    instrument answers a different question and can never join this one.
 
     Short-source rows are deliberately KEPT: they are extraction failures rather
     than summary defects, and dropping them would bias the sample toward
@@ -95,46 +87,32 @@ def eligible(
         dict(record)
         for record in records
         if record.get("scorer_version") == scorer_version
-        and (
-            pipeline_fingerprint is None
-            or record.get("pipeline_fingerprint") == pipeline_fingerprint
-        )
     ]
 
 
 class Pair(NamedTuple):
-    """One instrument-and-producer combination the ledger holds, and what it covers."""
+    """One instrument the ledger holds, and what it covers."""
 
     scorer_version: str
-    pipeline_fingerprint: str
-    rows: int
-    first_date: str
-    last_date: str
-
-
-class Stratum(NamedTuple):
-    """One producer inside a pool, and how much of the pool it wrote."""
-
-    pipeline_fingerprint: str
     rows: int
     first_date: str
     last_date: str
 
 
 def pairs(records: Iterable[Mapping[str, str]]) -> list[Pair]:
-    """Every pair in the ledger with its row count and dates, oldest first.
+    """Every instrument in the ledger with its row count and dates, oldest first.
 
-    What a refusal prints. "No rows at the pair you asked for" on its own leaves
-    the operator guessing whether the gate is one day away or unreachable; the
-    same refusal that also says what the ledger does hold answers that.
+    What a refusal prints. "No rows at the scorer you asked for" on its own
+    leaves the operator guessing whether the gate is one day away or
+    unreachable; the same refusal that also says what the ledger does hold
+    answers that.
     """
-    dates: dict[tuple[str, str], list[str]] = {}
+    dates: dict[str, list[str]] = {}
     for record in records:
-        key = (record["scorer_version"], record["pipeline_fingerprint"])
-        dates.setdefault(key, []).append(record["date"])
+        dates.setdefault(record["scorer_version"], []).append(record["date"])
     found = [
-        Pair(scorer_version, fingerprint, len(seen), min(seen), max(seen))
-        for (scorer_version, fingerprint), seen in dates.items()
+        Pair(scorer_version, len(seen), min(seen), max(seen))
+        for scorer_version, seen in dates.items()
     ]
     return sorted(found, key=lambda pair: (pair.first_date, pair.last_date, pair.rows))
 
@@ -144,7 +122,6 @@ def draw(
     *,
     draw_id: str,
     scorer_version: str,
-    pipeline_fingerprint: str | None = None,
     per_decile: int,
 ) -> list[dict[str, str]]:
     """`per_decile` rows from each `hhem` decile, deterministic by hash.
@@ -158,13 +135,11 @@ def draw(
     emitting decile after decile hid nothing: a labeller working down the queue
     still read the confidence gradient off the sequence, and the first twenty
     rows were the bottom three deciles entire. `label_id` is a hash over the
-    address, the inputs, the words, the instrument and the draw, so sorting the
-    whole picked set by it is a shuffle that needs no seed and stays
-    reproducible - which matters the moment two labellers compare notes.
+    address, the words, the instrument and the draw, so sorting the whole picked
+    set by it is a shuffle that needs no seed and stays reproducible - which
+    matters the moment two labellers compare notes.
     """
-    pool = eligible(
-        records, scorer_version=scorer_version, pipeline_fingerprint=pipeline_fingerprint
-    )
+    pool = eligible(records, scorer_version=scorer_version)
     buckets: dict[int, list[dict[str, str]]] = {index: [] for index in range(DECILES)}
     for record in pool:
         record["label_id"] = label_id(record, draw_id=draw_id)
@@ -193,33 +168,12 @@ def run_days(
     records: Iterable[Mapping[str, str]],
     *,
     scorer_version: str,
-    pipeline_fingerprint: str | None = None,
 ) -> set[str]:
     """Distinct run-days at one scorer. The collection requirement counts these."""
     return {
         record["date"]
-        for record in eligible(
-            records, scorer_version=scorer_version, pipeline_fingerprint=pipeline_fingerprint
-        )
+        for record in eligible(records, scorer_version=scorer_version)
     }
-
-
-def strata(records: Iterable[Mapping[str, str]]) -> list[Stratum]:
-    """How a set of rows splits by producer, largest first.
-
-    This is what a relaxed pool costs and what has to be reported with any
-    result read off it. A rate computed over rows several producers wrote is a
-    prior with wide bounds, not a calibration, and the only thing that makes it
-    honest is printing the mix beside it.
-    """
-    dates: dict[str, list[str]] = {}
-    for record in records:
-        dates.setdefault(record["pipeline_fingerprint"], []).append(record["date"])
-    found = [
-        Stratum(fingerprint, len(seen), min(seen), max(seen))
-        for fingerprint, seen in dates.items()
-    ]
-    return sorted(found, key=lambda one: (-one.rows, one.pipeline_fingerprint))
 
 
 def columns() -> tuple[str, ...]:

@@ -5,6 +5,10 @@ without it, so the tests are written against blindness rather than against
 happy paths: every declared input must move the digest, and a field that stops
 moving it is the failure this file is here to catch.
 
+The record gates nothing since 2026-09-10. One alarm is left - `prose_changed_alone`
+- and it reports rather than blocks, so the tests below ask what it says and never
+what it withholds.
+
 The closed-world block is contract tier (`CLAUDE.md` section 13). It holds the
 stamp and `InferenceConfig` to one another, so a knob added to config is either
 digested or written down as undigested, and never simply forgotten.
@@ -15,13 +19,11 @@ fixture, so the test and the fixture cannot drift apart.
 
 from __future__ import annotations
 
-import csv
 import inspect
 import re
-import tracemalloc
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
@@ -31,23 +33,19 @@ from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
-    LEDGER_RELPATH,
+    MACHINE_INPUTS,
     NOT_DIGESTED,
     PLACEHOLDER_DIGEST,
+    PROSE_INPUTS,
     UNRECORDED_BUILD,
-    Observation,
-    append_new,
     build_inputs,
-    classify,
     digested_inference_fields,
     host_cpu,
-    read_ledger,
-    recorded_fingerprints,
+    prose_changed_alone,
     runner_class,
     runtime_build,
     runtime_flags_spelling,
     sampling_spelling,
-    text_digest,
 )
 from idhazh.ledger import load_retirements
 
@@ -94,15 +92,6 @@ def stamp_with(model_sha256: str | None) -> PipelineInputs:
 
 def committed_row() -> FingerprintRow:
     return FingerprintRow.from_json(read_text(FIXTURE))
-
-
-def restamp(inputs: PipelineInputs, **changes: Any) -> FingerprintRow:
-    """A row for a mutated input set, with the digest rebuilt to match."""
-    moved = inputs.model_copy(update=changes)
-    template = committed_row()
-    return template.model_copy(
-        update={"inputs": moved, "pipeline_fingerprint": moved.fingerprint()}
-    )
 
 
 def a_different_value(value: object) -> object:
@@ -245,185 +234,76 @@ def test_a_null_runtime_knob_spells_apart_from_a_pinned_one() -> None:
     assert "n_threads_batch=runtime-default" in spelling
 
 
-# --- What a prior stamp means ----------------------------------------------
+# --- The one alarm that survives the retired gate ---------------------------
+#
+# `classify` and the four observations it returned are gone with the gate they
+# fed (owner decision, 2026-09-10): the skip-if-unchanged half was never wired
+# to a caller, and the eval-window half withheld a quality number until N
+# consecutive run-days ran at one digest, which in a repository whose prompts
+# move weekly meant never. What is left reports and never blocks.
 
 
-def test_no_prior_stamp_is_a_first_run() -> None:
-    assert classify(prior_fingerprint=None, current_fingerprint="a" * 64) is Observation.FIRST_RUN
-
-
-def test_a_different_stamp_runs_the_work() -> None:
-    assert (
-        classify(prior_fingerprint="a" * 64, current_fingerprint="b" * 64)
-        is Observation.INPUTS_CHANGED
+def moved(inputs: PipelineInputs, *names: str) -> PipelineInputs:
+    """The same manifest with each named input moved to a different value."""
+    return inputs.model_copy(
+        update={name: a_different_value(getattr(inputs, name)) for name in names}
     )
 
 
-def test_a_matching_stamp_does_no_work() -> None:
-    """Identical inputs measured nothing, so they write no eval row."""
-    observation = classify(prior_fingerprint="a" * 64, current_fingerprint="a" * 64)
-    assert observation is Observation.UNCHANGED
+@pytest.mark.parametrize("prose", sorted(PROSE_INPUTS))
+def test_a_prose_input_moving_alone_is_the_alarm(prose: str) -> None:
+    """The case nobody else can see: the same weights, the same binary, and
+    different words asked of them."""
+    before = committed_row().inputs
+
+    assert prose_changed_alone(before, moved(before, prose)) == (prose,)
 
 
-def test_a_matching_stamp_with_unequal_output_is_recorded_not_raised() -> None:
-    observation = classify(
-        prior_fingerprint="a" * 64,
-        prior_output_digest=text_digest("one"),
-        current_fingerprint="a" * 64,
-        current_output_digest=text_digest("another"),
-    )
-    assert observation is Observation.DETERMINISM_VIOLATION
+def test_every_prose_input_that_moved_is_named() -> None:
+    """Naming them is the whole of the report, so one of three is not an answer."""
+    before = committed_row().inputs
+
+    assert set(prose_changed_alone(before, moved(before, *PROSE_INPUTS))) == set(PROSE_INPUTS)
 
 
-def test_a_matching_stamp_with_equal_output_is_unchanged() -> None:
-    digest = text_digest("the same words")
-    observation = classify(
-        prior_fingerprint="a" * 64,
-        prior_output_digest=digest,
-        current_fingerprint="a" * 64,
-        current_output_digest=digest,
-    )
-    assert observation is Observation.UNCHANGED
+@pytest.mark.parametrize("machine", sorted(MACHINE_INPUTS))
+def test_a_machine_input_moving_too_is_a_model_change_and_not_this_alarm(machine: str) -> None:
+    """An operator already reads a model swap off the boundary the console draws.
 
-
-# --- The ledger -------------------------------------------------------------
-
-
-def test_a_changed_cap_records_a_second_observation(tmp_path: Path) -> None:
-    """The row's acceptance gate, end to end."""
-    ledger = tmp_path / LEDGER_RELPATH
-    first = committed_row()
-
-    assert append_new(ledger, [first]) == [first]
-    assert append_new(ledger, [first]) == [], "a known stamp is never appended twice"
-
-    widened = restamp(first.inputs, truncation_cap_tokens=first.inputs.truncation_cap_tokens * 2)
-    assert append_new(ledger, [widened]) == [widened]
-
-    stored = read_ledger(ledger)
-    assert set(stored) == {first.pipeline_fingerprint, widened.pipeline_fingerprint}
-
-
-def test_the_ledger_round_trips_through_flat_columns(tmp_path: Path) -> None:
-    ledger = tmp_path / LEDGER_RELPATH
-    row = committed_row()
-    append_new(ledger, [row])
-    assert read_ledger(ledger)[row.pipeline_fingerprint] == row
-
-
-def test_an_absent_ledger_reads_as_empty(tmp_path: Path) -> None:
-    assert read_ledger(tmp_path / LEDGER_RELPATH) == {}
-
-
-def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
-    """A new input would otherwise land in the column an older input named."""
-    ledger = tmp_path / LEDGER_RELPATH
-    first = committed_row()
-    append_new(ledger, [first])
-
-    kept = ledger.read_text(encoding="utf-8").split("\n")
-    kept[0] = ",".join(FingerprintRow.csv_columns()[:-1])
-    ledger.write_text("\n".join(kept), encoding="utf-8")
-
-    widened = restamp(first.inputs, truncation_cap_tokens=first.inputs.truncation_cap_tokens * 2)
-    with pytest.raises(ValueError, match="Migrate the ledger"):
-        append_new(ledger, [widened])
-
-
-def test_appending_nothing_creates_nothing(tmp_path: Path) -> None:
-    ledger = tmp_path / LEDGER_RELPATH
-    assert append_new(ledger, []) == []
-    assert not ledger.exists()
-
-
-def _fingerprint_fixture(path: Path, *, rows: int, stamps: int) -> set[str]:
-    """`rows` records over `stamps` distinct identities. Returns the identities.
-
-    Every row validates, because `FingerprintRow` rebuilds the digest from the
-    inputs on read. A fixture of invented hex would fail the parse instead of
-    measuring it.
+    Reporting it here as well would bury the one reading nothing else carries.
     """
-    template = committed_row()
-    cap = template.inputs.truncation_cap_tokens
-    distinct = [restamp(template.inputs, truncation_cap_tokens=cap + n) for n in range(stamps)]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=FingerprintRow.csv_columns(), lineterminator="\n")
-        out.writeheader()
-        for number in range(rows):
-            out.writerow(distinct[number % stamps].csv_row())
-    return {row.pipeline_fingerprint for row in distinct}
+    before = committed_row().inputs
+
+    assert prose_changed_alone(before, moved(before, "prompt_sha256", machine)) == ()
 
 
-def _peak_of_append_new(path: Path, row: FingerprintRow) -> tuple[list[FingerprintRow], int]:
-    tracemalloc.start()
-    try:
-        fresh = append_new(path, [row])
-        return fresh, tracemalloc.get_traced_memory()[1]
-    finally:
-        tracemalloc.stop()
+def test_a_first_run_has_nothing_to_compare_against() -> None:
+    """No earlier manifest is not a change, and reporting one would cry wolf
+    on the first run after every model swap."""
+    assert prose_changed_alone(None, committed_row().inputs) == ()
 
 
-def test_appending_costs_the_identities_and_not_the_file(tmp_path: Path) -> None:
-    """The append reads what it must refuse, not every row ever written.
+def test_a_run_that_moved_nothing_is_silent() -> None:
+    inputs = committed_row().inputs
 
-    `append_new` needs one answer from the ledger - which identities are already
-    on record - and used to build a parsed row per stored line to get it. The
-    answer is the distinct identities, so doubling the lines over the same
-    identities must not move the peak.
+    assert prose_changed_alone(inputs, inputs) == ()
 
-    Measured 2026-09-07 on an Intel Core i7-1265U, Windows 11, Python 3.14.2,
-    over 600 and 1,200 lines carrying the same 300 identities. Before: 2,468,376 B
-    of peak against 4,781,120 B - the file doubled and so did the cost, 1.94x.
-    After, over three runs: 306,489 / 306,333 / 306,269 B against 306,269 /
-    306,189 / 306,066 B, a ratio of 0.999 to 1.000. So the 1,200-line arm now
-    peaks about 15.6 times lower, and it stops moving when the file grows.
 
-    Both populations are built and fixed, so this costs the same on the day the
-    committed ledger holds ten times either (Guardrail #12, `CLAUDE.md` section 13).
+def test_the_change_names_the_input_that_moved_rather_than_saying_one_did() -> None:
+    """Why the record is a list of names and not one digest.
+
+    A digest affords equality and nothing else, which is a gate's only
+    operation. The names come back in declaration order, so two runs compared
+    twice read the same way round.
     """
-    stamps = 300
-    small = tmp_path / "small" / LEDGER_RELPATH
-    large = tmp_path / "large" / LEDGER_RELPATH
-    known_small = _fingerprint_fixture(small, rows=stamps * 2, stamps=stamps)
-    known_large = _fingerprint_fixture(large, rows=stamps * 4, stamps=stamps)
-    assert known_small == known_large, "both arms must hold one answer or this proves nothing"
-    assert len(known_large) == stamps, "the fixture has to repeat identities or it proves nothing"
+    before = committed_row().inputs
 
-    template = committed_row()
-    arriving = restamp(
-        template.inputs, truncation_cap_tokens=template.inputs.truncation_cap_tokens + stamps
+    assert moved(before, "n_ctx").changed_inputs(before) == ("n_ctx",)
+    assert before.changed_inputs(before) == ()
+    assert moved(before, "sanitizer_version", "model_sha256").changed_inputs(before) == (
+        "model_sha256",
+        "sanitizer_version",
     )
-    fresh_small, peak_small = _peak_of_append_new(small, arriving)
-    fresh_large, peak_large = _peak_of_append_new(large, arriving)
-
-    assert fresh_small == [arriving], "an unrecorded identity is still appended"
-    assert fresh_large == [arriving]
-    assert peak_large < peak_small * 1.1, (
-        f"twice the lines over the same {stamps} identities moved peak from {peak_small} B "
-        f"to {peak_large} B, so the append is still holding the file rather than the answer"
-    )
-
-
-def test_a_repeated_identity_is_refused_however_many_lines_carry_it(tmp_path: Path) -> None:
-    """The behaviour the streaming read may not move: a known stamp never lands twice."""
-    path = tmp_path / LEDGER_RELPATH
-    known = _fingerprint_fixture(path, rows=12, stamps=4)
-    template = committed_row()
-    repeat = restamp(template.inputs, truncation_cap_tokens=template.inputs.truncation_cap_tokens)
-
-    assert repeat.pipeline_fingerprint in known
-    assert append_new(path, [repeat]) == [], "a recorded identity is never appended twice"
-    assert recorded_fingerprints(path) == known, "and the ledger gained no line"
-
-
-def test_the_recorded_identities_are_read_without_parsing_a_row(tmp_path: Path) -> None:
-    """The reader answers the one question the append asks, and no more."""
-    path = tmp_path / LEDGER_RELPATH
-    assert recorded_fingerprints(path) == set(), "an absent ledger has recorded nothing"
-    known = _fingerprint_fixture(path, rows=9, stamps=3)
-    assert recorded_fingerprints(path) == known
-    assert recorded_fingerprints(path) == set(read_ledger(path)), "the two reads agree"
 
 
 # --- The four bounds this row declares ---------------------------------------

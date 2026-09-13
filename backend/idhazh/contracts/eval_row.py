@@ -68,6 +68,16 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T21:00",
+            change="pipeline_fingerprint is optional and nothing sets it.",
+            why=(
+                "It keyed the eval window - a quality number counted only after N run-days "
+                "at one stamp - and the stamp moves on any of seventeen inputs, so the "
+                "window never opened. Relaxing rather than removing keeps every committed "
+                "row valid; the drop and its read-side migration are their own commit."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T18:40",
             change=(
                 "item_id accepts a second shape: sixteen Crockford base32 symbols "
@@ -416,7 +426,13 @@ class EvalRow(Contract):
         ),
     )
     summary_word_count: int = Field(ge=0)
-    pipeline_fingerprint: Sha256
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description=(
+            "Null on every row written after 2026-09-12. The stamp stopped being a gate "
+            "and stopped keying the eval window, so no writer fills it."
+        ),
+    )
     output_digest: Sha256
     determinism_violation: bool = Field(
         default=False,

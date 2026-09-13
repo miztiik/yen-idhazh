@@ -61,7 +61,6 @@ LEDGER_COLUMNS: Final = (
     "source_word_count",
     "model_id",
     "scorer_version",
-    "pipeline_fingerprint",
 )
 
 
@@ -82,7 +81,6 @@ def rows(
             words,
             model_id="fixture-model",
             scorer_version="fixture-scorer",
-            pipeline_fingerprint="fixture-pipeline",
         )
         for index in range(count)
     ]
@@ -192,7 +190,7 @@ def test_a_partial_review_does_not_claim_every_article_was_compared() -> None:
     assert "blog.example.org: source length not compared" in text
 
 
-@pytest.mark.parametrize("field", ["model_id", "scorer_version", "pipeline_fingerprint"])
+@pytest.mark.parametrize("field", ["model_id", "scorer_version"])
 def test_model_metrics_do_not_compare_different_versions(field: str) -> None:
     before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
     after = [
@@ -200,9 +198,6 @@ def test_model_metrics_do_not_compare_different_versions(field: str) -> None:
             row,
             model_id="changed" if field == "model_id" else row.model_id,
             scorer_version="changed" if field == "scorer_version" else row.scorer_version,
-            pipeline_fingerprint=(
-                "changed" if field == "pipeline_fingerprint" else row.pipeline_fingerprint
-            ),
         )
         for row in rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8)
     ]
@@ -507,7 +502,6 @@ def ledger(directory: Path, *, recent: int, baseline: int) -> None:
                 "source_word_count": "1200",
                 "model_id": "fixture-model",
                 "scorer_version": "fixture-scorer",
-                "pipeline_fingerprint": "fixture-pipeline",
             }
             for age, count in ((1, recent), (14, baseline))
             for index in range(count)
@@ -624,7 +618,6 @@ def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
                 "source_word_count": str(words),
                 "model_id": "fixture-model",
                 "scorer_version": "fixture-scorer",
-                "pipeline_fingerprint": "fixture-pipeline",
             }
             for age, words in ((1, 150), (14, 1200))
             for index in range(enough())

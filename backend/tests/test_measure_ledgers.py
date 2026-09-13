@@ -6,10 +6,10 @@ the stdlib's own least squares for the regression, a counting definition for the
 percentile, and a positional re-read of the fixture for the clocks.
 
 The fixture is a small ledger of four runs designed so each branch has exactly
-one witness: one run proven at the cap by its eval stamp, one by a row cut on the
-ceiling, one proven by neither, and one whose shard filed no clock. One of the
-four names its shard on every row and so splits per shard; the rest predate the
-column and read as whole runs.
+one witness: one run proven at the cap by a row cut on the ceiling, two proven
+by nothing, and one whose shard filed no clock. One of the four names its shard
+on every row and so splits per shard; the rest predate the column and read as
+whole runs.
 """
 
 from __future__ import annotations
@@ -36,7 +36,6 @@ from utilities.measure_ledgers import (
     report,
     shard_clocks,
     sized_pairs,
-    stamps_by_run,
 )
 
 LEDGERS: Final = FIXTURES_DIR / "state" / "measure-ledgers"
@@ -159,24 +158,28 @@ def test_a_row_missing_a_clock_is_skipped_rather_than_read_as_zero() -> None:
     assert Residual.over(unclocked).values == ()
 
 
-def test_the_cap_population_is_admitted_by_two_independent_proofs() -> None:
+def test_the_cap_population_is_admitted_only_by_a_row_cut_on_the_ceiling() -> None:
+    """One physical proof, and a run that cannot show it stays out.
+
+    The eval stamp was the second proof until 2026-09-12. It went with the field,
+    and `2026-01-01-2` is what that costs: it ran at the cap and can no longer
+    say so, because no article it fetched was wide enough to be cut. Admitting it
+    on anything less would put rows of an unknown cap into the regression.
+    """
     by_run = {
         entry.run_id: entry
         for entry in admissions(LEDGERS, read_items(LEDGERS), cap_tokens=CAP_TOKENS)
     }
 
     assert ceiling_words(CAP_TOKENS) == 3846
-    assert stamps_by_run(LEDGERS)[0] == "bbbbbbbb"
-    assert by_run["2026-01-01-2"].carries_live_stamp
-    assert not by_run["2026-01-01-2"].cut_at_ceiling
     assert by_run["2026-01-01-3"].cut_at_ceiling
-    assert not by_run["2026-01-01-3"].carries_live_stamp
+    assert "cut exactly on the ceiling" in by_run["2026-01-01-3"].proof
+    assert not by_run["2026-01-01-2"].cut_at_ceiling
+    assert not by_run["2026-01-01-2"].admitted
+    assert "none" in by_run["2026-01-01-1"].proof
     assert not by_run["2026-01-01-1"].admitted
     assert "2026-01-01-4" not in by_run
-    assert sorted(run for run, entry in by_run.items() if entry.admitted) == [
-        "2026-01-01-2",
-        "2026-01-01-3",
-    ]
+    assert sorted(run for run, entry in by_run.items() if entry.admitted) == ["2026-01-01-3"]
 
 
 def test_the_regression_agrees_with_the_stdlib_least_squares() -> None:
@@ -185,12 +188,22 @@ def test_the_regression_agrees_with_the_stdlib_least_squares() -> None:
     expected = statistics.linear_regression([w for w, _ in pairs], [t for _, t in pairs])
     residuals = [t - (expected.intercept + expected.slope * w) for w, t in pairs]
 
-    assert fit.count == len(pairs) == 5
+    assert fit.count == len(pairs) == 2
     assert fit.slope == expected.slope
     assert fit.intercept == expected.intercept
     assert fit.residual_sd == statistics.stdev(residuals)
     assert fit.widest_words == 3846
     assert fit.prompt_at(3846) == expected.intercept + expected.slope * 3846
+
+    # One admitted run leaves two rows, and a line through two points has no
+    # spread to measure - so the spread arm is driven by a built population
+    # instead (`CLAUDE.md` section 13). It is arithmetic and needs no ledger.
+    spread = [(500, 1100), (1000, 2150), (2000, 4050), (3846, 7800)]
+    over_spread = WordsToTokens.over(spread)
+    line = statistics.linear_regression([w for w, _ in spread], [t for _, t in spread])
+    scatter = [t - (line.intercept + line.slope * w) for w, t in spread]
+
+    assert over_spread.residual_sd == statistics.stdev(scatter) > 0
 
 
 def test_dividing_reads_a_different_rate_from_regressing() -> None:

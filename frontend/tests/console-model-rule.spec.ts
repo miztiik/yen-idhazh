@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { modelRules } from '../src/lib/charts/frame';
-import { pipelineChanges } from '../src/lib/server/model-work';
+import { pipelineChanges, RECORDED_INPUTS_FROM } from '../src/lib/server/model-work';
 
 /**
  * The model-change rule, and the judgement behind it.
@@ -50,14 +50,19 @@ function canaryScores(): Record<string, string>[] {
  * The boundary dates, derived here rather than imported.
  *
  * The rule, stated in `docs/architecture/publishing/frontend.md`: a day is a
- * boundary when it ran a stamp the previous scored day did not run. This is a
- * second implementation of it on purpose - a check that calls the code it is
- * checking only proves the code is deterministic.
+ * boundary when it ran an identity the previous recorded day did not run. This
+ * is a second implementation of it on purpose - a check that calls the code it
+ * is checking only proves the code is deterministic.
+ *
+ * It reads the score ledger's stamp, so it speaks only for days before
+ * `RECORDED_INPUTS_FROM`. That is the same half of the split the function under
+ * test reads from there.
  */
 function boundariesFrom(rows: Record<string, string>[]): string[] {
 	const seen = new Map<string, string[]>();
 	for (const row of rows) {
 		if (!row.date || !row.pipeline_fingerprint) continue;
+		if (row.date >= RECORDED_INPUTS_FROM) continue;
 		seen.set(row.date, [...(seen.get(row.date) ?? []), row.pipeline_fingerprint]);
 	}
 	const dates = [...seen.keys()].sort();
@@ -166,6 +171,69 @@ test.describe('the boundary, as arithmetic', () => {
 		const rows = canaryScores();
 		expect(rows.length, 'the canary ledger is empty - the read is broken').toBeGreaterThan(0);
 		expect(pipelineChanges(rows)).toEqual(boundariesFrom(rows));
+	});
+});
+
+/**
+ * The half that reads the run record, which is what a day after the cutover has.
+ *
+ * `pipeline_fingerprint` stopped being written on 2026-09-12, so a chart that
+ * only read the score ledger would report "nothing moved" for ever. What is
+ * compared now is each run's recorded input manifest, and the comparison can say
+ * which input moved where a digest could only say that one did.
+ */
+test.describe('the boundary, after the inputs became a record', () => {
+	const after = (days: number) => {
+		const day = new Date(`${RECORDED_INPUTS_FROM}T00:00:00Z`);
+		day.setUTCDate(day.getUTCDate() + days);
+		return day.toISOString().slice(0, 10);
+	};
+	const runDay = (date: string, ...inputs: (Record<string, unknown> | null)[]) => ({
+		date,
+		records: inputs.map((one) => ({ inputs: one }))
+	});
+
+	test('a day whose recorded inputs differ from yesterday is a boundary', () => {
+		expect(
+			pipelineChanges(
+				[],
+				[
+					runDay(after(0), { prompt_sha256: 'aaa' }),
+					runDay(after(1), { prompt_sha256: 'aaa' }),
+					runDay(after(2), { prompt_sha256: 'bbb' })
+				]
+			)
+		).toEqual([after(2)]);
+	});
+
+	test('a run that recorded nothing contributes no identity', () => {
+		expect(
+			pipelineChanges([], [runDay(after(0), { prompt_sha256: 'aaa' }), runDay(after(1), null)])
+		).toEqual([]);
+	});
+
+	test('the cutover day is never a boundary, because the store changed and not the pipeline', () => {
+		// The day before reads the score ledger's digest and the day itself reads
+		// the run record. The two shapes always compare unequal, so a rule there
+		// would mark a change nothing caused.
+		expect(
+			pipelineChanges(
+				[{ date: '2026-09-11', pipeline_fingerprint: 'aaa' }],
+				[runDay(RECORDED_INPUTS_FROM, { prompt_sha256: 'aaa' })]
+			)
+		).toEqual([]);
+	});
+
+	test('a score row on or after the cutover is ignored, so no day is counted twice', () => {
+		expect(
+			pipelineChanges(
+				[
+					{ date: after(0), pipeline_fingerprint: 'aaa' },
+					{ date: after(1), pipeline_fingerprint: 'bbb' }
+				],
+				[runDay(after(0), { prompt_sha256: 'x' }), runDay(after(1), { prompt_sha256: 'x' })]
+			)
+		).toEqual([]);
 	});
 });
 

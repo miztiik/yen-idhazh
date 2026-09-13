@@ -944,56 +944,60 @@ row still identifies its article after the day is pruned from the site. Identity
 has to be the thing that does not vary, and our title is rewritten per run and is
 absent whenever the rewrite missed its range.
 
-## The stamp covers the ask
+## The record covers the ask
 
-`pipeline_fingerprint` answers "which pipeline configuration produced this".
-The intended fingerprint ledger expands it, but production does not write that
-ledger yet.
+`RunRecord.inputs.prompt_sha256` answers "which ask produced this". It is one
+named field of the run's recorded input manifest
+([../contracts/determinism.md](../contracts/determinism.md)), and it gates
+nothing: a run whose prompt moved is counted, averaged and published exactly as
+one whose prompt held still.
 
 It hashes `prompt_inputs` - the template text plus every number that can be
 substituted into it - and not one rendered prompt. The rendered text varies with
-the article's length, so a stamp built from it would move per item and could not
-answer the question the stamp exists to answer.
+the article's length, so a digest built from it would move per item and could not
+answer the question the record exists to answer.
 
-Two consequences once fingerprint-based skip is wired:
-
-- Editing the wording, any band, or any title knob changes the stamp exactly
- once and would invalidate every prior work identity.
-- A band edit re-summarizes articles in the other bands too. That
- over-invalidates by design. It is cheaper than a rule that has to decide which
- articles an edit reached, and it is wrong in the safe direction.
+**What it buys, now that nothing skips.** Editing the wording, any band, or any
+title knob is visible in the data rather than only in a commit message, and
+`prose_changed_alone` says so on the next run: the words we ask for moved while
+the model and the binary did not. That is the one alarm the retired stamp left
+behind, and it reports rather than blocking.
 
 This also closed a hole: `summary_words_min` and `summary_words_max` decide which
-summaries are publishable and were absent from the fingerprint, so a cached
-summary survived a change to the rule it was written under.
+summaries are publishable and were absent from the record, so a change to the
+rule a summary was written under left no trace at all.
 
 **The two-call path opened a hole of its own, and row #5b closed it on
 2026-09-12.** Since the prompt bytes became ours, the turn markers are a
 determinism input, and nothing digested them: `build_inputs` hashes the chat
 template off `/props`, which no longer renders those two prompts, and
 `prompt_inputs`, which is the single-call template. So a change to
-`turn_markers.json` would have moved every output while the stamp said
-`unchanged` - which is the event `Observation.DETERMINISM_VIOLATION` exists to
-make visible. It could not bite while no stage dispatched either call, and it
-bites on the first run under `run.two_calls_per_item`. **Under that flag
-`build_inputs` is handed `classify.calls.prompt_inputs` instead**: one argument
-at one call site, and it covers the markers, all four prompt files and the turn
-order together. It is not one item's rendered prompt - a stamp that moved per
-item could not answer the question the stamp exists to answer - so the article
-and call 1's reply render as empty strings and every number `summarize` can
-substitute is appended, exactly as the single call's own `prompt_inputs` does.
-Recorded here 2026-09-12 by plan 11 row #3c; closed by row #5b the same day.
+`turn_markers.json` would have moved every output while the record said the ask
+held still - and after 2026-09-12 that is a missing reading rather than a wrong
+skip, because nothing skips. It could not bite while no stage dispatched either
+call, and it bites on the first run under `run.two_calls_per_item`. **Under that
+flag `build_inputs` is handed `classify.calls.prompt_inputs` instead**: one
+argument at one call site, and it covers the markers, all four prompt files and
+the turn order together. It is not one item's rendered prompt - a digest that
+moved per item could not answer the question the record exists to answer - so
+the article and call 1's reply render as empty strings and every number
+`summarize` can substitute is appended, exactly as the single call's own
+`prompt_inputs` does. Recorded here 2026-09-12 by plan 11 row #3c; closed by row
+#5b the same day.
 
 ## The changes are not retroactive
 
 A change to what the summariser writes - the decode reorder, the per-band
 key-point counts, the deterministic restatement drop - takes effect from the run
 it lands in onward and never rewrites an already-published day. Two things hold
-the archive still, and neither is the fingerprint skip above, which production
-does not write yet: a committed digest is frozen output the site reads as-is, and
+the archive still, and neither is a skip - there is none, and the one the retired
+stamp was going to define was never wired: a committed digest is frozen output
+the site reads as-is, and
 the plan stage drops every already-run address (`ledger.load_published`, in
 `backend/idhazh/cli.py`) before the summariser is called, so a URL summarised
-last week is not summarised again under the new rules. The gain arrives going
+last week is not summarised again under the new rules. Neither is a skip built on
+the run's recorded inputs - there is no such skip and there never was one wired.
+The gain arrives going
 forward, which is the right trade for the runner budget - regenerating the whole
 archive would be a model sweep bounded only by its own size (Guardrail #2). Changing
 the prompt WORDING would behave the same way; it is a separate lever from the
@@ -1196,7 +1200,7 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 | --- | --- |
 | Keep the numbers as literals in the prompt text | No schema sees them, nothing checks them against the gate, and the prompt and the pipeline drift apart silently. |
 | One length range for every article | A padded summary of a release note and a thin one of a long read, from the same correct instruction. |
-| Hash one rendered prompt for the fingerprint | The rendered text varies per article, so the stamp would move per item and stop meaning "which pipeline". |
+| Hash one rendered prompt for the record | The rendered text varies per article, so the value would move per item and stop meaning "which pipeline". |
 | Pin the decoder's character rails as constants | A widened gate leaves the rail behind, still quietly enforcing the old range. |
 | Give the title a decoder floor as the summary has | A headline does not stop early. A floor would only pad a good short line into a bad long one. |
 | Make `Summary.title` required | A missed range would kill an item that has a working fallback sitting on the article. |
@@ -1227,6 +1231,6 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 - [`../../concepts/config.md`](../../concepts/config.md) - what belongs in a knob.
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the title as a reader-facing element.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text, including its headline, is data.
-- [`../contracts/determinism.md`](../contracts/determinism.md) - the fingerprint this prompt is part of.
+- [`../contracts/determinism.md`](../contracts/determinism.md) - the recorded input manifest this prompt is part of.
 - [`../../reference/measurements.md`](../../reference/measurements.md) - the token cost.
 - [`../../../.github/agents/andre.agent.md`](../../../.github/agents/andre.agent.md) - the persona who owns prompt strategy.

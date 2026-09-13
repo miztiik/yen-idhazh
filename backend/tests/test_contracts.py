@@ -1748,6 +1748,67 @@ def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> Non
     assert CollectConfig.model_validate({"max_per_source": 3}).max_per_source == 3
 
 
+#: Every place `pipeline_fingerprint` may still be named in source a person
+#: wrote, and why. The field stays on the contracts, so the gate cannot be "the
+#: name appears nowhere" - it is that nothing READS it to decide anything, with
+#: the survivors named rather than implied.
+FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
+    "backend/idhazh/cli.py": (
+        "the qualification stage copying the column from a shard onto the report, "
+        "both of which keep the field until it is dropped from every shape at once"
+    ),
+    "backend/idhazh/contracts/day_metrics.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/eval_row.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/evidence.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/fingerprint.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/label_row.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/public_eval.py": "the published column, which stays a column",
+    "backend/idhazh/contracts/qualification.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/run_manifest.py": "the empty list, kept so an older manifest reads",
+    "backend/idhazh/contracts/score_archive.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/summary.py": "the field, relaxed to optional",
+    "backend/idhazh/contracts/app_config.py": "a changelog entry, which is history",
+    "frontend/src/lib/server/model-work.ts": (
+        "the dated historical branch, which reads the months committed before "
+        "2026-09-12 and retires on the condition written beside RECORDED_INPUTS_FROM"
+    ),
+    "frontend/src/lib/console/eval-instruments.ts": (
+        "the published column's own note, which says the column is blank from now on"
+    ),
+}
+
+
+def test_nothing_reads_the_pipeline_fingerprint_except_the_places_named_here() -> None:
+    """The stamp stopped gating and stopped being the eval window's key.
+
+    A fixed-size read of code a person wrote, never of data a run appended
+    (`CLAUDE.md` section 13). It grows with the codebase and not with the
+    archive, so a day that publishes changes nothing here.
+
+    The gate is not "the name appears nowhere": the field stays on twelve
+    contracts until its own commit drops it, and one console branch still reads
+    the months committed before the cutover so a chart over them does not report
+    that nothing moved. Both are named above, which is what makes this a rule
+    rather than a habit.
+    """
+    roots = (
+        (REPO_ROOT / "backend" / "idhazh", ("*.py",)),
+        (REPO_ROOT / "frontend" / "src", ("*.ts", "*.svelte", "*.js")),
+    )
+    found: set[str] = set()
+    for root, patterns in roots:
+        for pattern in patterns:
+            for path in root.rglob(pattern):
+                if "pipeline_fingerprint" in path.read_text(encoding="utf-8"):
+                    found.add(path.relative_to(REPO_ROOT).as_posix())
+
+    assert found == set(FINGERPRINT_SURVIVORS), (
+        "a module names pipeline_fingerprint that is not on the survivor list. "
+        "Either it is a reader and has to stop reading, or it is a survivor and "
+        "has to say why it survives."
+    )
+
+
 def swapped_summarizer() -> dict[str, Any]:
     """The committed config with `models.summarize` pointed at other weights.
 

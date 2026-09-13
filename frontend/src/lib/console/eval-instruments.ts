@@ -98,10 +98,7 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 /** Every remaining column, and why no panel owes it a number.
  *
  * Each of these says *which* row this is, not *how it went*. A panel drawing one
- * would draw an identifier over time, which is a chart of nothing. Two of them -
- * `model_id` and `pipeline_fingerprint` - do reach the page, as the boundary the
- * model-change panel splits on rather than as a reading, and that is why they
- * are here and not above.
+ * would draw an identifier over time, which is a chart of nothing.
  */
 export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 	version: 'The schema stamp the row was written under.',
@@ -112,9 +109,9 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 	source_url: 'The address the article was read from.',
 	title: 'The headline, carried so a row can be read without a second file.',
 	vertical: 'Which desk the article belongs to.',
-	model_id: 'Which model wrote the summary. The model-change panel splits on it.',
+	model_id: 'Which model wrote the summary.',
 	pipeline_fingerprint:
-		'A digest of the declared settings. The model-change panel splits on it; it has no direction to plot.',
+		'A digest of the declared settings, on rows written before 2026-09-12 and blank after. It has no direction to plot, and the model-change panel reads the run record instead.',
 	output_digest: 'A digest of the summary, kept so a re-run can be proved identical.',
 	source_digest: 'A digest of the article text, kept for the same reason.',
 	scorer_version: 'Which checker ran. It says the instrument changed, not that the summaries did.',

@@ -605,16 +605,9 @@
         },
         "label_min_run_days": {
           "default": 10,
-          "description": "Distinct run-days at one scorer version before a draw is worth finalising. A draw over one day is a draw over one day's sources. The pipeline fingerprint is reported per stratum rather than required to hold still: requiring both made the gate unreachable, and no pair has ever held for more than three consecutive run-days.",
+          "description": "Distinct run-days at one scorer version before a draw is worth finalising. A draw over one day is a draw over one day's sources. It is the only collection requirement: a draw is one pool at one scorer, and the figure read off it is reported rather than withheld.",
           "minimum": 1,
           "title": "Label Min Run Days",
-          "type": "integer"
-        },
-        "label_min_stratum_rows": {
-          "default": 20,
-          "description": "Rows one pipeline must contribute to a draw before a result read off that stratum may move a threshold. Below it the stratum is printed and marked too thin to cut on, because a rate over a handful of rows from one producer is noise wearing a decimal point (Guardrail #10).",
-          "minimum": 1,
-          "title": "Label Min Stratum Rows",
           "type": "integer"
         },
         "labellers": {
@@ -2108,6 +2101,11 @@
       "change": "retention.image_months is re-valued in config/idhazh.json from -1 to 13, and its description carries the derivation. No key was added, removed or retyped, and the default on the model stays -1 - so a config written before this still loads and needs no read-side migration. retention.dry_run stays true, so nothing is deleted by this.",
       "version": "2026-09-13",
       "why": "-1 switched the age window off entirely, so this is the first age window this project has had rather than a tightening of one. The value was an owner decision with no measurement behind it; the rate it needed was taken on 2026-09-13 over the 23 dated directories under frontend/public/digest/. Rendered visuals arrive at 324,580 bytes a published day over the 19 days past the startup regime, so 390 days stands at 120.7 MiB for ever, 11.8 percent of the 1 GiB Pages ceiling. 12 and 14 months are 18.6 MiB either side of it against a one-spread band of 47.6 MiB, so the byte budget cannot separate them and the owner's 13 stands (Carmack, 2026-09-13)."
+    },
+    {
+      "change": "evaluation.label_min_stratum_rows is REMOVED, and evaluation.label_min_run_days no longer mentions a pipeline stratum.",
+      "version": "2026-09-12T21:00",
+      "why": "It bounded how few rows one pipeline stamp could contribute to a draw before a result read off that stratum was refused. The stamp stopped being written on 2026-09-12, so a draw is one pool at one scorer and there is no stratum left to be thin. config/idhazh.json never set the key, so the committed file is unchanged. BREAKING for a file that sets it - the read-side migration is that the key is dropped rather than defaulted, and a config carrying it is refused rather than silently ignored."
     },
     {
       "change": "Added run.two_calls_per_item, a boolean defaulting to false. Additive and defaulted, so config/idhazh.json written before this still loads and needs no read-side migration; the committed file sets it false explicitly, which is what makes the knob visible to an operator reading it.",

@@ -100,6 +100,15 @@ class LabelRow(Contract):
     __schema_stem__: ClassVar[str] = "label-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T21:00",
+            change="pipeline_fingerprint is optional and nothing sets it.",
+            why=(
+                "A draw reported the stamp per stratum and refused to call a mixed pool a "
+                "calibration. The stamp stopped being written, so there is one pool at one "
+                "scorer and the number is read rather than withheld."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-03",
             change=(
                 "Added unsupported_numbers, hedge_dropped and extraction_suspect, "
@@ -171,7 +180,13 @@ class LabelRow(Contract):
             "the label is about different words."
         )
     )
-    pipeline_fingerprint: Sha256
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description=(
+            "Null since 2026-09-12. It was the covariate a draw reported per stratum; "
+            "the stamp stopped being written, so a draw is one pool at one scorer."
+        ),
+    )
     summary_word_count: int = Field(ge=0)
     source_seen_word_count: int = Field(
         ge=0,

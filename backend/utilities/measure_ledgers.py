@@ -38,18 +38,20 @@ of one run the ratio says 1.695 tokens a word where the regression says 1.387
 and a 951-token fixed prompt. Dividing is how a cap gets called safe or unsafe
 against the wrong number.
 
-**Which rows count as "at the configured cap", and why two instruments.** A run
-qualifies on either proof, and both are committed data:
+**Which rows count as "at the configured cap", and why one instrument.** A run
+qualifies on one proof, and it is committed data:
 
-- **The eval ledger.** `state/scores/<YYYY-MM>.csv` carries `pipeline_fingerprint`, and
-  `extract.truncation_cap_tokens` is a field of the payload that stamp is taken
-  over - so the stamp moved when the cap moved. The live stamp is the one on the
-  newest committed row, the same "the live instrument is the last row" rule
-  `label_queue.py` uses for `scorer_version`.
 - **The item ledger itself.** `source_words` is post-cap and cannot exceed
   `int(truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so a row sitting
   exactly on that ceiling with a larger `source_words_before_cap` is physical
   proof the configured cap did the cutting.
+
+  There were two until 2026-09-12. The second read `pipeline_fingerprint` off
+  `state/scores/`, because the cap was one of the inputs that stamp was taken
+  over - so the stamp moved when the cap moved. The stamp stopped being written,
+  so a run after that date can only be admitted on the physical proof. What that
+  costs: a run whose articles were all shorter than the ceiling now has no proof
+  at all and is excluded, where the stamp used to admit it.
 
 Neither alone is enough. A run whose eval rows have not been committed yet has
 no stamp; a run whose longest article never reached the ceiling cut nothing.
@@ -77,7 +79,6 @@ from typing import Final
 
 from idhazh import config, ledger
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.evals.writer import records as score_records
 from idhazh.extract import TOKENS_PER_WORD
 
 #: The percentile the residual is reported at, beside the median and the two
@@ -350,27 +351,22 @@ class WordsToTokens:
 
 @dataclass(frozen=True, slots=True)
 class Admission:
-    """One run, and whether the two cap proofs let it into the regression."""
+    """One run, and whether the cap proof lets it into the regression."""
 
     run_id: str
     rows: int
     widest_words: int
     cut_at_ceiling: bool
-    carries_live_stamp: bool
 
     @property
     def admitted(self) -> bool:
-        return self.cut_at_ceiling or self.carries_live_stamp
+        return self.cut_at_ceiling
 
     @property
     def proof(self) -> str:
-        if self.cut_at_ceiling and self.carries_live_stamp:
-            return "both: a row cut on the ceiling, and the live pipeline stamp"
         if self.cut_at_ceiling:
             return "a row cut exactly on the ceiling the configured cap implies"
-        if self.carries_live_stamp:
-            return "the live pipeline stamp on its eval rows"
-        return "none - no row reached the ceiling and no eval row carries the live stamp"
+        return "none - no row reached the ceiling the configured cap implies"
 
 
 def ceiling_words(cap_tokens: int) -> int:
@@ -378,25 +374,9 @@ def ceiling_words(cap_tokens: int) -> int:
     return int(cap_tokens / TOKENS_PER_WORD)
 
 
-def stamps_by_run(state_dir: Path) -> tuple[str, dict[str, set[str]]]:
-    """The live pipeline fingerprint, and every stamp each run's eval rows carry.
-
-    Live means the newest committed row's stamp, not the most common one: a
-    ledger holds every pipeline this project has ever run, and only the last one
-    is the pipeline in force.
-    """
-    per_run: dict[str, set[str]] = {}
-    live = ""
-    for row in score_records(state_dir):
-        live = row["pipeline_fingerprint"]
-        per_run.setdefault(row["run_id"], set()).add(live)
-    return live, per_run
-
-
 def admissions(state_dir: Path, items: Sequence[Item], *, cap_tokens: int) -> list[Admission]:
     """Every run in the item ledger, with the proof it ran at the configured cap."""
     ceiling = ceiling_words(cap_tokens)
-    live, per_run = stamps_by_run(state_dir)
     out: list[Admission] = []
     for run_id in sorted({item.run_id for item in items}):
         sized = [
@@ -419,7 +399,6 @@ def admissions(state_dir: Path, items: Sequence[Item], *, cap_tokens: int) -> li
                 rows=len(sized),
                 widest_words=max(i.source_words or 0 for i in sized),
                 cut_at_ceiling=cut_on_ceiling,
-                carries_live_stamp=bool(live) and live in per_run.get(run_id, set()),
             )
         )
     return out

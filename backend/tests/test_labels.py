@@ -9,11 +9,10 @@ discouraged is not a control.
 No mocks and no network (Guardrail #7). The draw runs over a ledger built here, not
 over `state/`: measured 2026-09-06 the committed ledger held 6,966 rows over 15
 days and grows by about 465 a day, and the tests below read and re-drew over all
-of them eighteen times to establish six cases. The draw reads `hhem`,
-`scorer_version` and `pipeline_fingerprint` and nothing else, so eighty built
-rows carry every combination the tests name - including a short decile and a
-second producer at one scorer, which are states the archive cannot be relied on
-to hold.
+of them eighteen times to establish six cases. The draw reads `hhem` and
+`scorer_version` and nothing else, so eighty built rows carry every combination
+the tests name - including a short decile and a retired scorer, which are states
+the archive cannot be relied on to hold.
 """
 
 from __future__ import annotations
@@ -38,16 +37,13 @@ from idhazh.contracts.label_row import LabelRow, LabelTag
 from idhazh.evals import labels, writer
 from utilities import label_queue
 
-#: A pair no run has ever written, so a draw for it is empty on any ledger.
-NO_SUCH_PIPELINE = "0" * 64
+#: A scorer no run has ever written, so a draw for it is empty on any ledger.
+NO_SUCH_SCORER = "hhem-0.0-open@00000000;metrics-0;bands=0.80/0.50;lead=0.30"
 
-#: The producers the built ledger carries. Two scorers, so an older one has a
-#: pool to be excluded from; two pipelines at the live scorer, so a pooled draw
-#: has a mix to report.
+#: The instruments the built ledger carries. Two of them, so an older one has a
+#: pool to be excluded from.
 LIVE_SCORER: Final = "hhem-2.1-open@6a30c896;metrics-3;bands=0.80/0.50;lead=0.30"
 OLD_SCORER: Final = "hhem-2.0-open@0f1e2d3c;metrics-2;bands=0.80/0.50;lead=0.30"
-LIVE_PIPELINE: Final = "1" * 64
-OTHER_PIPELINE: Final = "2" * 64
 
 #: One more than `evaluation.label_draw_per_decile`, so a full decile proves the
 #: draw stops at the cap.
@@ -76,7 +72,7 @@ def _band_of(hhem: float) -> ConfidenceBand:
 
 
 def _an_eval_row(
-    base: EvalRow, *, seq: int, decile: int, date: str, scorer: str, pipeline: str, words: int
+    base: EvalRow, *, seq: int, decile: int, date: str, scorer: str, words: int
 ) -> EvalRow:
     """One row at a chosen decile, distinct from every other row by address."""
     hhem = round(decile / 10 + 0.05, 2)
@@ -95,7 +91,6 @@ def _an_eval_row(
             "hhem_delta": 0.0,
             "band": _band_of(hhem),
             "scorer_version": scorer,
-            "pipeline_fingerprint": pipeline,
             "source_seen_word_count": words,
             "source_word_count": max(words, 1320),
         }
@@ -105,14 +100,14 @@ def _an_eval_row(
 def _built_rows() -> list[EvalRow]:
     """Eighty rows, in the order the shards must hold them.
 
-    `_live_scorer` reads the last row, so the live pair is written last and the
-    two it has to be told apart from are written before it.
+    `_live_scorer` reads the last row, so the live scorer is written last and the
+    one it has to be told apart from is written before it.
     """
     base = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
     rows: list[EvalRow] = []
     seq = 0
 
-    def add(*, decile: int, date: str, scorer: str, pipeline: str, words: int = 1320) -> None:
+    def add(*, decile: int, date: str, scorer: str, words: int = 1320) -> None:
         nonlocal seq
         rows.append(
             _an_eval_row(
@@ -121,7 +116,6 @@ def _built_rows() -> list[EvalRow]:
                 decile=decile,
                 date=date,
                 scorer=scorer,
-                pipeline=pipeline,
                 words=words,
             )
         )
@@ -129,24 +123,25 @@ def _built_rows() -> list[EvalRow]:
 
     # A scorer that has been retired, on its own day.
     for decile in (0, 2, 4, 6, 8, 9):
-        add(decile=decile, date="2026-08-20", scorer=OLD_SCORER, pipeline=LIVE_PIPELINE)
+        add(decile=decile, date="2026-08-20", scorer=OLD_SCORER)
 
-    # A second producer at the live scorer, so a pooled draw mixes two.
+    # An earlier day at the live scorer, so the pool spans more than the two days
+    # the deciles below are built on.
     for decile in range(8):
-        add(decile=decile, date="2026-09-01", scorer=LIVE_SCORER, pipeline=OTHER_PIPELINE)
+        add(decile=decile, date="2026-09-01", scorer=LIVE_SCORER)
 
-    # The live pair. Nine full deciles, one short one, and one failed extraction.
+    # The live scorer's own days. Nine full deciles, one short one, and one
+    # failed extraction.
     for decile in range(9):
         for position in range(FULL_DECILE_ROWS):
             add(
                 decile=decile,
                 date="2026-09-02" if position % 2 == 0 else "2026-09-03",
                 scorer=LIVE_SCORER,
-                pipeline=LIVE_PIPELINE,
                 words=A_SHORT_SOURCE if seq == 20 else 1320,
             )
     for _ in range(SHORT_DECILE_ROWS):
-        add(decile=9, date="2026-09-03", scorer=LIVE_SCORER, pipeline=LIVE_PIPELINE)
+        add(decile=9, date="2026-09-03", scorer=LIVE_SCORER)
     return rows
 
 
@@ -188,10 +183,6 @@ def live_scorer(records: list[dict[str, str]]) -> str:
     return records[-1]["scorer_version"]
 
 
-def live_pipeline(records: list[dict[str, str]]) -> str:
-    return records[-1]["pipeline_fingerprint"]
-
-
 def a_label(**overrides: object) -> LabelRow:
     payload: dict[str, object] = {
         "label_id": "a1b2c3d4e5f60718",
@@ -201,7 +192,6 @@ def a_label(**overrides: object) -> LabelRow:
         "date": "2026-08-24",
         "run_id": "2026-08-24-1",
         "output_digest": "b" * 64,
-        "pipeline_fingerprint": "c" * 64,
         "summary_word_count": 90,
         "source_seen_word_count": 900,
         "scorer_version": "hhem-2.1-open@6a30c896;metrics-3;bands=0.80/0.50;lead=0.30",
@@ -225,14 +215,12 @@ class TestTheDraw:
             records,
             draw_id="d1",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         second = labels.draw(
             records,
             draw_id="d1",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         drawn = [row["label_id"] for row in first]
@@ -245,14 +233,12 @@ class TestTheDraw:
             records,
             draw_id="d1",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         second = labels.draw(
             records,
             draw_id="d2",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         assert {row["label_id"] for row in first} != {row["label_id"] for row in second}
@@ -265,70 +251,34 @@ class TestTheDraw:
             records,
             draw_id="d1",
             scorer_version=scorer,
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         assert {row["scorer_version"] for row in drawn} == {scorer}
 
-    def test_another_pipeline_is_not_in_the_pool(self) -> None:
-        """A producer change is a covariate. Two producers are two samples."""
-        records = ledger()
-        pipeline = live_pipeline(records)
-        drawn = labels.draw(
-            records,
-            draw_id="d1",
-            scorer_version=live_scorer(records),
-            pipeline_fingerprint=pipeline,
-            per_decile=6,
-        )
-        assert drawn
-        assert {row["pipeline_fingerprint"] for row in drawn} == {pipeline}
-
-    def test_the_scorer_has_no_default_and_the_pipeline_does(self) -> None:
+    def test_the_scorer_has_no_default_and_is_the_whole_of_the_pool(self) -> None:
         """The scorer is the stratum being calibrated, so no call site may omit it.
 
-        The pipeline is a covariate. Omitting it pools every producer one scorer
-        read, which is the reachable rule - requiring both never once held for
-        more than three consecutive run-days.
+        It is also the only stratum left. The pipeline stamp used to cut the pool
+        a second time, and no pair of stamp and scorer ever held for more than
+        three consecutive run-days - so the cut withheld the answer rather than
+        sharpening it. The stamp went on 2026-09-10.
         """
         records = ledger()
         scorer = live_scorer(records)
         with pytest.raises(TypeError):
             labels.eligible(records)  # type: ignore[call-arg]
 
-        pooled = labels.eligible(records, scorer_version=scorer)
-        narrowed = labels.eligible(
-            records, scorer_version=scorer, pipeline_fingerprint=live_pipeline(records)
-        )
-        assert pooled, "one scorer alone must select rows"
-        assert len(narrowed) <= len(pooled), "naming a pipeline can only narrow"
-        assert {row["scorer_version"] for row in pooled} == {scorer}
+        pool = labels.eligible(records, scorer_version=scorer)
+        assert pool, "one scorer alone must select rows"
+        assert {row["scorer_version"] for row in pool} == {scorer}
+        assert len(pool) < len(records), "the other scorer's rows are still refused"
 
-    def test_a_pooled_draw_reports_the_producers_it_mixed(self) -> None:
-        """The trade Option B makes is only honest when the mix is printed.
-
-        A rate over rows several producers wrote is a prior with wide bounds. The
-        strata are what say so, so they are computed from the drawn rows rather
-        than from the whole ledger.
-        """
-        records = ledger()
-        pooled = labels.eligible(records, scorer_version=live_scorer(records))
-        found = labels.strata(pooled)
-
-        assert found, "a non-empty pool has at least one stratum"
-        assert sum(one.rows for one in found) == len(pooled), "every row lands in exactly one"
-        assert [one.rows for one in found] == sorted((one.rows for one in found), reverse=True)
-        assert len({one.pipeline_fingerprint for one in found}) == len(found), "no duplicates"
-        for one in found:
-            assert one.first_date <= one.last_date
-
-    def test_a_pair_no_run_wrote_draws_nothing(self) -> None:
+    def test_a_scorer_no_run_wrote_draws_nothing(self) -> None:
         records = ledger()
         drawn = labels.draw(
             records,
             draw_id="d1",
-            scorer_version=live_scorer(records),
-            pipeline_fingerprint=NO_SUCH_PIPELINE,
+            scorer_version=NO_SUCH_SCORER,
             per_decile=6,
         )
         assert drawn == []
@@ -339,7 +289,6 @@ class TestTheDraw:
             records,
             draw_id="d1",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         counts: dict[int, int] = {}
@@ -355,7 +304,6 @@ class TestTheDraw:
             records,
             draw_id="d1",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         missing = labels.shortfalls(drawn, per_decile=6)
@@ -368,7 +316,6 @@ class TestTheDraw:
             records,
             draw_id="d1",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         scores = [float(row["hhem"]) for row in drawn]
@@ -389,7 +336,6 @@ class TestTheDraw:
             records,
             draw_id="d1",
             scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
             per_decile=6,
         )
         deciles = [labels.decile_of(float(row["hhem"])) for row in drawn]
@@ -405,30 +351,23 @@ class TestTheDraw:
     def test_short_source_rows_stay_in_the_pool(self) -> None:
         """Extraction failures are the sample, not noise to be tidied out of it."""
         records = ledger()
-        pool = labels.eligible(
-            records,
-            scorer_version=live_scorer(records),
-            pipeline_fingerprint=live_pipeline(records),
-        )
+        pool = labels.eligible(records, scorer_version=live_scorer(records))
         assert any(int(row["source_seen_word_count"]) < 50 for row in pool)
 
 
 class TestWhatTheLedgerHolds:
     """The inventory a refusal prints, so an empty pool is a status report."""
 
-    def test_every_pair_is_listed_with_its_rows_and_dates(self) -> None:
+    def test_every_scorer_is_listed_with_its_rows_and_dates(self) -> None:
         records = ledger()
         found = labels.pairs(records)
-        assert {(pair.scorer_version, pair.pipeline_fingerprint) for pair in found} == {
-            (row["scorer_version"], row["pipeline_fingerprint"]) for row in records
+        assert {pair.scorer_version for pair in found} == {
+            row["scorer_version"] for row in records
         }
         assert sum(pair.rows for pair in found) == len(records)
         for pair in found:
             dates = [
-                row["date"]
-                for row in records
-                if row["scorer_version"] == pair.scorer_version
-                and row["pipeline_fingerprint"] == pair.pipeline_fingerprint
+                row["date"] for row in records if row["scorer_version"] == pair.scorer_version
             ]
             assert (pair.rows, pair.first_date, pair.last_date) == (
                 len(dates),
@@ -442,64 +381,34 @@ class TestWhatTheLedgerHolds:
 
 
 class TestTheOperatorTool:
-    def test_the_default_pool_is_every_pipeline_at_the_live_scorer(
+    def test_the_pool_is_the_live_scorer_and_the_report_says_how_many_rows_it_holds(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Naming no pipeline is the normal case, and the report says so."""
+        """One scorer is the whole pool rule, and the report prints what it drew from."""
         monkeypatch.setattr(sys, "argv", ["label_queue.py"])
         assert label_queue.main() == 0
 
+        records = ledger()
+        scorer = live_scorer(records)
         printed = capsys.readouterr().out
-        assert "all at this scorer - reported, not filtered" in printed
+        assert f"scorer_version   {scorer}" in printed
+        assert f"eligible rows    {len(labels.eligible(records, scorer_version=scorer))}" in printed
         assert "eligible rows    0" not in printed
 
-    def test_a_pooled_draw_names_every_producer_it_mixed(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """The pooled rate is only honest beside the mix that produced it."""
-        monkeypatch.setattr(sys, "argv", ["label_queue.py"])
-        label_queue.main()
-
-        printed = capsys.readouterr().out
-        records = ledger()
-        evaluation = config.load(CONFIG_DIR).app.evaluation
-        drawn = labels.draw(
-            records,
-            draw_id=f"{records[-1]['date']}-decile-{evaluation.label_draw_per_decile}",
-            scorer_version=live_scorer(records),
-            per_decile=evaluation.label_draw_per_decile,
-        )
-        for one in labels.strata(drawn):
-            assert one.pipeline_fingerprint[:12] in printed, "every stratum is named"
-
     def test_an_empty_pool_exits_non_zero_and_says_what_the_ledger_holds(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Silence on an empty pool is what makes the gate invisible."""
-        monkeypatch.setattr(
-            sys, "argv", ["label_queue.py", "--pipeline-fingerprint", NO_SUCH_PIPELINE]
-        )
-        assert label_queue.main() != 0
+        records = ledger()
+
+        assert label_queue.refuse(records, scorer=NO_SUCH_SCORER, reason="no row") != 0
 
         printed = capsys.readouterr().out
         assert "eligible rows    0" in printed
-        assert NO_SUCH_PIPELINE in printed
-        for pair in labels.pairs(ledger()):
+        assert NO_SUCH_SCORER in printed
+        for pair in labels.pairs(records):
             assert pair.scorer_version in printed
-            assert pair.pipeline_fingerprint in printed
             assert f"{pair.rows} rows, {pair.first_date} to {pair.last_date}" in printed
-
-    def test_an_empty_pool_draws_nothing_at_all(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """No fallback and no widening: a draw from a pair nobody asked for is not a draw."""
-        monkeypatch.setattr(
-            sys, "argv", ["label_queue.py", "--pipeline-fingerprint", NO_SUCH_PIPELINE]
-        )
-        label_queue.main()
-        printed = capsys.readouterr().out
-        assert "drawn            " not in printed
-        assert "NOT YET RECALIBRATABLE" not in printed
 
 
 class TestTheRow:
@@ -658,8 +567,9 @@ class TestTheLoopStaysOpen:
                     }
 
         assert {"unsupported_numbers", "hedge_dropped", "extraction_suspect"} <= filled
-        assert filled == set(LabelRow.model_fields) - {"version"}, (
-            "the queue fills every column but the schema stamp, which defaults"
+        assert filled == set(LabelRow.model_fields) - {"version", "pipeline_fingerprint"}, (
+            "the queue fills every column but the schema stamp, which defaults, and the "
+            "retired pipeline stamp, which no writer fills any more"
         )
 
     def test_the_queue_says_which_months_a_draw_can_no_longer_reach(self) -> None:
@@ -678,7 +588,6 @@ class TestTheLoopStaysOpen:
             records,
             draw_id="d1",
             scorer_version=scorer,
-            pipeline_fingerprint=None,
             per_decile=settings.app.evaluation.label_draw_per_decile,
         )
 
@@ -688,7 +597,6 @@ class TestTheLoopStaysOpen:
                 records,
                 settings,
                 scorer=scorer,
-                pipeline=None,
                 archived=["2025-11", "2025-12"],
             )
         printed = captured.getvalue().splitlines()

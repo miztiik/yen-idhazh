@@ -28,7 +28,7 @@ import {
 	observabilityConfig,
 	runConfig
 } from '$lib/server/config';
-import { itemHealthRows, evalRows, shardMonths } from '$lib/server/payload';
+import { itemHealthRows, evalRows, loadManifests, shardMonths } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
@@ -306,8 +306,8 @@ export async function load() {
 		// time is the model call itself. Derived per chart it would be derived twice
 		// off two different day lists, and the two would eventually disagree. The
 		// rows stop at the widest preset, which is as far back as either chart draws
-		// (`CLAUDE.md` Guardrail #12).
-		modelChanges: pipelineChanges(evalRows(shards).rows),
+		// (`CLAUDE.md` Guardrail #12), and the manifests are bounded the same way.
+		modelChanges: pipelineChanges(evalRows(shards).rows, loadManifests(undefined, widest)),
 		board,
 		spanBreakdown: spanView,
 		memory,

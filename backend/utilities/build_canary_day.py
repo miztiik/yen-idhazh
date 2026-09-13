@@ -1160,7 +1160,6 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         source_word_count=measured.source_words if measured.full_length_known else None,
         source_seen_word_count=seen_words(measured),
         summary_word_count=measured.summary_words,
-        pipeline_fingerprint=_fixture_digest("pipeline", DATE),
         output_digest=_fixture_digest("summary", item.item_id),
         source_digest=_fixture_digest("premise", item.item_id),
         determinism_violation=False,
