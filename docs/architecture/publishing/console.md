@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
@@ -434,9 +434,14 @@ sequence ran 4,120 to 7,186 tokens of the configured 8,192 - so the worst run in
 the window used 88 percent of the window, and the panel's answer to "can the
 truncation cap go up" was no. It was yes on 2026-09-09, when the window went to
 16,384 and the same 7,186-token worst run became 44 percent of it. The cap
-doubled to 10,000 that day and the panel's answer is no again, at a worst case
-of about 86 percent. That is the panel working: it is the one surface that says
-when the lever is free and when it is spent.
+doubled to 10,000 that day and the panel's answer went back to no, at a worst
+case of about 86 percent. **It is yes again since 2026-09-13**, when the window
+went to 65,536 to hold the two-call pair and the same worst case became 21
+percent - though what the panel measures is the single call, and the pair the
+window was actually raised for sizes at 39,284 of it
+([`../summarize/prompt.md`](../summarize/prompt.md)). That is the panel working:
+it is the one surface that says when the lever is free and when it is spent, and
+the caveat is that it reads the path that is retiring.
 
 **The panel is about the worst run in the span, not the newest**, which is why
 it stays windowed and why every run in the span keeps a mark. Drawing only the

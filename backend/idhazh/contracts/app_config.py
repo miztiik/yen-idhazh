@@ -79,12 +79,15 @@ class InferenceConfig(Model):
         description=(
             "The window one sequence gets. The default stays 8192 because it is the "
             "conservative window for weights nobody has put in front of a runner; "
-            "models.summarize pins 16384 and models.visual_planner does not, and the "
+            "models.summarize pins 65536 and models.visual_planner does not, and the "
             "measurement that earns the raise is about the 9B on a GitHub-hosted "
             "runner rather than about this field. Doubling buys nothing but KV cache: "
-            "32 KiB a token on those weights, so 0.25 GiB at 8192 and 0.50 at 16384. "
-            "Whether that fits is decided by what the machine had free and never by "
-            "what the processes held - docs/reference/measurements.md."
+            "32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for "
+            "16384, 1024.00 for 32768 and 2048.00 for 65536, over the 8 attention "
+            "layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB "
+            "whatever the window is. Whether that fits is decided by what the machine "
+            "had free and never by what the processes held - "
+            "docs/reference/measurements.md."
         ),
     )
     n_threads: int = Field(default=4, ge=1)
@@ -2174,14 +2177,17 @@ class FinetuneConfig(Model):
         default=16384,
         ge=1,
         description=(
-            "How long a training row is allowed to be, and it is the same sequence "
-            "models.<teacher>.inference.n_ctx serves: a training row is a prompt the "
-            "pipeline could have sent and an answer it could have returned. So this "
-            "tracks that window rather than being derived on its own. At "
-            "extract.truncation_cap_tokens of 10,000 the worst case is 997 tokens of "
-            "prompt overhead, 12,191 for the longest and hardest-tokenizing article the "
-            "cap lets through, and 900 of answer - 14,088 of 16,384, which is 86 "
-            "percent. A row longer than this is dropped and counted by the wrangler and "
+            "How long a training row is allowed to be. It sizes the SINGLE call, "
+            "because that is the shape a training row has: a prompt the pipeline "
+            "could have sent and an answer it could have returned, and the corpus "
+            "holds single-call rows. At extract.truncation_cap_tokens of 10,000 the "
+            "worst case is 997 tokens of prompt overhead, 12,191 for the longest and "
+            "hardest-tokenizing article the cap lets through, and 900 of answer - "
+            "14,088, which is 86 percent of this. It tracked "
+            "models.<teacher>.inference.n_ctx until 2026-09-13, when that window went "
+            "to 65536 to hold the two-call pair; nothing trains on a two-call row, so "
+            "this stayed where the single-call sum put it. A row longer than this is "
+            "dropped and counted by the wrangler and "
             "by the notebook, never truncated, because a truncated target teaches the "
             "model to stop mid-summary; at this value nothing is over, where at the "
             "8,192 this replaced on 2026-09-09 the training set silently lost every "
@@ -3608,6 +3614,33 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T21:00",
+            change=(
+                "config/idhazh.json moves models.summarize.inference.n_ctx from 16384 "
+                "to 65536, and InferenceConfig.n_ctx's description carries the KV "
+                "reading behind it. No field was added, removed or retyped, and the "
+                "default stays 8192."
+            ),
+            why=(
+                "The two-call path did not fit the old window and does not fit the "
+                "32768 an owner authorised on 2026-09-12 either. Measured 2026-09-13 "
+                "on the configured weights through llama-server's own tokenizer: at "
+                "the 10,000-token truncation cap, call 1's prompt plus its 6,491-token "
+                "output budget plus the 58-token seam plus call 2's 4,694-token budget "
+                "sizes at 39,284 tokens. Three of eight cap-length articles built from "
+                "corpus prose measured over 32,768 on their own, the worst at 37,495. "
+                "Memory is what the window costs and it is cheap on these weights: KV "
+                "runs 32 KiB a token over 8 attention layers of 32, so 65536 is "
+                "2,048.00 MiB against 512.00 at 16384 - 1,584 MiB more all told, "
+                "against the 6.84 GiB low-water free the runner measured on 2026-09-10 "
+                "and a 1.0 GiB bar. The model trains to 262,144, so no RoPE scaling. "
+                "49152 would also clear the sizing; 65536 is picked because the sizing "
+                "is a sizing rather than a ceiling - the worst build tokenized at 1.952 "
+                "tokens a word against a recorded worst of 1.585 - and 512 MiB is cheap "
+                "insurance against the next article that tokenizes harder."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T18:00",
             change=(
@@ -6083,3 +6116,4 @@ class AppConfig(Contract):
             window_days=self.console.max_window_days,
         )
         return self
+

@@ -167,7 +167,7 @@
         "max_output_tokens": 900,
         "metrics": true,
         "n_batch": 512,
-        "n_ctx": 16384,
+        "n_ctx": 65536,
         "n_parallel": 1,
         "n_threads": 4,
         "n_threads_batch": null,

@@ -335,6 +335,36 @@ GiB, 6.3 times the trigger's 1.0 GiB bar. **If a later plan needs a wider window
 memory is not what stops it** - the standing objection to 32,768 is that nothing
 needs it, and that objection is now the only one.
 
+## What three windows cost the summarizer, 2026-09-13
+
+**The projection above was exact at 32,768 and stays linear to 65,536.** Three
+arms, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
+own flags, read off the load log at `log_verbosity` 4.
+
+| `n_ctx` | KV buffer | Recurrent state | Compute buffer | Model buffers | Total |
+| --- | --- | --- | --- | --- | --- |
+| 16,384 | 512.00 MiB | 50.25 MiB | 112.02 MiB | 8,024.61 MiB | 8,698.88 MiB = 8.49 GiB |
+| 32,768 | 1,024.00 MiB | 50.25 MiB | 128.02 MiB | 8,024.61 MiB | 9,226.88 MiB = 9.01 GiB |
+| 65,536 | 2,048.00 MiB | 50.25 MiB | 160.02 MiB | 8,024.61 MiB | 10,282.88 MiB = 10.04 GiB |
+
+So **65,536 costs 1,584 MiB more than 16,384**, against the 6.84 GiB low-water
+mark above and a 1.0 GiB bar. `config/idhazh.json` took 65,536 on 2026-09-13 and
+this is the reading that says it fits.
+
+**Only 8 of the model's 32 layers hold a KV cache.** The other 24 are recurrent
+and carry a fixed 50.25 MiB whatever the window is, which is why doubling the
+window does not double the footprint and why the 32 KiB a token above is the
+figure over the attention layers rather than over all of them. `n_ctx_train` is
+262,144, so none of these arms scaled RoPE.
+
+Hardware: a developer laptop, i7-1265U, 32 GiB, with four other agents live.
+Peak working set ran 6.05, 8.47 and 9.47 GiB across the three arms and is the
+weaker number of the two - it counts the memory-mapped weights, which the OS may
+evict, and it moves with what else the box was doing. The llama.cpp buffer sizes
+are arithmetic over the model's own architecture and carry to a runner unchanged.
+Method and the token readings taken in the same session:
+[`../architecture/summarize/prompt.md`](../architecture/summarize/prompt.md).
+
 ## What the browser CI job costs against its bound, 2026-09-10
 
 **The `browser` job runs 310 to 384 s against a 25-minute timeout - 20.7 to 25.6

@@ -30,6 +30,7 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh import day_partition, ledger, source_health
+from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
 from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
@@ -126,6 +127,10 @@ from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields, text_digest
+from idhazh.measured import CALL_ONE_BODY_TOKENS_A_WORD as _CALL_ONE_A_WORD
+from idhazh.measured import CALL_ONE_MENU_TOKENS_A_ROW as _MENU_A_ROW
+from idhazh.measured import CALL_ONE_SCAFFOLD_TOKENS as _CALL_ONE_SCAFFOLD
+from idhazh.measured import CALL_TWO_SEAM_TOKENS as _CALL_TWO_SEAM
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
@@ -1070,7 +1075,7 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """Row 3 raised one role, because one role is what was measured.
 
     The visual planner is different weights with its own settings block, and
-    nothing has put a 16,384 window in front of them - so it keeps 8,192. That
+    nothing has put a 65,536 window in front of them - so it keeps 8,192. That
     is the whole reason the block sits on the entry rather than on `models`:
     a number measured against one model may not be inherited by another.
 
@@ -1080,7 +1085,7 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """
     models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
 
-    assert models.summarize.inference.n_ctx == 16384
+    assert models.summarize.inference.n_ctx == 65536
     assert models.summarize.inference.flash_attention == "on"
     assert models.visual_planner.inference.n_ctx == 8192
     assert InferenceConfig().n_ctx == 8192, (
@@ -1093,6 +1098,13 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
 #: what to do when either moves are in `idhazh.measured`.
 PROMPT_OVERHEAD_TOKENS: Final = int(_PROMPT_OVERHEAD.value)
 WORST_TOKENS_A_WORD: Final = _WORST_TOKENS.value
+
+#: The same four things for the two-call path, whose prompt this repository
+#: renders itself. Same module, same reason.
+CALL_ONE_SCAFFOLD_TOKENS: Final = int(_CALL_ONE_SCAFFOLD.value)
+CALL_ONE_BODY_TOKENS_A_WORD: Final = _CALL_ONE_A_WORD.value
+CALL_ONE_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
+CALL_TWO_SEAM_TOKENS: Final = int(_CALL_TWO_SEAM.value)
 
 
 def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
@@ -1121,7 +1133,10 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
 
     The worst case is built from the measured expansion rather than from
     `TOKENS_PER_WORD`. At the committed cap of 10,000 that is 997 + 12,191 + 900
-    = 14,088 tokens of 16,384, which is 86 percent and a margin of 1.16x.
+    = 14,088 tokens of 65,536, which is 21 percent. **It is the smaller of the
+    two sums this file now holds and it is the one that is retiring**, so read
+    `test_the_two_calls_fit_the_window_at_the_cap` before concluding the window
+    has room: that one sizes 39,284 over the same cap.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     inference = committed.models.summarize.inference
@@ -1133,6 +1148,85 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
         f"{worst_prompt} prompt tokens, and {inference.max_output_tokens} of answer "
         f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
         "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
+    )
+
+
+def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
+    """Call 1's prompt at the cap, and the whole two-call sequence behind it.
+
+    A second derivation and not a widening of the one above, because the two
+    paths render different prompts. The single call sends one system turn and
+    the article. Call 1 sends a system turn that carries both jobs, the article
+    with an address in front of every sentence, and a menu of every quantity and
+    date the extractor already cut - then pays for its own reply twice, once as
+    a decode and once again inside call 2's prompt.
+
+    Three terms rather than one, and each reads something:
+
+    - the scaffold is fixed, and moves when a prompt file is edited;
+    - the per-word rate covers the article and its sentence addresses, and moves
+      when prose tokenizes harder;
+    - the menu is `elements.max_per_article` rows, so **the one config knob that
+      is not the cap or the window still moves this sum.**
+
+    The budgets come from `classify.calls`, which re-derives both on import from
+    the reply shapes' own bounds - so a `maxItems` that moves moves this too.
+    """
+    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
+    prompt = (
+        CALL_ONE_SCAFFOLD_TOKENS
+        + int(cut_words * CALL_ONE_BODY_TOKENS_A_WORD)
+        + int(committed.elements.max_per_article * CALL_ONE_MENU_TOKENS_A_ROW)
+    )
+    sequence = (
+        prompt
+        + call_one_output_tokens()
+        + CALL_TWO_SEAM_TOKENS
+        + call_two_output_tokens(committed.summarize)
+    )
+    return prompt, sequence
+
+
+def test_the_two_calls_fit_the_window_at_the_cap() -> None:
+    """The window has to hold both calls, and nothing sized both until today.
+
+    The test above sizes the single call this plan is replacing and passes with
+    room. That is the trap: a green gate over the path being retired reads as
+    coverage of the path replacing it. The two-call sequence is 2.8 times the
+    single call's, because call 1's reply is paid twice and the candidate menu
+    is paid once, and neither term exists on the single-call path at all.
+
+    Both sides come from `config/` (Guardrail #6) and the arithmetic is measured
+    rather than assumed: at the committed cap of 10,000 tokens and a menu of 256
+    rows the prompt sizes at 28,041 and the sequence at 39,284 tokens, which is
+    60 percent of a 65,536 window with 26,252 spare.
+
+    **At 32,768 this failed by 6,516 tokens and the failure was not theoretical.**
+    Of eight cap-length articles built from committed corpus prose on 2026-09-13,
+    three measured over 32,768 on their own and the worst reached 37,495.
+
+    The failure it catches is silent. `--no-context-shift` means a decode that
+    runs into the wall stops there on an ordinary HTTP 200, `recovered_completion`
+    salvages the summary, and the item publishes with no picture - so what a
+    window this sum does not fit produces is not an error but a quiet drop in how
+    many items carry a picture at all.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    inference = committed.models.summarize.inference
+    prompt, sequence = _worst_two_call_sequence_tokens(committed)
+
+    assert sequence <= inference.n_ctx, (
+        f"the longest article extract.truncation_cap_tokens "
+        f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
+        f"call 1 prompt at elements.max_per_article of "
+        f"{committed.elements.max_per_article}. Call 1's {call_one_output_tokens()}-token "
+        f"reply, the {CALL_TWO_SEAM_TOKENS}-token seam and call 2's "
+        f"{call_two_output_tokens(committed.summarize)}-token reply put the pair at "
+        f"{sequence} against a window of {inference.n_ctx}, over by "
+        f"{sequence - inference.n_ctx}. Raise models.summarize.inference.n_ctx, or "
+        "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "
+        "KV is 32 KiB a token on the configured weights, so a doubling is about a "
+        "gigabyte and docs/reference/measurements.md says what the runner had free."
     )
 
 

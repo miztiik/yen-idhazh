@@ -1019,11 +1019,22 @@ cannot tell whether the marks differ from each other, whether the labels are leg
 anybody would choose to look - which is Susan's standing warning about this whole subsystem: every
 binding gate here is integrity or cost, and a plain grey bar chart passes all of them.
 
-**Why `none_reason` lives on the decision and not on the plan.** Two of its four members fire when
-no plan object exists at all - the gate takes the plan fields off the request, and the budget cut
-loses the plan's bytes - so a field on `VisualPlan` would be unwritable on exactly the routes it is
-for. `VisualDecision` exists for every item either way, and `asked_the_model` and `drafted_chart`
-are the same kind of fact in the same payload. Authority: Fowler, 2026-09-11.
+**Why `none_reason` lives on the decision and not on the plan.** Three of its five members fire when
+no plan object exists at all - the gate takes the plan fields off the request, and the budget cut and
+the window cut both lose the plan's bytes - so a field on `VisualPlan` would be unwritable on exactly
+the routes it is for. `VisualDecision` exists for every item either way, and `asked_the_model` and
+`drafted_chart` are the same kind of fact in the same payload. Authority: Fowler, 2026-09-11.
+
+**Why a cut reply needs two members and not one.** `output_budget_cut` and `window_exhausted` arrive
+as the same event: `--no-context-shift` means a decode that reaches the end of the context window
+stops there, on an ordinary HTTP 200, with the same `finish_reason` of `length` a decode that spent
+its whole output budget returns. One member for both would have made the largest thing an operator
+can act on unreadable, because the fix for one is not the fix for the other - a budget cut is the
+reply shape's own arithmetic, and a window cut is `models.summarize.inference.n_ctx` against
+`extract.truncation_cap_tokens`. Separating them costs one comparison at the one call site that
+writes either, over numbers already in hand: the server counted the prompt, and call 2's budget is
+derived from its own grammar. Plan 11 row #3f, 2026-09-13;
+[`../summarize/prompt.md`](../summarize/prompt.md) carries the sizing behind it.
 
 **Why the edge table has a date-stamp of its own.** `PLAN_VOCABULARY_VERSION` is what
 `plan_version_current` compares a plan against, so moving it re-plans every item carrying an older

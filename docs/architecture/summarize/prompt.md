@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -562,46 +562,103 @@ So **the trigger is the first daily run after row #5b lands** - not the next
 content refresh. Re-read the figure then, and again when plan 11 is distilled per
 [`../../how-to/distill-a-plan.md`](../../how-to/distill-a-plan.md).
 
-### At the configured truncation cap the two calls do not fit the window
+### What the two calls cost at the truncation cap, and the window that holds them
 
-The same run rendered both prompts for an article built to
-`extract.truncation_cap_tokens`, which is 10,000 tokens or 7,692 words. The
-committed corpus cannot supply one - its longest body is 3,846 words, which is
-`int(5000 / 1.3)` under the cap in force until 2026-09-09 - so the arm is built
-from corpus prose and cut by `truncate_to_tokens` itself.
+`extract.truncation_cap_tokens` is 10,000 tokens, which
+`extract.truncate_to_tokens` spends as 7,692 words. **The committed corpus
+cannot supply an article that long** - its longest body is 3,846 words, which is
+`int(5000 / 1.3)` under the cap in force until 2026-09-09 - so every reading
+below comes from eight articles built out of corpus prose and cut by
+`truncate_to_tokens` itself: longest-first, densest-first, its reverse, and five
+seeded shuffles. `CLAUDE.md` section 13 is the rule - where the awkward shape is
+the point, the shape is built, because a built one carries the case the archive
+has never produced.
 
-| Term | Tokens |
-| --- | --- |
-| call 1's prompt | 14,306 |
-| plus call 1's 6,491-token output budget | 20,797 |
-| call 2's prompt, carrying call 1's reply | 21,495 |
-| plus the 4,694-token reply call 2's grammar may write | **26,189** |
-| `models.summarize.inference.n_ctx` | 16,384 |
-| **over by** | **9,805** |
+Measured 2026-09-13 on `Qwen3.5-9B-Q4_K_M.gguf` through `llama-server`'s own
+`/tokenize`, on a laptop (i7-1265U, 32 GiB, four other agents live). A tokenizer
+reading is not a timing, so the hardware bounds nothing: the same weights return
+the same token counts on a runner.
 
-**Three of those numbers moved on 2026-09-13 and the direction is worse, not
-better.** The table used to size call 2 with a **400-token stand-in** for call
-1's reply, which was not call 1's budget then either: at the 900-token budget in
-force until that day the real overflow was **4,214** rather than the 3,714 this
-table printed. Then call 1's budget was derived from its own grammar and went
-900 -> 6,491, and **call 1's reply is paid twice** - once as its own decode, once
-inside call 2's prompt - so the pair went from 4,214 over to 9,805 over. **At
-the 32,768 the owner authorised on 2026-09-12 the worst sequence is 80 percent
-of the window with 6,579 tokens spare.**
+| Term | Tokens | Where it comes from |
+| --- | --- | --- |
+| call 1's scaffold, before a word or a menu row | 2,167 | `idhazh.measured.CALL_ONE_SCAFFOLD_TOKENS`; the system turn alone is 2,055 |
+| plus the article and the address in front of every sentence | 17,141 | 2.2285 a word over 7,692 words, worst of the eight |
+| plus a candidate menu at `elements.max_per_article` | 8,733 | 34.115 tokens a row over 256 rows, worst of the eight |
+| **call 1's prompt** | **28,041** | |
+| plus call 1's own output budget | 34,532 | `call_one_output_tokens()` is 6,491 |
+| plus the seam call 2 adds in front of its reply | 34,590 | `idhazh.measured.CALL_TWO_SEAM_TOKENS` |
+| plus the reply call 2's grammar may write | **39,284** | `call_two_output_tokens()` is 4,694 |
+| `models.summarize.inference.n_ctx` | 65,536 | `config/idhazh.json` |
+| **spare** | **26,252** | 60 percent of the window used |
 
-So at 16,384 call 2 has **no room at all** for a reply whose grammar can emit
-4,694, and the shape that used to fit - the picture already suppressed, at
-`SUPPRESSED_BUDGET_TOKENS` of 905 - does not fit either.
-`test_the_longest_article_the_cap_allows_still_fits_the_window` sizes the
-single-call sequence at 14,088 of 16,384 and passes; nothing sizes the two-call
-sequence.
+**Call 1's reply is paid twice** - once as its own decode, once again inside
+call 2's prompt - which is why the pair is 2.8 times the single call's 14,088.
+`test_the_two_calls_fit_the_window_at_the_cap` is the assertion, and it reads
+the cap, the element cap and the window from `config/` on both sides so it
+follows the next move of any of the three.
 
-**The failure it produces is silent.** With `--no-context-shift` the decode stops
-at the wall rather than raising, `classify.calls.recovered_completion` salvages
-the closed summary, the item publishes with `decision = none`, and no
-`none_reason` member says the window was why - so it is indistinguishable from
-"the model had nothing to draw". Plan 11 row #3f owns it and is blocked on an
-owner decision, because every fix moves a contract.
+**The window went to 65,536 rather than to the 32,768 an owner authorised.** The
+authorisation on 2026-09-12 was given against a table that sized the pair at
+26,189 with 6,579 spare - one build, longest-first, and the mildest of the
+eight. Re-measured, three of the eight exceed 32,768 on their own and the worst
+reaches 37,495. These are orderings of ordinary corpus prose rather than
+adversarial constructions: two of the five seeded shuffles are among the three.
+
+| Build, all 7,692 words of corpus prose | Menu rows | Call 1's prompt | The pair |
+| --- | --- | --- | --- |
+| densest first | 256 | 26,252 | **37,495** |
+| shuffled, seed 2 | 254 | 23,954 | **35,197** |
+| shuffled, seed 4 | 237 | 21,924 | **33,167** |
+| shuffled, seed 5 | 178 | 19,778 | 31,021 |
+| shuffled, seed 1 | 157 | 19,589 | 30,832 |
+| shuffled, seed 3 | 136 | 18,455 | 29,698 |
+| longest first | 35 | 15,007 | 26,250 |
+| densest first, reversed | 0 | 13,422 | 24,665 |
+
+**A cap-length article saturates the candidate menu, and that is the corpus's
+own reading rather than a construction.** Over the 1,444 committed corpus rows
+the 95th-percentile element density is 0.0659 a word, which is 507 elements at
+7,692 words against an `elements.max_per_article` of 256; the median is 0.0167,
+which is 128. One real row already reaches 256. So a menu at its cap costs
+8,733 tokens - 22 percent of the sequence - on better than one cap-length
+article in twenty.
+
+**What the window costs is memory, and memory is why 65,536 was affordable.**
+[`../../reference/measurements.md`](../../reference/measurements.md) carries the
+three arms; the short version is that KV runs 32 KiB a token over 8 attention
+layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever
+the window is - so 65,536 is 2,048.00 MiB of KV against 512.00 at 16,384, and
+1,584 MiB more all told. The runner's measured low-water free is 6.84 GiB
+against a 1.0 GiB bar. The weights train to 262,144, so nothing is scaled.
+**49,152 would also have cleared the sizing**; 65,536 was picked because the
+sizing is a sizing rather than a ceiling - the worst build tokenized at 1.952
+tokens a word against a recorded worst of 1.585 - and 512 MiB is cheap insurance
+against the next article that tokenizes harder.
+
+**When the sizing is wrong anyway, the failure now has a name.** With
+`--no-context-shift` a decode that runs into the wall stops there rather than
+raising, `classify.calls.recovered_completion` salvages the closed summary, and
+the item publishes with `decision = none`. Until 2026-09-13 that was
+indistinguishable from "the model had nothing to draw", because the server
+reports a window cut and a budget cut with the same `finish_reason` of `length`.
+`NoneReason.WINDOW_EXHAUSTED` separates them, and the discriminator needs
+nothing new: the server counted the prompt, call 2's budget is derived from its
+own grammar, and less room left than the grammar may write means the window was
+the wall. A run of `window_exhausted` says the window is too narrow for the cap;
+a run of `output_budget_cut` says the reply shape is too wide for its budget.
+
+**Open, and owned by nobody: the truncation cap does not hold.**
+`truncate_to_tokens` cuts at `words x 1.3`, and the densest build's body
+measured **15,014 real tokens under a 10,000-token cap** - 1.952 tokens a word.
+So the cap over-runs by 50 percent on number-dense prose, which is the same
+defect `WORST_TOKENS_A_WORD` records at 1.585 and one more article has now
+beaten. It is written here so the distill picks it up.
+
+**Open, and owned by nobody: a cap-length prompt may not be affordable at all.**
+The one 8,741-token prompt the pipeline has actually sent cost 927 s of prefill
+on the runner. A 28,041-token call 1 prompt is 3.2 times that, and the wiring
+row is where that stops being arithmetic and starts being a shard's wall clock
+(Guardrail #2).
 
 **Open gap, owned by nobody: the prompt loop still refines the prompt that is
 retiring.** `backend/utilities/prompt_loop.py` today refines the single-call
@@ -747,13 +804,18 @@ only the conversion, and it differs because the shapes do.
 **Rejected: call 2's rule applied unchanged to call 1.** It gives 12,953 tokens
 and leaves 117 tokens of margin across the two-call sequence at 32,768. The row
 that owns the window called 75 tokens "luck rather than a margin", and 117 is
-the same thing. Refused by Carmack, 2026-09-13.
+the same thing. Refused by Carmack, 2026-09-13. **Re-measured the same day, the
+premise was worse than that: the pair sizes at 39,284 tokens, so at 32,768 there
+was no margin at all and the window went to 65,536.**
 
 **Rejected: clamping the budget against `n_ctx`.** A `min()` silently shrinks
 the budget, which reproduces the exact failure being fixed - a quiet cut with
-nothing saying the window did it. At 16,384 the clamp computes negative, and it
-would make an import-time constant depend on a config value another row is
-mid-flight on. Refused by Carmack, 2026-09-13.
+nothing saying the window did it. At the 16,384 in force when this was ruled the
+clamp computed negative, and it would make an import-time constant depend on a
+config value another row was mid-flight on. Refused by Carmack, 2026-09-13. The
+window has moved since and the ruling has not: what says the window did it is
+`NoneReason.WINDOW_EXHAUSTED`, written at the call site where the numbers are
+already in hand, rather than a constant that changed shape at import.
 
 **Rejected: recording a cut call-1 reply as the existing `output_truncated`.**
 The counter is how anybody sees whether the derived budget worked, and folded in

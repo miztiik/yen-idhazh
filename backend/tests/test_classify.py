@@ -76,11 +76,11 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable, Extractor
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
-from idhazh.contracts.visual_decision import VisualKind
+from idhazh.contracts.visual_decision import NoneReason, VisualKind
 from idhazh.elements import SpanDriftError, element_table
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion, continued_prompt, post, render_prompt, turn_markers
-from idhazh.visual_planner import plan_lost_to_the_budget
+from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
 
@@ -1654,6 +1654,52 @@ class TestARepliedCutByTheBudget:
 
         assert decision.kind is VisualKind.NONE
         assert decision.rationale and "output budget" in decision.rationale
+
+    def test_the_window_and_the_budget_are_told_apart_by_arithmetic(
+        self, summary_ok: Summary
+    ) -> None:
+        """Same bytes, same `finish_reason`, two causes - and only a sum separates them.
+
+        Under `--no-context-shift` a decode that reaches the end of the window
+        stops exactly as one that spends its output budget does, so
+        `hit_the_budget` is true either way and the reply is the same reply. What
+        differs is how much room was left in front of it. Both arms below are
+        driven from the one recorded cut reply, and the only thing changed
+        between them is the prompt the server counted.
+
+        Plan 11 row #3f. Before it, both arms wrote `output_budget_cut`, so a
+        window too narrow for `extract.truncation_cap_tokens` was reported as a
+        reply shape too wide for its budget - and the fix for one is not the fix
+        for the other.
+        """
+        app = config.load(CONFIG_DIR).app
+        window = app.models.summarize.inference.n_ctx
+        asked_for = call_two_output_tokens(app.summarize)
+        body = json.loads(read_text(CALL_TWO_REPLIES / "cut-in-the-plan.json"))
+        content = body["choices"][0]["message"]["content"]
+
+        roomy = Completion(
+            content=content, finish_reason="length", prompt_tokens=window - asked_for
+        )
+        walled = Completion(
+            content=content, finish_reason="length", prompt_tokens=window - asked_for + 1
+        )
+
+        assert roomy.hit_the_budget and walled.hit_the_budget
+        assert roomy.prompt_tokens + asked_for <= window, "the budget was the wall"
+        assert walled.prompt_tokens + asked_for > window, "the window was the wall"
+
+        by_the_budget = plan_lost_to_the_budget(
+            summary_ok, model_id="m", decided_at="2026-09-10T00:00:00Z", version="2026-08-21"
+        )
+        by_the_window = plan_lost_to_the_window(
+            summary_ok, model_id="m", decided_at="2026-09-10T00:00:00Z", version="2026-08-21"
+        )
+
+        assert by_the_budget.none_reason is NoneReason.OUTPUT_BUDGET_CUT
+        assert by_the_window.none_reason is NoneReason.WINDOW_EXHAUSTED
+        assert by_the_window.kind is VisualKind.NONE, "the item still publishes"
+        assert by_the_window.rationale and "window" in by_the_window.rationale
 
 
 def test_a_recorded_call_two_reply_parses_over_a_loopback_socket(article_ok: Article) -> None:
