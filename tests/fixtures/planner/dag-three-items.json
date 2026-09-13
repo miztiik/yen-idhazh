@@ -1,0 +1,35 @@
+{
+  "note": "Three consecutive items of one shard, with what the server reported for both calls of each. Recorded from a real llama-server on a stock ubuntu-latest runner, not constructed: these are the rows the run itself wrote to state/item-health/2026/09/13.csv, copied here so a test never reads the committed ledger (CLAUDE.md section 13, Guardrail #12). What it is for is the prefix cache - three items is the smallest number that can tell an item-major sequence from a call-major one, because the second item is the first that could have had its prefix evicted and the third is the first that proves it was not a fluke.",
+  "provenance": {
+    "run_id": "2026-09-13-34762570110",
+    "date": "2026-09-13",
+    "shard": "2",
+    "rows": "the 161st, 162nd and 163rd rows of state/item-health/2026/09/13.csv, in the order the run appended them",
+    "hardware": "github stock ubuntu-latest, 4 vCPU, no GPU",
+    "model": "qwen3.5-9b-q4-k-m, Q4_K_M, llama-server, n_parallel 1",
+    "spread": "one run, three items; the fourth consecutive item agrees and is recorded below as a fourth reading rather than as an average"
+  },
+  "caveat": "The system turn was 1,755 tokens on this run. It is not 1,755 today - the prompt files have been edited since, and `idhazh.measured.CALL_ONE_SCAFFOLD_TOKENS` records 2,167 for the whole scaffold with 2,055 of it the system turn. So the assertions over this file are the relationships between the numbers, never the numbers themselves: a prefix figure that is identical across items, and a call-2 prefix that covers call 1's whole prompt. A test that pinned 1,755 would go red the next time somebody improved a sentence, which is a fuse rather than a check.",
+  "items": [
+    {
+      "item_id": "ai-2tx0g9dp10ttb9dh",
+      "call_1": { "input_tokens": 6834, "output_tokens": 1847, "cached_tokens": 1755 },
+      "call_2": { "input_tokens": 8732, "output_tokens": 416, "cached_tokens": 8680 }
+    },
+    {
+      "item_id": "ai-x6hryqwgg4dphw9g",
+      "call_1": { "input_tokens": 4271, "output_tokens": 1300, "cached_tokens": 1755 },
+      "call_2": { "input_tokens": 5627, "output_tokens": 222, "cached_tokens": 5570 }
+    },
+    {
+      "item_id": "business-economy-w95w48zedgygv8q6",
+      "call_1": { "input_tokens": 2457, "output_tokens": 395, "cached_tokens": 1755 },
+      "call_2": { "input_tokens": 2902, "output_tokens": 770, "cached_tokens": 2851 }
+    },
+    {
+      "item_id": "business-economy-wm67jv2z7vrgxs87",
+      "call_1": { "input_tokens": 3299, "output_tokens": 1610, "cached_tokens": 1755 },
+      "call_2": { "input_tokens": 4959, "output_tokens": 4694, "cached_tokens": 4908 }
+    }
+  ]
+}

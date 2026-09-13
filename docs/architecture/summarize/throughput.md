@@ -274,16 +274,57 @@ number `summarize` can substitute into them. Editing a marker moves the stamp,
 which is the state `Observation.DETERMINISM_VIOLATION` exists to make visible.
 
 **Three prices nobody can read off a token count, and each can fail the design
-on its own.** The first is the prompt cache: if call 2's `cached_tokens` is
-below call 1's prompt token count, the slot is not answering for the article and
-every figure above is wrong - `state/item-health/<month>.csv` carries
+on its own. The first has now been read.** The prompt cache: if call 2's
+`cached_tokens` is below call 1's prompt token count, the slot is not answering
+for the article and every figure above is wrong. `state/item-health/` carries
 `call_1_input_tokens` and `call_2_cached_tokens` side by side from 2026-09-12,
-so the reading is one comparison over that ledger. The second is call 2's
-decode: its output budget is 4,694 tokens and the one reply ever measured was
-327, and a reply at half the budget is 143 minutes of call 2 alone on a 20-item
-shard. The third is the worst `work` shard against the 180-minute bar in
-`state/runtime-counters.csv`. All three are read off the first scheduled runs
-after row #6 merged.
+so the reading is one comparison over that ledger, and
+[the sequence the window holds](#the-sequence-is-declared-once-and-the-window-was-checked-against-it)
+below says what came back. The second is call 2's decode: its output budget is
+4,694 tokens and the one reply ever measured was 327, and a reply at half the
+budget is 143 minutes of call 2 alone on a 20-item shard. The third is the worst
+`work` shard against the 180-minute bar in `state/runtime-counters.csv`.
+
+## The sequence is declared once, and the window was checked against it
+
+`backend/idhazh/classify/dag.py` holds the two calls as an ordered tuple with
+each one's decode budget beside it, and `work` walks that tuple rather than
+writing the two calls out as two statements. **The reason is the window, not
+tidiness.** Every node's reply is paid twice - once as its own decode, and again
+inside the prompt of every node behind it - so what the window has to hold is
+call 1's prompt plus both budgets plus the seam between the turns. A sequence
+assembled a statement at a time is a budget nobody ever checks whole, and
+`dag.sequence_tokens` is that sum in one place: the contract test and the
+production refusal read the same function. A third call raises it by that call's
+budget plus a seam plus the prompt it drags forward, and the import-time guard in
+that module is what makes adding one loud.
+
+**An article the sequence cannot hold is refused before call 1 is sent.**
+`dag.fits_the_window` is the check and `FailureCode.CONTEXT_EXCEEDED` is what the
+item lands as. Admitting it is the silent failure: `--no-context-shift` means the
+decode stops at the wall on an ordinary HTTP 200, `recovered_completion` salvages
+the summary, and the item publishes looking finished with its picture quietly
+gone - after both calls have been paid for.
+
+**The cache works, measured on the runner.** Over run `2026-09-13-34762570110`,
+shard 2, three consecutive items on a stock `ubuntu-latest`: call 2 reported
+8,680, 5,570 and 2,851 cached tokens against call 1 prompts of 6,834, 4,271 and
+2,457 - so call 2 read back the whole of call 1's prompt and its reply every
+time, and prefilled only the seam. Call 1 reported 1,755 cached tokens on all
+three, which is the shared turn in front of the article surviving from one item
+to the next. That is the one comparison the paragraph above asks for, and it is
+the first price answered.
+
+**How many items the window refuses, and it is none.** Over the trailing 30 days
+ending 2026-09-13, 8,938 items carry a recorded prompt: the median is 1,672
+tokens, the 95th percentile 3,378 and the worst 8,741. Behind the prompt the
+sequence spends a fixed 11,243 tokens - 6,491 for call 1's reply, 58 for the seam
+and 4,694 for call 2's. At the committed `n_ctx` of 49,152 **no item of the 8,938
+would have been refused**. At the 16,384 the window carried until 2026-09-13 it
+would have been **94, which is 1.1 percent**. That is the number that decides
+whether a later row proposes a raise, and it says the raise has already been
+made and bought the whole tail. Read once from `ledger.load_item_health` with a
+30-day cover, 2026-09-13.
 
 ## The write rate still falls through a run, and the cause is the ordering
 

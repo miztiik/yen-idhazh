@@ -326,7 +326,16 @@ def fits_context(
     inference: InferenceConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> bool:
-    """Prompt plus reply has to fit, or the reply is silently cut off mid-sentence."""
+    """Prompt plus reply has to fit, or the reply is silently cut off mid-sentence.
+
+    **This sizes the single call, and the digest does not send a single call.**
+    One system turn, one article, one reply - which is what the qualification
+    harness sends a candidate model, and it is the only caller. The digest's own
+    path is two calls and `classify.dag.fits_the_window` sizes that one: 2.8
+    times this sum at the same cap, because call 1's reply is paid twice and the
+    candidate menu is paid once, and neither term exists here at all. Sizing the
+    two-call path with this function would admit articles it cannot hold.
+    """
     rendered = system_prompt(
         prompt_config, source_words=article.band_source_words, brief=article.brief
     )
