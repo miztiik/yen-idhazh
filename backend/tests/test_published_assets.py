@@ -43,9 +43,9 @@ def story_id(index: int) -> str:
 
 
 def picture(index: int) -> str:
-    """Where `asset_relpath` would put that story's drawing, relative to public."""
+    """Where `asset_relpath` would put that story's marks, relative to public."""
     year, month, day = DATE.split("-")
-    return f"digest/{year}/{month}/{day}/{story_id(index)}.svg"
+    return f"digest/{year}/{month}/{day}/{story_id(index)}.json"
 
 
 def day_dir(public_root: Path) -> Path:
@@ -60,13 +60,17 @@ def a_day_naming(public_root: Path, paths: list[str | None]) -> None:
     pipeline writes, and its own runs declare how many stories each added - so
     rebuilding the item list means rebuilding bookkeeping this test has no
     business having an opinion about.
+
+    **The fixture's own visual still carries the retired `path` key**, which is
+    what the 24 frozen days carry. Leaving it there means every case below also
+    reads a payload through the read-side migration rather than around it.
     """
     payload: dict[str, Any] = json.loads(read_text(FIXTURE))
     # The fixture's own visual, so this file never has to restate its shape.
     drawn: dict[str, Any] = json.loads(json.dumps(TEMPLATE["visual"]))
     wanted = paths + [None] * (len(payload["items"]) - len(paths))
     for item, path in zip(payload["items"], wanted, strict=True):
-        item["visual"] = None if path is None else {**drawn, "path": path}
+        item["visual"] = None if path is None else {**drawn, "data_path": path}
     payload["leads"] = []
 
     day_dir(public_root).mkdir(parents=True, exist_ok=True)
@@ -76,7 +80,7 @@ def a_day_naming(public_root: Path, paths: list[str | None]) -> None:
 def draw(public_root: Path, path: str) -> None:
     file = public_root / path
     file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
+    file.write_text('{"item_id": "ai-01"}', encoding="utf-8")
 
 
 def faults_for(public_root: Path) -> list[str]:
