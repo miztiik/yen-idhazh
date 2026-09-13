@@ -34,73 +34,21 @@ Each carries a feed list, a feed floor and a lifecycle status. A vertical below 
 
 Counts measured 2026-09-02 from the committed config and the committed health record, with no network involved. **A feed counts when we are allowed to ask its address**, not when it answered: a curated tombstone, an address a server reported permanently gone, a `robots.txt` refusal and a permission we could not establish are each out of the count, and a resting or failing address is in it. The rule and what it costs are in [health.md](health.md#the-feed-floor-counts-the-addresses-we-may-ask).
 
-The count changed on 2026-09-02 and the earlier figures are not comparable: until then the table said "live feeds", measured 2026-08-22 by fetching and parsing every configured feed, which answered a different question - whether a feed worked that morning.
-
 **There is no per-vertical daily cap and no daily item ceiling.** How many items a vertical publishes is decided by supply, by the score, and by `max_per_source`. What one feed may hold of the whole day is `max_source_share_per_day`. See [freshness.md](freshness.md).
 
-**Lenses** are a closed vocabulary of cross-cutting tags. **Events** are a closed vocabulary of what happened to an item - a release, a deal, an acquisition, a funding round, a capital commitment, results, a regulatory action, research, an incident. **What closes them is [`../../../config/taxonomy.json`](../../../config/taxonomy.json), not the Python type**: both ids are open slugs since 2026-09-12, and the matcher can only ever emit a word that file carries, so adding one is a config edit and nothing can invent one ([../../concepts/taxonomy.md](../../concepts/taxonomy.md), [../contracts/schemas.md](../contracts/schemas.md)). They were closed Python enums until then, which charged a code change, four regenerated schemas and a release for a word.
-
-## Lenses, events and entities are declared and never assigned
-
-Every published item carries `lenses: []`, `events: []` and `entities: []`. Not most items - every item, on every committed day.
-
-Measured 2026-08-26 over the six committed days under `frontend/public/digest/`:
-
-| Day | Items | With a lens | With an event | With an entity |
-| --- | --- | --- | --- | --- |
-| 2026-08-21 | 4 | 0 | 0 | 0 |
-| 2026-08-22 | 10 | 0 | 0 | 0 |
-| 2026-08-23 | 147 | 0 | 0 | 0 |
-| 2026-08-24 | 731 | 0 | 0 | 0 |
-| 2026-08-25 | 724 | 0 | 0 | 0 |
-| 2026-08-26 | 273 | 0 | 0 | 0 |
-| **Total** | **1889** | **0** | **0** | **0** |
-
-The three fields are declared on `Article`, copied onto `DigestItem`, exported to `schemas/article.schema.json` and `schemas/digest-day.schema.json`, and typed in the frontend's payload types. Nothing writes them. The tagging step this page describes was never built.
-
-**Lenses and events were built on 2026-08-26. Entities are still empty.** The rest of this section is the diagnosis that is now history; the rule that replaced it is the section below.
-
-**Where the value would have been set.** `to_article` in `backend/idhazh/extract.py` builds the only ok article and passes none of the three; `_failed` in the same file does the same for a failed one. All three are declared `default_factory=list` in `backend/idhazh/contracts/article.py`, so leaving them out is legal and silent. `to_digest_item` in `backend/idhazh/assemble.py` then copies the three empty lists onto the published item. No model is involved anywhere: no prompt under `backend/idhazh/prompts/` contains the word lens, event or entity.
-
-**The entity half is worse than unwired.** `config/watchlist.json` declared `"entities": []`, so there was no registry to match a name against and the ceiling on items that could gain an entity was zero, whatever the matcher. `backend/idhazh/cli.py` handed `plan_vertical` a hardcoded empty `watchlist_keys` for the same reason, so `watchlist_bonus` had never moved a score - the watchlist term of the ranking formula below was dead arithmetic. `EntityDef.aliases` was declared in `backend/idhazh/contracts/watchlist.py` and read nowhere, and it was the only name-matching surface any config contract had. All of that was fixed on 2026-08-26; the rule is below.
-
-**The vocabulary would fire, and the match rule is the whole design.** Measured 2026-08-26 over our own published title, summary and key points - our words, never fetched text. A word-boundary match on the words inside each lens id hits 167 of 1889 items, 8.8 percent: `china` 94, `markets` 69, `cyber` 11, `ai-roi` 2. The same match for an event id as a word hits 438 items, 23.2 percent, led by `research` 179 and `incident` 72.
-
-Those are floors, not proposals - they read the summary rather than the article, and the terms are the ids themselves rather than a curated list. What matters more is how far the count moves when the rule moves. Five plausible rules over the identical corpus:
-
-| Match rule | Items with a lens | Share |
-| --- | --- | --- |
-| Word-boundary on the id's words, ignoring words of 2 letters or fewer | 167 | 8.8 percent |
-| Substring on the same words | 200 | 10.6 percent |
-| Substring on the display name | 189 | 10.0 percent |
-| Substring on `market` rather than `markets` | 335 | 17.7 percent |
-| Substring on every word in the id, `ai` included | 1666 | 88.2 percent |
-
-The last row is the finding. Dropping the two-letter guard makes `ai-roi` match 1648 items, because `ai` is a substring of `said`, `remains` and `chair`. One unstated choice moves the answer by a factor of ten and turns a filter into noise. **The vocabulary is not the problem and the wiring is not the whole problem: the match rule is a curated artifact, and it has nowhere to live today.** That is what makes this a config-shape change rather than a missing function call.
-
-**What it costs.** Nothing a reader sees today, because lenses and events were already kept off the topic pill row ([../publishing/frontend.md](../publishing/frontend.md)). It costs the retrieval eval its free query tier, which builds queries from entity slugs carried by three or more items and therefore builds none. And it costs this page its own claim: eight index entries per fetch is one index entry today, the vertical.
-
-### Why this is a design consultation and not a defect fix
-
-Assigning a tag needs a rule, and no config contract has anywhere to put one. `LensDef` carries `id`, `display_name` and a lifecycle; `EventDef` carries `id` and `display_name`. The measured spread above says the rule cannot be derived from the id, so it has to be written down, and writing it down changes a persisted config shape and pulls in `CLAUDE.md` section 11. That alone makes it Level 5 (section 6, "a persisted contract") before the rest is counted: the matcher and its tests, the wiring commit, a curated watchlist, and the `watchlist_keys` wiring - which is a live ranking change, because a bonus that starts firing reorders every future day.
-
-**How it runs is settled. Where it runs is not.** Four places agree the tagger is deterministic, uses no model and costs no extra request: this page's own definition, `LensId` in `backend/idhazh/contracts/taxonomy.py` ("a question asked of items already collected"), Fowler's recorded ruling 1 in the plan-doc, and that plan-doc's stage diagram, which marks the plan job "(no model)". Nothing in the repository proposes asking a model.
-
-The site is the open question, and the two candidates carry different contract costs. This page says "a tag, applied after the fetch", which puts the matcher on sanitized article text at Extract, where `Article` already holds the three fields and nothing new is persisted. The stage diagram says "rank + tag lens/entity" inside the plan job, which runs on the feed title alone before a byte is fetched, and would need three new fields on `PlannedItem` - making `run-plan` a second persisted contract to version. Picking one is the owner's call and is not settled here.
-
-Whichever is chosen, one boundary rule holds. A matcher that reads article text reads a stranger's page, so it runs after `sanitize` and it may only ever emit a member of a closed enum ([trust-boundary.md](trust-boundary.md), Guardrail #11). A hostile page can then win itself a tag we already publish. It can never invent one, and it never reaches a prompt.
-
-**There is a third outcome, and it is cheaper than either.** Fowler, consulted 2026-08-26: before asking how to build the tagger, ask whether the surface should exist. Three fields, two schemas, a frontend type and a config vocabulary are rent paid every day by a feature with no reader-facing consumer today. The consultation therefore weighs three options, not two - tag at Extract, tag in the plan job, or delete the three dimensions and their vocabularies and stop paying. Deleting is itself a breaking contract change needing a read-side migration (section 11), so it is the same class of work; it is not the cheap way out, only the honest third choice.
+**Lenses** are a closed vocabulary of cross-cutting tags. **Events** are a closed vocabulary of what happened to an item - a release, a deal, an acquisition, a funding round, a capital commitment, results, a regulatory action, research, an incident. **What closes them is [`../../../config/taxonomy.json`](../../../config/taxonomy.json), not the Python type**: both ids are open slugs, and the matcher can only ever emit a word that file carries, so adding one is a config edit and nothing can invent one ([../../concepts/taxonomy.md](../../concepts/taxonomy.md), [../contracts/schemas.md](../contracts/schemas.md)). A closed Python enum would charge a code change, four regenerated schemas and a release for a word.
 
 ## The match rule
 
-Settled 2026-08-26 by the owner: build lenses and events. This is the rule, and it is one sentence.
+The rule is one sentence.
 
 > **A tag is assigned when one of its curated terms appears in the item's words as a whole-word phrase, case-folded. Nothing is derived from the tag's id or its display name.**
 
-The second sentence is the load-bearing half. Deriving terms from the id is what produced the 88.2 percent measured above, because `ai` sits inside `said`, `remains` and `chair`. `backend/idhazh/tag.py` derives nothing: the terms are curated in `config/taxonomy.json` under `keywords` on each lens and each event, and a vocabulary with no terms is never assigned. Punctuation is dropped on both sides before the comparison, so `ai-roi`, `AI/ROI` and `AI ROI` are one term. A term must be at least two characters, which the contract enforces.
+The second sentence is the load-bearing half. Derive the terms from the id and `ai-roi` matches almost every story, because `ai` sits inside `said`, `remains` and `chair` - one unstated choice turns a filter into noise. `backend/idhazh/tag.py` derives nothing: the terms are curated in `config/taxonomy.json` under `keywords` on each lens and each event, and a vocabulary with no terms is never assigned. Punctuation is dropped on both sides before the comparison, so `ai-roi`, `AI/ROI` and `AI ROI` are one term. A term must be at least two characters, which the contract enforces.
 
-**Where it runs: on the extracted article, after `sanitize`.** `stages.common._fetch_one` calls `tag.tagged(article, taxonomy=...)` immediately after `extract.to_article`, so the matcher reads text that has already crossed the trust boundary exactly once, `Article` already holds the three fields, and nothing new is persisted. The alternative - tagging inside the plan job - was rejected: it sees the feed title alone, and it would need three new fields on `PlannedItem`, making `run-plan` a second persisted contract to version for a worse signal. The stage diagram in [`../../../TODO/20260815-digest-pipeline-plan.md`](../../../TODO/20260815-digest-pipeline-plan.md) said "rank + tag lens/entity" in the plan job and was corrected in the same commit.
+**A keyword set is curated against real articles, not by judgement.** A first draft using bare `research`, `study`, `revenue` and `profit` tagged one article in three, and a filter taking one in three is not a filter. Phrases - `researchers`, `arxiv`, `preprint`, `quarterly results`, `fiscal quarter` - are what made it selective. Running a candidate list over a sample of real articles is the only thing that finds this; no opinion about good keywords does.
+
+**Where it runs: on the extracted article, after `sanitize`.** `stages.common._fetch_one` calls `tag.tagged(article, taxonomy=...)` immediately after `extract.to_article`, so the matcher reads text that has already crossed the trust boundary exactly once, `Article` already holds the three fields, and nothing new is persisted. The alternative - tagging inside the plan job - is rejected: it sees the feed title alone, and it would need three new fields on `PlannedItem`, making `run-plan` a second persisted contract to version for a worse signal.
 
 A failed article keeps its empty lists. It has no text, it never reaches a reader, and a tag on it would be a tag on a feed title.
 
@@ -108,9 +56,9 @@ A failed article keeps its empty lists. It has no text, it never reaches a reade
 
 ### A lens can also score, and then two more rules apply
 
-From 2026-08-30 a lens carries a `weight`. Zero, the default, means it only labels. Above zero it adds to a story's rank at plan time, where the same match rule runs against the **headline alone** - the body has not been fetched yet. The label is unchanged: it is still matched on title plus body after summarizing, so **every scoring hit is also a label** and the reverse does not hold.
+A lens carries a `weight`. Zero, the default, means it only labels. Above zero it adds to a story's rank at plan time, where the same match rule runs against the **headline alone** - the body has not been fetched yet. The label is unchanged: it is still matched on title plus body after summarizing, so **every scoring hit is also a label** and the reverse does not hold.
 
-Two rules govern which lens may carry a weight. Both were set by Editor on 2026-08-30 and both are about what a bonus is for.
+Two rules govern which lens may carry a weight, and both are about what a bonus is for. Authority: Editor, 2026-08-30.
 
 > **A weighted lens must be an under-carried theme, never an over-carried one.**
 
@@ -122,49 +70,21 @@ A headline is eight to twelve words and the matcher has no surrounding context t
 
 **One fact earns one bonus.** No lens keyword may repeat a watchlist alias. ASML, Nvidia, Intel, Samsung and Huawei are entities carrying `watchlist_bonus`; putting them in the `chips` keywords would pay twice for a single fact. The lens names the thing, the watchlist names the company.
 
-**A theme takes the largest weight it earned, never the sum.** Two themes in one headline is not twice the story, and summing would let a keyword list outweigh the fact that another feed carried it too. The shipped weight of 0.3 is above `collect.carriage_step` (0.25) rather than half of it, because carriage stopped multiplying a tier on 2026-09-13 and a theme is now worth slightly more than the bare fact of a repeat. What a second feed still brings with it is a second tier's authority, and `backend/tests/test_discover.py::test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story` asserts a themed single-sourced story ranks below the same story a better-trusted second feed carried.
+**A theme takes the largest weight it earned, never the sum.** Two themes in one headline is not twice the story, and summing would let a keyword list outweigh the fact that another feed carried it too. The shipped weight of 0.3 sits above `collect.carriage_step` (0.25), because what a second feed brings with it is a second tier's authority as well as the repeat. `backend/tests/test_discover.py::test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story` asserts a themed single-sourced story ranks below the same story a better-trusted second feed carried.
 
-### Measured coverage
+### Entities, and the watchlist term they feed
 
-Two corpora, because they answer different questions. Both measured 2026-08-26 on this checkout.
+An entity matches by the same one-sentence rule, with `aliases` in `config/watchlist.json` as the curated surface instead of `keywords`.
 
-**The real one: 121 article payloads with `status: ok`**, downloaded from the `items-0..3` artifacts of pipeline run `32986307407` (2026-08-26T15:54Z). This is the sanitized article text the tagger actually reads.
+**An entity nobody has published about does not enter the registry.** A candidate is run over a real corpus before it is written down, and one that matches nothing is cut rather than kept in hope. Adding it later is one config edit the day a story needs it, and a vocabulary full of entries that never fire is decoration that every reader of the file has to think about.
 
-| | Any tag | Highest single tag | Lowest single tag |
-| --- | --- | --- | --- |
-| Lenses | 31 of 121, **25.6 percent** | `china` 13.2 percent | `ai-roi` 0.8 percent |
-| Events | 70 of 121, **57.9 percent** | `release` 22.3 percent | `earnings` and `incident` 4.1 percent |
+**`watchlist_bonus` pays the candidates whose feed title matches an alias.** The title, not the article text, and the asymmetry is deliberate: a plan runs before a single page is fetched, so the title is all it has. An article whose body names an entity its title does not still earns the published tag at Extract. **The tag says what the item is about, the bonus says what we were already watching for.** Those are different questions and they are allowed to disagree.
 
-Full event spread: `release` 22.3, `regulation` 19.0, `deal` 13.2, `research` 12.4, `capex` 7.4, `funding` 7.4, `acquisition` 5.8, `earnings` 4.1, `incident` 4.1 percent. Fifty-one of 121 items carry no event at all, and no item carries more than four.
+**A bonus that starts firing reorders every future day and no past one.** That makes wiring one a live ranking change and an owner's decision rather than a defect fix. The published ledger under `state/published/` stops an already-published address being planned again, so no day a reader has already seen moves.
 
-**The comparable one: the item's own published words** - title, summary and key points over all 2,121 committed items, which is the corpus the 8.8 / 88.2 percent spread above was measured on. Lenses reach 16.1 percent and events 39.9 percent. Article bodies are never committed (we publish a link and our own summary, never the source text), so this is the only corpus that reaches back over every published day.
+**An entry is an organisation or a subject, and only the second kind has a gap worth measuring.** `EntityDef.kind` defaults to `organisation`. A company is in the news most weeks, so the time between our own mentions of it is near zero; a running story - a pandemic, a tournament, an export-control regime - goes quiet between instalments. The field exists so the second kind can enter the vocabulary at all, which an organisation-only registry could not allow. A subject carries no SEC filer id and the contract refuses one.
 
-**The first draft was worse and the measurement is what caught it.** A candidate vocabulary using bare `research`, `study`, `revenue` and `profit` tagged `research` on 34.7 percent of articles and `earnings` on 14.9 percent - a filter taking one article in three is not a filter. Replacing them with `researchers`, `arxiv`, `preprint`, `quarterly results` and `fiscal quarter` moved those to 12.4 and 4.1 percent. No judgement about "good keywords" would have found that; running the list over 121 real articles did.
-
-**What is still zero: nothing.** `entities` was the last of the three, and it is built - see below.
-
-### Entities, and the end of the dead watchlist term
-
-`config/watchlist.json` declared `"entities": []`, so the ceiling on items that could gain an entity was zero whatever the matcher, and `EntityDef.aliases` was declared on day one and read nowhere. Both were fixed on 2026-08-26 and the rule is the same one sentence, with `aliases` as the curated surface instead of `keywords`.
-
-**Thirty entities, and the list was measured rather than asserted.** Thirty-five candidates were run over both corpora first. Five matched **nothing at all** - `cisa`, `european-commission`, `opec`, `sec`, `tsmc` - which was confirmed as genuine absence rather than a matcher fault by grepping the raw strings across every committed payload (0 hits each). Those five were cut. An entity nobody has published about is a vocabulary entry with no evidence, and this file already has a history of shipping decoration; any of them is one config edit away the day a story needs it.
-
-| Corpus | Items with an entity | Entities carried by >= 3 items |
-| --- | --- | --- |
-| 121 real articles (the Extract site) | 38, **31.4 percent** | 7 |
-| 2,237 committed items, own words | 495, **22.1 percent** | 25 |
-
-**The number this was for: the retrieval eval's free query tier goes from 0 queries to 25**, covering 616 of 2,237 items, from `entity-asml` at 3 to `entity-google` at 105. Measured by running the eval's own `entity_queries` over a corpus the matcher had tagged ([../../concepts/evaluation.md](../../concepts/evaluation.md)). That is what the corpus **supports**: no committed payload was rewritten, so the tier reports zero until new days land.
-
-**`watchlist_bonus` was dead arithmetic and is now live.** `cli` handed `plan_vertical` a hardcoded empty `watchlist_keys`, so `PlannedItem.watchlist_hit` was false on every item ever planned and the 0.5 bonus never reached a score. It is now the set of candidates whose **feed title** matches an entity alias.
-
-The title, not the article text, and the asymmetry is deliberate. A plan runs before a single page is fetched, so the title is all it has. An article whose body names an entity its title does not still earns the published tag at Extract: **the tag says what the item is about, the bonus says what we were already watching for.** Those are different questions and they are allowed to disagree.
-
-**This reorders every future day and no past one.** A bonus that starts firing is a live ranking change - that was named before it was made, and it is the reason this was an owner decision rather than a defect fix. The published ledger under `state/published/` still stops an already-published address being planned again, so no day a reader has already seen moves.
-
-**All thirty are standing organisations, and on 2026-08-31 the registry gained room for something else.** `EntityDef.kind` is `organisation` or `subject`, it defaults to `organisation`, and no committed entry is a subject yet. The reason for the widening is a gap: a company is in the news most weeks, so the time between our own mentions of it is near zero, and a running story goes quiet between instalments. Only the second kind of entry has a gap worth measuring. Nothing reads `kind` yet - it exists so a pandemic or a tournament can enter the vocabulary at all, which an organisation-only registry could not allow. A subject carries no SEC filer id and the contract refuses one.
-
-**Nothing fades a subject's score across days, and one shape of that idea is refused rather than deferred.** What was asked for was a decay, and three different features answer to that word. Keeping a running story visible on a quiet day is the one worth building, and it waits on a registry entry that actually goes quiet - our silence about a name we track runs zero days at the median and three at the worst observed, so a fade rate set anywhere in that range fires on every name every day ([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#what-this-settles)). A **running total that a subject adds to every day and a rate then shrinks is refused outright**: it grows for as long as the subject runs, so a two-year story eventually outranks every fresh story permanently, and on a day the subject did produce coverage the shared-subject term above has already counted it. Stopping one subject from leading five days running is a third thing again, and its control is the per-subject cap below rather than a rate - a rate doing that job would have to penalise a subject still producing coverage, which is exactly the case the request was protecting. Authority: Editor, 2026-08-31.
+**Nothing fades a subject's score across days, and one shape of that idea is refused rather than deferred.** Three different features answer to the word decay. Keeping a running story visible on a quiet day is the one worth building, and it waits on a registry entry that actually goes quiet - our silence about a name we track is short enough that a fade rate would fire on every name every day. A **running total that a subject adds to every day and a rate then shrinks is refused outright**: it grows for as long as the subject runs, so a two-year story eventually outranks every fresh story permanently, and on a day the subject did produce coverage the shared-subject term below has already counted it. Stopping one subject from leading five days running is a third thing again, and its control is the per-subject cap below rather than a rate - a rate doing that job would have to penalise a subject still producing coverage, which is exactly the case the request was protecting. Authority: Editor, 2026-08-31.
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 
@@ -182,25 +102,18 @@ The weight is also the reversible half of retirement. Drop a source to 0.5, watc
 
 The consequence worth stating plainly: **a link aggregator is a vote, not a source.** It contributes rank to a URL already in the pool. It never discovers, because a site with no subject taxonomy cannot be asked for a subject.
 
-### The vote is thin, and the number is here so nobody re-litigates it from intuition
+### A speculative term ships with the condition that retires it
 
-Measured 2026-08-30. Over two real plans (`2026-08-29-1` and `2026-08-29-2`, from their committed plan artifacts) the front-page vote fired on **0 of 160 and 1 of 160 planned items**.
+A signal nobody has measured may still be worth trying, and the honest way to try one is to write down what would kill it before it ships. The aggregator vote is the worked example: it was added with the condition "retire it if it fires on under 1 percent of planned items", the condition fired, and `collect.front_page_bonus` is gone. A vote is now a published fact about a story and moves no score at all.
 
-The cause is not a bug, and three things were ruled out before that was believed:
+Two things make this a rule rather than one decision.
 
-- The feed is correct. `hnrss.org/frontpage` puts the **article** in `link` and its own discussion page in `comments` - 0 of 20 entries pointed at `news.ycombinator.com`. `salience_urls` reads `link`, which is right.
-- Canonicalisation is correct. A feed URL carrying `?utm_source=rss` and the aggregator's clean copy of the same address canonicalise to one string.
-- Widening the sample barely helps. `hnrss.org/best` carries 30 entries against 20 and churns more slowly, and still only **1 of 30** sat on a host we have a feed for.
+- **A term that moves nothing almost every time and then decides the lead is a lottery, not a ranking term.** Nobody can attribute a move to it either way, which is the property that makes it unmeasurable rather than merely small.
+- **A bonus nothing earns is still a moving part.** It has to be read, tested and reasoned about on every later change, and it pays for none of that.
 
-The cause is that **an aggregator and a news digest do not read the same internet.** The front page was 19 distinct hosts, of which 1 was ours: the rest were personal blogs, GitHub, Bluesky and one-off domains. Only 3 of 20 were on a host we have *ever* published from.
+Raising a weight is never the repair here. A story on an aggregator's front page *and* in our pool is by definition well carried, and `reach` already scores it.
 
-So the vote is kept because it costs one request and occasionally lands, `hn-best` is added because it doubles the sample for a second request, and neither is expected to move a day much. **If the vote still fires on under 1 percent of planned items after a week of both feeds, retire them both** - a bonus nothing earns is a moving part that has to be read and maintained for nothing.
-
-**That condition fired, and half of it has been honoured.** Re-measured 2026-09-13 over the 13 committed days that carry `rank_score` - 5,682 published stories - the vote fired on **8 of them, 0.14 percent**, and on 2 of 260 head slots. So `collect.front_page_bonus` is gone and the vote no longer moves the order. The other half is open: `hn-frontpage` and `hn-best` still cost one request each per run, and retiring a feed is a `config/sources.json` decision nobody has taken. **The number is published rather than planned items**, which is the population the sentence above names; published is a subset of planned, so the planned rate can only be the same or higher, and the two-week gap between measurements is the week the sentence asks for and more. `on_front_page` is still computed and still published, so a later row can restore the term the day the signal is actually supplied.
-
-Raising a weight was never the answer here and would have been the wrong instrument. A story on an aggregator's front page *and* in our pool is by definition well carried, and `reach` already scores it.
-
-`backend/tests/test_discover.py::test_a_vote_is_for_the_article_and_never_for_the_discussion_page` pins the half that is easy to break: `hnrss.org` also offers a `?link=article` form whose `link` is the discussion page, and reading that would cast every vote for an address no feed can offer. It would fail silently, because a vote for a URL we do not hold looks exactly like no vote.
+`backend/tests/test_discover.py::test_a_vote_is_for_the_article_and_never_for_the_discussion_page` pins the half that is easy to break: an aggregator also offers a feed form whose `link` is the discussion page, and reading that would cast every vote for an address no feed can offer. It would fail silently, because a vote for a URL we do not hold looks exactly like no vote.
 
 ## One address per story
 
@@ -215,17 +128,16 @@ Identity is the digest of the canonical address, and it lives in a payload field
 
 ## An address a healthy feed should not have offered
 
-A working news feed syndicates promotional pages. `cnn-world` carried three
-`fool.com/the-ascent/` affiliate credit-card reviews into the `world` vertical on
-2026-08-23 and 2026-08-24. They summarized well, scored 0.92 to 0.95
-faithfulness, and published as `high`.
+A working news feed syndicates promotional pages. An affiliate product review
+arrives through a real outlet's real feed, summarizes cleanly, scores high on
+faithfulness and publishes as a confident item.
 
 That is not an evaluation defect and no threshold fixes it. A page of short
 declarative marketing sentences is trivially entailed, so raising the
-faithfulness bar rewards the wrong source. The only honest signal available
-before anything is spent is the address, so the control sits at collection:
-`collect.blocked_url_markers` is a list of case-insensitive substrings that never
-enter the pool.
+faithfulness bar rewards the wrong source and cuts real reporting first. The only
+honest signal available before anything is spent is the address, so the control
+sits at collection: `collect.blocked_url_markers` is a list of case-insensitive
+substrings that never enter the pool.
 
 Two rules keep it from becoming a censorship surface:
 
@@ -237,9 +149,10 @@ Two rules keep it from becoming a censorship surface:
  source that failed, and folding the two counts together would quarantine a
  working feed.
 
-The marker is the narrowest thing that was measured. `fool.com/the-ascent/` is
-the publisher's affiliate arm; `fool.com/investing/` is not blocked, because no
-item from it has been observed to fail (Guardrail #10).
+**Block the narrowest thing that was measured.** `fool.com/the-ascent/` is the
+publisher's affiliate arm and is blocked; `fool.com/investing/` is not, because
+no item from it has been observed to fail (Guardrail #10). A marker wide enough
+to catch what has not happened yet is a marker nobody can defend.
 
 ## Ranking is arithmetic, not judgement
 
@@ -255,13 +168,13 @@ The day is decided before any model loads, by a score with four terms and one ti
 
 The authority of the source - its tier, scaled by that feed's own hand-set weight and again by the reliability its recent record earned - plus a step if more than one of our feeds carried the same address, plus a bonus for naming a watchlist entity, plus the heaviest theme it matched, plus a bonus for being recent. A story the best-trusted source carried is the day's story.
 
-**Until 2026-09-13 this block said "five terms", printed four lines, and left out both the reliability multiplier and the lens.** It has been rewritten term for term against `rank.score`, and `backend/tests/test_rank.py` now asserts each term moves the order on its own and that a field the score does not read moves nothing.
+**Carriage is a step and never a multiplier.** `collect.carriage_step` fires once, at two carriers, and never grows, because three carriers is not three times the story. A multiplier on that first line does two wrong things at once: it compounds without bound, so a story on six feeds takes the day, and it pays in proportion to what the story already had - the same signal buying more on an institution than on a community feed, so the more a story needed the help the less it got.
 
-**Carriage multiplied that first line until 2026-09-13 and is a step under it now.** The term was `1 + repetition_weight * (carriers - 1)` at a weight of 1.0, so a second feed DOUBLED a story's authority and a third tripled it, uncapped - a story on six feeds took the day. It also paid in proportion to what the story already had, so the same signal bought 1.0 on an institution and 0.3 on a community feed: the more a story needed the help, the less it got. `collect.carriage_step` fires once, at two carriers, and never grows, because three carriers is not three times the story. The section below has the measurement.
+`backend/tests/test_rank.py` asserts each term moves the order on its own, and that a field the score does not read moves nothing.
 
 ### The terms, in the order an editor set them
 
-A score that only admitted stories needed its terms to point the right way. Since 2026-09-13 the same number also decides the order a reader meets ([../../concepts/placement.md](../../concepts/placement.md)), so the terms are ranked, and the ranking is the editor's. Each row's bound is the most that term can move one story, which is the only comparison available between a multiplier and an addition. `backend/tests/test_rank.py::test_the_terms_rank_in_the_order_the_editor_set` reads all four off `config/`, so a weight edit moves the bound rather than leaving this table stale.
+A score that only admitted stories needed its terms to point the right way. The same number also decides the order a reader meets ([../../concepts/placement.md](../../concepts/placement.md)), so the terms are ranked, and the ranking is the editor's. Each row's bound is the most that term can move one story, which is the only comparison available between a multiplier and an addition. `backend/tests/test_rank.py::test_the_terms_rank_in_the_order_the_editor_set` reads all four off `config/`, so a weight edit moves the bound rather than leaving this table stale.
 
 | # | Term | The most it may move a story | Today |
 | ---: | --- | --- | ---: |
@@ -274,13 +187,11 @@ Two terms are not in that ranking and each has a different reason. **Carriage** 
 
 **The four rows above are not the four lines of the formula**, and the difference is deliberate. The ranking splits the formula's first line in two - the authority a tier sets, and the reliability a feed's own record earns - because a person sets those from different config keys and tunes them apart. It then leaves out the two the paragraph above names.
 
-**Row 1 is the term that decides the head, and this is what says so.** Measured 2026-09-13 over the 13 committed days that carry `rank_score`, 5,682 stories: flatten every tier to 1.0 and the story sitting in a median of 19 of the 20 head slots changes, and the lead story changes on 6 of the 13 days. Of those stories, 5,456 are on a feed `config/sources.json` still names and 231 of the 260 head slots are; over that population the 40 institution feeds supply 5.5 percent of the stream and hold 22.1 percent of the head - a 4.0x lift - while the 11 community feeds supply 1.8 percent and have held **none of it**. That last figure is what would overturn the 0.3: a weight that has never put a story in the head is not yet distinguishable from zero there.
+**Row 1 is the term that decides the head.** Flatten every tier to 1.0 and almost every head slot changes hands. Institution feeds supply a small share of the stream and hold several times that share of the head; community feeds have never held any of it, and **a weight that has never put a story in the head is not yet distinguishable from zero there** - which is the reading that would overturn the community tier's 0.3.
 
-**Every number above is an estimate and each says what would overturn it** (Guardrail #10). All four carry their measurement in the field description on `CollectConfig`, which is where a config key's comment lives in this project - `config/idhazh.json` is JSON and holds no comments.
+**Every number above is an estimate and each says what would overturn it** (Guardrail #10). All four carry their current reading in the field description on `CollectConfig`, which is where a config key's comment lives in this project - `config/idhazh.json` is JSON and holds no comments.
 
 **A term may reorder; it may never admit.** No weight, at any value, can pull a story past a gate it failed: `too_old` runs before anything is scored, and `max_per_source` and the day ceiling are counts rather than thresholds on the score. `backend/tests/test_rank.py::test_no_weight_can_admit_a_story_the_age_gate_refused` is that promise, driven with every bonus at once against a stale story.
-
-**An aggregator's front-page vote was a fifth term until 2026-09-13** and is not one now. It fired on 8 of 5,682 published stories while being worth 0.4, more than the 0.3 step between two tiers, and a move nobody can attribute to a term is not a ranking term. The section above has the measurement. `on_front_page` is still published.
 
 Three details in that carry weight:
 
@@ -290,25 +201,24 @@ Three details in that carry weight:
 
 The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
 
-**Three of those terms and the score itself now reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` were computed here and thrown away at the end of the plan job until 2026-08-31, so the published page could not say why a story is in the digest. They are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is). **`on_front_page` stopped being one of the terms on 2026-09-13 and is still one of the four published facts**, so a reader can still be told another desk led with a story that our own arithmetic placed on its own merits.
+**Three of those terms and the score itself reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is). `on_front_page` is a published fact and not a term, so a reader can still be told another desk led with a story that our own arithmetic placed on its own merits.
 
-**And since 2026-09-01 the run manifest records which shape produced the order.** `rank.RANK_VERSION` is bumped whenever the scoring shape changes, and until that date nothing read it - so no run had ever recorded the shape its order came from, and a bump would have recorded nothing. `RunRecord.rank_version` is where it lands. It is null on every manifest written before then, which reads as unknown.
+**The run manifest records which shape produced the order.** `rank.RANK_VERSION` is bumped whenever the scoring shape changes and lands in `RunRecord.rank_version`. A bump nothing records is a bump nobody can read, so the field and the constant have to ship together. It is null on a manifest written before the field existed, which reads as unknown.
 
 ### A second order over the same day: the leading stories
 
-The day's item order is settled above and never moves. From 2026-09-01 the day
-also publishes a **second order over the same stories** - at most
-`ui.leading_stories` of them, in `DigestDay.leads` - so the page has a first
-screen. Nothing is removed, hidden or re-ranked: a lead names a story `items`
-already holds, in the place it already holds it, and every story a rule turns
-away still publishes in the stream. What the block *is* for a reader is
+The day's item order is settled above and never moves. The day also publishes a
+**second order over the same stories** - at most `ui.leading_stories` of them, in
+`DigestDay.leads` - so the page has a first screen. Nothing is removed, hidden or
+re-ranked: a lead names a story `items` already holds, in the place it already
+holds it, and every story a rule turns away still publishes in the stream. What
+the block *is* for a reader is
 [../../concepts/digest.md](../../concepts/digest.md#the-days-leading-stories).
 
 It is chosen across the whole day rather than off the head of the published
-order, because that head is not a ranking: `cli.build_plan` extends one list per
-desk, so the first stories on the page are the top of whichever desk sorted
-first in run 1. Measured 2026-08-31 on the 2026-08-30 payload, the first 40
-stories read `ai` x5, `energy` x8, `business-economy` x13, `world` x14.
+order, because that head is not a ranking: the plan extends one list per desk, so
+the first stories on the page are the top of whichever desk sorted first in run
+1. That is an accident of assembly, not a judgement about the news.
 
 The arithmetic is one line:
 
@@ -323,13 +233,12 @@ rest of this page does.
 **One fact earns one bonus.** A story takes the largest weight it earned and
 never the sum, which is the rule `lens_bonus` already follows: two of the day's
 running subjects in one title is not twice the story. And **lens overlap is
-refused outright**. Six live lenses fire on 25.6 percent of real articles and
-within a desk the lens that fires is the desk's own theme, so an overlap term
-would restate the per-desk cap - and worse, this page already pays a weight to
-*under-carried* lenses, so paying the over-carried ones a second time in the
-opposite direction would break the rule in the paragraph above. What the reader
-loses is nothing: the cross-desk case it would have caught is already priced by
-those weights.
+refused outright**. Within a desk the lens that fires is the desk's own theme, so
+an overlap term would restate the per-desk cap - and worse, this page already
+pays a weight to *under-carried* lenses, so paying the over-carried ones a second
+time in the opposite direction would break the rule in the paragraph above. What
+the reader loses is nothing: the cross-desk case it would have caught is already
+priced by those weights.
 
 **The term is a step, not a ramp.** A qualifying subject adds
 `ui.lead_shared_subject_weight` and a subject that does not qualify adds nothing.
@@ -361,9 +270,9 @@ may hold one, and stories the feed dated to the previous day may hold
 running story crosses desks and sources, so the first three do not bound it -
 three of five would clear all of them - and a subject that genuinely deserves
 two of five means the day had fewer than five distinct stories worth leading.
-The per-desk cap matters more than it looks for the same reason: 25 of the 30
-committed registry entries are technology companies, so the shared-subject term
-is structurally biased toward the AI and business desks and this cap is the only
+The per-desk cap matters more than it looks for the same reason: most of the
+committed registry is technology companies, so the shared-subject term is
+structurally biased toward the AI and business desks and this cap is the only
 thing holding it.
 
 Ties break on higher `carried_by`, then `high` before `medium`, then the newer
@@ -376,58 +285,37 @@ with one filler.
 **A full block is a property of a finished day.** The caps only bind when there
 are stories left for them to turn away, and a day is built up over several runs
 into one `date -u +%F`, so the most recent date on disk is a fraction of itself
-for most of the day. Measured 2026-09-06 on this checkout, one run in: 78
-stories and 11 that could lead, giving a block of four with the pool exhausted
-and no `block-full` refusal recorded at all. The six finished days before it
-that carry the signal ran 374 to 627 stories and 64 to 127 that could lead, and
-every one of them filled all five. So anything asking whether the block fills
-has to read a finished day - which is any date except the newest one on disk,
-because an earlier date can gain no more runs.
-`backend/tests/test_leading_stories.py` does exactly that, and it counts the
-pool from the line the build log already writes for every story a cap turned
-away, rather than running the selection a second time, so a day that ran out of
-stories and a cap that refused them cannot be read as the same failure.
+for most of the day - few enough candidates that the block runs short with no cap
+ever firing. So anything asking whether the block fills has to read a finished
+day, which is any date except the newest one on disk, because an earlier date can
+gain no more runs. `backend/tests/test_leading_stories.py` does exactly that, and
+it counts the pool from the line the build log already writes for every story a
+cap turned away, rather than running the selection a second time, so a day that
+ran out of stories and a cap that refused them cannot be read as the same
+failure.
 
-#### Where the weight came from
+#### Why a shared subject is worth less than a second carrier
 
-Measured 2026-09-01 on this checkout, over the 11 committed days under
-`frontend/public/digest/` - 4,086 stories, of which 490 record `carried_by`.
+**A signal is priced by how often it fires: the commoner one has to be worth
+less.** A shared subject at the cluster floor fires several times as often as a
+second feed carrying one address, so `ui.lead_shared_subject_weight` sits under
+`collect.carriage_step`. The rule, not the arithmetic, is what is load-bearing -
+a subject that recurs across a week may not outrank a story two independent feeds
+carried today.
 
-| Signal | How often it fires | What it is worth |
-| --- | --- | --- |
-| A second feed carrying one address | 22 of 490 stories, **4.49 percent** | `collect.carriage_step`, **0.25** |
-| A shared subject at a floor of 3 sources | 525 of 4,086 stories, **12.85 percent** | `ui.lead_shared_subject_weight`, **0.2** |
-
-The shared subject is **2.9 times commoner** than a second carrier, so it has to
-be worth less.
 `backend/tests/test_contracts.py::test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story`
-holds it under `collect.carriage_step`, read off the config rather than spelled,
-so an edit to the step moves the bound with it.
+holds it, reading both numbers off the config rather than spelling them, so an
+edit to the step moves the bound with it.
 
-**That ceiling was 0.6 until 2026-09-13 and it is 0.25 now.** A second carrier
-used to multiply a story's authority, so what it was worth depended on the tier
-that carried it and the bound had to name one - `tier_weights.trade_press` times
-`repetition_weight`. Carriage is a flat step now and is worth the same to every
-tier, so the bound is the step itself. **The rule did not change**: a subject
-that recurs across a week may not outrank a story two independent feeds carried
-today. Only the arithmetic under it did, and it tightened.
+**The firing rate prices a signal; it does not by itself set the weight.** What a
+weight buys has to be read against the gaps in a real day's scores, because the
+same number that moves a story five places at the top of one day would leapfrog
+the whole of another. A weight moved on evidence is moved by the per-run loop
+that measures both, never by re-running a division.
 
-**The derivation that produced 0.2 went with the old 0.6**, and 0.2 stays. It
-came from dividing 0.6 by 2.9, and re-running that division against 0.25 would
-move the leading block's order, which nothing in the change that retired the
-multiplier measured. The two firing rates above are still facts about the
-corpus. Re-deriving the weight belongs to plan 23 row #17's per-run loop, which
-is the thing that moves a weight on evidence.
-
-What 0.2 buys on a real day: on 2026-08-31, 601 stories, the gap from the day's
-highest `rank_score` to its fifth is 0.31 and to its fifteenth is 0.60. So a
-qualifying subject moves a story about five places at the top of the day, and
-0.6 would have let it leapfrog the whole of it.
-
-The floor of 3 was measured the same way. At two distinct sources 598 of 4,086
-stories (14.64 percent) sit in a cluster and at three it is 525 (12.85 percent),
-so the stronger claim costs 73 stories in 11 days - and a story several sources
-carried is a stronger claim than a story one did.
+The cluster floor follows the same reasoning in the other direction: raising it
+costs a few stories a week and buys a stronger claim, because a story several
+sources carried is a stronger claim than a story one did.
 
 ## Changing the source set without breaking history
 
@@ -439,72 +327,8 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 - **A draft status plus a minimum-feed floor** lets a vertical be built in the open over weeks. Below the floor it is not published, so an under-sourced desk never reaches a reader.
 - **Feed health is recorded, not configured.** Repeated failures rest a feed automatically, and nothing in a run ever edits `config/sources.json`. See the [source lifecycle flow](health.md#from-item-outcome-to-feed-rest-or-retirement).
 - **Soft retirement before hard.** Drop a source's weight, watch what changes, then retire it. Reversible in one field.
-
-## The 2026-08-29 sweep: 40 out, 43 in
-
-Between 2026-08-24 and 2026-08-29 the pipeline planned 3,832 articles and
-published 2,739. Of the 1,093 it lost, **83 percent came from 24 sources that
-had never once published anything**, and those 24 consumed **43 of every run's
-160 slots**. The full table is in
-[../../reference/measurements.md](../../reference/measurements.md).
-
-Forty feeds were retired and forty-three added. What the sweep changed, and what
-it taught:
-
-**A feed that fails is not the same as a feed that is wrong, and the difference
-is the runner's IP address.** Seven of the forty served a valid feed to a
-developer machine and HTTP 403 to the runner - `indianexpress.com` offered 200
-headlines to a laptop while every scheduled run recorded a refusal. They are
-retired because a source the runner cannot read is a source this project cannot
-use, not because the publisher is at fault. The tombstone says so.
-
-**Three of the forty were our own bug.** `anthropic-news`, `cohere-blog` and
-`stanford-hai` were configured with the address of a web page rather than a
-feed. Every read returned HTTP 200 and zero items, so [health.md](health.md)
-recorded a healthy feed and the pool gained nothing. **A feed read can succeed
-and still be worthless, and nothing here noticed for weeks.** None of the three
-publishes a feed at any address we could find, so all three are retired rather
-than corrected.
-
-**Every replacement was verified before it was written.** The feed parses, and
-one article behind it answered HTTP 200 with readable prose, fetched with the
-pipeline's own user agent on 2026-08-29. That check is weaker than it looks -
-see the IP paragraph above - so the honest statement is that a verified feed has
-cleared the failure this sweep was about, not that it will work on the runner.
-The instrument that settles it is the item-health ledger after a week, not the
-probe.
-
-**The additions are shaped by what the tier mix was missing, not only by what
-died.** 84 percent of published items came from trade press, 15 percent from
-institutions and 1.3 percent from independent writing. The 43 additions are 9
-institutions, 26 outlets and 8 independent writers, and they deliberately reach
-outside the US, UK and India - Rest of World, Global Voices, The Conversation's
-global and Africa desks, VoxDev, The New Humanitarian, Mongabay.
-
-**Two feeds were deliberately not re-added.** `the-register-ai` and `bair-blog`
-both verify today and both were retired on 2026-08-21 with the rest of the `ai`
-curation. This sweep did not review that decision, so it does not reverse it.
-
-**One feed was added on 2026-08-30: `fastcompany-tech`**, trade press on the
-`ai` desk, taking it to 41 feeds against a floor of 35. It goes to `ai` because
-that is where every general-technology outlet already sits - `bbc-tech`,
-`wired-ai`, `techcrunch-ai`, `ars-technica-ai` and `zdnet-ai` are all filed
-there. There is no separate technology desk and this one feed is not a reason to
-open one.
-
-Probed 2026-08-30 from a developer machine, which is evidence about a developer
-machine and not about the runner: `https://www.fastcompany.com/technology/rss`
-answered 200 with 20 entries, every one carrying a date. `/feed` answers 403 and
-is the wrong address. `robots.txt` allows us - the `*` group is `Allow: /` with
-`Disallow: /rest`, and the feed is not under `/rest`.
-
-**One thing about that source is a standing decision, not a settled one.** Its
-`robots.txt` carries an explicit "AI Training Bots (BLOCKED)" group naming
-GPTBot, ChatGPT, Bard, Jasper and others. We are none of those user agents and
-the fetch is allowed, but `corpus/` commits article text as training samples
-(CLAUDE.md section 0a), so the publisher's stated intent and one of our uses
-point in opposite directions. Recorded here rather than resolved: the owner
-takes that call, and if it goes the other way the fix is one `retired_on`.
+- **A candidate that failed research never enters `retired`.** That list preserves the ids of feeds this project configured and later stopped asking, so that an item already published under one still resolves a name. An address nobody ever ran is not a tombstone, and filling the list with them makes it stop meaning anything.
+- **A retirement date is the last day a plan could select the feed**, read off the committed health record rather than chosen. An earlier date claims a stop that did not happen.
 
 ## Feed Admission Check
 
@@ -543,414 +367,71 @@ Admission remains a curator's decision. Ongoing feed availability and article
 yield answer different questions and have different controls; see
 [health.md](health.md#per-source-yield-is-measured-and-since-2026-09-06-it-speaks).
 
-### The 2026-09-13 Substack feed additions
+### Three things a green probe does not tell you
 
-One production-path probe ran on a Windows developer machine at
-2026-09-13 12:28 UTC, with `--articles 3`. Each feed returned HTTP 200,
-parsed without warnings, and supplied 20 dated entries. The robots policy
-allowed all three feeds. All nine sampled pages returned HTTP 200 without a
-detected paywall. Word counts below describe that sample, not future quality.
+**A feed that fails is not the same as a feed that is wrong, and the difference
+is often the IP address.** A publisher can serve a valid feed to a developer
+machine and refuse the runner outright. A source the runner cannot read is a
+source this project cannot use, which is a retirement - but the tombstone says
+that rather than blaming the publisher, and the instrument that settles it is the
+item-health ledger after a week, not the probe.
 
-| Feed | Address | Placement | Article sample |
-| --- | --- | --- | --- |
-| Paul Walsh | `https://paulfwalsh.substack.com/feed` | `ai`, tier 3, `analysis` | 3 readable articles; 743 to 1,113 words |
-| Policy Wire | `https://policywire.substack.com/feed` | `world`, tier 3, `analysis` | 3 readable articles; 105 to 243 words |
-| ERINGER | `https://roberteringer.substack.com/feed` | `world`, tier 3, `community` | 2 substantive articles, 622 to 959 words; 1 image post with only 6 extracted words |
+**A feed read can succeed and still be worthless.** An address that answers HTTP
+200 with a web page rather than a feed, or with a feed carrying zero entries,
+records as a healthy read and supplies nothing to the pool. Health counts reads;
+only yield counts items. A feed configured with the address of a web page can sit
+green for weeks.
 
-All three enter the live list at weight 1.0. Paul Walsh covers technology,
-surveillance and AI policy. Policy Wire covers global affairs. ERINGER mixes
-political commentary, serial writing and image posts. Its six-word result is
-not evidence of a readable article, even though the probe reported `ok`.
-The two substantive articles establish its current access pass.
-
-Three further feeds were probed at 12:35 UTC on the same date and platform,
-with the same three-page sample. Each returned HTTP 200 with 20 dated entries,
-no parser warning and robots permission for the configured user agent.
-
-| Feed | Address | Decision | Article sample |
-| --- | --- | --- | --- |
-| MTS | `https://mtslive.substack.com/feed` | Added to `ai`, tier 3, `community` | 3 readable articles; 645 to 790 words |
-| Oligarch Watch | `https://oligarchwatch.substack.com/feed` | Not added: paid article in the sample | 2 readable articles, 2,458 to 2,568 words; 1 publisher-declared paywall |
-| Getting Out of Control | `https://outofcontrol.substack.com/feed` | Added to `ai`, tier 3, `analysis` | 3 readable articles; 344 to 6,291 words |
-
-Both additions start at weight 1.0. MTS publishes AI news roundups; Getting
-Out of Control's sampled posts discuss AI policy. Oligarch Watch passed the
-utility's any-one-success check but stays out under the existing rule against
-paywalled sources. This gives up its free articles to avoid known paid-page
-failures. The paywall detector refused the paid page and extracted no text
-from it. No access control was bypassed.
-
-Two more feeds were probed at 12:42 UTC on the same date and platform, with
-three articles sampled per feed. Both feeds returned HTTP 200, parsed without
-warnings, supplied 20 dated entries, and allowed the configured user agent
-under the robots policy. All six articles returned readable text with no
-detected paywall.
-
-| Feed | Address | Placement | Article sample |
-| --- | --- | --- | --- |
-| Eurykosmotron | `https://bengoertzel.substack.com/feed` | `ai`, tier 3, `analysis` | 3 readable articles; 2,376 to 3,129 words |
-| Think BRICS | `https://thinkbrics.substack.com/feed` | `world`, tier 3, `analysis` | 3 readable articles; 852 to 2,613 words |
-
-Both enter the live list at weight 1.0. Eurykosmotron is a personal AI and
-frontier-science blog. Think BRICS covers geopolitics and emerging economies.
-Neither feed is classified as an institution's announcements.
-
-This checks access from a developer machine, not from the GitHub runner or
-the accuracy of the writing. Admission does not promise every post is suitable
-for a summary. The existing freshness and article-processing rules are unchanged.
-
-### The 2026-09-13 security feed additions
-
-One production-path probe ran on a Windows developer machine at
-2026-09-13 12:14 UTC, with `--articles 3`. Both feeds returned HTTP 200,
-allowed the configured user agent under the robots policy, and parsed without
-warnings. All six sampled pages returned HTTP 200 and readable text, with no
-detected paywall. The word ranges below are the minimum and maximum across
-the first three entries in each feed, not a representative quality estimate.
-
-| Feed | Address | Placement | Probe result |
-| --- | --- | --- | --- |
-| BleepingComputer | `https://www.bleepingcomputer.com/feed/` | `ai`, tier 2, `reporting` | 15 of 15 entries dated; 3 of 3 articles readable, 362 to 790 words |
-| tl;dr sec | `https://rss.beehiiv.com/feeds/xgTKUmMmUm.xml` | `ai`, tier 3, `community` | 20 of 20 entries dated; 3 of 3 issues readable, 1,973 to 2,901 words |
-
-Both start at weight 1.0 on the existing AI and technology desk. BleepingComputer
-adds security reporting. tl;dr sec contains weekly security roundups and
-commentary by Clint Gibler. Its entry admits newsletter issues, not discovery
-of the articles they link to. The existing freshness limit stays unchanged;
-adding a weekly feed does not make old issues eligible.
-
-This establishes access from that developer machine on that date, not access
-from a GitHub runner, permission to train on the text, or summary quality.
-The source shape and historical health records are unchanged.
-
-### The 2026-09-13 France 24 regional split and the Newslaundry retirement
-
-Owner decision: replace the one general France 24 feed with two regional feeds,
-and retire Newslaundry. The two calls are unrelated and share only a date.
-
-| Feed | Address | Decision |
-| --- | --- | --- |
-| France 24 - Europe | `https://www.france24.com/en/europe/rss` | Added to `world`, tier 2, `reporting`, weight 1.0 |
-| France 24 - Asia-Pacific | `https://www.france24.com/en/asia-pacific/rss` | Added to `world`, tier 2, `reporting`, weight 1.0 |
-| France 24 | `https://www.france24.com/en/rss` | Retired. The two regional feeds replace it |
-| Newslaundry | `https://www.newslaundry.com/stories.rss` | Retired. The feed answers 200 and carries no entries |
-
-Two out and two in, so the live list holds 160 feeds either side of this change.
-`world` goes from 30 feeds to 31 and `india` from 23 to 22, against a floor of 21
-each. Both retirements move to the `retired` key and keep their id, title, kind
-and address, so an item already published under `france24` or `newslaundry`
-still resolves a name through `Sources.known_feeds`. `retired_on` carries
-2026-09-13, the day this change lands and the last day a plan can select them.
-The committed item-health record shows `france24` producing rows on 2026-09-13
-and `newslaundry` on 2026-09-11, so an earlier date would claim a stop that did
-not happen.
-
-Two production-path probes ran on a Windows developer machine on 2026-09-13, at
-13:33 UTC with `--articles 3` and at 13:34 UTC with `--articles 5`. Every France
-24 address returned HTTP 200, parsed without a warning, carried a date on every
-entry, and allowed the configured user agent under the robots policy.
-
-| Feed | Entries | Sampled articles |
-| --- | --- | --- |
-| France 24 - Europe | 30 of 30 dated | 5 of 5 readable; 58 to 716 words |
-| France 24 - Asia-Pacific | 30 of 30 dated | 5 of 5 readable; 53 to 1,040 words |
-| France 24 (general) | 24 of 24 dated | 3 of 3 readable; 53 to 70 words |
-
-**France 24 is a swap, not a removal.** The general feed still works, so it is
-retired for what it duplicates rather than for a failure: its committed
-feed-health record is 96 reads across 22 days, all of them `ok`, none of them
-empty. Two of its three sampled stories came back from a regional feed in the
-same run, while the Europe and Asia-Pacific samples shared nothing with each
-other. The general feed also offered six fewer entries than either regional one.
-Splitting it doubles the room France 24 gets, because `collect.max_per_source` is
-a per-feed limit. The reversal is one `retired_on: null` and two deletions.
-
-**Newslaundry is retired because its feed stopped carrying anything.** Today it
-answered HTTP 200 with zero entries, which the utility reports as `not_a_feed`.
-That is not one bad day. Across the committed feed-health record it was read 96
-times over 22 days, and **30 of the 81 successful reads returned zero items**.
-Its `robots.txt` allows `/stories.rss`, and the articles behind it read when
-there are any - 48 of its 52 item-health rows are `ok`. The feed is the problem,
-not the site or its permissions, so this is a retirement and not an access
-refusal.
-
-**France 24 carries the same unresolved tension `fastcompany-tech` does.** Its
-`robots.txt` allows `*` with an empty `Disallow`, then names about forty AI
-crawlers - GPTBot, ClaudeBot, Google-Extended, PerplexityBot and the rest - with
-`Disallow: /`. We are none of those user agents, so the fetch is allowed. But
-`corpus/` commits article text as training samples (`CLAUDE.md` section 0a), so
-the publisher's stated intent and one of our uses point in opposite directions.
-This is not new exposure, because France 24 has been a live source throughout.
-It is recorded here rather than resolved: the owner takes that call, and if it
-goes the other way the fix is two `retired_on` dates.
-
-This establishes access from that developer machine on that date, not access
-from a GitHub runner, permission to train on the text, or summary quality. Two
-of the eleven articles sampled here came in under `extract.min_source_words`,
-which marks them `brief` and routes them to the shortest summary band rather
-than refusing them. France 24 publishes short video and live segments beside its
-reporting, so expect more of those.
-
-### The 2026-09-09 finance curation
-
-Owner decision, 2026-09-09: add these four feeds and retire the existing
-Seeking Alpha feed. Each addition passed one production-path probe from a
-Windows developer machine that day. Three articles per feed returned HTTP 200
-without login or a detected paywall. The word ranges are the minimum and
-maximum extracted across those three articles, not a future quality claim.
-
-| Feed | Address | Placement | Sampled articles |
-| --- | --- | --- | --- |
-| Finshots Daily | `https://finshots.in/archive/rss/` | `india`, tier 2, `analysis` | 3 of 3 readable; 1,327 to 1,510 words |
-| Finshots Markets | `https://finshots.in/markets/rss/` | `india`, tier 2, `analysis` | 3 of 3 readable; 908 to 1,619 words |
-| Aswath Damodaran - Musings on Markets | `https://aswathdamodaran.blogspot.com/feeds/posts/default?alt=rss` | `business-economy`, tier 3, `analysis` | 3 of 3 readable; 2,642 to 5,098 words |
-| Bank Underground | `https://bankunderground.co.uk/feed/` | `business-economy`, tier 1, `research` | 3 of 3 readable; 1,535 to 1,726 words |
-
-Damodaran follows the existing independent-analysis tier, as Conversable
-Economist does. Bank Underground publishes its staff's own research; its views
-are not necessarily Bank of England policy. All four start at weight 1.0.
-The 24-hour freshness limit is unchanged: weekly and occasional feeds contribute
-when they publish new work, not by replaying older articles.
-
-**Seeking Alpha is retired for repeated article access failures, not for a
-measured paywall.** At commit `64699c54`, the published source-health view
-covered 2026-08-24 through 2026-09-08: 115 article opportunities, 33
-publications, 80 source-owned failures and two summarizer failures. The raw
-record held 82 HTTP 403 attempts across those 80 article/date pairs. All 71
-feed reads returned HTTP 200. The 33 publications carried 12 to 149 source
-words; 30 also carried short-text or non-prose signals. Reading this fixed
-committed record is deterministic, so the spread is zero.
-
-The same day's local probe read its seven-entry `market_currents.xml` feed,
-but all three sampled articles returned HTTP 403. None of the five requested
-Seeking Alpha tag or sector feeds passed either: Long Ideas and Editors' Picks
-each returned 20 dated entries with three blocked articles; India, Financial
-and Utilities returned HTTP 403 on the feed itself.
-
-This is direct owner curation with 16 complete days recorded, not an automatic
-yield judgement before the configured 30-day requirement. The entry moves from
-`feeds` to `retired`, keeps `id: seekingalpha` and its descriptive fields, and
-sets `retired_on: 2026-09-09`. Future plans stop selecting it. Historical
-health rows and published items stay unchanged and can still resolve its name
-through `Sources.known_feeds`. No source or feed-health schema changes: this
-uses the existing lifecycle fields. A run already holding a plan is not
-rewritten by a later curation edit.
-
-### The 2026-09-06 requested feed check: three of fourteen entered live config
-
-Fourteen endpoints were requested and every one was probed with
-[`backend/utilities/probe_feeds.py`](../../../backend/utilities/probe_feeds.py),
-which drives the production fetcher and extractor - the configured user agent,
-the public-address check, the `robots.txt` policy, bounded retries, `feedparser`,
-the publisher-declared paywall check and prose extraction. Three articles were
-sampled behind each feed, and a feed passes when any one of them yields prose.
-Evidence about a developer machine on 2026-09-06, not qualification on the
-runner.
-
-| Candidate | Feed result | Articles, 3 sampled | Decision |
-| --- | --- | --- | --- |
-| Google AI - `https://blog.google/technology/ai/rss/` | 200; 20 of 20 entries dated | 3 of 3 read; 320 to 951 words | **Added** as `google-ai-blog`, tier 1, `announcement`. |
-| MarkTechPost - `https://www.marktechpost.com/feed/` | 200; 10 of 10 entries dated | 3 of 3 read; 726 to 936 words | **Added** as `marktechpost`, tier 2, `reporting`. |
-| OpenAI - `https://openai.com/news/rss.xml` | 200; 1,172 of 1,172 entries dated | 3 of 3 read; 1,270 to 2,994 words | **Un-retired.** See below. |
-| VentureBeat all-site - `https://venturebeat.com/feed/` | HTTP 429 on the feed itself | Not reached | Reject. Third VentureBeat address to fail; keep the `venturebeat-ai` tombstone. |
-| Pandaily - `https://pandaily.com/feed` | 200; 20 of 20 entries dated | 3 of 3 returned no extractable text | Reject. |
-| Fast Company AI - `https://www.fastcompany.com/section/artificial-intelligence/rss` | 200; 15 of 15 entries dated | 3 of 3 HTTP 403 | Reject. The links carry `?campaign_date=&partner=newsletter&position=` and answer 403; the live `fastcompany-tech` feed does not. |
-| Bloomberg Technology - `https://feeds.bloomberg.com/technology/news.rss` | 200; 3 entries | 3 of 3 HTTP 403 | Reject. |
-| SCMP Diplomacy, China Economy, Companies, Global Economy, Tech, Innovation - `/rss/318199`, `/318421`, `/10`, `/12`, `/36`, `/318222` | 200; 50 of 50 entries dated on each | 18 of 18 publisher-declared paywall | Reject, all six. |
-| SCMP Tech leaders and founders - `/rss/318223` | 200; 50 of 50 entries dated | 1 of 3 read, at 105 words and dated 2021; 2 of 3 paywalled | Reject. See below. |
-
-**The SCMP result is one publisher answering nine times, not nine results.**
-Every one of the seven addresses parsed perfectly and offered fifty dated
-entries, so a check that stopped at the feed would have added seven feeds and
-600 slots of nothing. Twenty of the twenty-one articles behind them are
-paywalled. The seventh feed technically passed on a single 105-word item from
-2021, which is a stale index page leaking through a paywall rather than a source:
-`min_source_words` is 60, so the length floor cannot catch it. Asking the same
-publisher about the feed we already had is what retired it - see the next
-section.
-
-**`openai-news` is un-retired, and that reverses a decision this page recorded.**
-It was retired on 2026-08-29 under "the article answers 4xx, however the feed
-reads". Measured again on 2026-09-06, three of three articles returned 1,270 to
-2,994 words through the same production path. The reason for the tombstone no
-longer holds, so the tombstone goes: the row moves back into `Sources.feeds`
-with `status: active` and `retired_on: null`. This is the mechanism working -
-a retirement is a statement about what was measured on a date, not a permanent
-judgement, and re-measuring is how it gets revisited. If the 4xx returns, the
-feed-health ledger will quarantine it without anyone editing config.
-
-**What this check cost, and why it is now a committed tool.** Fourteen feeds and
-thirty-nine article reads took 55 seconds. The 2026-08-30 check was done by hand
-and left nothing runnable behind, so this one was written as
-`probe_feeds.py` instead: it takes addresses or reads `config/sources.json`, it
-emits spans through the project's own tracer, and its verdicts are `FailureCode`
-values, so a row of the table above is a row of the reasons table further down
-this page. Re-running it on a tombstone is now one command, which is the only
-reason the OpenAI reversal was found at all.
-
-### `scmp-news` is retired on 2026-09-06, and the live list is where the probe found it
-
-Probing the seven requested SCMP addresses raised the obvious question about the
-one already in `Sources.feeds`, so it was asked in the same session. Five of five
-sampled articles behind `https://www.scmp.com/rss/91/feed` answered with a
-publisher-declared paywall and zero words of prose, on 2026-09-06 from a
-developer machine.
-
-The item-health ledger says the same thing over fourteen days rather than one
-afternoon. Between 2026-08-24 and 2026-09-06 the pipeline attempted 127 items
-from this feed. **123 failed at extraction as `paywalled`, one as `not_prose`,
-and four reached a reader** - at 254, 195, 270 and 76 source words. A read rate
-of 3.1 percent, and the best of the four is a quarter of what a typical published
-item carries.
-
-So the feed is retired: the row moves to `Sources.retired` with `retired_on:
-2026-09-06`. `world` goes from 25 feeds to 24 against a floor of 21, so the desk
-stays publishable. SCMP is not replaced, because the seven addresses probed above
-are the replacements and every one of them is the same wall.
-
-**Three things about this are worth keeping, and the third is the reason this
-section exists.** First, the feed itself was never unhealthy - it answered 200
-with fifty dated entries every time, so [health.md](health.md) had nothing to
-rest and the automatic quarantine correctly never fired. Second, four successes
-in 127 attempts is exactly the shape a slot budget cannot afford: the feed was
-spending real requests on a wall. Third, **nothing was looking.** This feed was
-added in the 2026-08-29 sweep and verified the way that sweep verified everything
-- one article, once. It failed 123 times in the fortnight after, and the only
-reason anybody noticed is that somebody asked about a different SCMP address. The
-instrument that should have raised it is a read rate per feed over a window, and
-this page cannot claim one exists.
-
-### The 2026-08-30 requested feed check: none entered live config
-
-Eight endpoints were checked independently from a developer machine on
-2026-08-30. The probe used the production fetcher and extractor: the configured
-user agent, public-address check, `robots.txt` policy, bounded retries,
-`feedparser`, publisher-declared paywall check and prose extraction. This is
-evidence about that developer machine, not qualification on the GitHub runner.
-
-| Candidate | Feed result | Sample article result | Decision |
-| --- | --- | --- | --- |
-| Fortune all-site - `https://fortune.com/feed/fortune-feeds/?id=3230629` | 200; 10 of 10 entries dated; mixes business, sport, lifestyle, world and AI | 200; publisher-declared paywall | Keep the existing `fortune` tombstone. This is not a Tech or AI feed. |
-| Fortune Tech CMS - `https://content.fortune.com/section/tech/feed/` | 200; 30 of 30 entries dated; malformed XML raises `SAXParseException` | 200; publisher-declared paywall | Reject. |
-| Fortune AI CMS - `https://content.fortune.com/section/artificial-intelligence/feed/` | 200; 30 of 30 entries dated; malformed XML raises `SAXParseException` | 200; publisher-declared paywall | Reject. |
-| The Economist - `https://www.economist.com/the-world-this-week/rss.xml` | 200; 300 of 300 entries dated | HTTP 403 | Reject. The two existing Economist tombstones record the same article-access failure. |
-| McKinsey Insights - `https://www.mckinsey.com/insights/rss` | `robots.txt` could not be reached on two probes | Not fetched | Reject. Unknown rules remain a refusal. |
-| Business Insider - `https://feeds2.feedburner.com/businessinsider` | 200; 50 of 50 entries dated | 200; publisher-declared paywall | Reject. Keep the existing `business-insider` tombstone. |
-| VentureBeat - `https://feeds.feedburner.com/venturebeat/SZYF` | 200; 7 of 7 entries dated | HTTP 429 on two probes | Reject. Keep the existing `venturebeat-ai` tombstone. |
-| The Washington Post - `https://feeds.washingtonpost.com/rss/world` | 200; 10 of 10 entries dated | Timed out on two probes | Keep the existing `wapo-world` tombstone. |
-
-The two Fortune topic feeds are directly hosted on Fortune's CMS origin, but
-the public Tech and AI pages advertise no RSS or Atom alternate. Their public
-`/feed/` routes return 404. A topic label therefore does not rescue them: both
-CMS feeds are malformed and both still point at articles the pipeline refuses
-as paywalled.
-
-None cleared the source rule above: a feed must parse cleanly and one article
-behind it must return readable prose through the production path. Rejected
-alternate addresses do not enter `Sources.retired`; that list preserves the ids
-of feeds the project configured and later retired, not every candidate that
-failed research.
-
-### The forty, and why each one went
-
-A tombstone carries a date and not a reason, so the reasons are here. Probed
-2026-08-29 with the pipeline's own user agent, against the 2026-08-24 to
-2026-08-29 ledger window.
-
-This is what was measured on that date and it is not a permanent judgement.
-`openai-news` was re-probed on 2026-09-06 and its articles now read, so it is
-live again and no longer in `Sources.retired`; its row below is history.
-
-| Reason | Feeds |
-| --- | --- |
-| Paywall on the article | `business-insider`, `nikkei-asia`, `foreign-policy`, `fortune`, `the-verge-ai`, `the-diplomat`, `semianalysis` |
-| `robots.txt` forbids the path, or cannot be read at all | `marketwatch`, `axios-business`, `cnbc-top`, `cbc-world`, `doe-news` |
-| The article answers 4xx, however the feed reads | `ft-companies`, `cbo-pubs`, `ndtv-top`, `economist-business`, `economist-finance`, `utility-dive`, `sec-press`, `sky-world`, `nyt-ai`, `nyt-world`, `openai-news`, `iaea-news` |
-| The feed itself answers HTTP 403 | `ftc-press`, `pib-india`, `bs-economy`, `business-standard` |
-| A valid feed for a developer machine, HTTP 403 for the runner | `indian-express`, `ie-india`, `ie-business`, `eia-press`, `reliefweb`, `import-ai` |
-| No feed at that address: it answers with a web page | `anthropic-news`, `cohere-blog`, `stanford-hai` |
-| Every article behind the feed is a PDF | `rbi-press` |
-| Resets the connection | `wapo-world` |
-| Rate-limits every article request | `venturebeat-ai` |
-
-### The per-feed cap is what picks the day
-With 160 slots and `max_per_source` at 2, a run needs about 80 feeds to fill
-itself. Measured over six runs, **73 to 78 of the roughly 85 working feeds sat
-exactly on the cap**, and the fifteen largest contributors each published
-exactly two per run for eleven runs running.
-
-So "a story several independent feeds carried is the day's story" described the
-score, and the score has not been deciding much: the cap fills the list and the
-ranking only chooses which few feeds miss out. This is a supply result, not a
-ranking defect. The cap stops binding as soon as the pool of *working* feeds is
-comfortably larger than 80, which is what this sweep is for. Re-read the cap
-column in the measurements page after a week of the new list before changing any
-ranking code. **That sentence stopped describing the score on 2026-09-13**, when
-carriage became a tie-break worth less than one step down the trust ladder; what
-decides the day now is the tier the source sits on.
+**Robots permission and training permission are different questions.** A
+publisher can allow every ordinary crawler and name a list of AI training bots it
+refuses. We are none of those user agents, so the fetch is allowed - but `corpus/`
+commits article text as training samples (`CLAUDE.md` section 0a), so the
+publisher's stated intent and one of our uses point in opposite directions. This
+is recorded rather than resolved: the owner takes that call, and if it goes the
+other way the fix is one `retired_on`.
 
 ### The feed floor counts feeds, not working feeds
 
 `rank.plan_vertical` compares `min_feeds` against the number of feeds
 **configured** as active in that vertical. It cannot count feeds that work,
-because it runs before anything is fetched.
+because it runs before anything is fetched. So the gate can be green while the
+source pool is not, and a desk can sit well under its floor on the count that
+matters.
 
-Measured 2026-08-29, every one of the five verticals was under its floor on the
-count that matters and every one of them passed the gate:
+**A vertical under its floor plans nothing at all**, which is why a curation
+sweep replaces rather than only removes. Retiring feeds without adding any takes
+a desk silent, and silence is the one failure a reader cannot tell from a quiet
+day.
 
-| Vertical | Configured | Ever produced an item | `min_feeds` |
-| --- | --- | --- | --- |
-| `ai` | 38 | 28 | 35 |
-| `business-economy` | 22 | 12 | 21 |
-| `energy` | 24 | 20 | 21 |
-| `india` | 27 | 19 | 21 |
-| `world` | 27 | 19 | 21 |
+The floor is not lowered to fit. Lowering it would trade a gate that reads the
+wrong number for a lower gate that reads the same wrong number. What would fix it
+is a floor read from the health ledger rather than from config, and that is a
+contract change nobody has costed - recorded here rather than done.
 
-This is why the sweep replaced rather than only removed. Retiring 40 feeds
-without adding any would have taken `ai` to 28 configured against a floor of 35
-and `business-economy` to 12 against 21, and **a vertical under its floor plans
-nothing at all** - the two desks would have gone silent, which is 34 percent of
-the digest. The replacement list is sized to leave every vertical above its
-floor with room: `ai` 40, `business-economy` 25, `energy` 27, `india` 24,
-`world` 25.
-
-The floor was not lowered. Lowering it would trade a gate that reads the wrong
-number for a lower gate that reads the same wrong number. What would fix it is a
-floor read from the health ledger rather than from config, and that is a
-contract change nobody has costed - filed here rather than done.
-
-**What was done is smaller and it is the part that was actually missing: the
-floor is now a merge gate.** `backend/tests/test_contracts.py::test_every_vertical_clears_its_own_feed_floor`
+**What the floor does have is a merge gate.**
+`backend/tests/test_contracts.py::test_every_vertical_clears_its_own_feed_floor`
 reads the committed `config/sources.json` against the committed
 `config/taxonomy.json` and fails the build when any vertical's active feed count
-drops under `min_feeds`.
-
-Until 2026-08-29 nothing in this repository checked that. `rank.plan_vertical`
-enforces the floor at run time by planning nothing, which is silent by design -
-the run succeeds, the digest publishes, and one section is simply absent. The
-sweep above came one edit away from doing exactly that to two desks, and what
-caught it was a throwaway assertion in a migration script. This test is that
-assertion, kept. It says what a failing vertical would cost:
+drops under `min_feeds`. It says what a failing vertical would cost:
 `ai has 6 active feeds against a floor of 35, so it would publish nothing`.
 
-It does not make the floor read the right number. It makes the number it does
-read impossible to break by accident.
+The run-time floor is silent by design - the run succeeds, the digest publishes,
+and one section is simply absent - so a config edit that emptied a desk would
+reach a reader before it reached anybody's attention. The gate does not make the
+floor read the right number. It makes the number it does read impossible to break
+by accident.
 
 ## Design rationale
 
-**The affiliate-page control sits at collection, not at the score (2026-08-24).** The three `fool.com/the-ascent/` items are the case that separates "the summary is wrong" from "the item should not be here". Every instrument in the eval ledger compares our summary to the article, and all of them passed. Moving the control to collection also costs nothing: a blocked address is never fetched, never summarized and never scored, which is the cheapest place a rejection can happen (Guardrail #2). Authority: owner, closing known defect 7.
+**The affiliate-page control sits at collection, not at the score.** An affiliate review that summarizes faithfully separates "the summary is wrong" from "the item should not be here" - every instrument in the eval ledger compares our summary to the article, and all of them pass. Collection is also the cheapest place a rejection can happen: a blocked address is never fetched, never summarized and never scored (Guardrail #2). Authority: owner, 2026-08-24, closing known defect 7.
 
 Segmenting by subject is a source-diversity problem, not a compute one. The pipeline had spare capacity long before it had spare sources, so the binding constraint was never how many items could be summarized - it was how many were worth summarizing, and whether they covered more than one subject.
 
 Two findings from prior art settled the shape. First, every system that publishes a multi-subject daily digest attaches a curated feed list per subject; none of them sorts a single firehose into subjects. Second, those systems enforce a floor below which a subject is not surfaced at all, because a thin list produces a thin day and the reader cannot tell the difference between a quiet day and a broken one.
 
-The floor started as a borrowed constant: twenty-five feeds for every vertical, taken from prior art. That number is wrong here, because it does not scale with how much a vertical publishes. The systems it came from surface dozens of items per subject per day; ours surface a handful.
-
-The floor was then set at seven times each vertical's daily cap, which is where 35 and 21 come from. **The daily cap has since been removed** - supply and the score decide the size of a day now ([freshness.md](freshness.md)) - and the floor numbers stayed behind. That is deliberate, and worth stating plainly rather than quietly re-deriving: the ratio was always a judgement, and the numbers it produced are the half that turned out to be useful. They describe a candidate pool several times larger than any day is likely to publish, which is what keeps the ranking with something to choose between when a day is quiet.
+**A borrowed constant is not a floor.** Twenty-five feeds per vertical came from prior art and is wrong here, because it does not scale with how much a vertical publishes: the systems it came from surface dozens of items per subject per day and ours surface a handful. The shipped numbers - 35 and 21 - came instead from seven times each vertical's daily cap. That cap has since been removed and the floor numbers stayed behind, which is deliberate rather than an oversight: the ratio was always a judgement, and what it produced is a candidate pool several times larger than any day is likely to publish, which is what keeps the ranking with something to choose between when a day is quiet.
 
 State the sequence honestly - the live counts were measured first, then the rule was written, so the rule is fitted to what the source pool supports rather than derived from an independent finding. It is recorded here so a later reader can overturn it with a real measurement instead of re-deriving it.
-
-The floor still does its job, but it has been doing it against the wrong number. It counts feeds configured as active, and until 2026-08-29 every vertical was under its floor on the count of feeds that had ever produced an item. See the section above; the gate was green and the source pool was not.
 
 Tiering the sources was the cheap half. Once a source carries a tier, ranking needs no model, no classifier and no judgement at run time: the arithmetic of "how authoritative" times "how widely carried" reproduces most of what an editor would pick, and it reproduces it identically on every re-run.
 
@@ -971,9 +452,9 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | Raising the faithfulness threshold to keep affiliate pages out | They are faithful. Short declarative marketing prose is trivially entailed, so every cut that excludes them excludes real reporting first, and the bar rewards the source it should reject. |
 | Retiring `cnn-world` over the syndicated affiliate pages | It is a working feed carrying real reporting. Retiring a whole source over three items it passed through costs the vertical a desk to fix a link filter. |
 | Blocking `fool.com` entirely | The publisher's editorial arm has not been observed to fail. The measured cut is the affiliate section, and nothing wider has been measured. |
-| Taking the leading block from the first N of the published order | It ships the accident instead of the edit. That head is the top of whichever desk sorted first in run 1, which is a property of `cli.build_plan` and not a judgement about the news. |
+| Taking the leading block from the first N of the published order | It ships the accident instead of the edit. That head is the top of whichever desk sorted first in run 1, which is a property of how the plan is assembled and not a judgement about the news. |
 | A heat score for the leading block, computed in the browser | Read-time re-ranking makes a shared link show the recipient a different page from the one the sender saw, and the number behind it would be one nobody measured (Guardrail #10). Carmack, 2026-08-31. |
-| `Front page at <source>.` as a lead's sentence | False. `on_front_page` says a salience feed voted, and the two active ones are `Hacker News front page` and `Hacker News best` - so naming the front page is wrong whenever the other one voted. Measured 2026-09-01, it is also false on all 490 committed stories that record it and absent on the other 3,596. |
+| `Front page at <source>.` as a lead's sentence | False. `on_front_page` says a salience feed voted, and more than one aggregator can be a salience feed - so naming the front page is wrong whenever the other one voted. |
 | `Three sources covered this.` as a lead's sentence | `rank.merge` groups by canonical URL, so `carried_by` counts syndication of one address. Two outlets writing their own pieces produce two addresses and both read 1. The shipped sentence says how the report reached us, which is what the number means. |
 | An `events`-based consequence proxy in the lead score | `events` names the kind of event and never its size - a seed round and a multi-billion acquisition both read `funding`. It would make every acquisition outrank every research paper, which is a rule about grammar rather than about importance. |
 | Asking the summarizer for the lens, event and entity tags | A tag decides what a reader is shown under a filter, so a page that picks its own tags writes its own index entry - fetched text steering a control (Guardrail #11). It also adds decode tokens to the one stage that already dominates the run. A deterministic matcher costs no model time and returns the same answer on every re-run, which is the property the rest of this page's arithmetic already has. Andre, consulted 2026-08-26. |
