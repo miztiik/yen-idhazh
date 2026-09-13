@@ -173,7 +173,7 @@ class LensDef(VocabularyEntry, Lifecycled):
     is_auto_discovered: bool = Field(default=False, description=AUTO_DISCOVERED_DESCRIPTION)
 
 
-class EventDef(VocabularyEntry):
+class EventDef(VocabularyEntry, Lifecycled):
     id: Slug
     keywords: list[MatchTerm] = Field(
         default_factory=list,
@@ -186,6 +186,27 @@ class Taxonomy(Contract):
 
     __schema_stem__: ClassVar[str] = "taxonomy"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "EventDef extends Lifecycled, so an event carries status and retired_on the "
+                "way a vertical and a lens already do. definition_block offers only active "
+                "events, event_terms drops a retired one, and the definition rule asks only "
+                "the events the vocabulary still offers."
+            ),
+            why=(
+                "Retire, never delete is the rule the other two vocabularies follow, and the "
+                "event vocabulary could not follow it: EventDef extended plain Model, so there "
+                "was nothing to retire an event WITH. Deleting the entry was the only way to "
+                "stop offering a word, and that leaves every committed day carrying it holding "
+                "an id nothing can name - which is the cost the lens tombstone already exists "
+                "to avoid. Additive with defaults, so a taxonomy written before this still "
+                "validates unchanged and every event in it reads as active; no read-side "
+                "migration is needed. Its own entry rather than a clause of the "
+                "2026-09-12T03:55 retype, because that one is breaking on the write side and "
+                "an expand bundled into a break cannot be reverted on its own (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T03:55",
             change=(
@@ -334,7 +355,11 @@ class Taxonomy(Contract):
                     for item in self.lenses
                     if item.status is LifecycleStatus.ACTIVE
                 ),
-                *(("event", item.id, bool(item.definition)) for item in self.events),
+                *(
+                    ("event", item.id, bool(item.definition))
+                    for item in self.events
+                    if item.status is LifecycleStatus.ACTIVE
+                ),
             )
             if not defined
         ]
@@ -351,15 +376,15 @@ class Taxonomy(Contract):
         a list is not indifferent to the list's order, so the order is a
         committed fact rather than whatever a dict iterated to that day.
 
-        Active entries only. A draft contributes nothing at all - not a heading,
-        not a blank line - which is what makes `status` a control rather than a
-        convention, and it is asserted by comparing this block's bytes with and
-        without the draft. Events have no status to read yet.
+        Active entries only, in all three vocabularies. A draft contributes
+        nothing at all - not a heading, not a blank line - which is what makes
+        `status` a control rather than a convention, and it is asserted by
+        comparing this block's bytes with and without the draft.
         """
         sections = (
             ("Desks", [item for item in self.verticals if item.status is LifecycleStatus.ACTIVE]),
             ("Lenses", [item for item in self.lenses if item.status is LifecycleStatus.ACTIVE]),
-            ("Events", list(self.events)),
+            ("Events", [item for item in self.events if item.status is LifecycleStatus.ACTIVE]),
         )
         written = [
             "\n".join(
@@ -403,4 +428,14 @@ class Taxonomy(Contract):
         }
 
     def event_terms(self) -> dict[str, list[str]]:
-        return {event.id: event.keywords for event in self.events}
+        """The event match surface, on the same rule as `lens_terms`.
+
+        A retired event keeps its tombstone and stops matching, so a word the
+        vocabulary has stopped carrying cannot be assigned to a new item while
+        the days that already carry it still read.
+        """
+        return {
+            event.id: event.keywords
+            for event in self.events
+            if event.status is not LifecycleStatus.RETIRED
+        }
