@@ -10,6 +10,7 @@ import csv
 import json
 import logging
 import re
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
-from idhazh.llm.server import Completion
+from idhazh.llm.server import Completion, parse_completion
 
 
 def plan() -> RunPlan:
@@ -596,6 +597,59 @@ def test_the_census_row_says_which_call_each_number_came_from() -> None:
     cells = row.csv_row()
     assert cells["call_1_kind"] == "label"
     assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_a_refused_reply_reaches_the_census_row_with_what_it_cost() -> None:
+    """Defect 19's second half: the summary carried the numbers and this row dropped them.
+
+    `reconcile_prefill.pool_ledger` skips a row whose `prefill_ms` or
+    `input_tokens` cell is empty, so a blank here is not a zero in the pool - it
+    is a request the server counted and the ledger never saw. The row is driven
+    through the real stage from a recorded reply, so the cells are the server's.
+    """
+    ok_article = article()
+    reply = parse_completion(
+        read_text(REPO_ROOT / "tests" / "fixtures" / "completions" / "timed.json")
+    )
+    assert reply.prefill_ms and reply.prompt_tokens, "a free reply would prove nothing"
+    unreadable = summarize.to_summary(
+        ok_article,
+        replace(reply, content="{bad"),
+        model_id="qwen3-8b",
+        generated_at="2026-08-21T06:00:00Z",
+    )
+    assert unreadable.failure_code is FailureCode.BAD_SHAPE
+
+    row = telemetry.classify_item(
+        planned=item(),
+        article=ok_article,
+        summary=unreadable,
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert row.outcome is ItemOutcome.FAILED
+    assert row.prefill_ms == reply.prefill_ms
+    assert row.input_tokens == reply.prompt_tokens
+    assert row.model_calls == 1
+    assert row.call_1_kind is CallKind.SUMMARIZE
+    cells = row.csv_row()
+    assert cells["prefill_ms"] and cells["input_tokens"], "an empty cell is skipped, not pooled"
+
+
+def test_a_summarize_call_that_never_returned_leaves_the_cost_cells_empty() -> None:
+    """A null is not a zero, and inventing one here would be the same defect twice.
+
+    Nothing came back, so there is no number to copy. The cells stay blank, which
+    is what keeps a pooled read skipping the row rather than averaging it in.
+    """
+    row = row_for(FailureCode.MODEL_UNREACHABLE)
+
+    assert row.outcome is ItemOutcome.FAILED
+    assert row.prefill_ms is None
+    assert row.input_tokens is None
+    assert row.model_calls is None
+    assert row.csv_row()["prefill_ms"] == ""
 
 
 def test_a_row_written_before_the_pre_cap_column_reads_as_unmeasured() -> None:
