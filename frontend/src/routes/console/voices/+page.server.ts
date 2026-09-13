@@ -1,6 +1,7 @@
 import { chartConfig, collectConfig, consoleConfig } from '$lib/server/config';
 import {
 	feedResults,
+	reliabilityPublished,
 	shardDays,
 	sourceHealthView,
 	itemHealthRows,
@@ -109,6 +110,14 @@ export interface Standing {
  * holds from before we stopped asking, so drawing it would put a bar on a feed
  * no run will ever ask again.
  *
+ * **Null for a view written before the reliability fields existed**, which is
+ * the read-side migration this panel owes (`CLAUDE.md` section 11). A view the
+ * pipeline wrote yesterday carries no `reliability`, no `reliability_reads`, no
+ * floor, no window and no headline; the page has to draw its named absence for
+ * that rather than die, and a build that dies takes the census and the failure
+ * list down with it. It is one guard rather than five optional fields because
+ * the five arrived together and no run can write a subset of them.
+ *
  * Not exported. SvelteKit allows a `+page.server.ts` to export `load` and a
  * short list of options and nothing else, so an exported helper here fails the
  * build rather than a lint - which is what took `site`, `browser` and
@@ -116,7 +125,7 @@ export interface Standing {
  * same way.
  */
 function standing(view: SourceHealthView | null, rows: number): Standing | null {
-	if (view === null) return null;
+	if (view === null || !reliabilityPublished(view)) return null;
 	const live = view.sources.filter((row) => !row.retired);
 	const ranked = live
 		.map((row) => ({
@@ -446,8 +455,9 @@ export async function load() {
 	// two different runs if a run landed between them.
 	const view = sourceHealthView();
 	return {
-		// Null when no run has written the view or it cannot be read, which the
-		// page draws as a named absence rather than as a section that is missing.
+		// Null when no run has written the view, when it cannot be read, or when the
+		// run that wrote it predates the ranking factor. The page draws a named
+		// absence for all three rather than a section that is simply missing.
 		standing: standing(view, console.source_rows),
 		// Permission, availability, retirement and the publishing record, read from
 		// the projection the pipeline published rather than re-derived here.

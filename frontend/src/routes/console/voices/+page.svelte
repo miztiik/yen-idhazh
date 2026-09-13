@@ -295,11 +295,12 @@
 
 	{#if standing === null}
 		<div class="console-panel" data-console-empty="voices">
-			<p class="empty-lead">No run has published a source record yet.</p>
+			<p class="empty-lead">No run has published a ranking weight yet.</p>
 			<p class="empty-note">
-				This page draws one file, <code>source-health.json</code>, which the pipeline writes at
-				the end of a run. Until a run finishes there is nothing to draw here, which is not the
-				same as every feed being fine.
+				This panel draws one file, <code>source-health.json</code>, which the pipeline writes at
+				the end of a run. It fills on the next run that writes a weight into it. Until then there
+				is nothing to draw here, which is not the same as every feed being fine - the census
+				above and the failure list below are read from the same file and are drawn already.
 			</p>
 		</div>
 	{:else}

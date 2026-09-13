@@ -641,7 +641,7 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 
 	// Nearest to a rest first. `canary-flaky` has failed every run it was asked,
 	// `canary-empty` answered once before its two blank runs, and `canary-gone`
-	// has one failure. The full ordering rule is held in console-feeds.spec.ts,
+	// has one failure. The full ordering rule is held in console-voices-feeds.spec.ts,
 	// against the page's own published streaks rather than against this list.
 	const named = await page
 		.locator('[data-feed]')

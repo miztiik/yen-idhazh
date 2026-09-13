@@ -953,6 +953,35 @@ export function sourceHealthView(path: string = SOURCE_HEALTH_PATH): SourceHealt
 	}
 }
 
+/** Does this view carry the ranking factor, or was it written before it existed?
+ *
+ * The read-side migration for `reliability`, `reliability_reads`,
+ * `reliability_floor`, `reliability_window_days` and `headline_sentence`, which
+ * arrived together on 2026-09-14 (`CLAUDE.md` section 11). Every run before that
+ * wrote a view with none of them, and one of those views is committed at
+ * `frontend/public/source-health.json` right now - so a page that read
+ * `row.reliability.toFixed(3)` without asking threw during prerender and took
+ * the whole route out of the build, census and failure list included.
+ *
+ * One question rather than five, because the five arrived in one producer and no
+ * run can write a subset of them. The floor is the one asked about: it is a
+ * number on the view itself, so it is answerable without looking at a row, and
+ * a view with no sources would otherwise pass a per-row check by having nothing
+ * to check.
+ *
+ * The census does not need this. Permission, reading, retirement and the
+ * publishing record are all on the old shape, so an old view still draws that
+ * panel in full - which is why this is a question the reliability panel asks
+ * rather than a refusal `sourceHealthView` makes for everybody.
+ */
+export function reliabilityPublished(view: SourceHealthView | null): boolean {
+	if (view === null) return false;
+	return (
+		typeof view.reliability_floor === 'number' &&
+		typeof view.reliability_window_days === 'number'
+	);
+}
+
 /** One run of one day, as the manifest recorded it. */
 export interface RunRecord {
 	runId: string;
