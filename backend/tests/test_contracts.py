@@ -30,6 +30,7 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh import cli, day_partition, ledger, source_health
+from idhazh.classify import dag
 from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
 from idhazh.cli import main
 from idhazh.contracts import canonical_json, derive_url_key
@@ -1152,7 +1153,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
 
 
 def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """Call 1's prompt at the cap, and the whole two-call sequence behind it.
+    """Call 1's prompt at the cap, and the whole sequence behind it.
 
     A second derivation and not a widening of the one above, because the two
     paths render different prompts. The single call sends one system turn and
@@ -1161,30 +1162,46 @@ def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     date the extractor already cut - then pays for its own reply twice, once as
     a decode and once again inside call 2's prompt.
 
-    Three terms rather than one, and each reads something:
-
-    - the scaffold is fixed, and moves when a prompt file is edited;
-    - the per-word rate covers the article and its sentence addresses, and moves
-      when prose tokenizes harder;
-    - the menu is `elements.max_per_article` rows, so **the one config knob that
-      is not the cap or the window still moves this sum.**
-
-    The budgets come from `classify.calls`, which re-derives both on import from
-    the reply shapes' own bounds - so a `maxItems` that moves moves this too.
+    **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
+    It used to be written out here, which put the number the production path
+    never checked and the number this file asserts in two places - and two
+    derivations of one quantity disagree the first time a term moves. The three
+    terms of the prompt and the per-turn seam are documented where they are
+    computed; what stays here is the cap, the knob and the window, all three
+    read from `config/` (Guardrail #6).
     """
-    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
-    prompt = (
-        CALL_ONE_SCAFFOLD_TOKENS
-        + int(cut_words * CALL_ONE_BODY_TOKENS_A_WORD)
-        + int(committed.elements.max_per_article * CALL_ONE_MENU_TOKENS_A_ROW)
+    rows = committed.elements.max_per_article
+    cap = committed.extract.truncation_cap_tokens
+    return (
+        dag.first_prompt_tokens(cap, menu_rows=rows),
+        dag.sequence_tokens(cap, menu_rows=rows, prompt_config=committed.summarize),
     )
-    sequence = (
-        prompt
-        + call_one_output_tokens()
-        + CALL_TWO_SEAM_TOKENS
-        + call_two_output_tokens(committed.summarize)
+
+
+def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
+    """A third call is a design change, and this is what makes it stop being quiet.
+
+    Every node's reply is paid twice - once as its own decode, and once again
+    inside the prompt of every node behind it - so a third call does not cost a
+    third of the sequence, it costs its own budget plus a seam plus the prompt
+    it drags forward. At the committed window that is the difference between 80
+    percent full and over.
+
+    The import-time guard in `classify.dag` fires first and says the same thing.
+    This test exists because a guard inside the module a change is editing is a
+    guard that change can edit; a row that adds a node has to come here and say
+    so as well, which is the point at which ESCALATE trigger 6 of
+    `TODO/20260910-23-article-classification-plan.md` section 12a has fired.
+
+    **A labelling row does not add a node.** It adds a field to call 1's reply
+    shape, and `call_one_output_tokens` re-derives the budget from the shape's
+    own bounds on import.
+    """
+    assert len(dag.NODES) == dag.NODE_COUNT == 2
+    assert [node.name.value for node in dag.NODES] == ["label", "summarize_and_plan"]
+    assert {node.name.value for node in dag.NODES} <= {kind.value for kind in CallKind}, (
+        "a node the ledger has no CallKind for records its cost as nothing"
     )
-    return prompt, sequence
 
 
 def test_the_two_calls_fit_the_window_at_the_cap() -> None:
