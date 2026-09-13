@@ -130,6 +130,45 @@ test('Markdown fixture data invalidates checks even though documentation does no
 	} finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+function commit(root, ...paths) {
+	execFileSync('git', ['-C', root, 'add', '--', ...paths]);
+	execFileSync('git', ['-C', root, '-c', 'user.email=t@example.com', '-c', 'user.name=Test',
+		'-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'a fixture']);
+}
+
+test('a tracked file git reports unchanged is taken from the index and never opened', () => {
+	const root = fixture();
+	try {
+		const source = join(root, 'frontend/src/page.ts');
+		commit(root, 'frontend/src/page.ts');
+		const before = inputFingerprint(root);
+		// git is told to stop reporting this path, so a fingerprint that moved
+		// could only have come from reading the file off disk.
+		execFileSync('git', ['-C', root, 'update-index', '--assume-unchanged', 'frontend/src/page.ts']);
+		writeFileSync(source, 'export const value = 999;\n');
+		assert.equal(inputFingerprint(root), before, 'the unchanged tracked file was read from disk');
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('a tracked file that is modified or deleted is read, not taken from the index', () => {
+	const root = fixture();
+	try {
+		const source = join(root, 'frontend/src/page.ts');
+		commit(root, 'frontend/src/page.ts');
+		const committed = inputFingerprint(root);
+		writeFileSync(source, 'export const value = 2;\n');
+		const modified = inputFingerprint(root);
+		assert.notEqual(modified, committed, 'a modified tracked file kept the hash the index holds');
+		rmSync(source);
+		assert.notEqual(inputFingerprint(root), modified, 'a deleted tracked file kept the bytes it no longer has');
+		assert.notEqual(inputFingerprint(root), committed, 'a deleted tracked file reads as its committed self');
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test('a failed or still-running build cannot reuse the previous build record', () => {
 	const root = fixture();
 	try {
