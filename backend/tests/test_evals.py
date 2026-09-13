@@ -59,6 +59,7 @@ from idhazh.evals.metrics import (
 from idhazh.evals.score import band, to_eval_row
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
+from idhazh.stages.rebuild_score_index import stage_rebuild_score_index
 
 ARTICLE = (
     "Example Grid ordered four small modular reactors from Northwind Atomics on Tuesday, "
@@ -1703,10 +1704,10 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
     workflow and no shell script, and the mechanism is called from one module.
     """
     state = _drifted_tree(tmp_path)
-    assert cli.stage_rebuild_score_index(months=["2026-02"], state_dir=state) == 0
+    assert stage_rebuild_score_index(months=["2026-02"], state_dir=state) == 0
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
-    assert cli.stage_rebuild_score_index(months=None, state_dir=state) == 0
-    assert cli.stage_rebuild_score_index(months=["2026-03"], state_dir=state) == 1
+    assert stage_rebuild_score_index(months=None, state_dir=state) == 0
+    assert stage_rebuild_score_index(months=["2026-03"], state_dir=state) == 1
 
     with pytest.raises(SystemExit) as unsaid:
         cli.main(["rebuild-score-index"])

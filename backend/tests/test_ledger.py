@@ -27,6 +27,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
+from idhazh.stages.dedupe_ledgers import stage_dedupe_ledgers
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
 from utilities.migrate_published_ledger import narrow
@@ -1565,7 +1566,7 @@ def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:
     with counters.open("a", encoding="utf-8", newline="") as handle:
         handle.write(counters.read_text(encoding="utf-8").splitlines()[1] + "\n")
 
-    assert cli.stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
+    assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
     assert ledger.repeated_keys(counters, ledger.RUNTIME_COUNTERS_KEY) == {}
     assert len(ledger.load_runtime_counters(state, run_id=RUN_ID)) == 1
 
@@ -1632,7 +1633,7 @@ def test_a_repeat_in_a_shard_this_run_wrote_is_still_settled(tmp_path: Path) -> 
     counters = ledger.runtime_counters_path(state)
     _repeat_last_row(counters)
 
-    assert cli.stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
+    assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
 
     assert ledger.repeated_keys(health, ledger.FEED_HEALTH_KEY) == {}
     assert ledger.repeated_keys(items, ledger.ITEM_HEALTH_KEY) == {}
@@ -1655,7 +1656,7 @@ def test_the_settlement_opens_no_shard_from_a_month_this_run_did_not_write(
     _month_of_history(state, DATE)
 
     with _file_opens() as opened:
-        assert cli.stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
+        assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
 
     assert [path.as_posix() for path in opened if path in older] == []
     assert ledger.repeated_keys(older[0], ledger.FEED_HEALTH_KEY) != {}, (
@@ -1687,7 +1688,7 @@ def test_more_history_does_not_make_the_ordinary_settlement_read_more(tmp_path: 
         _month_of_history(state, DATE)
         settled = DATE if cover == "run" else None
         with _file_opens() as opened:
-            assert cli.stage_dedupe_ledgers(state_dir=state, date=settled) == 0
+            assert stage_dedupe_ledgers(state_dir=state, date=settled) == 0
         return len(opened)
 
     reads = {
@@ -1713,7 +1714,7 @@ def test_the_operator_pass_settles_a_repeat_an_older_month_kept(tmp_path: Path) 
     health, items, scores = _month_of_history(state, "2026-05-14")
     _month_of_history(state, DATE)
 
-    assert cli.stage_dedupe_ledgers(state_dir=state, date=None) == 0
+    assert stage_dedupe_ledgers(state_dir=state, date=None) == 0
 
     assert ledger.repeated_keys(health, ledger.FEED_HEALTH_KEY) == {}
     assert ledger.repeated_keys(items, ledger.ITEM_HEALTH_KEY) == {}

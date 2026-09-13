@@ -169,18 +169,33 @@ named it the single busiest module in the project at 18 rows, and two rows that
 touched nothing in common still could not run in the same wave. Split on
 2026-09-13: one module a stage, `stages/common.py` for the 31 names two or more
 stages share, and `cli.py` down to 762 lines - the parser, the verb table, five
-routing helpers, and nothing a stage does. The stage names are re-exported from
-`cli`, so every caller and every doc that says `cli.stage_assemble` still says a
-true thing (CLAUDE.md section 1a, "A router is not a worker").
+routing helpers, and nothing a stage does (CLAUDE.md section 1a, "A router is
+not a worker").
 
-**The nine roots the tests redirect are deliberately not re-exported.** A stage
+**The router imports stage modules and never the names inside them.** The split
+first shipped with `cli` re-exporting 51 of those names, so 168 call sites in 20
+files did not have to move. That bought a day and cost the thing the split was
+for. `cli` stayed the listed home of code it does not contain, so the next
+reader still looked for the work in the wrong file, and the re-export was an
+import path nobody had to declare. It also made one shape of redirect silent:
+`setattr(cli, "_picture_faults", ...)` rebinds the router's copy while the stage
+goes on calling the shipped rule out of its own module, so a test passes against
+the thing it meant to replace. The nine roots below were already exempt for
+exactly that reason, which left the rule true of nine names and false of 51.
+
+Retired on 2026-09-13, in the commit after the split. `cli.stage_work` does not
+resolve, every caller and every sentence names the module that defines what it
+means, and `cli.py` declares no `__all__` because it exports what it defines and
+nothing else. `test_the_router_exposes_no_name_a_stage_owns` in
+`backend/tests/test_contracts.py` reads the imported router against every
+module-level name the stage modules declare and fails on any it can still see.
+
+**The nine roots the tests redirect are reached through `common`.** A stage
 reads `common.PUBLIC_ROOT` as an attribute rather than importing the value, so
-one `monkeypatch.setattr(common, "PUBLIC_ROOT", tmp)` reaches every reader. Had
-`cli` re-exported the name too, a redirect left on `cli` would bind a copy no
-stage reads and the test would go on passing against the real tree. It raises
-instead. For the names `cli` does re-export, a test in
-`backend/tests/test_contracts.py` walks the suite and fails any redirect naming
-the router rather than the module that defines the name.
+one `monkeypatch.setattr(common, "PUBLIC_ROOT", tmp)` reaches every reader. A
+redirect left on `cli` raises instead of binding a copy no stage reads - which
+is now true of every stage-owned name rather than these nine alone, so the
+suite-walking guard that policed the difference is gone with the difference.
 
 ## Rejected alternatives
 

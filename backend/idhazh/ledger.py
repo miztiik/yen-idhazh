@@ -404,18 +404,18 @@ def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]
     So each caller owns its own repeats, and each one is named here because the
     guarantee does not live in this file:
 
-    - **seen** - `cli.stage_plan` builds its rows from `_first_sights`, which
+    - **seen** - `stages.plan.stage_plan` builds its rows from `_first_sights`, which
       subtracts what `load_seen` already holds. A sight older than the window is
       outside that subtraction, and `load_seen` keeps the earliest of two, so the
       repeat costs bytes and never moves an age.
-    - **published** - `cli._published_rows` joins the day against this run's plan,
+    - **published** - `stages.assemble._published_rows` joins the day against this run's plan,
       and `rank.plan_vertical` has already dropped every address `load_published`
       returned. Measured on this checkout 2026-08-27: 2,097 rows and 2,097
       distinct addresses. `load_published` keeps the earliest date, so a repeat
       costs bytes and never moves a publication date.
     - **feed-health** - one row per feed per run. A repeat needs a run to be run
       twice under one `run_id`. Two runs cannot compute one any more - a run id
-      now carries the identity of the execution that made it (`cli.stage_plan`)
+      now carries the identity of the execution that made it (`stages.plan.stage_plan`)
       - but a second attempt at the same execution still can, and this is the
       one caller whose two rows can disagree: the first attempt may have failed
       where the second succeeded. `append_health` settles the shard against

@@ -21,12 +21,13 @@ from typing import Any
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import assemble, cli
+from idhazh import assemble
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, VECTOR_SCALE, dequantise, from_base64
 from idhazh.stages import common
+from idhazh.stages.assemble import _index_root
 
 DIGEST_ROOT = REPO_ROOT / "frontend" / "public" / "digest"
 
@@ -393,10 +394,10 @@ class TestTheCommittedShard:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The test that would have caught it, and does now."""
-        assert cli._index_root() == REPO_ROOT / "frontend" / "public" / "assist" / "index"
+        assert _index_root() == REPO_ROOT / "frontend" / "public" / "assist" / "index"
 
         monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-        redirected = cli._index_root()
+        redirected = _index_root()
 
         assert redirected == tmp_path / "public" / "assist" / "index"
         assert REPO_ROOT not in redirected.parents

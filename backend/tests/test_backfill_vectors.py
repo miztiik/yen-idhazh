@@ -19,11 +19,17 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import assemble, cli
+from idhazh import assemble
 from idhazh.contracts.app_config import AssistConfig
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
+from idhazh.stages.backfill_vectors import (
+    earns_a_vector,
+    is_closed,
+    needs_backfill,
+    stage_backfill_vectors,
+)
 
 # A headline written in Devanagari. `readable_share` counts no Latin letter in
 # it, so no configured share above zero lets it earn a vector.
@@ -83,7 +89,7 @@ def needs_encoder() -> None:
 
 def backfill(root: Path, today: str, encoder: Embedder) -> int:
     """The command as the CLI invokes it, with the index beside the days."""
-    return cli.stage_backfill_vectors(
+    return stage_backfill_vectors(
         root=root, index_root=root / "index", today=today, embedder=encoder
     )
 
@@ -91,24 +97,24 @@ def backfill(root: Path, today: str, encoder: Embedder) -> int:
 
 class TestWhichDaysAreInScope:
     def test_a_finished_day_is_closed(self) -> None:
-        assert cli.is_closed("2026-08-25", today="2026-08-26")
+        assert is_closed("2026-08-25", today="2026-08-26")
 
     def test_the_live_day_is_not(self) -> None:
         """The pipeline appends to it several times an hour and the payload is one file."""
-        assert not cli.is_closed("2026-08-26", today="2026-08-26")
+        assert not is_closed("2026-08-26", today="2026-08-26")
 
     def test_a_day_stamped_ahead_of_today_is_not(self) -> None:
         """A clock skew must not open the live day's neighbour either."""
-        assert not cli.is_closed("2026-08-27", today="2026-08-26")
+        assert not is_closed("2026-08-27", today="2026-08-26")
 
 
 class TestWhichItemsEarnAVector:
     def test_readable_items_all_earn_one(self) -> None:
-        assert cli.earns_a_vector(day(), embedder()) == {"ai-01", "energy-01", "ai-02"}
+        assert earns_a_vector(day(), embedder()) == {"ai-01", "energy-01", "ai-02"}
 
     def test_an_item_the_encoder_cannot_read_earns_nothing(self) -> None:
         """A vector about characters rather than a story is one no query retrieves."""
-        assert cli.earns_a_vector(with_one_unreadable_item(None), embedder()) == {
+        assert earns_a_vector(with_one_unreadable_item(None), embedder()) == {
             "ai-01",
             "energy-01",
         }
@@ -116,20 +122,20 @@ class TestWhichItemsEarnAVector:
 
 class TestWhichDaysAreWrong:
     def test_a_day_with_no_block_is_wrong(self) -> None:
-        assert cli.needs_backfill(with_block(None), embedder())
+        assert needs_backfill(with_block(None), embedder())
 
     def test_a_day_short_of_a_vector_is_wrong(self) -> None:
-        assert cli.needs_backfill(with_block(block({"ai-01": vector(0.25)})), embedder())
+        assert needs_backfill(with_block(block({"ai-01": vector(0.25)})), embedder())
 
     def test_a_day_that_matches_is_not(self) -> None:
         """This is what makes the command safe to dispatch twice."""
         covered = block({item.item_id: vector(0.25) for item in day().items})
-        assert not cli.needs_backfill(with_block(covered), embedder())
+        assert not needs_backfill(with_block(covered), embedder())
 
     def test_a_surplus_vector_is_wrong_too(self) -> None:
         """Short and surplus are one question: is the block what this encoder would write?"""
         every = block({item.item_id: vector(0.25) for item in day().items})
-        assert cli.needs_backfill(with_one_unreadable_item(every), embedder())
+        assert needs_backfill(with_one_unreadable_item(every), embedder())
 
     def test_another_width_is_wrong(self) -> None:
         """One map holding two widths is nonsense no reader-side decoder can read."""
@@ -137,11 +143,11 @@ class TestWhichDaysAreWrong:
             {"ai-01": base64.b64encode(bytes(256)).decode("ascii")},
             dimensions=256,
         )
-        assert cli.needs_backfill(with_block(narrow), embedder())
+        assert needs_backfill(with_block(narrow), embedder())
 
     def test_another_model_is_wrong(self) -> None:
         other = block({"ai-01": vector(0.25)}, model_id="some-other-encoder")
-        assert cli.needs_backfill(with_block(other), embedder())
+        assert needs_backfill(with_block(other), embedder())
 
 
 class TestTheBackfill:

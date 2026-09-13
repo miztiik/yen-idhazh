@@ -18,7 +18,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import cli, config, extract, ledger, summarize, telemetry
+from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.call_cost import CallCost, CallKind
@@ -29,6 +29,7 @@ from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
 from idhazh.llm.server import Completion, parse_completion
+from idhazh.stages.common import _log_no_reply
 
 
 def plan() -> RunPlan:
@@ -842,7 +843,7 @@ def test_a_summarize_failure_logs_the_envelope_the_helper_built(
     is that a second emitter cannot ship a different set.
     """
     with caplog.at_level(logging.WARNING, logger="idhazh"):
-        cli._log_no_reply(
+        _log_no_reply(
             article(),
             model_id="qwen3.5-9b-q4_k_m",
             code=FailureCode.MODEL_UNREACHABLE,

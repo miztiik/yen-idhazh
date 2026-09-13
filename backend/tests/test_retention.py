@@ -35,7 +35,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import day_partition, ledger, publish_telemetry, retention, telemetry
-from idhazh.cli import main, stage_prune_state, stage_site_weight
+from idhazh.cli import main
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
     AppConfig,
@@ -83,6 +83,8 @@ from idhazh.retention import (
     prune_traces,
     visuals_older_than,
 )
+from idhazh.stages.prune_state import stage_prune_state
+from idhazh.stages.site_weight import stage_site_weight
 
 pytestmark = pytest.mark.slow
 

@@ -2605,10 +2605,10 @@ def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
 
     A run appends only to the partition its own date routes to, so a repeat the
     union merge left can only be in a file that run wrote, and the date names it.
-    Drop the flag and `cli.stage_dedupe_ledgers` walks every feed-health day,
-    every item-health day and every score day the archive holds - a bill that
-    rises every day for an answer already given, because a finished partition was
-    settled when it was written and cannot change again.
+    Drop the flag and `stages.dedupe_ledgers.stage_dedupe_ledgers` walks every
+    feed-health day, every item-health day and every score day the archive holds
+    - a bill that rises every day for an answer already given, because a finished
+    partition was settled when it was written and cannot change again.
 
     The command refuses to run with no cover at all, so a workflow that lost the
     flag fails its commit step rather than quietly reading the archive. This

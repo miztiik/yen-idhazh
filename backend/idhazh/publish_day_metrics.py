@@ -7,7 +7,7 @@ answer that never changes once the day is frozen (CLAUDE.md Guardrail #12). This
 producer writes the answer once, from the data the publication step already
 holds, so a reader loads one small file instead.
 
-One writer, at the existing publication step (`cli.stage_assemble`), never a
+One writer, at the existing publication step (`stages.assemble.stage_assemble`), never a
 second stage (Fowler). A republished day rewrites its record whole rather than
 adding to a running total: a total needs a decrement path for every correction,
 and a missed decrement is silent and permanent (owner, 2026-09-06).

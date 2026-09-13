@@ -71,7 +71,7 @@ from urllib.parse import urlsplit
 
 import feedparser
 
-from idhazh import assemble, cli, config, discover, extract, telemetry
+from idhazh import assemble, config, discover, extract, telemetry
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
@@ -81,6 +81,7 @@ from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
+from idhazh.stages.common import Fetcher
 
 LOG: Final = logging.getLogger("idhazh.probe_feeds")
 
@@ -194,7 +195,7 @@ def _timed[T](call: Callable[[], T]) -> tuple[T, int]:
 def probe_feed(
     feed: FeedDef,
     *,
-    fetcher: cli.Fetcher,
+    fetcher: Fetcher,
     settings: config.Settings,
     tracer: telemetry.Tracer,
     articles: int,
@@ -271,7 +272,7 @@ def _probe_article(
     *,
     feed: FeedDef,
     index: int,
-    fetcher: cli.Fetcher,
+    fetcher: Fetcher,
     settings: config.Settings,
     tracer: telemetry.Tracer,
 ) -> ArticleProbe:

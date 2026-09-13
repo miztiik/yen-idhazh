@@ -105,7 +105,7 @@ def ledger_days(state_dir: Path) -> list[Path]:
     The daily settlement is no longer a caller. A run appends to the one day file
     `ledger_path` names, so that file is the only place a repeat can be, and
     walking the rest charged every run for every day on record (Guardrail #12,
-    `cli.stage_dedupe_ledgers`). The operator's full pass still comes here.
+    `stages.dedupe_ledgers.stage_dedupe_ledgers`). The operator's full pass still comes here.
     """
     return list(day_partition.day_files(state_dir / LEDGER_DIRNAME))
 
@@ -340,7 +340,7 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     **An operator command, and no stage calls it.** It opens every row of every
     day it is given - the read the index exists to avoid - so the cover is the
     days the caller names and there is no default (Guardrail #12,
-    `cli.stage_rebuild_score_index`). A day with no committed rows is refused
+    `stages.rebuild_score_index.stage_rebuild_score_index`). A day with no committed rows is refused
     by name rather than skipped: a typo must not read as a clean pass over
     nothing.
     """

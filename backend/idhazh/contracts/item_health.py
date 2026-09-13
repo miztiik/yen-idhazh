@@ -431,7 +431,7 @@ class ItemHealthRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Which worker of the run produced this row, numbered the way cli.shard_of "
+            "Which worker of the run produced this row, numbered the way stages.common.shard_of "
             "numbers them. state/runtime-counters.csv carries the same number at the "
             "run grain, so a per-shard rate can be read against the machine that ran "
             "it. Null means no worker claimed the row: assemble writes the day's "

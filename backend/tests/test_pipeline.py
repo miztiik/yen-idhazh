@@ -68,6 +68,20 @@ from idhazh.fingerprint import prose_changed_alone, text_digest
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.render.write import asset_relpath
 from idhazh.stages import common, validate_days
+from idhazh.stages.assemble import _published_rows, _recorded_inputs, stage_assemble
+from idhazh.stages.common import INPUTS_PAYLOAD, _item_payloads, _load_manifest, shard_of
+from idhazh.stages.counters import stage_counters
+from idhazh.stages.plan import _next_run_n, stage_plan
+from idhazh.stages.record import stage_record
+from idhazh.stages.validate_days import (
+    _picture_faults,
+    _proved,
+    _receipts_for,
+    _validator_identity,
+    day_validations_path,
+    stage_validate_days,
+)
+from idhazh.stages.work import _FetchedWorkItem, _summarize_band_sort_key, stage_work
 
 pytestmark = pytest.mark.slow
 
@@ -130,13 +144,13 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
         return base.model_copy(update={"word_count": words, "source_word_count": words})
 
     candidates = [
-        cli._FetchedWorkItem(items[0], sized(2000), "", 0, 0, 0.0, 0),
-        cli._FetchedWorkItem(items[1], sized(10), "", 0, 0, 0.0, 1),
-        cli._FetchedWorkItem(items[2], sized(800), "", 0, 0, 0.0, 2),
-        cli._FetchedWorkItem(items[3], sized(100), "", 0, 0, 0.0, 3),
+        _FetchedWorkItem(items[0], sized(2000), "", 0, 0, 0.0, 0),
+        _FetchedWorkItem(items[1], sized(10), "", 0, 0, 0.0, 1),
+        _FetchedWorkItem(items[2], sized(800), "", 0, 0, 0.0, 2),
+        _FetchedWorkItem(items[3], sized(100), "", 0, 0, 0.0, 3),
     ]
 
-    ordered = sorted(candidates, key=lambda candidate: cli._summarize_band_sort_key(candidate, settings))
+    ordered = sorted(candidates, key=lambda candidate: _summarize_band_sort_key(candidate, settings))
 
     assert [candidate.item.item_id for candidate in ordered] == ["ai-02", "ai-04", "ai-03", "ai-01"]
 
@@ -1014,7 +1028,7 @@ def test_a_dead_model_server_marks_every_item_without_parsing(
     run_plan = plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=config.load(CONFIG_DIR),
         scorer=None,
@@ -1072,7 +1086,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
     with HangingLoopbackEndpoint() as server:
-        cli.stage_work(
+        stage_work(
             run_plan,
             settings=fast_settings,
             scorer=None,
@@ -1117,14 +1131,14 @@ def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
     rather than the words, so it has to reach the run record on a day the model
     was unreachable too.
     """
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
 
 def score_one_item(items_dir: Path, run_plan: RunPlan) -> None:
@@ -1151,7 +1165,7 @@ def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
 
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
@@ -1159,14 +1173,14 @@ def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
         model_endpoint=closed_loopback_endpoint(),
     )
     score_one_item(items_dir, run_plan)
-    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
-    written = cli._recorded_inputs(items_dir)
+    written = _recorded_inputs(items_dir)
     manifest = RunManifest.from_json(
         read_text(tmp_path / "public" / "digest" / "2026" / "08" / "21" / "run.json")
     )
 
-    assert (items_dir / cli.INPUTS_PAYLOAD).is_file()
+    assert (items_dir / INPUTS_PAYLOAD).is_file()
     assert written is not None
     assert manifest.runs[-1].inputs == written
     assert "pipeline_fingerprints" not in type(manifest.runs[-1]).model_fields, (
@@ -1186,7 +1200,7 @@ def test_an_assemble_that_saw_no_work_shard_records_no_inputs(
     items_dir = tmp_path / "run" / plan().date / "items"
     items_dir.mkdir(parents=True)
 
-    assert cli._recorded_inputs(items_dir) is None
+    assert _recorded_inputs(items_dir) is None
 
 
 def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
@@ -1198,7 +1212,7 @@ def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
     isolate_ledgers(tmp_path, monkeypatch)
     work_then_assemble(run_plan, settings)
 
-    recorded = cli._recorded_inputs(tmp_path / "run" / run_plan.date / "items")
+    recorded = _recorded_inputs(tmp_path / "run" / run_plan.date / "items")
 
     assert recorded is not None
     assert recorded.runtime_build != "llama-server-local"
@@ -1221,7 +1235,7 @@ def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
     isolate_ledgers(tmp_path, monkeypatch)
     work_then_assemble(run_plan, settings)
 
-    recorded = cli._recorded_inputs(tmp_path / "run" / run_plan.date / "items")
+    recorded = _recorded_inputs(tmp_path / "run" / run_plan.date / "items")
     assert recorded is not None
 
     assert prose_changed_alone(recorded, recorded) == ()
@@ -1247,7 +1261,7 @@ def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
     settings = config.load(CONFIG_DIR)
     assert settings.app.observability.tracing_enabled, "the committed config traces by default"
 
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
@@ -1301,7 +1315,7 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     items_dir = tmp_path / "run" / run_plan.date / "items"
     state = tmp_path / "state"
 
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
@@ -1309,7 +1323,7 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
         model_endpoint=closed_loopback_endpoint(),
     )
     score_one_item(items_dir, run_plan)
-    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
     day_path = assemble.day_dir(common.PUBLIC_ROOT, run_plan.date) / "digest.json"
     published = DigestDay.from_json(read_text(day_path))
@@ -1321,7 +1335,7 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
         "the guard still holds these addresses, so this is not the crash the window leaves"
     )
 
-    cli.stage_assemble(
+    stage_assemble(
         run_plan.model_copy(update={"run_id": f"{run_plan.date}-2"}),
         settings=settings,
         commit_sha="a" * 40,
@@ -1564,7 +1578,7 @@ def test_item_payloads_include_an_article_without_a_summary(tmp_path: Path) -> N
     items_dir.mkdir()
     (items_dir / "ai-01.article.json").write_text(article().to_json(), encoding="utf-8")
 
-    payloads = list(cli._item_payloads(plan(), items_dir))
+    payloads = list(_item_payloads(plan(), items_dir))
 
     assert [payload.planned.item_id for payload in payloads] == [
         item.item_id for item in plan().items
@@ -1591,7 +1605,7 @@ def test_an_item_written_before_a_contract_moved_says_so_at_the_stage_that_reads
     (items_dir / "ai-01.article.json").write_text(json.dumps(stale), encoding="utf-8")
 
     with pytest.raises(StalePayloadError) as raised:
-        list(cli._item_payloads(plan(), items_dir))
+        list(_item_payloads(plan(), items_dir))
 
     assert "2026-01-01" in str(raised.value)
     assert Article.schema_version() in str(raised.value)
@@ -1616,7 +1630,7 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
         encoding="utf-8",
     )
 
-    day = cli.stage_assemble(
+    day = stage_assemble(
         run_plan,
         settings=config.load(CONFIG_DIR),
         commit_sha="a" * 40,
@@ -1672,14 +1686,14 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
 
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    recorded, _ = cli.stage_record(run_plan, settings=settings)
+    recorded, _ = stage_record(run_plan, settings=settings)
 
     rows = health_rows(state, run_plan.date)
     assert recorded == len(rows) == len(run_plan.items)
@@ -1704,17 +1718,17 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    cli.stage_record(run_plan, settings=settings)
+    stage_record(run_plan, settings=settings)
     after_the_worker = health_rows(state, run_plan.date)
 
-    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
     rows = health_rows(state, run_plan.date)
     keys = [(row.date, row.run_id, row.item_id) for row in rows]
@@ -1737,17 +1751,17 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     committed = ledger.item_health_path(tmp_path / "state", run_plan.date)
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    cli.stage_record(run_plan, settings=settings)
+    stage_record(run_plan, settings=settings)
     after_one_run = committed.read_bytes()
 
-    replayed, _ = cli.stage_record(run_plan, settings=settings)
+    replayed, _ = stage_record(run_plan, settings=settings)
 
     assert replayed == 0
     assert committed.read_bytes() == after_one_run
@@ -1802,7 +1816,7 @@ def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
     )
 
     def planned(execution: int | None) -> str:
-        return cli.stage_plan(
+        return stage_plan(
             date,
             settings=settings,
             fetcher=lambda _url: FetchResult(outcome=FetchOutcome.TRANSIENT, detail="offline"),
@@ -1812,7 +1826,7 @@ def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
         ).run_id
 
     # Neither run has published, so the count is the same answer for both.
-    assert cli._next_run_n(date) == cli._next_run_n(date) == 2
+    assert _next_run_n(date) == _next_run_n(date) == 2
     assert planned(None) == planned(None), "the count cannot tell two executions apart"
 
     assert planned(33270983446) == f"{date}-33270983446"
@@ -1827,7 +1841,7 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
@@ -1837,9 +1851,9 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
         model_endpoint=closed_loopback_endpoint(),
     )
 
-    cli.stage_record(run_plan, settings=settings, shard=0, shards=2)
+    stage_record(run_plan, settings=settings, shard=0, shards=2)
 
-    mine = [item.item_id for item in cli.shard_of(run_plan, shard=0, shards=2)]
+    mine = [item.item_id for item in shard_of(run_plan, shard=0, shards=2)]
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == mine
     assert len(mine) < len(run_plan.items)
 
@@ -1860,7 +1874,7 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     interrupted = run_plan.items[1]
     (items_dir / f"{interrupted.item_id}.summary.json").unlink()
 
-    recorded, _ = cli.stage_record(run_plan, settings=config.load(CONFIG_DIR))
+    recorded, _ = stage_record(run_plan, settings=config.load(CONFIG_DIR))
 
     settled = [item.item_id for item in run_plan.items if item.item_id != interrupted.item_id]
     assert recorded == len(settled)
@@ -1884,7 +1898,7 @@ def test_a_shard_commits_what_its_model_server_counted(
     isolate_ledgers(tmp_path, monkeypatch)
     capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
 
-    row = cli.stage_counters(run_plan, metrics_path=capture, shard=0, shards=1)
+    row = stage_counters(run_plan, metrics_path=capture, shard=0, shards=1)
 
     assert row.prompt_tokens_total == 23411
     assert row.prompt_seconds_total == 2128.08
@@ -1907,7 +1921,7 @@ def test_a_shard_whose_server_died_still_files_a_row(
     run_plan = plan()
     isolate_ledgers(tmp_path, monkeypatch)
 
-    row = cli.stage_counters(run_plan, metrics_path=tmp_path / "never-written.prom")
+    row = stage_counters(run_plan, metrics_path=tmp_path / "never-written.prom")
 
     assert row.prompt_tokens_total is None
     assert row.run_id == run_plan.run_id
@@ -1932,7 +1946,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
     capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
 
     for shard in (0, 1):
-        cli.stage_work(
+        stage_work(
             run_plan,
             settings=settings,
             scorer=None,
@@ -1941,8 +1955,8 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             shards=2,
             model_endpoint=closed_loopback_endpoint(),
         )
-        cli.stage_record(run_plan, settings=settings, shard=shard, shards=2)
-        cli.stage_counters(run_plan, metrics_path=capture, shard=shard, shards=2)
+        stage_record(run_plan, settings=settings, shard=shard, shards=2)
+        stage_counters(run_plan, metrics_path=capture, shard=shard, shards=2)
 
     rows = health_rows(state, run_plan.date)
     counted = ledger.load_runtime_counters(state, run_id=run_plan.run_id)
@@ -1950,7 +1964,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
     assert {row.shard for row in rows} == {row.shard for row in counted} == {0, 1}
     assert len(rows) == len(run_plan.items)
     for shard in (0, 1):
-        mine = {item.item_id for item in cli.shard_of(run_plan, shard=shard, shards=2)}
+        mine = {item.item_id for item in shard_of(run_plan, shard=shard, shards=2)}
         assert {row.item_id for row in rows if row.shard == shard} == mine
         assert mine, "a shard with no items would make the set comparison pass on nothing"
 
@@ -1970,7 +1984,7 @@ def test_the_census_assemble_adds_names_no_machine(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
@@ -1979,12 +1993,12 @@ def test_the_census_assemble_adds_names_no_machine(
         shards=2,
         model_endpoint=closed_loopback_endpoint(),
     )
-    cli.stage_record(run_plan, settings=settings, shard=0, shards=2)
+    stage_record(run_plan, settings=settings, shard=0, shards=2)
 
-    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
     rows = health_rows(state, run_plan.date)
-    worked = {item.item_id for item in cli.shard_of(run_plan, shard=0, shards=2)}
+    worked = {item.item_id for item in shard_of(run_plan, shard=0, shards=2)}
     assert len(rows) == len(run_plan.items)
     assert {row.item_id for row in rows if row.shard == 0} == worked
     assert {row.item_id for row in rows if row.shard is None} == {
@@ -2215,8 +2229,8 @@ def test_a_carried_item_is_not_recorded_as_published_twice() -> None:
     )
 
     assert [item.item_id for item in day_two.items] == [first.item_id, second.item_id]
-    assert [row.url_key for row in cli._published_rows(day_one, first_plan)] == [first.url_key]
-    assert [row.url_key for row in cli._published_rows(day_two, later_plan)] == [second.url_key]
+    assert [row.url_key for row in _published_rows(day_one, first_plan)] == [first.url_key]
+    assert [row.url_key for row in _published_rows(day_two, later_plan)] == [second.url_key]
 
 
 def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
@@ -2660,7 +2674,7 @@ def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> No
     old_path = tmp_path / "run.json"
     old_path.write_text(json.dumps(old_payload), encoding="utf-8")
 
-    migrated = cli._load_manifest(old_path, day=second_day)
+    migrated = _load_manifest(old_path, day=second_day)
 
     assert migrated is not None
     assert migrated.version == RunManifest.schema_version()
@@ -2819,7 +2833,7 @@ def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
 
-    cli.stage_work(
+    stage_work(
         run_plan,
         settings=settings,
         scorer=None,
@@ -2827,7 +2841,7 @@ def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
         model_endpoint=closed_loopback_endpoint(),
     )
     score_one_item(items_dir, run_plan)
-    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
     record = last_record(tmp_path, run_plan)
 
@@ -2925,11 +2939,11 @@ def test_a_day_with_no_receipt_is_validated_and_earns_one(tmp_path: Path) -> Non
     day = a_published_day(public)
     root = public / "digest"
 
-    code, opened = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
+    code, opened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
 
     assert code == 0
     assert "2026/08/21/digest.json" in opened, "a day with no receipt has to be read"
-    held = cli._receipts_for(state, cli._validator_identity())
+    held = _receipts_for(state, _validator_identity())
     assert set(held) == {"2026-08-21"}
     (receipt,) = held["2026-08-21"]
     assert receipt.payload_bytes == day.stat().st_size
@@ -2949,8 +2963,8 @@ def test_an_unchanged_day_under_an_unchanged_validator_is_not_opened(tmp_path: P
     a_published_day(public)
     root = public / "digest"
 
-    first_code, first = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
-    second_code, second = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
+    first_code, first = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+    second_code, second = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
 
     assert (first_code, second_code) == (0, 0)
     assert "2026/08/21/digest.json" in first
@@ -2975,18 +2989,18 @@ def test_a_day_whose_payload_moved_is_opened_again(tmp_path: Path) -> None:
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert cli.stage_validate_days(root, state_dir=state) == 0
+    assert stage_validate_days(root, state_dir=state) == 0
 
     rewritten = a_published_day(public, pretty=True)
-    code, opened = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
-    after, quiet = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
+    code, opened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+    after, quiet = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
 
     assert (code, after) == (0, 0)
     assert "2026/08/21/digest.json" in opened, "a rewritten day was skipped on a stale receipt"
     assert quiet == set(), "the rewritten day never settled down"
-    held = cli._receipts_for(state, cli._validator_identity())
+    held = _receipts_for(state, _validator_identity())
     assert len(held["2026-08-21"]) == 2, "the superseded row should still be on file"
-    assert cli._proved(held["2026-08-21"], rewritten.stat().st_size)
+    assert _proved(held["2026-08-21"], rewritten.stat().st_size)
 
 
 def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
@@ -3004,14 +3018,14 @@ def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert cli.stage_validate_days(root, state_dir=state) == 0, "the day itself has to be clean"
+    assert stage_validate_days(root, state_dir=state) == 0, "the day itself has to be clean"
 
     shard = public / "telemetry" / "2026-08.csv"
     shard.parent.mkdir(parents=True)
     shard.write_text("date,not_the_contract\n2026-08-21,1\n", encoding="utf-8")
 
     with caplog.at_level(logging.ERROR):
-        assert cli.stage_validate_days(root, state_dir=state) == 1
+        assert stage_validate_days(root, state_dir=state) == 1
     assert "frontend/public/telemetry/2026-08.csv" in caplog.text, "name the file"
     assert "header is" in caplog.text, "and say what the contract wanted instead"
 
@@ -3027,10 +3041,10 @@ def test_a_named_day_is_opened_even_when_it_carries_a_receipt(tmp_path: Path) ->
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert cli.stage_validate_days(root, state_dir=state) == 0
+    assert stage_validate_days(root, state_dir=state) == 0
 
     code, opened = days_opened(
-        root, lambda: cli.stage_validate_days(root, ["2026-08-21"], state_dir=state)
+        root, lambda: stage_validate_days(root, ["2026-08-21"], state_dir=state)
     )
 
     assert code == 0
@@ -3050,8 +3064,8 @@ def test_the_validator_identity_moves_when_a_rule_moves() -> None:
     claim about the rules a day was read under, not about the verdict they
     happened to reach.
     """
-    before = cli._validator_identity()
-    shipped = cli._picture_faults
+    before = _validator_identity()
+    shipped = _picture_faults
 
     def reworded(public_root: Path, day: DigestDay) -> list[str]:
         """The shipped rule under another name. Same verdict, different source."""
@@ -3059,7 +3073,7 @@ def test_the_validator_identity_moves_when_a_rule_moves() -> None:
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(validate_days, "_picture_faults", reworded)
-        assert cli._validator_identity() != before
+        assert _validator_identity() != before
 
 
 def test_the_validator_identity_moves_when_a_contract_moves() -> None:
@@ -3070,7 +3084,7 @@ def test_the_validator_identity_moves_when_a_contract_moves() -> None:
     what ties a receipt to the contract the day was read through, so a widened
     field cannot be waved past on a record earned under the old one.
     """
-    before = cli._validator_identity()
+    before = _validator_identity()
     moved = (
         ChangelogEntry(version="2099-01-01", change="a shape change", why="this test's own"),
         *DigestView.__changelog__,
@@ -3078,7 +3092,7 @@ def test_the_validator_identity_moves_when_a_contract_moves() -> None:
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(DigestView, "__changelog__", moved)
-        assert cli._validator_identity() != before
+        assert _validator_identity() != before
 
 
 def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
@@ -3093,11 +3107,11 @@ def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert cli.stage_validate_days(root, state_dir=state) == 0
-    _, quiet = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
+    assert stage_validate_days(root, state_dir=state) == 0
+    _, quiet = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
     assert quiet == set()
 
-    shipped = cli._picture_faults
+    shipped = _picture_faults
 
     def reworded(public_root: Path, day: DigestDay) -> list[str]:
         """The shipped rule under another name. Same verdict, different source."""
@@ -3105,8 +3119,8 @@ def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(validate_days, "_picture_faults", reworded)
-        first, reopened = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
-        second, again = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
+        first, reopened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+        second, again = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
 
     assert (first, second) == (0, 0)
     assert "2026/08/21/digest.json" in reopened, "a moved rule left the archive unread"
@@ -3124,18 +3138,18 @@ def test_two_receipts_that_disagree_about_one_day_leave_it_unproved(tmp_path: Pa
     state = tmp_path / "state"
     day = a_published_day(public)
     root = public / "digest"
-    assert cli.stage_validate_days(root, state_dir=state) == 0
+    assert stage_validate_days(root, state_dir=state) == 0
 
-    receipts = cli.day_validations_path(state)
+    receipts = day_validations_path(state)
     rows = list(csv.DictReader(receipts.read_text(encoding="utf-8").splitlines()))
     disagreeing = {**rows[0], "payload_digest": "b" * 64}
     with receipts.open("a", encoding="utf-8", newline="") as handle:
         csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n").writerow(disagreeing)
 
-    held = cli._receipts_for(state, cli._validator_identity())
-    assert not cli._proved(held["2026-08-21"], day.stat().st_size)
+    held = _receipts_for(state, _validator_identity())
+    assert not _proved(held["2026-08-21"], day.stat().st_size)
 
-    code, opened = days_opened(root, lambda: cli.stage_validate_days(root, state_dir=state))
+    code, opened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
 
     assert code == 0
     assert f"2026/08/21/{day.name}" in opened
@@ -3314,7 +3328,7 @@ def worked(
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     with RecordedEndpoint(200, *replies) as server:
-        cli.stage_work(
+        stage_work(
             run_plan,
             settings=config.load(CONFIG_DIR),
             scorer=None,
@@ -3339,7 +3353,7 @@ def recorded_inputs(items: Path) -> PipelineInputs:
     configuration, so `INPUTS_PAYLOAD` settles by atomic rename and there is
     nothing to pick from.
     """
-    recorded = cli._recorded_inputs(items)
+    recorded = _recorded_inputs(items)
     assert recorded is not None, "the shard summarized something and recorded no inputs"
     return recorded
 
@@ -3408,8 +3422,8 @@ class TestTheWorkStageDispatchesBothCalls:
         So this reads the drawn bytes off disk at the path the payload names. It
         fails if the compiler stops compiling, if the renderer stops writing, or
         if the decision starts naming a path nothing wrote - which is the fault
-        `cli._picture_faults` catches a whole job later, on a day that has
-        already published.
+        `stages.validate_days._picture_faults` catches a whole job later, on a
+        day that has already published.
         """
         run_plan, items, _served = worked(
             tmp_path,

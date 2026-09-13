@@ -46,6 +46,8 @@ from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
 from idhazh.stages import common
+from idhazh.stages.common import Fetcher, shard_of
+from idhazh.stages.plan import RETIRED_DETAIL, _within_ceiling, stage_plan
 
 FEEDS = FIXTURES_DIR / "feeds"
 
@@ -159,7 +161,7 @@ def served(name: str) -> fetch.FetchResult:
     )
 
 
-def fetcher_over(*urls: str) -> cli.Fetcher:
+def fetcher_over(*urls: str) -> Fetcher:
     """Serve exactly these addresses from the fixtures, and refuse every other one.
 
     Refusing rather than returning empty is deliberate. The plan stage must read
@@ -176,7 +178,7 @@ def fetcher_over(*urls: str) -> cli.Fetcher:
     return read
 
 
-def failing(url: str, result: fetch.FetchResult, *serve: str) -> cli.Fetcher:
+def failing(url: str, result: fetch.FetchResult, *serve: str) -> Fetcher:
     """One address that answers badly, the rest served from the fixtures."""
     healthy = fetcher_over(*serve)
 
@@ -218,7 +220,7 @@ def plan(
     salience: list[SalienceFeedDef] | None = None,
     verticals: list[VerticalDef] | None = None,
     retired: list[FeedDef] | None = None,
-    fetcher: cli.Fetcher | None = None,
+    fetcher: Fetcher | None = None,
     now: str = NOW,
     run_n: int = 1,
     state: Path | None = None,
@@ -265,7 +267,7 @@ def plan(
     # so reading one is an AssertionError rather than something to remember to
     # assert against.
     urls = [feed.url for feed in feeds] + [feed.url for feed in (salience or [])]
-    return cli.stage_plan(
+    return stage_plan(
         DATE,
         settings=settings,
         fetcher=fetcher or fetcher_over(*urls),
@@ -436,14 +438,14 @@ def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
     """
     built = plan([LAB, TRADE, COMMUNITY])
     every = list(built.items)
-    trimmed = cli._within_ceiling(every, ceiling=2)
+    trimmed = _within_ceiling(every, ceiling=2)
     assert len(trimmed) == 2
     assert [item.item_id for item in trimmed] == [
         item.item_id for item in every if item in trimmed
     ], "the surviving items keep the order the plan gave them"
     weakest = min(every, key=lambda item: item.rank_score)
     assert weakest not in trimmed
-    assert cli._within_ceiling(every, ceiling=len(every) + 1) == every
+    assert _within_ceiling(every, ceiling=len(every) + 1) == every
 
 
 def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(caplog: pytest.LogCaptureFixture) -> None:
@@ -1315,7 +1317,7 @@ def test_a_retired_address_leaves_a_row_that_run_and_says_which_reason() -> None
     retire_after_gone(state)
     rows = [row for row in health_after(state) if row.feed_id == "trade-press"]
     assert rows[-1].outcome is FetchOutcome.SKIPPED
-    assert rows[-1].detail == cli.RETIRED_DETAIL
+    assert rows[-1].detail == RETIRED_DETAIL
     assert not rows[-1].failing
 
 
@@ -1539,7 +1541,7 @@ def built_plan() -> RunPlan:
 
 def test_a_single_shard_takes_the_whole_plan() -> None:
     built = built_plan()
-    assert cli.shard_of(built, shard=0, shards=1) == list(built.items)
+    assert shard_of(built, shard=0, shards=1) == list(built.items)
 
 
 @pytest.mark.parametrize("shards", [2, 3, 4, 8])
@@ -1549,7 +1551,7 @@ def test_every_item_lands_in_exactly_one_shard(shards: int) -> None:
     landed = [
         item.item_id
         for shard in range(shards)
-        for item in cli.shard_of(built, shard=shard, shards=shards)
+        for item in shard_of(built, shard=shard, shards=shards)
     ]
     assert sorted(landed) == sorted(item.item_id for item in built.items)
 
@@ -1559,14 +1561,14 @@ def test_shards_are_round_robin_so_the_long_articles_spread() -> None:
     built = built_plan()
     if len(built.items) < 2:
         pytest.skip("the fixture pool is too small to interleave")
-    assert cli.shard_of(built, shard=0, shards=2)[0] == built.items[0]
-    assert cli.shard_of(built, shard=1, shards=2)[0] == built.items[1]
+    assert shard_of(built, shard=0, shards=2)[0] == built.items[0]
+    assert shard_of(built, shard=1, shards=2)[0] == built.items[1]
 
 
 def test_a_shard_beyond_the_item_count_is_empty_rather_than_an_error() -> None:
     """Four workers on a two-item day is normal, and two of them must exit cleanly."""
     built = built_plan()
-    assert cli.shard_of(built, shard=len(built.items) + 1, shards=len(built.items) + 2) == []
+    assert shard_of(built, shard=len(built.items) + 1, shards=len(built.items) + 2) == []
 
 
 def run_config(**overrides: int) -> RunConfig:

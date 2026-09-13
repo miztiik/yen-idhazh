@@ -33,7 +33,7 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import cli, config, extract
+from idhazh import config, extract
 from idhazh.contracts.app_config import (
     EvaluationConfig,
     InferenceConfig,
@@ -60,6 +60,7 @@ from idhazh.llm.server import (
     server_argv,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, LINK_PLACEHOLDER
+from idhazh.stages.validate import _summarize_one
 from idhazh.summarize import (
     build_request,
     draft_model,
@@ -1987,7 +1988,7 @@ def refused_endpoint() -> str:
 
 
 def summarize_against(endpoint: str) -> Summary:
-    return cli._summarize_one(
+    return _summarize_one(
         article(), config.load(CONFIG_DIR), endpoint=endpoint, run_id="2026-08-25-1"
     )
 

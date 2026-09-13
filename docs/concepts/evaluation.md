@@ -515,7 +515,7 @@ The range was enforced twice, off the same two knobs. `summarize.to_summary`
 counted the drafted words and refused anything outside
 `evaluation.summary_words_min` to `evaluation.summary_words_max` with
 `length_out_of_range`, returning a payload whose status is `failed` and whose
-summary text is unset. `cli._observe` sets both `ok` and `schema_valid` from that
+summary text is unset. `stages.qualify._observe` sets both `ok` and `schema_valid` from that
 status, and takes `summary_word_count` from the summary text - zero for a refused
 reply, never the count the model actually wrote. `evals/qualify.py` then graded
 `[o for o in observations if o.ok]` against those same two knobs. Every reply

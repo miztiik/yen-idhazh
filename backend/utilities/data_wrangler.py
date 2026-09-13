@@ -40,7 +40,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import assemble, cli, config, corpus, extract, summarize, tag
+from idhazh import assemble, config, corpus, extract, summarize, tag
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
@@ -52,6 +52,7 @@ from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import archive, writer
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.stages import common
+from idhazh.stages.common import Fetcher, published_days
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 #: What a table is padded to. A number nobody can line up is a number nobody reads.
@@ -359,7 +360,7 @@ def _digest_items(digest_root: Path) -> dict[str, _Entry]:
     fetch that failed.
     """
     found: dict[str, _Entry] = {}
-    for path in cli.published_days(digest_root):
+    for path in published_days(digest_root):
         day = DigestDay.from_json(path.read_text(encoding="utf-8"))
         for item in day.items:
             if not item.title or not item.summary:
@@ -436,7 +437,7 @@ def refill(
     state_dir: Path,
     digest_root: Path,
     limit: int | None,
-    read_url: cli.Fetcher | None = None,
+    read_url: Fetcher | None = None,
 ) -> int:
     """Rebuild rows from the source address, for runs whose artifacts have expired.
 

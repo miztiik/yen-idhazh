@@ -22,7 +22,6 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import cli
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
@@ -31,6 +30,7 @@ from idhazh.contracts.label_row import LabelTag, LabelVerdict
 from idhazh.contracts.summary import Summary
 from idhazh.evals import evidence
 from idhazh.stages import common
+from idhazh.stages.work import _write_evidence
 from utilities import label_queue
 
 EVIDENCE_FIXTURE = CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json"
@@ -112,7 +112,7 @@ class TestTheTextSurvivesTheRun:
         monkeypatch.setattr(common, "EVIDENCE_ROOT", tmp_path)
         row = a_row()
 
-        path = cli._write_evidence(row, premise=an_item().premise, summary="Some words.")
+        path = _write_evidence(row, premise=an_item().premise, summary="Some words.")
 
         assert path.parent == tmp_path / row.date
         assert evidence.look_up(evidence.index(tmp_path), a_queue_row()).refusal is None

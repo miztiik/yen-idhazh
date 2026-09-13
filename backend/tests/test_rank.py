@@ -20,7 +20,6 @@ from typing import Final
 
 import pytest
 
-from idhazh import cli
 from idhazh.config import REPO_ROOT, load
 from idhazh.contracts.app_config import AssistConfig, CollectConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
@@ -45,6 +44,7 @@ from idhazh.rank import (
     score,
     tier_weight,
 )
+from idhazh.stages.plan import _record_plan_duplicates
 
 DATE = "2026-08-23"
 RUN = "2026-08-23-1"
@@ -729,7 +729,7 @@ def test_record_only_logs_the_would_cut_pair_and_removes_nothing(
     assert collect.dedup_enforce is False, "the shipping default is record-only"
     embedder = Embedder(REPO_ROOT, AssistConfig())
     with caplog.at_level(logging.INFO):
-        kept = cli._record_plan_duplicates(
+        kept = _record_plan_duplicates(
             [strong, weak], embedder=embedder, leads={}, collect=collect
         )
     assert kept == [strong, weak], "record-only removes nothing"
@@ -745,7 +745,7 @@ def test_enforcing_cuts_the_weaker_telling() -> None:
     strong = _planned("ai", 1, source_id="alpha", rank_score=10.0, title=headline)
     weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
     embedder = Embedder(REPO_ROOT, AssistConfig())
-    kept = cli._record_plan_duplicates(
+    kept = _record_plan_duplicates(
         [strong, weak], embedder=embedder, leads={}, collect=CollectConfig(dedup_enforce=True)
     )
     assert kept == [strong], "enforcing keeps the stronger telling and drops the weaker"
