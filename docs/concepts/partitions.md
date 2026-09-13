@@ -217,6 +217,17 @@ their grain from different things.
 on the same boundary. A month's input is at most 31 files, so the bridge is a
 store-bounded read rather than a growing one.
 
+**A day tree's filenames are an index of which days the store holds, and a
+bridge reads that index instead of doing calendar arithmetic.**
+`publish_source_health._recent_item_health` wants the newest
+`source_yield_min_complete_days` dates the ledger actually recorded, which is not
+the set a calendar window of the same width names - a gap in the record leaves
+the window short, and widening it until it is long enough reads back to the first
+run the project made. Every day file's name IS a recorded date, so the newest
+`keep` names are the answer and nothing behind them is opened. A month name could
+not do this: it says only that the store holds records somewhere inside that
+month.
+
 What the day grain costs, stated rather than implied: the unbounded arm of
 `publish_telemetry.publish` opens about thirty times as many file handles for the
 same rows, and every listing of the store names one entry a recorded day instead
