@@ -1,8 +1,8 @@
 """One picture, one story - held by the producer that writes the day.
 
 Contract tier (CLAUDE.md section 13). The rule itself is
-`idhazh.cli._picture_faults`, and it runs inside `idhazh validate-days`, which
-`ci.yml` runs on every change and `digest.yml` runs before every publish. That
+`idhazh.stages.validate_days._picture_faults`, and it runs inside `idhazh validate-days`,
+which `ci.yml` runs on every change and `digest.yml` runs before every publish. That
 function's docstring carries the defect it exists for.
 
 **It used to be one test per committed day, and that is what changed.** A day
