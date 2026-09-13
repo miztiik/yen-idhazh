@@ -232,6 +232,16 @@ listed: its cover is its argument. These are `backend/`'s;
 | `retention.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
 | `retention.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
 | `retention._dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
+| `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
+
+**The reference-set read is the only one on this table that nothing schedules**,
+and that is the whole of its cover. `plan` is one of four verbs on
+`backend/utilities/build_reference_dataset.py`, a person runs it by hand, and its
+sibling `verify` - the one anybody might run twice - reads only the frozen set
+and the capped fine-tuning window. Measured 2026-09-13 on an Intel Core i7-1265U:
+23 days, 24,244,409 bytes, 9,278 items, 1.3 seconds. No test repeats it
+(`CLAUDE.md` section 13); the tests drive from
+`tests/fixtures/reference-dataset/`.
 
 **Six of these carry the word `Cover:` on the line that declares them** -
 `ledger.py` twice, `corpus.py` twice, `fingerprint.py` and `contracts/base.py`.

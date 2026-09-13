@@ -1,0 +1,33 @@
+US regulators are grappling with a controversial new frontier in online shopping: companies using our personal data to work out how much each of us is willing to pay.
+The Federal Trade Commission is currently consulting on an enforcement policy for “personalised pricing”, amid concern increasingly sophisticated algorithms could allow businesses to tailor prices and discounts to individual customers.
+Closer to home, Consumer NZ recently warned about the vast amounts of data collected through supermarket loyalty programmes.
+There is no evidence New Zealand supermarkets are individually pricing products this way. But Consumer NZ argues loyalty data could give retailers an increasingly detailed picture of shopping habits – including clues about how much individual customers are prepared to pay.
+The concern underscores a growing tension in the AI-driven economy: what happens when businesses become much better at learning the financial limits of the people they deal with?
+The same question applies to workers: could algorithms also help businesses learn the lowest amount someone is willing to accept for their labour?
+AI is changing who knows what
+At the University of Auckland Business School, we spend a lot of time teaching students how businesses create value, compete and become more efficient.
+But consider the same person in two markets. As a worker, their employer benefits from knowing the lowest amount they will accept; as a customer, a seller benefits from knowing the highest amount they will pay.
+Traditionally, neither side knows those numbers precisely. A worker might accept $24 but receive $30 because that is the going rate; a customer might pay $20 but buy for $14 because that is the advertised price.
+Algorithms are increasingly reducing that uncertainty – much faster for firms than for the workers and consumers they deal with.
+Digital platforms can observe thousands of individual decisions. A ride-hailing platform can see which jobs a driver accepts, when they work and which incentives bring them online. A retailer can see purchases, abandoned carts and responses to discounts.
+There is no strong evidence major companies already know everyone’s precise financial breaking point. But algorithmically mediated pay, personalised worker incentives, discounts and consumer offers are already real.
+Lyft has already documented systems that determine which drivers receive incentives, with some earnings challenges explicitly personalised.
+Recent research on 1.5 million Uber trips in the UK meanwhile found dynamic pricing was associated with lower real hourly earnings and greater inequality, although that does not prove Uber calculates the minimum each driver will accept.
+A recent US Federal Trade Commission investigation also found pricing intermediaries had access to information including location, demographics, browsing histories, shopping-cart activity and even mouse movements in systems capable of influencing prices, discounts and promotions.
+A retailer need not charge one customer $100 and another $120. It can simply offer a discount to someone predicted to walk away and withhold it from someone predicted to buy anyway.
+It should be noted that markets have never been perfectly transparent. Employers know more about wage structures than workers and sellers more about margins than buyers. Yet there has traditionally been uncertainty on both sides.
+Algorithmic systems now risk reducing that uncertainty in only one direction: firms can increasingly learn an individual’s limits, while their own remain hidden.
+A worker cannot easily know whether rejecting $24 would have produced $28. Nor can a customer know whether walking away from a purchase today would have triggered a discount tomorrow.
+Meanwhile, firms can observe, test and learn from repeated behaviour.
+At its extreme, this risks becoming a kind of digital feudalism: platforms can increasingly see the people they deal with, while those people can barely see the systems governing the exchange.
+Where do the gains go?
+There can, of course, also be genuine benefits to AI-driven personalisation.
+Targeted incentives can improve matching, personalised discounts can help price-sensitive customers and better forecasting can reduce waste.
+The issue, however, isn’t whether these systems can create efficiencies, but how the gains are distributed. They could translate into higher wages, lower prices, better products, greater investment or higher profits.
+That depends partly on information. Personal data has economic value because it can help predict the terms people are willing to accept, making privacy a question of bargaining power too.
+Transparency is equally important. Workers and consumers are increasingly visible to businesses, while the systems making decisions about them remain largely opaque.
+They might reasonably expect to know when an offer has been personalised, what information influenced it and whether others are receiving materially different treatment. That does not require companies to publish their algorithms, but visibility should not flow only one way.
+Business schools also have a responsibility. Alongside teaching pricing strategy, segmentation, cost reduction and AI-driven decision-making, students should be encouraged to ask: effective for whom?
+There is a difference between using technology to create new value and becoming better at capturing value from the other side of a transaction.
+The most troubling outcome does not require malicious AI. Companies can rationally reduce costs and improve margins while becoming better at predicting what workers will accept and customers will pay.
+The question cannot simply be whether something can be optimised. We should also ask who benefits, whether it is fair – and what happens if every business does the same thing.

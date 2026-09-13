@@ -1,0 +1,8 @@
+Sept 10 : D-Matrix said on Thursday it will adopt Nvidia's chip-linking technology to use the startup's processors directly inside the semiconductor giant's data-center systems as demand for AI intensifies.
+Artificial intelligence workloads have been shifting from training AI models to running them for everyday use, a process known as inference. While Nvidia's pricey graphics processors dominate training workloads, d-Matrix specializes in inference.
+D-Matrix's new chips, called Raptor, will plug into Nvidia's server racks using NVLink Fusion, a technology that has connectors and specialized memory so custom AI chips can plug into Nvidia's larger data-center systems, the startup said.
+The Nvidia-compatible racks are expected to be available in 2027, with the Raptor chips scheduled to complete their final design stage by the end of this year.
+D-Matrix said the combined systems are aimed at fast, low-latency AI services such as coding assistants, chatbots and voice agents, where speed is critical.
+The startup did not disclose the financial terms of the collaboration.
+The Santa Clara, California-based startup is also partnering with connectivity firm Astera Labs to build custom solutions to ensure fast data flow across the system.
+Microsoft has backed d-Matrix since its $110 million financing round in 2023. The startup, which shipped its first AI chip in November 2024, was valued at $2 billion when it raised $450 million last year.

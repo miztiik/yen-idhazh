@@ -1,0 +1,28 @@
+Hitesh Bhatia
+Assistant Vice President and Head of Engineering, Airtel Digital
+Anand Vijayan
+Senior Product Manager, Media CDN, Google Cloud
+For the millions of fervent fans of the Indian Premiere League (IPL), being able to count on a flawless live streaming cricket experience is never up for debate. For Airtel, producing league TV broadcasts with some of the world's most massive concurrent viewership, dropped packets and buffering are simply not options.
+During the IPL 2026 season, Airtel partnered with Google Cloud to manage this digital delivery. Across 74 matches, the streaming infrastructure delivered several hundred petabytes of egress data. The final match alone processed tens of billions of requests, hitting a peak egress of several Tbps.
+Delivering video under these concurrency spikes requires an edge architecture designed strictly around localization, paired with proactive operational monitoring.
+Our goal for IPL 2026 was to deliver an uninterrupted, stadium-grade viewing experience to cricket fans across India, regardless of concurrency surges or network conditions. Partnering with Google Cloud and using Media CDN gave us deep local edge proximity and excellent cache efficiency. Combined with proactive match-day real-time monitoring, we delivered a reliable broadcast experience from start to finish.
+Architecting for concurrency and edge efficiency
+One of the primary challenges in live sports broadcasting is seamlessly handling large traffic spikes and never degrading stream performance or overwhelming backend origins. That’s especially important when millions of viewers simultaneously tune in during a final over because every millisecond counts.
+To accelerate content delivery across India’s diverse ISP landscape, Airtel leveraged Google Cloud’s Media CDN. By utilizing Google’s extensive global edge network, Airtel was able to serve viewer requests from edge locations that were physically close to end users. This deep localization was a cornerstone of the broadcast's success, with 99.9% of all tournament traffic being served locally from within India.
+This efficient architecture minimized network hops and reduced transit congestion, translating into remarkable infrastructure and viewer experience metrics throughout the 74 matches:
+-
+Superior caching efficiency: Airtel saw an overall cache hit ratio exceeding 98%. By effectively absorbing massive viewer traffic load at the edge, origin server/video platform demands remained minimal even during peak playoff viewership.
+-
+Consistent ultra-low latency: Airtel maintained a p99 latency of < 300 ms during the tournament, which supported fast stream start times and minimized buffering risk during critical game moments.
+Proactive strategies for operational readiness
+While maintaining an intelligent backend architecture was vital to Airtel’s IPL streaming strategy, it was only half the equation. Executing high-stakes live broadcasts across 74 consecutive matches also demanded meticulous operational preparation and proactive match-day execution.
+Because Airtel and Google Cloud recognized that potential bottlenecks had to be identified long before the first ball, they established a deeply integrated operational support model:
+-
+Pre-tournament support readiness reviews: Well ahead of the opening match, joint engineering teams conducted comprehensive support readiness reviews. By auditing traffic projections, reviewing manifest configurations, and validating failover mechanisms early, the teams supported robust client readiness, resulting in low operational friction during the tournament.
+-
+Monitoring as a service (MaaS): The teams maintained continuous, proactive telemetry monitoring through MaaS on Media CDN, and real-time observability enabled early detection and mitigation of network shifts before anomalies could impact viewer playback.
+-
+Dedicated match-day and weekend support: Live sports don't play by the rules of standard business hours, so Airtel established comprehensive monitoring protocols for every match. During critical weekend fixtures and the high-stakes playoff stage, Google Cloud’s Technical Account Management and MaaS teams worked hand-in-hand with Airtel engineering to provide dedicated, real-time event support.
+A blueprint for live broadcast excellence
+Airtel’s successful streaming of IPL 2026 demonstrates that handling extreme concurrency is only possible with an integrated strategy across architecture, edge localization, and operational governance. By combining a 98%+ cache hit ratio with 99.9% local delivery and proactive match-day monitoring, Airtel hit a benchmark for live sports broadcasting at scale.
+This deployment provides an overview of the technical architecture and operational strategies involved in scaling live media delivery for high-concurrency events. To learn more about optimizing live broadcasts and edge delivery, review the Media CDN developer documentation.

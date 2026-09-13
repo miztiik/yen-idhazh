@@ -1,0 +1,43 @@
+Enterprise work spans messages, decisions, projects, and obligations that change over time. An AI agent that starts without this context must reconstruct it before contributing.
+To provide agents with this necessary context, our team used NVIDIA NemoClaw to build a memory-driven Chief of Staff. It maintains a human-readable knowledge layer called the self model: an agent memory of relevant people, projects, priorities, and working patterns. Scheduled jobs periodically review new activity, track obligations, and incorporate user decisions over time. Our experience shows that useful agent memory requires structure, selective retrieval, and governance—not just storage.
+This post demonstrates how a memory-driven agent built with NVIDIA NemoClaw can improve productivity in real-world enterprise workflows. It also shares five design lessons you can apply to your own agents:
+- Maintain context across daily work to improve task quality
+- Separate evidence, knowledge, and actions to help agents make better judgments
+- Design memory-driven agents can prioritize user intent over short-term urgency
+- Allow users to correct agent decisions to build trust
+- Enforce the boundary of security and authorization with NVIDIA OpenShell
+Conversation history provides short-term continuity, but it mixes current priorities with past decisions and temporary requests. Retrieval can find relevant source material, but the agent must still connect information across time.
+Consider a project status question. The answer might depend on an earlier decision, a correction in a later message, an unresolved obligation, and the knowledge that two different names refer to the same project.
+To solve these problems, you can use the self model that maintains these relationships in structured Markdown pages. It organizes information about people, projects, priorities, goals, concepts, and recurring work patterns. Its schema defines indexing, cross-references, provenance, and growth limits.
+The self model stores a derived interpretation rather than replacing source evidence. Keeping the two separate helps you, the developer, determine whether an incorrect answer came from the evidence, memory maintenance, retrieval, or the model’s final decision.
+You could use the three layers of tuning capabilities from the memory-driven Chief of Staff:
+Evidence → Knowledge → Governed execution
+Evidence supports updates to the self model. For each task, the agent retrieves a bounded set of relevant context. The agent then uses that context within the NVIDIA NemoClaw example. The architecture is shown in Figure 1.
+The example stores two kinds of information:
+- Knowledge: People, projects, priorities, and working patterns
+- Judgment: Whether an item needs attention, where it ranks, and whether the user ignored it
+A Markdown agent memory stores knowledge. A SQLite ledger stores obligations, rankings, corrections, and audit events. This design preserves the agent’s judgments without writing them into source messages as read flags, labels, or folders.
+A memory page might say that a collaborator prefers Slack. The agent can use that context to recommend Slack, but sending a message still depends on credentials, tool permissions, runtime policy, and user approval.
+Context can inform an action, but it cannot authorize one.
+Incoming requests often describe themselves as urgent, but urgency does not necessarily reflect the user’s priorities. An intent gate therefore reserves the highest tier for obligations connected to the user’s stated priorities.
+In the public recipe provided, an urgent expense-policy attestation remains visible but ranks below a quieter request tied to a stated priority. Your NVIDIA NemoClaw could interpret that relationship, while deterministic code enforces tier size, overflow behavior, and ranking order.
+Persistent memory can preserve an incorrect judgment as easily as a correct one. Using the recipe, you could move an obligation to another tier or ignore it, and later agent runs preserve that decision. Each change is recorded once in an append-only audit trail.
+Repeated correction patterns can update a small, readable preference policy. Users can inspect, edit, or delete that policy instead of leaving the preference hidden in model state.
+The feedback loop remains visible:
+Agent judgment → User correction → Audit event → Preference update
+Adding the memory-driven Chief of Staff to NemoClaw produced measurable improvements across several agent tasks, as shown in Table 1. The Agent Memory Benchmark and evaluation examples are included in the example repo. The example repo compares an agentic retrieval-augmented generation (RAG) baseline that performs multi-round retrieval with the self model.
+This separation is enforced with NVIDIA NemoClaw and the NVIDIA OpenShell secure runtime for autonomous agents. NemoClaw integrates the example with NVIDIA OpenShell and manages its lifecycle, while NVIDIA OpenShell runs the agent in a sandbox and provides governance and policy enforcement for file system, process, and network access. For managed inference and MCP connections, credentials remain outside the sandbox.
+This is important because memory and retrieved content are inputs to the model, not trusted security policy. If the agent misinterprets that context—or follows malicious instructions—it still operates within operator-defined runtime boundaries. They limit the agent’s access and the potential impact of a failure.
+To adapt the memory design featured in this post for your own NemoClaw example, review the open source Memory-Driven Chief of Staff recipe and its design proposal in the NVIDIA/nemoclaw-community GitHub repo.
+The recipe packages the example as a deployable Hermes profile for NemoClaw:
+- A structured memory schema
+- A durable obligation ledger
+- Bounded ranking logic
+- User correction and audit paths
+- Scheduled memory maintenance
+- Synthetic messages and memory pages
+- An offline walkthrough
+- A suite of unit tests
+The sample people, organizations, projects, and messages are invented. Recorded model decisions stand in for inference in the offline walkthrough. The code then applies the ranking, correction, persistence, and validation behavior.
+The current recipe focuses on the memory foundation. It does not send messages or modify source systems. This scope allows you to examine the design without connecting a workplace account. Live connectors require separate handling for credentials, privacy, retention, and deletion.
+Learn more about NVIDIA NemoClaw and NVIDIA OpenShell.

@@ -1,0 +1,16 @@
+According to Google, the upgrades are designed to make conversations across languages more seamless, with Live Translate now supporting more than 70 languages, including Hindi, Arabic, French, Korean, Spanish and Tamil
+Washington: Google has introduced major upgrades to Live Translate in its Google Translate app, bringing real-time, two-way conversational audio and on-screen text translation to Android and iOS users.
+According to Google, the upgrades are designed to make conversations across languages more seamless, with Live Translate now supporting more than 70 languages, including Hindi, Arabic, French, Korean, Spanish and Tamil.
+A key addition is Gemini-powered speech intelligence. Google says its advanced speech recognition and multimodal Gemini models can help isolate background noise in environments such as busy cafés and airports, while also recognizing accents, intonation and conversational pauses.
+Live Translate also provides dual-language transcripts on screen while playing the translated audio, allowing users to follow conversations both visually and through sound. The app can automatically detect the active language as users speak.
+Google has also added a companion language-learning feature that creates customized speaking and listening practice sessions based on individual learning goals.
+How to use Live Translate:
+1. Open the Google Translate app on an Android or iOS device.
+2. Tap the Live translate option.
+3. Select the source and target languages.
+4. Start speaking naturally. The app automatically detects the active language and displays and reads out the translation.
+Google has also announced two additional Live Translate upgrades. On Android, Live Translate can process conversations in the background, including when the phone's screen is locked, allowing users to multitask. Support for this functionality on iOS is coming soon.
+On iOS, translated audio can now be played through the phone's earpiece. This complements the existing Android support for hands-free listening, particularly in noisy environments such as airports and public transport.
+The latest changes are aimed at making real-time translation more practical for travel and everyday conversations, while expanding the ways users can listen to and follow translated speech within the Translate app.
+( Source : ANI )
+Next Story

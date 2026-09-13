@@ -1,0 +1,12 @@
+OpenClaw 2.0 brings simplified setup, a rebuilt browser app, and multiplayer sessions
+The OpenClaw Foundation has released version 2.0 of its open-source AI platform. It's the project's largest release to date with over 16,000 pull requests, adding shared cloud sessions, a streamlined onboarding process, and a browser app rebuilt from scratch.
+Version 2.0 is the largest OpenClaw release so far, and the biggest change is a simplified first-run setup. The software now detects existing resources on the computer, including ChatGPT or Claude subscriptions, API keys, and local models, which cuts out many of the configuration steps users previously had to deal with. Additional settings can be adjusted later during a conversation with the bot.
+The browser app is rebuilt from scratch
+It now opens a conversation right away and lets users continue setup, pick up ongoing work, or track tasks in real time. One addition is the "Session Rail," a compact status display inside the chat that shows the progress of a running session, including ratings, plan progress, and pull requests. There's also an integrated companion thread that lets you ask questions about the current session without interrupting the agent. According to the documentation, the gateway loads a limited snapshot of the session for this and uses a separate utility model.
+Shared Cloud Sessions let multiple users work on the same tasks, pulling team members into ongoing work or assigning them tasks along with their context. OpenClaw says its own team already uses this feature to build OpenClaw itself.
+Sessions can run in three places: on the local gateway as the default, on the user's own hardware connected via openclaw connect (Paired Devices), or on rented disposable machines through the Crabbox provisioning tool, which supports backends like AWS and Hetzner. Provider credentials always stay on the gateway and never reach the remote machine, according to the documentation.
+Beyond these three updates, the release notes list changes to messaging, memory, skills, model support, automations, native apps, plugins, and security. All changes are available here, and the software is open source on GitHub.
+AI News Without the Hype – Curated by Humans
+
+Subscribe to THE DECODER for ad-free reading, a weekly AI newsletter, our exclusive "AI Radar" frontier report six times a year, full archive access, and access to our comment section.
+Subscribe now

@@ -1,0 +1,53 @@
+ST Explains
+Why are bond yields rising and how does it affect me?
+AI generated
+SINGAPORE - Long-term government bond yields around the world have climbed to multi-year highs in recent weeks, raising borrowing costs and putting pressure on other investments.
+As US Treasuries provide a global benchmark for interest rates and asset valuations, their yields can affect everything from Singapore government bonds and corporate bonds to share prices, exchange rates and, indirectly, borrowing costs here.
+The yield on the 30-year US Treasury bond closed above 5.3 per cent in August, its highest level since 2007.
+Long-term government bond yields in Britain, Germany and Japan have also risen to levels not seen in years.
+This rise is the result of a potent cocktail of issues, including an increase in headline inflation due to the energy crisis caused by the prolonged Middle East conflict.
+Oil prices hit US$100 a barrel for Brent crude on Sept 9 owing to the continued blockade around the Strait of Hormuz – a vital global shipping channel for oil and gas – raising the prices of everything from fuel to food.
+The US is also borrowing more to finance its war with Iran, adding to fiscal pressures that were already mounting before the conflict began.
+The federal government recorded a deficit of US$1.78 trillion (S$2.25 trillion) in the financial year ended September 2025, as spending exceeded revenue. Its gross national debt has since surpassed US$40 trillion, intensifying concerns about how much more debt the market will have to absorb and the interest rates investors will demand to hold it.
+Governments around the world need to finance infrastructure and defence investments, technological transformation and growing social spending linked to ageing populations, Kelvin Tay, chief investment officer for Asia at Pictet Wealth Management, explained.
+At the same time, companies need to invest to adapt to emerging artificial intelligence demands.
+Governments and businesses are therefore competing more actively for investors’ money, potentially pushing borrowing costs higher, particularly for longer-term funding, said OCBC head of wealth advisory Chez Anbu.
+In exchange, investors now want higher returns for lending money over longer periods, particularly when elevated inflation threatens to erode the value of future interest payments. This pushes long-term bond yields higher.
+Impact on the US Dollar
+Higher US bond yields tend to support the US dollar, as more capital flowing into US fixed income markets can lead to greater demand for the dollar, said JP Morgan Asset Management’s Swa Wu, head of Asia excluding-Japan investment specialists for fixed income.
+But the higher yields this time do not guarantee a stronger US dollar, as there are also concerns about how sustainable US debt is.
+Goh Rong Ren, Eastspring Investments’ head of macro and thematics for Asian fixed income, said other factors like uncertainty around US economic policy, such as tariffs and fiscal outlook, have also reduced some of the confidence that has previously supported US assets.
+International investors are also parking money in other assets instead of channelling large amounts into the US.
+“Taken together, these factors are helping to keep a lid on the dollar despite higher US yields,” Goh said.
+The volatility of the US dollar affects Singapore investors, especially since many investors have holdings in the United States, whether in shares, exchange-traded funds (ETFs) or other assets, said UOB’s Gidon Jerome Kessel, group head of deposit and wealth management.
+For example, if a US stock gains 8 per cent but the greenback falls against the Singapore dollar, the gains for a Singapore investor would be eroded.
+Impact on other government bonds
+Kessel said there is typically a correlation between the yields of the Singapore Savings Bond (SSB) and yields across other markets, especially since the US Treasury is the key benchmark for global fixed income markets.
+The Monetary Authority of Singapore (MAS) announces the interest rates of each SSB tranche, as well as the returns over different holding periods.
+For instance, the average return over 10 years for the upcoming tranche of SSB is 2.32 per cent, according to the MAS website.
+Goh noted that if investors can earn more from US government bonds, they may also demand somewhat higher yields from government bonds elsewhere.
+But that does not mean other bond markets move one for one with the US.
+“Singapore government bonds, and Singapore-dollar fixed income more broadly, have been relatively stable even as global bond yields have risen in 2026,” he said.
+“There has been some upward pressure on Singapore government securities yields, but the move has been much smaller than in the US and several other major bond markets.”
+Anbu noted that other factors like local inflation, monetary conditions and currency hedging costs also matter.
+Singapore’s 10-year government bond yield of under 2.5 per cent in September remains well below its US counterpart.
+But he also said that if Singapore government securities yields rise sustainably, future SSB issues could offer higher returns.
+Will Singapore see higher interest rates?
+Bond yields set out the cost of borrowing when banks lend money. Hence, long-term yields also benchmark the cost of other loans such as mortgages and corporate term loans.
+Shorter-term borrowing in Singapore is anchored to the Singapore Overnight Rate Average (SORA), which also follows global funding conditions such as a US Federal Reserve rate hike, said Eric Xiao from CMC Markets.
+Hence, in Singapore, many floating rate loans are linked to compounded SORA and not directly to the US 10-year yield. MAS also conducts monetary policy through the exchange rate rather than a policy interest rate, said Anbu.
+“Consequently, higher US yields create upward pressure, but do not guarantee an immediate or equivalent rise in Singapore lending rates,” he added.
+“Local liquidity and bank competition can cushion the effect. Existing fixed-rate borrowers remain protected during their fixed-rate period.”
+Goh said households that are concerned about higher interest rates can lock in their borrowing costs for the next few years through a fixed-rate loan or refinancing package.
+Impact on REITs and stocks
+If government yields rise, REITs will have to offer investors higher dividends to stay competitive. If not, investors may sell REITs to buy safer government bonds that offer higher yields, said Xiao.
+Kessel added that if yields continue to increase, bonds and fixed income may also become more attractive to investors. This can lead them to reallocate funds away from REITs and stocks into assets like bonds and treasury bills.
+But Kessel said that for Singapore’s stock market, there may still be good interest given strong corporate balance sheets and attractive dividend payouts, especially with the three local banks making up a large part of the equities market and possibly benefiting from higher interest rates.
+Maybank analysts also said that the impact of the higher bond yields on the Singapore market will be “uneven”, especially since more than half of the Straits Times Index (STI) is dominated by financials that benefit from rising rates.
+Maybank Securities Singapore head of equity research Thilan Wickramasinghe said: “Singapore’s domestic drivers such as the construction boom, AI supply chain-linked semiconductor demand and fiscal measures are secular drivers that are likely to be less impacted by the near-term direction of bonds.”
+Morningstar senior analyst Arvind Subramanian said investors should be careful when chasing higher yields, as they should be prepared to tolerate greater volatility with funds that take on more interest rate risk.
+“This has disappointed investors seeking the more stable return profile that fixed income is traditionally expected to provide,” he said.
+Anbu also noted that while bonds can offer investors meaningful income opportunities, it does not mean they should totally drop stocks.
+“The higher yields raise the bar for equity investments, but they do not automatically undermine the case for equities,” he said.
+“With growth still resilient, the key is whether earnings and cash-flow growth can justify valuations and compensate for higher financing costs.”
+Eastspring Investments’ portfolio manager Bryan Yeong said that equities remain an important part of an investor’s long-term portfolio because they offer the potential for earnings, dividend growth and capital appreciation.

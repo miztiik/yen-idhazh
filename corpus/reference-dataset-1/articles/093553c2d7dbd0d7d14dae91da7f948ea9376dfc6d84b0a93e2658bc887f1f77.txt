@@ -1,0 +1,6 @@
+MacGregor has received DNV certification for floating-to-floating (F2F) personnel transfers using its Horizon gangway following a sea acceptance test.
+For F2F operations, the gangway uses a purpose-designed flap at its tip instead of the docking head used for conventional fixed-structure landings. LiDAR-based relative-motion tracking provides data to the gangway’s motion-compensation system, which adjusts to the movements of both vessels to maintain the connection.
+MacGregor said the capability opens up new possibilities for personnel transfers in offshore operations including floating wind, as well as FPSOs, floating rigs and offshore service fleets, allowing crew changes and vessel-to-vessel access to be carried out offshore without relying on fixed landing points or coordinating operations around port calls.
+“In the renewables sector, this supports the service logistics that floating wind operations demand – where there is no fixed structure to land on whatsoever”, said Prateek Sadhana , MacGregor Product Owner, Walk-to-Work Gangways.
+The F2F function is offered as an extension of the existing Horizon gangway range rather than as a separate product, according to MacGregor, which said the capability could also be retrofitted or added to Horizon gangways already in operation.
+Follow offshoreWIND.biz on:

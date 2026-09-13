@@ -1,0 +1,205 @@
+TL:DR
+PyTorch Conference North America 2026 (San Jose, October 20–21) is packed with sessions on getting PyTorch to run fast, portably, and reliably across an increasingly diverse silicon landscape – GPUs, TPUs, NPUs, and custom ASICs alike.
+Introduction
+In this blog, we take a look at every session that touches hardware acceleration and compute infrastructure: kernel engineering, compiler backends, new accelerators (TPU, Trainium, Intel XPU, AMD Instinct, IBM Spyre, Arm) and the profiling/observability tooling that keeps it all running.
+Keynotes
+Sponsored Keynote: Trainium’s Journey to Native PyTorch
+Maen Suleiman, Amazon Web Services
+10/20/2026, 9:35–9:40 AM, Grand Ballroom
+AWS walks through how PyTorch now runs natively on Trainium with no code changes, covering eager mode, torch.compile, and integrations with TorchTitan, TorchAO, and Hugging Face Transformers v5.
+Workload Fungibility in the Age of Agents
+Bill Jia, Google Cloud
+10/21/2026, 9:15–9:25 AM, Grand Ballroom
+Google Cloud showcases TorchTPU in production, plus agentic workflows that migrate models from GPUs to TPUs and autonomously hill-climb performance through quantization, kernel generation, and sharding.
+Linear Algebra for the Age of Research
+Mark Saroufim, Core Automation
+10/21/2026, 10:20–10:28 AM, Grand Ballroom
+A talk on the linear algebra kernels being developed today, why these long-studied performance bottlenecks still matter, and how AI tools are accelerating progress on them.
+Kernel Engineering & Compilers: Day One
+Extending TorchInductor with FlyDSL: A New MLIR-Native Backend for High-Performance GEMMs
+Liz Li, AMD
+11:10–11:35 AM, 210BF
+AMD presents FlyDSL, an MLIR-based GPU kernel DSL integrated into TorchInductor’s GEMM compilation pipeline, with performance comparisons against Triton on AMD Instinct GPUs.
+Helion: CuteDSL and TPU Backends for Heterogeneous Hardware, and Why It Suits Agents
+Oguz Ulgen, Dunfan Lu, Jason Ansel, Meta
+11:45 AM–12:10 PM, 210BF
+Meta introduces two new Helion compiler backends – CuteDSL for NVIDIA GPUs and Pallas for TPUs – letting one kernel source target different hardware, plus a look at why Helion’s high-level abstraction suits LLM-agent-written kernels.
+Practical GPU Programming with Triton for PyTorch Developers
+Suman Debnath, JanakiRam Goteti, Crusoe AI
+11:45 AM–12:10 PM, LL20CD
+A beginner-friendly introduction to writing GPU kernels in Triton, building from vector addition up to matrix multiplication with no CUDA or C++ required.
+High-Velocity GPU Kernel Authoring with CUTLASS Python
+Michael Goldfarb, Guray Ozen, NVIDIA
+12:20–12:45 PM, 210BF
+NVIDIA showcases new Python-first CUTLASS features – CuTe DSL extensions, low-level hardware primitives, and a zero-cost async scheduler – aimed at making advanced GPU kernel construction more accessible.
+PerfModel: A Validation-Driven Performance Model for Triton Kernels
+Xiaohu Guo, AMD
+3:25–3:50 PM, 210BF
+AMD presents PerfModel, an analytical model that predicts high-performance Triton GEMM configurations for AMD GPUs before JIT compilation, cutting the cost of exhaustive autotuning.
+JIT Kernel Compilation: How Modular Writes Fast Kernels for Any Hardware
+Stefan Lindall, Modular
+4:20–4:45 PM, 210BF
+An overview of Modular’s Mojo language, graph compiler, and hardware abstractions, showing how MAX automatically compiles specialized fused kernels across chips from H100s to TPUs and Trainium.
+Kernel Engineering & Compilers: Day Two
+Beyond the Brrr: Building a Unified Ecosystem for Optimized Kernels
+Sayak Paul, Hugging Face
+11:10–11:35 AM, 210BF
+Hugging Face introduces its Kernels library, which makes discovering and swapping in optimized custom kernels as simple as loading a model checkpoint, delivering 2–5x speedups without writing CUDA.
+Parametrized Dynamic Shape CUDA Graphs
+Elias Ellison (Meta), Daniel Galvez (NVIDIA)
+11:45 AM–12:10 PM, LL21ABC
+New support for capturing and re-parametrizing a single CUDA Graph across dynamic shapes, reducing the whole-model rewrites normally required and cutting cold-start times for inference serving.
+Making vLLM Faster on Intel GPUs with Triton Kernels
+Whitney Tsang, Artur Fierka, Intel
+12:20–12:30 PM, 210BF
+Intel presents Triton kernel strategies – unified attention, fused/batched MoE – that outperform SYCL on Intel Arc GPUs for vLLM’s hottest inference serving paths.
+FlexGEMM: Flexible PyTorch Epilogues
+Driss Guessous, Meta
+12:35–12:45 PM, 210BF
+A proposed PyTorch frontend, FlexGEMM, that lets developers write GEMM epilogues (bias, activation, residuals) as ordinary PyTorch functions the compiler can fuse into the GEMM store path.
+Sponsored: dmx-compressor: Accelerating the Development of Kernels for Custom ASIC Hardware
+Tristan Webb, d-Matrix
+12:35–12:45 PM, Community Expo
+d-Matrix demos a PyTorch 2.0 quantization framework that maps GPU reference implementations to ASIC kernel libraries, catching hardware numerical bugs earlier in development.
+Sponsored: Why is Heterogeneous Computing So Hard and Why Does it Have To Be?
+Jay Dawani, Lemurian Labs
+1:50–2:00 PM, Community Expo
+Lemurian Labs discusses why compiler and runtime abstractions break down across GPUs, NPUs, and custom accelerators, and what a genuinely hardware-agnostic stack needs to get right.
+Advancing torch.compile for Verifiable Precision & Dynamic Shapes
+Jing Li, Qi Guo, Huawei
+2:15–2:40 PM, 210BF
+Huawei presents a three-level numerical-verification toolchain and a Dynamic Virtual Machine integrated into Inductor, benchmarked on Ascend NPUs, for precision checking and dynamic-shape compilation.
+Sponsored: Beyond torch.compile: Reducing Data Movement with Device-Persistent Tensors in PyTorch
+Minwook Ahn, Rebellions
+2:15–2:25 PM, Community Expo
+Rebellions shows how extending PyTorch’s device abstraction with device-persistent tensors (Tensor.to(‘rbln’)) minimizes costly host-device transfers in LLM serving.
+Scaling MXFP8 Pretraining on 1K+ AMD Instinct MI355X: TorchAO Kernels and TorchTitan Training
+Liz Li, Shekhar Pandey, AMD
+2:15–2:40 PM, LL20AB
+AMD details MXFP8 kernel work in TorchAO and end-to-end TorchTitan pretraining on MI355X, comparing Triton and FlyDSL implementations and sharing MXFP4 accuracy trade-offs.
+PyTorch-Native LLM Serving on TPU: SGLang and vLLM
+Colin Taylor (Meta), Qi Zhou (Google), Angela Yi (Meta)
+2:15–2:40 PM, LL20CD
+An open-sourced native TPU backend (torch_tpu) that lets SGLang and vLLM run on TPUs while preserving their existing schedulers, batching, and OpenAI-compatible APIs.
+Clearing the Path Towards an ABI Stable PyTorch C++ Extension Ecosystem
+Sean McGovern (Red Hat), Chris Leonard (Red Hat), Jane Xu (Meta)
+2:15–2:40 PM, LL21ABC
+Tooling to help C++ extensions like vLLM and SGLang migrate to PyTorch’s stable ABI, ending the pin-and-rebuild cycle that breaks extensions on every PyTorch release.
+Native DSL Operators in PyTorch Core
+Simon Layton, Meta
+2:50–3:15 PM, LL21ABC
+Meta’s work bringing DSL-authored kernel operators (the pattern behind libraries like FlashAttention) into PyTorch core as first-class dispatch-integrated citizens.
+Speeding Up torch.compile: A New FakeTensor
+Angel Li, Meta
+4:55–5:05 PM, LL21ABC
+A new C++ implementation of FakeTensor that delivers roughly 30x speedup over the Python version, substantially cutting torch.compile’s cold-start compilation time.
+Lightweight FX Tracing in PyTorch
+Richard Zou, Yidi Wu, Meta
+5:10–5:20 PM, LL21ABC
+A JAX-style, make_fx-based lightweight FX tracer for functionally pure PyTorch code, offering a simpler, more learnable alternative to Dynamo for full-graph use cases.
+From Backed to Unbacked: Sound, Predictable, and Controllable Dynamic Shapes in PyTorch
+Laith Sakka, Meta
+4:20–4:45 PM, LL21ABC
+An argument for unbacked dynamic shapes over backed shapes for explicit graph-capture workflows like vLLM and export, plus a year-and-a-half of work closing the performance gap.
+Hardware Backends & Accelerator Portability: Day One
+Relay and Reuse: The Dual Engine Behind PyTorch Out-of-Tree Release Readiness
+Jiahao Chen, Jiahao Tan, Huawei
+11:10–11:35 AM, LL21DEF
+Huawei describes how device-agnostic test reuse and a Cross-Repo CI Relay let out-of-tree hardware backends ship high-quality PyTorch releases within 30 days of each upstream update.
+Sponsored: Cloud TPU Nexus: Autonomous Multi-Agent Swarms for PyTorch
+Sandeep Pokkunuri, Chris Jones, Google
+11:45 AM–12:10 PM, 210AE
+Google introduces Cloud TPU Nexus, a multi-agent system that automates PyTorch model migration from GPUs to TPUs, tuning compiler flags and kernels to reach most of hand-tuned performance in under a day.
+Sponsored: PyTorch Ecosystem Running Natively on Trainium
+Maen Suleiman, Amazon Web Services
+10:55–11:05 AM, Community Expo
+A live demo of training, serving, profiling, and custom kernel development running end-to-end on AWS Trainium with unmodified PyTorch workflows.
+Sponsored: Unifying Open-Source LLM Serving on Google Cloud TPUs with TorchTPU
+Rob Mulla, Google
+10:40–10:50 AM, Community Expo
+A demo of TorchTPU as a unified backend letting inference engines like vLLM and SGLang deploy state-of-the-art models on Cloud TPUs with minimal code changes.
+PyTorch Generalization: A Journey Toward Write Once, Run Anywhere
+Yu Guangye, Eikan Wang, Intel
+12:20–12:30 PM, LL21DEF
+Intel discusses PyTorch’s generalization effort toward hardware-agnostic code: API unification, the new torch.accelerator runtime API, and test infrastructure that validates correctness consistently across backends.
+Sponsored: Hardware-Aware AI: Building Agentic Systems from Cloud to Edge with PyTorch, ExecuTorch
+Kavya Sri Chennoju, Arm
+12:20–12:45 PM, LL20CD
+Arm demonstrates a cloud-to-edge workflow combining PyTorch, ExecuTorch, vLLM, and Arm Device Connect so foundation models can invoke edge models and coordinate physical hardware.
+Model Training with TorchTitan and HuggingFace Transformers v5 on AWS Trainium via TorchNeuron
+Maen Suleiman (Amazon Web Services), Michael Benayoun (Hugging Face)
+3:05–3:15 PM, LL21DEF
+A walkthrough of training Hugging Face models at scale on Trainium using TorchTitan’s parallelism with no model rewrite, plus NKI kernel acceleration via the kernelize() API.
+Faster LLM Serving Startup with fastsafetensors
+Takeshi Yoshimura, IBM
+3:25–3:35 PM, LL20CD
+IBM presents fastsafetensors, an open-source library that speeds up safetensors checkpoint loading 4.8x–7.5x by treating model loading as a data-movement problem.
+Sponsored: From Prompt to Physical Action: A Live Hardware-Aware AI Demo with PyTorch, ExecuTorch
+Kavya Sri Chennoju, Arm
+3:55–4:05 PM, Community Expo
+A live demo showing an LLM reasoning about a task, discovering devices, and coordinating real hardware through PyTorch, ExecuTorch, vLLM, and Arm Device Connect.
+Sponsored: Quantization Showdown: PyTorch Inference Optimization
+Markell Rawls, Red Hat
+4:10–4:20 PM, Community Expo
+A live stress test of quantization and speculative decoding using LLM Compressor and vLLM to show real production trade-offs in performance, cost, and quality.
+Beyond Size and Stride: Unleash Performance with Device-Aware Tensor Layouts
+Olivier Tardieu, Matthew Arnold, IBM
+4:20–4:30 PM, LL20AB
+IBM introduces a tensor layout extension enabling device-aware, tiling- and NUMA-aware physical layouts that torch.compile (Inductor) can automatically adapt per target device.
+One Model Definition, Many Accelerators: Scaling vLLM Across Hardware Without Forks
+Thomas Parnell (IBM), Richard Zou (Meta)
+4:20–4:45 PM, LL20CD
+A hardware-agnostic model definition approach for vLLM that decouples model logic from execution paths, demonstrated supporting Intel Gaudi/HPU and IBM Spyre without hardware-specific code.
+Unlocking PyTorch for Dataflow Accelerators: An Open-Source Kernel Tile IR and Dataflow Scheduler
+Prasanth Chatarasi (IBM Research), Bardia Mahjour (IBM), Viji Srinivasan (IBM Research)
+4:55–5:20 PM, 210BF
+IBM open-sources KTIR, an MLIR-based tile IR with a dataflow scheduler for programmable dataflow accelerators like IBM Spyre, Meta’s MTIA, TPU, and Trainium, integrated into TorchInductor.
+Portable PyTorch Across AI Accelerators: A Triton Operator Stack from Eager Mode to vLLM
+Yonghua Lin, Beijing Academy of Artificial Intelligence
+4:55–5:20 PM, LL20CD
+An overview of FlagOS, a Triton-based operator, compiler, and runtime stack tested on 20+ AI chips that has enabled day-0 adaptation of frontier open models across vendor hardware.
+Efficient MoE LLM Inference on Arm with vLLM and OpenVINO
+Abhishek Jain, N Maajid Khan, Fujitsu Research of India
+4:55–5:05 PM, LL21ABC
+Fujitsu presents SVE-optimized attention, KV-cache quantization, and a NUMA-aware MoE operator that roughly doubles throughput for MoE serving on Arm CPUs via vLLM and OpenVINO.
+Integrating the IBM Spyre Accelerator
+David Grove (IBM), Antoni Viros i Martin (IBM Research), Avery Blanchard (IBM Research)
+4:55–5:20 PM, LL21DEF
+IBM covers Torch-Spyre, a PyTorch PrivateUse1 backend with an Inductor path for the IBM Spyre dataflow accelerator, including device-specific tensor layouts and scratchpad-optimized tiling.
+XCCL: Scaling PyTorch Collectives to Exascale on Intel GPUs with TorchComms
+Panagiotis Kourdis, Tanima Dey, Intel
+5:10–5:20 PM, LL21ABC
+Intel details XCCL, a TorchComms backend built on oneCCL that achieved over 90% scaling efficiency running TorchTitan across thousands of nodes on Argonne’s Aurora exascale supercomputer.
+TorchNeuron: Native PyTorch on AWS Trainium – From Research to Production Without Compromise
+Yahav Biran, Annapurna Labs
+5:30–5:40 PM, LL21ABC
+A look at TorchNeuron’s adaptive eager execution, native distributed training, and torch.compile sub-module compilation that let researchers switch .to(‘cuda’) to .to(‘neuron’) with no rewrite.
+Sponsored: PyTorch for Agentic AI: Scaling Heterogeneous Systems from CPU to XPU
+Eikan Wang, Huma Abidi, Intel
+5:30–5:55 PM, LL21DEF
+Intel discusses how agentic AI workloads demand balanced CPU/GPU infrastructure and details its upstream-first optimizations across Xeon processors and Intel GPUs.
+Building Portable, Composable Local Agents with ExecuTorch
+Mergen Nachin, Digant Desai, Meta
+5:45–5:55 PM, LL20CD
+Meta positions ExecuTorch as a runtime substrate for local agents, offering memory-efficient multi-session serving across phones, workstations, embedded systems, and future private agent appliances.
+Hardware Backends & Accelerator Portability: Day Two
+TorchTPU: Running PyTorch Natively on Google TPUs
+Claudio Basile, Google
+11:10–11:35 AM, LL21ABC
+Google details TorchTPU’s eager-first stack, ATen-to-StableHLO lowering, and “DeferAndFuse” execution, bringing native TPU support to PyTorch users for the first time without a JAX detour.
+From torch.profiler to Hardware Cycles: A Practical Profiling Playbook for AWS Trainium
+Esha Lakhotia (AWS Annapurna Labs), Pinak Panigrahi (Annapurna ML)
+2:20–2:45 PM, LL21ABC
+A hands-on profiling workflow using torch.profiler to trace Trainium performance from the nn.Module level down to hardware-cycle resolution, with AI-assisted bottleneck analysis.
+Sponsored: AI Playground Home Agent: Remote PyTorch AI Workflows from Your Phone
+Ashok Emani, Qiacheng Li, Intel
+1:00–1:10 PM, Community Expo
+A demo of PyTorch-powered generative workflows running locally on an Intel AI PC and controlled remotely from a phone.
+From PyTorch to the Edge: Agentic Synthesis of Inference Runtimes for Heterogeneous Hardware
+Thomas Cottenier, Arm
+5:30–5:55 PM, LL20AB
+Arm presents an agentic harness that synthesizes bespoke inference runtimes per edge target – combining torch.export, ExecuTorch backends, and quantization – validated on Apple silicon and Arm hardware.
+Explore the full program
+Taken together, all these sessions reflect a clear throughline for PyTorch’s 2026 roadmap: hardware heterogeneity is no longer an edge case, it’s the default. From TPUs and Trainium going fully native, to AMD, Intel, and IBM Spyre backends reaching deep PyTorch integration, to new compiler and communication primitives (Helion, symmetric memory, NCCL extensions, unbacked shapes) built explicitly with portability in mind – the common goal is letting the same PyTorch code run fast on whatever silicon is available, without vendor lock-in or per-accelerator rewrites.
+Join us for two days in San Jose, October 20–21, 2026. Learn everything you need to know about enabling seamless portability, advanced compiler and kernel optimizations, and scalable distributed infrastructure across a diverse landscape of AI accelerators and silicon.
+Registration for PyTorch Conference North America 2026 is open now. Visit the official PyTorch Foundation conference page to secure your registration and reserve your hotel.

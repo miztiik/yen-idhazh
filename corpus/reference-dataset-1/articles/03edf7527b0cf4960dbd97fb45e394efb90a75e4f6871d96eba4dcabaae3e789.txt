@@ -1,0 +1,28 @@
+OpenAI says its models solved one of math's hardest problems as researchers cry foul
+US tech giant OpenAI on Tuesday said it had solved one of the hardest problems in mathematics with an unreleased artificial intelligence model after just 88 hours – and millions of dollars' worth of computing power. But a US mathematician and a researcher at rival Anthropic allege that OpenAI only took up the problem after it had gotten wind of their own AI-assisted efforts to crack the challenge which had demanded months to craft a radically distinctive approach.
+OpenAI said Tuesday that one of its unreleased artificial intelligence models had solved a mathematical puzzle that has eluded mathematicians for generations, in a claim which also drew a fight with rival researchers over credit.
+Researchers at OpenAI said it took just days – and millions of dollars in computing power – to crack what is known as the Navier-Stokes problem.
+Navier-Stokes is one of the seven Millennium Prize Problems, a list of the hardest open questions in mathematics drawn up by the Clay Mathematics Institute.
+It concerns the equations describing how fluids such as air and water move, which are used in aircraft design, weather forecasting and the study of blood flow.
+OpenAI said its work showed that these equations are fatally flawed, answering the question as set out by the Millennium Prize.
+"This is a significant milestone for AI research, and its promise for the world is that even more of our hardest questions would become possible to answer," Mark Chen, OpenAI's chief research officer, told reporters.
+In a blog post describing the breakthrough, OpenAI said it began training a new model in late August, more capable than anything it had released publicly.
+Read moreOpenAI begins rollout of GPT-6 amid growing scrutiny over safety
+Days later, seeing online rumours that a competitor had solved Millennium problems, OpenAI turned the system loose on all six that remain open.
+Work on Navier-Stokes showed unexpected promise, and the company poured its computing power into it.
+Competing claims
+By the final stage, OpenAI researcher Sebastien Bubeck said, 10,000 AI agents – programs that operate on their own – were working on the problem at once, passing messages back and forth.
+Chen said the computing costs ran "emphatically in the millions of dollars", with Bubeck adding this was roughly 1,000 times what the company spent on earlier mathematical results.
+According to OpenAI's account, the agents reached a solution Saturday, about 88 hours after launching the project.
+The claim arrived hours after Tristan Buckmaster, a mathematician at New York University, and Levent Alpoge, who works at OpenAI competitor Anthropic, released their own AI-assisted work on three related equations.
+In a statement published alongside his papers, Buckmaster said OpenAI had taken up the problem only after word of his research spread, and pursued the same unusual approach he and Alpoge had spent months developing.
+Watch moreArtificial intelligence in Europe: Does advanced AI have a glass ceiling?
+OpenAI's researchers denied having had any access to the rival team's work and said they proposed sharing credit before realising that Buckmaster and Alpoge had fallen short of solving the problem.
+"To be clear, we did not use their prompts or proofs to prompt our models or direct our agents," Bubeck said.
+However, in a later post on X, OpenAI said "while unlikely, we cannot rule out that de-identified data derived from their usage of our products helped improve our models."
+Each Millennium Prize Problem carries a $1 million reward, and only one has been solved since the list was published in 2000. OpenAI says it will not claim money if its finding is confirmed.
+According to the prize rules, a solution has to be published in a peer-reviewed journal and survive two years after gaining acceptance in the mathematical community before the institute will even convene a committee to consider the work.
+"The process of evaluation is deliberately unhurried, and we shall ensure that it is absolutely rigorous," Professor Martin Bridson, President of the Clay Mathematics Institute, told AFP.
+ChatGPT-style AI is revolutionising the world of high-level math by quickly solving famous, long-unsolved problems that stumped experts for decades.
+But it has also sparked debate over whether machine-generated answers truly count as real human understanding.
+(FRANCE 24 with AFP)

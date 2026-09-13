@@ -1,0 +1,60 @@
+NVIDIA’s Gamescom announcements are revealing what’s next for GeForce NOW, with new ways to play, more supported devices and platforms, and even more big PC games headed to the cloud.
+New NVIDIA DLSS 4.5 technology controls give members more ways to fine-tune gameplay, while expanded support for new Steam devices, GOG single sign-on, Firefox browser support and more Amazon Fire TV devices continue broadening where and how GeForce RTX-powered PC gaming can be enjoyed.
+Gamescom is also bringing a blockbuster lineup of PC games to GeForce NOW. CONTROL Resonant, Gears of War: E-Day, Onimusha: Way of the Sword, The Blood of Dawnwalker and STAR WARS Zero Company are all coming to the cloud at launch.
+For a limited time, members can also get CONTROL Resonant with the purchase of a 12-month GeForce NOW Ultimate membership.
+The Gamescom extras don’t stop there. To celebrate, GeForce NOW is giving away more than 40 prizes in our Community Giveaway — including gaming hardware and GeForce NOW Ultimate memberships.
+There’s even more fun to come. Check out the list of 13 games joining the GeForce NOW library this week.
+Next-Level Cloud Gaming
+This fall, GeForce NOW is introducing new NVIDIA DLSS 4.5 controls in the cloud, giving Ultimate members more choice over how supported games look and perform, even without the latest hardware. Powered by NVIDIA RTX graphics, each control offers something different: DLSS Super Resolution sharpens image quality, while Dynamic Frame Generation delivers lower latency and stutter for smoother streaming, and Ray Reconstruction enhances ray-traced visuals. Together, these technologies make it easier to tune supported games for image quality, responsiveness or a preferred balance between the two.
+Stay tuned to GFN Thursdays for details about best practices for enabling DLSS 4.5 overrides and how Dynamic Frame Generation can help Ultimate members enable more graphic settings while still getting smooth streaming.
+GeForce NOW is also adding community-requested support for Steam Machine with Steam Controller later this fall, and later for Windows and macOS, delivering more ways to play and making it even easier for longtime Steam players to jump into the cloud using familiar hardware. The additions build on existing Steam Deck support and expand compatibility across the Steam ecosystem.
+Launching GOG games just got even easier. With GOG single sign-on now available on GeForce NOW, members can securely link their account once, automatically sync supported games and launch them without having to sign in to GOG again — all with a single click.
+With fewer steps between opening the app, skipping any downloads and jumping into gameplay, it’s another way GeForce NOW continues streamlining access to PC gaming libraries, making it easier to play the GOG library of games on TV platforms since gamers are automatically logged into their GOG accounts.
+Find popular titles, like Cyberpunk 2077 and The Witcher 3: The Wild Hunt, in the app in the dedicated GOG row. Or search and filter for GOG games, then jump into supported titles from almost anywhere — all streamed from the cloud. Check back on GFN Thursdays for the latest games joining the GeForce NOW library, including newly supported games streaming from GOG.
+Plus, GeForce NOW is now officially supported on Firefox, expanding browser access across all major Windows browsers. Members can jump into supported PC games directly from Firefox without downloading a dedicated app. Ultimate members can enjoy GeForce RTX-powered gaming at up to 1440p and 120 frames per second.
+Simply download the latest version of Firefox and visit play.geforcenow.com to get started. The cloud handles downloads, installs and updates, keeping local storage free while games stay ready to play in the cloud.
+GeForce NOW is expanding support to additional Amazon Fire TV devices. GeForce NOW first launched on Fire TV devices earlier this year, and will soon expand to the Fire TV Stick 4K Select, a 4K streaming stick that’s ready to game right out of the box. Streaming from the cloud means supported PC games are ready to play using a compatible controller, making it easy to enjoy GeForce NOW on the biggest screen in the house with even more options to play from the comfort of the couch.
+And that’s not all the awesomeness from Amazon. Later this year, Fire TV users will be able to purchase GeForce NOW memberships directly through Amazon, creating a more seamless path from device setup to gameplay.
+These new features will arrive alongside some of the biggest games coming to the cloud throughout the year.
+Get Ready for Launch
+Five newly announced and highly anticipated games are coming to GeForce NOW at launch: CONTROL Resonant, Gears of War: E-Day, Onimusha: Way of the Sword, The Blood of Dawnwalker and STAR WARS Zero Company.
+Better yet, members can lock in one of them early: For a limited time, purchase a 12-month GeForce NOW Ultimate membership and receive CONTROL Resonant at launch at no additional cost, and be first to experience Faden’s next chapter. The offer is available Tuesday, Aug. 25, through Sunday, Sept. 27.
+Ultimate members can stream the full lineup with GeForce RTX 5080-class performance in the cloud, including NVIDIA DLSS 4, ray tracing, NVIDIA Reflex and Cinematic Quality Streaming technologies, with up to 5K high dynamic range on supported devices.
+Whether diving into new worlds or returning to iconic franchises, GeForce NOW lets members skip expensive hardware upgrades, massive installs and storage management so they can jump straight into the action the moment each game launches. Here’s a closer look at what’s coming:
+Explore a warped Manhattan on the brink of paranatural annihilation in Remedy’s CONTROL Resonant. Harness Dylan Faden’s extraordinary powers to battle the Hiss, the Mold and other reality-bending threats while searching for his sister, Federal Bureau of CONTROL Director Jesse Faden.
+Experience the horror and brutality of Emergence Day in the Coalition’s Gears of War: E-Day. Fourteen years before the original Gears of War, join Marcus Fenix and Dominic Santiago in a gripping origin-story campaign as the Locust Horde first erupt from below, igniting a desperate fight for survival. Rally squads and fight on in multiplayer with a reimagination of Gears’ iconic PvE mode, Horde Siege, or go head to head with a refined versus PvP.
+Fight across a twisted vision of Edo-period Kyoto in Capcom’s Onimusha: Way of the Sword. Wield the mystical Oni Gauntlet, master intense swordplay and battle relentless demonic Genma beneath mysterious clouds of Malice.
+Step into 14th-century Europe in Bandai Namco’s The Blood of Dawnwalker, where war, plague and rising vampire powers have reshaped history. Play as Coen, a young Dawnwalker torn between humanity and cursed strength, and shape his path while fighting to save his family.
+Lead an elite squad behind enemy lines in STAR WARS Zero Company, a single-player turn-based game set during the twilight of the Clone Wars. Command former Republic officer Hawks and Zero Company through tactical battles and high-stakes missions where strategy, squad composition and player choices shape the fate of the galaxy.
+More Ways to Win
+GeForce NOW is marking Gamescom with a community giveaway featuring more than 40 prizes. Gamers will have a chance to score a MacBook Neo, Steam Deck or Chromebook — each paired with a one-year GeForce NOW Ultimate membership — along with Amazon Fire TV Sticks and GeForce NOW Ultimate memberships ranging from one month to one year.
+Head over to the GeForce NOW community on Reddit for all the giveaway details and how to enter.
+The Hunt Is On
+Squad up and fight for survival in Aliens: Fireteam Elite 2, streaming on GeForce NOW this week at launch. Assemble a four-player fireteam of Colonial Marines and battle through swarms of Xenomorphs, deadly new threats and increasingly desperate encounters. With deeper squad mechanics, new and improved classes, smarter enemies and expanded customization, every mission puts teamwork — and nerves — to the test.
+Members can also look for the following games joining the cloud this week:
+- Aliens: Fireteam Elite 2 (New release on Steam, Aug. 25)
+- Resonance: A Plague Tale Legacy (New release on Steam and Xbox, Aug. 27, available on Game Pass)
+- STAR WARS Zero Company (New release on EA app and Steam, Aug. 27)
+- Baldur’s Gate 3 (GOG)
+- Call of Duty: Modern Warfare 4 – Open Beta Weekend (Battle.net, Steam and Xbox available from Aug. 28 10am PDT to Sep. 1 at 10am PDT. For more information please visit the Call of Duty website).
+- Clair Obscur: Expedition 33 (GOG)
+- Cold Fear (GOG)
+- IRON NEST: Heavy Turret Simulator (Steam)
+- Kingdom Come: Deliverance II (GOG)
+- Mount & Blade: Bannerlord II (GOG)
+- No Man’s Sky (GOG)
+- Paradise Killer (Steam)
+- The Witcher 3: Wild Hunt (GOG)
+Dates listed above reflect when games are released on their respective stores. GeForce NOW availability may vary, as games are onboarded after release and added throughout the week. Keep an eye on GeForce NOW channels and GFN Thursdays for availability updates on announced titles.
+To experience GeForce NOW, gamers can start with a GeForce NOW day pass and try premium cloud gaming before committing to a membership. Better yet, the cost of a day pass can be applied toward a first membership purchase, making it even easier to level up when ready.
+Check back every GFN Thursday for new games, new features and even more ways to play on GeForce NOW. Which Gamescom announcement has you most excited? Let us know on X or in the comments below.
+The future of PC gaming is on display with GeForce NOW. ☁️⚡
+🖥️DLSS 4.5 controls
+📱Expanded device support
+✨ Upcoming AAA games
+🎮 More ways to play
+🎁 Community giveaway
+🦊 Firefox browser support
+… and more! #gamescom
+Details ➡️ [link] pic.twitter.com/sShKRhzrD3
+— 🌩️ NVIDIA GeForce NOW (@NVIDIAGFN) August 25, 2026

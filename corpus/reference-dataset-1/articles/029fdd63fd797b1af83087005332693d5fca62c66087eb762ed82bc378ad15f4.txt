@@ -1,0 +1,14 @@
+Two years at 5,200 meters: POWEROAD BESS proven in extreme altitude
+At 5,200 meters above sea level, reliable electricity is critical – and difficult to guarantee. In 2024, POWEROAD commissioned a 50 kW / 559.1 kWh backup power system at the North Everest Base Camp in Tibet, built around three FLEX 215 outdoor battery cabinets, to support scientific research in one of the world’s most demanding environments.
+As of August 2026, the POWEROAD energy storage system at Everest Base Camp had been operating for more than 800 days, continuing to provide backup power at 5,200 meters above sea level.
+Engineering for an extreme environment
+Above 5,200 meters, reduced air density affects heat dissipation, while extreme cold, strong UV radiation, high winds, and reduced atmospheric pressure create additional challenges for thermal management, electrical insulation, and equipment durability.
+POWEROAD adapted the system to these conditions through high-altitude engineering and extensive pre-deployment testing. Thermal management, insulation, electrical protection, and cabinet structure were optimized for the site’s requirements. The system was also repeatedly tested in laboratory conditions down to -40 C to verify its ability to operate in severe cold.
+800 days of real-world validation
+After more than 800 days at the project site, the system has continued to operate reliably through prolonged cold, strong winds, intense UV exposure, and reduced air pressure. Its performance in the field has closely matched the environmental requirements defined during the original engineering process.
+The system is also connected to POWEROAD’s intelligent cloud platform, enabling remote monitoring, fault warnings, operating-data analysis, and more efficient O&M at a site where physical access is challenging. Long-term operating data also supports the continuous optimization of BMS algorithms, system configuration, and operational strategies.
+Backup power when it matters
+The system provides at least 24 hours of backup power for a scientific expedition team at the site. With a transfer time of less than 20 milliseconds, the system can rapidly switch to backup power when grid supply becomes unstable or unavailable, helping maintain continuity for critical scientific activities.
+For the expedition team, each successful backup response provides an additional layer of energy security for communications, instruments, data collection, and other scientific activities in one of the world’s most remote environments.
+After more than two years at 5,200 meters, the Everest project provides real-world evidence of long-term backup power reliability under sustained environmental stress – and continues to support scientific research where dependable power matters most.
+This content is protected by copyright and may not be reused. If you want to cooperate with us and would like to reuse some of our content, please contact: [email protected].
