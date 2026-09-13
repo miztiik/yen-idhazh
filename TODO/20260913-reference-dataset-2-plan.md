@@ -93,6 +93,7 @@ Table C - Local configuration
 | C9 | `selection.fill_shortfall` | `true`, configurable. Transfer places unavailable in small groups to groups with remaining articles. |
 | C10 | `selection.group_by` | `publisher`, approved by the owner on 2026-09-13. `source_domain` and `host` remain available as explicit alternatives. |
 | C11 | `selection.publisher_disambiguation` | The ordered parts appended to a publisher key that is not unique, default `["registered_name", "public_suffix", "host"]`. A unique key is never lengthened. |
+| C12 | `selection.generic_host_labels` | Leftmost labels that name a subdomain rather than an outlet, so the key falls back to the registered name. Added after the first real import read `newsletter.semianalysis.com` as `newsletter`. |
 
 `publisher` is the outlet name taken from the address rather than the registered domain. Drop a leading `www.`. When the host carries a label to the left of its registered domain, take that leftmost label, so `aleximas.substack.com` gives `aleximas`. Otherwise take the name part of the registered domain, so `theverge.com` gives `theverge` and `bbc.co.uk` gives `bbc`. Case-fold it, replace each run of characters that are not letters or digits with one hyphen, and trim the ends. That is the slug rule `idhazh/classify/calls.py` already applies to element names; share that helper rather than copy it, and refuse a key that normalises to nothing instead of writing an empty group. Under this rule `economictimes.indiatimes.com` and `timesofindia.indiatimes.com` are two publishers instead of one `indiatimes.com`, and every newsletter on a shared platform keeps its own allocation.
 
@@ -148,9 +149,9 @@ Table F - Status Reckoner
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Approve local dataset layout and meanings | - | A | DONE (approved 2026-09-13; name `reference-dataset-2`, grouping `publisher`) | - | direct | - |
-| F2 | 2 | Snapshot and inventory the supplied URLs | 1 | B | PENDING | - | - | - |
-| F3 | 3 | Define local config and record schemas | 2 | C | PENDING | - | - | - |
-| F4 | 4 | Build the manifest, publisher keys and totals | 3 | D | PENDING | - | - | - |
+| F2 | 2 | Snapshot and inventory the supplied URLs | 1 | B | DONE | refdata2 | direct | - |
+| F3 | 3 | Define local config and record schemas | 2 | C | DONE | refdata2 | direct | - |
+| F4 | 4 | Build the manifest, publisher keys and totals | 3 | D | DONE | refdata2 | direct | - |
 | F5 | 5 | Add resumable extraction through existing helpers | 4 | E | PENDING | - | - | - |
 | F6 | 6 | Run and review a small extraction pilot | 5 | F | PENDING | - | - | - |
 | F7 | 7 | Validate the utility with offline tests | 6 | G | PENDING | - | - | - |

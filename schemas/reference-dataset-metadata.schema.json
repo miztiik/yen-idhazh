@@ -400,6 +400,15 @@
           "title": "Fill Shortfall",
           "type": "boolean"
         },
+        "generic_host_labels": {
+          "description": "Leftmost labels that name a subdomain rather than an outlet. `newsletter.semianalysis.com` is `semianalysis`, not `newsletter`.",
+          "items": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "title": "Generic Host Labels",
+          "type": "array"
+        },
         "group_by": {
           "$ref": "#/$defs/ReferenceGroupBy",
           "default": "publisher",

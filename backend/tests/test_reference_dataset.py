@@ -21,6 +21,7 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import REPO_ROOT
@@ -81,9 +82,7 @@ def splits(rows: list[ReferenceDatasetRow]) -> dict[ReferenceSplit, list[str]]:
     return built_split(rows)
 
 
-def domains_of(
-    rows: Sequence[ReferenceDatasetRow], keys: Sequence[str]
-) -> set[str]:
+def domains_of(rows: Sequence[ReferenceDatasetRow], keys: Sequence[str]) -> set[str]:
     by_key = {row.url_key: row for row in rows}
     return {by_key[key].source_domain for key in keys}
 
@@ -142,7 +141,9 @@ def test_the_split_unit_is_the_registered_name_and_not_the_host() -> None:
     opposite sides and call the result disjoint; it would also split one
     newsletter platform into hundreds of one-article outlets.
     """
-    assert builder.registrable_domain("https://economictimes.indiatimes.com/a/b") == "indiatimes.com"
+    assert (
+        builder.registrable_domain("https://economictimes.indiatimes.com/a/b") == "indiatimes.com"
+    )
     assert builder.registrable_domain("https://timesofindia.indiatimes.com/x") == "indiatimes.com"
     assert builder.registrable_domain("https://www.bbc.co.uk/news/x") == "bbc.co.uk"
     assert builder.registrable_domain("https://aleximas.substack.com/p/x") == "substack.com"
@@ -178,7 +179,7 @@ def test_the_fixture_clears_a_floor_it_can_actually_clear(
 
 
 def test_an_empty_side_is_caught_by_the_floor_and_not_by_disjointness(
-    rows: list[ReferenceDatasetRow]
+    rows: list[ReferenceDatasetRow],
 ) -> None:
     """The builder this test describes would pass 'no domain on both sides' perfectly."""
     everything: dict[ReferenceSplit, list[str]] = {
@@ -222,9 +223,7 @@ def test_an_article_in_the_fine_tuning_window_is_caught(
     rows: list[ReferenceDatasetRow], splits: dict[ReferenceSplit, list[str]]
 ) -> None:
     """Trained on, then measured on. The contamination decision 1 named, by the other door."""
-    faults = builder.leakage_faults(
-        rows, splits, trained_on={rows[0].url_key}, held_out=set()
-    )
+    faults = builder.leakage_faults(rows, splits, trained_on={rows[0].url_key}, held_out=set())
     assert len(faults) == 1
     assert "corpus/corpus.jsonl" in faults[0]
     assert rows[0].url_key in faults[0]
@@ -233,9 +232,7 @@ def test_an_article_in_the_fine_tuning_window_is_caught(
 def test_an_article_in_the_fine_tuning_holdout_is_caught(
     rows: list[ReferenceDatasetRow], splits: dict[ReferenceSplit, list[str]]
 ) -> None:
-    faults = builder.leakage_faults(
-        rows, splits, trained_on=set(), held_out={rows[1].url_key}
-    )
+    faults = builder.leakage_faults(rows, splits, trained_on=set(), held_out={rows[1].url_key})
     assert len(faults) == 1
     assert "corpus/holdout.txt" in faults[0]
 
@@ -286,9 +283,7 @@ def test_an_article_edited_in_place_stops_matching_its_row(
     assert "no longer matches its digest" in faults[0]
 
 
-def test_a_missing_article_file_is_caught(
-    tmp_path: Path, rows: list[ReferenceDatasetRow]
-) -> None:
+def test_a_missing_article_file_is_caught(tmp_path: Path, rows: list[ReferenceDatasetRow]) -> None:
     faults = builder.text_faults(rows[:1], tmp_path)
     assert faults == [f"{rows[0].url_key[:12]} has no article file"]
 
@@ -300,18 +295,14 @@ def test_a_row_is_only_built_for_an_article_that_is_on_disk(tmp_path: Path) -> N
 # --- the contract -----------------------------------------------------------
 
 
-def test_a_row_cannot_claim_an_identity_it_does_not_own(
-    rows: list[ReferenceDatasetRow]
-) -> None:
+def test_a_row_cannot_claim_an_identity_it_does_not_own(rows: list[ReferenceDatasetRow]) -> None:
     payload = rows[0].model_dump(mode="json")
     payload["canonical_url"] = "https://newsroom-a.example.com/somewhere-else"
     with pytest.raises(ValueError, match="identity it does not own"):
         ReferenceDatasetRow.model_validate(payload)
 
 
-def test_every_label_slot_is_empty_when_the_set_is_built(
-    rows: list[ReferenceDatasetRow]
-) -> None:
+def test_every_label_slot_is_empty_when_the_set_is_built(rows: list[ReferenceDatasetRow]) -> None:
     """This row writes no label. A person does, in row #P3."""
     assert all(row.labels.is_empty for row in rows)
     assert all(row.second_labels is None for row in rows)
@@ -378,7 +369,9 @@ def import_metadata(**overrides: object) -> dict[str, object]:
         "output_path": "corpus/reference-dataset-2/manifest.json",
         "output_sha256": derive_text_digest("output"),
         "rows": 1,
-        "settings": ReferenceDatasetLocalConfig().model_dump(mode="json"),
+        "settings": ReferenceDatasetLocalConfig(
+            version=ReferenceDatasetLocalConfig.schema_version()
+        ).model_dump(mode="json"),
         "import_totals": ReferenceImportTotals(
             input_lines=1,
             blank_lines=0,
@@ -395,7 +388,7 @@ def import_metadata(**overrides: object) -> dict[str, object]:
 
 def test_the_local_config_defaults_to_the_approved_sampling_rule() -> None:
     """20 an outlet, 1,000 at most, shortfalls filled, grouped on the publisher prefix."""
-    config = ReferenceDatasetLocalConfig()
+    config = ReferenceDatasetLocalConfig(version=ReferenceDatasetLocalConfig.schema_version())
     assert config.selection.rows_per_domain_target == 20
     assert config.selection.rows_max == 1000
     assert config.selection.fill_shortfall is True
@@ -532,8 +525,191 @@ def test_the_new_shapes_are_stamped_and_changelogged() -> None:
         ReferenceExtractionRow,
         ReferenceCollectionMetadata,
     ):
-        assert contract.schema_version() == "2026-09-13"
+        assert contract.schema_version().startswith("2026-09-13")
         assert contract.__changelog__[0].why
+
+
+# --- the publisher key ------------------------------------------------------
+#
+# Built in the test body rather than read off the collection, so the cases a
+# real input may never carry - a collision, a label of punctuation - are here.
+
+GENERIC = frozenset(
+    ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version()
+    ).selection.generic_host_labels
+)
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://chipbriefing.substack.com/p/one", "chipbriefing"),
+        ("https://aleximas.substack.com/p/two", "aleximas"),
+        ("https://www.bbc.co.uk/news/articles/three", "bbc"),
+        ("https://www.theverge.com/four", "theverge"),
+        ("https://economictimes.indiatimes.com/five", "economictimes"),
+        ("https://timesofindia.indiatimes.com/six", "timesofindia"),
+        ("https://newsletter.semianalysis.com/p/seven", "semianalysis"),
+        ("https://blog.google/eight", "blog"),
+    ],
+)
+def test_the_publisher_key_is_the_outlet_and_not_the_registered_domain(
+    url: str, expected: str
+) -> None:
+    """Two newsletters on one platform are two outlets; a subdomain word is not one."""
+    name, _registered, _suffix, _host = builder.publisher_parts(url, generic=GENERIC)
+    assert name == expected
+
+
+def test_two_newsletters_on_one_platform_do_not_collapse() -> None:
+    keys, lengthened = builder.assign_publishers(
+        [
+            "https://bengoertzel.substack.com/p/one",
+            "https://chipbriefing.substack.com/p/two",
+        ],
+        generic=GENERIC,
+    )
+    assert sorted(keys.values()) == ["bengoertzel", "chipbriefing"]
+    assert lengthened == {}
+    assert builder.registrable_domain("https://bengoertzel.substack.com/p/one") == "substack.com"
+
+
+def test_only_the_keys_that_collide_are_lengthened() -> None:
+    keys, lengthened = builder.assign_publishers(
+        [
+            "https://news.bbc.co.uk/one",
+            "https://news.ycombinator.com/two",
+            "https://chipbriefing.substack.com/three",
+        ],
+        generic=frozenset(),
+    )
+    assert keys["news.bbc.co.uk"] == "news-bbc"
+    assert keys["news.ycombinator.com"] == "news-ycombinator"
+    assert keys["chipbriefing.substack.com"] == "chipbriefing"
+    assert set(lengthened) == {"news-bbc", "news-ycombinator"}
+
+
+def test_a_label_that_normalises_to_nothing_falls_back_rather_than_refusing() -> None:
+    keys, _lengthened = builder.assign_publishers(["https://---.example.com/one"], generic=GENERIC)
+    assert keys["---.example.com"] == "example"
+
+
+def test_the_key_is_the_same_whatever_the_pool_order() -> None:
+    pool = [
+        "https://news.bbc.co.uk/one",
+        "https://news.ycombinator.com/two",
+        "https://chipbriefing.substack.com/three",
+    ]
+    first, _ = builder.assign_publishers(pool, generic=GENERIC)
+    second, _ = builder.assign_publishers(list(reversed(pool)), generic=GENERIC)
+    assert first == second
+
+
+# --- import-urls ------------------------------------------------------------
+
+
+def supplied(tmp_path: Path) -> tuple[Path, ReferenceDatasetLocalConfig]:
+    """A collection directory holding the fixture URL list and its own config."""
+    dataset = tmp_path / "reference-dataset-2"
+    dataset.mkdir()
+    listing = dataset / "urls.txt"
+    listing.write_text(
+        (FIXTURES / "url-inputs.txt").read_text(encoding="utf-8"), encoding="utf-8", newline=""
+    )
+    local = ReferenceDatasetLocalConfig(
+        version=ReferenceDatasetLocalConfig.schema_version(),
+        input_file="reference-dataset-2/urls.txt",
+    )
+    return dataset, local
+
+
+def imported(tmp_path: Path) -> tuple[Path, dict[str, Any]]:
+    dataset, local = supplied(tmp_path)
+    code = builder.build_manifest(
+        dataset, local, sources_path=FIXTURES / "url-source-config.json", root=tmp_path
+    )
+    assert code == 0
+    meta: dict[str, Any] = json.loads(
+        (dataset / builder.MANIFEST_META_FILENAME).read_text(encoding="utf-8")
+    )
+    return dataset, meta
+
+
+def test_every_supplied_line_appears_once_in_the_order_it_was_given(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    rows = json.loads((dataset / builder.MANIFEST_FILENAME).read_text(encoding="utf-8"))
+    assert [row["source_line"] for row in rows] == sorted(row["source_line"] for row in rows)
+    assert len(rows) == 7
+
+
+def test_equivalent_addresses_keep_both_rows_and_share_one_identity(tmp_path: Path) -> None:
+    """The tracking parameter is not a second article."""
+    dataset, meta = imported(tmp_path)
+    rows = json.loads((dataset / builder.MANIFEST_FILENAME).read_text(encoding="utf-8"))
+    briefing = [row for row in rows if row["publisher"] == "chipbriefing"]
+    assert len(briefing) == 2
+    assert len({row["url_key"] for row in briefing}) == 1
+    assert meta["import_totals"]["equivalent_urls"] == 1
+
+
+def test_a_host_two_verticals_share_claims_neither(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    rows = json.loads((dataset / builder.MANIFEST_FILENAME).read_text(encoding="utf-8"))
+    shared = next(row for row in rows if row["host"] == "globaltimes.cn")
+    assert shared["source_id"] is None
+    assert shared["vertical"] is None
+
+
+def test_a_declared_host_carries_its_feed_and_vertical(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    rows = json.loads((dataset / builder.MANIFEST_FILENAME).read_text(encoding="utf-8"))
+    declared = next(row for row in rows if row["host"] == "bbc.co.uk")
+    assert declared["source_id"] == "bbc-world"
+    assert declared["vertical"] == "world"
+
+
+def test_the_manifest_stores_the_publisher_map_it_froze(tmp_path: Path) -> None:
+    """Two BBC hosts read as one outlet name, so both were lengthened rather than merged."""
+    _dataset, meta = imported(tmp_path)
+    assert meta["publisher_hosts"]["semianalysis"] == ["newsletter.semianalysis.com"]
+    assert meta["publisher_hosts"]["ycombinator"] == ["news.ycombinator.com"]
+    assert set(meta["lengthened_publishers"]) == {"bbc-co-uk", "news-bbc-co-uk"}
+    assert meta["lengthened_publishers"]["bbc-co-uk"] == "public_suffix"
+    assert meta["lengthened_publishers"]["news-bbc-co-uk"] == "host"
+
+
+def test_the_stored_totals_are_read_back_off_the_file_that_was_written(
+    tmp_path: Path,
+) -> None:
+    """A total nobody re-read is a total that cannot disagree with its collection."""
+    dataset, meta = imported(tmp_path)
+    written = (dataset / builder.MANIFEST_FILENAME).read_bytes()
+    assert meta["output_sha256"] == hashlib.sha256(written).hexdigest()
+    assert meta["rows"] == len(json.loads(written.decode("utf-8")))
+
+
+def test_a_malformed_line_blocks_the_manifest_and_is_named_by_its_line_number(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dataset, local = supplied(tmp_path)
+    listing = tmp_path / "reference-dataset-2" / "urls.txt"
+    listing.write_text(
+        listing.read_text(encoding="utf-8") + "not-an-address\n", encoding="utf-8", newline=""
+    )
+    code = builder.build_manifest(
+        dataset, local, sources_path=FIXTURES / "url-source-config.json", root=tmp_path
+    )
+    assert code == 1
+    assert "line 9" in capsys.readouterr().out
+    assert not (dataset / builder.MANIFEST_FILENAME).exists()
+
+
+def test_the_import_reads_no_pipeline_config_and_writes_no_label(tmp_path: Path) -> None:
+    dataset, meta = imported(tmp_path)
+    rows = json.loads((dataset / builder.MANIFEST_FILENAME).read_text(encoding="utf-8"))
+    assert all("desk" not in row and "labels" not in row for row in rows)
+    assert meta["settings"]["selection"]["group_by"] == "publisher"
 
 
 # --- the builder refuses, rather than writing a set that leaks ---------------

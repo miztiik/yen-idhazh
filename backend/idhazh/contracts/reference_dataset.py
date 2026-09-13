@@ -314,6 +314,24 @@ class ReferenceSelectionSettings(Model):
         min_length=1,
         description="The parts a colliding publisher key is lengthened with, in order.",
     )
+    generic_host_labels: list[Slug] = Field(
+        default_factory=lambda: [
+            "blog",
+            "feed",
+            "feeds",
+            "mail",
+            "news",
+            "newsletter",
+            "rss",
+            "stories",
+            "web",
+            "www2",
+        ],
+        description=(
+            "Leftmost labels that name a subdomain rather than an outlet. "
+            "`newsletter.semianalysis.com` is `semianalysis`, not `newsletter`."
+        ),
+    )
 
 
 class ReferenceDatasetLocalConfig(Contract):
@@ -332,6 +350,17 @@ class ReferenceDatasetLocalConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "reference-dataset-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T10:20",
+            change="Added selection.generic_host_labels.",
+            why=(
+                "The first import over the supplied list produced the outlet key "
+                "`newsletter` for `newsletter.semianalysis.com`, which names a subdomain "
+                "rather than a publisher. The list of labels that fall back to the "
+                "registered name is a knob rather than a literal, because which words "
+                "read as generic is a judgement that will change (Guardrail #6)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change=(

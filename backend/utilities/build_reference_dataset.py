@@ -57,22 +57,33 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
 from collections import defaultdict
-from collections.abc import Mapping, Sequence, Set
+from collections.abc import Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 from courlan import extract_domain
 
 from idhazh import config, corpus, extract, fetch
 from idhazh.contracts.app_config import ExtractConfig, ReferenceDatasetConfig
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.feed_health import RobotsOutcome
-from idhazh.contracts.reference_dataset import ReferenceDatasetRow, ReferenceSplit
+from idhazh.contracts.reference_dataset import (
+    ReferenceCollectionMetadata,
+    ReferenceDatasetLocalConfig,
+    ReferenceDatasetRow,
+    ReferenceImportTotals,
+    ReferenceManifestRow,
+    ReferencePhase,
+    ReferencePublisherPart,
+    ReferenceSplit,
+)
 from idhazh.discover import canonicalise
 from idhazh.sanitize import SANITIZER_VERSION
 
@@ -190,9 +201,7 @@ def archive_candidates(digest_dir: Path) -> list[Candidate]:
     return sorted(found.values(), key=lambda c: c.url_key)
 
 
-def spread_across_domains(
-    candidates: Sequence[Candidate], *, per_domain: int
-) -> list[Candidate]:
+def spread_across_domains(candidates: Sequence[Candidate], *, per_domain: int) -> list[Candidate]:
     """Round-robin across domains so no outlet dominates, capped at `per_domain` each.
 
     Deterministic: domains in sorted order, candidates sorted by `url_key` inside
@@ -242,9 +251,7 @@ def plan(
     path = work_dir / CANDIDATES_FILENAME
     _write_atomically(
         path,
-        "".join(
-            json.dumps(candidate.to_payload(), sort_keys=True) + "\n" for candidate in picked
-        ),
+        "".join(json.dumps(candidate.to_payload(), sort_keys=True) + "\n" for candidate in picked),
     )
 
     print(f"{'archive items read':<{_WIDTH}} {len(everything)}")
@@ -279,9 +286,7 @@ def article_path(dataset_dir: Path, url_key: str) -> Path:
 
 def _robots_for(origin_url: str, config_: ExtractConfig) -> fetch.RobotsRules:
     return fetch.robots_rules(
-        fetch.fetch(
-            fetch.robots_url(origin_url), config=config_, permission=RobotsOutcome.ALLOWED
-        )
+        fetch.fetch(fetch.robots_url(origin_url), config=config_, permission=RobotsOutcome.ALLOWED)
     )
 
 
@@ -315,9 +320,7 @@ def fetch_articles(
             rules[origin] = _robots_for(candidate.canonical_url, extract_config)
             time.sleep(asked.request_delay_seconds)
         permission = rules[origin].permits(extract_config.user_agent, candidate.canonical_url)
-        result = fetch.fetch(
-            candidate.canonical_url, config=extract_config, permission=permission
-        )
+        result = fetch.fetch(candidate.canonical_url, config=extract_config, permission=permission)
         time.sleep(asked.request_delay_seconds)
         text = _usable_text(result, extract_config, words_min=asked.article_words_min)
         if text is None:
@@ -534,9 +537,7 @@ def split(
 
     _write_atomically(
         dataset_dir / DATASET_FILENAME,
-        "".join(
-            json.dumps(row.model_dump(mode="json"), sort_keys=True) + "\n" for row in rows
-        ),
+        "".join(json.dumps(row.model_dump(mode="json"), sort_keys=True) + "\n" for row in rows),
     )
     for side, keys in splits.items():
         _write_atomically(
@@ -637,6 +638,270 @@ def _write_atomically(path: Path, body: str) -> None:
     temp.replace(path)
 
 
+# --- import-urls: the supplied-URL collection ------------------------------
+#
+# Everything below builds `corpus/reference-dataset-2/`, which is a different
+# collection from the frozen set above: its input is a list somebody supplied,
+# its settings are its own `config.json`, and it groups on a publisher prefix
+# rather than on the registered domain. The verbs above are untouched.
+
+SUPPLIED_RELPATH: Final = "corpus/reference-dataset-2"
+SUPPLIED_CONFIG_FILENAME: Final = "config.json"
+MANIFEST_FILENAME: Final = "manifest.json"
+MANIFEST_META_FILENAME: Final = "manifest.meta.json"
+
+#: Anything that is not a letter or a digit becomes one hyphen. Same rule the
+#: element labels are slugged with, so two outlet keys compare as one spelling.
+_NOT_SLUG: Final = re.compile(r"[^a-z0-9]+")
+
+
+def slugged(words: str) -> str:
+    """The project's slug spelling: lower case, one separator, no padding."""
+    return _NOT_SLUG.sub("-", words.strip().casefold()).strip("-")
+
+
+def host_of(url: str) -> str:
+    """The host, lower case and without a leading `www.`."""
+    host = urlsplit(url).netloc.lower()
+    return host.partition(":")[0].removeprefix("www.")
+
+
+def publisher_parts(url: str, *, generic: Set[str] = frozenset()) -> tuple[str, str, str, str]:
+    """The pieces a publisher key is built from: name, registered name, suffix, host.
+
+    The name is the leftmost label when the host carries one to the left of its
+    registered domain - `chipbriefing` out of `chipbriefing.substack.com` - and
+    the registered domain's own first label otherwise, so `bbc.co.uk` gives
+    `bbc`. That is the whole point of the key: the public suffix list merges
+    every newsletter on a shared platform, and a reader does not.
+
+    A leftmost label in `generic` names a subdomain rather than an outlet, so it
+    falls back to the registered name: `newsletter.semianalysis.com` is
+    `semianalysis`, and reading it as `newsletter` would file one outlet under a
+    word half the web uses.
+    """
+    host = host_of(url)
+    registered = registrable_domain(url)
+    registered_name = registered.split(".")[0]
+    name = registered_name
+    if host != registered and host.endswith("." + registered):
+        leftmost = host[: -(len(registered) + 1)].split(".")[0]
+        if slugged(leftmost) not in generic:
+            name = leftmost
+    suffix = registered.partition(".")[2]
+    # A label of punctuation slugs to nothing, and an empty group is not a
+    # publisher. Fall back rather than refuse: the address is still fetchable.
+    chosen = slugged(name) or slugged(registered_name) or slugged(host)
+    return chosen, slugged(registered_name) or slugged(host), slugged(suffix), slugged(host)
+
+
+def assign_publishers(
+    urls: Sequence[str], *, generic: Set[str] = frozenset()
+) -> tuple[dict[str, str], dict[str, ReferencePublisherPart]]:
+    """Freeze one publisher key per host, lengthening only the keys that collide.
+
+    Returns the host-to-key map and, separately, the keys that had to be
+    lengthened and what settled them. A key nobody collides with keeps its short
+    form, which is the rule the owner set on 2026-09-13.
+
+    The map is computed once over the whole input and then stored, because the
+    length of a key depends on which other hosts are in the pool: recomputing it
+    over a later pool could rename an outlet that nothing changed.
+    """
+    parts: dict[str, tuple[str, str, str, str]] = {}
+    for url in urls:
+        host = host_of(url)
+        if host not in parts:
+            parts[host] = publisher_parts(url, generic=generic)
+
+    sharing: dict[str, list[str]] = defaultdict(list)
+    for host, (name, _registered, _suffix, _whole) in parts.items():
+        sharing[name].append(host)
+
+    keys: dict[str, str] = {}
+    lengthened: dict[str, ReferencePublisherPart] = {}
+    taken = {name for name, hosts in sharing.items() if len(hosts) == 1}
+    for name, hosts in sorted(sharing.items()):
+        if len(hosts) == 1:
+            keys[hosts[0]] = name
+            continue
+        for host in sorted(hosts):
+            _name, registered, suffix, whole = parts[host]
+            longer_forms = [
+                (
+                    ReferencePublisherPart.REGISTERED_NAME,
+                    f"{name}-{registered}" if registered != name else "",
+                ),
+                (ReferencePublisherPart.PUBLIC_SUFFIX, f"{name}-{suffix}" if suffix else ""),
+                (ReferencePublisherPart.HOST, whole),
+            ]
+            for part, longer in longer_forms:
+                if longer and longer not in taken:
+                    keys[host] = longer
+                    lengthened[longer] = part
+                    taken.add(longer)
+                    break
+    return keys, lengthened
+
+
+def read_url_list(path: Path) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
+    """Every line that holds an address, and every line that does not.
+
+    Both are returned with their 1-based line number, because a person reading a
+    refusal needs the line to open, not a count of how many there were.
+    """
+    accepted: list[tuple[int, str]] = []
+    refused: list[tuple[int, str]] = []
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        address = line.strip()
+        if not address:
+            continue
+        split_address = urlsplit(address)
+        if split_address.scheme not in {"http", "https"} or not split_address.netloc:
+            refused.append((number, address))
+            continue
+        accepted.append((number, address))
+    return accepted, refused
+
+
+def feeds_by_host(sources_path: Path) -> dict[str, tuple[str, str] | None]:
+    """Host to (feed id, vertical), and `None` where the host is not one answer.
+
+    A host two feeds in different verticals share is not an unambiguous
+    association, so it maps to nothing rather than to whichever feed sorted
+    first.
+    """
+    declared = json.loads(sources_path.read_text(encoding="utf-8"))
+    found: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    for feed in declared.get("feeds", []):
+        url = str(feed.get("url") or "")
+        if not url:
+            continue
+        found[host_of(url)].add((str(feed["id"]), str(feed["vertical"])))
+    return {host: next(iter(pair)) if len(pair) == 1 else None for host, pair in found.items()}
+
+
+def build_manifest(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    sources_path: Path,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Read the snapshotted URL list, write the manifest, and store what it holds.
+
+    Paths in the config are relative to `root`, which is the repository unless a
+    test hands it somewhere else. Nothing is resolved against the current shell
+    directory, so the verb produces the same manifest wherever it is run from.
+    """
+    input_path = root / local.input_file
+    accepted, refused = read_url_list(input_path)
+    if refused:
+        print(f"{len(refused)} line(s) hold no usable address, so no manifest was written:")
+        for number, line in refused[:20]:
+            print(f"  line {number}: {line[:120]}")
+        return 1
+
+    canonical = {address: canonicalise(address) for _, address in accepted}
+    publishers, lengthened = assign_publishers(
+        list(canonical.values()), generic=frozenset(local.selection.generic_host_labels)
+    )
+    declared = feeds_by_host(sources_path)
+
+    rows: list[ReferenceManifestRow] = []
+    identities: set[str] = set()
+    for number, address in accepted:
+        canonical_url = canonical[address]
+        host = host_of(canonical_url)
+        feed = declared.get(host)
+        rows.append(
+            ReferenceManifestRow(
+                version=ReferenceManifestRow.schema_version(),
+                source_line=number,
+                source_url=address,
+                canonical_url=canonical_url,
+                url_key=derive_url_key(canonical_url),
+                source_domain=registrable_domain(canonical_url),
+                host=host,
+                publisher=publishers[host],
+                source_id=feed[0] if feed else None,
+                vertical=feed[1] if feed else None,
+            )
+        )
+        identities.add(rows[-1].url_key)
+
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+    _write_atomically(manifest_path, canonical_json([row.model_dump(mode="json") for row in rows]))
+
+    # Every count below is read back off the file that was written rather than
+    # carried out of the loop above, so a metadata total and its collection can
+    # actually disagree (Guardrail #10).
+    written = json.loads(manifest_path.read_text(encoding="utf-8"))
+    read_back = [ReferenceManifestRow.model_validate(row) for row in written]
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.IMPORT,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceManifestRow.__schema_stem__,
+        input_path=_under(root, input_path),
+        input_sha256=hashlib.sha256(input_path.read_bytes()).hexdigest(),
+        output_path=_under(root, manifest_path),
+        output_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        rows=len(read_back),
+        verticals=_tally(row.vertical for row in read_back if row.vertical),
+        domains=_tally(row.source_domain for row in read_back),
+        hosts=_tally(row.host for row in read_back),
+        publishers=_tally(row.publisher for row in read_back),
+        publisher_hosts={
+            key: sorted({row.host for row in read_back if row.publisher == key})
+            for key in sorted({row.publisher for row in read_back})
+        },
+        lengthened_publishers=lengthened,
+        settings=local,
+        import_totals=ReferenceImportTotals(
+            input_lines=len(input_path.read_text(encoding="utf-8").splitlines()),
+            blank_lines=sum(
+                1
+                for line in input_path.read_text(encoding="utf-8").splitlines()
+                if not line.strip()
+            ),
+            valid_urls=len(read_back),
+            unique_urls=len({row.url_key for row in read_back}),
+            equivalent_urls=len(read_back) - len({row.url_key for row in read_back}),
+            invalid_lines=0,
+            unassigned_vertical=sum(1 for row in read_back if row.vertical is None),
+        ),
+    )
+    _write_atomically(
+        dataset_dir / MANIFEST_META_FILENAME, canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.import_totals
+    assert totals is not None
+    print(f"{'manifest':<{_WIDTH}} {_under(root, manifest_path)}")
+    print(f"{'rows':<{_WIDTH}} {totals.valid_urls}")
+    print(f"{'unique identities':<{_WIDTH}} {totals.unique_urls}")
+    print(f"{'equivalent addresses':<{_WIDTH}} {totals.equivalent_urls}")
+    print(f"{'registered domains':<{_WIDTH}} {len(meta.domains)}")
+    print(f"{'hosts':<{_WIDTH}} {len(meta.hosts)}")
+    print(f"{'publishers':<{_WIDTH}} {len(meta.publishers)}")
+    print(f"{'publisher keys lengthened':<{_WIDTH}} {len(lengthened)}")
+    print(f"{'rows with no vertical':<{_WIDTH}} {totals.unassigned_vertical}")
+    return 0
+
+
+def _tally(values: Iterable[str]) -> dict[str, int]:
+    counted: dict[str, int] = defaultdict(int)
+    for value in values:
+        counted[value] += 1
+    return dict(sorted(counted.items()))
+
+
+def _under(root: Path, path: Path) -> str:
+    """`path` as a relative POSIX path under `root` (`CLAUDE.md` section 2)."""
+    return path.resolve().relative_to(root.resolve()).as_posix()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=REPO_ROOT / DATASET_RELPATH)
@@ -652,8 +917,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     splitting = verbs.add_parser("split", help="Draw the split, or refuse and say why.")
     splitting.add_argument("--fetched-on", default=None, help="YYYY-MM-DD. Defaults to today.")
     verbs.add_parser("verify", help="Re-check the committed set.")
+    importing = verbs.add_parser(
+        "import-urls", help="Build the supplied-URL collection's manifest. No network."
+    )
+    importing.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
 
     args = parser.parse_args(argv)
+    if args.verb == "import-urls":
+        local = ReferenceDatasetLocalConfig.model_validate_json(
+            args.local_config.read_text(encoding="utf-8")
+        )
+        return build_manifest(
+            args.local_config.parent, local, sources_path=REPO_ROOT / local.sources_file
+        )
+
     settings = config.load(args.config)
     asked = settings.app.reference_dataset
     if args.verb == "plan":

@@ -1,7 +1,7 @@
 # Reference dataset 2
 
 **Built**: 2026-09-13
-**State**: step 2 of 12. The supplied URL list is snapshotted. Nothing is fetched yet.
+**State**: step 4 of 12. The URL list is snapshotted and the manifest is built. Nothing is fetched yet.
 
 A collection built from a URL list supplied by hand, not drawn from what this
 pipeline published. It exists so that the article classifier can later be run
@@ -29,26 +29,36 @@ collections. Nothing here reads or writes that one.
 
 ## What is in it today
 
-Measured 2026-09-13, on the snapshot as committed.
+Measured 2026-09-13 by `build_reference_dataset.py import-urls`, read back off the
+files it wrote.
 
 | | Count |
 | --- | ---: |
 | Input lines | 1,661 |
-| Valid URLs | 1,661 |
-| Unique URLs | 1,661 |
-| Exact duplicates | 0 |
+| Manifest rows | 1,661 |
+| Unique identities | 1,661 |
+| Equivalent addresses | 0 |
 | Invalid lines | 0 |
 | Hosts | 55 |
+| Publishers | 55 |
+| Registered domains | 16 |
+| Publisher keys that needed lengthening | 0 |
+| Rows with no vertical | 1,455 |
 
 - `urls.txt` is **115,415 bytes**, SHA-256
   `64dc5e2787d08aae67faef31fd32b6309bf81b902edbeaf17062ca11ad54e071`, which is
   byte-identical to the supplied file. The list already used LF and carried no
   duplicate and no malformed address, so the snapshot changed nothing.
-- The five deepest hosts are `www.globaltimes.cn` with 63 URLs,
-  `newsletter.semianalysis.com` with 58, `www.ai-supremacy.com` with 52, and
-  `bengoertzel.substack.com` and `chipbriefing.substack.com` with 50 each.
-- 55 hosts against a target of 20 URLs each is 1,100 places wanted, so the cap
-  of 1,000 binds and a sample cannot give every host its full target.
+- **55 publishers against 16 registered domains** is the grouping decision doing
+  its work: 1,075 of the 1,661 URLs sit under `substack.com`, and they are 40
+  separate newsletters rather than one outlet.
+- The five deepest publishers are `globaltimes` with 63 URLs, `semianalysis`
+  with 58, `ai-supremacy` with 52, and `bengoertzel` and `chipbriefing` with 50
+  each.
+- No two hosts produced the same publisher key, so every key kept its short
+  form.
+- 55 publishers against a target of 20 URLs each is 1,100 places wanted, so the
+  cap of 1,000 binds and a sample cannot give every publisher its full target.
 
 ## What it is for, and what it is not for
 

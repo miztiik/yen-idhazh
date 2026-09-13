@@ -75,6 +75,18 @@
     "request_delay_seconds": 1.0,
     "selection": {
       "fill_shortfall": true,
+      "generic_host_labels": [
+        "blog",
+        "feed",
+        "feeds",
+        "mail",
+        "news",
+        "newsletter",
+        "rss",
+        "stories",
+        "web",
+        "www2"
+      ],
       "group_by": "publisher",
       "publisher_disambiguation": [
         "registered_name",
@@ -86,7 +98,7 @@
     },
     "sources_file": "config/sources.json",
     "taxonomy_file": "config/taxonomy.json",
-    "version": "2026-09-13"
+    "version": "2026-09-13T10:20"
   },
   "version": "2026-09-13",
   "verticals": {}
