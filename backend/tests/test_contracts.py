@@ -2158,8 +2158,49 @@ def test_the_rest_rule_reads_the_knob_the_committed_config_spells() -> None:
     assert committed.availability_strikes_before_rest == 5
     assert tuned.availability_strikes_before_rest == 3
 
-    source = read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py")
+    source = read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "plan.py")
     assert "after_failures=collect.availability_strikes_before_rest" in source
+
+
+def test_no_test_redirects_a_name_the_router_only_re_exports() -> None:
+    """A redirect has to reach the module the stage reads the name from.
+
+    `idhazh.cli` re-exports every stage and several of their helpers so a caller
+    keeps naming what it always named. That makes one shape of redirect silent:
+    `setattr(cli, "_picture_faults", ...)` rebinds the router's name, the stage
+    goes on calling the shipped rule out of its own module, and the test passes
+    against the thing it meant to replace. So a redirect must name the module
+    that defines the name.
+
+    The roots are covered another way - `cli` does not re-export them at all, so
+    a redirect left on one raises. This is the half of the rule a re-export can
+    still hide.
+    """
+    router = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
+    declared = {
+        node.name
+        for node in router.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+    }
+
+    stale: list[str] = []
+    for path in sorted((REPO_ROOT / "backend" / "tests").glob("*.py")):
+        for node in ast.walk(ast.parse(read_text(path))):
+            if not isinstance(node, ast.Call) or len(node.args) < 2:
+                continue
+            if not isinstance(node.func, ast.Attribute) or node.func.attr != "setattr":
+                continue
+            target, attribute = node.args[0], node.args[1]
+            if not isinstance(target, ast.Name) or target.id != "cli":
+                continue
+            if not isinstance(attribute, ast.Constant) or not isinstance(attribute.value, str):
+                continue
+            if attribute.value not in declared:
+                stale.append(f"{path.name}:{node.lineno} redirects cli.{attribute.value}")
+
+    assert not stale, "redirect the module that defines the name, not the router: " + "; ".join(
+        stale
+    )
 
 
 def test_the_console_falls_back_to_the_strike_count_the_pipeline_reads() -> None:

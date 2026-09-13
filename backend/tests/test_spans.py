@@ -42,6 +42,7 @@ from idhazh import cli, config, telemetry
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.fetch import FetchResult
+from idhazh.stages import common
 
 #: What prose looks like. The shape rule refuses it on the space alone.
 SENTINEL_SENTENCE: Final = "Kumquat lanternfish barometer, nine four two seven."
@@ -219,8 +220,8 @@ def trace_a_run(
 ) -> list[dict[str, Any]]:
     """One real work stage over one planted page, and every span it produced."""
     run_plan = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "EVIDENCE_ROOT", tmp_path / "evidence")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "EVIDENCE_ROOT", tmp_path / "evidence")
 
     with RecordedCompletionEndpoint(*reply) as server:
         cli.stage_work(
@@ -230,7 +231,7 @@ def trace_a_run(
             fetcher=lambda _url: FetchResult(FetchOutcome.OK, status=200, body=page),
             model_endpoint=server.endpoint,
         )
-    return spans_of(cli.STATE_ROOT / telemetry.TRACES_DIRNAME)
+    return spans_of(common.STATE_ROOT / telemetry.TRACES_DIRNAME)
 
 
 def assert_nothing_leaked(spans: list[dict[str, Any]], planted: tuple[str, ...]) -> None:
@@ -334,8 +335,8 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
     trace nor the span rollup is written.
     """
     run_plan = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
-    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "EVIDENCE_ROOT", tmp_path / "evidence")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(common, "EVIDENCE_ROOT", tmp_path / "evidence")
     settings = untraced_settings()
     assert not settings.app.observability.tracing_enabled
 
@@ -352,8 +353,8 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
             model_endpoint=server.endpoint,
         )
 
-    assert not (cli.STATE_ROOT / telemetry.TRACES_DIRNAME).exists()
-    assert not (cli.STATE_ROOT / "span-rollup").exists()
+    assert not (common.STATE_ROOT / telemetry.TRACES_DIRNAME).exists()
+    assert not (common.STATE_ROOT / "span-rollup").exists()
 
 
 # --- The second control -----------------------------------------------------
@@ -461,7 +462,7 @@ def test_the_robots_read_is_a_span_inside_the_fetch() -> None:
     """
     sink = Collect()
     tracer = telemetry.Tracer(sink=sink, now=lambda: "2026-08-30T06:00:00Z")
-    read = cli.live_fetcher(config.load(CONFIG_DIR), tracer=tracer)
+    read = common.live_fetcher(config.load(CONFIG_DIR), tracer=tracer)
 
     with tracer.trace("2026-08-30-1-ai-01"), tracer.span(telemetry.SpanName.FETCH) as outer:
         result = read("http://127.0.0.1:9/article")

@@ -35,6 +35,7 @@ from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
+from idhazh.stages import common
 from utilities import build_canary_day
 
 
@@ -120,9 +121,9 @@ class TestTheStageAssembledTwice:
         if not Embedder(REPO_ROOT).available:
             pytest.skip("the encoder is not committed in this checkout")
         settings = config.load(CONFIG_DIR)
-        monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-        monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-        monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+        monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+        monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
         items_dir = tmp_path / "run" / full_plan().date / "items"
         write_payloads(items_dir, full_plan().items[0])
 
@@ -150,9 +151,9 @@ class TestTheStageAssembledTwice:
         if not Embedder(REPO_ROOT).available:
             pytest.skip("the encoder is not committed in this checkout")
         settings = config.load(CONFIG_DIR)
-        monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-        monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-        monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+        monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+        monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
         items_dir = tmp_path / "run" / full_plan().date / "items"
         for index in (0, 1):
             write_payloads(items_dir, full_plan().items[index])
@@ -181,9 +182,9 @@ class TestTheStageAssembledTwice:
         if not Embedder(REPO_ROOT).available:
             pytest.skip("the encoder is not committed in this checkout")
         settings = config.load(CONFIG_DIR)
-        monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-        monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-        monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+        monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+        monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
         items_dir = tmp_path / "run" / full_plan().date / "items"
         for index in (0, 1):
             write_payloads(items_dir, full_plan().items[index])
