@@ -729,12 +729,16 @@ def test_a_theme_lifts_a_story_by_exactly_its_lens_weight() -> None:
 def test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
     """Corroboration is evidence; a theme is a preference. It must not outrank one.
 
-    A second independent feed is worth `repetition_weight` times the tier, which
-    for trade press is 0.6. The shipped lens weight is 0.3 - half a corroborating
-    feed - and this is the assertion that stops a later edit inverting that.
+    A second feed carrying the same address is worth `carriage_step`, 0.25, and
+    it is worth that whatever tier carried it - it multiplied the tier until
+    2026-09-13, so the same signal used to buy 1.0 on an institution and 0.6 on
+    the trade press. The shipped lens weight is 0.3, which is ABOVE the step, so
+    the two candidates here are not interchangeable: the assertion holds because
+    a second feed also brings a second tier's authority into `max`, and that is
+    the thing a theme may not outrank.
     """
     one = [candidate for candidate in all_candidates() if candidate.source_id == "trade-press"][:1]
-    two = [*one, *[c for c in all_candidates() if c.source_id == "community"][:1]]
+    two = [*one, *[c for c in all_candidates() if c.source_id == "lab-blog"][:1]]
     assert rate(one, lens_bonus=0.3) < rate(two), (
         "a themed single-sourced story must not beat the same story two feeds carried"
     )
@@ -790,9 +794,10 @@ def test_the_scoring_formula_is_exactly_its_four_terms() -> None:
         base + config.watchlist_bonus + 0.3
     )
 
-    # Reach multiplies authority; the bonuses are added after, never scaled by it.
+    # Carriage is a flat step now, not a multiplier: it adds the same amount to
+    # any tier, and the bonuses are added after it rather than scaled by it.
     two = [one[0], replace(one[0], source_id="trade-press", canonical_url=one[0].canonical_url)]
-    assert rate(two) == pytest.approx(base * (1.0 + config.repetition_weight))
+    assert rate(two) == pytest.approx(base + config.carriage_step)
     assert rate(two, watchlist_hit=True) == pytest.approx(rate(two) + config.watchlist_bonus)
 
 
