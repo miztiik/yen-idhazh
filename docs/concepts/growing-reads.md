@@ -284,9 +284,22 @@ long the project runs, and every later listing of it is bounded by that. This is
 the shape the note above calls "a cover enforced on the store instead of on the
 read".
 
+**`frontend/public/telemetry/` is the one directory where that bound is declared
+and not yet enforced, and it says so here rather than in a sentence that would be
+wrong.** Six of the seven series are trimmed on every assemble, because their
+publishers reach `publish_console.publish_series`, which calls `prune_months`.
+`publish_telemetry.publish` does not: its deletion lives in
+`retention.prune_telemetry`, inside the workflow step that ships `--dry-run`. So
+`public_telemetry_keep_months` is 14 and the directory holds every month it has
+ever published - 2 files on 2026-09-13, gaining one a month. Every listing of it
+grows with it, including the one
+`cli._console_payload_faults` takes on its contract sweep. What closes it is
+switching that prune on, which is a decision about the whole repository rather
+than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
+
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `publish_console.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries |
+| `publish_console.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
 | `publish_scores.publish`, `publish_feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
 | `publish_span_rollup.publish` | the state shard for the month named | the month the run appended to |
 | `publish_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `cli.stage_assemble` passes; `months=None` is unbounded on purpose |
