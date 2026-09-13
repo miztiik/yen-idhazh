@@ -1,7 +1,7 @@
 # Model swap as a config edit, and a bench that outlives its artifact
 
 **Last Updated**: 2026-09-13
-**Level**: 5 overall (section 6). Rows #2, #6, #10 and #11 change a persisted contract. Row #10 PAUSES for sign-off; the other three proceed under the ESCALATE triggers in section 0.
+**Level**: 5 overall (section 6). Rows #2, #6, #10 and #11 change a persisted contract. **Row #10 was signed off by the owner on 2026-09-13 and no longer pauses**; all four proceed under the ESCALATE triggers in section 0.
 
 Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md): the orchestrator dispatches one worktree-isolated worker per row; workers consult personas on ambiguity; AUTO-merge on green gates; **parallel N = 4**; honour the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
@@ -12,7 +12,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 | Why this plan exists | Swapping the summarizer is a source edit today, and every benchmark that would inform the choice is deleted after seven days. |
 | Hard scope - in | The model's turn envelope onto its entry; one complete config file per model selected by a pointer; a start-up proof with five arms; both benchmark arms chained in one workflow emitting a paste-ready page; a per-model dossier; benchmark filenames lose their date; every tokenizer-shaped constant names its weights; the sanitizer learns the control tokens of the configured model; a runbook whose swap and revert are one line each. |
 | Hard scope - out | Adopting any candidate. Layered config overrides. Per-model prompt TEXT. Multi-file weights, vision projectors, speculative draft heads. Any new quality instrument - the eleven gates in `validate.yml` stay the only quality arm. Non-greedy sampling. Committing benchmark prose from CI. |
-| ESCALATE triggers | (1) Row #10 is Level 5 and PAUSES for sign-off before any commit. (2) Any row that would put a model identity into a branch under `backend/idhazh/llm/` stops and surfaces; row #6 builds the test that catches it. (3) Any row that would make a gate threshold, a prompt string or an output schema configurable per model stops and surfaces. (4) Rows #2 and #11 must render the incumbent's prompt byte-identical; a single differing byte stops the row. (5) Row #12 touches the trust boundary (Guardrail #11), which is surfaced and never adapted - a widening that cannot be proved to strip a declared marker stops the row. |
+| ESCALATE triggers | (1) Row #10 changes the summarize contract, three hard refusals and the shard timeout. **The owner signed it off on 2026-09-13, so it runs without a further pause** - but it stops and surfaces if the measured cost per item exceeds the 28 percent the row prices, or if the qualification run does not clear every gate the incumbent clears. (2) Any row that would put a model identity into a branch under `backend/idhazh/llm/` stops and surfaces; row #6 builds the test that catches it. (3) Any row that would make a gate threshold, a prompt string or an output schema configurable per model stops and surfaces. (4) Rows #2 and #11 must render the incumbent's prompt byte-identical; a single differing byte stops the row. (5) Row #12 touches the trust boundary (Guardrail #11), which is surfaced and never adapted - a widening that cannot be proved to strip a declared marker stops the row. |
 | Chosen strategy | One complete `ModelsConfig` per file, selected by a pointer - never a merge. Ruled by Fowler, 2026-09-13, on the ground that a merged product is a value with no file to read it from. |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
@@ -23,7 +23,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | # | Intent | Effect | Authority |
 | --- | --- | --- | --- |
 | 1 | Testing a new model, and reverting, costs the least possible friction against existing code. | The measure of success is that no step in the runbook is a source edit. Rows #2, #6, #11 and #9. | Owner, 2026-09-13 |
-| 2 | Reasoning during summarization is correct and wanted - a summarizer that cannot think works with its hands tied. | Overturns the standing position that a reasoning-by-default model is off-policy. Row #10 exists because of this; the argument is now the budget, not the ban. | Owner, 2026-09-13, under section 0 |
+| 2 | Reasoning during summarization is correct and wanted - a summarizer that cannot think works with its hands tied. | Overturns the standing position that a reasoning-by-default model is off-policy. Row #10 exists because of this; the argument is now the budget, not the ban. **Row #10 signed off 2026-09-13.** | Owner, 2026-09-13, under section 0 |
 | 3 | A benchmark record is named for what it measured and nothing else. | Overturns the dated-filename rule in four places. Row #4. | Owner, 2026-09-13, under section 0 |
 | 4 | Per-model benchmark output lives in its own file, with one file pointing at the others. | Creates a doc class. Row #7. | Owner, 2026-09-13 |
 
@@ -58,7 +58,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 13 | Retake the two budgets that were sized on a retired vocabulary | 3, 7 | E | PENDING | - | - | - |
 | 8 | Both bench arms in one workflow, emitting a page ready to paste | 1, 6, 7 | F | PENDING | - | - | - |
 | 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | PENDING | - | - | - |
-| 10 | Two spans on one call, so the model can think. **PAUSES** | 5, 6, 11 | H | PENDING | - | - | - |
+| 10 | Two spans on one call, so the model can think | 5, 6, 11 | H | PENDING | - | - | - |
 
 ### Parallel groups, derived
 
@@ -73,7 +73,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | E | 12, 13 | Row #12 writes `sanitize.py`, `app_config.py` and two test modules. Row #13 writes `taxonomy.py`, `visual.py`, `measured.py` and the instrument log. No shared file. |
 | F | 8 | Alone. It rewrites the workflow row #1 fixed and reads the shapes rows #6 and #7 created. |
 | G | 9 | Alone. It shares the how-to with row #8 and `AGENTS.md` with row #4. |
-| H | 10 | Alone, and PAUSED. |
+| H | 10 | Alone. It is the last row and it touches most of the summarize package. |
 
 ---
 
@@ -477,9 +477,9 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 
 ---
 
-### Row #10 - Two spans on one call, so the model can think. PAUSES
+### Row #10 - Two spans on one call, so the model can think
 
-**ESCALATE trigger 1. Level 5. This row does not start without sign-off.** It changes the summarize contract, three hard refusals, and the shard timeout.
+**Level 5, and signed off by the owner on 2026-09-13.** It changes the summarize contract, three hard refusals, and the shard timeout. It runs without a further pause, and stops only on the two conditions in ESCALATE trigger 1.
 
 - **Scope:** A call becomes an unconstrained thinking span followed by a schema-constrained answer span on the same slot, and the thinking is discarded before anything reads it.
 - **Contract introduced:** on `ModelRef.turns`, `thinking_close: str | None`. On `InferenceConfig`, `max_think_tokens: int` and `max_answer_tokens: int`; `max_output_tokens` and `thinking` retire into the refused-knob list. `PipelineInputs` gains `turn_markers_sha256`.
