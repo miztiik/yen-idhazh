@@ -57,6 +57,7 @@
         "fetch",
         "extract",
         "summarize",
+        "visual",
         "publish"
       ],
       "title": "ItemStage",
@@ -67,6 +68,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ItemStage gained visual. No row here can carry it.",
+      "version": "2026-09-14T01:30",
+      "why": "The enum is inlined in this schema, so a name added for the event envelope's src becomes legal in this column too. It is unreachable: every row here projects an item-health row, and that census column refuses visual because an item whose picture failed still publishes. The entry exists so the widening is dated rather than inferred from a schema diff."
+    },
     {
       "change": "Added nullable model_calls, call_1_kind and the first call's five cost cells at the end of the row. The second call is the remainder.",
       "version": "2026-09-12T16:20",
@@ -369,7 +375,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-12T16:20",
+      "default": "2026-09-14T01:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -391,5 +397,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-12T16:20"
+  "version": "2026-09-14T01:30"
 }

@@ -51,6 +51,13 @@ class ItemStage(StrEnum):
     FETCH = "fetch"
     EXTRACT = "extract"
     SUMMARIZE = "summarize"
+    #: Planning and drawing a picture, which happen inside the work stage once a
+    #: summary is accepted. **Not terminal**: an item whose picture failed still
+    #: reaches the digest, so it leaves a `publish` row and the census column
+    #: refuses this name. It exists so the step that draws can say so in a log
+    #: line - `telemetry.event(src=...)` names the step that wrote the line, and
+    #: a render failure had no name and made no sound until it did.
+    VISUAL = "visual"
     PUBLISH = "publish"
 
 
@@ -206,6 +213,27 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T01:30",
+            change=(
+                "ItemStage gained visual. The generated schema lists it because the enum "
+                "is inlined here; the stage column refuses it and no row may carry it."
+            ),
+            why=(
+                "The pipeline had no name for the step that draws a picture, so a render "
+                "failure was silent: render.write caught the OSError, recorded "
+                "render_failed on the day's own payload and logged nothing at all. The "
+                "name exists for telemetry.event(src=...), which says which step wrote a "
+                "line rather than where an item ended, and item.visual.failed is the "
+                "first event to use it. It is not terminal - an item whose picture failed "
+                "still publishes - so a visual row here would say the item stopped where "
+                "it did not, and would shrink the publish count that publish_day_metrics "
+                "and the console read. TERMINAL_STAGES is what this column accepts and a "
+                "validator refuses the rest, so the widening is legal in the schema and "
+                "unreachable in this ledger. No read-side migration is owed: no row an "
+                "earlier run wrote can carry a value that did not exist."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T14:20",
             change=(
@@ -543,6 +571,8 @@ class ItemHealthRow(Contract):
 
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:
+        if self.stage not in TERMINAL_STAGES:
+            raise ValueError("an item-health row records where an item stopped")
         if self.outcome is ItemOutcome.OK:
             if self.code not in {
                 None,

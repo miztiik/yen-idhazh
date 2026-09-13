@@ -7,6 +7,7 @@
         "fetch",
         "extract",
         "summarize",
+        "visual",
         "publish"
       ],
       "title": "ItemStage",
@@ -17,6 +18,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ItemStage gained visual. No folded row can carry it.",
+      "version": "2026-09-14T01:30",
+      "why": "The enum is inlined in this schema, so a name added for the event envelope's src becomes legal in this column too. It is unreachable: retention.fold_month groups item-health rows, and that census column refuses visual because an item whose picture failed still publishes. A folded month an earlier run wrote reads unchanged, and the entry exists so the widening is dated rather than inferred from a schema diff."
+    },
     {
       "change": "Initial shape: one row per (date, stage) folded from an item-health shard.",
       "version": "2026-08-30T20:00",
@@ -108,7 +114,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-08-30T20:00",
+      "default": "2026-09-14T01:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -123,5 +129,5 @@
   ],
   "title": "TelemetryAggregateRow",
   "type": "object",
-  "version": "2026-08-30T20:00"
+  "version": "2026-09-14T01:30"
 }

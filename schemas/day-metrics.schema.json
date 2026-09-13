@@ -449,6 +449,7 @@
         "fetch",
         "extract",
         "summarize",
+        "visual",
         "publish"
       ],
       "title": "ItemStage",
@@ -459,6 +460,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ItemStage gained visual, so stage_timing may name it. Nothing writes it yet.",
+      "version": "2026-09-14T01:30",
+      "why": "The enum is inlined in this schema, so a name added for the event envelope's src becomes a legal stage timing here as well. publish_day_metrics times fetch, extract and summarize and nothing else, so no day metrics file carries the new name and this entry records a vocabulary that widened rather than a field that moved. The date is what lets a reader of an old payload place the shape without diffing two generated files."
+    },
     {
       "change": "Removed pipeline_fingerprint. BREAKING.",
       "version": "2026-09-13T22:00",
@@ -639,7 +645,7 @@
       "description": "The day's token clock, or null when no item timed a token. Additive parts."
     },
     "version": {
-      "default": "2026-09-13T22:00",
+      "default": "2026-09-14T01:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -670,5 +676,5 @@
   ],
   "title": "DayMetrics",
   "type": "object",
-  "version": "2026-09-13T22:00"
+  "version": "2026-09-14T01:30"
 }
