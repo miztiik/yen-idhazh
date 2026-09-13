@@ -50,6 +50,14 @@ EMBEDDER_ID: Final = "all-minilm-l6-v2-quantized"
 # the first time a revision was corrected without the bytes changing.
 ENCODER_DIRECTORY: Final = "2026-08-22"
 
+# The two lines above, fused, so anything that has to record WHICH WEIGHTS wrote
+# a vector records one string and compares one string. `EMBEDDER_ID` alone does
+# not answer that question - it does not move when the weights move, only the
+# directory does - so a field carrying the id alone reads as an encoder identity
+# and is not one. `config/taxonomy-vectors.bin` carries this in its header and
+# `DayLabelSimilarity` carries it on the day record.
+ENCODER_REF: Final = f"{EMBEDDER_ID}/{ENCODER_DIRECTORY}"
+
 # Relative to the repository root, and the same directory the published page
 # fetches. `frontend/static/` rather than `frontend/public/`: the latter is where
 # the pipeline writes its payloads, which the site reads at BUILD time through
