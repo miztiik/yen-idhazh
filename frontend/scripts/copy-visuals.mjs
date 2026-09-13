@@ -1,24 +1,23 @@
 #!/usr/bin/env node
 /**
- * Stage the pipeline's rendered visuals, public telemetry and month indexes
+ * Stage the pipeline's published visuals, public telemetry and month indexes
  * into `static/` before the build.
  *
  * `frontend/public/` is where `backend/` writes, and the page reads those
  * payloads through the filesystem at build time - so the JSON never needs
- * serving. A rendered chart is different: it is fetched by the browser for any
- * story past the seed the document was built with, and only `static/` is copied
- * into the served bundle.
+ * serving. A visual's marks are different: they are fetched by the browser that
+ * draws the chart, and only `static/` is copied into the served bundle.
  *
- * **`visuals.asset_base_url` is the switch that stops this staging the images.**
- * It ships empty, which means this site, so the images are staged and the
- * bundle is what it always was. Naming a host there is the release valve for
- * the 1 GB published ceiling: `ItemVisual.svelte` asks that host for the
- * drawing, so staging a second copy here would leave the bytes in the bundle
- * and the valve would move nothing. The two are one switch for that reason -
- * where a drawing is asked for and whether it also ships cannot disagree.
- * Whoever opens it puts the same `digest/` tree at that prefix first; the day
- * payloads and the month index are staged either way, because they are read
- * from this origin and are not what the ceiling is about.
+ * **`visuals.asset_base_url` is the switch that stops this staging the marks.**
+ * It ships empty, which means this site, so they are staged and the bundle is
+ * what it always was. Naming a host there is the release valve for the 1 GB
+ * published ceiling: `ItemVisual.svelte` asks that host for the file, so staging
+ * a second copy here would leave the bytes in the bundle and the valve would
+ * move nothing. The two are one switch for that reason - where a visual is asked
+ * for and whether it also ships cannot disagree. Whoever opens it puts the same
+ * `digest/` tree at that prefix first; the day payloads and the month index are
+ * staged either way, because they are read from this origin and are not what the
+ * ceiling is about.
  *
  * Two earlier placements were wrong, both silently:
  *
@@ -31,7 +30,7 @@
  * Staging into `static/` before the build is the placement where dev, preview
  * and the deployed bundle all agree.
  *
- * Three kinds of file are staged from the digest tree: rendered images, the day
+ * Three kinds of file are staged from the digest tree: a visual's marks, the day
  * payloads a search result renders from, and the month index with its sibling
  * vector file. `run.json` is not staged - nothing fetches it. Telemetry is
  * different again: the console fetches a projected CSV that has already dropped
@@ -45,9 +44,10 @@
  * day's text and vectors in the bundle. Measured 2026-08-31 on Intel Core
  * i7-1265U / Windows 11 / node 24.12.0, 11 committed days and 3,733 items,
  * `gzip -9`: the committed day is 792.65 bytes an item and the projection is
- * 468.58, which is 40.9 percent less. The floor is not zero because 2,259,497
- * bytes of the staged tree is 178 rendered images, which this step must not
- * touch.
+ * 468.58, which is 40.9 percent less. The floor was not zero while 2,259,497
+ * bytes of the staged tree was 178 rendered images; the drawings are deleted
+ * and a visual's marks are about a tenth of what its drawing weighed, so what
+ * is left beside the projections is small and this step must still not touch it.
  *
  * The shape is `schemas/digest-view.schema.json`, generated from
  * `backend/idhazh/contracts/digest_view.py`, and every staged file carries its
@@ -72,7 +72,13 @@ import { assetBaseUrl } from '../asset-base.js';
 // but resolves nothing else.
 import { ITEM_FIELDS, VIEW_VERSION, projectDay } from '../src/lib/payload/project.ts';
 
-const IMAGE_SUFFIXES = ['.svg', '.webp', '.png', '.jpg', '.jpeg'];
+// What a per-item file in a day directory is named, and it is the whole rule.
+// `digest.json` and `run.json` belong to the day rather than to a story, and an
+// item id ends in a hyphen and a run of digits or sixteen base32 symbols - so no
+// day-level payload can look like one and no name list has to be kept here. It
+// was a set of image suffixes until 2026-09-13, when the reader's browser took
+// over the drawing and a visual stopped being an image.
+const ITEM_FILE = /^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 // Empty means this site, which is what ships, so the images are staged.
 const servedElsewhere = assetBaseUrl() !== '';
@@ -244,7 +250,7 @@ function stageConsolePayloads() {
 stageConsolePayloads();
 
 if (!existsSync(source)) {
-	console.log(`rendered visuals: no payload tree at ${source}, nothing to stage.`);
+	console.log(`published visuals: no payload tree at ${source}, nothing to stage.`);
 	// Both trees, because this exit skips the telemetry pass at the foot of the
 	// file and a staged tree with no source behind it is exactly what `reconcile`
 	// exists to prevent.
@@ -258,7 +264,7 @@ let payloads = 0;
 let current = 0;
 let skipped = 0;
 let elsewhere = 0;
-// Neither an unreadable day nor an image left out by `visuals.asset_base_url`
+// Neither an unreadable day nor a marks file left out by `visuals.asset_base_url`
 // joins this set, so `reconcile` clears a copy an earlier build staged - which
 // is what deleting the tree first used to do for them.
 const wanted = new Set();
@@ -281,14 +287,14 @@ const walk = (relative) => {
 			try {
 				projected = projectDay(readFileSync(join(source, next), 'utf8'));
 			} catch (cause) {
-				console.warn(`rendered visuals: ${next} is unreadable, day skipped - ${String(cause)}`);
+				console.warn(`published visuals: ${next} is unreadable, day skipped - ${String(cause)}`);
 				skipped += 1;
 				continue;
 			}
 			wanted.add(next);
 			if (stage(Buffer.from(projected), join(target, next))) payloads += 1;
 			else current += 1;
-		} else if (IMAGE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))) {
+		} else if (ITEM_FILE.test(name)) {
 			if (servedElsewhere) {
 				elsewhere += 1;
 				continue;
@@ -302,14 +308,14 @@ const walk = (relative) => {
 walk('');
 const stale = reconcile(target, wanted);
 console.log(
-	`rendered visuals: staged ${copied} image(s) and projected ${payloads} day payload(s) ` +
+	`published visuals: staged ${copied} marks file(s) and projected ${payloads} day payload(s) ` +
 		`into static/digest at digest-view ${VIEW_VERSION}, ${ITEM_FIELDS.length} field(s) an item, ` +
 		`${current} already current, ${stale} stale removed, ${skipped} unreadable.`
 );
 if (servedElsewhere) {
 	console.log(
-		`rendered visuals: ${elsewhere} image(s) left out of the bundle - visuals.asset_base_url ` +
-			`says they are served from ${assetBaseUrl()}.`
+		`published visuals: ${elsewhere} marks file(s) left out of the bundle - ` +
+			`visuals.asset_base_url says they are served from ${assetBaseUrl()}.`
 	);
 }
 

@@ -35,7 +35,14 @@ from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.qualification import QualificationReport, QualificationShard
-from idhazh.contracts.reference_dataset import ReferenceDatasetRow
+from idhazh.contracts.reference_dataset import (
+    ReferenceCollectionMetadata,
+    ReferenceDatasetLocalConfig,
+    ReferenceDatasetRow,
+    ReferenceExtractionRow,
+    ReferenceManifestRow,
+    ReferenceSelectionRow,
+)
 from idhazh.contracts.review_queue import ReviewQueue
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
@@ -54,6 +61,7 @@ from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow
 from idhazh.contracts.watchlist import Watchlist
 
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
@@ -82,7 +90,12 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublicTelemetryRow,
     QualificationReport,
     QualificationShard,
+    ReferenceCollectionMetadata,
+    ReferenceDatasetLocalConfig,
     ReferenceDatasetRow,
+    ReferenceExtractionRow,
+    ReferenceManifestRow,
+    ReferenceSelectionRow,
     ReviewQueue,
     VisualDecision,
     RunManifest,
@@ -99,6 +112,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Taxonomy,
     TelemetryAggregateRow,
     ValidationRow,
+    VisualAggregateRow,
+    VisualAttemptRow,
     VisualData,
     VisualPlan,
     VisualPruneRow,

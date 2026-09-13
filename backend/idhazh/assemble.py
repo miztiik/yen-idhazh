@@ -253,7 +253,6 @@ def to_digest_visual(decision: VisualDecision | None) -> DigestVisual | None:
     return DigestVisual(
         kind=decision.kind,
         state=decision.visual_state,
-        path=decision.asset_path,
         data_path=decision.data_path,
         alt=decision.alt_text,
     )

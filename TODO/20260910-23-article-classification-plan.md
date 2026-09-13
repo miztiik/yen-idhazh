@@ -255,7 +255,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | 4 | An event gets a lifecycle | 3 | F | DONE #663 | p23-4 | #663 | worker |
 | 13 | The encoder alarm | 3 | F | DONE #666 | p23-13 | #666 | worker |
 | 6 | The desk is a new field, and the feed's word stays where it is | 3 | G | DONE #620 | p23-r6 | #620 | worker |
-| 7b | The two calls become a DAG, and every label rides in the first | 7a, P4, 6, plan 11 row 6 | H | IN-FLIGHT | p23-r7b | - | worker |
+| 7b | The two calls become a DAG, and every label rides in the first | 7a, P4, 6, plan 11 row 6 | H | DONE #688 | p23-r7b | #688 | worker |
 | 8 | Call 1 labels: desk, lenses, article kind | 7b, 2 | I | PENDING | - | - | - |
 | 14 | The classification ledger, and the day file the console reads | 8, plan 24 row #1 | J | PENDING | - | - | - |
 | 12 | The quote: seven conditions, three checks, ten codes | 7b, 8 | J | PENDING | - | - | - |
@@ -765,6 +765,19 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 ---
 
 ## 12a. Row #7b - The two calls become a DAG, and every label rides in the first
+
+**Six facts in this section were true when it was written and are not true now.
+They are corrected here, in the row that carried them, by the pull request that
+found them (2026-09-13).**
+
+| What this row says | What the tree says | What it changes |
+| --- | --- | --- |
+| `n_ctx` stays at 16,384, and raising it is ESCALATE trigger 7 | `models.summarize.inference.n_ctx` is **49,152**, moved 2026-09-13T21:00 with its own derivation in the config changelog | The window table below is sized against a number that has moved. **Trigger 7 did not fire in this row** - the raise landed before it, in another row. The refusal count is reported at both windows |
+| `extract.truncation_cap_tokens` is 5,000 | It is **10,000**, moved 2026-09-09 | Every window row below is sized at half the real cap |
+| `cache_prompt` appears nowhere in this repository | It has been sent on every request since row #3c: `backend/idhazh/llm/server.py` sets it in `completion_payload`, and `backend/tests/test_classify.py` already asserts it survives into call 2 | The oracle's third clause was already true. This row asserts it on the wire as well, over every request a real stage sent |
+| `test_the_longest_article_the_cap_allows_still_fits_the_window` sums one call and this row extends it | `test_the_two_calls_fit_the_window_at_the_cap` already exists and sums the whole sequence at 39,284 tokens | The extension had landed. What had not is that the sum lived only in the test, so this row lifts it into `classify.dag` and points the test at it |
+| `summarize.fits_context` is at `summarize.py:311` and is called from `cli.py:2007` | It is at line 324. `cli.py` is 679 lines and holds no stage body; the **only** caller is `stages/qualify.py`, which sends a **single** call | `summarize.fits_context` is correct for the harness that calls it and is left alone. The DAG's check is new - `dag.fits_the_window` - and the production path in `stages/work.py`, which called neither, calls it now |
+| The four-variant de-risk is an acceptance gate of this row | It cannot be taken: `backend/models/` and `backend/bin/` are empty, and every `labels.desk` in `corpus/reference-dataset-1/dataset.jsonl` is null on all 641 rows | The instrument ships and takes the half that needs no model - what each variant costs. The agreement half refuses by name. **It moves to row #8**, which builds the labelling prompt the variants would ride in; measuring against an invented prompt would be evidence about a prompt this pipeline never sends |
 
 - **Scope:** The call structure becomes a DAG the code walks, and the DAG has **two** nodes: call 1 returns the elements **and every label and score**; call 2 returns the summary and the visual plan. **The shape is two calls, and a third is an ESCALATE trigger.** The political gate is **Python that inspects call 1's reply and decides what is recorded**, not a schema conditional and not a dispatch.
 - **Files touched:** `backend/idhazh/classify/dag.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/summarize.py`, `backend/idhazh/cli.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/prompts/summarize_and_plan_visual.txt`, `backend/utilities/measure_definition_placement.py`, `backend/tests/{test_contracts,test_classify,test_summarize}.py`, `tests/fixtures/planner/dag-three-items.json`, `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/throughput.md`, `docs/concepts/growing-reads.md`

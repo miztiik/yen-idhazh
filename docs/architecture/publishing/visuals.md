@@ -3,7 +3,6 @@
 **Last Updated**: 2026-09-13
 
 How an item gets a chart or - most of the time - nothing at all.
-
 The rule this subsystem serves is in [`../../concepts/digest.md`](../../concepts/digest.md): a
 visual must carry a fact the sentence beside it does not. A picture that decorates is worse than
 no picture, because the product is trust and an invented axis label costs it permanently.
@@ -889,20 +888,73 @@ browser's.
 
 **What the ruling costs, named rather than implied.** A reader with JavaScript off gets no
 chart, where today they get one, because today the drawing is markup inside the document
-itself. That is the reason row 22 chose build-time SVG and it is a real loss. And the
-drawing stops being an archival artefact: a committed SVG is a fixed record of what a reader
-saw on a given day, where a spec plus drawing code can be redrawn differently by a later
-change with nothing in the payload to show it moved. `renderer_version` travelling on the
-payload is what makes that visible, and it is why it is minted before anything draws.
+itself. That is the reason row 22 chose build-time SVG and it is a real loss. What such a
+reader still gets is the sentence: the figure carries `alt` on every path and that sentence
+states every figure the bars are drawn at.
 
-**What it buys.** The 495 committed drawings - 6.01 MB, mean 12.4 KB each, measured
-2026-09-13 - stop being published bytes, and their growing tail stops counting against the
-1 GB site cap (Guardrail #2). The chart takes the width the reader's screen actually has,
-which a fixed build-time canvas cannot do and which is the whole of plan 12's complaint. The
-two-runs-one-path race that `drop_raced_assets.py` exists to clean up has nothing left to
-race over. And the build-time renderer's own non-determinism goes with it - the clip-path
-counter recorded below - because determinism moves to the spec, which is where the
-architecture record already argued it belongs.
+**And every day published before 2026-09-13 loses its chart, for every reader rather than
+only for one with JavaScript off.** The 495 committed drawings are deleted and no marks file
+was ever written for one, so those stories publish shorter from here on. Back-filling would
+mean re-fetching 495 source pages that have since moved, and a chart compiled from today's
+page under an old day's date is a record of nothing.
+
+And the drawing stops being an archival artefact: a committed SVG is a fixed record of what a
+reader saw on a given day, where a spec plus drawing code can be redrawn differently by a
+later change with nothing in the payload to show it moved. `renderer_version` travelling on
+the payload is what makes that visible, and it is why it is minted before anything draws.
+
+**What it buys.** The 495 committed drawings - 6,297,398 bytes, mean 12.7 KB each,
+re-measured on this branch 2026-09-13 - stop being published bytes, and their growing tail
+stops counting against the 1 GB site cap (Guardrail #2). A visual's marks weigh about a tenth
+of what its drawing did: the two on the canary day are 1,711 and 1,332 bytes against a mean
+drawing of 12,722. The chart takes the width the reader's screen actually has, which a fixed
+build-time canvas cannot do and which is the whole of plan 12's complaint. And the build-time
+renderer's own non-determinism goes with it - the clip-path counter recorded below - so an
+item compiled twice from unchanged inputs now writes identical bytes, and git does not
+conflict on two adds of identical content.
+
+**The two-runs-one-path race itself does not go, and the row that deleted the renderer did
+not delete the control** (Fowler, 2026-09-13). The marks file is filed under the item's id
+exactly as the drawing was, and it is compiled from a plan and an element table derived from
+text re-fetched off the open web - so a source page that moved between two runs' fetches still
+puts two different blobs on one path. That is rarer than the clip-path counter was and exactly
+as expensive: run `32869125768` cost eight workers, a day of summaries and the day's digest.
+A rare catastrophic failure with the control deleted is worse than a frequent one, because
+nobody will have it in mind when it fires. `drop_raced_assets.py` keeps the job and changed
+only what it lists.
+
+**What the reading page now carries, measured rather than estimated** (Guardrail #8). Two d3
+modules reach a reader and no others: `d3-scale` gives the bar its band scale - the
+per-category slot, step, padding and rounding arithmetic that decides where each mark sits -
+and `d3-array` supplies the `range` and `InternMap` that band scale is built on. Both were
+already installed for the operator console's chart frame, so this added no install time, and
+both are now exact-pinned: a caret range lets a patch bump move pixels with no diff to review.
+`d3-selection`, `d3-axis` and `d3-shape` are **not installed**, which is the control rather
+than a preference - a package that is not in the lockfile cannot be imported onto a reading
+page. Nothing here joins, enters or exits, so `d3-selection` would buy a join engine and use
+only its append path; `d3-axis` writes a 10px axis font, which is below `--text-xs` at every
+root size this site uses, so it would be imported in order to be undone; and `d3-shape` has no
+rect generator, so it waits for the row that draws a path (Carmack, 2026-09-13).
+
+Measured on the development box (Windows 11, 8 vCPU, node 24.12.0), 2026-09-13, control build
+at `origin/main` against this branch, same machine and same toolchain: the reading route's
+first load goes from **60,544 to 62,577 bytes at gzip -5**, over 24 modules either way. That
+is **2,033 bytes, 3.4 percent**, and it covers the scale arithmetic, the geometry module and
+the component rewrite together, net of the inlining code they replaced. Raw, it is 144,500 to
+149,955. **There is no `page_weight` entry to re-baseline**: the owner ruled on 2026-09-10
+that a route may be named in `page_weight.ceilings_bytes` only if its weight does not move
+when a run publishes, and a reading route's document carries the day. The gate measures and
+prints it rather than guarding it.
+
+**What the reader can read, measured rather than promised, and it is not the floor yet.** The
+view box is a fixed 720 units wide and the figure takes the card's width, so the browser
+scales every user unit. Measured on the canary build at 390 CSS px, 2026-09-13: every drawn
+string resolves at **4.8 CSS px** against a `--text-xs` of 12. That is better than the
+**3.1 CSS px** plan 12 measured for the build-time renderer at the same width, and it is
+still well under the floor. Plan 12 row #2 takes the width the screen actually has, which
+removes the scale; row #4 is the row that holds the result to the floor, and it could not
+start until something measurable was drawing. What this row buys is that the size is a token
+in one place and that the strings can be measured at all.
 
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and
@@ -1021,7 +1073,8 @@ the payload that points at it:
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json
 ```
 
-That is the path the drawing already occupies with a `.svg` extension, so the shape does not move -
+That is the path the drawing occupied with a `.svg` extension until 2026-09-13, so the shape did not
+move -
 only what is inside it. **The shard is the day directory**, which is what every other published
 store uses, and the day is also what a reader fetches.
 
@@ -1088,36 +1141,39 @@ approximate is how a wrong chart reaches a reader, and the product is trust. 94.
 already have no visual, so a story without one is the ordinary shape of the page rather than a hole
 in it - there is no placeholder to design and no layout to hold open.
 
-`refusedVisualData` in `frontend/src/lib/payload/drawing.ts` is where that check lives, beside
-`refusedDrawing`, and for the same reason: both the build and the browser import that module, and
-two copies of one refusal is how the two drift.
+`refusedVisualData` in `frontend/src/lib/payload/drawing.ts` is where that check lives, and
+`frontend/src/lib/visual/bar.ts` is what draws once it has passed. The split is not decoration:
+geometry with no DOM in it can be checked by calling it twice and comparing, which is the row's
+own oracle, and a function that also wrote to a document could only be checked by rendering one.
 
-### Two things this row did not move, and the row that owns them
+### Two things that moved with the drawing, and where they went
 
-**`retention.py` still prunes by image suffix.** `_VISUAL_SUFFIXES` is `.png`, `.webp`, `.jpg`,
-`.jpeg` and `.svg`, so a pruned day now leaves its `.json` files behind. Adding `.json` to that set
-without first excluding the day's own payloads would delete `digest.json` and `run.json`, which is a
-much worse failure than an orphan, so it is not a one-line change and it is not this row's.
-`retention.image_months` is 13 and the oldest committed visual is weeks old, so nothing prunes
-before 2027.
+**`retention.py` reads identity rather than extension.** `_visuals_in` selected a day's
+prunable files by image suffix, and a visual is a `.json` document now - the same extension
+`digest.json` and `run.json` carry. Adding `.json` to a suffix set would have made the record
+that a day happened a deletion candidate, which is a much worse failure than an orphan. So a
+visual is **a file named for an item**, which is the rule `render.write.assets_in_day` already
+used and the rule the writer already obeys. It needs no list of names to skip, and a list is
+what rots: the one that named `digest.json` was written before `run.json` existed, and
+`run.json` walked straight through it. `retention.image_months` is 13, so nothing prunes
+before 2027 either way.
 
-**`frontend/scripts/copy-visuals.mjs` stages by image suffix too**, so the data file is not copied
-into the bundle. Nothing fetches it yet, so nothing is broken by that today.
-
-Both belong to the row that makes the browser draw, which is the row that first needs the file to be
-there. They are listed here rather than in a plan-doc alone because this page is what somebody reads
-before changing either file.
+**`frontend/scripts/copy-visuals.mjs` stages by the same rule.** It selected by image suffix
+and now selects a per-item `.json`, because the file the browser fetches has to be in the
+bundle. `visuals.asset_base_url` still switches both halves together - where a visual is asked
+for and whether it also ships cannot disagree.
 
 
-## The build-time renderer, which the ruling above retires
+## What the pipeline stopped doing on 2026-09-13
 
-**This section describes what runs today, and the ruling above ends it.** It stays until
-the drawing moves to the browser, because a page that describes a renderer we deleted is
-as wrong as one that hides a renderer we still run.
+**This section is the record of three renderers that were deleted, and what each cost.** None
+of them runs. It is kept because a page that hides a thing we removed is as wrong as one that
+describes a thing we still run, and because two of the three were removed on measurements
+somebody would otherwise take again.
 
-| Kind | Persisted spec | Renderer |
+| Kind | Persisted | Drawn by |
 | --- | --- | --- |
-| `chart` | Vega-Lite JSON | `vl-convert`, the Vega toolchain compiled as a Rust extension |
+| `chart` | `VisualData` - marks and their channels | d3 in the reader's browser |
 
 Chart is the only kind. `VisualKind` held four until 2026-09-05, and the other three are gone.
 
@@ -1150,81 +1206,96 @@ is being rebuilt on a plan that carries nodes and edges natively, so serialising
 that to `flowchart TD` and reading it back with a regex would end with less than it
 began. Deleted 2026-09-05 on the same scan: zero committed items carry a diagram.
 
-The renderer writes SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, beside the
-payload that references it. A render failure records why and the item publishes without a
-picture. No failure path raises.
+**The Vega-Lite renderer is the third one deleted, and this one was the reader's.**
+`vl-convert` bundled the Vega toolchain as a Rust extension and turned a compiled spec into an
+SVG under `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, beside the payload that
+referenced it. Measured 2026-08-22 (8 vCPU, `vl-convert-python` 1.9.0.post1): 2,568 ms for the
+first render in a process, 49 ms warm, about 7 KB of SVG - the cold cost being engine boot,
+paid once per run rather than once per item. It went on 2026-09-13 with the dependency, its
+mypy override, the 495 committed drawings, the canvas knobs only it read, and `render_visual`,
+the one call that turned a spec into a file.
 
-**The spec is compiled and then thrown away, which is the gap the ruling above closes.**
-`VisualDecision.spec` lands under gitignored `backend/var/`, travels as a one-day artifact,
-and the published `DigestVisual` carries only `kind`, `state`, `path` and `alt` - so the data
-the drawing was made from is unreachable 24 hours after a run. The browser is handed a
-finished picture and no way to redraw it at the size the reader's screen actually has.
+**It was also not deterministic inside one process, and that was found while scoping the row
+that deleted it.** Vega's clip-path id counter was global to the process, so the first render
+of a titled plan emitted `clip1` to `clip4`, the second `clip5` to `clip8`, and at `clip10` the
+id gained a digit and the file gained a byte. `_drawn` ran once per item inside one shard
+process, so **an asset's bytes depended on where its item sat in the render order**. Measured
+2026-09-13 on the development box against
+`tests/fixtures/visual-validator/plans/passes.json`: three renders of one plan in one process
+gave three different byte strings, the third 6 bytes longer than the first. The committed
+evidence agreed - 495 drawings carried 3,256 clip ids running from `clip1` to `clip67`, which a
+per-render counter could not produce. The determinism test could not see it: its inline spec
+carried no title, so it emitted no clip path at all and passed for a reason other than the
+property it named. It was recorded rather than patched, because a fix inside a module being
+deleted is the temporary kind `CLAUDE.md` Guardrail #5 refuses - and it was deleted with the
+module rather than ported, because its false comfort was the defect. What replaced it is a
+property the data can carry: compiling one plan twice gives one document.
 
-### One plan becomes one picture, and `compile_bar` is the only thing that draws it
+### One plan becomes one set of marks, and `compile_bar` is the only thing that makes them
 
 `backend/idhazh/render/chart.py` holds the compiler the plan contract was written for. It takes one
 validated `VisualPlan` and one article's `ElementTable`, resolves every mark through
-`resolve_displayed_values`, and returns the Vega-Lite spec, the alt text and the published data
-together.
+`resolve_displayed_values`, and returns the alt text and the published `VisualData` together.
 
-**One resolution, three outputs.** The spec, the sentence and the wire data are built from the same
-resolved marks in one pass, so the picture a reader sees, the sentence a screen reader reads and the
-data a browser will draw cannot disagree about what the article said. Resolving twice is how they
-would. `TestPublishedData` in `backend/tests/test_render.py` is the oracle: it renders the spec,
-measures the bars out of the drawn SVG, and asserts the published marks are the same names in the
-same order at one scale. **That comparison is only possible while both exist**, which is why it is
-written now rather than in the row that deletes the renderer.
+**The file kept its name and the package kept its name.** `chart.py` says what it produces rather
+than how, and it still produces a chart - as data now rather than as pixels. Stripping it in place
+is also the diff a reviewer can read: the resolution path, which is the whole safety argument,
+shows as untouched lines rather than as a file that arrived from nowhere. Renaming `render/` would
+move 23 importers and a dozen doc references for no behaviour, and the moment that is worth an hour
+is the one where plans 15 to 18 add the second visual vocabulary and somebody has to name a new
+module anyway (Fowler, 2026-09-13).
 
-**Every number in that spec came out of the article, by construction.** The plan carries element
+**One resolution, two outputs.** The sentence a screen reader hears and the data a browser draws
+are built from the same resolved marks in one pass, so the picture a reader sees and the sentence
+beside it cannot disagree about what the article said. Resolving twice is how they would.
+
+**Every number in those marks came out of the article, by construction.** The plan carries element
 references and no figure at all - the shape refuses one - so a bar can only be as long as an element
 the extractor cut out of the article's own characters, or as long as a derived value with a chain
 back to several of them. Nothing in the compiler can reach a number from anywhere else.
 
 **Category `i` names quantity `i`.** The resolver returns each channel in the plan's own order, so
 the pairing is the plan's rather than a rule invented in the compiler, and the bars are drawn in
-that order - `"sort": null`. Re-ranking them here would be the compiler deciding what the comparison
-says.
+that order. Re-ranking them here would be the compiler deciding what the comparison says.
 
-**One type, and a second is refused by name.** `bar` is what this build draws. Drawing a `line` plan
-as bars because bars are what we have would publish a picture nobody planned, so every other member
-of the vocabulary raises `CompileError` naming itself. The rest of the types are plan 12's.
+**One type, and a second is refused by name.** `bar` is what this build compiles. Compiling a `line`
+plan into bars because bars are what we have would publish a picture nobody planned, so every other
+member of the vocabulary raises `CompileError` naming itself. The rest of the types are plan 12's.
 
-**The alt text is assembled from the same figures the spec carries**, so the sentence and the
-picture cannot disagree. That is the reason `alt_text` is not a field the model may write.
+**The alt text is assembled from the same figures the marks carry**, so the sentence and the
+picture cannot disagree. That is the reason `alt_text` is not a field the model may write - and
+since 2026-09-13 it is also the whole of what a reader with JavaScript off receives.
 
-**The drawn title is `plan.title`, and `caption` is not drawn.** Two prose fields and one slot: the
-field called `title` goes in the slot called `title`, because the alternative is a second spelling
-somebody later has to remember.
+**No `title` and no `caption` reach the wire.** The plan carries both and the published marks carry
+neither, because publishing the compiled result must not become the hole an authored string gets
+through. The drawn title the old renderer put above the bars is therefore gone, and plan 12 row #5
+is the row that gives a caption a home.
 
-**A plan this build cannot draw leaves the item decided to nothing, and that is the contract's
-ruling rather than a shortcut.** `render_failed` means a spec was drawn and the drawing failed, and
-`VisualDecision` refuses a `render_failed` that carries no spec - so a plan that never became a spec
-has nothing to record there. `render_planned_visual` in `render/write.py` is the whole path in one
-call for exactly that reason: the decision arrives as the `none` it is, a successful compile
+**A plan this build cannot compile leaves the item decided to nothing, and that is the contract's
+ruling rather than a shortcut.** `render_failed` means marks were compiled and their file did not
+land, and `VisualDecision` refuses a `render_failed` that carries no spec - so a plan that never
+compiled has nothing to record there. `render_planned_visual` in `render/write.py` is the whole path
+in one call for exactly that reason: the decision arrives as the `none` it is, a successful compile
 promotes it to a `chart` through the contract's own validation, and a caller never has to remember a
 `try`.
 
-**The oracle is the drawn geometry, not the spec.** `backend/tests/test_render.py` renders the
-committed `bar` plan, reads the bar widths out of the SVG's own path data, and divides each one by
-the figure the element table states for that bar - every bar has to return the same number. A spec
-holding the right figures proves the compiler agreed with itself; this proves the picture did. A
-second arm doubles one element's figure in the table and requires that one bar to be drawn twice as
-long with the other three untouched, which is what proportionality alone cannot say.
+**The oracle is the published figure against the element table.** `backend/tests/test_render.py`
+compiles the committed `bar` plan and asserts every published figure equals the one its element
+states, in the plan's own channel order; a second arm doubles one element's figure and requires that
+one mark to double with the other three untouched, which is what an equality on a single table
+cannot say. The browser's half is `frontend/tests/item-visual.spec.ts`, which reads the same numbers
+back off a real page and checks each bar's length is its figure in proportion to the longest.
 
-**The canary day carries one compiled drawing**, built by `backend/utilities/build_canary_day.py`
-from the same committed plan and table, so `frontend/tests/item-visual.spec.ts` re-derives the same
-ratio off the live page. Driven from the canary and never from `frontend/public/digest/`, because a
-test may not cost more as the archive grows (Guardrail #12). The day's other two drawings stay
-hand-written: they carry a chart with no unit on its axis and a spec the toolchain refuses, and a
-compiled plan produces neither.
-
-**The page needed no change to draw it.** Measured 2026-09-12: the compiled spec renders to the same
-SVG class vocabulary the hand-written one does - `mark-rect`, `mark-text`, `mark-rule`,
-`role-axis-*`, `role-title-text` - and `ItemVisual.svelte` already repaints every one of those from
-the page's own tokens. The inline carrier plan 01 built is the carrier this row uses.
+**The canary day carries one compiled visual and one written by hand**, built by
+`backend/utilities/build_canary_day.py` from the same committed plan and table, so the browser suite
+reads back the marks the backend oracle compiled. Driven from the canary and never from
+`frontend/public/digest/`, because a test may not cost more as the archive grows (Guardrail #12).
+The hand-written one carries the case a compiled plan cannot - bars with no unit on their axis - and
+a third story is planned with no file, which is what keeps a visual that is not a published chart on
+the day.
 
 **The name is the item's own id, so a path is a function of the item and of nothing else.**
-`energy-4821903756.svg` on a day written before 2026-09-12 and `energy-wfyypy5sgvnwcxd3.svg` after
+`energy-4821903756.json` on a day written before 2026-09-12 and `energy-wfyypy5sgvnwcxd3.json` after
 it - the same id a reader already lands on as an anchor, in whichever of the two live shapes that
 day was written under ([`layout.md`](layout.md)). Two items cannot share a path, so nothing has to
 notice that they did.
@@ -1247,30 +1318,22 @@ The common factor is that a counter has to be seeded from something a process ca
 processes observed different things. **An identity cannot be read from a directory.** That is the
 whole of the fix, and it is why no third seeding rule was tried.
 
-**What is left is one story rendered twice, and it has one right answer.** Two overlapping runs can
-still both plan the same item, render it, and disagree about the bytes. That path is now the same
-item on both sides, never two stories under one name - so there is nothing to choose between. The
-tip's copy is published and a reader may already hold that address, and `build_day` keeps the tip's
-item over this run's in any case, which makes this run's file the one nothing will reference. Before
-each rebase attempt the commit step lists the asset paths the tip already publishes and hands them to
+**What is left is one story compiled twice, and it has one right answer.** Two overlapping runs can
+still both plan the same item, compile it, and disagree about the bytes - the article is re-fetched
+from the open web, so a source page that moved between the two fetches yields a different element
+table and a different plan. That path is now the same item on both sides, never two stories under one
+name - so there is nothing to choose between. The tip's copy is published and a reader may already
+hold that address, and `build_day` keeps the tip's item over this run's in any case, which makes this
+run's file the one nothing will reference. Before each rebase attempt the commit step lists the paths
+the tip already publishes and hands them to
 [`backend/utilities/drop_raced_assets.py`](../../../backend/utilities/drop_raced_assets.py), which
 deletes this run's copy of any of them. The decision payload is left naming the same path, because after
 the rebase the tip's file is sitting at it.
 
-**The bytes disagree for a second reason, and it has nothing to do with the race.** `render_chart` is not
-deterministic inside one process. Vega's clip-path id counter is global to the process, so the first render
-of a titled plan emits `clip1` to `clip4`, the second emits `clip5` to `clip8`, and at `clip10` the id gains
-a digit and the file gains a byte. `_drawn` runs once per item inside one shard process, so **an asset's
-bytes depend on where its item sat in the render order**. Measured 2026-09-13 on the development box against
-`tests/fixtures/visual-validator/plans/passes.json`: three renders of one plan in one process gave three
-different byte strings, the third 6 bytes longer than the first. The committed evidence agrees - 495
-drawings carry 3,256 clip ids running from `clip1` to `clip67`, which a per-render counter could not
-produce. Across **fresh** processes the first render is stable, which is why the race control above is still
-the right fix for the race and does not reach this. The determinism test in `backend/tests/test_render.py`
-cannot see it: its inline `SPEC` carries no title, so it emits no clip path at all and passes for a reason
-other than the property it names. Found while scoping plan 12 row #1, which retires this renderer, so it is
-recorded rather than patched - a fix inside a module being deleted is the temporary kind `CLAUDE.md`
-Guardrail #5 refuses.
+**The renderer's own non-determinism was a second cause of differing bytes, and it left with the
+renderer.** What that cost, and why the test that should have caught it did not, is recorded above.
+An item compiled twice from unchanged inputs now writes identical bytes and git merges those without
+a conflict, which is why the race is rarer than it was - and why it is not gone.
 
 **Neither control repairs the day it already happened on.** Both stop a run standing on a path
 another run published; neither revisits a payload that already names one file twice. 2026-08-24 kept
@@ -1283,16 +1346,14 @@ bytes, three quarters of that day's picture weight, dead against the 1 GB Pages 
 reader-facing string was added: no picture is the common and correct answer and the page says nothing
 about it, so a repaired item reads exactly like the 699 that never had one.
 
-**`test_every_published_picture_belongs_to_exactly_one_item` is what would have caught it.** It reads
-every committed day and holds the three ways a payload and its directory disagree: no two items share
-a path, every declared path is a file that is there, and every file in a day directory is named by an
-item. Against the pre-repair payload the first one fires and names all fourteen paths. It is
-parametrized over the days it finds, so a second test asserts that count is not zero - a scan with no
-input reports the same "no problems" as a scan that finds none.
-
-Measured 2026-08-22 (8 vCPU, `vl-convert-python` 1.9.0.post1): a Vega-Lite render takes
-2568 ms for the first call in a process and 49 ms warm, and produces about 7 KB of SVG. The cold
-cost is engine boot, paid once per run rather than once per item.
+**`validate-days` is what would have caught it.** It holds the three ways a payload and its
+directory can disagree: no two items share a path, every declared path is a file that is there, and
+every file in a day directory named for an item is named by an item. It runs inside
+`idhazh validate-days` rather than as a test per committed day, because a day already published is
+frozen and re-checking every one of them costs more every day the pipeline runs (Guardrail #12). The
+trees it is driven against are built in `backend/tests/test_published_assets.py` - one correct, and
+one for each way a payload and its directory can disagree - and a built tree can also carry a fault
+the archive has never produced.
 
 ## Design rationale
 
@@ -1521,7 +1582,7 @@ file before it can be enabled.
 | A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Guardrail #11 in spirit, with no prompt involved. |
 | A second, smaller model to triage items first | Two calls where the point was zero. |
 | Diffusion for charts | Produces a beautiful picture of a chart with hallucinated axis labels. |
-| A charting library in the renderer | `vl-convert` takes a spec to PNG or SVG with no browser and no runtime JavaScript. |
+| A charting library in the renderer | `vl-convert` took a spec to SVG with no browser and no runtime JavaScript. **Retired 2026-09-13**: the reader's browser draws the chart now, so there is no renderer for a library to be in. |
 | `mermaid-cli` for diagrams | A headless Chromium to lay out a linear chain of boxes. |
 | PNG or WebP for charts and diagrams | A bar chart is a dozen paths. The vector is smaller than any raster of it, stays sharp on a phone, and costs the retention budget less. Raster stays the right answer for a photographic image. |
 | Discard the whole chart when one bar disagrees on units | Observed live: the model picked three correct year-on-year megawatt bars and appended the sector headcount. Three good bars thrown away to reject one bad one. |
