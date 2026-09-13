@@ -30,10 +30,11 @@ import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/typ
  *
  * **The list the seam splits is the reading order, not the published one.** The
  * stream runs newest first by the time on the story, so a seed taken off the
- * desk-blocked payload would put one desk in the document and then shuffle it
- * the moment the rest of the day arrived. The expectations below therefore go
- * through `orderByTime` - the same function the shell and the page call - so
- * this file cannot disagree with either about what the head of the day is.
+ * published order would put the day's highest-scoring stories in the document
+ * and then shuffle them the moment the rest of the day arrived. The expectations
+ * below therefore go through `orderByTime` - the same function the shell and the
+ * page call - so this file cannot disagree with either about what the head of
+ * the day is.
  */
 
 const ROOT = resolve(process.cwd(), '..');
