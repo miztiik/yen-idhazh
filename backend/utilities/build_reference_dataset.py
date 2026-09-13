@@ -1103,15 +1103,21 @@ def extract_supplied(
         if limit is not None and attempted >= limit:
             break
         attempted += 1
-        origin = fetch.origin(row.canonical_url)
+        # Ask the address as supplied, not the canonical one. `canonicalise`
+        # strips a leading `www.`, and several newsletter hosts serve only the
+        # `www` name - asking the apex made 188 URLs across 5 publishers read as
+        # "robots.txt unreachable" when every one of them allows us. The
+        # canonical form is identity; it was never a routing instruction.
+        asked_url = row.source_url
+        origin = fetch.origin(asked_url)
         if origin not in rules:
             rules[origin] = fetch.robots_rules(
-                reader(fetch.robots_url(row.canonical_url), RobotsOutcome.ALLOWED)
+                reader(fetch.robots_url(asked_url), RobotsOutcome.ALLOWED)
             )
             time.sleep(local.request_delay_seconds)
-        permission = rules[origin].permits(local.extract.user_agent, row.canonical_url)
+        permission = rules[origin].permits(local.extract.user_agent, asked_url)
         result = (
-            reader(row.canonical_url, permission)
+            reader(asked_url, permission)
             if permission is RobotsOutcome.ALLOWED
             else fetch.FetchResult(outcome=FetchOutcome.ROBOTS_DENIED, robots=permission)
         )
@@ -1447,6 +1453,114 @@ def _digest_of(record: ReferenceExtractionRow) -> str:
     return record.article_sha256
 
 
+# --- verify-urls -----------------------------------------------------------
+
+
+def extraction_faults(dataset_dir: Path, run_id: str, root: Path = REPO_ROOT) -> list[str]:
+    """Everything wrong with a finished extraction, named rather than counted.
+
+    Nothing here re-fetches. Re-asking a site changes the observation and cannot
+    prove that the saved run was right; what proves it is that the exported file
+    still joins to the manifest, to the saved results, and to its own metadata.
+    """
+    faults: list[str] = []
+    run = dataset_dir / EXTRACTIONS_DIRNAME / run_id
+    articles = run / ARTICLES_FILENAME
+    if not articles.is_file():
+        return [f"no extraction at {articles.as_posix()}"]
+
+    rows = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(articles.read_text(encoding="utf-8"))
+    ]
+    meta = ReferenceCollectionMetadata.model_validate_json(
+        (run / METADATA_FILENAME).read_text(encoding="utf-8")
+    )
+    manifest = read_manifest(dataset_dir)
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+
+    if meta.input_sha256 != hashlib.sha256(manifest_path.read_bytes()).hexdigest():
+        faults.append("the metadata names a manifest that is not the one on disk")
+    if meta.output_sha256 != hashlib.sha256(articles.read_bytes()).hexdigest():
+        faults.append("the metadata names an extraction that is not the one on disk")
+    if meta.rows != len(rows):
+        faults.append(f"metadata says {meta.rows} rows, the file holds {len(rows)}")
+
+    lines = [row.source_line for row in rows]
+    if sorted(lines) != sorted(row.source_line for row in manifest):
+        faults.append("the exported rows do not cover the manifest's input lines exactly once")
+    for row in rows:
+        if row.url_key != derive_url_key(row.canonical_url):
+            faults.append(f"line {row.source_line} carries an identity it does not own")
+        if row.status is ArticleStatus.OK:
+            if row.text is None or row.article_sha256 is None or row.article_words is None:
+                faults.append(f"line {row.source_line} is a success with no text")
+                continue
+            if row.article_sha256 != derive_text_digest(row.text):
+                faults.append(f"line {row.source_line} carries a digest its text does not match")
+            if row.article_words != len(row.text.split()):
+                faults.append(
+                    f"line {row.source_line} carries a word count its text does not match"
+                )
+        elif row.text is not None:
+            faults.append(f"line {row.source_line} is a failure carrying text")
+
+    totals = meta.extraction_totals
+    if totals is None:
+        faults.append("an extraction metadata file carries no extraction totals")
+        return faults
+    kept = [row for row in rows if row.status is ArticleStatus.OK]
+    if totals.rows_succeeded != len(kept):
+        faults.append(
+            f"metadata says {totals.rows_succeeded} kept rows, the file holds {len(kept)}"
+        )
+    if totals.succeeded != len({row.url_key for row in kept}):
+        faults.append("the kept-identity count does not match the file")
+    if totals.pending:
+        faults.append(f"{totals.pending} identity(ies) were still pending when this was written")
+
+    checkpoints = read_checkpoints(dataset_dir, run_id)
+    for row in rows:
+        saved = checkpoints.get(row.url_key)
+        if saved is None:
+            faults.append(f"line {row.source_line} has no saved result behind it")
+        elif saved.status is not row.status or saved.article_sha256 != row.article_sha256:
+            faults.append(f"line {row.source_line} disagrees with the result it was built from")
+    return faults
+
+
+def verify_extraction(dataset_dir: Path, run_id: str, root: Path = REPO_ROOT) -> int:
+    """Re-check a finished extraction and print what it holds. No network."""
+    faults = extraction_faults(dataset_dir, run_id, root)
+    if faults:
+        print(f"{len(faults)} fault(s):")
+        for fault in faults[:20]:
+            print(f"  {fault}")
+        return 1
+
+    run = dataset_dir / EXTRACTIONS_DIRNAME / run_id
+    rows = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads((run / ARTICLES_FILENAME).read_text(encoding="utf-8"))
+    ]
+    kept = [row for row in rows if row.status is ArticleStatus.OK and row.text is not None]
+    words = sorted(len(row.text.split()) for row in kept if row.text)
+    print(f"{'extraction':<{_WIDTH}} {_under(root, run)}")
+    print(f"{'rows':<{_WIDTH}} {len(rows)}")
+    print(f"{'with article text':<{_WIDTH}} {len(kept)}")
+    print(f"{'publishers with an article':<{_WIDTH}} {len({row.publisher for row in kept})}")
+    print(f"{'rows with no vertical':<{_WIDTH}} {sum(1 for row in rows if row.vertical is None)}")
+    if words:
+        print(f"{'median words':<{_WIDTH}} {words[len(words) // 2]}")
+        print(f"{'shortest / longest words':<{_WIDTH}} {words[0]} / {words[-1]}")
+        print(
+            f"{'article bytes':<{_WIDTH}} "
+            f"{sum(len(row.text.encode('utf-8')) for row in kept if row.text):,}"
+        )
+    print(f"{'faults':<{_WIDTH}} 0")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=REPO_ROOT / DATASET_RELPATH)
@@ -1509,9 +1623,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Names the output directory. A new sample gets a new name.",
     )
+    verifying = verbs.add_parser(
+        "verify-urls", help="Re-check a finished extraction. No network, no re-fetch."
+    )
+    verifying.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    verifying.add_argument("--run-id", required=True, help="Which extraction to re-check.")
 
     args = parser.parse_args(argv)
-    if args.verb in {"import-urls", "extract-urls", "export-urls", "select-urls"}:
+    if args.verb in {"import-urls", "extract-urls", "export-urls", "select-urls", "verify-urls"}:
         local = ReferenceDatasetLocalConfig.model_validate_json(
             args.local_config.read_text(encoding="utf-8")
         )
@@ -1521,6 +1645,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         if args.verb == "export-urls":
             return export_extraction(args.local_config.parent, local, run_id=args.run_id)
+        if args.verb == "verify-urls":
+            return verify_extraction(args.local_config.parent, args.run_id)
         if args.verb == "select-urls":
             return select_sample(
                 args.local_config.parent,

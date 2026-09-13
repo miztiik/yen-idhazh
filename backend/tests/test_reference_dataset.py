@@ -776,7 +776,7 @@ def extracted(
 
 
 def manifest_urls(dataset: Path) -> list[str]:
-    return [row.canonical_url for row in builder.read_manifest(dataset)]
+    return [row.source_url for row in builder.read_manifest(dataset)]
 
 
 def all_pages(dataset: Path, body: bytes) -> dict[str, bytes]:
@@ -822,7 +822,7 @@ def test_a_truncated_body_is_a_failure_and_never_a_short_article(tmp_path: Path)
     urls = manifest_urls(dataset)
     reader = served(all_pages(dataset, article), truncated={urls[0]})
     _dataset, results = extracted(tmp_path, reader)
-    cut = next(row for row in results if row.canonical_url == urls[0])
+    cut = next(row for row in results if row.source_url == urls[0])
     assert cut.status is ArticleStatus.FETCH_FAILED
     assert cut.failure_code is ReferenceFailureCode.BODY_TRUNCATED
     assert cut.text is None
@@ -961,6 +961,30 @@ def test_a_checkpoint_is_named_by_recomputed_identity_and_not_by_page_text(
     assert all(derive_url_key(row.canonical_url) == row.url_key for row in results)
 
 
+def test_a_host_that_serves_only_the_supplied_name_is_asked_at_that_name(
+    tmp_path: Path,
+) -> None:
+    """`canonicalise` strips `www.`; several newsletter hosts serve only `www`.
+
+    Asking the apex made 188 real URLs read as "robots.txt unreachable" when
+    every one of them allowed us. The canonical form is identity, not a routing
+    instruction.
+    """
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    asked: list[str] = []
+    inner = served(all_pages(dataset, article))
+
+    def counting(url: str, permission: RobotsOutcome) -> FetchResult:
+        asked.append(url)
+        return inner(url, permission)
+
+    _dataset, results = extracted(tmp_path, counting)
+    assert all(row.status is ArticleStatus.OK for row in results)
+    assert [url for url in asked if url.startswith("https://www.bbc.co.uk")]
+    assert not [url for url in asked if url.startswith("https://bbc.co.uk")]
+
+
 # --- export-urls ------------------------------------------------------------
 
 
@@ -1065,6 +1089,54 @@ def test_a_second_export_of_the_same_run_is_byte_identical(tmp_path: Path) -> No
     )
     assert builder.export_extraction(dataset, local, run_id="2026-09-13-1", root=tmp_path) == 0
     assert target.read_bytes() == once
+
+
+# --- verify-urls ------------------------------------------------------------
+
+
+def test_a_clean_extraction_has_no_faults(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    assert builder.extraction_faults(dataset, "2026-09-13-1", tmp_path) == []
+
+
+def test_an_edited_article_stops_matching_its_digest(tmp_path: Path) -> None:
+    """The one check that catches a text somebody changed in place."""
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    target = dataset / builder.EXTRACTIONS_DIRNAME / "2026-09-13-1" / builder.ARTICLES_FILENAME
+    rows = json.loads(target.read_text(encoding="utf-8"))
+    rows[0]["text"] = (rows[0]["text"] or "") + "a sentence nobody published\n"
+    target.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8", newline="")
+    faults = builder.extraction_faults(dataset, "2026-09-13-1", tmp_path)
+    assert any("digest its text does not match" in fault for fault in faults)
+
+
+def test_a_missing_input_line_is_caught(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    target = dataset / builder.EXTRACTIONS_DIRNAME / "2026-09-13-1" / builder.ARTICLES_FILENAME
+    rows = json.loads(target.read_text(encoding="utf-8"))
+    target.write_text(json.dumps(rows[:-1], indent=2) + "\n", encoding="utf-8", newline="")
+    faults = builder.extraction_faults(dataset, "2026-09-13-1", tmp_path)
+    assert any("input lines exactly once" in fault for fault in faults)
+
+
+def test_metadata_naming_bytes_that_are_not_on_disk_is_caught(tmp_path: Path) -> None:
+    dataset, _meta = imported(tmp_path)
+    article = (PAGES / "article.html").read_bytes()
+    dataset = exported(tmp_path, served(all_pages(dataset, article)))
+    run = dataset / builder.EXTRACTIONS_DIRNAME / "2026-09-13-1"
+    meta = json.loads((run / builder.METADATA_FILENAME).read_text(encoding="utf-8"))
+    meta["output_sha256"] = derive_text_digest("not the file")
+    (run / builder.METADATA_FILENAME).write_text(
+        json.dumps(meta, indent=2) + "\n", encoding="utf-8", newline=""
+    )
+    faults = builder.extraction_faults(dataset, "2026-09-13-1", tmp_path)
+    assert any("not the one on disk" in fault for fault in faults)
 
 
 # --- select-urls ------------------------------------------------------------
