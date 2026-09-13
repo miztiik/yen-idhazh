@@ -35,11 +35,10 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 4 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 4 |
 
-## In flight - 1
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #1 | 12 | A | A new engine behind the same seam | p12-r1 |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
 ## Ready now - 21
 
@@ -71,7 +70,7 @@ section 3 is where it is answered.
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
-## Waiting on another row - 55
+## Waiting on another row - 56
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -80,12 +79,13 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #2 | 12 | B | The drawing takes the width it is given | 1 is IN-FLIGHT |
-| #3 | 12 | B | Numbers a reader can say out loud | 1 is IN-FLIGHT |
+| #1 | 12 | A | A new engine behind the same seam | - |
+| #2 | 12 | B | The drawing takes the width it is given | 1 is BLOCKED |
+| #3 | 12 | B | Numbers a reader can say out loud | 1 is BLOCKED |
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | D | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | E | A whole day, again | 5 is PENDING |
-| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1 is IN-FLIGHT |
+| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1 is BLOCKED |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
