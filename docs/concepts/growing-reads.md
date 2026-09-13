@@ -489,29 +489,76 @@ and it is why the answer is a count of files rather than a stopwatch.
 
 ## The developer loop reads the built tree, 2026-09-10
 
-The three reads below are neither `backend/`'s nor the site's. Two belong to
+The reads below are neither `backend/`'s nor the site's. They belong to
 `frontend/scripts/build-state.ts`, which decides whether a test result may
-certify a tree, and they are here because **the shell-and-fetch plan left them
-growing and said so rather than fixing them** (Carmack, 2026-09-08). A plan that
-bounded nineteen reads and left two of its own is worth recording exactly that
-way.
+certify a tree. Both were unbounded when this section was first written, and
+**the shell-and-fetch plan left them growing and said so rather than fixing
+them** (Carmack, 2026-09-08). One of the two has since been covered; the entry
+keeps both, because which one could be fixed and which could not is the useful
+half of the record.
+
+### The input side took a cover that is not a clock
+
+| Read | What it opens | Its cover |
+| --- | --- | --- |
+| `build-state.inputFingerprint` | the files git reports modified, deleted or untracked | the working tree's diff |
+
+**Git had already hashed everything else, so the read stopped doing it again.**
+`git ls-files --stage` hands back a content hash per tracked path out of the
+index, without opening one of them; only what git reports as modified, deleted
+or untracked is read off disk. `core.autocrlf` is false and `.gitattributes`
+pins these paths to LF, so the bytes on disk are the bytes git hashed, and the
+index answer and a fresh read agree.
+
+Measured 2026-09-13 on a 12th Gen Intel Core i7-1265U, Node 24.12.0, over this
+repository at 2,217 paths in scope and 159,640,333 bytes, five runs each with
+the two implementations alternating in one process:
+
+| | Files opened | Bytes opened | Median | Spread |
+| --- | --- | --- | --- | --- |
+| before | 2,217 | 159,640,333 | 4,133.2 ms | 3,378.1-5,010.9 ms |
+| after | 2 | 20,530 | 213.4 ms | 196.4-231.4 ms |
+
+**19.4 times faster, and the count is what matters rather than the clock.** Two
+files is what the working tree had changed. It is not a share of 2,217 and it
+does not become four when the archive doubles - `frontend/public/digest/` is
+tracked and gains a day payload and its rendered pictures every run, so the old
+read charged this check for the whole archive on an edit that touched one file.
+What is left is two `git` invocations, and that cost is fixed. `run-checks.ts`
+takes this fingerprint three times a run to refuse a tree that moved underneath
+it, so the saving lands three times over.
+
+**Both implementations name the same paths, which is what says the saving is
+real rather than a narrower question being asked.** Over this repository the two
+lists are identical: 2,217 paths for a `checks` run and 2,029 for a `build` run,
+with nothing in either that the other misses.
+
+**What it gives up, stated rather than hidden.** A file modified and then
+reverted reads as changed until git refreshes its stat cache. That costs one
+rebuild and can never certify a stale tree, so the error is in the safe
+direction.
+
+### The output side stayed unbounded, and a test says why
 
 | Read | What it opens | Why no cover |
 | --- | --- | --- |
 | `build-state.outputFingerprint` | every file under `frontend/build` and `frontend/.svelte-kit/output` | a fingerprint that skipped a file cannot say the tree did not change, which is the only thing it is for |
-| `build-state.inputFingerprint` | every tracked and untracked file `git ls-files` names, minus two kinds its `isInput` names in writing - a tree the tooling itself writes, and prose no program reads - and, for a build, the tests and the harness that cannot change the built site | the same, from the other side: an input it did not hash is an input that can move under a green result |
 
-**Both still grow with the archive after the migration, and the reason is the
-part of the tree the migration did not touch.** Row #14 deleted 116 dated
-documents, so `frontend/build` no longer gains an HTML file and a `__data.json`
-per published day - but `frontend/public/digest/` gains a day payload and its
-rendered pictures every run, `copy-visuals.mjs` stages them into the build, and
-both hashed trees carry them. Measured 2026-09-08 on a developer machine:
-`assertBuild` costs 16.2 s, of which 3.23 s hashes 66.55 MB of inputs and 12.93 s
-hashes 222.4 MB across 1,589 output files. **The dominant term is per-file, not
-per-byte**: sha256 on that class of CPU runs at 1 to 2 GB/s, so the bytes are
-about 0.2 s and the other 98 percent is syscalls, and `hashFiles` opens each path
-twice.
+The build tree is gitignored, so nothing has hashed it for us and the input
+trick does not reach here. The obvious cheap cover is a manifest of path, size
+and modification time, checked with `stat` instead of a read - and **the suite
+already refuses it**: `preview assets outside the static build are part of its
+identity` replaces `const value = 1;` with `const value = 2;`, which is the same
+length, and requires the check to catch it. A stat cover would pass that edit,
+and a build certified by a test that ran against different bytes is the one
+failure this whole file exists to prevent.
+
+So the cost stays, and it is smaller than it was: `hashFiles` opened every path
+twice, `existsSync` then `readFileSync`, and now opens it once. Measured
+2026-09-08 on a developer machine and before that change, `assertBuild` cost
+16.2 s, of which 12.93 s hashed 222.4 MB across 1,589 output files. **The
+dominant term is per-file, not per-byte**: sha256 on that class of CPU runs at 1
+to 2 GB/s, so the bytes are about 0.2 s and the rest is syscalls.
 
 **The cost of leaving it, stated rather than hidden.** It is a developer-loop
 cost and zero in CI, which runs each check once in its own job and never
@@ -521,13 +568,15 @@ slope measured on 2026-09-10
 ([../reference/measurements.md](../reference/measurements.md)). Nothing here is a
 per-reader or per-run pipeline cost.
 
-**Why no cover was written, and what it would take.** The honest cover is not a
-window: it is hashing a manifest the build already writes instead of walking the
-tree it produced. That is a new persisted artefact and a new agreement about what
-"the same tree" means, so it is a person's decision rather than a tidy-up. Until
-somebody takes it, these two are the escape hatch in use.
+**What a real cover would take.** Not a window, and not a stat: it is hashing a
+manifest the build itself writes as it writes each file, so the manifest and the
+tree come out of one pass and a later check reads one file. That is a new
+persisted artefact and a new agreement about what "the same tree" means, so it is
+a person's decision rather than a tidy-up. Until somebody takes it, this one is
+the escape hatch in use.
 
-**The re-encode migration is the third, and it is a person running it once.** A
+**The re-encode migration is the last of this loop's three, and it is a person
+running it once.** A
 later encoder swap re-embeds every published day, so its cost is the whole
 archive by construction (row #17 decision 3 of the shell-and-fetch plan, Andre,
 2026-09-08). It is legal here for the reason the hatch exists: a human runs it,
