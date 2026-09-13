@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -108,6 +108,7 @@ These operationalize the guardrails and shape every subsystem.
 - **Pydantic models are the source of truth.** Every event, every persisted payload, and every config file is a Pydantic model under `backend/idhazh/contracts/`. `schemas/*.schema.json` is generated from those models, and the frontend's TypeScript types and validators are generated from those schemas. A CI drift gate regenerates both and fails on any diff. Nobody hand-edits a generated artifact.
 - **Payloads, not calls.** Data crossing any boundary is a serializable structured payload (JSON-shaped), so it can be logged, validated, replayed, and tested with real fixtures.
 - **Atomic, resumable units.** One work item is one content-addressed file written with a temp-file-plus-rename. A failed item never damages a sibling, and a re-run costs only the unfinished items.
+- **A router is not a worker.** A file that chooses which unit of work runs holds the choice and nothing else; the work lives in the unit's own module. A file every change opens is a file no change owns, so its growth is invisible to the change that causes it and paid by whoever reads it next.
 - **Config-driven, sane defaults.** Both `frontend/` and `backend/` read tunable behaviour from `config/`; every knob has a sane default; a fresh clone runs on the defaults (Guardrail #6).
 - **Schema-first.** Every config file and every persisted payload conforms to a generated schema in `schemas/`; a config or payload that fails its schema fails the build (Guardrail #3).
 - **Degrade, do not fail.** A missing visual, a failed extraction, or an unreachable source degrades that item and records why. It never takes down the run.
@@ -146,7 +147,7 @@ Which directory holds what, who writes it, whether it is committed and whether a
 - `backend/` is the only writer of pipeline output under `frontend/public/`. The site reads only that output.
 - `backend/` MUST NOT import frontend code, and frontend code MUST NOT import backend code. They meet only through committed data and generated contracts (Guardrail #1, section 1a).
 - `backend/idhazh/contracts/` MUST NOT import any other subpackage of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them.
-- Every stage is invocable on its own with a file in and a file out. A stage that can only run as part of the whole pipeline cannot be tested and is a design error.
+- Every stage lives in its own module and is invocable on its own with a file in and a file out. A stage that can only run as part of the whole pipeline, or whose body sits in the file that dispatches it, is a design error.
 - Anything fetched from the open web crosses the trust boundary exactly once, at the extraction stage, and is sanitized there (Guardrail #11).
 
 These are boundaries rather than guardrails because each is a structural invariant with one correct side, so there is nothing here to adapt.
@@ -232,6 +233,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - Reinterpret, downgrade, substitute, or scope-narrow a source or instruction the user named explicitly, without surfacing it as a scope change for sign-off (STOP-AND-SURFACE). **Declining on a limitation without pricing it is the same thing** - it is scope-narrowing to zero, and section 0d names what is owed instead: do it, price it, or name the measurement that would settle it.
 - Assume a backend exists in production.
 - Hardcode tunables, source lists, model refs, thresholds, or magic strings. They live in `config/`.
+- Put a unit of work in the file that routes to it.
 - Ship a surface that is still under development without a config flag, default off, carrying its removal condition on the line that declares it (Guardrail #6).
 - Hand-edit a generated artifact (`schemas/*.schema.json`, `frontend/src/contracts/*`). Edit the Pydantic model and regenerate.
 - Store absolute / backslash paths in any persisted artifact.
