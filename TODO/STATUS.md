@@ -34,14 +34,13 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 14 | 14 | 4 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 1 | 12 | 0 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 2 | 11 | 0 |
 
-## In flight - 3
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
-| #1 | 28 | A | The runtime sweep reaches for a key that is not there | p28-r1 |
 | #2 | 28 | A | The turn envelope moves onto the model entry | p28-r2 |
 
 ## Ready now - 23
@@ -137,7 +136,7 @@ section 3 is where it is answered.
 | #11 | 28 | D | Where the system text goes, and which keyword the runtime is told | 5 is PENDING; 6 is PENDING |
 | #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 is PENDING |
 | #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 7 is PENDING |
-| #8 | 28 | F | Both bench arms in one workflow, emitting a page ready to paste | 1 is IN-FLIGHT; 6 is PENDING; 7 is PENDING |
+| #8 | 28 | F | Both bench arms in one workflow, emitting a page ready to paste | 6 is PENDING; 7 is PENDING |
 | #9 | 28 | G | The runbook: swap and revert in one line each | 6 is PENDING; 8 is PENDING; 12 is PENDING |
 | #10 | 28 | H | Two spans on one call, so the model can think | 5 is PENDING; 6 is PENDING; 11 is PENDING |
 
