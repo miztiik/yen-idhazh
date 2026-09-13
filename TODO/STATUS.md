@@ -28,23 +28,23 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-17-infographic-vocabulary-plan.md](20260905-17-infographic-vocabulary-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-18-diagram-vocabulary-plan.md](20260905-18-diagram-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-19-visual-telemetry-plan.md](20260905-19-visual-telemetry-plan.md) | 4 | 0 | 4 | 0 |
+| [20260905-19-visual-telemetry-plan.md](20260905-19-visual-telemetry-plan.md) | 4 | 1 | 3 | 1 |
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 0 | 13 | 3 |
 
-## In flight - 4
+## In flight - 3
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #1b | 12 | B | The browser draws the chart, and the pipeline stops rendering | p12-r1b |
-| #1 | 19 | A | The fold key, decided before anything writes a row | p19-r1 |
 | #7b | 23 | H | The two calls become a DAG, and every label rides in the first | p23-r7b |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
 
-## Ready now - 18
+## Ready now - 22
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -61,6 +61,7 @@ section 3 is where it is answered.
 | #2 | 16 | B | The four ways code may reach a number the article did not write | 1 |
 | #1 | 17 | A | A real sentence made to fit, without anyone re-writing it | - |
 | #1 | 18 | A | The words that mean "then", and the words that mean "against" | - |
+| #2 | 19 | B | A stage of its own | 1 |
 | #1 | 20 | A | The two funnels | - |
 | #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 |
 | #1 | 22 | A | What is durable, and where it already lives | - |
@@ -70,8 +71,11 @@ section 3 is where it is answered.
 | #8a | 25 | J | The second desk reaches the reader | 8 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
+| #1 | 28 | A | The runtime sweep reaches for a key that is not there | - |
+| #2 | 28 | A | The turn envelope moves onto the model entry | - |
+| #3 | 28 | A | Every tokenizer-shaped constant names the weights it was taken against | - |
 
-## Waiting on another row - 55
+## Waiting on another row - 64
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -105,7 +109,6 @@ section 3 is where it is answered.
 | #4 | 18 | D | A layout that draws the same twice | 3 is PENDING |
 | #5 | 18 | E | Trees, states and branches | 4 is PENDING |
 | #6 | 18 | F | A whole day, once more | 5 is PENDING |
-| #2 | 19 | B | A stage of its own | 1 is IN-FLIGHT |
 | #3 | 19 | C | One row per attempt, and a reason for every refusal | 2 is PENDING |
 | #4 | 19 | D | What a re-render needs, and where a rejected plan lives | 3 is PENDING |
 | #2 | 20 | B | Why it was refused, and what happened when it stepped down | 1 is PENDING |
@@ -130,10 +133,20 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
+| #4 | 28 | B | Benchmark records lose the date from their filename | 2 is PENDING; 3 is PENDING |
+| #5 | 28 | C | Five things the server proves before the first item | 2 is PENDING |
+| #6 | 28 | C | One complete config file per model, selected by a pointer | 2 is PENDING |
+| #7 | 28 | D | The model dossier, and the index that points at every one | 3 is PENDING; 4 is PENDING |
+| #11 | 28 | D | Where the system text goes, and which keyword the runtime is told | 5 is PENDING; 6 is PENDING |
+| #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 is PENDING |
+| #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 3 is PENDING; 7 is PENDING |
+| #8 | 28 | F | Both bench arms in one workflow, emitting a page ready to paste | 1 is PENDING; 6 is PENDING; 7 is PENDING |
+| #9 | 28 | G | The runbook: swap and revert in one line each | 6 is PENDING; 8 is PENDING; 12 is PENDING |
+| #10 | 28 | H | Two spans on one call, so the model can think | 5 is PENDING; 6 is PENDING; 11 is PENDING |
 
-## Finished - 17 plans with no live row
+## Finished - 18 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-reference-dataset-2-plan.md
 
 ## See also
 

@@ -57,24 +57,46 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
-from collections import defaultdict
-from collections.abc import Mapping, Sequence, Set
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 from courlan import extract_domain
 
 from idhazh import config, corpus, extract, fetch
 from idhazh.contracts.app_config import ExtractConfig, ReferenceDatasetConfig
-from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.feed_health import RobotsOutcome
-from idhazh.contracts.reference_dataset import ReferenceDatasetRow, ReferenceSplit
+from idhazh.contracts.article import ArticleStatus
+from idhazh.contracts.base import canonical_json, derive_text_digest, derive_url_key
+from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
+from idhazh.contracts.reference_dataset import (
+    ReferenceCleaningSettings,
+    ReferenceCleaningTotals,
+    ReferenceCollectionMetadata,
+    ReferenceDatasetLocalConfig,
+    ReferenceDatasetRow,
+    ReferenceExtractionRow,
+    ReferenceExtractionTotals,
+    ReferenceFailureCode,
+    ReferenceGroupBy,
+    ReferenceImportTotals,
+    ReferenceManifestRow,
+    ReferencePhase,
+    ReferencePublisherPart,
+    ReferenceQualityFlag,
+    ReferenceSelectionRow,
+    ReferenceSelectionTotals,
+    ReferenceSplit,
+)
 from idhazh.discover import canonicalise
 from idhazh.sanitize import SANITIZER_VERSION
+from utilities import scan_reference_articles as quality
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DATASET_RELPATH: Final = "corpus/reference-dataset-1"
@@ -190,9 +212,7 @@ def archive_candidates(digest_dir: Path) -> list[Candidate]:
     return sorted(found.values(), key=lambda c: c.url_key)
 
 
-def spread_across_domains(
-    candidates: Sequence[Candidate], *, per_domain: int
-) -> list[Candidate]:
+def spread_across_domains(candidates: Sequence[Candidate], *, per_domain: int) -> list[Candidate]:
     """Round-robin across domains so no outlet dominates, capped at `per_domain` each.
 
     Deterministic: domains in sorted order, candidates sorted by `url_key` inside
@@ -242,9 +262,7 @@ def plan(
     path = work_dir / CANDIDATES_FILENAME
     _write_atomically(
         path,
-        "".join(
-            json.dumps(candidate.to_payload(), sort_keys=True) + "\n" for candidate in picked
-        ),
+        "".join(json.dumps(candidate.to_payload(), sort_keys=True) + "\n" for candidate in picked),
     )
 
     print(f"{'archive items read':<{_WIDTH}} {len(everything)}")
@@ -279,9 +297,7 @@ def article_path(dataset_dir: Path, url_key: str) -> Path:
 
 def _robots_for(origin_url: str, config_: ExtractConfig) -> fetch.RobotsRules:
     return fetch.robots_rules(
-        fetch.fetch(
-            fetch.robots_url(origin_url), config=config_, permission=RobotsOutcome.ALLOWED
-        )
+        fetch.fetch(fetch.robots_url(origin_url), config=config_, permission=RobotsOutcome.ALLOWED)
     )
 
 
@@ -315,9 +331,7 @@ def fetch_articles(
             rules[origin] = _robots_for(candidate.canonical_url, extract_config)
             time.sleep(asked.request_delay_seconds)
         permission = rules[origin].permits(extract_config.user_agent, candidate.canonical_url)
-        result = fetch.fetch(
-            candidate.canonical_url, config=extract_config, permission=permission
-        )
+        result = fetch.fetch(candidate.canonical_url, config=extract_config, permission=permission)
         time.sleep(asked.request_delay_seconds)
         text = _usable_text(result, extract_config, words_min=asked.article_words_min)
         if text is None:
@@ -534,9 +548,7 @@ def split(
 
     _write_atomically(
         dataset_dir / DATASET_FILENAME,
-        "".join(
-            json.dumps(row.model_dump(mode="json"), sort_keys=True) + "\n" for row in rows
-        ),
+        "".join(json.dumps(row.model_dump(mode="json"), sort_keys=True) + "\n" for row in rows),
     )
     for side, keys in splits.items():
         _write_atomically(
@@ -637,6 +649,1163 @@ def _write_atomically(path: Path, body: str) -> None:
     temp.replace(path)
 
 
+# --- import-urls: the supplied-URL collection ------------------------------
+#
+# Everything below builds `corpus/reference-dataset-2/`, which is a different
+# collection from the frozen set above: its input is a list somebody supplied,
+# its settings are its own `config.json`, and it groups on a publisher prefix
+# rather than on the registered domain. The verbs above are untouched.
+
+SUPPLIED_RELPATH: Final = "corpus/reference-dataset-2"
+SUPPLIED_CONFIG_FILENAME: Final = "config.json"
+MANIFEST_FILENAME: Final = "manifest.json"
+MANIFEST_META_FILENAME: Final = "manifest.meta.json"
+
+#: Anything that is not a letter or a digit becomes one hyphen. Same rule the
+#: element labels are slugged with, so two outlet keys compare as one spelling.
+_NOT_SLUG: Final = re.compile(r"[^a-z0-9]+")
+
+
+def slugged(words: str) -> str:
+    """The project's slug spelling: lower case, one separator, no padding."""
+    return _NOT_SLUG.sub("-", words.strip().casefold()).strip("-")
+
+
+def host_of(url: str) -> str:
+    """The host, lower case and without a leading `www.`."""
+    host = urlsplit(url).netloc.lower()
+    return host.partition(":")[0].removeprefix("www.")
+
+
+def publisher_parts(url: str, *, generic: Set[str] = frozenset()) -> tuple[str, str, str, str]:
+    """The pieces a publisher key is built from: name, registered name, suffix, host.
+
+    The name is the leftmost label when the host carries one to the left of its
+    registered domain - `chipbriefing` out of `chipbriefing.substack.com` - and
+    the registered domain's own first label otherwise, so `bbc.co.uk` gives
+    `bbc`. That is the whole point of the key: the public suffix list merges
+    every newsletter on a shared platform, and a reader does not.
+
+    A leftmost label in `generic` names a subdomain rather than an outlet, so it
+    falls back to the registered name: `newsletter.semianalysis.com` is
+    `semianalysis`, and reading it as `newsletter` would file one outlet under a
+    word half the web uses.
+    """
+    host = host_of(url)
+    registered = registrable_domain(url)
+    registered_name = registered.split(".")[0]
+    name = registered_name
+    if host != registered and host.endswith("." + registered):
+        leftmost = host[: -(len(registered) + 1)].split(".")[0]
+        if slugged(leftmost) not in generic:
+            name = leftmost
+    suffix = registered.partition(".")[2]
+    # A label of punctuation slugs to nothing, and an empty group is not a
+    # publisher. Fall back rather than refuse: the address is still fetchable.
+    chosen = slugged(name) or slugged(registered_name) or slugged(host)
+    return chosen, slugged(registered_name) or slugged(host), slugged(suffix), slugged(host)
+
+
+def assign_publishers(
+    urls: Sequence[str], *, generic: Set[str] = frozenset()
+) -> tuple[dict[str, str], dict[str, ReferencePublisherPart]]:
+    """Freeze one publisher key per host, lengthening only the keys that collide.
+
+    Returns the host-to-key map and, separately, the keys that had to be
+    lengthened and what settled them. A key nobody collides with keeps its short
+    form, which is the rule the owner set on 2026-09-13.
+
+    The map is computed once over the whole input and then stored, because the
+    length of a key depends on which other hosts are in the pool: recomputing it
+    over a later pool could rename an outlet that nothing changed.
+    """
+    parts: dict[str, tuple[str, str, str, str]] = {}
+    for url in urls:
+        host = host_of(url)
+        if host not in parts:
+            parts[host] = publisher_parts(url, generic=generic)
+
+    sharing: dict[str, list[str]] = defaultdict(list)
+    for host, (name, _registered, _suffix, _whole) in parts.items():
+        sharing[name].append(host)
+
+    keys: dict[str, str] = {}
+    lengthened: dict[str, ReferencePublisherPart] = {}
+    taken = {name for name, hosts in sharing.items() if len(hosts) == 1}
+    for name, hosts in sorted(sharing.items()):
+        if len(hosts) == 1:
+            keys[hosts[0]] = name
+            continue
+        for host in sorted(hosts):
+            _name, registered, suffix, whole = parts[host]
+            longer_forms = [
+                (
+                    ReferencePublisherPart.REGISTERED_NAME,
+                    f"{name}-{registered}" if registered != name else "",
+                ),
+                (ReferencePublisherPart.PUBLIC_SUFFIX, f"{name}-{suffix}" if suffix else ""),
+                (ReferencePublisherPart.HOST, whole),
+            ]
+            for part, longer in longer_forms:
+                if longer and longer not in taken:
+                    keys[host] = longer
+                    lengthened[longer] = part
+                    taken.add(longer)
+                    break
+    return keys, lengthened
+
+
+def read_url_list(path: Path) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
+    """Every line that holds an address, and every line that does not.
+
+    Both are returned with their 1-based line number, because a person reading a
+    refusal needs the line to open, not a count of how many there were.
+    """
+    accepted: list[tuple[int, str]] = []
+    refused: list[tuple[int, str]] = []
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        address = line.strip()
+        if not address:
+            continue
+        split_address = urlsplit(address)
+        if split_address.scheme not in {"http", "https"} or not split_address.netloc:
+            refused.append((number, address))
+            continue
+        accepted.append((number, address))
+    return accepted, refused
+
+
+def feeds_by_host(sources_path: Path) -> dict[str, tuple[str, str] | None]:
+    """Host to (feed id, vertical), and `None` where the host is not one answer.
+
+    A host two feeds in different verticals share is not an unambiguous
+    association, so it maps to nothing rather than to whichever feed sorted
+    first.
+    """
+    declared = json.loads(sources_path.read_text(encoding="utf-8"))
+    found: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    for feed in declared.get("feeds", []):
+        url = str(feed.get("url") or "")
+        if not url:
+            continue
+        found[host_of(url)].add((str(feed["id"]), str(feed["vertical"])))
+    return {host: next(iter(pair)) if len(pair) == 1 else None for host, pair in found.items()}
+
+
+def build_manifest(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    sources_path: Path,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Read the snapshotted URL list, write the manifest, and store what it holds.
+
+    Paths in the config are relative to `root`, which is the repository unless a
+    test hands it somewhere else. Nothing is resolved against the current shell
+    directory, so the verb produces the same manifest wherever it is run from.
+    """
+    input_path = root / local.input_file
+    accepted, refused = read_url_list(input_path)
+    if refused:
+        print(f"{len(refused)} line(s) hold no usable address, so no manifest was written:")
+        for number, line in refused[:20]:
+            print(f"  line {number}: {line[:120]}")
+        return 1
+
+    canonical = {address: canonicalise(address) for _, address in accepted}
+    publishers, lengthened = assign_publishers(
+        list(canonical.values()), generic=frozenset(local.selection.generic_host_labels)
+    )
+    declared = feeds_by_host(sources_path)
+
+    rows: list[ReferenceManifestRow] = []
+    identities: set[str] = set()
+    for number, address in accepted:
+        canonical_url = canonical[address]
+        host = host_of(canonical_url)
+        feed = declared.get(host)
+        rows.append(
+            ReferenceManifestRow(
+                version=ReferenceManifestRow.schema_version(),
+                source_line=number,
+                source_url=address,
+                canonical_url=canonical_url,
+                url_key=derive_url_key(canonical_url),
+                source_domain=registrable_domain(canonical_url),
+                host=host,
+                publisher=publishers[host],
+                source_id=feed[0] if feed else None,
+                vertical=feed[1] if feed else None,
+            )
+        )
+        identities.add(rows[-1].url_key)
+
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+    _write_atomically(manifest_path, canonical_json([row.model_dump(mode="json") for row in rows]))
+
+    # Every count below is read back off the file that was written rather than
+    # carried out of the loop above, so a metadata total and its collection can
+    # actually disagree (Guardrail #10).
+    written = json.loads(manifest_path.read_text(encoding="utf-8"))
+    read_back = [ReferenceManifestRow.model_validate(row) for row in written]
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.IMPORT,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceManifestRow.__schema_stem__,
+        input_path=_under(root, input_path),
+        input_sha256=hashlib.sha256(input_path.read_bytes()).hexdigest(),
+        output_path=_under(root, manifest_path),
+        output_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        rows=len(read_back),
+        verticals=_tally(row.vertical for row in read_back if row.vertical),
+        domains=_tally(row.source_domain for row in read_back),
+        hosts=_tally(row.host for row in read_back),
+        publishers=_tally(row.publisher for row in read_back),
+        publisher_hosts={
+            key: sorted({row.host for row in read_back if row.publisher == key})
+            for key in sorted({row.publisher for row in read_back})
+        },
+        lengthened_publishers=lengthened,
+        settings=local,
+        import_totals=ReferenceImportTotals(
+            input_lines=len(input_path.read_text(encoding="utf-8").splitlines()),
+            blank_lines=sum(
+                1
+                for line in input_path.read_text(encoding="utf-8").splitlines()
+                if not line.strip()
+            ),
+            valid_urls=len(read_back),
+            unique_urls=len({row.url_key for row in read_back}),
+            equivalent_urls=len(read_back) - len({row.url_key for row in read_back}),
+            invalid_lines=0,
+            unassigned_vertical=sum(1 for row in read_back if row.vertical is None),
+        ),
+    )
+    _write_atomically(
+        dataset_dir / MANIFEST_META_FILENAME, canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.import_totals
+    assert totals is not None
+    print(f"{'manifest':<{_WIDTH}} {_under(root, manifest_path)}")
+    print(f"{'rows':<{_WIDTH}} {totals.valid_urls}")
+    print(f"{'unique identities':<{_WIDTH}} {totals.unique_urls}")
+    print(f"{'equivalent addresses':<{_WIDTH}} {totals.equivalent_urls}")
+    print(f"{'registered domains':<{_WIDTH}} {len(meta.domains)}")
+    print(f"{'hosts':<{_WIDTH}} {len(meta.hosts)}")
+    print(f"{'publishers':<{_WIDTH}} {len(meta.publishers)}")
+    print(f"{'publisher keys lengthened':<{_WIDTH}} {len(lengthened)}")
+    print(f"{'rows with no vertical':<{_WIDTH}} {totals.unassigned_vertical}")
+    return 0
+
+
+def _tally(values: Iterable[str]) -> dict[str, int]:
+    counted: dict[str, int] = defaultdict(int)
+    for value in values:
+        counted[value] += 1
+    return dict(sorted(counted.items()))
+
+
+def _under(root: Path, path: Path) -> str:
+    """`path` as a relative POSIX path under `root` (`CLAUDE.md` section 2)."""
+    return path.resolve().relative_to(root.resolve()).as_posix()
+
+
+# --- extract-urls ----------------------------------------------------------
+
+SCRATCH_DIRNAME: Final = "scratch"
+ITEMS_DIRNAME: Final = "items"
+RUN_FILENAME: Final = "run.json"
+
+
+def read_manifest(dataset_dir: Path) -> list[ReferenceManifestRow]:
+    """Every manifest row, validated on read rather than trusted."""
+    path = dataset_dir / MANIFEST_FILENAME
+    return [
+        ReferenceManifestRow.model_validate(row)
+        for row in json.loads(path.read_text(encoding="utf-8"))
+    ]
+
+
+def run_dir(dataset_dir: Path, run_id: str) -> Path:
+    return dataset_dir / SCRATCH_DIRNAME / run_id
+
+
+def checkpoint_path(dataset_dir: Path, run_id: str, url_key: str) -> Path:
+    """`scratch/<run-id>/items/<url_key>.json`. The name is recomputed identity."""
+    return run_dir(dataset_dir, run_id) / ITEMS_DIRNAME / f"{url_key}.json"
+
+
+def open_run(
+    dataset_dir: Path, run_id: str, local: ReferenceDatasetLocalConfig, manifest_sha256: str
+) -> dict[str, object]:
+    """Start a run, or re-open one and refuse if its input or settings have moved.
+
+    A checkpoint is only worth reusing if it was taken under the same manifest
+    and the same fetch settings. Without this a resume silently mixes two runs
+    and the metadata describes neither.
+    """
+    marker = run_dir(dataset_dir, run_id) / RUN_FILENAME
+    started: dict[str, object] = {
+        "manifest_sha256": manifest_sha256,
+        "settings": local.model_dump(mode="json"),
+        "started_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    if marker.is_file():
+        found = json.loads(marker.read_text(encoding="utf-8"))
+        if found["manifest_sha256"] != manifest_sha256:
+            raise ValueError(f"run {run_id} was taken against a different manifest")
+        if found["settings"] != started["settings"]:
+            raise ValueError(f"run {run_id} was taken with different settings")
+        return dict(found)
+    _write_atomically(marker, canonical_json(started))
+    return started
+
+
+def outcome_of(
+    result: fetch.FetchResult, permission: RobotsOutcome
+) -> tuple[ArticleStatus, ReferenceFailureCode] | None:
+    """The typed reason a read produced no article, or `None` where it may have."""
+    if permission is RobotsOutcome.DENIED:
+        return ArticleStatus.ROBOTS_DENIED, ReferenceFailureCode.ROBOTS_DENIED
+    if permission is RobotsOutcome.UNREACHABLE:
+        return ArticleStatus.ROBOTS_DENIED, ReferenceFailureCode.ROBOTS_UNREACHABLE
+    if result.outcome is FetchOutcome.BLOCKED:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.BLOCKED_ADDRESS
+    if result.outcome is FetchOutcome.PERMANENT:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.FETCH_PERMANENT
+    if result.outcome is FetchOutcome.TRANSIENT:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.FETCH_TRANSIENT
+    if not result.ok:
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.FETCH_PERMANENT
+    if result.body_truncated:
+        # The bytes stopped at the cap, so what came back is a prefix of the
+        # article. Calling that a short article is the one failure this
+        # collection cannot afford.
+        return ArticleStatus.FETCH_FAILED, ReferenceFailureCode.BODY_TRUNCATED
+    return None
+
+
+def extraction_of(
+    row: ReferenceManifestRow,
+    result: fetch.FetchResult,
+    permission: RobotsOutcome,
+    local: ReferenceDatasetLocalConfig,
+) -> ReferenceExtractionRow:
+    """One typed result for one identity: the article, or why there is none."""
+    identity = {
+        "version": ReferenceExtractionRow.schema_version(),
+        "source_line": row.source_line,
+        "source_url": row.source_url,
+        "canonical_url": row.canonical_url,
+        "url_key": row.url_key,
+        "source_domain": row.source_domain,
+        "host": row.host,
+        "publisher": row.publisher,
+        "vertical": row.vertical,
+    }
+    refusal = outcome_of(result, permission)
+    if refusal is not None:
+        status, code = refusal
+        # A robots refusal is synthesized rather than returned by a socket, so it
+        # carries no detail of its own. `fetch` already writes the sentence.
+        detail = result.detail or fetch.ROBOTS_REFUSALS.get(permission) if permission else None
+        return ReferenceExtractionRow.model_validate(
+            {
+                **identity,
+                "status": status,
+                "failure_code": code,
+                "failure_detail": detail,
+            }
+        )
+
+    fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    html = result.body.decode("utf-8", errors="replace")
+    if extract.is_paywalled(html, local.extract):
+        return ReferenceExtractionRow.model_validate(
+            {
+                **identity,
+                "status": ArticleStatus.EXTRACT_FAILED,
+                "failure_code": ReferenceFailureCode.PAYWALLED,
+                "failure_detail": "the page is behind a paywall or a login",
+            }
+        )
+    # `extract_text` is trafilatura plus the sanitizer and applies no token cap,
+    # so what is saved is the whole article rather than the model's input.
+    body = extract.extract_text(html)
+    if not body or not body.strip():
+        return ReferenceExtractionRow.model_validate(
+            {
+                **identity,
+                "status": ArticleStatus.EXTRACT_FAILED,
+                "failure_code": ReferenceFailureCode.EMPTY_TEXT,
+                "failure_detail": "no article prose was found on the page",
+            }
+        )
+    text = body if body.endswith("\n") else body + "\n"
+    return ReferenceExtractionRow.model_validate(
+        {
+            **identity,
+            "status": ArticleStatus.OK,
+            "text": text,
+            "article_words": len(text.split()),
+            "article_sha256": derive_text_digest(text),
+            "fetched_at": fetched_at,
+            "extracted_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "extractor_version": extract.EXTRACTOR_VERSION,
+            "sanitizer_version": SANITIZER_VERSION,
+        }
+    )
+
+
+def extract_supplied(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    limit: int | None = None,
+    only: Set[str] | None = None,
+    read: Callable[[str, RobotsOutcome], fetch.FetchResult] | None = None,
+) -> int:
+    """Fetch every manifest identity once and save a typed result for each. Resumable.
+
+    One request per identity, one saved file per identity, written with
+    temp-file-plus-rename. An interrupted pass loses at most the item in flight,
+    and a resume re-reads what is on disk rather than asking again.
+
+    `read` is the one seam that touches the network. It defaults to the project's
+    own protected fetch, and a test hands it recorded pages instead so no test
+    opens a socket (`CLAUDE.md` section 13).
+    """
+    reader = read or (
+        lambda url, permission: fetch.fetch(url, config=local.extract, permission=permission)
+    )
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        print(f"no manifest under {dataset_dir.as_posix()}. Run `import-urls` first")
+        return 1
+    rows = read_manifest(dataset_dir)
+    manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    open_run(dataset_dir, run_id, local, manifest_sha256)
+
+    # One row per identity: equivalent addresses are one article, fetched once.
+    identities: dict[str, ReferenceManifestRow] = {}
+    for row in rows:
+        if only is not None and row.url_key not in only:
+            continue
+        identities.setdefault(row.url_key, row)
+
+    rules: dict[str, fetch.RobotsRules] = {}
+    saved = attempted = 0
+    for url_key, row in sorted(identities.items()):
+        target = checkpoint_path(dataset_dir, run_id, url_key)
+        if target.is_file():
+            saved += 1
+            continue
+        if limit is not None and attempted >= limit:
+            break
+        attempted += 1
+        # Ask the address as supplied, not the canonical one. `canonicalise`
+        # strips a leading `www.`, and several newsletter hosts serve only the
+        # `www` name - asking the apex made 188 URLs across 5 publishers read as
+        # "robots.txt unreachable" when every one of them allows us. The
+        # canonical form is identity; it was never a routing instruction.
+        asked_url = row.source_url
+        origin = fetch.origin(asked_url)
+        if origin not in rules:
+            rules[origin] = fetch.robots_rules(
+                reader(fetch.robots_url(asked_url), RobotsOutcome.ALLOWED)
+            )
+            time.sleep(local.request_delay_seconds)
+        permission = rules[origin].permits(local.extract.user_agent, asked_url)
+        result = (
+            reader(asked_url, permission)
+            if permission is RobotsOutcome.ALLOWED
+            else fetch.FetchResult(outcome=FetchOutcome.ROBOTS_DENIED, robots=permission)
+        )
+        time.sleep(local.request_delay_seconds)
+        record = extraction_of(row, result, permission, local)
+        _write_atomically(target, canonical_json(record.model_dump(mode="json")))
+        saved += 1
+        if attempted % 25 == 0:
+            print(f"  {attempted} attempted, {saved} saved", flush=True)
+
+    done = sorted((run_dir(dataset_dir, run_id) / ITEMS_DIRNAME).glob("*.json"))
+    results = [
+        ReferenceExtractionRow.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in done
+    ]
+    succeeded = sum(1 for record in results if record.status is ArticleStatus.OK)
+    print(f"{'identities':<{_WIDTH}} {len(identities)}")
+    print(f"{'attempted this pass':<{_WIDTH}} {attempted}")
+    print(f"{'results on disk':<{_WIDTH}} {len(results)}")
+    print(f"{'with article text':<{_WIDTH}} {succeeded}")
+    print(f"{'with a typed failure':<{_WIDTH}} {len(results) - succeeded}")
+    print(f"{'still to fetch':<{_WIDTH}} {len(identities) - len(results)}")
+    for code, count in sorted(
+        _tally(
+            record.failure_code.value for record in results if record.failure_code is not None
+        ).items()
+    ):
+        print(f"  {code:<{_WIDTH - 2}} {count}")
+    return 0
+
+
+# --- export-urls -----------------------------------------------------------
+
+EXTRACTIONS_DIRNAME: Final = "extractions"
+ARTICLES_FILENAME: Final = "articles.json"
+METADATA_FILENAME: Final = "metadata.json"
+
+
+def read_checkpoints(dataset_dir: Path, run_id: str) -> dict[str, ReferenceExtractionRow]:
+    """Every saved result of one run, keyed by identity and validated on read."""
+    items = run_dir(dataset_dir, run_id) / ITEMS_DIRNAME
+    found: dict[str, ReferenceExtractionRow] = {}
+    for path in sorted(items.glob("*.json")):
+        record = ReferenceExtractionRow.model_validate_json(path.read_text(encoding="utf-8"))
+        found[record.url_key] = record
+    return found
+
+
+def export_extraction(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Turn the saved results into the collection file and its metadata. No network.
+
+    One row per input manifest line, so an address that two lines carried appears
+    twice with its own line number and its own supplied URL. A reused checkpoint
+    saves a request; it never removes an input row.
+    """
+    rows = read_manifest(dataset_dir)
+    saved = read_checkpoints(dataset_dir, run_id)
+    pending = [row for row in rows if row.url_key not in saved]
+    if pending:
+        print(f"{len(pending)} identity(ies) have no result yet, so nothing was exported:")
+        for row in pending[:10]:
+            print(f"  line {row.source_line}: {row.source_url[:100]}")
+        return 1
+
+    exported: list[ReferenceExtractionRow] = []
+    for row in rows:
+        record = saved[row.url_key]
+        # The alias keeps its own input position and its own supplied address;
+        # everything the fetch produced is the same article.
+        exported.append(
+            record.model_copy(update={"source_line": row.source_line, "source_url": row.source_url})
+        )
+
+    target = dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    _write_atomically(
+        target, canonical_json([record.model_dump(mode="json") for record in exported])
+    )
+
+    written = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(target.read_text(encoding="utf-8"))
+    ]
+    kept = [record for record in written if record.status is ArticleStatus.OK]
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+    marker = json.loads((run_dir(dataset_dir, run_id) / RUN_FILENAME).read_text(encoding="utf-8"))
+    identities = {record.url_key for record in written}
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.EXTRACTION,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceExtractionRow.__schema_stem__,
+        input_path=_under(root, manifest_path),
+        input_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        output_path=_under(root, target),
+        output_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
+        rows=len(written),
+        verticals=_tally(record.vertical for record in written if record.vertical),
+        domains=_tally(record.source_domain for record in written),
+        hosts=_tally(record.host for record in written),
+        publishers=_tally(record.publisher for record in written),
+        publisher_hosts={
+            key: sorted({record.host for record in written if record.publisher == key})
+            for key in sorted({record.publisher for record in written})
+        },
+        lengthened_publishers={},
+        settings=local,
+        extraction_totals=ReferenceExtractionTotals(
+            started_at=str(marker["started_at"]),
+            finished_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            manifest_sha256=str(marker["manifest_sha256"]),
+            extractor_version=extract.EXTRACTOR_VERSION,
+            sanitizer_version=SANITIZER_VERSION,
+            unique_attempted=len(identities),
+            succeeded=len({record.url_key for record in kept}),
+            failed=len(identities) - len({record.url_key for record in kept}),
+            pending=0,
+            rows_succeeded=len(kept),
+            rows_failed=len(written) - len(kept),
+            failure_codes={
+                ReferenceFailureCode(code): count
+                for code, count in _tally(
+                    record.failure_code.value
+                    for record in written
+                    if record.failure_code is not None
+                ).items()
+            },
+            succeeded_by_publisher=_tally(record.publisher for record in kept),
+        ),
+    )
+    _write_atomically(
+        target.with_name(METADATA_FILENAME), canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.extraction_totals
+    assert totals is not None
+    print(f"{'articles':<{_WIDTH}} {_under(root, target)}")
+    print(f"{'rows':<{_WIDTH}} {meta.rows}")
+    print(f"{'unique identities':<{_WIDTH}} {totals.unique_attempted}")
+    print(f"{'with article text':<{_WIDTH}} {totals.succeeded}")
+    print(f"{'with a typed failure':<{_WIDTH}} {totals.failed}")
+    print(f"{'publishers with an article':<{_WIDTH}} {len(totals.succeeded_by_publisher)}")
+    for code, count in totals.failure_codes.items():
+        print(f"  {code:<{_WIDTH - 2}} {count}")
+    return 0
+
+
+# --- select-urls -----------------------------------------------------------
+
+SELECTIONS_DIRNAME: Final = "selections"
+SELECTED_FILENAME: Final = "urls.json"
+
+
+def group_of(record: ReferenceExtractionRow, by: ReferenceGroupBy) -> str:
+    """Which outlet a record counts under, read from the record rather than recomputed."""
+    if by is ReferenceGroupBy.PUBLISHER:
+        return record.publisher
+    if by is ReferenceGroupBy.SOURCE_DOMAIN:
+        return record.source_domain
+    return record.host
+
+
+def allocate(
+    pools: Mapping[str, Sequence[str]], *, target: int, cap: int, fill: bool
+) -> dict[str, list[str]]:
+    """Round-robin one article per group per round, then fill what small groups cannot use.
+
+    Deterministic: group names in sorted order, candidates in the order the caller
+    sorted them, and no random number anywhere. The same pool and the same
+    settings return the same selection.
+    """
+    taken: dict[str, list[str]] = {name: [] for name in pools}
+    total = 0
+
+    def rounds(ceiling: int) -> None:
+        nonlocal total
+        moved = True
+        while moved and total < cap:
+            moved = False
+            for name in sorted(pools):
+                if total >= cap:
+                    return
+                pool = pools[name]
+                if len(taken[name]) >= ceiling or len(taken[name]) >= len(pool):
+                    continue
+                taken[name].append(pool[len(taken[name])])
+                total += 1
+                moved = True
+
+    rounds(target)
+    if fill:
+        # A place a short group cannot use moves to a group that still has
+        # articles, rather than being reported as a shortfall nobody could fix.
+        rounds(max(len(pool) for pool in pools.values()) if pools else 0)
+    return taken
+
+
+def select_sample(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    selection_id: str,
+    clean_id: str | None = None,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Draw a balanced sample from a finished extraction and write it with its totals.
+
+    `clean_id` names a cleaned collection to draw from instead of the raw
+    extraction. The sample records which one it read, so a later reader can tell
+    a sample of cleaned text from a sample of the text as fetched.
+    """
+    source = (
+        dataset_dir / CLEANED_DIRNAME / clean_id / ARTICLES_FILENAME
+        if clean_id
+        else dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    )
+    if not source.is_file():
+        print(f"no collection at {source.as_posix()}. Run `export-urls` first")
+        return 1
+    records = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(source.read_text(encoding="utf-8"))
+    ]
+
+    by = local.selection.group_by
+    # Every group the manifest represents, including the ones that produced no
+    # article: their unfilled places are what `fill_shortfall` moves elsewhere.
+    universe = {group_of(record, by) for record in records}
+    usable: dict[str, list[ReferenceExtractionRow]] = {name: [] for name in universe}
+    seen: set[str] = set()
+    for record in sorted(records, key=lambda r: r.url_key):
+        if record.status is not ArticleStatus.OK or record.url_key in seen:
+            continue
+        seen.add(record.url_key)
+        usable[group_of(record, by)].append(record)
+
+    target = local.selection.rows_per_domain_target
+    cap = local.selection.rows_max
+    requested = min(cap, target * len(universe))
+    chosen = allocate(
+        {name: [record.url_key for record in pool] for name, pool in usable.items()},
+        target=target,
+        cap=requested,
+        fill=local.selection.fill_shortfall,
+    )
+
+    by_key = {record.url_key: record for pool in usable.values() for record in pool}
+    rows = [
+        ReferenceSelectionRow(
+            version=ReferenceSelectionRow.schema_version(),
+            url_key=by_key[key].url_key,
+            source_url=by_key[key].source_url,
+            canonical_url=by_key[key].canonical_url,
+            source_domain=by_key[key].source_domain,
+            host=by_key[key].host,
+            publisher=by_key[key].publisher,
+            vertical=by_key[key].vertical,
+            article_sha256=_digest_of(by_key[key]),
+        )
+        for name in sorted(chosen)
+        for key in chosen[name]
+    ]
+
+    target_path = dataset_dir / SELECTIONS_DIRNAME / selection_id / SELECTED_FILENAME
+    _write_atomically(
+        target_path, canonical_json([row.model_dump(mode="json") for row in rows])
+    )
+
+    written = [
+        ReferenceSelectionRow.model_validate(payload)
+        for payload in json.loads(target_path.read_text(encoding="utf-8"))
+    ]
+    selected_by_group = _tally(
+        group_of(by_key[row.url_key], by) for row in written
+    ) | {name: 0 for name in universe if not chosen[name]}
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.SELECTION,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceSelectionRow.__schema_stem__,
+        input_path=_under(root, source),
+        input_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        output_path=_under(root, target_path),
+        output_sha256=hashlib.sha256(target_path.read_bytes()).hexdigest(),
+        rows=len(written),
+        verticals=_tally(row.vertical for row in written if row.vertical),
+        domains=_tally(row.source_domain for row in written),
+        hosts=_tally(row.host for row in written),
+        publishers=_tally(row.publisher for row in written),
+        publisher_hosts={
+            key: sorted({row.host for row in written if row.publisher == key})
+            for key in sorted({row.publisher for row in written})
+        },
+        lengthened_publishers={},
+        settings=local,
+        selection_totals=ReferenceSelectionTotals(
+            extraction_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            group_by=by,
+            groups=len(universe),
+            requested=requested,
+            selected=len(written),
+            shortfall=max(requested - len(written), 0),
+            available_by_group={name: len(pool) for name, pool in sorted(usable.items())},
+            selected_by_group=dict(sorted(selected_by_group.items())),
+            extra_by_group={
+                name: len(keys) - target
+                for name, keys in sorted(chosen.items())
+                if len(keys) > target
+            },
+            shortfall_by_group={
+                name: target - len(keys)
+                for name, keys in sorted(chosen.items())
+                if len(keys) < target
+            },
+        ),
+    )
+    _write_atomically(
+        target_path.with_name(METADATA_FILENAME), canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.selection_totals
+    assert totals is not None
+    print(f"{'selection':<{_WIDTH}} {_under(root, target_path)}")
+    print(f"{'grouped by':<{_WIDTH}} {by.value}")
+    print(f"{'groups':<{_WIDTH}} {totals.groups}")
+    print(f"{'requested':<{_WIDTH}} {totals.requested}")
+    print(f"{'selected':<{_WIDTH}} {totals.selected}")
+    print(f"{'unfilled places':<{_WIDTH}} {totals.shortfall}")
+    print(f"{'groups above the target':<{_WIDTH}} {len(totals.extra_by_group)}")
+    print(f"{'groups below the target':<{_WIDTH}} {len(totals.shortfall_by_group)}")
+    return 0
+
+
+def _digest_of(record: ReferenceExtractionRow) -> str:
+    if record.article_sha256 is None:  # pragma: no cover - a kept article always carries one
+        raise ValueError("a selected article has no text digest")
+    return record.article_sha256
+
+
+# --- verify-urls -----------------------------------------------------------
+
+
+def extraction_faults(dataset_dir: Path, run_id: str, root: Path = REPO_ROOT) -> list[str]:
+    """Everything wrong with a finished extraction, named rather than counted.
+
+    Nothing here re-fetches. Re-asking a site changes the observation and cannot
+    prove that the saved run was right; what proves it is that the exported file
+    still joins to the manifest, to the saved results, and to its own metadata.
+    """
+    faults: list[str] = []
+    run = dataset_dir / EXTRACTIONS_DIRNAME / run_id
+    articles = run / ARTICLES_FILENAME
+    if not articles.is_file():
+        return [f"no extraction at {articles.as_posix()}"]
+
+    rows = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(articles.read_text(encoding="utf-8"))
+    ]
+    meta = ReferenceCollectionMetadata.model_validate_json(
+        (run / METADATA_FILENAME).read_text(encoding="utf-8")
+    )
+    manifest = read_manifest(dataset_dir)
+    manifest_path = dataset_dir / MANIFEST_FILENAME
+
+    if meta.input_sha256 != hashlib.sha256(manifest_path.read_bytes()).hexdigest():
+        faults.append("the metadata names a manifest that is not the one on disk")
+    if meta.output_sha256 != hashlib.sha256(articles.read_bytes()).hexdigest():
+        faults.append("the metadata names an extraction that is not the one on disk")
+    if meta.rows != len(rows):
+        faults.append(f"metadata says {meta.rows} rows, the file holds {len(rows)}")
+
+    lines = [row.source_line for row in rows]
+    if sorted(lines) != sorted(row.source_line for row in manifest):
+        faults.append("the exported rows do not cover the manifest's input lines exactly once")
+    for row in rows:
+        if row.url_key != derive_url_key(row.canonical_url):
+            faults.append(f"line {row.source_line} carries an identity it does not own")
+        if row.status is ArticleStatus.OK:
+            if row.text is None or row.article_sha256 is None or row.article_words is None:
+                faults.append(f"line {row.source_line} is a success with no text")
+                continue
+            if row.article_sha256 != derive_text_digest(row.text):
+                faults.append(f"line {row.source_line} carries a digest its text does not match")
+            if row.article_words != len(row.text.split()):
+                faults.append(
+                    f"line {row.source_line} carries a word count its text does not match"
+                )
+        elif row.text is not None:
+            faults.append(f"line {row.source_line} is a failure carrying text")
+
+    totals = meta.extraction_totals
+    if totals is None:
+        faults.append("an extraction metadata file carries no extraction totals")
+        return faults
+    kept = [row for row in rows if row.status is ArticleStatus.OK]
+    if totals.rows_succeeded != len(kept):
+        faults.append(
+            f"metadata says {totals.rows_succeeded} kept rows, the file holds {len(kept)}"
+        )
+    if totals.succeeded != len({row.url_key for row in kept}):
+        faults.append("the kept-identity count does not match the file")
+    if totals.pending:
+        faults.append(f"{totals.pending} identity(ies) were still pending when this was written")
+
+    checkpoints = read_checkpoints(dataset_dir, run_id)
+    for row in rows:
+        saved = checkpoints.get(row.url_key)
+        if saved is None:
+            faults.append(f"line {row.source_line} has no saved result behind it")
+        elif saved.status is not row.status or saved.article_sha256 != row.article_sha256:
+            faults.append(f"line {row.source_line} disagrees with the result it was built from")
+    return faults
+
+
+def verify_extraction(dataset_dir: Path, run_id: str, root: Path = REPO_ROOT) -> int:
+    """Re-check a finished extraction and print what it holds. No network."""
+    faults = extraction_faults(dataset_dir, run_id, root)
+    if faults:
+        print(f"{len(faults)} fault(s):")
+        for fault in faults[:20]:
+            print(f"  {fault}")
+        return 1
+
+    run = dataset_dir / EXTRACTIONS_DIRNAME / run_id
+    rows = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads((run / ARTICLES_FILENAME).read_text(encoding="utf-8"))
+    ]
+    kept = [row for row in rows if row.status is ArticleStatus.OK and row.text is not None]
+    words = sorted(len(row.text.split()) for row in kept if row.text)
+    print(f"{'extraction':<{_WIDTH}} {_under(root, run)}")
+    print(f"{'rows':<{_WIDTH}} {len(rows)}")
+    print(f"{'with article text':<{_WIDTH}} {len(kept)}")
+    print(f"{'publishers with an article':<{_WIDTH}} {len({row.publisher for row in kept})}")
+    print(f"{'rows with no vertical':<{_WIDTH}} {sum(1 for row in rows if row.vertical is None)}")
+    if words:
+        print(f"{'median words':<{_WIDTH}} {words[len(words) // 2]}")
+        print(f"{'shortest / longest words':<{_WIDTH}} {words[0]} / {words[-1]}")
+        print(
+            f"{'article bytes':<{_WIDTH}} "
+            f"{sum(len(row.text.encode('utf-8')) for row in kept if row.text):,}"
+        )
+    print(f"{'faults':<{_WIDTH}} 0")
+    return 0
+
+
+# --- clean-urls ------------------------------------------------------------
+
+CLEANED_DIRNAME: Final = "cleaned"
+
+
+def furniture_by_publisher(
+    articles: Sequence[ReferenceExtractionRow], asked: ReferenceCleaningSettings
+) -> dict[str, set[str]]:
+    """The lines each publisher puts on most of its own articles.
+
+    Per-publisher because the extractor has already taken out the furniture that
+    looks like markup. What survives reads exactly like prose - a disclaimer, a
+    standing blurb, a sponsor slot - and the only thing that gives it away is
+    that one outlet repeats it verbatim.
+    """
+    grouped: dict[str, list[ReferenceExtractionRow]] = defaultdict(list)
+    for row in articles:
+        grouped[row.publisher].append(row)
+
+    found: dict[str, set[str]] = {}
+    for name, group in sorted(grouped.items()):
+        if len(group) < asked.publisher_min_articles:
+            continue
+        counted: Counter[str] = Counter()
+        for row in group:
+            counted.update({line.strip() for line in (row.text or "").splitlines() if line.strip()})
+        floor = max(asked.repeat_min_count, int(len(group) * asked.repeat_min_share))
+        repeated = {line for line, count in counted.items() if count >= floor}
+        if repeated:
+            found[name] = repeated
+    return found
+
+
+def strip_furniture(text: str, furniture: Set[str]) -> tuple[str, int, int]:
+    """The text without its furniture, and how many lines and words that removed."""
+    kept: list[str] = []
+    lines = words = 0
+    for line in text.splitlines():
+        if line.strip() in furniture:
+            lines += 1
+            words += len(line.split())
+            continue
+        kept.append(line)
+    cleaned = "\n".join(kept).strip("\n")
+    return (cleaned + "\n" if cleaned else ""), lines, words
+
+
+def clean_extraction(
+    dataset_dir: Path,
+    local: ReferenceDatasetLocalConfig,
+    *,
+    run_id: str,
+    clean_id: str,
+    root: Path = REPO_ROOT,
+) -> int:
+    """Write a cleaned collection beside a frozen extraction. No network, no edit.
+
+    The extraction is verified and stays exactly as it was verified. This reads
+    it, removes each publisher's own repeated furniture, drops the articles a
+    configured flag rules out, and writes a new collection whose metadata names
+    every line it took away.
+    """
+    source = dataset_dir / EXTRACTIONS_DIRNAME / run_id / ARTICLES_FILENAME
+    if not source.is_file():
+        print(f"no extraction at {source.as_posix()}. Run `export-urls` first")
+        return 1
+    rows = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(source.read_text(encoding="utf-8"))
+    ]
+
+    unique: dict[str, ReferenceExtractionRow] = {}
+    for row in rows:
+        if row.status is ArticleStatus.OK and row.text:
+            unique.setdefault(row.url_key, row)
+    articles = list(unique.values())
+
+    asked = local.cleaning
+    furniture = furniture_by_publisher(articles, asked)
+
+    # Strip first, then judge. Two articles from one newsletter share its
+    # disclaimer, and comparing them before that is removed reads the shared
+    # furniture as a shared story.
+    stripped: dict[str, tuple[str, int, int]] = {}
+    for row in articles:
+        original = row.text or ""
+        text, lines, words = strip_furniture(original, furniture.get(row.publisher, set()))
+        before = len(original.split())
+        if before and words / before > asked.max_removed_share:
+            stripped[row.url_key] = (original, 0, 0)
+        elif not text.strip():
+            stripped[row.url_key] = (original, 0, 0)
+        else:
+            stripped[row.url_key] = (text, lines, words)
+
+    twins = quality.near_duplicates(
+        {row.url_key: quality.sketch(stripped[row.url_key][0]) for row in articles},
+        jaccard_min=asked.near_duplicate_jaccard,
+    )
+
+    cleaned: list[ReferenceExtractionRow] = []
+    dropped: Counter[ReferenceQualityFlag] = Counter()
+    flagged: Counter[ReferenceQualityFlag] = Counter()
+    removed_words: Counter[str] = Counter()
+    removed_lines: dict[str, set[str]] = defaultdict(set)
+    lines_removed = words_in = words_out = over_cleaned = 0
+
+    for row in sorted(articles, key=lambda entry: entry.url_key):
+        original = row.text or ""
+        before = len(original.split())
+        text, lines, words = stripped[row.url_key]
+        flags = set(quality.flags_of(text, _limits(asked)))
+        if row.url_key in twins:
+            flags.add(ReferenceQualityFlag.NEAR_DUPLICATE)
+        # The safety valve. A rule that can empty an article says so instead.
+        if text == original and furniture.get(row.publisher) and before:
+            wholly, _lines, would_remove = strip_furniture(
+                original, furniture.get(row.publisher, set())
+            )
+            if would_remove and (
+                would_remove / before > asked.max_removed_share or not wholly.strip()
+            ):
+                over_cleaned += 1
+                flags.add(ReferenceQualityFlag.OVER_CLEANED)
+
+        for flag in flags:
+            flagged[flag] += 1
+        if flags & set(asked.drop_flags):
+            for flag in sorted(flags & set(asked.drop_flags)):
+                dropped[flag] += 1
+            continue
+
+        lines_removed += lines
+        words_in += before
+        words_out += len(text.split())
+        if words:
+            removed_words[row.publisher] += words
+            removed_lines[row.publisher] |= {
+                line.strip()
+                for line in original.splitlines()
+                if line.strip() in furniture.get(row.publisher, set())
+            }
+        cleaned.append(
+            row.model_copy(
+                update={
+                    "text": text,
+                    "article_words": len(text.split()),
+                    "article_sha256": derive_text_digest(text),
+                    "quality_flags": sorted(flags),
+                }
+            )
+        )
+
+    target = dataset_dir / CLEANED_DIRNAME / clean_id / ARTICLES_FILENAME
+    _write_atomically(
+        target, canonical_json([row.model_dump(mode="json") for row in cleaned])
+    )
+    written = [
+        ReferenceExtractionRow.model_validate(payload)
+        for payload in json.loads(target.read_text(encoding="utf-8"))
+    ]
+
+    meta = ReferenceCollectionMetadata(
+        version=ReferenceCollectionMetadata.schema_version(),
+        phase=ReferencePhase.CLEANING,
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        collection_schema=ReferenceExtractionRow.__schema_stem__,
+        input_path=_under(root, source),
+        input_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        output_path=_under(root, target),
+        output_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
+        rows=len(written),
+        verticals=_tally(row.vertical for row in written if row.vertical),
+        domains=_tally(row.source_domain for row in written),
+        hosts=_tally(row.host for row in written),
+        publishers=_tally(row.publisher for row in written),
+        publisher_hosts={
+            key: sorted({row.host for row in written if row.publisher == key})
+            for key in sorted({row.publisher for row in written})
+        },
+        lengthened_publishers={},
+        settings=local,
+        cleaning_totals=ReferenceCleaningTotals(
+            extraction_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            articles_in=len(articles),
+            articles_out=len(written),
+            articles_dropped=len(articles) - len(written),
+            words_in=words_in,
+            words_out=sum(len((row.text or "").split()) for row in written),
+            lines_removed=lines_removed,
+            over_cleaned=over_cleaned,
+            dropped_by_flag=dict(sorted(dropped.items())),
+            flagged_by_flag=dict(sorted(flagged.items())),
+            removed_words_by_publisher=dict(sorted(removed_words.items())),
+            removed_lines={name: sorted(lines) for name, lines in sorted(removed_lines.items())},
+        ),
+    )
+    _write_atomically(
+        target.with_name(METADATA_FILENAME), canonical_json(meta.model_dump(mode="json"))
+    )
+
+    totals = meta.cleaning_totals
+    assert totals is not None
+    print(f"{'cleaned':<{_WIDTH}} {_under(root, target)}")
+    print(f"{'articles in':<{_WIDTH}} {totals.articles_in}")
+    print(f"{'articles out':<{_WIDTH}} {totals.articles_out}")
+    print(f"{'articles dropped':<{_WIDTH}} {totals.articles_dropped}")
+    print(f"{'words in':<{_WIDTH}} {totals.words_in:,}")
+    print(f"{'words out':<{_WIDTH}} {totals.words_out:,}")
+    print(f"{'furniture lines removed':<{_WIDTH}} {totals.lines_removed:,}")
+    print(f"{'publishers trimmed':<{_WIDTH}} {len(totals.removed_words_by_publisher)}")
+    print(f"{'saved by the safety valve':<{_WIDTH}} {totals.over_cleaned}")
+    for flag, count in totals.dropped_by_flag.items():
+        print(f"  dropped {flag.value:<{_WIDTH - 10}} {count}")
+    return 0
+
+
+def _limits(asked: ReferenceCleaningSettings) -> quality.Thresholds:
+    """The cleaning settings as the scanner's own threshold record."""
+    return quality.Thresholds(
+        words_min=asked.words_min,
+        short_line_words=5,
+        link_dump_ratio=0.6,
+        diversity_min=0.0,
+        promo_hits=asked.promo_hits,
+        latin_ratio_min=0.5,
+        sentence_words_min=asked.sentence_words_min,
+        near_duplicate_jaccard=asked.near_duplicate_jaccard,
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=REPO_ROOT / DATASET_RELPATH)
@@ -652,8 +1821,119 @@ def main(argv: Sequence[str] | None = None) -> int:
     splitting = verbs.add_parser("split", help="Draw the split, or refuse and say why.")
     splitting.add_argument("--fetched-on", default=None, help="YYYY-MM-DD. Defaults to today.")
     verbs.add_parser("verify", help="Re-check the committed set.")
+    importing = verbs.add_parser(
+        "import-urls", help="Build the supplied-URL collection's manifest. No network."
+    )
+    importing.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    extracting = verbs.add_parser(
+        "extract-urls", help="Take the article text for the supplied-URL manifest. Resumable."
+    )
+    extracting.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    extracting.add_argument("--run-id", required=True, help="Names the checkpoint directory.")
+    extracting.add_argument(
+        "--limit", type=int, default=None, help="Stop after this many attempts."
+    )
+    exporting = verbs.add_parser(
+        "export-urls", help="Write the collection file and its metadata. No network."
+    )
+    exporting.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    exporting.add_argument("--run-id", required=True, help="Which saved run to export.")
+    selecting = verbs.add_parser(
+        "select-urls", help="Draw a balanced sample from a finished extraction. No network."
+    )
+    selecting.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    selecting.add_argument("--run-id", required=True, help="Which extraction to draw from.")
+    selecting.add_argument(
+        "--selection-id",
+        required=True,
+        help="Names the output directory. A new sample gets a new name.",
+    )
+    selecting.add_argument(
+        "--clean-id",
+        default=None,
+        help="Draw from this cleaned collection instead of the raw extraction.",
+    )
+    verifying = verbs.add_parser(
+        "verify-urls", help="Re-check a finished extraction. No network, no re-fetch."
+    )
+    verifying.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    verifying.add_argument("--run-id", required=True, help="Which extraction to re-check.")
+    cleaning = verbs.add_parser(
+        "clean-urls",
+        help="Write a cleaned collection beside a frozen extraction. No network, no edit.",
+    )
+    cleaning.add_argument(
+        "--local-config",
+        type=Path,
+        default=REPO_ROOT / SUPPLIED_RELPATH / SUPPLIED_CONFIG_FILENAME,
+        help="The collection's own config.json. Never config/idhazh.json.",
+    )
+    cleaning.add_argument("--run-id", required=True, help="Which extraction to clean.")
+    cleaning.add_argument(
+        "--clean-id", required=True, help="Names the output directory. A new pass, a new name."
+    )
 
     args = parser.parse_args(argv)
+    if args.verb in {
+        "import-urls",
+        "extract-urls",
+        "export-urls",
+        "select-urls",
+        "verify-urls",
+        "clean-urls",
+    }:
+        local = ReferenceDatasetLocalConfig.model_validate_json(
+            args.local_config.read_text(encoding="utf-8")
+        )
+        if args.verb == "import-urls":
+            return build_manifest(
+                args.local_config.parent, local, sources_path=REPO_ROOT / local.sources_file
+            )
+        if args.verb == "export-urls":
+            return export_extraction(args.local_config.parent, local, run_id=args.run_id)
+        if args.verb == "verify-urls":
+            return verify_extraction(args.local_config.parent, args.run_id)
+        if args.verb == "clean-urls":
+            return clean_extraction(
+                args.local_config.parent, local, run_id=args.run_id, clean_id=args.clean_id
+            )
+        if args.verb == "select-urls":
+            return select_sample(
+                args.local_config.parent,
+                local,
+                run_id=args.run_id,
+                selection_id=args.selection_id,
+                clean_id=args.clean_id,
+            )
+        return extract_supplied(
+            args.local_config.parent, local, run_id=args.run_id, limit=args.limit
+        )
+
     settings = config.load(args.config)
     asked = settings.app.reference_dataset
     if args.verb == "plan":

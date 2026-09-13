@@ -124,24 +124,40 @@ back through its contract, and the summary is reconciled field by field against
 a second reading of the shard before the shard is unlinked. The telemetry fold
 above checks that what it wrote reads back; this checks that as well, and then
 checks that what reads back still describes the file it is about to delete.
+
+**The visual fold is the seventh thing, and today it is the fold and not the
+pass.** `state/visuals/` takes one row per attempt at a picture, and
+`observability.visuals_full_grain_months` is where a month stops being readable
+attempt by attempt. `fold_visual_month` is the arithmetic that replaces it: one
+row per `(date, decision, none_reason, rejection_reason, potential_primary,
+family, element_band, downgrade_depth)` group, carrying the counts a keep rate
+needs and the spread of the two measured columns. What is deliberately absent is
+a `prune_visuals` beside the six passes above, and the reason is that nothing
+writes the store yet: a pass over a directory no run creates would walk an empty
+tree on every run and report a policy working, which is a green light on the
+wrong tree - the failure this module already learned once from the alarm. The
+key is settled now because the fold deletes the shard and cannot be revised; the
+pass lands with the writer.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Final, NoReturn
+from typing import Final, NamedTuple, NoReturn
 
 from idhazh import day_partition, ledger, month_partition, publish_telemetry, telemetry
 from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
+from idhazh.contracts.visual_decision import VisualState
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow, band_of
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 
@@ -886,6 +902,134 @@ def prune_telemetry(
         public_deleted=public_deleted,
         dry_run=dry_run,
     )
+
+
+# --- The visual fold ---------------------------------------------------------
+
+
+class _Spread(NamedTuple):
+    """One measured column of one group, as the six figures that survive the fold.
+
+    Deliberately not a mean. A mean cannot be re-added across groups and, more to
+    the point here, it hides a bimodal spread - which is the finding worth having
+    when the question is whether a gate refuses two different populations for two
+    different reasons.
+    """
+
+    n: int
+    min: int | None
+    p25: int | None
+    p50: int | None
+    p75: int | None
+    max: int | None
+
+
+def _spread(values: list[int]) -> _Spread:
+    """The six figures over one group's readings of one column.
+
+    Nearest-rank quartiles, so every figure is one an attempt really had and can
+    be checked against the shard this replaced. An interpolated quartile is a
+    number no attempt produced, and a fold that invents a value cannot be
+    reconciled against the file it deletes.
+
+    Empty in, empty out: a column nothing measured carries `n = 0` and no
+    figures. Zero would say the attempts measured the column and found nothing.
+    """
+    if not values:
+        return _Spread(n=0, min=None, p25=None, p50=None, p75=None, max=None)
+    ordered = sorted(values)
+    return _Spread(
+        n=len(ordered),
+        min=ordered[0],
+        p25=percentile(ordered, 0.25),
+        p50=percentile(ordered, 0.5),
+        p75=percentile(ordered, 0.75),
+        max=ordered[-1],
+    )
+
+
+def _visual_group(row: VisualAttemptRow) -> tuple[str, ...]:
+    """This attempt's `FOLD_KEY` tuple, as sortable text.
+
+    Text rather than the typed values because six of the eight terms are
+    optional, and `sorted` cannot compare `None` with a member of an enum. An
+    absent term sorts first as the empty string, which puts the groups nobody
+    could classify at the top of their day rather than scattered through it. The
+    depth is zero-padded so ten sorts after nine.
+    """
+    band = band_of(row.elements_found)
+    return (
+        row.date,
+        row.decision.value,
+        row.none_reason.value if row.none_reason is not None else "",
+        row.rejection_reason.value if row.rejection_reason is not None else "",
+        row.potential_primary.value if row.potential_primary is not None else "",
+        row.family.value if row.family is not None else "",
+        band.value if band is not None else "",
+        "" if row.downgrade_depth is None else f"{row.downgrade_depth:03d}",
+    )
+
+
+def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateRow]:
+    """One month of visual attempts, as one row per `FOLD_KEY` group.
+
+    Cover: the rows of one month's shard, handed in rather than read here - the
+    same shape `fold_month` above takes, and for the same reason. The cost
+    follows the month being folded and never the months behind it
+    (Guardrail #12), so a fold in year three costs what a fold in year one did.
+
+    **It can only shrink the store.** Every group holds at least one attempt, so
+    the row count never rises, and the folded row is narrower than the attempt
+    row it replaces - it drops the run, the item and the join key and adds
+    nothing per attempt. The pathological month in which every attempt lands in
+    its own group folds to the same number of rows, each one smaller, which is
+    the fold buying nothing rather than costing something.
+
+    Ordered by the key, so a folded month reads down the days and then down the
+    causes.
+    """
+    grouped: dict[tuple[str, ...], list[VisualAttemptRow]] = {}
+    for row in rows:
+        grouped.setdefault(_visual_group(row), []).append(row)
+
+    folded: list[VisualAggregateRow] = []
+    for key in sorted(grouped):
+        members = grouped[key]
+        first = members[0]
+        elements = _spread(
+            [member.elements_found for member in members if member.elements_found is not None]
+        )
+        marks = _spread([member.marks for member in members if member.marks is not None])
+        folded.append(
+            VisualAggregateRow(
+                version=VisualAggregateRow.schema_version(),
+                date=first.date,
+                decision=first.decision,
+                none_reason=first.none_reason,
+                rejection_reason=first.rejection_reason,
+                potential_primary=first.potential_primary,
+                family=first.family,
+                element_band=band_of(first.elements_found),
+                downgrade_depth=first.downgrade_depth,
+                attempts=len(members),
+                published=sum(
+                    1 for member in members if member.state is VisualState.RENDERED
+                ),
+                elements_n=elements.n,
+                elements_min=elements.min,
+                elements_p25=elements.p25,
+                elements_p50=elements.p50,
+                elements_p75=elements.p75,
+                elements_max=elements.max,
+                marks_n=marks.n,
+                marks_min=marks.min,
+                marks_p25=marks.p25,
+                marks_p50=marks.p50,
+                marks_p75=marks.p75,
+                marks_max=marks.max,
+            )
+        )
+    return folded
 
 
 # --- The feed-health shards --------------------------------------------------

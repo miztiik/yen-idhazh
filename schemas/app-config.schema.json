@@ -1463,6 +1463,27 @@
           "description": "Whether a work shard builds a span tree. On by default (2026-09-06): a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
           "title": "Tracing Enabled",
           "type": "boolean"
+        },
+        "visual_aggregate_keep_months": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Months after which a folded visual month is removed outright. Null means never, on the same argument as the other two aggregates: the fold is the only record that a gate ever refused anything, and it is kilobytes. Set, it must sit ABOVE visuals_full_grain_months.",
+          "title": "Visual Aggregate Keep Months"
+        },
+        "visuals_full_grain_months": {
+          "default": 14,
+          "description": "How long state/visuals/ stays readable attempt by attempt. Past it a month is folded to the eight-term group VisualAggregateRow declares and the full-grain shard goes, so a reader keeps every cause breakdown and every stratum and loses the per-attempt row and its join key. Fourteen matches the two ledgers it is read beside; a shorter one would leave a day whose failures are still readable and whose refused pictures are not. It is NOT in full_grain_months() yet, and the reason is that no console read opens one of these shards today - the panels that will are their own plan, and the window joins that check in the same commit as the first of them.",
+          "minimum": 1,
+          "title": "Visuals Full Grain Months",
+          "type": "integer"
         }
       },
       "title": "ObservabilityConfig",
@@ -2151,6 +2172,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.visuals_full_grain_months added, defaulting to 14, and observability.visual_aggregate_keep_months added, defaulting to null. The second must sit above the first, which the existing pair validator now checks for all three folded stores.",
+      "version": "2026-09-13T23:50",
+      "why": "state/visuals/ takes the fold policy, and a fold needs an age or it never happens. It is a named per-store window rather than a share of anybody else's, because the visual ledger answers a different question from the item-health census and from the eval ledger, and one number standing for three stores is the knob this project already removed once. Fourteen matches the two it is read beside. The pair rule is the same rule the other two aggregates carry: a summary set to expire before the rows it replaces would delete a month that was never folded."
+    },
+    {
       "change": "Four keys are gone in one commit: models.visual_planner, run.two_calls_per_item, run.visual_planner_budget_minutes and finetune.student. This is a contract break and the read-side migration ships with it - each name is refused by name through refuse_a_removed_knob rather than through 'extra inputs are not permitted', and so are the two older spellings that used to migrate into them, models.route and run.route_budget_minutes. A removed knob now carries an empty replacement, which the refusal reads as 'gone and nothing replaces it' - the rename maps RENAMED_MODELS_KEYS and RENAMED_RUN_KEYS retired with the keys they pointed at, because a rename onto a deleted key is a migration that silently loses a number. finetune.teacher keeps its default of summarize and is the only role left; a teacher still naming visual_planner or route is answered by name rather than by a list of legal keys.",
       "version": "2026-09-13T23:30",
       "why": "Plan 11 row #6. The work stage makes two calls per item on the summarizer weights - call 1 labels, call 2 writes the summary and then the picture - so the small visual planner decides nothing, and a model nothing calls is a download, a cache entry and a 50-minute job the run waits on. Owner ruling 2026-09-13: move forward, no rollback, so the flag goes away with the model rather than staying as a second implementation (Guardrail #6). finetune.student had no reader and named the retired model; re-pointing it at summarize would make the teacher and the student one model, which is a session that trains a model on its own output."
@@ -2826,7 +2852,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-13T23:30",
+      "default": "2026-09-13T23:50",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2840,5 +2866,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-13T23:30"
+  "version": "2026-09-13T23:50"
 }
