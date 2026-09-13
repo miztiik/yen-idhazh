@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | How often does an article actually state a whole | - | A | DONE #TBD | p16-1 | - | worker |
+| 1 | How often does an article actually state a whole | - | A | DONE #654 | p16-1 | #654 | worker |
 | 2 | The four ways code may reach a number the article did not write | 1 | B | PENDING | - | - | - |
 | 3 | A declared whole: pie | 2 | C | PENDING | - | - | - |
 | 4 | Three numbers at once: bubble | 3 | D | PENDING | - | - | - |
