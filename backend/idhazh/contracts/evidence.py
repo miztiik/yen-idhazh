@@ -62,6 +62,17 @@ class EvidenceItem(Contract):
     __schema_stem__: ClassVar[str] = "evidence-item"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:00",
+            change="Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
+            why=(
+                "The stamp gated nothing and no writer had filled it since 2026-09-12. This "
+                "shape is deliberately not a migration surface: the oldest EvidenceItem "
+                "that can exist is a 14-day workflow artifact, so nothing it was written "
+                "into survives and a shape change here owes a re-run rather than a popper "
+                "(docs/architecture/contracts/schemas.md)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
             why=(
@@ -102,14 +113,10 @@ class EvidenceItem(Contract):
         ),
     )
 
-    # The four fields that identify one measurement, spelled exactly as
+    # The three fields that identify one measurement, spelled exactly as
     # `state/scores.csv` spells them. A file is named by their digest, so a
     # ledger row finds its evidence without a lookup table.
     url_key: UrlKey
-    pipeline_fingerprint: Sha256 | None = Field(
-        default=None,
-        description="Null since 2026-09-12. The stamp gates nothing, so no writer fills it.",
-    )
     output_digest: Sha256
     scorer_version: str = Field(min_length=1)
 
