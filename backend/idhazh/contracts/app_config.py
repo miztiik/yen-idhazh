@@ -79,7 +79,7 @@ class InferenceConfig(Model):
         description=(
             "The window one sequence gets. The default stays 8192 because it is the "
             "conservative window for weights nobody has put in front of a runner; "
-            "models.summarize pins 49152 and models.visual_planner does not, and the "
+            "models.summarize pins 49152, and the "
             "measurement that earns the raise is about the 9B on a GitHub-hosted "
             "runner rather than about this field. Doubling buys nothing but KV cache: "
             "32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for "
@@ -305,40 +305,14 @@ class RunConfig(Model):
             "the ceiling, never by raising this."
         ),
     )
-    visual_planner_budget_minutes: int = Field(
-        default=40,
-        ge=1,
-        description=(
-            "What the route stage may spend before it stops asking the model and leaves "
-            "the rest of the day unrouted. Sized below the job's own timeout, not equal "
-            "to it: a job killed at its bound uploads no artifact, so the whole hour's "
-            "decisions are lost rather than the tail it could not reach."
-        ),
-    )
-    two_calls_per_item: bool = Field(
-        default=False,
-        description=(
-            "REMOVED BY plan 11 row #6, which deletes this knob, the small model and the "
-            "visuals job together - this line is the removal condition Guardrail #6 asks "
-            "for. False is today's pipeline exactly: the work stage makes one summarizer "
-            "call an item and the separate visuals job draws the pictures on the 4B. True "
-            "makes the work stage dispatch the two calls in idhazh.classify.calls "
-            "adjacently per item on the summarizer weights - call 1 labels what the "
-            "candidate pass found, call 2 writes the summary and then the plan - and the "
-            "visuals stage then decides nothing, because the item already carries a "
-            "decision. It is a flag rather than a swap because turning it on changes what "
-            "every item does, and there is no rollback that keeps charts if the wiring is "
-            "wrong."
-        ),
-    )
     success_floor_pct: int = Field(
         default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
     )
 
     @model_validator(mode="before")
     @classmethod
-    def _a_renamed_knob_still_opens(cls, data: Any) -> Any:
-        return read_a_renamed_key("run", data, RENAMED_RUN_KEYS)
+    def _a_removed_knob_is_refused_by_name(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("run", data, SUPERSEDED_RUN_NAMES)
 
 
 #: The `collect` names this block used to carry, and the knob that answers the
@@ -358,71 +332,65 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 
 
 def refuse_a_removed_knob(block: str, data: Any, names: Mapping[str, str]) -> Any:
-    """Fail a config that still spells a removed knob, and name its replacement.
+    """Fail a config that still spells a removed knob, and say where it went.
 
     Every model here forbids unknown keys, so a removed name already fails - with
     "extra inputs are not permitted", which does not tell an operator where their
     number went. Ignoring it silently would be worse: that is how somebody comes
     to believe a value nothing reads.
+
+    **An empty replacement means the knob is gone rather than renamed**, because
+    the thing it tuned is gone. Pointing at a successor that does not exist is
+    the same defect one level down.
     """
     if not isinstance(data, dict):
         return data
     carried = sorted(name for name in names if name in data)
     if carried:
-        spelled = "; ".join(f"{block}.{name} is now {block}.{names[name]}" for name in carried)
+        spelled = "; ".join(
+            f"{block}.{name} is now {block}.{names[name]}"
+            if names[name]
+            else f"{block}.{name} is gone and nothing replaces it"
+            for name in carried
+        )
         raise ValueError(
-            f"{block} carries a knob that was removed ({spelled}). Rename it - a knob "
-            "nothing reads is a number somebody believes"
+            f"{block} carries a knob that was removed ({spelled}). Rename or delete it - "
+            "a knob nothing reads is a number somebody believes"
         )
     return data
 
 
-#: The `run` knobs this block used to carry, and the knob holding the same
-#: number now. A config still spelling one is read as the new name.
-RENAMED_RUN_KEYS: Final[Mapping[str, str]] = MappingProxyType(
-    {"route_budget_minutes": "visual_planner_budget_minutes"}
+#: The `run` knobs this block used to carry. Both sized or switched the visual
+#: planner stage, which plan 11 row #6 deleted with the model it ran, so there
+#: is no knob answering the same question and the value is empty.
+#: `route_budget_minutes` is the older spelling of the budget and is refused
+#: here rather than migrated: it used to be read as `visual_planner_budget_minutes`,
+#: which would now migrate an operator's number onto a key nothing reads.
+SUPERSEDED_RUN_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "route_budget_minutes": "",
+        "two_calls_per_item": "",
+        "visual_planner_budget_minutes": "",
+    }
 )
 
-#: The `models` keys this block used to carry, and the key holding the same
-#: model now. It is also the map `finetune` roles are read through, because a
-#: role names one of these keys as a value.
-RENAMED_MODELS_KEYS: Final[Mapping[str, str]] = MappingProxyType({"route": "visual_planner"})
-
-#: The one `models` key that is gone rather than renamed. It held a single
+#: The `models` keys this block used to carry. `inference` held a single
 #: settings block that both roles were served on, so a swap of either entry
 #: inherited numbers measured against the other. There is no lift onto the
 #: entries, because the lift IS the inheritance: it would hand a swapped entry
-#: the previous weights' numbers and raise nothing.
+#: the previous weights' numbers and raise nothing. `visual_planner` and its
+#: older spelling `route` named the small model plan 11 row #6 retired; the two
+#: calls on `summarize` replaced it, so nothing answers for them.
 SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {"inference": "<role>.inference"}
+    {"inference": "<role>.inference", "route": "", "visual_planner": ""}
 )
 
 
-def read_a_renamed_key(block: str, data: Any, names: Mapping[str, str]) -> Any:
-    """Read a config still spelling a renamed key as though it spelled the new one.
-
-    `config/` is a persisted surface, so a key rename is breaking: every model
-    here forbids unknown keys, and a file written before the rename would be
-    refused outright (section 11). The migration sits on the model that owns the
-    key, so one place knows both spellings and there is no second config reader.
-
-    A file carrying both spellings with different values is refused. Taking one
-    silently is how somebody comes to believe a number nothing reads.
-    """
-    if not isinstance(data, dict):
-        return data
-    migrated = dict(data)
-    for old, new in names.items():
-        if old not in migrated:
-            continue
-        carried = migrated.pop(old)
-        if new in migrated and migrated[new] != carried:
-            raise ValueError(
-                f"{block} spells both {old} and {new}, with different values. "
-                f"{block}.{old} is now {block}.{new} - keep one"
-            )
-        migrated.setdefault(new, carried)
-    return migrated
+#: The `finetune` roles this block used to carry. `student` named the small
+#: model plan 11 row #6 retired, and re-pointing it at `summarize` would make
+#: the teacher and the student one model - a session that trains a model on its
+#: own output. Nothing read it, so it is gone rather than moved.
+SUPERSEDED_FINETUNE_NAMES: Final[Mapping[str, str]] = MappingProxyType({"student": ""})
 
 
 #: The one sentinel a lookback window uses to say "never forget". Not 0, which
@@ -938,19 +906,21 @@ class ElementsConfig(Model):
 class ModelsConfig(Model):
     """One entry per role, and each entry carries the settings it runs on.
 
-    There is no block shared between the entries. Two roles are two model
-    families served by two llama-server processes, and one block over both is a
+    There is no block shared between the entries. A role is a model family
+    served by its own llama-server process, and one block over two roles is a
     measurement about one of them quietly applied to the other.
+
+    One role is left. Plan 11 row #6 retired the small visual planner: the two
+    calls the work stage now makes per item run on these weights, so the picture
+    is decided by the same model that wrote the summary.
     """
 
     summarize: ModelRef
-    visual_planner: ModelRef
 
     @model_validator(mode="before")
     @classmethod
-    def _a_renamed_key_still_opens(cls, data: Any) -> Any:
-        refuse_a_removed_knob("models", data, SUPERSEDED_MODELS_NAMES)
-        return read_a_renamed_key("models", data, RENAMED_MODELS_KEYS)
+    def _a_removed_key_is_refused_by_name(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("models", data, SUPERSEDED_MODELS_NAMES)
 
     @model_validator(mode="after")
     def _every_block_names_the_weights_it_is_declared_for(self) -> Self:
@@ -2101,9 +2071,13 @@ class FinetuneConfig(Model):
 
     Nothing here runs on the runner. Training needs a GPU and the runner has
     none (section 0a), so these knobs size a file CI commits and a notebook
-    somewhere else reads. The two model fields name a KEY in `models` rather
-    than a model, because `models.summarize` has already moved once and a knob
-    that spells a model name is stale the day the config moves.
+    somewhere else reads. `teacher` names a KEY in `models` rather than a model,
+    because `models.summarize` has already moved once and a knob that spells a
+    model name is stale the day the config moves.
+
+    There is no `student`. It named the small visual planner, which plan 11 row
+    #6 retired, and a distillation session needs two models: with one role left,
+    the student could only be the teacher.
 
     The prune knobs live here and not in `retention`. That block is about
     published-site images and its own `site_budget_mb`; putting corpus history
@@ -2113,10 +2087,6 @@ class FinetuneConfig(Model):
     teacher: ModelRole = Field(
         default="summarize",
         description="A key in `models`. The model whose outputs a session fine-tunes.",
-    )
-    student: ModelRole = Field(
-        default="visual_planner",
-        description="A key in `models`. The smaller model a distillation session trains.",
     )
     corpus_rows: int = Field(
         default=2000,
@@ -2249,22 +2219,8 @@ class FinetuneConfig(Model):
 
     @model_validator(mode="before")
     @classmethod
-    def _a_role_naming_a_renamed_key_still_opens(cls, data: Any) -> Any:
-        """A role naming a renamed `models` key reads as the new name.
-
-        `ModelsConfig` carries the same rename where it is spelled as a key.
-        This carries it where it is spelled as a value, and without it a file
-        written before the rename loads its `models` block and then fails the
-        `AppConfig` check that a role names a real one.
-        """
-        if not isinstance(data, dict):
-            return data
-        migrated = dict(data)
-        for field in ("teacher", "student"):
-            named = migrated.get(field)
-            if isinstance(named, str) and named in RENAMED_MODELS_KEYS:
-                migrated[field] = RENAMED_MODELS_KEYS[named]
-        return migrated
+    def _a_removed_role_is_refused_by_name(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("finetune", data, SUPERSEDED_FINETUNE_NAMES)
 
     @model_validator(mode="after")
     def _a_session_cannot_draw_more_than_the_window_holds(self) -> Self:
@@ -3682,6 +3638,37 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T23:30",
+            change=(
+                "Four keys are gone in one commit: models.visual_planner, "
+                "run.two_calls_per_item, run.visual_planner_budget_minutes and "
+                "finetune.student. This is a contract break and the read-side migration "
+                "ships with it - each name is refused by name through "
+                "refuse_a_removed_knob rather than through 'extra inputs are not "
+                "permitted', and so are the two older spellings that used to migrate "
+                "into them, models.route and run.route_budget_minutes. A removed knob "
+                "now carries an empty replacement, which the refusal reads as 'gone and "
+                "nothing replaces it' - the rename maps RENAMED_MODELS_KEYS and "
+                "RENAMED_RUN_KEYS retired with the keys they pointed at, because a "
+                "rename onto a deleted key is a migration that silently loses a number. "
+                "finetune.teacher keeps its default of summarize and is the only role "
+                "left; a teacher still naming visual_planner or route is answered by "
+                "name rather than by a list of legal keys."
+            ),
+            why=(
+                "Plan 11 row #6. The work stage makes two calls per item on the "
+                "summarizer weights - call 1 labels, call 2 writes the summary and then "
+                "the picture - so the small visual planner decides nothing, and a model "
+                "nothing calls is a download, a cache entry and a 50-minute job the run "
+                "waits on. Owner ruling 2026-09-13: move forward, no rollback, so the "
+                "flag goes away with the model rather than staying as a second "
+                "implementation (Guardrail #6). finetune.student had no reader and named "
+                "the retired model; re-pointing it at summarize would make the teacher "
+                "and the student one model, which is a session that trains a model on "
+                "its own output."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T23:00",
             change=(
@@ -6224,13 +6211,22 @@ class AppConfig(Contract):
 
         Checked here because `FinetuneConfig` cannot see `models` and a typo
         would otherwise surface on a GPU somebody is paying for, hours later.
+
+        A role still naming a retired one is answered by name. `visual_planner`
+        and its older spelling `route` are the two that were legal, and the
+        difference matters to whoever is reading the failure: they did not
+        misspell a key, the model is gone.
         """
         roles = set(ModelsConfig.model_fields)
-        for field in ("teacher", "student"):
-            named = getattr(self.finetune, field)
-            if named not in roles:
-                spelled = ", ".join(sorted(roles))
-                raise ValueError(f"finetune.{field} must name one of models: {spelled}")
+        named = self.finetune.teacher
+        if named in SUPERSEDED_MODELS_NAMES:
+            raise ValueError(
+                f"finetune.teacher names {named}, a model that was retired with the "
+                "visuals stage. Name one of models: " + ", ".join(sorted(roles))
+            )
+        if named not in roles:
+            spelled = ", ".join(sorted(roles))
+            raise ValueError(f"finetune.teacher must name one of models: {spelled}")
         return self
 
     @model_validator(mode="after")

@@ -396,12 +396,11 @@ def context_fit(observations: Sequence[ItemObservation], inference: InferenceCon
     budget it adds is `max_output_tokens`, which sizes one summarize request;
     the two-call path's budgets are derived in `classify.calls` and are five and
     twenty-two times larger. This gate reads what the qualification harness
-    actually ran, and the harness runs the single call while
-    `run.two_calls_per_item` is off - so reaching for a two-call budget here
-    would size a request nothing sent. What sizes the pair is
+    actually ran, and the harness sends one summarize request an article - so
+    reaching for a two-call budget here would size a request nothing sent. What
+    sizes the pair the daily run dispatches is
     `test_the_two_calls_fit_the_window_at_the_cap`, which is a config-level check
-    and needs no observations. When the flag turns on, the budget this adds is
-    the first thing that has to follow it.
+    and needs no observations.
     """
     overflow = [
         o for o in observations if o.prompt_tokens + inference.max_output_tokens > inference.n_ctx

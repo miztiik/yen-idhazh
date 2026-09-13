@@ -48,12 +48,10 @@ answers with one of three classes. It rests on Tier 1 fields alone - `kind`,
 | `unclassified` | quantities, but no unit shared widely enough |
 
 **Distinct quantities per unit, because a bar chart cannot draw the same figure
-twice.** `visual_planner.same_unit_bars` groups the chosen bars by unit and the
-bars are distinct by construction, so counting a repeated figure here would call
-an article chartable that no planner could ever draw - and the rate built on it
-would carry that gap for ever while claiming to measure the planner. The empty
-unit is a group like any other, which is the reading `chart_is_reachable`
-already takes.
+twice.** A chart's bars must share one unit and are distinct by construction, so
+counting a repeated figure here would call an article chartable that nothing
+could ever draw - and the rate built on it would carry that gap for ever while
+claiming to measure the picture. The empty unit is a group like any other.
 
 **This is not `chart_is_reachable` and is not meant to be.** That function asks
 whether a chart could survive the planner's own drops - the sixteen-fact cap and
@@ -195,13 +193,13 @@ with the article's identity and the hash of the text every span indexes. All
 four are pure functions over one payload: nothing is committed, and the passes
 are proved by re-slicing their own output.
 
-**The offsets are not new work.** `visual_planner.numeric_facts` has always
-computed `match.start` and `match.end`, and has always thrown them away.
+**The offsets are not new work.** The retired planner's `numeric_facts`
+computed `match.start` and `match.end`, and threw them away.
 This pass keeps them and cuts `span_excerpt` at them.
 
-**What the pass keeps that the planner drops.** `numeric_facts` picks a few bars
-for one chart, so it collapses a figure repeated across two periods into one
-fact, drops a magnitude at or below two, drops a bare year, and stops at 16.
+**What the pass keeps that the fact reader dropped.** `numeric_facts` picked a few bars
+for one chart, so it collapsed a figure repeated across two periods into one
+fact, dropped a magnitude at or below two, dropped a bare year, and stopped at 16.
 Every one of those is correct for choosing bars and wrong for a candidate set -
 the collapsed repeat is exactly the series a trend chart exists to show. Nothing
 in the candidate pass dedupes and nothing drops on size. Measured 2026-09-08 on
@@ -251,7 +249,9 @@ article did not write is not a date it stated.
 
 `YEAR_MIN` and `YEAR_MAX` are the bounds, and they are one definition rather
 than two: they moved off `visual_planner` in this row so the pass that claims a
-bare year and the pass that refuses to plot one read the same pair.
+bare year and the pass that refused to plot one read the same pair. The second
+of those retired on 2026-09-13 and the constants stayed here, where the pass
+that still needs them lives.
 
 ### Two passes, one stretch of characters
 
@@ -570,14 +570,14 @@ unchanged and the `version` stamp stays where row 3 left it.
 
 ## `context` is gone, and this is the sentence saying so
 
-`visual_planner.NumericFact` carries `context`: a whitespace-cleaned window of
-the words around a number, about 50 characters back and 30 forward, snapped to
-word boundaries. This shape does not have it.
+The retired planner's `NumericFact` carried `context`: a whitespace-cleaned
+window of the words around a number, about 50 characters back and 30 forward,
+snapped to word boundaries. This shape does not have it.
 
 A derived string is replaced by a pointer. `sentence_index` plus the span says
 where the words are, and `Article.text` still holds them, so nothing stores a
-second copy of the reader's sentence. `NumericFact.context` is untouched by this
-contract and retires when its own producer does.
+second copy of the reader's sentence. That derived string retired with its
+producer on 2026-09-13, and this contract never carried it.
 
 ## Design rationale
 
@@ -764,11 +764,12 @@ contracts) on required and on the key.
 ### The number pattern moved to the pass that is lower
 
 `NUMBER`, the magnitude table, the percent set, the unit stop list and
-`normalise_unit` were `visual_planner` privates. Two passes now read the same
-vocabulary, and the fact pass is the lower of the two, so the definitions live
-in `backend/idhazh/elements.py` and the planner imports them back. Nothing about
+`normalise_unit` were `visual_planner` privates. Two passes read the same
+vocabulary and the fact pass is the lower of the two, so the definitions live
+in `backend/idhazh/elements.py`. Nothing about
 its behaviour changed: a duplicated regex would have been a second definition of
-one concept, guaranteed to drift the first time the pattern is fixed.
+one concept, guaranteed to drift the first time the pattern is fixed. The other
+pass retired on 2026-09-13 and the definitions stayed where they had moved.
 
 `_TRIVIAL_MAX` and the context window stayed with the planner. They are its
 judgements about what makes a bar, and the candidate pass does not share them.
@@ -874,10 +875,10 @@ only the file list predates the shape.
 
 ### The year range moved to the pass that is lower
 
-`YEAR_MIN` and `YEAR_MAX` were `visual_planner` privates. Two passes now need
+`YEAR_MIN` and `YEAR_MAX` were `visual_planner` privates. Two passes needed
 the same fact about the same bytes - one to claim a bare four-digit run as a
 year, the other to refuse it as a bar height - so the constants live in
-`backend/idhazh/elements.py` and the planner imports them back. It is the same
+`backend/idhazh/elements.py`. It is the same
 move row 2 made for the number pattern, and for the same reason: two definitions
 of one concept drift the first time either is fixed.
 
@@ -922,7 +923,7 @@ on together.
 ## See also
 
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the generated schemas, and the drift gate over both.
-- [../publishing/visuals.md](../publishing/visuals.md) - the visual planner, which reads the same number pattern and keeps its own drops.
+- [../publishing/visuals.md](../publishing/visuals.md) - the picture, which is decided from this table.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).
 - [../../../TODO/20260905-08-element-table-plan.md](../../../TODO/20260905-08-element-table-plan.md) - the plan this shape was written for, and the producers that follow it.

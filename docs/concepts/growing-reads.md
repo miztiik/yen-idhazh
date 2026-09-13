@@ -557,12 +557,12 @@ broken.
 carries the total forward where one process both writes and deletes, so an
 ordinary deletion pass no longer re-reads the whole tree to learn a number it is
 already holding. The three walks above stayed, and the reason is structural
-rather than an excuse: **three separate jobs write `frontend/public/digest/`** -
-the visuals job renders, the assembly job writes the day payload, the cleanup
-pass deletes - so a total one of them accumulated would silently miss what the
-other two did, in the number that feeds the site-size card. Carrying one between
-three jobs means writing it down, which is a new persisted contract and a
-person's decision. So the three walks declare their growth instead.
+rather than an excuse: **two separate jobs write `frontend/public/digest/`** -
+the work shards render and the assembly job writes the day payload - and the
+cleanup pass deletes from it, so a total one of them accumulated would silently
+miss what the others did, in the number that feeds the site-size card. Carrying
+one between three jobs means writing it down, which is a new persisted contract
+and a person's decision. So the three walks declare their growth instead.
 
 **The state-prune row's premise was measured and refuted, so nothing was
 optimised.** The row asked for the dated walk that `retention._dated_days` gave

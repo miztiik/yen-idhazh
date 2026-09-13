@@ -277,16 +277,16 @@ What it costs: the Python name and the committed key now disagree, so a grep for
 
 The section above rules on *when* a name may move. This one rules on *which word* it moves to.
 
-**The project's word for a thing is used verbatim in every identifier for that thing.** That binds a module filename, a class, a function, an enum member, a contract field, a schema stem, a telemetry value, a config key, a CLI verb and a prompt filename. Casing follows the language - `VisualPlan` in Python, `visual_planner` in a config key, `plannerMinutes` in TypeScript - and the word does not change between them.
+**The project's word for a thing is used verbatim in every identifier for that thing.** That binds a module filename, a class, a function, an enum member, a contract field, a schema stem, a telemetry value, a config key, a CLI verb and a prompt filename. Casing follows the language - `VisualPlan` in Python, `visual_state` in a payload key, `visualState` in TypeScript - and the word does not change between them.
 
 **Prose is not bound, and trying to bind it makes the writing worse.** A sentence in a doc, a plan-doc, a commit message or a code comment uses the plain register (`CLAUDE.md` section 0b). "the validator", "the planner", "what the stage spent" are correct English and correct here. A decision record that writes `Visual Plan` in every sentence reads like a specification, and this project does not write specifications.
 
 Two more clauses, and each one has already cost a day:
 
-- **A model's size, vendor or revision never appears in an identifier.** `models.visual_planner` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen4b` would have to be renamed the day the weights change.
+- **A model's size, vendor or revision never appears in an identifier.** `models.summarize` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen9b` would have to be renamed the day the weights change.
 - **A word that is wrong is renamed early, not when it is convenient.** `route` named a dispatch decision and the stage makes a planning decision. It reached a module, a contract, a schema stem, two config keys, a workflow job, an enum member, two TypeScript fields and about two hundred sentences before anybody paid it off. Every plan written against the wrong word writes more of it, so the bill grows with the calendar and never with the difficulty.
 
-Two names in this repository do not take the word a glossary would give them, recorded here so they are not argued twice. **`visual_planner.py`** is the module filename, decided ahead of any glossary because a glossary names steps and not files. **`density_floor`** was chosen over the more formal term outright, by the owner.
+Two names in this repository do not take the word a glossary would give them, recorded here so they are not argued twice. **`visual_planner.py`** is the module filename, decided ahead of any glossary because a glossary names steps and not files; the stage it was named for retired on 2026-09-13 and the file kept the name, because what it still holds is the gate and the ladder that decide a picture. **`density_floor`** was chosen over the more formal term outright, by the owner.
 
 **A definition that turns out to be false does not stop the term binding.** `Ledger` is defined as "never edited in place" and the corpus window rewrites at its edge. The word is still the identifier; the narrowed definition on the page that owns it governs what it means. Narrow the definition there rather than minting a second word.
 
