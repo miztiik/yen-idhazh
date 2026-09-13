@@ -97,7 +97,7 @@ SKIP: Final = object()
 
 
 def _ledger(state_dir: Path) -> list[dict[str, str]]:
-    """Every committed row, oldest month first. The ledger is a directory now.
+    """Every committed row, oldest day first. The ledger is a day tree now.
 
     A ledger with no full-grain month left is refused by name rather than
     reported as an empty draw. The two look identical from the row count and

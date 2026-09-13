@@ -45,6 +45,7 @@ from idhazh import (
     assemble,
     config,
     corpus,
+    day_partition,
     discover,
     elements,
     extract,
@@ -3195,7 +3196,7 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
     **`date` names the run, and that is the whole cover.** A run appends only to
     the file its own date routes to, so a repeat the merge left can only be in a
     file this run wrote - and the ordinary pass reads six files whether the
-    archive holds one month or sixty. It used to glob every feed-health shard,
+    archive holds one day or a thousand. It used to glob every feed-health shard,
     every item-health partition and every score shard, which charged each run for
     every month the pipeline had ever recorded and found nothing, because a
     finished partition was settled when it was written and cannot change again
@@ -3203,7 +3204,7 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
 
     **`date=None` is the operator's full pass, and it is the one that pays for
     the history.** What the bounded pass gives up is an earlier run whose settle
-    step itself failed: no later run writes that month, so nothing sweeps the
+    step itself failed: no later run writes that day, so nothing sweeps the
     repeat up in passing any more. `idhazh dedupe-ledgers --every-shard` is the
     command a person runs to clear it, and it is deliberately a command rather
     than a default - an unbounded read is a decision somebody takes out loud.
@@ -3222,7 +3223,7 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
     scores: list[tuple[Path, tuple[str, ...]]] = (
         [(writer.ledger_path(state, date), writer.OBSERVATION_KEY)]
         if date is not None
-        else [(shard, writer.OBSERVATION_KEY) for shard in writer.ledger_shards(state)]
+        else [(day, writer.OBSERVATION_KEY) for day in writer.ledger_days(state)]
     )
     targets: list[tuple[Path, tuple[str, ...]]] = [
         *ledger.keyed_paths(state, date=date),
@@ -3253,51 +3254,60 @@ def stage_rebuild_score_index(
 ) -> int:
     """Write `state/score-index/` again from the rows it indexes, and say what drifted.
 
-    The operator's repair for an index that stopped describing its shard. A fill
-    a crash cut short, a shard a `merge=union` grew behind the index's back, or
-    an index left at a grain the ledger no longer uses all read as a success
-    today: `evals.writer.refresh_index` only fills a month with no index at all,
-    so a wrong one is never compared against anything and the next dedupe
-    silently admits a measurement the ledger already holds.
+    The operator's repair for an index that stopped describing the rows beside
+    it. A fill a crash cut short, a day file a `merge=union` grew behind the
+    index's back, or an index left at a grain the ledger no longer uses all read
+    as a success today: `evals.writer.refresh_index` only fills a partition with
+    no index at all, so a wrong one is never compared against anything and the
+    next dedupe silently admits a measurement the ledger already holds.
+
+    **The cover is named in months and the work is done in days.** Both files
+    moved to `<YYYY>/<MM>/<DD>.csv` on 2026-09-13, but the thing an operator
+    knows is that a month looks wrong, and naming thirty-one days to say so is a
+    worse command than naming one month. So `--month` is expanded to that month's
+    committed days here and `writer.rebuild_index` is given days - the same split
+    the prunes already use, where a `keep_months` knob deletes day files.
 
     **Never a step of a run, and that is the design rather than an oversight.**
-    Rebuilding reads every score row of every month it is given, which is the
+    Rebuilding reads every score row of every day it is given, which is the
     read the index exists to avoid (Guardrail #12), and an index that repaired itself
     on a schedule would hide the drift this exists to reveal. So a person types
     it, and the cover is stated: `--month` names the months to rebuild and
     `--every-shard` is the full pass over the archive. Neither is the default,
     which is the shape `dedupe-ledgers` already uses for the same question.
 
-    A month with no committed shard exits non-zero rather than reporting a clean
-    pass over nothing, and so does a tree with no shard at all - the rule
+    A month with no committed rows exits non-zero rather than reporting a clean
+    pass over nothing, and so does a tree with no rows at all - the rule
     `validate-days` and `site-weight` already hold.
     """
     state = state_dir if state_dir is not None else STATE_ROOT
-    live = sorted(shard.stem for shard in writer.ledger_shards(state))
-    named = live if months is None else sorted({month[:7] for month in months})
+    by_month = day_partition.days_by_month(state / writer.LEDGER_DIRNAME)
+    named = sorted(by_month) if months is None else sorted({month[:7] for month in months})
     if not named:
         LOG.error(
-            "rebuild-score-index found no shard under %s, so no index can be wrong about one",
+            "rebuild-score-index found no rows under %s, so no index can be wrong about one",
             writer.LEDGER_RELDIR,
         )
         return 1
-    absent = [month for month in named if month not in live]
+    absent = [month for month in named if month not in by_month]
     if absent:
         LOG.error("rebuild-score-index was asked for months that are not committed: %s", absent)
         return 1
 
-    found = writer.rebuild_index(state, named)
-    for month, drift in sorted(found.items()):
+    days = [day_partition.date_of(day) for month in named for day in by_month[month]]
+    found = writer.rebuild_index(state, days)
+    for date, drift in sorted(found.items()):
         LOG.info(
             "index rebuilt file=%s held_the_rows_cannot_produce=%s rows_it_did_not_hold=%s",
-            writer.index_relpath(month),
+            writer.index_relpath(date),
             len(drift.extra),
             len(drift.missing),
         )
     LOG.info(
-        "score index rebuilt cover=%s months=%s drifted=%s",
+        "score index rebuilt cover=%s months=%s days=%s drifted=%s",
         "every-shard" if months is None else ",".join(named),
         len(named),
+        len(days),
         sum(1 for drift in found.values() if drift.extra or drift.missing),
     )
     return 0
@@ -3577,12 +3587,17 @@ def _prune_trace_shards(
 def _prune_score_shards(
     state: Path, observability: ObservabilityConfig, today: date_type, *, dry_run: bool
 ) -> list[str]:
-    """Archive the score months past their full-grain window, then delete their shards.
+    """Archive the score months past their full-grain window, then delete their days.
 
     The one store here whose deletion is preceded by a summary that is written,
-    read back and reconciled against the file it replaces. The log says what the
-    archive weighs against what the shard weighed, because that ratio is the
+    read back and reconciled against the files it replaces. The log says what the
+    archive weighs against what those files weighed, because that ratio is the
     measurement this policy rests on and a dry run is where a person reads it.
+
+    The files come from the result rather than being spelled here. A month is a
+    directory of day files, so a caller that synthesised `<month>-01` would name
+    a file the ledger may never have held - and the list a dry run prints has to
+    be the list a live run removes, file for file.
     """
     scores = retention.prune_scores(state, observability, today, dry_run=dry_run)
     if not scores.changed:
@@ -3593,17 +3608,18 @@ def _prune_score_shards(
         )
         return []
     LOG.info(
-        "score archive%s: summarised %s - %s rows and %s distinct measurements, "
-        "%s bytes of shard into %s bytes of archive - and hard-deleted %s",
+        "score archive%s: summarised %s - %s rows and %s distinct measurements over "
+        "%s day files, %s bytes of rows into %s bytes of archive - and hard-deleted %s",
         " (dry run)" if scores.dry_run else "",
         ", ".join(scores.archived) or "no month",
         scores.rows_archived,
         scores.observations_indexed,
+        len(scores.days_removed),
         scores.source_bytes,
         scores.archive_bytes,
         ", ".join(scores.hard_deleted) or "no month",
     )
-    removed = [writer.ledger_relpath(f"{stem}-01") for stem in scores.archived]
+    removed = list(scores.days_removed)
     removed += [score_archive.archive_relpath(stem) for stem in scores.hard_deleted]
     return removed
 
@@ -4957,7 +4973,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="YYYY-MM",
         help=(
             "A month for `rebuild-score-index` to write again from the rows beside it, "
-            "repeatable. A month that is not committed is an error, not a skip."
+            "repeatable. Every committed day of that month is rewritten. A month that "
+            "is not committed is an error, not a skip."
         ),
     )
     parser.add_argument(

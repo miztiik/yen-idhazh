@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { grouped } from '../src/lib/charts/series';
 import { doubted, sourceDoubts, type DayWindow } from '../src/lib/server/model-work';
-import { readDayShards, readShards } from '../src/lib/server/payload';
+import { readDayShards } from '../src/lib/server/payload';
 
 /**
  * Which sources the checker doubts, and the rule the ranking is made of.
@@ -31,9 +31,9 @@ import { readDayShards, readShards } from '../src/lib/server/payload';
 
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** The score ledger, which files by month, read the way the page's server reads it. */
+/** The score ledger, which files by day, read the way the page's server reads it. */
 function scoreRows(): Record<string, string>[] {
-	return readShards(join(STATE, 'scores'), -1).rows;
+	return readDayShards(join(STATE, 'scores'), -1).rows;
 }
 
 /** The item-health ledger, which files by day, read the same way.
