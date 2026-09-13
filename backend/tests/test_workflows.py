@@ -499,6 +499,12 @@ SETTLE_COVER_FLAG: Final = "--date"
 # check out a fresh tree and harvest nothing. It may not fail the publish.
 HARVEST_STEP: Final = "Harvest the training corpus"
 HARVEST_COMMAND: Final = "python -m idhazh harvest"
+# The step that lays out this run's visual decisions for a person to look at. It
+# runs in assemble because that is the only job holding every population at
+# once, and last because nothing on the publish path reads what it writes.
+REVIEW_STEP: Final = "Build the day's review tree"
+REVIEW_COMMAND: Final = "python backend/utilities/review_queue.py"
+REVIEW_ARTIFACT: Final = "review"
 # The seed a fresh checkout must already carry, because `commit-and-push.sh`
 # runs `git add "$@"` under `set -euo pipefail` - a staged path that does not
 # exist yet aborts the whole commit step and costs the ledgers staged beside it.
@@ -2800,6 +2806,40 @@ def test_the_harvest_runs_where_the_article_text_still_is() -> None:
     )
 
 
+def test_the_review_tree_is_an_artifact_and_no_commit_step_can_reach_it() -> None:
+    """The row's oracle, asked of the workflow: a review surface never becomes a published one.
+
+    Three separate things have to hold, and the third is the one that could go
+    wrong quietly. The tree is written under `backend/var/`, which `.gitignore`
+    covers, so no diff would ever show it drifting into the published tree. So
+    the assertion is that no path any commit step stages names it, taken over
+    every staged path in the file rather than over the assemble job alone.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    step = _step(workflow, "assemble", "name", REVIEW_STEP)
+    assert REVIEW_COMMAND in _script(step, "assemble review step")
+
+    upload = _artifact_upload(workflow, "assemble", REVIEW_ARTIFACT)
+    with_block = _mapping(upload.get("with"), "review upload")
+    path = str(with_block["path"])
+    assert path.startswith("backend/var/review/"), (
+        "the review tree is a build artifact; a path outside backend/var/ is one git can see"
+    )
+    assert int(str(with_block["retention-days"])) > 0
+    assert upload.get("if") == "always()", (
+        "the step above may have degraded, and a partial sheet is still worth looking at"
+    )
+
+    staged: list[str] = []
+    for label in COMMIT_STEPS:
+        paths, settings = _commit_call(label)
+        staged += paths
+        staged += [settings.get("REFRESH_PATHS", "")]
+    assert staged, "no commit step declares a staged path, so this test proves nothing"
+    for value in staged:
+        assert "review" not in value, f"a commit step stages the review tree: {value}"
+
+
 def test_the_telemetry_fold_runs_only_once_the_day_is_committed() -> None:
     """A fold that ran first could delete a month from a tree nothing pushed.
 
@@ -3170,7 +3210,10 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     # a failure costs is one run's worth of bytes and the next run folds the same
     # month again. The two visuals steps join it for the work job's reason, one
     # rung down: this job cannot stop a publication at all, so a scrape or a push
-    # that fails there costs one reading and the day nothing.
+    # that fails there costs one reading and the day nothing. The review tree
+    # joins it one rung further out again: nothing downloads it, no gate reads
+    # it, and it is built after the day is committed - so the most a failure
+    # costs is one day's contact sheet, and the next run builds its own.
     tolerant = {
         (job_name, step.get("name") or step.get("uses"))
         for job_name in _mapping(workflow.get("jobs"), "jobs")
@@ -3183,6 +3226,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", HARVEST_STEP),
         ("assemble", FOLD_STEP),
+        ("assemble", REVIEW_STEP),
         ("assemble", COMMIT_STEPS["fold"]),
     }
 
