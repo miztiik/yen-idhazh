@@ -1,0 +1,38 @@
+Peder Ulander
+Vice President, Product Marketing, Google Cloud
+We are excited to share that Gartner has named Google a Leader in its inaugural 2026 Magic Quadrant for Enterprise AI Assistants. In this comprehensive evaluation of top enterprise AI assistant vendors, Gartner placed Google in the Leaders quadrant for its evaluation across both Completeness of Vision and Ability to Execute.
+Gemini Enterprise helps organizations bring helpful, secure AI directly into the daily work of their employees. It moves teams past basic chat interactions to automating multi-step, end-to-end workflows with AI agents. It connects with the tools and infrastructure companies already use and scales easily and cost-effectively, all with security and governance in place.
+We see this recognition from Gartner as validation of our goal: creating a unified platform where everyone — from business users to developers — can work alongside AI agents to accomplish more together.
+Our take on Google as a Leader
+Amid a complex landscape of standalone AI tools and emerging platforms, Gemini Enterprise emerges as a unified, open agentic platform backed by Google’s full AI stack, with strengths mentioned in the report such as:
+-
+Unified “AI front door”: Gemini Enterprise unifies enterprise chat and search, first and third-party agents, a no-code agent designer, Google Workspace integration, and third-party connectors all in one platform, eliminating the need for organizations to piece together disparate AI tools.
+-
+Open connectivity: Gemini Enterprise offers extensive connectivity beyond Google's ecosystem — extending to Microsoft 365, other third-party software, and internal enterprise data sources. This open connectivity lets organizations adopt Gemini Enterprise alongside their existing infrastructure without costly system overhauls.
+-
+Simple economics: Gemini Enterprise offers a straightforward pricing model, with actions like chat and search included in the base SKU. Organizations can select per-user seat subscriptions, as well as a pay-as-you-go option that lets users run agent workloads without hitting quota limits mid-task.
+-
+Built-in governance: Gemini Enterprise provides robust agent governance out-of-the- box at no extra cost, enabling enterprises to seamlessly manage users, agents, and data permissions while curbing security risks and agent sprawl.
+-
+Full-stack depth and scale: Google’s vertically-integrated stack provides global infrastructure, custom silicon, world-class models, and a secure, enterprise-ready foundation — all optimized for security, interoperability, and cost.
+To read the full report, download it here.
+Accelerating our vision with the latest Gemini Enterprise advancements
+Over the past months, we have accelerated Gemini Enterprise with significant product advancements:
+-
+Tailored industry solutions: We introduced specialized solutions for legal and financial services last month. These tailored solutions bring pre-built agents, domain-specific skills, secure data connectors, and an open partner ecosystem, allowing for rapid deployment. They are also built on top of Gemini Enterprise’s governed control plane so you can create and manage workflows in these highly regulated industries.
+-
+Google Antigravity in Gemini Enterprise: With the introduction of AI developer tools in Gemini Enterprise, enterprises can now easily enable agentic dev tools like Antigravity and Android Studio for their developer teams with eligible Gemini Enterprise licenses, and maintain full governance and observability inside the admin console.
+-
+FinOps and cost controls: New FinOps and cost-control capabilities were introduced last month, allowing organizations to optimize AI spend through more pricing options, Flexible Savings Plans, and granular spend management.
+Gemini Enterprise customers are also seeing the value
+Hearing this recognition from Gartner is great, but it's not just them—our customers are seeing this real-world value too, and it's driving a positive impact across their organizations every day.
+Check out what our customers are saying about the recent product advancements.
+“Deploying Antigravity in Gemini Enterprise allows Accenture to arm our engineers with Google DeepMind’s premier technology on the secure, trusted foundation of Google Cloud. Abstracting away operational complexity ensures our teams don't have to choose between developer speed and enterprise-grade governance — freeing them to deliver high-velocity engineering and transformative value for our clients.” — Chetna Sehgal, Global Practice Lead, Accenture Google Business Group. Learn more here.
+“Cleary is committed to embedding AI into our workflows in strategic and competitive ways. Using Google’s Gemini Enterprise, which can slot in seamlessly with other daily work tools, we can unlock greater efficiencies for our teams and help them deliver even higher quality work for our clients.” — Jeff Karpf, Managing Partner, Cleary Gottlieb. Learn more here.
+“As a design partner for the Financial Research agent, Deutsche Bank has helped shape this capability in view of the realities of a highly regulated industry – from data protection and governance to the workflows our teams use every day,” – Marie-Jeanne Deverdun, Chief Technology, Data and Innovation Officer, and Member of the Deutsche Bank Management Board. Learn more here.
+“We’re thrilled to partner with Google Cloud in the early adoption of Gemini Enterprise for Legal. We look forward to integrating Google’s technology to streamline workflow and further support our litigators in shaping outcomes critical to our clients’ futures.” — Joe Petrosinelli, Chairman, Williams & Connolly. Learn more here.
+Get started today
+-
+Read the report: Download your complimentary copy of the 2026 Gartner Magic Quadrant for Enterprise AI Assistants to explore the full analysis
+-
+Explore Gemini Enterprise: Discover how your organization can deploy governed, connected agents across every team at cloud.google.com/gemini-enterprise

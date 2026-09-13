@@ -1,0 +1,216 @@
+Welcome to Inside Climate, a podcast from the staff of Inside Climate News. This week, Alabama-based reporters Dennis Pillion and Lee Hedgepeth join co-host Kiley Price to talk about energy demand, rising residential utility bills and why customers in their state are paying so much for power.
+Listen and subscribe on YouTube, Spotify, Apple Podcasts, Amazon Music, and iHeart.
+KILEY PRICE
+Between air conditioners and data centers, energy demand continues to climb this summer—and that means rising utility bills.
+DENNIS PILLION: Utility companies across the country requested more than $18 billion in rate increases so far this year.
+But it may surprise you who’s paying the most for residential power in the United States.
+DENNIS PILLION: What we found was that Alabama Power customers were paying the highest total bills of any of the 100 utilities that we looked at.
+Can Alabama reform utility regulation and lower bills, while also welcoming energy-hungry data centers to the state?
+LEE HEDGEPETH: The total demand for energy just from those proposals will be more energy than is used by every household in the state of Alabama.
+We’ll speak to our award-winning reporters based in Alabama about the state’s power struggles … next, on Inside Climate.
+It’s the end of August, which means air conditioners across the country are steadily humming. The number of days where people need to use energy to cool their homes because of rising temperatures has increased in 97 percent of the more than 240 U.S. cities analyzed by the group Climate Central.
+And more air conditioning generally means higher energy bills.
+From 2020 to 2025, U.S. residential energy costs have risen by 30 percent due to higher demand from customers and energy-intensive technology, like data centers. Costs are also increasing due to aging infrastructure that is often damaged by extreme weather.
+It’s a problem that is impacting households everywhere, but it’s particularly bad in Alabama, a state with some of the highest poverty rates and the highest residential utility bills in the country.
+We’ll speak to Birmingham-based reporter Dennis Pillion on why Alabama’s costs are so high and what state political leaders are doing to address it. Then, we’ll chat with his fellow Alabamian, reporter Lee Hedgepeth, on the state’s data center expansion and the secrecy around these projects.
+Let’s get started.
+The Politics of Power Prices
+KILEY PRICE
+Welcome Dennis. It’s great to have you on the podcast for the first time.
+DENNIS PILLION
+Thanks, I’m really excited to be here.
+KILEY PRICE
+So Dennis is one of ICN’s Alabama reporters who started in 2024. But before that, you spent 17 years working as a local reporter in Alabama at a couple different outlets, nine years as a statewide natural resources reporter for publications such as AL.com and the Birmingham News.
+So, I imagine you have to keep your AC on pretty frequently during the summer, like a lot of us. I myself live in New York and I know that my energy bill goes up a ton during the summer because of air conditioning. I’m curious what your experiences are like with energy bills during the summer?
+DENNIS PILLION
+Yeah, absolutely. You know, here in Alabama, in the Deep South, we run air conditioners all the time, and those rates are going up. Nationwide, I think electricity costs for residential customers are up something like 30 percent over the last five years, which is a really significant increase. Personally, myself, I just had a new air conditioner installed two days ago, so my energy costs are really high right now. But you know, I’m certainly not alone in that. Utility companies across the country requested more than $18 billion in rate increases so far this year.
+KILEY PRICE
+Wow, so just to clarify, you said that utility companies are asking for rate increases. They don’t get to raise rates automatically? And who are they asking?
+DENNIS PILLION
+They don’t. You know, we have a kind of a weird system that was developed, you know, more than 100 years ago, when electricity was first starting to become a thing, where basically the states, state governments, said it doesn’t make sense to have competing electric companies. You’d have to have duplicate power plants, duplicate power lines, you’d have to have two or more of everything, and that would be twice or more as expensive. And, and you know, ultimately it would be the customers who had to pay those costs.
+So, the governments and the utilities kind of reached an arrangement under which the government will grant monopoly service to a utility. So, they’ll say to this utility, OK, this is your territory. You are the only electric company that is legally allowed to operate in this territory. But in exchange for giving you that monopoly, you’re gonna have to agree to follow our rules. And that includes how much you charge, what you build and don’t build, what kind of fuels you use for electricity, what kind of customer programs you might have to help increase efficiency. All these kinds of things are regulated by these state utility commissions for most of the United States.
+This story is funded by readers like you.
+Our nonprofit newsroom provides award-winning climate coverage free of charge and advertising. We rely on donations from readers like you to keep going. Please donate now to support our work.
+Donate Now
+KILEY PRICE
+So Dennis, how does Alabama stick out compared to other states?
+DENNIS PILLION
+So when you look at utility issues, Alabama is an outlier in some ways. We’re one of only nine states where the members of that public service commission, the public utility commission, are elected. Currently, we have three commissioners that are chosen by a statewide ballot.
+KILEY PRICE
+So Alabama has three commissioners that decide on these rate increases. How is that different from other states?
+DENNIS PILLION
+So in most other states, they hold something called a rate case hearing when the utility wants to increase their rates. So usually the way it works is the utility will go before their regulators, the commission, and they will say, “We need to increase our rates for X reason.” They say either, “We need to earn a higher return on our investment for our investors,’ or “We need to build a new power plant.”
+And in most states, these are kind of courtroom-style hearings. And then ultimately those utility commissions kind of decide—they weigh the evidence on both sides and they say, either “We’re granting the your request for an increase,” maybe, “We’re denying your request for an increase,” or maybe, “We’re going to give you some increase, but not as much as you asked for.” That’s usually how it works out.
+Alabama’s system works a little differently. Alabama has not had one of those rate case hearings for an electric provider since 1981. So oddly enough, the reason for that, as with many things in Alabama history finds its way back to George Wallace. He was governor of Alabama for a long time, well throughout the ’70s and into the ’80s. He kind of, essentially waged war against the power company, which is Alabama Power. So Alabama Power, they would ask for a rate increase in these hearings, Wallace would hire attorneys and personally intervene in the case and try to get those rate increases denied.
+So you would have these really contentious, really combative rate hearings, and then generally whichever side lost would appeal to the courts, the court process would drag on, and it all just kind of devolved into a huge mess that basically wasn’t working out for anybody.
+So in 1982, the commission, which was, at that time, run by a former advisor to George Wallace, they basically created a system which is called the RSE system, which is rate stabilization and equalization. And the whole purpose of this system is to get around all of those messy rate hearings that they were having. They wanted this to be a non-contentious process. They tried to put in this system where in 1982 they set, it’s called a rate of return for the utility, which is essentially how much profit they’re allowed to earn off of all of the things they do.
+So with this RSE system, they set a range, a band, and they said, “OK, Alabama Power,
+you can earn between, I think, 13 and 14.5 percent return on equity. And if you have projections for the coming year that say you’re going to earn less than that or more than that, the rates are going to be automatically adjusted to put you in that range.” And so automatically adjusted means there is no vote by the commission. There is no approval that has to happen. But you also don’t have public input or public engagement. You are putting basically complete trust in the utility commission to act in the best interests of the customers. And, you know, after about 40 years of that system, we really started to see some problems emerge.
+KILEY PRICE
+Yeah, right. So that happened in 1982. Now 2026. It sounds like it might be time to update a few policies given rising energy demand. What is Alabama doing to combat these costs?
+DENNIS PILLION
+Yes, it is absolutely time. So we looked at the residential electric bills from 100 of the largest utilities in the country that we could find. And we looked at things like what their rates were, what the total bills were for customers, and all these things. And what we found was that Alabama Power customers were paying the highest total bills of any of the 100 utilities that we looked at. And now part of that is because we use a lot of electricity—I think depending on the ranking, we’re number four or five in terms of electricity use. But we also, a lot of the other states that have really high usage, say Louisiana, Mississippi, Florida, a lot of those states have lower rates than Alabama.
+KILEY PRICE
+So why are these rates so high?
+DENNIS PILLION
+As with anything that has to do with electric utilities, there are a lot of factors. But I do think a big part of it, and the numbers bear this out, is those really high return rates that were set in 1982. So a lot of the reason that Alabama Power customers were paying such huge bills was from an outdated profit model that was put in place 40-something years ago and, and hasn’t meaningfully changed since.
+KILEY PRICE
+Right, so by stabilizing the system, preventing these kind-of circus-like arguments, in reality it eventually yielded negatives for residential energy consumers at least.
+DENNIS PILLION
+Absolutely. You know, I’ve heard people say they put it on cruise control but they put it on cruise control when they were going 80 miles an hour. So it would have been more appropriate to bring it back down to 60 or so.
+KILEY PRICE
+So it seems like business is really good for Alabama Power. How good is it?
+DENNIS PILLION
+Yes, business has been pretty good lately. You know, they reported a $1.5 billion profit in 2025, which is pretty good, and they’re on pace to earn even more this year. Through the first two quarters, they are on pace now to earn $1.7 billion in 2026. So you know, they have been doing very well financially over the past few years, especially.
+KILEY PRICE
+So are there reforms happening now to help, you know, mitigate this issue?
+DENNIS PILLION
+There are definitely reforms happening. Whether or not they help sort of remains to be seen. Because of these really high electricity bills that the public has been facing, there’s a lot of pushback against this this year, and that showed up in the state legislature. There were several different versions of utility reform bills that were introduced in the Alabama Legislature this year, kind of stemming from all of that public angst and anger over electricity prices. In the end, it kind of boiled down to, you had two sort-of competing bills.
+So, the first bill that the Alabama Legislature considered to address these high electricity prices was one that would have ended PSC elections entirely. Instead of having elected commissioners, you would have commissioners that were appointed by the governor. And that bill to end elections, it made it to committee but it died fairly quickly. And after that there were, kind of, two bills that emerged, really.
+One of the ones, which was House Bill 475, sponsored by Mack Butler, a Republican, I would say very Republican, who was really concerned about high electricity rates. And Butler’s bill, that would have required Alabama to undergo these kind-of formal rate case hearings that most other states require. It would have actually established a profit cap for Alabama Power, saying they could not, by law, earn more profit than the regional average of the surrounding utilities.
+KILEY PRICE
+OK, so that was in mind for this first option for a bill.
+DENNIS PILLION
+Yes. And there was a second option. And this bill kind of developed in the Senate, which basically would completely turn the Public Service Commission on its head, but would not have required any of these specific changes, like requiring rate hearings or like including a profit cap for Alabama Power. The Senate bill will expand the commission from three members to seven. Those commissioners will be elected by congressional district now instead of a statewide ballot. It will create a new cabinet-level position in Alabama called the secretary of energy.
+The secretary of energy will oversee the Public Service Commission, will set the agenda for the Public Service Commission, and the secretary’s decisions can only be overruled if five of the seven commissioners vote to do so. The secretary of energy will be appointed by the governor.
+KILEY PRICE
+Dennis, was there any other outside influence over how these pieces of legislation were written?
+DENNIS PILLION
+Yes, there was a very, very public incident, which happened behind the scenes. In the middle of February, an audio call was leaked, the recording of an audio call, between an Alabama Power lobbyist and Energy Alabama, which is a sort of clean energy nonprofit that is often advocating for cleaner energy, lower bills, reducing Alabama Power’s profit margin, and so forth. And in that call, the lobbyist for Alabama Power is asking Energy Alabama to come on board and support a bill that would end PSC elections and make all the commission seats appointed. And now this, this was before any bill had been introduced in the legislature on this.
+That call got leaked during sort of the contentious process of negotiating between these various bills. But I think what the call did, it really angered a lot of the general public because while Alabama Power is supposed to be, you know, basically politically neutral on all things involving the Public Service Commission, they’re supposed to just follow the rules, they’re not supposed to try and influence the rules, this call showed that really they were the actors behind the scenes that were trying to line up the passage of this bill that would affect the regulators who regulated them directly.
+KILEY PRICE
+So Alabama now has a utility commission of seven people and this new secretary of energy. What does that mean for the state?
+DENNIS PILLION
+Well, it means that the governor will have a much larger influence over utility regulation because the governor will appoint the secretary of energy. Ironically, it means more costs. The latest estimates were that it would cost about an extra $3 million a year for Alabama in, you know, new staff and equipment and needs for the new commissioners. But expanding it to seven members, that will basically ensure that you have at least a bipartisan commission. And so that’s why some Democrats supported this reform bill, even though it didn’t include a lot of the provisions that people thought would help bring rates down.
+KILEY PRICE
+Right, so what power do voters have and what influence in this situation, you know, given these new roles and it seems like they’re pretty powerful roles? Is there any influence voters can have?
+DENNIS PILLION
+The voters will still elect the commissioners. They will elect them by congressional district. And the commissioners are feeling more political pressure now than they have in a long time. But the problem is those commissioners will have less power than ever because it will be very hard for the commissioners to overrule the secretary of energy. The secretary will have to be the one to call for a rate case hearing. The commissioners would need a vote of five of seven commissioners to do that, which is gonna be a pretty high bar to clear.
+KILEY PRICE
+How is this law that was signed a win for Alabama Power?
+DENNIS PILLION
+I would imagine it will change their focus in terms of what they lobby for. Alabama Power can’t donate directly to Public Service Commission candidates. They are officially neutral on basically all matters involving the Public Service Commission.
+That’s not the case for governor. And now, starting next year, it will be the governor’s office that controls the secretary of energy position that controls the commission. And there’s no prohibition on them donating to the governor. So I would think that makes it less likely that we’ll have serious pushes for rate case hearings. I expect that it would be less likely that we would see any kind of a profit cap put in place on Alabama Power. And I would say, you know, any of these sort-of restrictions and regulations that maybe could have been passed to protect the public, to keep costs down, to potentially even lower electricity costs, I think it will be a much steeper climb for any of those things to happen now.
+KILEY PRICE
+So if much of the power has now been handed into this newly appointed secretary of energy, what does that mean for the governor’s race in November?
+DENNIS PILLION
+Yeah, we have a race in November with two fairly familiar candidates running for governor. One of them is current U.S. Senator Tommy Tuberville. The other is a former U.S. senator, Democrat Doug Jones. Tommy Tuberville, so far in his campaign, has not really paid a lot of credence to some of the objections that people have over electricity rates and data centers, in particular. And Tuberville’s opinion on it is that well, these things are going to happen, so we better get on board. He has said that people who have concerns about data centers, over the health or environmental impacts, he said that’s “bull crap,” quoting him directly. So it doesn’t seem like he’s going to be a forceful advocate for the ratepayer in these kinds of matters.
+KILEY PRICE
+Where does his opponent stand?
+DENNIS PILLION
+So Doug Jones has taken a different stance, obviously. He has said that the reforms that were passed as a whole are just increasing the bureaucracy, increasing the costs. He has tried to propose a debate with Tuberville strictly on data centers. So far, we haven’t seen that happen.
+Tuberville is obviously the heavy favorite. Some of the polling more recently has been, maybe looking like Doug Jones has more of a chance than we may have thought a year ago or six months ago or what have you. So we will see how that kind of plays out over the next few months.
+KILEY PRICE
+Well, Dennis, I think this is a great place to pause because your fellow Alabamian and reporting partner, Lee Hedgepeth, is going to bring us up to speed on data centers, which seem to be the topic du jour. So thank you so much for joining us on Inside Climate.
+DENNIS PILLION
+Always happy to talk nerdy utility stuff.
+Data Center Disruptions Across the State
+KILEY PRICE
+Lee, it’s so great to have you on Inside Climate. Welcome.
+LEE HEDGEPETH
+Thank you.
+KILEY PRICE
+So you are an Alabama-based investigative reporter for Inside Climate News. You were raised in Grand Bay, Alabama, a small town on the Gulf Coast. Before moving to ICN, you worked for news outlets across the state, including most recently Birmingham’s CBS affiliate.
+We just heard from your reporting partner, Dennis Pillion, about Alabama Power and all the challenges the state faces from rising energy costs. But we can’t talk about high energy bills without talking about data centers. Can you share more about what your reporting has started to yield with data centers in Alabama?
+LEE HEDGEPETH
+Sure. So like in a lot of parts of the country, data centers have become a huge part of politicians’ economic development plan. And that’s been to the ire of a lot of residents across the state. So as, kind of, this AI boom that we’ve seen across the nation has happened, a lot of these AI companies have started looking for cheap land, cheap water and cheap power.
+And Alabama is a place where they can get some of those things, right? So Alabama, like a lot of states in the Southeast, has seen a lot of these developers move in. So before this kind of AI boom, we had some data centers, kind of small servers for companies and things like that. But once this AI boom started, you know, a year or two years ago, we started seeing these huge proposals for construction across the state. And so now we’ve seen, you know, something like a dozen proposals that are at a scale that we’ve never seen, not just when it comes to data centers, but when it comes to any type of economic development in the state of Alabama. So the question is, you know, politicians are saying that this will be good for residents, that it’ll lead to tax revenue. And the question is will that really happen?
+KILEY PRICE
+So how many data centers are in Alabama and how many are coming?
+LEE HEDGEPETH
+So part of this kind of depends on how you define a data center. So before, you know, this AI boom started, we had some data centers that were kind of small server facilities that you wouldn’t think of when you think of a data center and see that in your mind. And they’re about, you know, between a dozen and two dozen of them across the state. But what we’re seeing now in these proposals—and we have about somewhere between 12 and 20 proposals across the state of various sizes—the scale of these is just so much bigger than anything we’ve seen before.
+KILEY PRICE
+What kind of scale are we talking about?
+LEE HEDGEPETH
+So just to give you a couple of examples, there’s one project in a town called Bessemer, it’s just southwest of Birmingham. And if built to full capacity, the plans are to have 18 buildings the size of Walmart Supercenters. And this is in an area that was previously agricultural land. So you have all of these residents that live around the area, and they’re watching this kind of pretty rural setting, forest, cut down to build this huge data center campus.
+And then when you look at the energy required to run these facilities and the water required to run these facilities, it’s kind of mind-boggling the amount of energy and the amount of water. So for this project, for example, in Bessemer, it’s a 1200 MW project. So just to give you kind of a comparison, if this facility is built to capacity and it uses electricity constantly, which is what a lot of these data centers do, that would be more energy than 90 times the amount of energy that is used by all of the residents in Bessemer. It’s more than 10 times the amount of electricity used by all of the residents in Birmingham, which is one of Alabama’s largest cities. So the scale of these projects is just beyond anything we’ve seen in Alabama and really across the country.
+KILEY PRICE
+Yes, that sounds incredibly large. How does the public feel about this?
+LEE HEDGEPETH
+Well, as you can imagine, we’ve talked, for example, to retirees who’ve moved to this community to kind of be in a more bucolic setting and they’ve, you know, had these homes for 10, 20 years, and then all of a sudden they’re told there are gonna be 18 Walmart Supercenters next door and the noise involved with data centers, the light pollution involved with data centers, the construction for this project in Bessemer, for example, could take up to 10 years.
+KILEY PRICE
+Mm. Big chunk of retirement, right?
+LEE HEDGEPETH
+Right, sure. So residents are definitely not happy. It’s interesting, we’ve interviewed dozens and dozens of people that are, their homes and businesses are located around these proposed data center sites and I, I haven’t interviewed anyone who’s like, “Bring in this data center, I’m ready. I’m happy about this.” Not a single person, resident that I’ve interviewed has said that they’re in favor of these data centers.
+KILEY PRICE
+So with this backlash in mind, how are these projects able to move forward?
+LEE HEDGEPETH
+You know, that’s a really interesting question. And one of the answers is because the public doesn’t know a lot about the intimate details of these projects. So one of the things that’s become an issue is what are called non-disclosure agreements. So you might have heard of these in other contexts.
+KILEY PRICE
+So, an NDA. I think a lot of people are familiar with the acronym, but maybe not the full name.
+LEE HEDGEPETH
+Sure. So these are agreements that usually are not made with government officials, but in these cases are being made with government officials, where the agreement says you can’t tell the public or anyone any of the information that we’re sharing with you. So when it comes to these data center agreements, for example, that could include how much energy is used, how much water is being used by the project, how much money a city may be abating in taxes for these data center companies. So this is all information that the public feels like they should know about these projects, but this is information that public officials, including, for example, the mayor in Bessemer, the city attorney in Bessemer, a lot of economic development officers, are signing these agreements and then are unable to answer questions publicly. So you see members of the public obviously very frustrated about their inability to get these answers.
+KILEY PRICE
+So how is it legal for a public official to sign an NDA?
+LEE HEDGEPETH
+You know, Kiley, I wish I knew the answer to the question. It is a question that I’m asked all the time. And you know, I’ve talked to a lot of public officials about this, and it is not unusual in economic development cases to sign limited NDAs that are around, like, proprietary information. Like you don’t want a public official saying, like, we’re gonna get this new facility that has this new technology that they haven’t told anyone about. That kind of makes sense, right? But when you have these kind-of wide-ranging NDAs that cover all of the details of a project, that does seem more problematic. The NDA in Bessemer, for example, included a provision that said, that required, public officials to destroy all the documents they were given by the data center developer. You know, when we talk to residents and say, “What do you think of these agreements,” they ask the same question you asked, “How is this possibly legal?”
+KILEY PRICE
+And you had access to this NDA.
+LEE HEDGEPETH
+Yeah, so we were able to get a copy of an NDA from a data center project in Alabama’s wealthiest county, Shelby County, and the NDA in Bessemer, but the problem is we may have the NDA, but we don’t have a lot of the information that’s being hidden by the NDA. So that’s what we’re working on is trying to dig and get those documents to answer those questions for residents.
+KILEY PRICE
+What else potentially are people not being told? And the big question that pops up for me is when you think about the energy and water required for these data centers, how are they going to be powered?
+LEE HEDGEPETH
+Yeah, so there’s a huge concern about where the power is gonna come from. Some companies that are more environmentally minded are trying to do things like on-site solar or renewable energy. But Alabama Power has continued to invest in fossil fuels. They bought a natural gas plant to be able to meet this demand from data centers. So as this demand goes up for energy, we’re gonna have to ask the question, where is that energy coming from?
+KILEY PRICE
+And if there were an expansion of these fossil fuel sites, what would the environmental implications of that be?
+LEE HEDGEPETH
+Yeah, so just to give you an example, I live here in Birmingham, about maybe 20, 25 miles away, is the largest polluter in the United States. It’s the Miller Plant, it’s owned by Alabama Power. And just to give you some context, the greenhouse gas emissions from this one plant are more than the entire country of Guatemala, annually. So this is a huge amount of greenhouse gas emissions that are being pumped out by these coal-fired power plants. So there are health implications; sometimes when the wind is blowing the right direction in Birmingham, we’ll get, you know, air quality alerts because of pollution from Miller and other industrial sources. So these are things that have huge impacts not just on our climate, but also on people’s health.
+KILEY PRICE
+So we talked about the environmental implications. Now let’s talk about economics. How much are power bills potentially gonna go up for consumers?
+LEE HEDGEPETH
+Yeah, that’s a great question. And one that Alabama Power says they have the answer to. And Alabama Power’s answer is none, your power bill will not go up, we promise you that data centers will not increase your power, your residential power bill. The problem is we have no way to verify whether that’s true. And we know that Alabama Power has already made these huge, huge investments, like the natural gas plant that I mentioned, to meet the demand for data centers. And the question is, you know, right now those data centers aren’t paying for that natural gas plant. So what is to prevent Alabama Power from shifting those costs onto consumers?
+So we have a copy, for example, we were able to get a redacted copy of one of the contracts between Alabama Power and the data center developer in one of these cases. And the contract is almost completely redacted, right? So all of the parts that would, you know, let me and you and the average Alabamian confirm that these costs aren’t being shifted onto us, you know, the cost of these data centers that we’re paying for. All the parts that would tell us whether or not that’s happening have black lines through them. So it’s really hard for the public to have confidence in these claims from a private company that is getting record profits that those costs won’t be shifted onto customers.
+KILEY PRICE
+How much more energy is going to be used by all these proposals?
+LEE HEDGEPETH
+So we only know about the energy demand for about a quarter of the proposed projects. We’ve only been able to get documents for those. But even if we count only those quarter of projects that are proposed in Alabama, the total demand for energy just from those proposals will be more energy than is used by every household in the state of Alabama.
+KILEY PRICE
+Whoa.
+LEE HEDGEPETH
+So the equivalent—there are about 2 million households in Alabama, and the energy equivalent for these data center proposals, only a quarter of them, only what we know, would be the equivalent of 2.8 million households. So you’re not talking about, you know, a small amount of energy that’s being used here. You’re talking about increasing Alabama’s total demand for energy by a significant amount.
+KILEY PRICE
+Wow. So, obviously Alabama Power is playing a really big role in this data center issue. Is there anything else that they’re part of that you’re investigating?
+LEE HEDGEPETH
+Yeah, so we’ve been doing reporting for a while now on Alabama Power’s role in being a reseller of Flock security cameras across the state. Flock is a company that sells these security cameras that read license plates. And so as cars pass, it reads the license plates and stores that data and that data is used for example by law enforcement and other entities.
+KILEY PRICE
+So sorry, Alabama Power, the energy company, is involved in this surveillance?
+LEE HEDGEPETH
+Yeah, so just to give you an example of how this works, in Birmingham, early last year, the City of Birmingham signed a contract with Alabama Power for close to $10 million, $9 million or $10 million, where Alabama Power would install these Flock cameras on 300 or so utility poles across the city of Birmingham. And then Alabama Power is responsible for kind of the infrastructure of putting it on the utility poles, etcetera. So this has become kind of a profitable side gig for Alabama Power. But a lot of residents are really concerned, right? A couple of counties over, we had recently a couple of police officers who were disciplined for misusing Flock information and stalking ex-wives and things like that. So there are a lot of privacy concerns and people want to know, well, if a police officer, you know, is getting disciplined for this, does Alabama Power have access to these videos? How are they using this information? And people just have a lot of privacy concerns.
+KILEY PRICE
+So we don’t know yet if they do have access to these videos, Alabama Power?
+LEE HEDGEPETH
+So we’ve asked Alabama Power about this. They say that they take these concerns, privacy concerns, seriously. We think they do have access to this video. We have a copy of an email that was sent to a customer where they confirmed that Alabama Power does have access to this video, but that they only use it, you know, to protect critical electrical infrastructure.
+KILEY PRICE
+We just talked to Dennis about voter anger over rising energy costs and data centers. What are you hearing from voters heading into November?
+LEE HEDGEPETH
+Yeah, so we actually have some really good recent polling about this. We see that when they’re asked about data centers, more people say that data centers will have negative consequences than say it will have positive consequences, and that’s even here in deep red Alabama.
+So this is a huge issue for people that they’re very concerned about. And it’s become, I think, as Dennis mentioned, an issue in the gubernatorial race here. So Tommy Tuberville, who’s you know, expected to be the front runner in the race, the Republican who’s running for governor, has said that data centers will be gold mines. His opponent, Doug Jones, who previously served as the Democratic senator from Alabama, is running against him for governor. And Doug Jones has said that he wants a one-year moratorium on data centers for at least a year while we figure out, you know, whatever regulations need to be made around data centers. And Doug Jones actually challenged Tommy Tuberville to a data center-specific debate. So we’ve told them we’re happy to host that debate if they’re willing.
+KILEY PRICE
+So Lee, obviously the data center issue is a national one. There’s conversations happening around it all the time, all over the country. How is your reporting in Alabama relevant to people outside the state?
+LEE HEDGEPETH
+What is happening in Alabama can happen across the nation if folks aren’t willing and public officials, even, aren’t willing to to really ask the hard questions about these data centers. So Alabama, unfortunately, could turn out to be the bad example of what states shouldn’t do in the face of data center regulation. But I think, you know, we’ll see how that unfolds in the coming months and years.
+KILEY PRICE
+Well, Lee, thank you so much for joining us on Inside Climate and talking about all of your great reporting that you’ve done lately. I’m sure we’ll speak again in the next few months once we see how this all plays out in the midterms.
+LEE HEDGEPETH
+Thanks so much, Kiley. Been really enjoying the podcast.
+Final Thought
+KILEY PRICE
+I want to end today’s episode on some good news.
+The Public Service Company of New Mexico, commonly called PNM, said it delivered 80 percent carbon-free electricity in 2025 after making investments in solar, wind and battery storage.
+As New Mexico’s largest utility company, PNM had relied on gas and coal to generate 80 percent of its energy as recently as 2021, but made the transition to more clean, renewable sources in just five years.
+The reason the company leaned so hard into this transition was because New Mexico passed a law in 2019 called the Energy Transition Act. PNM must generate 80 percent of its electricity from renewable sources by 2040 and get to 100 percent zero-carbon electricity by 2045.
+So far, PNM is ahead of schedule and the company believes it will meet the 100 percent target five years early.
+JAKE BOLSTER
+Thank you so much for listening to Inside Climate.
+For more of our reporting, please visit insideclimatenews.org and sign up for our newsletters, all of which are free to read because we want to make our work available to anyone, wherever they are.
+You can also follow us on your favorite social media platforms and share our podcast with others.
+If you love what you read, see and hear, please consider donating to support our nonprofit newsroom because we rely on the support of our audience to make our reporting and this podcast possible.
+We’ll be back soon with more climate stories from our reporters all across the world.
+About This Video
+Perhaps you noticed: This video, like all the news we publish, is available for free. That’s because Inside Climate News is a 501c3 nonprofit organization. We do not charge a subscription fee, lock our news behind a paywall, or clutter our website with ads. We make our news on climate and the environment freely available to you and anyone who wants it.
+That’s not all. We also share our news for free with scores of other media organizations around the country. Many of them can’t afford to do environmental journalism of their own. We’ve built bureaus from coast to coast to report local stories, collaborate with local newsrooms and co-publish articles so that this vital work is shared as widely as possible.
+Two of us launched ICN in 2007. Six years later we earned a Pulitzer Prize for National Reporting, and now we run the oldest and largest dedicated climate newsroom in the nation. We tell the story in all its complexity. We hold polluters accountable. We expose environmental injustice. We debunk misinformation. We scrutinize solutions and inspire action.
+Donations from readers like you fund every aspect of what we do. If you don’t already, will you support our ongoing work, our reporting on the biggest crisis facing our planet, and help us reach even more readers in more places?
+Please take a moment to make a tax-deductible donation. Every one of them makes a difference.
+Thank you,

@@ -1,0 +1,266 @@
+{
+  "$defs": {
+    "ReferenceLabels": {
+      "additionalProperties": false,
+      "description": "One person's reading of one article. Every field is empty when the set is built.\n\nThe vocabularies are `config/taxonomy.json`, so nothing here enumerates a\nmember: a label is a slug the taxonomy names, and adding a word to the\ntaxonomy may not be a schema change (plan 23 section 0.1).\n\n`reference_summary` is the one field with no writer. **The human faithfulness\nledger was dropped and its contract kept** (plan 23 row #P2 decision 6, owner,\n2026-09-10), so the ledger can return without a schema argument. A\nmodel-written summary is a legitimate reference for classification labels a\nperson confirmed, and is **never** a faithfulness reference.",
+      "properties": {
+        "article_kind": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What kind of writing it is - a report, an analysis, a notice.",
+          "title": "Article Kind"
+        },
+        "definition_version": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which `config/taxonomy.json` definition text the label was taken against. A label taken against last month's definition measures a different question.",
+          "title": "Definition Version"
+        },
+        "desk": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which desk the article belongs to, read from the text.",
+          "title": "Desk"
+        },
+        "labelled_by": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Who read it. A person, never a model.",
+          "title": "Labelled By"
+        },
+        "labelled_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day they read it.",
+          "title": "Labelled On"
+        },
+        "lenses": {
+          "description": "Every lens the article carries. May be empty.",
+          "items": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "title": "Lenses",
+          "type": "array"
+        },
+        "reference_summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Kept shape with no writer. Never a faithfulness reference - plan 23 row #P2 decision 6.",
+          "title": "Reference Summary"
+        },
+        "sentiment": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sentiment about one named subject, not about the article.",
+          "title": "Sentiment"
+        },
+        "stances": {
+          "description": "One stance per political question the article takes a position on.",
+          "patternProperties": {
+            "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            }
+          },
+          "title": "Stances",
+          "type": "object"
+        }
+      },
+      "title": "ReferenceLabels",
+      "type": "object"
+    }
+  },
+  "$id": "reference-dataset-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the article's identity and provenance, the text file's digest and word count, and two empty label slots - one per rater.",
+      "version": "2026-09-13",
+      "why": "Plan 23 measures a classifier against a frozen labelled set, and the set needs a declared shape before anything writes one (Guardrail #3). The split is deliberately absent: `splits/dev.txt` and `splits/test.txt` are the split, and a copy of it here is a second thing that can disagree. `second_labels` is here from the first commit because row #P3 double-labels 60 dev items for a Cohen's kappa, and a field added later would make that a schema argument in the middle of a labelling pass."
+    }
+  ],
+  "description": "One article of `corpus/reference-dataset-1/dataset.jsonl`.",
+  "properties": {
+    "article_sha256": {
+      "description": "sha256 of `articles/<url_key>.txt`. What detects a text edited in place, which would silently move what a label was taken against.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Article Sha256",
+      "type": "string"
+    },
+    "article_words": {
+      "description": "Words in the article file. Recomputed by `verify`, never trusted.",
+      "minimum": 1,
+      "title": "Article Words",
+      "type": "integer"
+    },
+    "canonical_url": {
+      "description": "What `url_key` is derived from, never trusted from a payload.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "extractor_version": {
+      "description": "Which extractor produced the text.",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Extractor Version",
+      "type": "string"
+    },
+    "fetched_on": {
+      "description": "The day the text was taken. The set is frozen from here.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Fetched On",
+      "type": "string"
+    },
+    "labels": {
+      "$ref": "#/$defs/ReferenceLabels",
+      "description": "The first rater's reading."
+    },
+    "published_date": {
+      "description": "The day the article was published.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Published Date",
+      "type": "string"
+    },
+    "sanitizer_version": {
+      "description": "Which sanitizer the text crossed the trust boundary through.",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Sanitizer Version",
+      "type": "string"
+    },
+    "second_labels": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceLabels"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "An independent second reading, on the 60 dev items row #P3 double-labels. Null everywhere else, and null is not a disagreement."
+    },
+    "source_domain": {
+      "description": "The registrable domain, which is the unit the split is drawn on. Two articles from one outlet share boilerplate, a house style and often a wire original, so a split that separates rows rather than outlets flatters every number taken on it.",
+      "maxLength": 253,
+      "minLength": 3,
+      "title": "Source Domain",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Which feed in `config/sources.json` carried it.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_url": {
+      "description": "The address the feed carried, kept so a person can open it.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "title": {
+      "description": "The headline, as published.",
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "url_key": {
+      "description": "sha256 of the canonical URL, recomputed on read. It is the join to `splits/*.txt`, to `articles/<url_key>.txt`, and to every collection this set must not overlap.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-13",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "description": "The vertical the pipeline published it under, kept as context.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Vertical",
+      "type": "string"
+    }
+  },
+  "required": [
+    "url_key",
+    "canonical_url",
+    "source_url",
+    "source_domain",
+    "source_id",
+    "vertical",
+    "published_date",
+    "title",
+    "article_words",
+    "article_sha256",
+    "extractor_version",
+    "sanitizer_version",
+    "fetched_on"
+  ],
+  "title": "ReferenceDatasetRow",
+  "type": "object",
+  "version": "2026-09-13"
+}

@@ -1,0 +1,19 @@
+US President Donald Trump has banned the import of inverters, transformers and other power equipment that pose a potential risk to US grid security.
+In an emergency executive order yesterday, President Trump said: “Certain foreign actors are increasingly creating and exploiting vulnerabilities in the United States bulk-power system,” and declared a “national emergency” over the “unusual and extraordinary threat” posed by foreign-made power equipment.
+The order covers specific power system equipment, including grid-connected inverters, transformers and battery energy storage systems (BESS). It only encompasses equipment that interacts with transmission lines of 69kV or greater, not including distributed energy sources or local distribution grids.
+It covers 24 countries currently on US arms embargo and sanctions lists, most pertinently China. Crucially, equipment must have come from these countries or an entity owned, controlled or directed by them, similar to the US rules around Foreign Entities of Concern (FEOC).
+Try Premium for just $1
+- Full premium access for the first month at only $1
+- Converts to an annual rate after 30 days unless cancelled
+- Cancel anytime during the trial period
+Premium Benefits
+- Expert industry analysis and interviews
+- Digital access to PV Tech Power journal
+- Exclusive event discounts
+The order is not yet in effect, but will supposedly cover all deals “initiated” after 26 August 2026. The Department of Energy (DOE) has 120 days to publish rules to implement the order.
+Moreover, transactions are not barred until the DOE has determined that the equipment in question “poses an unacceptable risk” to US security on the grounds of cybersecurity, sabotage and remote access concerns.
+Questions remain about how the DOE will implement the order. According to law firm Norton Rose Fulbright, “DOE may decide to issue a white list of pre-qualified equipment and vendors. It may also set up a process to issue licenses to power companies that want to use sensitive equipment.” It may also pursue more stringent measures, and “could order equipment already in use to be isolated, monitored or removed,” the firm said.
+This order comes amid increased scrutiny on both trade policy and cybersecurity in US solar.
+Last month, the Federal Communications Commission (FCC) banned foreign-made inverters from US power plants on national security grounds. As digital systems with huge influence over the operation of renewable energy plants, inverters are a flashpoint for cybersecurity concerns. Inverter producers have the ability to remotely control the devices, which opens them up to infiltration by hackers or hostile states. You can read more detailed coverage of PV’s cybersecurity concerns on PV Tech.
+This executive order goes further than the FCC ruling, encompassing a far wider range of technologies and equipment, including BESS. PV Tech Premium analysed how the US market will adapt to restrictions on inverter supply earlier this month.
+To read the full version of this story, visit PV Tech.

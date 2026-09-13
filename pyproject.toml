@@ -28,6 +28,15 @@ dependencies = [
     # Boilerplate removal for the Extract stage. A custom HTML extractor is a
     # maintenance surface with no beneficiary feature.
     "trafilatura>=1.12",
+    # The public suffix list, for the one question "which name did somebody
+    # register". Already installed as a trafilatura dependency; declared here
+    # because build_reference_dataset.py imports it directly, and a transitive
+    # dependency that a direct import relies on breaks the day the package above
+    # it drops it. The alternative is a hand-written suffix rule, which is wrong
+    # on bbc.co.uk and on every newsletter platform, and which Guardrail #8
+    # refuses anyway. Zero install cost: it is already in the tree. Beneficiary:
+    # the reference dataset's split unit, plan 23 row #P2.
+    "courlan>=1.3",
     # Vega-Lite spec to SVG for the Render stage. The Vega toolchain compiled as
     # a Rust extension, so it renders without Node and without a headless
     # browser. Measured 2026-08-22 (Windows 11, 8 vCPU): 2568 ms for the first

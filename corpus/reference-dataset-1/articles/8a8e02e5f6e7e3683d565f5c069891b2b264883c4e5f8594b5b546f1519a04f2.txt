@@ -1,0 +1,22 @@
+Nick Galloway
+Staff Security Engineer, Google
+Yulong Zhang
+Senior Staff Security Engineer, Google
+AI models have clearly proven their ability to discover and exploit vulnerabilities without much, if any, human assistance. To help defenders gain the advantage with AI, we built the Mantis harness to automate the discovery, triage, reproduction, and patching of software vulnerabilities.
+Available to all as an open-source framework, Mantis is part of Google’s internal approach to find and fix vulnerabilities at machine-speed. It creates a more effective scalable, context-aware repository analysis.
+While sloppiness in AI code scanning frequently leads to hallucinated bugs and weak true-positive rates under 7%, we designed Mantis to be effective by combining industry-standard agentic techniques like critic and review agents with sandboxed reproduction of vulnerabilities for grounding.
+As we detailed in June, it examines the history of the repository to learn from past security fixes and automatically builds up architectural and threat model documentation, even if these are not provided.
+It constructs a hierarchical security summary tree, condensing individual files into directory and root-level summaries. This technique reduced token overhead by over 85%, while preserving critical structural context across massive repositories.
+Mantis distills decades of cybersecurity expertise across a wide spectrum of codebases, and is available on GitHub. Here’s how you can get started using Mantis.
+-
+First, clone the Mantis repo locally using:
+-
+Second, open your favorite coding agent and use the prompt, “I would like to use Mantis framework in path/to/mantis to review my code inpath/to/your/code , can you help me get started?”
+Internally at Google, this exact prompt has been used to find real vulnerabilities across our many code repositories. As part of the Mantis repository on GitHub, we’ve included sample sandboxing options. You can also implement your own sandbox to match your own workflow.
+Mantis is intended to be an easy place to start with vulnerability discovery, true positive filtering, and patching. Once you've got a handle on AI-discovered vulnerabilities, you can use the new mantis-advise skill to make use of the accumulated knowledge and get your coding agents to write secure code the first time.
+To get the most out of AI-driven vulnerability discovery and modernize your development practices, we strongly recommend two essential practices:
+-
+Feed your tools the right context: While Mantis automatically analyzes commit history and code to build documentation for itself, human-curated knowledge often can dramatically improve the quality of your results. For example, if you would never waste time fixing bugs where the user can crash their own program, this is critical information for a scanning pipeline to ensure that those types of bugs are never surfaced.
+-
+Build a cyber sandbox with vulnerability acceptance criteria. Safe, sandboxed environments where you can reproduce vulnerabilities with clear vulnerability-reproduction criteria will give you better results for surfacing only the things you need to know and also for ensuring that your fixes are correct.
+You can learn more about Mantis here.

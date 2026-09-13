@@ -1,0 +1,32 @@
+Next Upcoming
+Rural America & The Clean Energy Transition at Climate Week NYC
+By Canary Media
+This analysis and news roundup come from the Canary Media Weekly newsletter. Sign up to get it every Friday.
+Solar is beating coal in China. Sorta. But also not at all.
+Let me explain.
+An eye-popping new chart made the rounds this week. It shows a line representing solar energy in China rising improbably over the last decade, until at last it overtakes another line that represents the nation’s vast coal fleet. One article featuring this chart came with the following headline: “Solar surpasses coal in China, becomes top power source.”
+This is exactly the type of chart a person concerned about climate change could hope to see — one that would have defied the imagination of analysts and onlookers even a few years ago. It proves that the nation has been taking serious steps to clean up its coal-heavy grid, contra those who use China’s enormous emissions to justify climate complacency elsewhere.
+But it’s also a bit misleading. While there’s nothing wrong with the data — solar really has overtaken coal in terms of capacity — the story is more complicated than a tidy chart can express.
+To understand why, you’ll have to bear with some technical definitions. Capacity is the key word here: It’s a measure of the absolute maximum output a power plant can produce. But plants don’t run at full tilt, and experts use a metric called capacity factor to express how much electricity a facility actually produces compared with its potential output.
+That means China still generates way, way more electricity from coal than from solar panels, even though solar’s capacity now outweighs coal’s. At current capacity factors, China’s solar fleet would need to be about 3.5 times bigger than its coal fleet in order to generate more electricity.
+The yawning gap between capacity and generation is, in part, the result of physical differences between coal and solar. You might have heard that solar only works during the day?
+But in China, a big piece of the story is also underutilization. The country has built solar — and wind — so quickly that it is struggling to metabolize the renewable energy sources into its grid. The nation doesn’t have enough power lines to bring electricity to where it’s needed, or enough batteries to absorb all the energy that isn’t immediately used.
+Due largely to these constraints, China had to curtail — or leave unused — more than one-quarter of its wind and solar power in the first half of this year. As a result, 360 terawatt-hours of carbon-free power went to waste, an amount larger than the U.K.’s entire electricity use last year.
+So, yes, solar has won the capacity race in China, and that is a truly remarkable milestone. But the real race — the one that measures actual electrons generated — is still coal’s to lose.
+1.5 degrees is off the table without carbon removal
+The United Nations warned this week that the world will soon surpass the 1.5 degree Celsius warming target set by the Paris Agreement. This was evident to climate scientists monitoring the situation, but nevertheless marks a symbolic — and grim — milestone for efforts to mitigate the worst effects of climate change.
+Now, the U.N. says, the only way to stay below the 1.5 degree threshold is to pull vast amounts of carbon dioxide out of the atmosphere and bury it underground. Large-scale carbon removal and sequestration is a largely unproven practice, and one that lacks a clear economic logic — the industry today rests largely on corporate benevolence from the likes of Microsoft, Stripe, Shopify, and other major companies. If the approach is technically capable of scaling up, it will still likely require government support to reach the levels the U.N. says are necessary.
+Carbon removal may eventually save the day. Or it may not. What’s certain, however, is that the world needs to radically reduce the use of fossil fuels — and build a lot more carbon-free energy and vehicles.
+California wraps up a chaotic legislative session
+State lawmakers in California, which often sets the pace for climate policy in the U.S., passed dozens of energy and climate bills this session — including several we’ve reported on targeting
+These bills, and many others, now head to Democratic Gov. Gavin Newsom’s desk.
+But perhaps the more important story is what didn’t pass this year. The biggest deal: the collapse of last-minute efforts to reform the regulations that expose California utilities to potentially ruinous wildfire liability. Other notable legislative misses: Lawmakers were unable to secure funding for the state’s most successful virtual power plant — or to save about $200 million for a program that helps schools upgrade HVAC systems. —Jeff St. John
+Guzzling less gas: China’s oil consumption dropped by 9% in the second quarter of this year compared with the same period in 2025 as more residents turned to EVs and public transit amid the war in Iran, causing overall emissions to fall by 1%. (Carbon Brief)
+Battery boon: A new study shows that EV batteries last longer than expected, retaining about 90% of their original capacity even after more than 90,000 miles. (InsideEVs)
+Battery boom: The U.S. built a record 20.2 GWh of battery storage in the second quarter of 2026, with most of that capacity coming from utility-scale installations. (Canary Media)
+Let’s make a deal: Democratic governors are increasingly urging data center developers to offer community benefit agreements as backlash to their construction expands. (Politico)
+Garden State solar: New Jersey Gov. Mikie Sherrill (D) signs a law officially authorizing residents to use plug-in solar panels, joining eight other states. (Gothamist, Canary Media)
+Geothermal growth: Next-generation geothermal company Fervo Energy signs a major deal with Google, which will purchase nearly 400 MW of power from its Cape Station project in Utah. (Canary Media)
+Fighting dirty for clean energy: A super PAC is fighting dirty on behalf of clean energy during this primary season — and is now targeting its first Democrat after a string of successes in GOP primaries. (Canary Media, Canary Media)
+This video requires marketing cookies.
+Update your cookie preferences to watch the video.

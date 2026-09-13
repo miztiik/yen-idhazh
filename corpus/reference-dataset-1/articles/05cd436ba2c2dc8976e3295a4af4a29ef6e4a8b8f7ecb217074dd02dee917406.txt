@@ -1,0 +1,8 @@
+Anthropic's Claude Code limit change is a raise on paper but a cut in practice
+Anthropic is effectively cutting the weekly usage limits for its AI coding assistant Claude Code by 17 percent. Starting September 14, the baseline limits for Pro, Max, Team, and Enterprise plans will permanently increase by 25 percent over the original baseline. But a temporary 50 percent boost is currently active, so the switch actually means less available capacity than users have right now. The official Claude account confirmed the change on X.
+The current 50 percent boost stays in place until September 14. Anthropic said it's working on changes that will "make it feel like you're getting more from Claude" and give users more control and transparency over their usage.
+Anthropic has also been shipping technical improvements to Claude Code recently, including performance optimizations and an automatic feedback tool. When something fails, Claude generates a bug report that users can review and submit. The session's conversation log can optionally be included. Users can turn the feature off in settings.
+AI News Without the Hype – Curated by Humans
+
+Subscribe to THE DECODER for ad-free reading, a weekly AI newsletter, our exclusive "AI Radar" frontier report six times a year, full archive access, and access to our comment section.
+Subscribe now

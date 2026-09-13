@@ -1,0 +1,162 @@
+Featured projects
+TL;DR
+PyTorch Conference North America 2026 features Agentic AI and Next-Gen Intelligence across sessions on training agents, serving agents in production, agents that build PyTorch, and PyTorch in the physical world.
+Agentic AI and Next-gen Intelligence at PyTorch Con NA
+When you look at the schedule for PyTorch Conference North America 2026, one thing jumps out: agents are featured everywhere. They write kernels, triage CI, migrate workloads between chips, drive robots, and answer the phone. The interesting questions have shifted from whether a model can do any of these things to how we train, serve, govern, and debug systems that act on their own.
+Here is a guided tour of the agentic AI and next-generation intelligence content across the two days of PyTorch Conference North America, along with why it is worth being in the room.
+View the full conference schedule
+Register for PyTorch Conference North America 2026
+It starts on the keynote stage
+Three keynotes frame the whole conversation.
+Beyond Brute Force: The Era of Adaptive Intelligence
+Sara Hooker, Adaption
+October 20, 09:40am | Grand Ballroom
+The next unlock isn’t scale, it’s architecture: systems that keep learning after deployment, closing the gap between a model’s frozen training distribution and the world it actually operates in. Sara’s talk digs into continual, gradient-free learning, which includes updating behavior without full retraining, without catastrophic forgetting, and without paying for repeated fine-tuning cycles. If you have ever shipped a model and watched it slowly drift out of relevance, you will not want to miss this.
+Workload Fungibility in the Age of Agents
+Bill Jia, Google Cloud
+October 21, 09:15am | Grand Ballroom
+The other half of the story addresses agents as developers. Alongside the deep dive on TorchTPU going open source, Jia demos long-horizon agentic workflows that migrate complex model workloads from GPUs to TPUs. The workflows keep going, hill-climbing on quantization, custom kernel generation, and sharding strategies with minimal human intervention.
+Agentic AI Foundation Keynote
+Mazin Gilbert, Agentic AI Foundation
+October 21, 09:10 | Grand Ballroom
+Mazin Gilbert is the Executive Director of the Agentic AI Foundation at the Linux Foundation and has over 25 years of experience pioneering open source platforms, authoring 100+ research papers, and holding 260+ U.S. patents. In his keynote, he will provide critical context on how agentic infrastructure is establishing a neutral governance home to support scalable, enterprise-ready open source AI deployment.
+Training agents: RL becomes a requirement
+The single densest cluster of agentic content is in post-training. Multi-turn, tool-using, long-horizon RL has moved from research curiosity to production requirement.
+Agentic RL Training in PyTorch
+Yichuan Wang, Shuhua Yu, Meta
+October 20, 16:20 | 210AE
+An end-to-end overview of the reinforcement learning training loop, spanning rollout infrastructure, trainer-serving communication, environment abstractions, and sandbox execution, alongside task scheduling and the trade-offs between on-policy and off-policy methods.
+Open Source Reinforcement Learning with Agent Harnesses
+Ben Burtenshaw, Hugging Face
+October 20, 17:30 | 210AE
+OpenEnv is the interoperability layer for publishing and running RL environments, co-owned by Hugging Face, Meta, Unsloth, Prime Intellect, Modal, NVIDIA, Mercor, and others. Frontier labs train models inside their own harness, while the open ecosystem vendors model, harness, and train separately. This talk is about closing that gap, and it ends with a demo you can fork on one GPU.
+Train the Agent, Not Just the Model
+Sergio Paniego Blanco, Hugging Face
+October 21, 12:20 | LL21DEF
+Explore practical SFT and GRPO techniques in agentic environments, progressing to harness-driven training where the harness manages its own inner loop directly inside the environment.
+Torchtitan RL: A Unified and Extensible Training Framework for Agentic Tasks
+Felipe Mello, Jiani Wang, Meta
+October 21, 16:20 | LL21DEF
+In Felipe and Jiani’s session, attendees learn how to use a single model definition for both training and generation with an on-policy, bitwise-reproducible mode that keeps system artifacts from getting in the way of your reward design.
+Miles: Enterprise-facing Agentic RL Framework
+Mao Cheng, RadixArk
+October 21, 11:45 | LL21DEF
+Learn how to scale post-training using unified low-precision training, stable Mixture-of-Experts (MoE) reinforcement learning, and accelerated speculative rollouts.
+When Rollout and Training Disagree
+Neiwen Ling (ByteDance), Tianle Zhong (University of Virginia)
+October 21, 16:55 | LL21DEF
+A sharp, specific lightning talk on training-inference mismatch: why small token-level numerical disagreements between the rollout engine and the training path are not benign, and how they can quietly reshape your PPO/GRPO objective.
+Serving agents in production
+Agentic workloads break the assumptions inference stacks were built on. Sessions may sit idle for hours before a follow-up arrives. Context is long, multi-turn, and tool-laden. CPU work such as orchestration, tool execution, and scheduling stops being a rounding error.
+Making Enterprise Agentic Inference Production-Ready with PyTorch and vLLM
+Joseph Groenenboom, Tyler Michael Smith, Red Hat
+October 20, 15:25 | LL21ABC
+Joseph shares what enterprise readiness actually entails, from build infrastructure up through tool calling and long-context multi-turn chat, with practical insights from the engineers themselves.
+Sponsored: PyTorch for Agentic AI: Scaling Heterogeneous Systems from CPU to XPU
+Eikan Wang, Huma Abidi, Intel
+October 20, 17:30 | LL21DEF
+To accommodate system-intensive and heterogeneous agentic AI workloads, Intel employs an upstream-first strategy across Intel Xeon processors, Intel GPUs, and its open software stack to deliver standard PyTorch workflows and deep performance optimizations.
+Native Tiered KV Cache Offloading in vLLM
+Or Ozeri, IBM
+October 20, 14:50 | LL20CD
+To address LLM scaling challenges with long-lived agentic sessions, vLLM introduces an upstream, dependency-free tiered KV cache offloading framework that routes transfers through CPU memory as a universal transport hub to minimize GPU overhead and ensure hardware-agnostic compatibility.
+LMCache: a cluster-wide open source solution for LLM prompt caching
+Kuntai Du, Tensormesh
+October 20, 15:40 | LL20CD
+LMCache offers a popular, open source prompt caching solution featuring extensive support across major inference engines and storage backends, alongside Kubernetes deployment guidance and underlying research insights.
+Agents that build PyTorch
+This is the most self-referential thread on the schedule, and one of the most practical.
+Contributing to PyTorch with AI agents (Birds of a Feather)
+Edward Yang, Meta
+October 20, 10:35 | Community Expo
+How should agents be used to contribute productively? How do you get your PR reviewed? Come, discuss and share your perspectives in person.
+Fighting Agents with Agents: Bringing Claude to PyTorch CI, triage, and PR review
+Driss Guessous, Meta
+October 20, 12:35 | LL21DEF
+Maintainers are already reviewing an ever-increasing number of agent-written PRs. This is the story of giving maintainers agent-shaped infrastructure for an agent-shaped world: issue triage, PR review skills, autorevert investigation, and the adoption curve after launch.
+Shipping PyTorch and Its Ecosystem: A Modern Release Story
+Andrey Talman, Meta
+October 20, 11:45 | LL21DEF
+PyTorch functions as a unified release train that integrates ecosystem projects like Triton and vLLM to deliver faster, highly validated, and predictable software builds through upstream continuous integration and agent-assisted triage. Join this session for an honest account of where agents in the release loop accelerate the team and where humans still own the call.
+Kernel and Performance Agentic Search
+Agentic search is producing real performance numbers across kernel work.
+KernelAgent: Hardware-Guided GPU Kernel Optimization via Multi-Agent Orchestration
+Kaiming Cheng, Laura Wang, Meta
+October 20, 14:15 | LL21DEF
+Building on its 100% correctness benchmark across KernelBench tasks, the updated open source KernelAgent integrates GPU hardware-performance signals into a closed-loop multi-agent workflow to optimize Triton kernels, delivering a 1.56x average speedup over default torch.compile and reaching 89% of hardware roofline efficiency on NVIDIA H100 GPUs.
+Smarter Autotuning for Kernels: From Bayesian Optimization to LLM-Guided Search in Helion DSL
+Jongsok Choi, Ethan Che, Meta
+October 20, 14:15 | 210BF
+PyTorch’s Helion DSL transforms compile-time kernel autotuning by combining Likelihood-Free Bayesian Optimization (LFBO) and LLM-guided search into an LLM-seeded hybrid approach that delivers up to 10X faster tuning times and improved performance on NVIDIA H100 and B200 GPUs.
+Helion: CuteDSL and TPU Backends for Heterogeneous Hardware, and Why It Suits Agents
+Oguz Ulgen, Dunfan Lu, Jason Ansel, Meta
+October 20, 11:45 | 210BF
+Helion is a high-level Python DSL for writing performant, portable ML kernels across NVIDIA GPUs and TPUs using CuteDSL and Pallas backends, while also leveraging LLM agents and built-in autotuning to simplify code generation. Join this session to learn why CuteDSL and TPU Backends suit Agents.
+From Weeks to Overnight: Autonomous Day-0 Kernel Bring-Up with Agent Pipelines
+Xiaogang Gu, Qun Yang, Intel
+October 20, 17:30 | 210BF.
+This session examines how to replace repetitive manual kernel optimization with an autonomous system that uses context-isolated specialized agents across a deterministic profiling-to-benchmarking workflow with long-term memory. This reduces vLLM kernel bring-up times from weeks to overnight unattended runs.
+Primus Tuning: Hybrid Projection and Agentic Search for Distributed Training
+Anshu Raina, Peyman Razaghi, AMD
+October 21, 16:20 | 210AE
+The Primus Tuning Agent automates distributed LLM training configurations by using a single-node hybrid projection engine to analytically reconstruct cross-node performance within ~10% accuracy, driving an LLM-guided search that boosted Mixtral 8x22B throughput by +27% over published 4-node reference baselines in under 30 minutes without full-cluster profiling.
+Sponsored: Cloud TPU Agent Suite: Autonomous Multi-Agent Swarms for PyTorch
+Sandeep Pokkunuri, Chris Jones, Google
+October 20, 11:45 | 210AE
+Cloud TPU Nexus streamlines PyTorch model migration from GPUs to TPUs by embedding an autonomous multi-agent intelligence platform directly into developer IDE tools, achieving over 70% of hand-tuned performance in under 24 hours without manual kernel tuning.
+TorchInsights: Zero-GPU Memory & Runtime Estimation
+Sanket Jayant Purandare, Aditya Venkataraman, Meta
+October 20, 17:45 | LL21ABC.
+Published at ICML 2025 as TorchSim, the open source TorchInsights tool simulates multi-stream GPU execution via zero-GPU fake tensor execution to accurately break down peak memory and profile distributed runtime configurations before launching multi-node jobs.
+Agents in the physical world
+Next-gen intelligence isn’t only text. A significant chunk of the schedule focuses on models that see, hear, and move.
+From Pixels to Physical Motion: Building World Action Models with PyTorch & NVIDIA Cosmos
+Susie Xia, Ruijie Zheng, George Kurian, NVIDIA
+October 21, 14:15 | 210AE
+NVIDIA Cosmos and GR00T serve as interconnected case studies for building physical AI in PyTorch, showing how to translate multimodal world understanding into executable robot motion while navigating end-to-end training and latency-sensitive deployment challenges.
+Deploying Robot Policies Across Many Targets with ExecuTorch
+Jacob Szwejbka, Meta
+October 21, 15:25 | 210AE
+ExecuTorch provides a production deployment layer that translates PyTorch robot policies from frameworks like LeRobot or OpenVLA into portable runtime artifacts across NVIDIA, Intel, ARM, and microcontroller hardware without requiring per-target stack rebuilds.
+Multimodal Dataloaders for Physical AI
+Gijs de Jong, Peter Prettenhofer, Rerun
+October 21, 17:30 | 210BF
+To help developers avoid GPU starvation when training large physical AI models, this session explores how to manage multi-modal temporal datasets, balance decoding and network tradeoffs, and optimize PyTorch dataloaders for complex access patterns.
+Building Portable, Composable Local Agents with ExecuTorch
+Mergen Nachin, Digant Desai, Meta
+October 20, 17:45 | LL20CD
+ExecuTorch serves as a fast, memory-efficient, and hardware-portable runtime substrate that enables efficient, composable, and private local agent experiences across diverse models, devices, and open ecosystem standards.
+From PyTorch to the Edge: Agentic Synthesis of Inference Runtimes for Heterogeneous Hardware
+Thomas Cottenier, Arm
+October 21, 17:30 | LL20AB
+Instead of one hand-tuned general-purpose runtime, an agentic harness synthesizes a bespoke runtime per target. Validated against llama.cpp and MLX on Apple silicon, then pointed at hardware with no baseline at all.
+Scaling Audio AI Infrastructure: Building Voice-Native AI
+Mu Li, Huapeng Zhou, Lindsey Allen, Boson AI
+October 21, 12:20 | LL20AB
+To advance real-time voice-native AI, this system-level discussion explores end-to-end PyTorch post-training and latency-constrained serving optimizations, including extending SGLang for audio workloads.
+Sponsored: Hardware-Aware AI: Building Agentic Systems from Cloud to Edge
+Kavya Sri Chennoju, Arm
+October 20, 12:20 | LL20CD
+This session explores building hardware-aware physical AI applications by combining PyTorch, ExecuTorch, vLLM, and Arm Device Connect in an end-to-end cloud-to-edge workflow that enables models to reason, retrieve live sensor data, and coordinate physical devices without bespoke integrations.
+Governance: A practical approach to accountability
+The governance track takes a clear-eyed and practical approach to accountability.
+Who Owns Production When the Agent Does the Fixing? Governance in AI-Assisted SRE
+Prakshal Doshi, Aditi Mewada, Apple
+October 20, 11:10 | LL21ABC
+When an agent misconfigures a service at 3:00 AM and takes down production, who is accountable? This talk offers a practical mental model for what agents should fix, what they should flag, and what should never leave a human’s hands.
+Compute, Latency, and Safety: Architecting Stateful Guardrails for Multi-Agent Workflows
+Purva Chiniya, Amazon
+October 20, 11:45 | LL21ABC
+To secure enterprise multi-agent architectures without destroying throughput, this session details how to build continuous red-teaming pipelines and deploy low-latency Small Language Models as deterministic guardrails to catch indirect orchestration exploits and prompt injection.
+Guardrails at the Infrastructure Layer (Birds of a Feather)
+Sai Charan Teja Gopaluni, Aaresh Sharma, AWS
+October 20, 15:50 | Community Expo
+This Birds of a Feather session explores infrastructure-level approaches to governing agentic AI in production through container sandboxing, GPU resource boundaries, and token-level observability.
+Closing the Confidence Gap: Making AI Output Trustworthy in Enterprise Systems
+Ravi Teja Prabhala Venkata, Capital One
+October 20, 12:20 | LL21ABC
+To close the AI confidence gap, this session presents a four-layer validation architecture that treats model trustworthiness as an engineering discipline through schema-based type coercion, confidence calibration, contract validation, and continuous observability.
+Explore the full program
+Join us for two days in San Jose, October 20–21, 2026. Experience agentic RL frameworks being open sourced on stage, kernel agents with published benchmarks, robot policies running on microcontrollers, and maintainers debating open source agent contributions in public.
+Day one closes with the Flare Party and poster presentations. Day two closes with the AI Community Bash, uniting the PyTorch, AGNTCon, and MCPCon communities alongside a live set from De La Soul. Space for the concert is limited, so please indicate that you are joining when registering!
+Registration for PyTorch Conference North America 2026 is open now. Visit the official PyTorch Foundation conference page to secure your registration and reserve your hotel.

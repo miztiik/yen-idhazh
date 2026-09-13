@@ -1,0 +1,279 @@
+Featured projects
+We are excited to announce the release of PyTorch® 2.14 (release notes)!
+The PyTorch 2.14 release features the following changes:
+- NVGEMM brings CuTeDSL-generated CUTLASS kernels to Inductor, with epilogue fusion, scaled and NVFP4 GEMM, and grouped-reduction epilogues autotuned alongside Triton and ATen
+- A new nccl2 backend for PyTorch Distributed, ported from torchcomms, implementing the full collective contract with nonblocking communicators and eager communicator splitting
+- Fault tolerance becomes a first-class c10d concept, with in-place process-group reconfiguration, one-sided RMA windows, and a Flight Recorder that works for any backend rather than only NCCL
+- Apple Silicon gains native linear algebra, including Jacobi-kernel SVD, eigh, QR and Cholesky, alongside a five-part reduction rewrite and a further MPSGraph to Metal kernel migration
+- torch.switch generalizes torch.cond to multi-way branching, and torch.while_loop can now be captured in a CUDA graph
+- Declarative dynamic shapes via @dynamic_spec, shared across torch.compile, torch.export and make_fx
+- Broader platform support: ROCm 7.14 wheels are produced from the TheRock pip SDK, Intel XPU adds native graph capture, and Inductor targets Rubin (sm_107)
+- Experimental torch.compile support for complex-valued tensors: Opt-in support decomposes supported complex operations into real and imaginary computations, enabling compiler backends to optimize more complex-number workloads.
+This release is composed of 2,995 commits from 487 contributors since PyTorch 2.13. We want to sincerely thank our dedicated community for your contributions. As always, we encourage you to try these out and report any issues as we improve 2.14. More information about how to get started with the PyTorch 2-series can be found at our Getting Started page.
+Bring any questions you may have about this release to our Q&A Webinar. It will be on Thursday, September 17, 2026 and will feature Andrey Talman (Meta), Natalia Gimelshein (Meta), Joe Spisak (Reflection AI), and Chris Gottbrath (Gottbrath Tech, moderator) who will share an overview of the 2.14 release and provide answers to community questions about PyTorch and the new capabilities in this release. Register today.
+Connect with the global PyTorch community at the upcoming PyTorch Conference North America October 20-21, 2026, in San Jose, CA. Explore what’s new with PyTorch framework with sessions spanning compiler and runtime work, distributed communication, device portability, release engineering, CI, observability, accelerator integration, contributor infrastructure, and much more. PyTorch Conference is the place for engineers, researchers and maintainers solving real problems in training, inference, kernels, applications and responsible AI to convene.
+Throughout the 2.x series, PyTorch has been evolving from a research-first framework into a unified, hardware-agnostic platform for production training and inference at scale. PyTorch 2.12 added a device-agnostic torch.accelerator.Graph API and Microscaling quantization export support. PyTorch 2.13 landed FlexAttention on Apple Silicon, gave Inductor a CuTeDSL code path, and introduced torchcomms for large-cluster training.
+PyTorch 2.14 builds directly on those threads. The CuTeDSL path matures into NVGEMM, a full GEMM backend with epilogue fusion and low-precision support. torchcomms lands in-tree as the nccl2 backend, with fault-tolerant reconfiguration and one-sided RMA windows raising fault tolerance from a backend detail to a c10d concept. Apple Silicon moves from attention kernels to native linear algebra, and dynamic shapes become declarative through a spec that travels across compile, export and tracing.
+PyTorch 2.14 delivers meaningful improvements across performance, reliability, and hardware support. The release introduces NVGEMM, a new GPU math backend that automatically selects the fastest kernel for matrix operations — including support for lower-precision formats that reduce memory use during training and inference. For teams training across many machines, a redesigned distributed communication backend (nccl2) offers better scalability, while new fault-tolerance features allow training jobs to recover from node failures without restarting from scratch.
+Apple Silicon users benefit from native linear-algebra routines (SVD, QR, Cholesky, and more) and a broad migration to hand-tuned Metal kernels that cut overhead on Mac GPUs. On the compiler side, new control-flow primitives (torch.switch, torch.while_loop) give model authors more flexibility when writing dynamic logic that still compiles efficiently, and a new @dynamic_spec decorator provides a single, clean way to declare which tensor dimensions can change at runtime — simplifying workflows across compilation, export, and tracing.
+Platform support expands to AMD ROCm 7.14, Intel XPU native graph capture, and NVIDIA’s next-generation Rubin architecture. Under the hood, the compiler now overlaps communication with computation by default, batches small GPU kernels more intelligently, and reduces per-call overhead — all of which add up to faster end-to-end model execution without any code changes from users.
+Performance Improvements
+Large MPS Op Migration to Native Metal
+Continuing the migration begun in 2.13, a further set of MPS operators moved off Apple’s MPSGraph framework onto hand-written Metal compute kernels, including index_add, index_select, argmin, argmax, conv3d, median, nanmedian, linspace, arange, nan_to_num, log_sigmoid, sigmoid_backward, mish and GLU.
+Reductions received a dedicated five-part rewrite covering full reductions, inner-dimension reductions, strided and batched outer reductions, small-dimension and narrow kernels, and the argmax and argmin split-K paths. The final part migrates min and max off MPSGraph. Skipping input up-casts and using vec4 loads removes work the MPSGraph path could not avoid.
+The native Metal path eliminates MPSGraph’s per-op compilation cost and gives PyTorch direct control over thread dispatch and memory access patterns, reducing kernel launch latency across common training and inference workloads on Apple Silicon.
+API Unstable
+(PR #191101, #191097, #191098, #191099 and #191100 by Irakli Salia, Hugging Face, #187109 and #188802 by Nikita Shulga, Thinking Machines Lab)
+MPS Memory and Copy Paths
+Long-running decode workloads grew the MPS caching allocator’s reserved footprint faster than necessary. The allocator now buckets large allocations to bound reserved memory and uses placement heaps to reduce fragmentation.
+Host and device transfers also got shorter paths. CPU to MPS copies blit directly from pinned buffers with event-deferred reclaim, contiguous same-dtype copies use a compute kernel instead of a graph, elementwise ops are vectorized on inner-contiguous sliced views, and cat gains a vectorized contiguous fast path for any dimension.
+API Unstable
+(PR #187441 and #190438 by Irakli Salia, Hugging Face, #189512 and #188613 by Nikita Shulga, Thinking Machines Lab, #188483 and #188200 by Joona Havukainen, Apple)
+F.linear Decode Path on MPS
+Single-token decode passes a [B, 1, K] activation to F.linear, a shape that was falling off the fast path on MPS and costing an 8.5x slowdown on bf16 and fp16 according to the fix. The sequence-length-1 case is now routed correctly, and new GEMV kernels back the vector-matrix shapes that dominate autoregressive decoding. Together, the routing fix and new GEMV kernels close one of the largest remaining performance gaps between MPS and CUDA for autoregressive workloads.
+API Unstable
+(PR #189855 by Giovanni Versiglioni, Apple, #186927 by Irakli Salia, Hugging Face)
+Compute and Communication Overlap On By Default in Inductor
+Inductor’s simple_overlap reordering, which interleaves collectives with independent compute so communication is not left on the critical path, is now enabled by default rather than opt-in. By enabling overlap by default, distributed training workloads compiled through Inductor automatically benefit from better GPU utilization without any configuration change.
+API Unstable
+(PR #184240, #184235by Ivan Kobzarev, Meta)
+reorder_for_locality Opt-In for Training Graphs
+reorder_for_locality, Inductor’s post-grad locality reordering pass, can now be opted into on training graphs via the new reorder_for_locality_in_training config (default off), where before it only ran on inference. This extends locality optimization to training workloads, giving users a tuning knob to improve cache behavior in training graphs without affecting default behavior.
+API Unstable
+(PR #186643 by @reger-men)
+Combo Kernels and Reductions in Inductor
+Combo kernels batch many small kernels into one launch, but a single very large reduction in the batch would previously shape the whole kernel. Large reductions are now split out of combo partitioning, combo reductions get dynamic RBLOCK scaling, and sub-kernel bodies are emitted as non-inlined device functions to keep register pressure down. For each combo kernel bodies are shared, and split-reduction heuristics are tuned for GB200. The net effect is fewer kernel launches with tighter resource usage, closing a gap where one oversized reduction could penalize an entire fused batch.
+API Unstable
+(PR #186668, #186957 and #190689 by Karthick Panner Selvam, Meta, #184323 by Jason Ansel, Meta, #188579 by Liqiang Lu, Nvidia)
+Dynamo Per-Call Overhead
+For models with many small compiled regions, fixed per-call cost matters more than graph quality. This release trims that cost in several places. compile_wrapper avoids DispatchKeySet pybind churn on every call, torch._dynamo.disable gets a cheaper path, and the pregraph profiler marker is gated on an active profiler instead of always being emitted. Guard creation is skipped for unused function inputs, and invoke_subgraph reuse lookup is faster for pytree arguments such as dataclasses and namedtuples. These micro-optimizations collectively lower the tax of entering compiled code, making torch.compile more practical for real-world models that mix many small compiled regions with eager execution.
+API Unstable
+(PR #190390, #190392 and #190623 by William Wen, Meta, #187782 and #191817 by Aditya Sanjeev)
+Eager Dispatch and CPU Kernels
+Several eager-mode hot paths got cheaper. PyObject dispatch is optimized, AOTAutograd avoids an expensive Tensor.detach() when saving graph-input views for backward, autograd stops copying at::Tensor when the profiler is off, addmm avoids a device-to-device copy when C and D are distinct, and CPU quantile and nanquantile use partial selection instead of a full sort.
+These targeted fixes reduce the per-operation tax in eager mode, tightening the performance floor so that common operations like linear layers, autograd bookkeeping, and statistical aggregations don’t carry unnecessary overhead. They keep PyTorch’s default development experience fast without requiring users to reach for torch.compile.
+API Unstable
+(PR #187949 #189759 and #189582 by Richard Zou, Meta, #191706 by Animesh Jain, Meta, and #188394 by Kimon N.)
+Core Features
+torch.linalg.polar and torch.linalg.matrix_sqrth
+Two additions to torch.linalg. torch.linalg.polar computes the polar decomposition using cuSOLVER’s QDWH algorithm, with a backward formula on CPU, CUDA and MPS, which makes it usable inside training loops rather than only for analysis. torch.linalg.matrix_sqrth computes the matrix square root for symmetric and Hermitian positive-definite matrices, a case that previously required composing an eigendecomposition by hand.
+API Unstable
+(PR #185837 by Simon Layton, Meta, #189732 by Irakli Salia, Hugging Face, #187987 by Colin Alberts, Cisco)
+Autograd Extension Points
+Three additions give more control over how the autograd graph is built and inspected. torch.autograd.graph.node_creation_hook fires as each autograd node is created, letting tools attach metadata or register hooks at graph-construction time instead of reconstructing that context afterward — the motivating case is attributing backward-pass memory usage back to the forward region that produced it. ctx.set_output_grad_dtype lets a custom autograd.Function declare the dtype its output’s incoming gradient should be, independent of the output’s own storage dtype, for mixed-precision functions where the two don’t match. Double backward is now implemented for cdist and pdist, unblocking create_graph=True uses that previously failed outright — Hessians, gradient penalties, and Hessian-vector products through pairwise-distance computations.
+API Unstable
+(PR #189284 by Edward Yang, Meta, #189634 by @SongyuanZhao, #188901 by Colin Alberts, Cisco)
+torch.switch Higher-Order Op
+torch.cond expresses a two-way branch, so an n-way dispatch had to be written as nested conditionals, which grows the traced graph and obscures intent. torch.switch is a new higher-order op for multi-way branching on an index, with lifted-argument deduplication in Dynamo so shared operands are not re-lifted per branch. The result is a more expressive and efficient way to trace models with multi-way branching, particularly mixture-of-experts architectures where torch.cond nesting was a practical barrier.
+API Unstable
+(PR #182902 and #188374 by Thomas Ortner, IBM)
+SDPA Fused Backends for Rank-3 Inputs
+Scaled dot-product attention now dispatches to the fused CUDA backends for rank-3 inputs instead of falling back to the math path, so callers who pass unbatched or already-flattened tensors get the fused kernels without reshaping. The fix closes a common performance trap where missing or flattened batch dimensions silently bypassed the fast fused kernels.
+API Unstable
+(PR #192271 by Driss Guessous, Meta)
+Experimental torch.compile support for complex-valued tensors
+torch.compile support for programs using complex-valued tensors. Supported complex operations are decomposed into real-valued computations that compiler backends can optimize. This enables more complex-number workloads including signal processing, scientific computing, and complex-valued neural networks to benefit from compiled execution. Not all complex operations are supported yet. See the feature tracking issue, implementation
+(PRs #167621 and #169832, #172813 by Hameer Abbasi, OpenTeams)
+Smaller API Additions
+A number of smaller public additions landed this release.
+- torch.utils.checkpoint.checkpoint accepts a decorator and curried calling convention in eager (#189411 by Edward Yang, Meta).
+- Read-only DLPack export and ReadOnlyTensorWrapper , so consumers can be handed a tensor they must not mutate (#188554 by Edward Yang, Meta).
+- Generator.philox_state exposes Philox RNG state reservation to Python (#191019 by Simon Layton, Meta).
+- torch.accelerator gainsinitial_seed ,get_rng_state andget_rng_state_all , closing part of the gap with the CUDA-specific RNG APIs (#186597 by Guangye Yu, Intel).
+- LBFGS gainsmaximize and is a no-op on an empty parameter group (#187309 by Raj Vijay Firke, Red Hat).
+- linear_cross_entropy , introduced in 2.13, supports probability targets on the chunked path (#187053 by Pearu Peterson, Quansight).
+- c10::utils::get_env andset_env are exposed to Python (#191015 by Nikita Shulga, Thinking Machines Lab).
+API Unstable
+Python 3.15 Support and Torchvision ABI Stability – Release Engineering
+PyTorch 2.14 adds binary support for Python 3.15, including the free-threaded (no-GIL) build, 3.15t across all platforms. Wheels are published for Linux on x86_64 and aarch64, Windows, and macOS on Apple silicon, spanning the CPU, CUDA, ROCm, and XPU builds. Also torchvision 0.29.0 ships matching 3.15 and 3.15t wheels for the same set of platforms.
+TorchVision is now ABI stable w.r.t. torch 2.14! This means that torchvision 0.29 will be compatible with future versions of torch: 2.15, 2.16, etc. You won’t need to install a new version of TorchVision when you upgrade torch. As a result, we might stop releasing TorchVision in sync with pytorch. But TorchVision is still actively maintained and developed: we’ll still be pushing releases, just not with the same cadence.
+Installation
+Python 3.15 and 3.15t wheels are not published to PyPI — they are available to download only via download.pytorch.org, using any of the following commands:
+# CPU
+pip3 install torch –index-url [link]
+# CUDA (substitute the CUDA version, e.g. cu126 / cu130)
+pip3 install torch –index-url [link]
+# ROCm (substitute the ROCm version)
+pip3 install torch –index-url [link]
+# XPU
+pip3 install torch –index-url [link]
+The same commands install the free-threaded 3.15t build when run under a free-threaded interpreter.
+The same applies to the free-threaded build. Install into a 3.15t interpreter and pip will resolve the cp315t wheels automatically.
+torch.compile is not yet supported on Python 3.15
+Python 3.15 support in 2.14 is eager-only. Calling torch.compile under Python 3.15 raises a RuntimeError rather than falling back silently, so the limitation surfaces immediately rather than as a silent performance loss. If your workload depends on torch.compile, stay on Python 3.14 or earlier for now.
+Dynamo support for 3.15 is in active development, with bytecode and symbolic-conversion handling already landed for the new interpreter. Progress is tracked in pytorch/pytorch#184352.
+Distributed Training
+nccl2 Backend
+torchcomms arrived in 2.13 as a communications backend integrated into PyTorch Distributed’s CI and device-mesh paths. In 2.14 the APIs landed in-tree with a new nccl2 c10d backend, gated behind USE_C10D_NCCL, implementing the full Work contract on top of a reusable NcclApi abstraction. The backend is eager only with new features such as one-sided windows, fault-tolerance, suspend and resume memory offload, and a greatly cleaned up implementation. A compatibility nccl-lazy wrapper builds per-peer P2P communicators on demand for workloads that require the old lazy initialization behavior.
+API Unstable
+(PR #188582, #189359, #190943 and #191272 by Tristan Rice, Meta, #191528 and #192105 by Tushar Jain, Meta)
+Fault-Tolerant Collectives in c10d
+When a rank fails in a large job, the usual recovery is to tear down the process group and restart, which discards warm state across the whole cluster. Backend and ProcessGroup now expose reconfiguration interfaces so a group can be rebuilt in place, with abort hooks and pre and post collective hooks wired through the same path. Gloo gains fault-tolerance support alongside nccl2, and the reconfigure APIs are documented.
+API Unstable
+(PR #186298, #186300, #187381 and #191384 by Tristan Rice, Meta)
+One-Sided (RMA) Window APIs
+Backend and ProcessGroup gain one-sided window interfaces, giving remote-memory-access semantics alongside the existing two-sided collectives. One-sided operations let a rank read or write peer memory without the peer posting a matching call, which suits irregular access patterns such as embedding lookups, weight transfer and expert routing. This exposes the new ncclGet and ncclPut APIs via the nccl2 backend.
+API Unstable
+(PR #186299 and #189360 by Tristan Rice, Meta)
+Backend-Agnostic Flight Recorder
+Flight Recorder, the collective trace buffer used to diagnose hangs and mismatched collectives, was tied to NCCL. FlightRecorderHook records through ProcessGroup hooks instead, so it works for any backend, and log serialization is portable through DebugMode. Debugging a Gloo or custom-backend job no longer means giving up the trace.
+API Unstable
+(PR #189363 by Tristan Rice, Meta, #185010 by Jason Ansel, Meta)
+Pluggable Distributed Backends
+Adding a communications backend previously meant patching c10d. Backends can now register through Python entry points, backend strings are auto-qualified, and implementation accessors are exposed. We’ve brought the PyProcessGroup trampoline to parity with C++, so an out-of-tree backend can implement the full collective surface from either C++ or Python, including batch_isend_irecv, the coalescing manager and the cleaned up *_single variants.
+API Unstable
+(PR #187388, #186853 and #188570 by Tristan Rice, Meta, #187494 by Kapil Sharma, Meta)
+torch.distributed API improvements: set_timeout, per-op timeouts, get_backend_impl, hooks, weights_only=True, *_single
+We’ve made a whole host of improvements to the torch.distributed API which allow for more control as well as cleaning up some inconsistencies. You can change a process group’s collective timeout after initialization — extending it around a slow checkpoint load, or shortening it so a wedged rank fails fast instead of hanging for the full default window — via the stable torch.distributed.set_timeout method as well as we now support per-operation collectives across all timeouts. We’ve made it easier to access advanced backend specific features via torch.distributed.get_backend_impl as well as add programmatic hooks to them to customize behavior and for observability. Object collectives now support the same weights_only=True mode as torch.load which can improve your training cluster security. We’ve also updated the names for all single tensor variants to share the _single suffix such as in all_to_all_single.
+API Unstable
+(PR #187387 and #187693 by Tristan Rice, Meta)
+DTensor Single-Dim Sharding Strategies
+DTensor’s sharding rules were historically written per operator against the whole device mesh, so each rule had to enumerate every combination of placements across all mesh dimensions — long to write and easy to get subtly wrong once the mesh had more than one dimension. This release continues moving op coverage to single-dim strategy functions, which describe how one mesh dimension shards an operator and leave the framework to expand that across the full mesh; matrix, math, and tensor ops are converted here, cutting direct register_op_strategy registrations from 158 to 114. Convolution also gains sharding on the last spatial dimension when the windows tile it exactly — zero padding, dilation 1, stride equal to kernel width, and a dimension divisible by kernel width times mesh size — so those convolutions run locally in forward and backward instead of allgathering to replicate. The new rules are stricter than the ones they replace, so annotations that previously matched a base strategy by accident will now be reported as needing redistribution, and Partial("product") is no longer produced by the migrated ops. This brings the number of total ops with registered sharding rules to 1239, up from 585 in Jan 2026.
+API Unstable
+(PR #186667, #179203, #186754, and #192147 by Anshul Sinha, Meta)
+Symmetric Memory: NCCL backend fixes and allocation layout
+Symmetric memory’s NCCL backend had gaps that only surfaced at runtime: barrier() raised a not-implemented error, and the signal pad was never zeroed after allocation, so the signaling protocol had nothing reliable to build on. Both are fixed — barrier now reuses the existing CUDA barrier kernel, and the pad is zeroed at allocation time. The signal pad also moves to the front of every symmetric allocation across all three backends (CUDA, NCCL, NVSHMEM), so a recycled or resized allocation can’t inherit a polluted pad, and only the pad gets zeroed rather than the whole block — large allocations no longer pay a full-buffer memset on every alloc(). The timing of when the signal pad is zeroed can be tricky in multiple stream scenarios and users may want to do that in user space code to be sure that they have the sequence right. CUDA allocations now set the GPUDirect RDMA capable flag when the driver reports support. Signal-pad slots are still shared across process groups on the same allocation, so concurrent barriers from overlapping groups can interfere.
+API Unstable
+(PRs #188051 by Kapil Sharma, Meta, #189088 by Junjie Wang, NVIDIA, #189941 by Natalia Gimelshein, Meta)
+Symmetric Memory: reaching NCCL symmetric kernels from ordinary collectives
+Symmetric memory based kernels became available on the NVLink domain in NCCL 2.27. These have been implemented in PyTorch’s symmetric memory in nightly builds since Jan 2026 but weren’t documented in a way that made it easy for users. Responding to feedback we improved the documentation in this release. The docs now cover both symmetric memory and ring or tree collectives — registering a torch.cuda.MemPool with register_mem_pool(pool, symm=True), or set_backend("NCCL") plus rendezvous — along with the eligibility rules (all_gather on any dtype; all_reduce and reduce_scatter only for SUM/AVG on float dtypes excluding float64) and the requirements: NCCL 2.27+, a single direct-NVLink domain, and NCCL_WIN_ENABLE. Users can verify via the [Symmetric] tag under NCCL_DEBUG_SUBSYS=TUNING or ncclSymkDevKernel_* names in a profile.
+API Unstable
+(PR #192515 by Kapil Sharma, Meta)
+Symmetric Memory: one-sided get
+Reading data that lives on another rank has generally meant a collective: every rank participates and synchronizes, even when only one rank actually needs the data. Symmetric memory now exposes get, a one-sided copy that reads a peer’s symmetric allocation directly into a local destination tensor, with no participation from the peer and no group-wide synchronization. It works on the NVSHMEM, NCCL symmetric-memory, and CUDA backends — XPU and rocSHMEM aren’t supported yet — and requires the source to be a rendezvoused symmetric allocation matching the destination in dtype and element count. It’s the primitive underneath the in-progress one-sided DTensor work, and it’s directly usable for any algorithm where pulling from one peer beats an all-gather across all of them.
+API Unstable
+(PR #182378 by Benjamin Brock, Intel)
+TokenSwitch
+Mixture-of-experts training spends much of its step time sending each token to the ranks holding its chosen experts and bringing the expert outputs back, and teams generally wire that up themselves against a vendor kernel library, backward pass included. TokenSwitch puts an interface around it — create_routing(), dispatch(), combine() — with TokenSwitchNCCL as the first backend, built on NCCL’s expert-parallel kernels. Called without an out= argument, dispatch and combine return differentiable tensors, so an MoE layer can be written as ordinary autograd-tracked Python; passing out= keeps the buffer-reuse path but gives up autograd. It is early code: the module is private and needs a build with USE_NCCL_EP=1 against the NCCL 2.30 pin, so today it is NVIDIA-only and out of reach of a stock wheel.
+API Unstable
+(PR #178712 and #181314 by Ke Wen, NVIDIA)
+Compile-on-One-Rank
+Every rank in a distributed job compiles the same model independently, so a single multi-minute compile is paid N times over before training starts. Compile-on-one-rank makes one compiled artifact reusable everywhere: make_fx no longer bakes the tracing rank’s device into factory and cast ops, and Inductor’s codegen and Triton launcher resolve the device at load time, so the generated source is identical across ranks and a kernel compiled on cuda:0 loads and runs on cuda:3. DeviceMesh.get_group() likewise fetches the group from the mesh in-graph instead of baking in a torchbind ProcessGroup, which used to leave the graph unserializable, and under the flag legacy collectives like dist.all_reduce trace as their functional forms. torchtitan’s experimental graph_trainer shows the intended shape: a single process compiles ahead of time and writes one artifact that every rank loads at startup, no N-GPU job required to produce it — though the mode assumes a single accelerator device per program and refuses a graph that touches a second, and stays opt-in behind torch.compiler.config.compile_on_one_rank.
+API Unstable
+(PR #187869, #186892, #187870 and #188215 by Aaron Orenstein, University of Alberta)
+Compilation and Export
+Declarative Dynamic Shapes with @dynamic_spec
+Telling PyTorch which input dimensions vary has meant a different mechanism per entry point — a dynamic_shapes dict for torch.export, a coarse dynamic= flag for torch.compile, a global tracing mode for make_fx — and in each case the declaration sits at the call site, far from the model it describes. This release adds a ShapesSpec API under torch.fx.experimental.dynamic_spec: you name a dimension once (ShapeVar("batch", min=2, max=128)), reuse it across inputs, build derived dims like batch * 2, and attach assumptions such as batch % 2 == 0, with all three entry points now taking it under the same dynamic_shapes= keyword. A @dynamic_spec decorator attaches that spec directly to a function or a module’s forward, so torch.compile, strict or non-strict torch.export.export, and make_fx(tracing_mode="fake") all pick it up with nothing passed at the call site. Dimensions declared this way become unbacked symbols, so the compiler cannot quietly specialize on the batch size it happened to trace — the trade-off is that shape-dependent branching now surfaces as a data-dependent error rather than a guard and a recompile. The API is experimental and still moving: make_fx support is limited to tracing_mode="fake", and combining a spec with prefer_deferred_runtime_asserts_over_guards=True, or a decorator with a call-site dynamic_shapes= argument, raises an error.
+API Unstable
+(PR #187639, #185982, #187602, #186751 and #187010 by Laith Sakka, Meta)
+AOTInductor External Constants and Zero-Copy Weight Sharing
+Serving several AOTInductor models that share the same weights used to mean every model container allocating and loading its own copy on the GPU. A new C API, [omitted], lets the caller hand in weight tensors at container creation; AOTI skips constant loading entirely and uses the caller’s memory instead, so one copy can back several models or be shared across processes via CUDA IPC. The caller retains ownership, which means those tensors have to outlive the container, and the API is available through the C ABI only, with no Python entry point yet. Existing code paths are untouched — the new constructor only engages when external constants are explicitly supplied. For a fleet serving many variants of the same base model, this turns per-model weight memory into a single shared allocation.
+API Unstable
+(PR #188643 by @iuliur-meta)
+AOTInductor Compilation
+Packaging a model with triton.autotune_at_compile_time=False used to run the whole codegen twice: compile, run to collect kernel metadata, reset state, then recompile for packaging. That path now emits the JIT and AOTI wrapper bodies in a single codegen pass, running the JIT body once with real inputs to capture the Triton kernel configuration that the packaged source then embeds. torch.cond and torch.while_loop are supported on the new path. Separately, cpp_wrapper can now emit explicit user streams and events, currently CUDA-only and not usable alongside CUDA graphs. The second codegen pass is gone from the lazy-autotune flow, and traced multi-stream code now survives into an AOTI package.
+API Unstable
+(PR #184735 and #184736 by @desertfire, #182971 by Brian Bustamante)
+AOTInductor Constant Loading
+Loading a model’s weights copies them from host memory to the GPU, and a synchronous copy out of pageable memory forces a device-wide synchronization that stalls inference already running on other streams. [omitted] routes constant loading and updates through pinned staging buffers instead, overlapping host copies with device transfers, with a companion call to size the buffers and the AOTI_COPY_USE_PINNED_ASYNC environment variable as a fallback. It’s off by default and has to be enabled before the model or container is created. The stretch between loading the .so and having a model ready to serve was previously silent, so setting AOTI_LOG_LOADING now emits [AOTI_LOAD] markers with copy timing and pinned-pool diagnostics. For a server swapping models in and out under live traffic, that combination keeps the rest of the GPU busy during a load and makes a slow one diagnosable without a rebuild.
+API Unstable
+(PR #186258 and #186309 by @joshuuuasu)
+Helion Backend Integration
+Writing a fast GPU kernel by hand means choosing tile sizes, loop order, and memory access patterns, then re-tuning all of it for every new shape and every new GPU. Helion raises that a level: you write the algorithm in Python, and Helion searches the schedule space and emits Triton for you. PyTorch 2.14 registers Helion as a third entry in the native DSL registry introduced in 2.13, so Helion-authored kernels can override ATen operations the same way Triton and CuTeDSL ones already can, controlled through torch.backends.python_native.helion. Registration requires the helion package plus its lowering backend, and is unavailable on ROCm builds. No operators are routed through Helion in this release; this is the foundation for Helion-backed kernel overrides landing in subsequent ones.
+API Unstable
+(PR #190636 by Karthick Panner Selvam, Meta)
+Platform Features and Updates
+CUDA
+NVGEMM, a CuTeDSL GEMM Backend for Inductor
+PyTorch 2.13 introduced the NVGEMM CuTeDSL backend for TorchInductor and in this release we are excited to expand support to epilogue fusion — the previous version could emit a standalone kernel, and whatever followed it (a bias add, an activation, a rescale) stayed in a separate kernel that re-read the result from memory. This release now utilizes NVGEMM, NVIDIA’s official cutlass.operators API, generating candidates that compete with Triton and ATen for mm, addmm, and scaled_mm. Its kernels fuse epilogues the way Triton templates do: addmm’s bias add, chained pointwise ops, and reductions over the GEMM result, including cases where the kernel returns both the reduced value and the full output matrix. Fusion now reaches the low-precision paths as well, so pointwise work after a scaled GEMM folds into the kernel, and NVFP4’s runtime global scale is applied inside the epilogue rather than as a separate multiply. Fused kernels are also cached to disk, so a process that recompiles them from scratch today reuses them instead. Enable it by adding NVGEMM to max_autotune_gemm_backends under max_autotune; it needs nvidia-cutlass-dsl 4.6.0, the NVFP4 paths require Blackwell, and epilogues the backend can’t express fall back to Triton so those cases keep their existing fusion. We are continuing to invest in this backend, with further improvements to autotuning time and performance currently being implemented.
+API Unstable
+(PRs #186183, #187013, #189772, #189774, #189805, #190808 and #190823 by Michael Lazos, Meta)
+CUDA Graph Lifecycle Hooks
+Tools that want to watch CUDA graphs from the outside, like a profiler or a memory tracker, could only register per-graph hooks, which is no help when the graph was constructed by Inductor or NCCL rather than by the tool. This release adds module-level hooks that fire for every graph in the process (capture start and end, replay start and end, instantiate, destroy), along with per-graph replay start/end hooks and a capture-start hook that previously existed in neither form. CUDAGraph also gains register_destroy_callback and retain_object for tying cleanup or object lifetime to the graph’s own; pass synchronize_before_release=True if the callback frees memory the graph still references, since teardown is asynchronous and releasing under an in-flight replay is a use-after-free. Observability tooling can now follow a graph’s full lifecycle without the graph code carrying any knowledge of the tool, and registering nothing costs nothing.
+API Unstable
+(PR #190582 and #190602 by Natalia Gimelshein, #191299 and #192162 by @dolpm)
+Multiple Memory Pools in a Single CUDA Graph
+A CUDAGraph capture previously bound to exactly one memory pool, which meant allocations that need to come from a separate pool — symmetric memory being the case that forced the issue — couldn’t participate in a captured region. A capture can now enter side pools with torch.cuda.use_mem_pool() and the graph retains all of them: g.pool() returns the primary pool passed to torch.cuda.graph(), and g.pools() returns the full set including any side pools entered during capture. This lets symmetric-memory buffers survive inside a CUDA graph, which unblocks graph capture for distributed workloads that allocate through a dedicated pool. One existing limitation carries over: use_mem_pool routes allocations by thread ID, so calling .backward() inside it with multithreaded autograd won’t send the backward allocations to the pool — run autograd on the same thread if you need that.
+API Unstable
+(PR #187929 by @Aidyn-A)
+CUDA Graph Capture for torch.while_loop
+Data-dependent loop counts have been one of the standard reasons a workload can’t be fully CUDA-graph captured, forcing a device-to-host copy to decide how many iterations to run and breaking the capture at exactly the point you’d rather keep it intact. torch.while_loop can now be captured into a CUDA graph using CUDA’s while conditional nodes: the condition is evaluated on the parent stream before the node is added and re-evaluated at the end of each body execution, so a single captured graph runs a runtime-determined number of iterations on replay. This isn’t a throughput win on its own — the point is that the loop no longer forces you out of graph capture, so cases like a reduction over a variable-length index tensor, or a loss applied to a variable number of packed sequences, stay inside one graph. The usual while_loop constraints still apply, including a fixed maximum trip count and tensor-only carried inputs.
+API Unstable
+(PR #186055 by Daniel Galvez, NVIDIA)
+Kernel Annotations for CUDA Graphs
+torch.cuda.graph_annotations makes the kernel-annotation API used with CUDA graph capture public: mark_kernels lets you tag GPU work with a name so it shows up labeled when you later export a profiler trace, rather than as an anonymous kernel launch. Previously this only worked for forward-pass kernels captured lexically inside the mark_kernels scope — backward kernels, captured later when autograd actually runs, were never tagged. Backward kernels are now annotated automatically, using the node_creation_hook mechanism from above to attribute them back to whichever forward scope created them, including through double-backward and checkpoint recomputation. This is opt-out via backward=False for callers that want to do their own backward attribution.
+API Unstable
+(PR #189417 and #191563 by Edward Yang, Meta)
+Post-Facto Memory Snapshot Annotations
+Memory snapshots already let you attach metadata to an allocation, but only at the moment it’s created — some information, like whether a tensor ended up retained by the autograd graph, is only known later, after it’s been packed into the backward tape. torch.cuda.memory._annotate_tensor(tensor, metadata) lets you attach metadata to a live allocation after the fact, recorded as a separate timestamped event so it doesn’t clobber whatever was recorded at alloc time. Views and offset tensors resolve to the allocation’s base address automatically, and the memory snapshot visualizer now shows these annotations alongside the allocation in the timeline.
+API Unstable
+(PR #190575 by Edward Yang, Meta)
+TunableOp on CUDA
+TunableOp profiles the available GEMM implementations for each input shape at runtime and caches the fastest, but on CUDA builds it previously had only one candidate to pick from — the cuBLAS default. It now registers cuBLASLt heuristic candidates too, with the candidate count set by PYTORCH_TUNABLEOP_CUBLASLT_REQUESTED_ALGO_COUNT or torch.cuda.tunable.set_cublaslt_requested_algo_count(). It’s a tool for rescuing shapes the stock heuristic handles badly rather than a general speedup: on H100 the mean is roughly flat, with individual shapes ranging from 0.66x to 1.57x. Offline tuning is also fixed for the case where a padded leading dimension equals one of m/n/k, which previously made tune_gemm_in_file silently tune the wrong shape.
+API Unstable
+(PR #186270 by Grayson Derossi, NVIDIA and #189355 by Aditya Srichandan, AMD)
+cuBLASLt as a grouped GEMM backend
+Grouped GEMM drives MoE layers, where many differently-shaped matmuls are issued together. cuBLASLt joins CUTLASS and the fallback as a backend: default for fp16 on Blackwell with CUDA 13.2+ and Hopper with CUDA 13.3+, opt-in for bf16 on the same combinations via torch.backends.cuda.matmul.prefer_cublaslt_grouped_gemm = True. That split reflects the measurements — it wins on ragged MoE-style groups but generally trails the CUTLASS bf16 kernel on uniform ones. It works with torch.compile and CUDA Graphs; the one thing you must handle yourself is 16-byte alignment on matrices and leading dimensions.
+API Unstable
+(PR #177037 by Grayson Derossi, NVIDIA)
+ROCm
+Grouped GEMM, CK Templates and Origami (ROCm GEMM)
+Mixture-of-experts models on AMD GPUs used to miss out on Inductor’s Triton-compiled grouped GEMM, which was previously limited to NVIDIA SM90+ hardware — ROCm fell back to a slower for-loop over hipBLASLt/rocBLAS calls instead. This release brings that Triton lowering to ROCm, including the scaled (FP8) variant, and also lets Composable Kernel GEMM templates work under JIT cpp_wrapper compilation, not just ahead-of-time compilation. On top of that, Origami — AMD’s analytical tile-size selector — is now on by default for ROCm max-autotune, so Inductor can pick near-optimal GEMM configs from a latency model instead of paying for a full autotuning sweep. All of this is ROCm-specific and only affects max-autotune paths; NVIDIA users won’t see any change.
+API Unstable
+(PR #188600 and #188742 by Nichols A. Romero, AMD, #185505 by Bin Bao, Meta, #186644 by Umesh Chand, AMD)
+FlexAttention Tile Configs for RDNA3
+FlexAttention on AMD’s RDNA3 GPUs (Radeon workstation and consumer cards, not the MI-series datacenter line) was using tile sizes that weren’t tuned for the architecture, leaving performance on the table for short-to-medium sequence lengths. This release adds sequence-length-aware tile configs specifically profiled for RDNA3, so Inductor picks a tile size matched to the actual sequence length instead of one fixed default. The result is roughly 2-8x lower latency in the low-hundreds-of-tokens range, with no regression on very short sequences. If you’re running FlexAttention on other AMD or NVIDIA hardware, this change doesn’t apply to you.
+API Unstable
+(PR #177840 by Robert Esclapez, AMD)
+MPS (Apple Silicon)
+Native Linear Algebra
+MPS linear algebra has historically leaned on Apple’s MPSGraph primitives or fallen back to CPU entirely for anything beyond the basics, which made mixed CPU/MPS round-trips a common source of slowdown in numerical code. This release replaces several of those gaps with native Metal kernels. SVD, eigh, and lstsq now run natively via Jacobi-style kernels for float32 and complex64 (falling back to CPU for float64, since Metal has no double type, and for small matrices/batches where the GPU launch overhead isn’t worth it) — and this also lights up matrix_rank, pinv, cond, and norm computations that depend on them, though non-Hermitian eig/eigvals are left for later. Cholesky gets a faster panel-factorization algorithm with a matmul2d-based trailing update (roughly 1.2–2.8x faster depending on size) plus a correctness fix for complex dtypes, which previously had no dtype guard and could silently produce wrong results. lu_factor and lu_solve move from Apple’s MPSMatrixDecompositionLU to hand-written Metal kernels, and the op level speedups can be substantial — the submitter measured >100x on small batched matrices and 2–9x on larger single matrices. Rounding things out, geqrf is added and linalg_qr is refactored to share the same device-agnostic code path CPU and CUDA use, and matrix_exp and linalg.polar (including its backward pass) are now available on MPS as well — though matrix_exp only overtakes CPU above roughly 512×512.
+API Unstable
+(PR #185954 by Darko SImonovski, #187022 and #191836 by Irakli Salia, Hugging Face, #189192 by Kurt Mohler, OpenTeams, #187038, #189200, #188954, #189701, and #189732 by Irakli Salia, Hugging Face)
+FlexAttention Improvements
+Building on FlexAttention’s arrival on MPS in 2.13, this release rounds out several gaps that showed up once people started using it for real models. KV batch broadcasting lets key/value tensors be shared across the query batch instead of requiring an exact match — a prerequisite for paged attention, which needs this to serve multiple sequences against a shared KV cache. flex_attention can now return the log-sum-exp and max-score auxiliary outputs alongside the main result, needed by anything that consumes attention weights beyond the output itself (custom losses, analysis, and eventually MPS-native backward support). And score_mod/mask_mod functions can now capture dynamic shape values (SymInts) directly, so masks built from runtime sizes — like a sequence-length-dependent cutoff — no longer force a recompile every time the shape changes under torch.compile(dynamic=True). A follow-up optimization narrows those captured SymInts to 32-bit integers when the value fits, since 64-bit arithmetic in the kernel is measurably slower.
+API Unstable
+(PR #187722, #187768, #188362, and #188403 , #188663 by Irakli Salia, Hugging Face)
+MPS Prefill Attention Acceleration
+Apple’s Metal Performance Primitives (MPP), new in macOS 26.2, expose lower-level building blocks for attention-style workloads that weren’t previously available to Metal kernels. This release takes advantage of them with a second prefill attention kernel for MPS, porting the approach MLX uses on M5 chips but extending it to older Apple silicon generations as well, for fp16/bf16 inputs with head dims of 64, 96, 128, or 256 and query length greater than 8 (macOS 26.2+; other shapes and dtypes keep using the existing simdgroup-matrix kernel). The payoff is substantial — the author’s own benchmarks show roughly 2–4x speedups over the previous kernel across head dims and sequence lengths, with the largest gains at smaller head dims and longer sequences. For anyone running attention-heavy models on Apple silicon, this is a meaningful prefill speedup with no code changes required — MPS just picks the faster kernel automatically when the shape and dtype qualify. This kernel’s performance benefits are best confirmed on Apple M5 hardware, which is what the underlying per-lane data layout was validated against; behavior on earlier Apple silicon generations has not been independently verified for this release and may not reflect the numbers above.
+API Unstable
+(PR #182256 by Irakli Salia, Hugging Face)
+MPS acceleration for CTC Loss
+ctc_loss — the loss behind alignment-free sequence models like speech recognition and OCR — gets both forward and backward passes on MPS for the first time, closing a gap that previously forced Mac users to fall back to CPU for this one op. The implementation follows the same log-domain approach as the CUDA kernel, including correct handling of variable-length (padded) batches. Training CTC-based models end-to-end on Apple silicon no longer requires dropping into CPU for the loss computation.
+API Unstable
+(PR #187716 and #188187 by Kurt Mohler, OpenTeams)
+XPU (Intel GPUs)
+Enhanced XPU Graph Performance
+Reduced graph capture and replay overhead in XPU Graph, improving execution efficiency and delivering better performance for graph-based training and inference workloads on Intel® Arc™ B-Series and newer Intel GPUs.
+API Unstable
+(PR #188874 by Jing Ma, Intel)
+MXFP8 and MXFP4 Support for scaled_mm
+Added MXFP8 and MXFP4 support for scaled_mm, enabling early software readiness for next-generation Intel GPUs and helping developers prepare AI workloads for emerging low-precision computation formats.
+API Unstable
+(PR #181726, #181727, and #187315 by Carson Wang, Intel)
+Symmetric Memory for Distributed AI Workloads
+Enabled the XPU Symmetric Memory backend for scale-up deployments, unlocking Async Tensor Parallelism (Async TP) on Intel GPUs and providing the foundation for more scalable distributed AI workloads.
+API Unstable
+(PR#185102 by Cherry Zhang, Intel)
+Fine-grained Per-Process Intel GPU Memory Tracking
+Added torch.xpu.list_gpu_processes(), enabling detailed tracking and reporting of Intel GPU memory usage on a per-process basis.
+API Unstable
+(PR #185192 by Guangye Yu, Intel)
+Expanded WSL2 Support
+Added support for Ubuntu 24.04 and Ubuntu 26.04 running under Windows Subsystem for Linux 2 (WSL2), making it easier for developers to build and run AI workloads on Intel GPUs from Windows environments.
+C++ ABI
+Expanded torch::stable Surface
+C++ applications that use the subset of APIs defined in torch::stable can rely on ABI compatibility across releases, and this release expands that surface. (C++ applications can also use the full API surface of libtorch.so if they’re willing to rebuild regularly or pin their libtorch version.) Following torch::stable::Generator in 2.13, this release adds PyObject-to-torch::stable::Tensor conversion and Tensor::has_storage, plus stable overloads for bitwise_and, bitwise_or, left_shift, right_shift, permute, view_dtype, index_select, floor_divide, and is_pinned. More utilities have also moved into the header-only torch::headeronly (including fastAtomicAdd and isinf/isnan), so extension authors can use them without linking against libtorch at all.
+C++ interface API Unstable while C interface is API Stable and ABI Stable.
+(PR #183323 by Paweł Gadziński, NVIDIA, #189877, #191973 and #193604 by Jane Xu, Meta, #192083 and #192097 by Chris Leonard, Red Hat)
+Profiling and Debugging
+Memory Snapshots for Pinned CPU Memory
+Memory snapshots have covered device allocations for a while, but not the pinned (page-locked) host memory used to stage host-to-device transfers — so if that memory grew unexpectedly, there was no way to see it in the same tool you’d already reach for. Pinned buffers are also easy to lose track of: they’re typically allocated once and held for the life of a process, since CUDA graphs require a fixed host address for any captured copy. Passing record_host=True to torch.cuda.memory._record_memory_history() now captures pinned allocations too, surfaced as new host_segments and host_traces keys alongside the existing device data. This gives host and device memory a single, consistent view for tracking down leaks or unexpected growth. The memory_viz visualizer does not yet render host data, and allocations made via a raw cudaHostRegister call outside PyTorch’s allocator are not captured.
+API Unstable
+(PR #182407 by Edward Yang, Meta)
+Deprecations and Backwards-Incompatible Changes
+- TorchScript deprecation warnings are now visible and TorchScript is kept out of import paths. Deprecated isIntegral overloads are removed. See #189914 and #187115.
+- Python function events are excluded from profiler key_averages() by default, a visible change in profiler output. See #188631.
+- In the profiler, the deprecated use_cuda option is removed andwith_modules is deprecated; the pattern matcher,BasicEvaluation ,profiler_metrics andprofiler_measure_per_kernel are removed. See #192543, #192808, #187362, #187439 and #187204.
+- The Dynamo TVM backend’s Relay path is removed after a FutureWarning deprecation; use the relax frontend. See #189639 and #190766.
+- In distributed, _set_pg_timeout gives way totorch.distributed.set_timeout ,setSequenceNumberForGroup becomes a deprecated no-op, the control collectives implementation is removed, and the compile-on-one-ranktorch.distributed alias gives way totorch.compiler.config . See #187387, #188611, #188617 and #187869.
+- CUDA green context set andpop are deprecated, and green contexts moved to the CUDA Python bindings. See #188419 and #185527.
+- Sparse tensors are validated for consistency when loaded with weights_only . See #184750.
+- The balanced accuracy policy is removed fromlinear_cross_entropy . See #188283.
+Non-Feature Updates
+- The build system migrated from setuptools to scikit-build-core, and Windows and macOS wheel builds are refactored into Python pipelines. See #180247, #184407 and #187944.
+- ROCm 7.14 wheels are built from the TheRock pip SDK with RPATH-based library resolution, manywheels are repackaged with auditwheel to fix invalid ZIP64 on wheels over 4 GB, and tooling migrates from rocm_smi toamd_smi . See #190276, #189903 and #190014.
+- cuDNN advances to 9.24 with conv engine 5 re-enabled, oneDNN to 3.12.3, and the XPU support package to 2026.1. See #189483, #188785 and #189593.
+- C++20 remains the minimum standard, and header-guard enforcement completes. See #178150.
+- New CI and platform coverage includes a native linux-riscv64 build image, a B200 benchmark workflow, a dedicated H100 fabric runner for P2P IPC tests, and Intel BMG client smoke tests. See #190887, #192659, #191280 and #187421.
+- Inductor targets Rubin (sm_107) with tuned vectorized elementwise kernels. See #190654 and #190546.

@@ -1,0 +1,28 @@
+{
+  "article_sha256": "77c52c71ca509677444b0a42fd33174421d0d7d0bfd59222e24e573b5935da25",
+  "article_words": 39,
+  "canonical_url": "https://newsroom-a.example.com/2026/09/01/berth-opens",
+  "extractor_version": "trafilatura-2.2.0-idhazh-2",
+  "fetched_on": "2026-09-13",
+  "labels": {
+    "article_kind": null,
+    "definition_version": null,
+    "desk": null,
+    "labelled_by": null,
+    "labelled_on": null,
+    "lenses": [],
+    "reference_summary": null,
+    "sentiment": null,
+    "stances": {}
+  },
+  "published_date": "2026-09-01",
+  "sanitizer_version": "idhazh-sanitize-1",
+  "second_labels": null,
+  "source_domain": "example.com",
+  "source_id": "a-wire",
+  "source_url": "https://newsroom-a.example.com/2026/09/01/berth-opens",
+  "title": "Berth Opens",
+  "url_key": "ad5fdba4df7cf5a8c3e577ba374e29b7028763a88d47be98e9001afd080f1eb4",
+  "version": "2026-09-13",
+  "vertical": "energy"
+}
