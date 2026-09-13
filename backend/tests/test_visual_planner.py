@@ -73,6 +73,7 @@ from idhazh.visual_planner import (
     parse_draft,
     plan_is_reachable,
     plan_lost_to_the_budget,
+    plan_lost_to_the_window,
     reachable_kinds,
     reachable_types,
     refused_by_the_validator,
@@ -1217,11 +1218,28 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
         assert recovered_completion(cut) is not None
         lost = plan_lost_to_the_budget(summary_ok, **stamp)
 
+        # Row #3f. The SAME cut reply, when the window rather than the budget is
+        # the wall. The server cannot tell them apart - both are `length` on an
+        # ordinary 200 - so the discriminator is arithmetic over the prompt the
+        # server counted and the budget call 2's grammar derived.
+        assert cut.hit_the_budget
+        asked_for = call_two_output_tokens()
+        window = 8192
+        at_the_wall = Completion(
+            content=cut.content,
+            finish_reason="length",
+            prompt_tokens=window - asked_for + 1,
+        )
+        assert cut.prompt_tokens + asked_for <= window, "the recorded reply left room"
+        assert at_the_wall.prompt_tokens + asked_for > window, "this one did not"
+        walled = plan_lost_to_the_window(summary_ok, **stamp)
+
         return {
             NoneReason.NOT_REACHABLE: gated,
             NoneReason.MODEL_DECLINED: declined,
             NoneReason.VALIDATION_FAILED: refused,
             NoneReason.OUTPUT_BUDGET_CUT: lost,
+            NoneReason.WINDOW_EXHAUSTED: walled,
         }
 
     def test_the_collected_set_is_the_enum_exactly(self, summary_ok: Summary) -> None:

@@ -335,6 +335,57 @@ GiB, 6.3 times the trigger's 1.0 GiB bar. **If a later plan needs a wider window
 memory is not what stops it** - the standing objection to 32,768 is that nothing
 needs it, and that objection is now the only one.
 
+## What the window costs the summarizer, 2026-09-13
+
+**The projection above was exact at 32,768 and stays linear to 65,536.** Three
+arms, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
+own flags, read off the load log at `log_verbosity` 4. The fourth row is the
+configured window and is interpolated between them.
+
+| `n_ctx` | KV buffer | Recurrent state | Compute buffer | Model buffers | Total |
+| --- | --- | --- | --- | --- | --- |
+| 16,384 | 512.00 MiB | 50.25 MiB | 112.02 MiB | 8,024.61 MiB | 8,698.88 MiB = 8.49 GiB |
+| 32,768 | 1,024.00 MiB | 50.25 MiB | 128.02 MiB | 8,024.61 MiB | 9,226.88 MiB = 9.01 GiB |
+| 49,152 | 1,536.00 MiB | 50.25 MiB | 144.02 MiB | 8,024.61 MiB | 9,754.88 MiB = 9.53 GiB |
+| 65,536 | 2,048.00 MiB | 50.25 MiB | 160.02 MiB | 8,024.61 MiB | 10,282.88 MiB = 10.04 GiB |
+
+**The 49,152 row is interpolated and the other three are measured.** KV is exact
+arithmetic at 32 KiB a token, and the compute buffer grows 16.00 MiB per 16,384
+tokens across the measured arms, so 144.02 MiB is the step between 128.02 and
+160.02. Nothing else in the row moves with the window.
+
+So **49,152 costs 1,056 MiB more than 16,384**, and 65,536 would cost 1,584,
+against the 6.84 GiB low-water mark above and a 1.0 GiB bar.
+`config/idhazh.json` took **49,152** on 2026-09-13 and this is the reading that
+says it fits.
+
+**The margin is 25 percent and that number has a derivation, which is the point
+of it.** The two-call sequence sizes at 39,284 tokens, so 49,152 leaves 9,868
+spare. The 25 percent is the size of the one tokenizer miss on record -
+`idhazh.measured.WORST_TOKENS_A_WORD` says 1.585 tokens a word and the densest
+cap-length build delivered 1.952, 23 percent over - rounded up to the next whole
+multiple of 16,384 and of the 512-token batch. **Memory did not choose it**:
+every candidate from 32,768 to 65,536 clears the 1.0 GiB bar by more than four
+times, so 528 MiB either way is noise. What a wider window costs is the
+assertion's reach - at 65,536 the sequence could grow 67 percent before the gate
+said so, and at 49,152 it can grow 25. Ruled by Carmack, 2026-09-13.
+**Re-derive it when `extract.truncation_cap_tokens` is fixed or
+`elements.max_per_article` moves.**
+
+**Only 8 of the model's 32 layers hold a KV cache.** The other 24 are recurrent
+and carry a fixed 50.25 MiB whatever the window is, which is why doubling the
+window does not double the footprint and why the 32 KiB a token above is the
+figure over the attention layers rather than over all of them. `n_ctx_train` is
+262,144, so none of these arms scaled RoPE.
+
+Hardware: a developer laptop, i7-1265U, 32 GiB, with four other agents live.
+Peak working set ran 6.05, 8.47 and 9.47 GiB across the three arms and is the
+weaker number of the two - it counts the memory-mapped weights, which the OS may
+evict, and it moves with what else the box was doing. The llama.cpp buffer sizes
+are arithmetic over the model's own architecture and carry to a runner unchanged.
+Method and the token readings taken in the same session:
+[`../architecture/summarize/prompt.md`](../architecture/summarize/prompt.md).
+
 ## What the browser CI job costs against its bound, 2026-09-10
 
 **The `browser` job runs 310 to 384 s against a 25-minute timeout - 20.7 to 25.6
