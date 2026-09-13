@@ -30,7 +30,19 @@ from idhazh.publish_telemetry import (
     shard_relpath,
 )
 
-COMMITTED_SHARDS = sorted((REPO_ROOT / "frontend" / "public" / "telemetry").glob("*.csv"))
+COMMITTED_ROOT = REPO_ROOT / "frontend" / "public" / "telemetry"
+
+
+def _newest_committed_shard() -> Path | None:
+    """The newest published shard, or `None` where none is committed yet.
+
+    One directory listing and one name, so this costs the same whatever the
+    projection has accumulated (`CLAUDE.md` section 13). An older shard is
+    frozen and is the producer's to check, not pytest's - `idhazh validate-days`
+    reads every committed shard back through this contract.
+    """
+    shards = sorted(COMMITTED_ROOT.glob("*.csv"))
+    return shards[-1] if shards else None
 
 
 def _row(**overrides: object) -> ItemHealthRow:
@@ -262,43 +274,57 @@ def test_the_projection_carries_the_contract_header_and_no_version_cell() -> Non
     assert not FORBIDDEN_COLUMNS & set(PublicTelemetryRow.model_fields)
 
 
-def test_every_committed_shard_reads_back_through_the_contract() -> None:
-    """The migration's oracle, on the published file itself.
+def test_the_newest_committed_shard_reads_back_through_the_contract() -> None:
+    """One published file, opened through the shape that now owns it.
 
     A published shard is the one artifact nobody can re-derive once its source
     month has been folded away, so "it still parses" is not the question - the
     question is whether every row loads through the shape that now owns it.
 
-    The newest shard, not every one. An older shard is frozen: if it parsed when
-    it was written it parses now, and the only thing that can change that is the
-    contract - which `ci.yml` re-reads the whole tree for (Guardrail #12).
+    The newest, and only the newest. Asking that of every committed shard is a
+    walk over a collection the pipeline appends to, which section 13 refuses,
+    and it is answered where the data is: `idhazh validate-days` reads every
+    published shard of all seven series back through its producer's reader.
     """
-    assert COMMITTED_SHARDS, "the committed projection has no shards to migrate"
-    path = COMMITTED_SHARDS[-1]
+    path = _newest_committed_shard()
+    if path is None:
+        pytest.skip("no telemetry shard is committed yet")
     rows = read_shard(path)
     assert rows, f"{path.name} published no rows"
     assert all(isinstance(row, PublicTelemetryRow) for row in rows)
     assert b"\r" not in path.read_bytes(), f"{path.name} must be LF"
 
 
-def test_migrating_the_committed_shards_changes_no_byte(tmp_path: Path) -> None:
+def test_migrating_a_published_projection_changes_no_byte(tmp_path: Path) -> None:
     """The migration is a read-back, so it must be a no-op on bytes.
 
-    Run against a copy rather than the committed tree: a dirty working tree is
-    what aborts the publish push and discards a day.
+    Driven from a projection this test builds rather than from the committed
+    one. A built tree costs the same on every run, and it carries the two shapes
+    the archive has never produced: a month published empty, and a month holding
+    one row.
     """
+    state = tmp_path / "state"
     public = tmp_path / "telemetry"
-    public.mkdir()
-    before = {path.name: path.read_bytes() for path in COMMITTED_SHARDS}
-    for path in COMMITTED_SHARDS:
-        (public / path.name).write_bytes(before[path.name])
+    _write_item_health(
+        state,
+        [
+            _row(date="2026-07-31", run_id="2026-07-31-1", item_id="ai-01"),
+            _row(date="2026-08-23", run_id="2026-08-23-1", item_id="ai-01"),
+            _row(date="2026-08-24", run_id="2026-08-24-1", item_id="ai-02"),
+        ],
+    )
+    publish(state_root=state, public_root=public, ensure_month="2026-09")
+    names = sorted(path.name for path in public.glob("*.csv"))
+    assert names == ["2026-07.csv", "2026-08.csv", "2026-09.csv"]
+    assert read_shard(public / "2026-09.csv") == [], "the empty month is the case built for"
+    before = {path.name: path.read_bytes() for path in sorted(public.glob("*.csv"))}
 
     results = migrate(public)
 
-    assert [path.name for path, _, _ in results] == [path.name for path in COMMITTED_SHARDS]
-    for path, rows, unchanged in results:
+    assert [path.name for path, _, _ in results] == names
+    assert [rows for _, rows, _ in results] == [1, 2, 0]
+    for path, _, unchanged in results:
         assert unchanged, f"{path.name} did not survive its own round trip"
-        assert rows > 0
         assert path.read_bytes() == before[path.name]
 
 

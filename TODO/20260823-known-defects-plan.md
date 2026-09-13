@@ -14,7 +14,8 @@ deleted by writing more of it.**
 Defects 15, 16 and 17 closed on 2026-08-27. Defects 19 and 20 were filed later,
 on 2026-09-12, by two rows that found them and declined to widen into them. Both
 closed on 2026-09-13. Defect 20 got its ruling and the ruling moved the fix: the
-fingerprint was right and the producer was wrong.
+fingerprint was right and the producer was wrong. Defect 21 came from plan 24,
+which ruled it a row on 2026-09-12 and never cut one; it closed on 2026-09-13.
 
 Closed rows are removed after checking their current production code, regression
 tests and canonical docs. Git history holds their execution record; the living
@@ -32,6 +33,33 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 18 | The truncation flag still cannot fire, now for a different reason | 5 | **OPEN - not measurable without the scorer weights** |
 | 19 | A summarize call that failed on its reply reports no cost at all | 2 | CLOSED 2026-09-13 (PR #657) |
 | 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | CLOSED 2026-09-13 (PR #660) |
+| 21 | A test walked every published telemetry shard, and it was the only thing reading them back | 2 | CLOSED 2026-09-13 |
+
+## 21 - A test walked every published telemetry shard (CLOSED 2026-09-13)
+
+`backend/tests/test_publish_telemetry.py` copied **every** file under
+`frontend/public/telemetry/` and ran the migration over all of them, on every
+run. Two files and 1,516,467 bytes on 2026-09-13, gaining one file a month.
+`CLAUDE.md` section 13 refuses a test that walks a collection the pipeline
+appends to.
+
+**It could not simply be bounded, which is why it survived two plans.** The loop
+was the only thing in the build that opened every published telemetry file and
+checked it still loaded through its contract: `cli._console_payload_faults`
+named six producers and `publish_telemetry` was not one of them. Deleting the
+loop would have traded a broken rule for a coverage hole.
+
+So the check moved to the producer's own gate, which is where section 13 says
+data hygiene belongs, and the test was rebuilt on a projection it writes itself -
+carrying an empty month and a one-row month, neither of which the committed
+archive has ever produced. The gate's own docstring now names the one directory
+whose `keep_months` is declared and not enforced, because a sentence that said
+all seven were bounded would have been wrong.
+
+Found by plan 24 row #4 on 2026-09-12 and ruled a row rather than a gap by
+Fowler the same day. No row was cut, and
+[`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md)
+closed with it outstanding.
 
 ## 18 - The truncation flag still cannot fire, now for a different reason (OPEN)
 

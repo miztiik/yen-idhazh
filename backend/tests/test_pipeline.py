@@ -15,6 +15,7 @@ import hashlib
 import inspect
 import itertools
 import json
+import logging
 import socket
 import threading
 from collections.abc import Callable
@@ -3103,6 +3104,33 @@ def test_a_day_whose_payload_moved_is_opened_again(tmp_path: Path) -> None:
     held = cli._receipts_for(state, cli._validator_identity())
     assert len(held["2026-08-21"]) == 2, "the superseded row should still be on file"
     assert cli._proved(held["2026-08-21"], rewritten.stat().st_size)
+
+
+def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The seventh producer, which read back nowhere until 2026-09-13.
+
+    `frontend/public/telemetry/` is a published mirror a reader's console
+    fetches, and it was the one no producer gate opened. A pytest walk over the
+    committed shards stood in for it, which section 13 refuses, so the check
+    moved to the producer's own gate - where it runs against the tree the run
+    wrote rather than against whatever the repository has accumulated.
+    """
+    public = tmp_path / "public"
+    state = tmp_path / "state"
+    a_published_day(public)
+    root = public / "digest"
+    assert cli.stage_validate_days(root, state_dir=state) == 0, "the day itself has to be clean"
+
+    shard = public / "telemetry" / "2026-08.csv"
+    shard.parent.mkdir(parents=True)
+    shard.write_text("date,not_the_contract\n2026-08-21,1\n", encoding="utf-8")
+
+    with caplog.at_level(logging.ERROR):
+        assert cli.stage_validate_days(root, state_dir=state) == 1
+    assert "frontend/public/telemetry/2026-08.csv" in caplog.text, "name the file"
+    assert "header is" in caplog.text, "and say what the contract wanted instead"
 
 
 def test_a_named_day_is_opened_even_when_it_carries_a_receipt(tmp_path: Path) -> None:
