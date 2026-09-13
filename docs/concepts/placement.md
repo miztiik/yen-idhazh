@@ -34,6 +34,10 @@ broken (`backend/tests/test_placement.py`).
 | `placement.max_desk_in_head` | 5 | How many of those 20 one desk may hold |
 | `placement.head_no_repeat` | 10 | How far down the head one feed may not repeat |
 
+Two more sit in `config/taxonomy.json` rather than here, one pair per desk,
+because they are bounds on a desk and that is where a desk's other bound already
+lives: [what a desk may not fall below, and may not rise above](#what-a-desk-may-not-fall-below-and-may-not-rise-above).
+
 ## Why this story is above that one
 
 Every story gets a number, and the number decides the order. It is worked out
@@ -250,7 +254,161 @@ The frame counts the desk a **reader** sees, which is `desk` where something has
 read the article and the feed's declared `vertical` where nothing has. Counting
 anything else would cap a grouping nobody is shown.
 
+## What a desk may not fall below, and may not rise above
+
+Two more numbers a person sets, one pair per desk, in `config/taxonomy.json`
+beside the `min_feeds` floor each desk already carries. They run in
+`placement.refile`, over the whole day rather than over its head.
+
+| Desk | Floor | Ceiling | What it means |
+| --- | ---: | ---: | --- |
+| India | 6 | 0.4 | India may hold up to four stories in ten of a day. A region desk covers many subjects, so a large share of it is still a varied digest |
+| World | 6 | 0.4 | World may hold up to four in ten, for the same reason India may |
+| AI | 6 | 0.35 | AI may hold up to seven stories in twenty. More room than Energy or Business because it has 35 feeds where they have 21, less than a region desk because it is one subject rather than a place |
+| Energy | 6 | 0.25 | Energy may hold up to one story in four. Past that a reader who opened a news digest is reading an energy newsletter with four small rails |
+| Business and Economy | 6 | 0.25 | The same, for the same reason |
+
+**The floor is a count and the ceiling is a share, and the difference is the
+point.** A count is a moving share - ten stories is 1.4 percent of a 731-story
+day and a quarter of a 40-story one - so the rule about one desk crowding out
+the rest of the day has to be a share. A floor is a count because it asks
+whether the desk is worth opening at all, and six stories is a fragment on a
+100-story day and on a 450-story one alike.
+
+**Neither one admits a story or drops one.** Both re-file: a story over the
+ceiling moves to the desk it would otherwise have been filed under, and a thin
+desk is opened from stories the day already carries. The day is exactly as long
+either way, so nothing a reader could have seen is ever taken out
+(`backend/tests/test_placement.py`).
+
+### The four things neither rule may do
+
+- **The floor never admits a story a gate refused.** Too old, a desk whose feeds
+  did not answer today, a read that failed, a summary that failed - all of them
+  stand. A refused story never becomes a story at all, so there is nothing for a
+  floor to reach; and a desk this run will not render receives nothing, because
+  a page showing stories under a name the same day says planned nothing is the
+  page and the operator surface disagreeing about one word.
+- **A desk it cannot fill publishes thin and says so.** The day's own record
+  already carries the reason - how many addresses the desk was offered, how many
+  were too old, and whether its feeds were under their floor.
+- **The floor never reaches a previous day.** A day fills from its own stories.
+- **A desk never dips under its own floor to lift another over theirs.** That is
+  two thin desks where there was one full one, so a floor that cannot be reached
+  in one piece is not started.
+
+### What happens to the overflow today, said plainly
+
+A story over its desk's ceiling goes to the desk whose feed carried it. So the
+rule only has somewhere to send a story when something has already filed it
+somewhere other than there - and **nothing reads an article yet, so on every day
+published so far a story's only desk IS its feed's desk and nothing moves.**
+Measured 2026-09-13 over the committed archive: 0 of 9,353 items across 24 days
+carry a read desk.
+
+**That is the honest state and it is written here rather than implied.** The two
+numbers are live arithmetic with a test behind each, and they change no day the
+site has published. They start moving stories on the day a model reads the
+article and names the desk itself, which is
+[20260910-23-article-classification-plan.md](../../TODO/20260910-23-article-classification-plan.md)
+row #6 - not on the day a story gains a second desk of its own reading, which is
+plan 25 row #8. **A ceiling with nowhere to send a story leaves it where it is**
+rather than shortening the day, and that is the one behaviour this rule may
+never get wrong.
+
 ## Design rationale
+
+### The desk floor and the desk ceiling, and the numbers behind them (2026-09-13)
+
+**Five desks cannot go empty today and nothing in the code guarantees it.** A
+feed sits on exactly one desk, and a desk's `min_feeds` floor counts FEEDS
+rather than stories, so the five desks are held up by the shape of
+`config/sources.json` and not by a rule.
+
+**And the failure to expect is not the obvious one.** The obvious risk is a desk
+going empty. The risk the measurements point at is the opposite: on a heavy-AI
+day, a model reading the article concentrates where the feeds distributed. Three
+AI-adjacent stories arriving on an Energy feed, a Business feed and a World feed
+are three desks today and one desk afterwards - so a five-desk digest becomes a
+one-desk digest with four thin rails, on exactly the day a reader most needs the
+other four. The ceiling is what stops that and the floor is what fills the gap
+it leaves.
+
+Measured 2026-09-13 from the committed archive, 24 days and 9,353 items,
+2026-08-21 to 2026-09-13, counting the desk a reader sees.
+
+| Desk | Share of the archive | Worst day | Worst full day | Fewest in a day |
+| --- | ---: | ---: | ---: | ---: |
+| `india` | 32.4 percent | 44.7 | 44.7 | 0 |
+| `world` | 26.9 | 37.2 | 37.2 | 0 |
+| `ai` | 14.7 | 100.0 | **29.5** | 3 |
+| `energy` | 13.2 | 19.3 | 19.3 | 0 |
+| `business-economy` | 12.7 | 16.7 | 16.7 | 0 |
+
+A full day runs 282 to 731 stories, median 374 over the 20 days above 100. Four
+days are stubs from the pipeline's first week and from a day still running, and
+`ai`'s 100 percent is one of them: 4 stories out of 4 on 2026-08-21.
+
+**Every ceiling sits above what supply has ever produced, and that is the whole
+design.** ESCALATE trigger 2 of the placement plan fires at a desk above roughly
+a third of the day **when supply does not put it there**, so a ceiling that cut
+into a real day would be enforcing a quota rather than catching a failure. Four
+of the five have never fired on the committed archive. `india` would have fired
+on one day, by 4.7 points - about 17 stories, well inside the one-in-ten
+day-over-day churn the same plan sets as its other trigger.
+
+**The tiers are editorial rather than statistical.** A region desk is a
+container for many stories; a subject desk is one story told many ways. A
+40-percent India day still has an election, a flood, a rate decision and a
+company. A 40-percent AI day is one story forty times, and duplication is the
+cheapest thing on any desk to cut. `ai` sits between the two because it is a
+subject with 35 feeds where the other subject desks have 21.
+
+**`ai` was ruled at 0.35 rather than 0.30 on one number.** 29.5 percent is the
+largest share it has ever taken on a real day, and it took it on the largest day
+in the archive - 216 stories of 731, on 2026-08-24. A ceiling of 0.30 clears
+that by half a point, so it would not bind today and would bind on the next
+AI-heavy day, cutting four real stories off the day AI genuinely was the news. A
+desk ceiling exists to stop one desk crowding the others out of a day that had
+room for them; it is not a device for trimming the day's dominant story.
+
+**The floor is six on every desk, and it is deliberately low.** Below six a desk
+page is less than one screen and a reader who chose that desk regrets it; at six
+there is a lead and five behind it. It is the same number on all five because
+"worth opening at all" means the same thing to a reader whichever pill they
+tapped. A floor of 20 on a day with 8 real Energy stories would file 12 stories
+under a label that is false, and the desk label is a factual claim about the
+story. A thin desk shown as thin is honest; a padded desk is not. On the
+committed archive a floor of 6 never fires - every desk's median is 36 or higher.
+
+**What a reader loses, said plainly.** On a genuinely huge India day they see a
+handful of India stories filed under World. They lose the label, not the story:
+it is in the same stream, in the same order, and one tap away on the desk it
+moved to. Nothing is removed from the day.
+
+**The two numbers cannot contradict each other, and the arithmetic that stops
+them is borrowed.** Five desks at a floor of six need thirty stories, and a
+quarter of a twenty-story day is five. So a desk's allowance is the larger of
+its floor and its share of the day - the same shape `rank.day_source_ceiling`
+already uses for the per-feed case, and for the same reason. It also switches the
+ceiling off on a day too thin to backfill, at the exact point where it would
+have cut a desk below the breadth the floor guarantees, rather than at a day
+size somebody guessed. A stated minimum day size was offered and refused for
+being a sixth number nobody could point at a day for.
+
+**A day-size threshold and a global floor were both rejected.** `ai` has 35
+feeds and the other four have 21, so one number for all five would mean
+different things on different desks; the floor is per-desk for the same reason
+`min_feeds` already is. Filling a thin desk from a previous day was refused
+because it publishes yesterday under today's date, and `ui.lead_max_yesterday`
+already bounds the one place a previous day may appear, at one. Dropping a thin
+desk from the pill row was refused because the desk exists in
+`config/taxonomy.json` and a reader who chose it yesterday would find it gone
+with no explanation.
+
+Ruled by Editor, 2026-09-13, over three rounds: the tiers and the floor, then
+`ai`'s number against its maximum real-day share, then the arithmetic that keeps
+the two rules agreeing.
 
 ### Carriage became a tie-break, and it moved the lead on 8 days in 13 (2026-09-13)
 
