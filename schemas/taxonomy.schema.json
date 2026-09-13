@@ -29,6 +29,23 @@
           },
           "title": "Keywords",
           "type": "array"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired On"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
         }
       },
       "required": [
@@ -181,6 +198,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "EventDef extends Lifecycled, so an event carries status and retired_on the way a vertical and a lens already do. definition_block offers only active events, event_terms drops a retired one, and the definition rule asks only the events the vocabulary still offers.",
+      "version": "2026-09-13",
+      "why": "Retire, never delete is the rule the other two vocabularies follow, and the event vocabulary could not follow it: EventDef extended plain Model, so there was nothing to retire an event WITH. Deleting the entry was the only way to stop offering a word, and that leaves every committed day carrying it holding an id nothing can name - which is the cost the lens tombstone already exists to avoid. Additive with defaults, so a taxonomy written before this still validates unchanged and every event in it reads as active; no read-side migration is needed. Its own entry rather than a clause of the 2026-09-12T03:55 retype, because that one is breaking on the write side and an expand bundled into a break cannot be reverted on its own (section 11)."
+    },
+    {
       "change": "LensDef.id and EventDef.id are Slug rather than the closed LensId and EventType enums, which are deleted. Taxonomy no longer requires the file to label every enum member exactly once; ids must only be distinct within their vocabulary.",
       "version": "2026-09-12T03:55",
       "why": "Adding or retiring a lens was a Python edit, a schema regeneration and a release, which is the opposite of the rule that a label vocabulary is config - and it is why the vocabulary had not moved. The schema now gates shape (the slug pattern) and never membership, so a word is one config edit. Breaking on the write side, read-compatible on the read side and deliberately so (section 11): every id any committed payload carries is a well-formed slug, so a widened type accepts every one of them, where a narrowed one would reject a day whose word this file has since stopped carrying. Nothing may invent a label, because tag.tags can only return a key of the mapping this file builds. What the enum was also doing was making it impossible to DELETE an id: measured 2026-09-12, ai-roi is retired here and carried by 18 committed items over 2026-08-27, 08-28 and 08-29, so deleting it rather than tombstoning it would leave those 18 holding a word nothing can name. That is what the reading side migrates for - it renders an id it cannot name rather than dropping it."
@@ -228,7 +250,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-12T03:55",
+      "default": "2026-09-13",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -248,5 +270,5 @@
   ],
   "title": "Taxonomy",
   "type": "object",
-  "version": "2026-09-12T03:55"
+  "version": "2026-09-13"
 }
