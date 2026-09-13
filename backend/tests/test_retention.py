@@ -44,6 +44,7 @@ from idhazh.contracts.app_config import (
     ObservabilityConfig,
     RetentionConfig,
 )
+from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
@@ -130,7 +131,7 @@ def test_an_absent_site_measures_as_nothing(tmp_path: Path) -> None:
 
 
 def test_the_site_is_measured_every_run(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2026-08-21": ["a.webp", "b.webp"]})
+    root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp", "b-0000000002.webp"]})
     size = measure(root)
     assert size.files == 3
     assert size.bytes_used > 2000
@@ -176,22 +177,22 @@ def test_a_ceiling_hugging_alarm_would_fail_this_check() -> None:
 
 def test_the_alarm_only_reports(tmp_path: Path) -> None:
     """It is an alarm, not a gate: it says yes and deletes nothing."""
-    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
-    (root / "2026" / "08" / "21" / "big.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
+    root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
+    (root / "2026" / "08" / "21" / "big-0000000005.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
     before = measure(root)
     assert over_budget(before, RetentionConfig(site_budget_mb=1)) is True
     assert measure(root) == before
 
 
 def test_a_small_site_is_not_over_budget(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
     assert not over_budget(measure(root), RetentionConfig())
 
 
 def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
     """The words the run logs: None below the budget, a headroom line above it."""
-    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
-    (root / "2026" / "08" / "21" / "big.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
+    root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
+    (root / "2026" / "08" / "21" / "big-0000000005.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
     over = measure(root)
     assert budget_alarm(over, RetentionConfig()) is None
     line = budget_alarm(over, RetentionConfig(site_budget_mb=1))
@@ -201,7 +202,7 @@ def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
 
 
 def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
     assert headroom_mb(measure(root)) == pytest.approx(PAGES_HARD_CAP_MB, abs=1)
 
 
@@ -303,11 +304,11 @@ def test_a_retracted_deletion_equals_an_independent_walk(tmp_path: Path) -> None
     directory survives and keeps its entry, and a file sitting directly under the
     root, where the entry goes with the file.
     """
-    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     (root / "sitemap.xml").write_bytes(b"x" * 40)
     before = measure(root)
 
-    doomed = [root / "2020" / "01" / "01" / "a.webp", root / "sitemap.xml"]
+    doomed = [root / "2020" / "01" / "01" / "a-0000000001.webp", root / "sitemap.xml"]
     sizes = {path: path.stat().st_size for path in doomed}
     for path in doomed:
         path.unlink()
@@ -317,10 +318,10 @@ def test_a_retracted_deletion_equals_an_independent_walk(tmp_path: Path) -> None
 
 def test_maintaining_the_total_does_not_read_more_as_the_tree_grows(tmp_path: Path) -> None:
     """Guardrail #12, counted. The walk grows with the archive and the retraction does not."""
-    small = site(tmp_path / "small", {"2026-08-20": ["a.webp", "b.webp"]})
+    small = site(tmp_path / "small", {"2026-08-20": ["a-0000000001.webp", "b-0000000002.webp"]})
     large = site(
         tmp_path / "large",
-        {f"2026-08-{day:02d}": [f"{n}.webp" for n in range(6)] for day in range(1, 11)},
+        {f"2026-08-{day:02d}": [f"p-{n:010d}.webp" for n in range(6)] for day in range(1, 11)},
     )
 
     walked_small = reads_during(lambda: measure(small))
@@ -332,10 +333,10 @@ def test_maintaining_the_total_does_not_read_more_as_the_tree_grows(tmp_path: Pa
     carried_small = measure(small)
     carried_large = measure(large)
     assert (
-        reads_during(lambda: carried_small.minus(small, {small / "2026/08/20/a.webp": 1000})) == 0
+        reads_during(lambda: carried_small.minus(small, {small / "2026/08/20/a-0000000001.webp": 1000})) == 0
     )
     assert (
-        reads_during(lambda: carried_large.minus(large, {large / "2026/08/01/0.webp": 1000})) == 0
+        reads_during(lambda: carried_large.minus(large, {large / "2026/08/01/p-0000000000.webp": 1000})) == 0
     )
 
 
@@ -553,10 +554,10 @@ def test_retention_is_off_by_default() -> None:
 
 
 def test_a_disabled_policy_deletes_nothing(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     result = prune(root, RetentionConfig(), date(2026, 8, 21))
     assert result.deleted == 0
-    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+    assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
 
 
 # --- The committed window names days, and still deletes none of them ----------
@@ -603,8 +604,8 @@ def test_the_committed_window_selects_only_rendered_visuals_past_its_cutoff(
         tmp_path,
         {
             expired.isoformat(): ["ai-01.svg", "ai-02.png"],
-            inside.isoformat(): ["kept.svg"],
-            WINDOW_TODAY.isoformat(): ["today.svg"],
+            inside.isoformat(): ["kept-0000000006.svg"],
+            WINDOW_TODAY.isoformat(): ["today-0000000007.svg"],
         },
     )
 
@@ -615,7 +616,7 @@ def test_the_committed_window_selects_only_rendered_visuals_past_its_cutoff(
     assert len(candidates) == result.considered == 2, "an empty list proves nothing"
     for path in candidates:
         day, month, year = path.parent.name, path.parent.parent.name, path.parent.parent.parent.name
-        assert path.suffix.lower() in retention._VISUAL_SUFFIXES, f"{path.name} is not a visual"
+        assert re.match(ITEM_ID_PATTERN, path.stem), f"{path.name} is not named for an item"
         assert date(int(year), int(month), int(day)) < limit, f"{path} is inside the window"
 
 
@@ -655,7 +656,7 @@ def test_one_run_can_clear_a_backlog_the_committed_window_would_open(tmp_path: P
     assert limit is not None
     heaviest = 43
     expired = (limit - timedelta(days=1)).isoformat()
-    root = site(tmp_path, {expired: [f"{n}.svg" for n in range(heaviest)]})
+    root = site(tmp_path, {expired: [f"p-{n:010d}.svg" for n in range(heaviest)]})
 
     result = prune(root, config, WINDOW_TODAY)
 
@@ -668,38 +669,74 @@ def test_one_run_can_clear_a_backlog_the_committed_window_would_open(tmp_path: P
 
 
 def test_only_visuals_are_candidates(tmp_path: Path) -> None:
-    """The payload is the record that a day happened. Text is never pruned."""
-    root = site(tmp_path, {"2020-01-01": ["old.webp", "notes.txt"]})
+    """A visual is a file named for an item, and nothing else in a day is.
+
+    It was a set of image suffixes until 2026-09-13, when the reader's browser
+    took over the drawing and a visual became a `.json` document - the same
+    extension the day's own payloads carry. Reading identity instead of
+    extension is what keeps those safe, and it needs no list of names to skip.
+    """
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp", "notes.txt"]})
     found = visuals_older_than(root, date(2026, 8, 21))
-    assert [path.name for path in found] == ["old.webp"]
+    assert [path.name for path in found] == ["old-0000000003.webp"]
+
+
+def test_the_day_s_own_payloads_are_never_candidates(tmp_path: Path) -> None:
+    """`digest.json` is the record that a day happened and is never deleted.
+
+    It sits in the same directory as a visual and now carries the same
+    extension, so this is the arm that would have caught the cheap version of
+    this change - adding `.json` to a suffix set. `run.json` is here for the
+    same reason: it walked straight through the deny-list that named only
+    `digest.json`, which is why there is no deny-list any more.
+    """
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.json"]})
+    (root / "2020" / "01" / "01" / "run.json").write_text('{"n": 1}', encoding="utf-8")
+
+    found = visuals_older_than(root, date(2026, 8, 21))
+
+    assert [path.name for path in found] == ["old-0000000003.json"]
+
+
+def test_an_enabled_policy_keeps_both_of_the_day_s_own_payloads(tmp_path: Path) -> None:
+    """The prune runs for real, and the two files it may never touch are still there."""
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.json"]})
+    (root / "2020" / "01" / "01" / "run.json").write_text('{"n": 1}', encoding="utf-8")
+
+    result = prune(root, RetentionConfig(image_months=6, dry_run=False), date(2026, 8, 21))
+
+    assert result.deleted == 1
+    assert not (root / "2020" / "01" / "01" / "old-0000000003.json").exists()
+    assert (root / "2020" / "01" / "01" / "digest.json").exists()
+    assert (root / "2020" / "01" / "01" / "run.json").exists()
 
 
 def test_a_recent_day_is_never_a_candidate(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2026-08-21": ["new.webp"]})
+    root = site(tmp_path, {"2026-08-21": ["new-0000000004.webp"]})
     assert visuals_older_than(root, date(2026, 1, 1)) == []
 
 
 def test_a_dry_run_reports_without_deleting(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     config = RetentionConfig(image_months=6, dry_run=True)
     result = prune(root, config, date(2026, 8, 21))
     assert result.considered == 1
     assert result.deleted == 0
-    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+    assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
 
 
 def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     config = RetentionConfig(image_months=6, dry_run=False)
     result = prune(root, config, date(2026, 8, 21))
     assert result.deleted == 1
-    assert not (root / "2020" / "01" / "01" / "old.webp").exists()
+    assert not (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
     assert (root / "2020" / "01" / "01" / "digest.json").exists(), "the day survives its picture"
 
 
 def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     """An off-by-one in a date parse must not eat the archive."""
-    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(10)]})
+    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(10)]})
     config = RetentionConfig(image_months=6, dry_run=False, max_deletes_per_run=3)
     result = prune(root, config, date(2026, 8, 21))
     assert result.deleted == 3
@@ -738,7 +775,7 @@ def dated_tree(root: Path, *, days: int, pictures: int) -> Path:
     return site(
         root,
         {
-            (SCAN_START + timedelta(days=n)).isoformat(): [f"{i}.webp" for i in range(pictures)]
+            (SCAN_START + timedelta(days=n)).isoformat(): [f"p-{i:010d}.webp" for i in range(pictures)]
             for n in range(days)
         },
     )
@@ -751,10 +788,9 @@ def by_sorting_the_whole_tree(root: Path, limit: date) -> list[Path]:
     has something to be equal to. It may cost whatever it likes - it runs over a
     fixture of fixed size, never over the archive.
     """
-    pictures = {".png", ".webp", ".jpg", ".jpeg", ".svg"}
     found: list[Path] = []
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in pictures:
+        if not path.is_file() or not re.match(ITEM_ID_PATTERN, path.stem):
             continue
         parts = path.relative_to(root).parts
         if len(parts) < 3:
@@ -903,7 +939,7 @@ def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Pa
     as long as whatever wrote them keeps writing. The root above is the other
     way round and stays that way - see the stray-directory test further down.
     """
-    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     (root / "2020" / "notes.txt").write_bytes(b"x")
 
     with pytest.raises(ValueError, match=r"2020/notes\.txt is not a month"):
@@ -923,7 +959,7 @@ def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> Non
     A run that deleted 200 and skipped 0 has cleared its backlog. A run that
     deleted 200 and skipped 100 has not. `deleted` is 200 in both.
     """
-    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
     config = RetentionConfig(image_months=6, dry_run=False)
     assert config.max_deletes_per_run == 200
 
@@ -951,7 +987,7 @@ def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -
     against 300 found is a run that reported, and it is readable off the numbers
     without cross-referencing the `dry_run` cell.
     """
-    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
     config = RetentionConfig(image_months=6, dry_run=True)
 
     result = prune(root, config, date(2026, 8, 21))
@@ -970,15 +1006,15 @@ def test_the_flag_can_only_make_a_run_report_and_never_delete(tmp_path: Path) ->
     There is no argument that turns deletion on, which is what keeps the two
     guards independent: a workflow edit alone cannot make this delete.
     """
-    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     live = RetentionConfig(image_months=6, dry_run=False)
 
     assert prune(root, live, date(2026, 8, 21), dry_run=True).deleted == 0
-    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+    assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
 
     shipped = RetentionConfig(image_months=6, dry_run=True)
     assert prune(root, shipped, date(2026, 8, 21), dry_run=False).deleted == 0
-    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+    assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
 
 
 def test_the_bytes_are_the_files_that_actually_left_the_tree(
@@ -992,7 +1028,7 @@ def test_the_bytes_are_the_files_that_actually_left_the_tree(
     really holds - is kept by the last line here, and by
     `test_the_after_total_counts_only_the_files_that_actually_left` below.
     """
-    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     config = RetentionConfig(image_months=6, dry_run=False)
 
     result = prune(root, config, date(2026, 8, 21))
@@ -1012,7 +1048,7 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
     had just removed the files, so it had their sizes. Counted rather than timed,
     because the cost this row is about is what gets read.
     """
-    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     walked = 0
     unpatched = retention.measure
 
@@ -1039,8 +1075,8 @@ def test_the_after_total_counts_only_the_files_that_actually_left(
     the pass retracts a file only once the file is gone, and one that stayed is
     charged to neither number.
     """
-    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
-    stubborn = root / "2020" / "01" / "01" / "b.webp"
+    root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
+    stubborn = root / "2020" / "01" / "01" / "b-0000000002.webp"
     unpatched = Path.unlink
 
     def refuse(self: Path, *args: Any, **kwargs: Any) -> None:
@@ -1062,7 +1098,7 @@ def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path:
     None is a different fact from "the oldest one is recent", and a stand-in date
     would read like the second.
     """
-    root = site(tmp_path, {"2020-01-01": ["old.webp"], "2026-08-20": ["new.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"], "2026-08-20": ["new-0000000004.webp"]})
     config = RetentionConfig(image_months=6, dry_run=False)
 
     result = prune(root, config, date(2026, 8, 21))
@@ -1082,7 +1118,7 @@ def test_a_switched_off_policy_still_reports_the_tree_it_looked_at(tmp_path: Pat
     the first row would arrive on the day the policy started working and there
     would be nothing to compare it against.
     """
-    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
 
     result = prune(root, RetentionConfig(), date(2026, 8, 21))
 
@@ -1099,7 +1135,7 @@ def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
     The policy is on the row rather than looked up, because config moves and a
     row read a year later has to say which policy it was written under.
     """
-    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
     config = RetentionConfig(image_months=6, dry_run=False)
 
     row = prune_row(
@@ -1167,7 +1203,7 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
     the committed archive.
     """
     state = tmp_path / "state"
-    digest = site(tmp_path / "public", {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+    digest = site(tmp_path / "public", {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
 
     with caplog.at_level(logging.INFO):
         assert (
