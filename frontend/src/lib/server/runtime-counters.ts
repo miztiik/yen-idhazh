@@ -34,7 +34,7 @@ import { itemRead } from '../charts/machine';
 import { inferenceConfig, runConfig } from './config';
 import {
 	itemHealthRows,
-	LEDGER_WINDOW_MONTHS,
+	LEDGER_WINDOW_DAYS,
 	readCsv,
 	STATE_ROOT,
 	type CsvTable
@@ -655,11 +655,11 @@ export function machineLimits(): MachineLimits {
  * The one caller a route needs. Reading happens here and nowhere else, so
  * `machineCounters` stays drivable from a fixture.
  *
- * `months` covers the item-health side, which is a directory of month shards.
+ * `days` covers the item-health side, which files one CSV a recorded day.
  * `state/runtime-counters.csv` is one file and carries its own cover: the route
  * keeps the runs inside the open span, and every run older than the widest
  * preset is filtered out before a panel sees it.
  */
-export function loadMachineCounters(months: number = LEDGER_WINDOW_MONTHS): MachineCounters {
-	return machineCounters(runtimeCounterRows().rows, itemHealthRows(months).rows, machineLimits());
+export function loadMachineCounters(days: number = LEDGER_WINDOW_DAYS): MachineCounters {
+	return machineCounters(runtimeCounterRows().rows, itemHealthRows(days).rows, machineLimits());
 }

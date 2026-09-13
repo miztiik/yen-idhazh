@@ -492,8 +492,20 @@ def records(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def committed_shards() -> list[Path]:
-    return sorted((REPO_ROOT / "state" / ledger.ITEM_HEALTH_DIRNAME).glob("*.csv"))
+def newest_committed_day() -> tuple[Path, str]:
+    """The newest committed item-health day file, and the date it is filed under.
+
+    Three listings - newest year, newest month, newest day - rather than a walk of
+    the tree. The question is what header the file the pipeline appends to
+    carries, and only the newest answers it, so the cost stays at most twelve plus
+    thirty-one entries however long the project runs (`CLAUDE.md` section 13,
+    Guardrail #12).
+    """
+    root = REPO_ROOT / "state" / ledger.ITEM_HEALTH_DIRNAME
+    year = max(path for path in root.iterdir() if path.is_dir())
+    month = max(path for path in year.iterdir() if path.is_dir())
+    day = max(path for path in month.iterdir() if path.suffix == ".csv")
+    return day, f"{year.name}-{month.name}-{day.stem}"
 
 
 def test_a_cut_item_carries_both_counts_and_the_cut_is_the_difference() -> None:
@@ -623,14 +635,13 @@ def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path)
     """The Oracle, second half: append to a byte copy of what is committed.
 
     `require_matching_header` compares the header tuple exactly, so the commit
-    that gave the contract this column stops the shard the pipeline is appending
-    to until the file is widened by the same column. That is a failed scheduled
-    run, not a failed lint. This is the run a release blocker would fail, and it
+    that gave the contract this column stops the file the pipeline is appending
+    to until it is widened by the same column. That is a failed scheduled run,
+    not a failed lint. This is the run a release blocker would fail, and it
     also proves the widened file can carry a real value - an absence check on
     its own passes on a file nothing was ever written to.
     """
-    committed = committed_shards()[-1]
-    date = f"{committed.stem}-01"
+    committed, date = newest_committed_day()
     state = tmp_path / "state"
     target = ledger.item_health_path(state, date)
     target.parent.mkdir(parents=True)

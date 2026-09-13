@@ -50,7 +50,9 @@ def clock_for(scope: str) -> ShardClock:
 
 def fixture_rows() -> list[list[str]]:
     """The item ledger re-read positionally, which shares no code with `read_items`."""
-    with (LEDGERS / "item-health" / "2026-01.csv").open(encoding="utf-8", newline="") as handle:
+    with (LEDGERS / "item-health" / "2026" / "01" / "01.csv").open(
+        encoding="utf-8", newline=""
+    ) as handle:
         return list(csv.reader(handle))[1:]
 
 
@@ -75,7 +77,7 @@ def naive_percentile(values: Sequence[int], share: float) -> int:
 
 def test_the_fixture_only_names_columns_the_real_ledgers_have() -> None:
     pairs = (
-        ("item-health/2026-01.csv", ItemHealthRow.csv_columns()),
+        ("item-health/2026/01/01.csv", ItemHealthRow.csv_columns()),
         ("runtime-counters.csv", RuntimeCountersRow.csv_columns()),
         ("scores/2026-01.csv", EvalRow.csv_columns()),
     )

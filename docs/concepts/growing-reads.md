@@ -203,7 +203,7 @@ listed: its cover is its argument. These are `backend/`'s;
 | --- | --- | --- |
 | `ledger.load_seen` | month shards of `state/seen/` | `collect.seen_window_days`, committed at 90 |
 | `ledger.load_health` | month shards of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
-| `ledger.load_item_health` | month shards of `state/item-health/` | the caller's `within_days` |
+| `ledger.load_item_health` | day files of `state/item-health/` | the caller's `within_days` |
 | `ledger.reliability` | the feed-health shards in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
 
@@ -214,8 +214,8 @@ listed: its cover is its argument. These are `backend/`'s;
 | `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
 | `cli.stage_dedupe_ledgers`, via `ledger.keyed_paths` | six files on the ordinary pass | the files this run staged |
 | `cli.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
-| `ledger.load_settled_failures` | one item-health shard | one date |
-| `ledger.load_source_counts` | one item-health shard | one date |
+| `ledger.load_settled_failures` | one item-health day file | one date |
+| `ledger.load_source_counts` | one item-health day file | one date |
 | `ledger.load_runtime_counters` | streams `state/runtime-counters.csv` | one run |
 | `fingerprint.append_new` | streams `state/fingerprints.csv` | the identities on record, not the file |
 | `corpus.scored_from_items` | one run's items directory | one run |
@@ -253,7 +253,7 @@ read".
 | --- | --- | --- |
 | `publish_console.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries |
 | `publish_scores.publish`, `publish_feed_health.publish`, `publish_span_rollup.publish` | the state shard for the month named | the month the run appended to |
-| `publish_telemetry.publish` | the `state/item-health/` partitions the caller names, or every one when it names none | **the month the run appended to**, which is what `cli.stage_assemble` passes; `months=None` is unbounded on purpose |
+| `publish_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `cli.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `publish_day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `publish_run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
 | `publish_console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards | `max(console.window_presets)`, committed at 90 |
@@ -295,12 +295,27 @@ measurement noise. `publish_telemetry.migrate` is the module's other growing rea
 and declares `-1`: rewriting every shard is the job, and it is an operator
 command a person runs once on a contract change rather than a per-run cost.
 
+**The ledger moved to day files on 2026-09-13, and this read got worse in
+handles and not in rows.** `state/item-health/` now files
+`<YYYY>/<MM>/<DD>.csv`, so the publisher folds a month from that month's day
+files through `day_partition.days_by_month`. The daily arm still opens one
+month's worth - at most 31 files rather than one - and the unbounded arm opens
+every recorded day rather than every month: **2 opens became 20 on 2026-09-13,
+11,223 rows over 20 days, and about 365 a year.** It is declared here under
+Guardrail #12's escape hatch rather than bounded, because the bound belongs on
+the store: the same fourteen-month cap answers it, and a cover in months on the
+read would leave a fresh clone permanently short of a mirror it never published.
+The count is checked rather than asserted in prose -
+`backend/tests/test_publish_telemetry.py` counts the handles both arms open, over
+a twelve-month ledger the test builds.
+
 **What the two arms open is counted rather than timed**, in
 `backend/tests/test_publish_telemetry.py`, over a twelve-partition ledger the
 test builds: the backfill opens twelve and the daily pass opens one. The count is
-also the tripwire for the day-grain move - `publish`'s glob is `*.csv` and not
-recursive, so a ledger that files by day would take the backfill to **zero**
-rather than to an error.
+also the tripwire the day-grain move was measured against - `publish`'s glob was
+`*.csv` and not recursive, so a ledger that filed by day would have taken the
+backfill to **zero** rather than to an error, and the count went red before the
+move landed rather than after.
 
 ### The oracle, and what it caught
 
@@ -367,10 +382,11 @@ the last day there was.
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded ledger | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
-| `payload.evalRows`, `payload.itemHealthRows`, `payload.feedResults` | through `readShards`, over `state/scores/`, `state/item-health/` and `state/feed-health/` | the same 5 |
+| `payload.readDayShards`, `payload.itemHealthRows` | the newest `days` day files of `state/item-health/` | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91 |
+| `payload.evalRows`, `payload.feedResults` | through `readShards`, over `state/scores/` and `state/feed-health/` | the same 5 |
 | `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
-| `runtime-counters.loadMachineCounters` | one file, plus item-health through `readShards` | the shard cover, and `state/runtime-counters.csv` is one file |
-| `payload.itemHealthForDay` | one item-health shard | one date |
+| `runtime-counters.loadMachineCounters` | one file, plus item-health through `readDayShards` | the day cover, and `state/runtime-counters.csv` is one file |
+| `payload.itemHealthForDay` | one item-health day file | one date |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
