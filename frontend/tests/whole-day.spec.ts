@@ -111,10 +111,14 @@ function theTreeUnderTest(): string[] {
 
 const SERVED_DATES = theTreeUnderTest();
 
-/** How many drawings a served day stages, counted off the files themselves. */
+/** What a per-item published file is named, and it is the whole rule.
+ * `digest.json` and `run.json` belong to the day rather than to a story. */
+const ITEM_FILE = /^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
+
+/** How many visuals a served day stages, counted off the files themselves. */
 function drawingFiles(date: string): number {
 	const [year, month, day] = date.split('-');
-	return readdirSync(join(BUILT, year, month, day)).filter((name) => name.endsWith('.svg')).length;
+	return readdirSync(join(BUILT, year, month, day)).filter((name) => ITEM_FILE.test(name)).length;
 }
 
 /** The served payload's size in bytes, which is what a browser downloads. */
@@ -151,15 +155,15 @@ const SERVED = JSON.parse(
 /** The day in the order the page draws it, which is newest first and not the
  * scored order the payload publishes. */
 const ITEMS: DigestItem[] = orderByTime(SERVED.items);
-/** Every story that published a drawing. What the page must end up holding. */
-const DRAWN = ITEMS.filter((item) => item.visual?.state === 'rendered' && item.visual.path);
+/** Every story that published a chart. What the page must end up holding. */
+const DRAWN = ITEMS.filter((item) => item.visual?.state === 'rendered' && item.visual.data_path);
 /** The last story of that order, whose own published address draws the day. */
 const LAST = ITEMS[ITEMS.length - 1]?.item_id ?? '';
 const SEED = shellSeedItems();
 
-/** Every drawing the day publishes, as the bytes the page will hold. */
+/** Every visual the day publishes, as the bytes the page will fetch. */
 const MARKUP = DRAWN.map((item) =>
-	readFileSync(join(FRONTEND, 'build', item.visual!.path as string), 'utf8')
+	readFileSync(join(FRONTEND, 'build', item.visual!.data_path as string), 'utf8')
 );
 
 /** One repaint rule in `ItemVisual.svelte`: what it aims at, and the token it
@@ -167,7 +171,7 @@ const MARKUP = DRAWN.map((item) =>
 interface Repaint {
 	/** What a reader would call the thing. */
 	part: string;
-	/** The class the renderer puts on it, looked for in the drawing itself. */
+	/** What the published marks carry when the page will draw this part. */
 	marker: string;
 	/** What the stylesheet aims at, inside `main figure`. */
 	selector: string;
@@ -178,48 +182,47 @@ interface Repaint {
 const REPAINTS: Repaint[] = [
 	{
 		part: 'a bar',
-		marker: 'mark-rect',
-		selector: '.mark-rect > path',
+		marker: '"category"',
+		selector: 'rect.bar',
 		property: 'fill',
 		token: '--chart-1'
 	},
 	{
-		part: 'an axis label',
-		marker: 'mark-text',
-		selector: '.mark-text text',
+		part: "a bar's name",
+		marker: '"text"',
+		selector: 'text.name',
 		property: 'fill',
 		token: '--color-text-secondary'
 	},
 	{
-		part: 'an axis line',
-		marker: 'mark-rule',
-		selector: '.mark-rule:not(.role-axis-grid) line',
-		property: 'stroke',
-		token: '--chart-axis'
+		part: "a bar's figure",
+		marker: '"quantity"',
+		selector: 'text.figure',
+		property: 'fill',
+		token: '--color-text'
 	},
 	{
-		part: 'a grid line',
-		marker: 'role-axis-grid',
-		selector: '.role-axis-grid line',
+		part: 'an axis line',
+		marker: '"encoding"',
+		selector: 'line.axis',
 		property: 'stroke',
-		token: '--chart-grid'
+		token: '--chart-axis'
 	}
 ];
 
-/** How many of the day's drawings carry each part.
+/** How many of the day's visuals will draw each part.
  *
- * Read off the committed drawings, never off a locator count. A check that
- * decides what to assert from what it finds on the page switches itself off the
- * day a class is renamed, reports green, and says nothing - the trap
+ * Read off the committed marks, never off a locator count. A check that decides
+ * what to assert from what it finds on the page switches itself off the day a
+ * class is renamed, reports green, and says nothing - the trap
  * `docs/how-to/run-the-gates.md` records for skip conditions, and the same trap
  * whether the guard is a skip or a branch.
  *
- * It is also the fact that stopped this file asserting the canary's shape
- * against a published day. Measured 2026-09-05 over all 351 drawings the 15
- * committed days publish: every one carries a bar, an axis label and an axis
- * line, and not one carries a grid line. The canary chart does carry one, so
- * `item-visual.spec.ts` exercises the `--chart-grid` rule and no published page
- * ever has.
+ * **Every drawn part is now a key in the published document rather than a class
+ * the renderer wrote**, which is what the markers below name. The grid-line rule
+ * went with the renderer that could emit one: measured 2026-09-05 over all 351
+ * drawings the 15 committed days held, not one carried a grid line, and nothing
+ * draws one now.
  */
 const DRAWINGS_WITH = new Map<string, number>(
 	REPAINTS.map((rule) => [
@@ -394,7 +397,7 @@ test.describe('what the day has to be for any of this to mean anything', () => {
 		// rather than demanded: a rule with no published reader is a fact about the
 		// renderer, not a failure of the page.
 		expect(
-			DRAWINGS_WITH.get('mark-rect'),
+			DRAWINGS_WITH.get('"category"'),
 			`${DAY} draws ${DRAWN.length} visuals and none of them is a chart: ${CENSUS}`
 		).toBeGreaterThan(0);
 	});
@@ -408,7 +411,9 @@ for (const width of WIDTHS) {
 			const faults = watch(page);
 			const asked: string[] = [];
 			page.on('request', (request) => {
-				if (request.url().endsWith('.svg')) asked.push(request.url());
+				if (/\/digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9-]+\.json$/.test(request.url())) {
+					asked.push(request.url());
+				}
 			});
 
 			await openTheWholeDay(page, width);

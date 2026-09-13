@@ -1299,21 +1299,21 @@ def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> 
 
 
 def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
-    """One rendered chart, exactly as the visuals job's artifact leaves it.
+    """One published visual, exactly as the work job's artifact leaves it.
 
-    An SVG under the day's directory and a real `VisualDecision` beside the run's items
-    saying where it landed. `body` is what makes two renders of one item differ,
-    which is the only case that can now put two adds on one path - identical
-    bytes are the case git resolves on its own.
+    A marks file under the day's directory and a real `VisualDecision` beside the
+    run's items saying where it landed. `body` is what makes two compiles of one
+    item differ, which is the only case that can now put two adds on one path -
+    identical bytes are the case git resolves on its own.
     """
-    _write(repo / "frontend" / "public" / relpath, f"<svg>{body or item_id}</svg>\n")
+    _write(repo / "frontend" / "public" / relpath, f'{{"item_id": "{body or item_id}"}}\n')
     decision = VisualDecision(
         version=VisualDecision.schema_version(),
         item_id=item_id,
         url_key=hashlib.sha256(item_id.encode("ascii")).hexdigest(),
         kind=VisualKind.CHART,
-        spec='{"mark": "bar"}',
-        asset_path=relpath,
+        spec='{"marks": []}',
+        data_path=relpath,
         visual_state=VisualState.RENDERED,
         model_id="qwen3-4b",
         decided_at=f"{date}T00:00:00Z",

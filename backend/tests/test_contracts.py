@@ -2800,11 +2800,11 @@ def test_no_hash_appears_in_any_published_path() -> None:
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     for item in day.items:
         assert not HEX_DIGEST.search(item.item_id)
-        if item.visual is not None and item.visual.path is not None:
-            assert not HEX_DIGEST.search(item.visual.path)
+        if item.visual is not None and item.visual.data_path is not None:
+            assert not HEX_DIGEST.search(item.visual.data_path)
     decision = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
-    assert decision.asset_path is not None
-    assert not HEX_DIGEST.search(decision.asset_path)
+    assert decision.data_path is not None
+    assert not HEX_DIGEST.search(decision.data_path)
 
 
 def test_an_item_id_reads_in_both_shapes_and_the_pattern_never_contracts() -> None:
@@ -4066,10 +4066,48 @@ def test_an_item_decided_to_nothing_carries_no_spec() -> None:
         VisualDecision.model_validate(payload)
 
 
-def test_only_a_rendered_visual_has_an_asset_path() -> None:
-    payload = mutate(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json", visual_state="absent")
-    with pytest.raises(ValueError, match="asset_path"):
-        VisualDecision.model_validate(payload)
+def test_a_day_still_carrying_the_retired_drawing_path_reads() -> None:
+    """The read-side migration `path` owes, proved by putting the key back.
+
+    Every one of the 24 committed days names a `.svg` on every rendered visual,
+    and none of them is ever rewritten. `Model` forbids a key it does not
+    declare, so without the named pop those days stop parsing the day this
+    lands - `validate-days` red, the build red, the release blocked. Driven by
+    adding the key to a fixture rather than by counting how many committed days
+    still carry it, because a count of a growing collection is a check timed to
+    go red on a date nobody chose (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    carried = 0
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"]["path"] = "digest/2026/08/21/ai-01.svg"
+            carried += 1
+    assert carried, "the fixture stopped carrying a visual, so this proves nothing"
+
+    day = DigestDay.model_validate(payload)
+
+    assert [item.visual.data_path for item in day.items if item.visual] == [
+        "digest/2026/08/21/ai-01.json"
+    ] * carried
+    assert "path" not in day.items[0].visual.model_dump() if day.items[0].visual else True
+
+
+def test_a_visual_carrying_a_data_path_must_have_rendered() -> None:
+    """One-way, and this is the direction that can hold.
+
+    The other direction cannot: 495 visuals across the 24 frozen days are
+    `rendered` and carry no data file, permanently, because back-filling one
+    would mean re-fetching 495 source pages that have since moved. So what is
+    asserted is that a path never appears without the state that produced it.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"]["state"] = "absent"
+
+    with pytest.raises(ValueError, match="data path"):
+        DigestDay.model_validate(payload)
 
 
 def test_hhem_delta_is_rebuilt_not_trusted() -> None:
@@ -4615,12 +4653,19 @@ def test_a_visual_published_before_the_data_file_reads_as_carrying_none() -> Non
     assert [item.visual.data_path for item in day.items if item.visual] == [None] * carried
 
 
-def test_a_decision_published_before_the_data_file_reads_as_carrying_none() -> None:
-    """The same sentence one stage earlier, where the run's own payloads live."""
+def test_a_rendered_decision_must_record_where_its_marks_landed() -> None:
+    """The other half of the rule, one stage earlier.
+
+    This payload is a one-day run artifact under gitignored `backend/var/`, so
+    the run that writes it is the run that reads it and no older shape is ever
+    opened. That is what lets the rule here be both ways round where the
+    published day's can only be one.
+    """
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
     payload.pop("data_path", None)
 
-    assert VisualDecision.model_validate(payload).data_path is None
+    with pytest.raises(ValueError, match="where its marks landed"):
+        VisualDecision.model_validate(payload)
 
 
 def test_only_a_rendered_visual_carries_data() -> None:

@@ -129,6 +129,7 @@ checks that what reads back still describes the file it is about to delete.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -137,6 +138,7 @@ from typing import Final, NoReturn
 
 from idhazh import day_partition, ledger, month_partition, publish_telemetry, telemetry
 from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
+from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -144,8 +146,6 @@ from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 
 BYTES_PER_MB: Final = 1024 * 1024
-
-_VISUAL_SUFFIXES: Final[frozenset[str]] = frozenset({".png", ".webp", ".jpg", ".jpeg", ".svg"})
 
 #: Where the built tree keeps the day payloads, relative to the tree root.
 _STAGED_DIGEST_DIRNAME: Final = "digest"
@@ -476,15 +476,25 @@ def _dated_days(root: Path, *, before: date | None = None) -> Iterator[tuple[dat
 
 
 def _visuals_in(folder: Path) -> list[Path]:
-    """The rendered pictures in one published day, by name.
+    """The published visuals in one day, by name.
 
-    A day's `digest.json` and `run.json` are never candidates: they are the
-    record that the day happened, and they are text.
+    **A visual is a file named for an item**, which is the same rule
+    `render.write.assets_in_day` uses and the same rule that decides where a
+    writer puts one. It was a set of image suffixes until 2026-09-13, when the
+    reader's browser took over the drawing and a visual stopped being an image -
+    and adding `.json` to that set would have made `digest.json` and `run.json`
+    candidates, which is the record that the day happened and the one thing this
+    module may never delete.
+
+    Reading identity rather than extension is also what stops the list rotting.
+    A suffix set holds the formats somebody remembered; an item id ends in a
+    hyphen and a run of digits or sixteen base32 symbols, so no day-level payload
+    can ever look like one whatever a later row files beside it.
     """
     return [
         path
         for path in sorted(folder.iterdir())
-        if path.suffix.lower() in _VISUAL_SUFFIXES and path.is_file()
+        if path.is_file() and re.match(ITEM_ID_PATTERN, path.stem)
     ]
 
 

@@ -53,6 +53,7 @@ from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
+from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -3447,17 +3448,21 @@ class TestTheWorkStageDispatchesBothCalls:
         public_root = common.PUBLIC_ROOT.parent
         for decision in drawn:
             assert decision.kind is VisualKind.CHART
-            assert decision.asset_path == asset_relpath(run_plan.date, decision.item_id), (
-                "a drawn chart is filed under its own item id and nothing else"
+            assert decision.data_path == asset_relpath(run_plan.date, decision.item_id), (
+                "a published chart is filed under its own item id and nothing else"
             )
-            asset = public_root / decision.asset_path
-            assert asset.is_file(), f"the payload names {decision.asset_path} and nothing wrote it"
-            markup = asset.read_text(encoding="utf-8")
-            assert markup.lstrip().startswith("<svg"), "the drawn bytes are an SVG"
-            assert "Denmark" in markup, (
-                "the drawn bars are named from the article's own entities, not from the plan's prose"
+            asset = public_root / decision.data_path
+            assert asset.is_file(), f"the payload names {decision.data_path} and nothing wrote it"
+            published = VisualData.read(asset)
+            named = [
+                mark.text
+                for mark in published.marks
+                if mark.mark_id in published.encoding.category
+            ]
+            assert "Denmark" in named, (
+                "the bars are named from the article's own entities, not from the plan's prose"
             )
-            assert decision.alt_text, "a drawn chart carries the words a screen reader gets"
+            assert decision.alt_text, "a published chart carries the words a screen reader gets"
             assert decision.spec, "the chart's own spec travels with the decision"
 
     def test_the_stamp_digests_the_two_prompts_instead(
