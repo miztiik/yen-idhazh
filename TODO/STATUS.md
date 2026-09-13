@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 8 | 6 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 1 | 6 | 1 |
+| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 1 | 6 | 0 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
@@ -32,17 +32,19 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 4 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
 
-## In flight - 2
+## In flight - 4
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
+| #1b | 12 | B | The browser draws the chart, and the pipeline stops rendering | p12-r1b |
 | #1 | 19 | A | The fold key, decided before anything writes a row | p19-r1 |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | p23-r7b |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
 
-## Ready now - 20
+## Ready now - 18
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -53,7 +55,6 @@ section 3 is where it is answered.
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
-| #1b | 12 | B | The browser draws the chart, and the pipeline stops rendering | 1a |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
@@ -65,7 +66,6 @@ section 3 is where it is answered.
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | 7a, P4, 6, plan 11 row 6 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #8a | 25 | J | The second desk reaches the reader | 8 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
@@ -80,12 +80,12 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #2 | 12 | C | The drawing takes the width it is given | 1b is PENDING |
-| #3 | 12 | C | Numbers a reader can say out loud | 1b is PENDING |
+| #2 | 12 | C | The drawing takes the width it is given | 1b is IN-FLIGHT |
+| #3 | 12 | C | Numbers a reader can say out loud | 1b is IN-FLIGHT |
 | #4 | 12 | D | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | E | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | F | A whole day, again | 5 is PENDING |
-| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1b is PENDING |
+| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1b is IN-FLIGHT |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
@@ -117,9 +117,9 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
+| #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is IN-FLIGHT |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
-| #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is PENDING; 8 is PENDING |
+| #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is IN-FLIGHT; 8 is PENDING |
 | #9 | 23 | K | Confidence is a masked probability over the label's whole span | 8 is PENDING; 14 is PENDING; P5 is PENDING |
 | #15 | 23 | K | The console tab, at `/console/judgement/` | 14 is PENDING; plan 25 row #12 is PENDING |
 | #10 | 23 | L | Five stances, each with its own decline, behind a gate written in code | 8 is PENDING; 14 is PENDING |
