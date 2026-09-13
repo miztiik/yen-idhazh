@@ -191,7 +191,7 @@ body it would have to count is gone.
 ## Which worker wrote the row
 
 A run splits into as many as eight `work` jobs, each on its own disposable
-machine. `shard` is the number `cli.shard_of` gave the job that produced this
+machine. `shard` is the number `stages.common.shard_of` gave the job that produced this
 row. `state/runtime-counters.csv` carries `shard` and `shards` for the same run,
 so `(run_id, shard)` joins the two files: the cells here say what the work cost,
 and the row there says which host paid it.
@@ -204,8 +204,8 @@ run. The worst was run `2026-08-27-2`, where eight shards ranged from 9.75 to
 disappears, and until this column existed pooling was the only read available -
 so a slow day and a slow machine looked the same.
 
-Only a worker writes it. `cli.stage_record` stamps its own number on every row
-it files, which is the one moment the number is known. `cli.stage_assemble` runs
+Only a worker writes it. `stages.record.stage_record` stamps its own number on every row
+it files, which is the one moment the number is known. `stages.assemble.stage_assemble` runs
 once for the whole day, so the census rows it adds - the items no worker reached
 - leave the cell empty rather than naming a machine that may never have started.
 An empty cell means no worker claimed the row, and it is also what every row

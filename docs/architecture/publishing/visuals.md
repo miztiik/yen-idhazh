@@ -33,7 +33,7 @@ each shard has to hand its drawn bytes to `assemble` itself, which is the `shard
 artifact in `digest.yml`. The decisions travel inside `items-<n>`, which is rooted at the items
 directory and therefore cannot carry a file written under `frontend/public/digest/`. Without the
 second artifact the day publishes a payload naming an asset nobody uploaded, which
-`cli._picture_faults` reports as "names a picture file that is not there".
+`stages.validate_days._picture_faults` reports as "names a picture file that is not there".
 
 **The flag is the first of two commits** (plan 11 rows #5b and #6). The second deletes the flag,
 the small model, this stage and its job together. Until then the flag off leaves the pipeline

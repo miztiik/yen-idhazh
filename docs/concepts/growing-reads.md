@@ -94,7 +94,7 @@ Sometimes a clock would answer a different question from the one asked. Then the
 answer is a cheaper cover, not a shorter memory. Three shapes, all in service
 today.
 
-**The files this run staged.** `cli.stage_dedupe_ledgers` settles the keyed
+**The files this run staged.** `stages.dedupe_ledgers.stage_dedupe_ledgers` settles the keyed
 ledgers after a push race merged two sides of a CSV. A run appends only to the
 shard its own date routes to, so a repeat can only be in a file that run wrote.
 The ordinary pass reads **six files whether the archive holds one month or
@@ -144,7 +144,7 @@ gives. `fingerprint.append_new` is the same shape one size down: it
 carries digests rather than built rows, and the set stops growing when the inputs
 stop changing.
 
-**A receipt, where the thing read cannot change.** `cli.stage_validate_days`
+**A receipt, where the thing read cannot change.** `stages.validate_days.stage_validate_days`
 opened every committed day on every publication. A published day is frozen - the
 only thing that can happen to it is deletion - so what invalidates a pass is a
 move in the rules, not the passage of time. `state/day-validations.csv` records
@@ -237,8 +237,8 @@ listed: its cover is its argument. These are `backend/`'s;
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
-| `cli.stage_dedupe_ledgers`, via `ledger.keyed_paths` | six files on the ordinary pass | the files this run staged |
-| `cli.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
+| `stages.dedupe_ledgers.stage_dedupe_ledgers`, via `ledger.keyed_paths` | six files on the ordinary pass | the files this run staged |
+| `stages.validate_days.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
 | `ledger.load_settled_failures` | one item-health day file | one date |
 | `ledger.load_source_counts` | one item-health day file | one date |
 | `ledger.load_runtime_counters` | streams `state/runtime-counters.csv` | one run |
@@ -293,7 +293,7 @@ publishers reach `publish_console.publish_series`, which calls `prune_months`.
 `public_telemetry_keep_months` is 14 and the directory holds every month it has
 ever published - 2 files on 2026-09-13, gaining one a month. Every listing of it
 grows with it, including the one
-`cli._console_payload_faults` takes on its contract sweep. What closes it is
+`stages.validate_days._console_payload_faults` takes on its contract sweep. What closes it is
 switching that prune on, which is a decision about the whole repository rather
 than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
 
@@ -302,7 +302,7 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | `publish_console.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
 | `publish_scores.publish`, `publish_feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
 | `publish_span_rollup.publish` | the state shard for the month named | the month the run appended to |
-| `publish_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `cli.stage_assemble` passes; `months=None` is unbounded on purpose |
+| `publish_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `publish_day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `publish_run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
 | `publish_console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards | `max(console.window_presets)`, committed at 90 |

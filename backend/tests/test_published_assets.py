@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import cli
+from idhazh.stages.validate_days import _day_faults, stage_validate_days
 
 pytestmark = [pytest.mark.contract, pytest.mark.visual]
 
@@ -80,7 +80,7 @@ def draw(public_root: Path, path: str) -> None:
 
 
 def faults_for(public_root: Path) -> list[str]:
-    return cli._day_faults(day_dir(public_root) / "digest.json", public_root)
+    return _day_faults(day_dir(public_root) / "digest.json", public_root)
 
 
 def test_a_day_whose_pictures_line_up_reports_nothing(tmp_path: Path) -> None:
@@ -126,7 +126,7 @@ def test_the_stage_stops_the_publish_rather_than_logging_and_passing(tmp_path: P
     a_day_naming(tmp_path, [picture(0), picture(0)])
     draw(tmp_path, picture(0))
 
-    assert cli.stage_validate_days(tmp_path / "digest") == 1
+    assert stage_validate_days(tmp_path / "digest") == 1
 
 
 def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) -> None:
@@ -143,8 +143,8 @@ def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) ->
         json.dumps({**json.loads(read_text(FIXTURE)), "date": "2026-08-22"}), encoding="utf-8"
     )
 
-    assert cli.stage_validate_days(tmp_path / "digest", ["2026-08-22"]) == 0
-    assert cli.stage_validate_days(tmp_path / "digest") == 1
+    assert stage_validate_days(tmp_path / "digest", ["2026-08-22"]) == 0
+    assert stage_validate_days(tmp_path / "digest") == 1
 
 
 def test_a_day_that_is_not_committed_fails_rather_than_checking_nothing(tmp_path: Path) -> None:
@@ -152,4 +152,4 @@ def test_a_day_that_is_not_committed_fails_rather_than_checking_nothing(tmp_path
     a_day_naming(tmp_path, [picture(0)])
     draw(tmp_path, picture(0))
 
-    assert cli.stage_validate_days(tmp_path / "digest", ["1999-01-01"]) == 1
+    assert stage_validate_days(tmp_path / "digest", ["1999-01-01"]) == 1
