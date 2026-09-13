@@ -3782,11 +3782,17 @@ def stage_assemble(
     # than from anything in memory: the record is a projection of the committed
     # day, so a correction reads the whole day across every run. One writer at
     # the publication step, never a second stage (Fowler).
+    #
+    # The label vectors are read here rather than inside the producer, so a
+    # stale file fails the run at the place the config is read and never half
+    # way through a record. Absent is not stale: a checkout without the file
+    # records no label similarity and publishes exactly as before.
     publish_day_metrics.publish(
         state_root=STATE_ROOT,
         date=plan.date,
         day=day,
         manifest=manifest,
+        taxonomy_vectors=assemble.read_taxonomy_vectors(config.REPO_ROOT, settings.taxonomy),
     )
     # The console's own payloads, in dependency order and never before it. Each
     # writes the one month this run appended to and prunes its directory to its

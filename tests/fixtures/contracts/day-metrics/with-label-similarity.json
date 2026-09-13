@@ -63,7 +63,19 @@
   "items_planned": 17,
   "items_published": 12,
   "items_truncated": 2,
-  "label_similarity": null,
+  "label_similarity": {
+    "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
+    "nearest": {
+      "count": 6,
+      "maximum": 0.2843,
+      "minimum": 0.1437,
+      "p25": 0.1802,
+      "p50": 0.2038,
+      "p75": 0.2311,
+      "total": 1.2464
+    },
+    "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
+  },
   "model_id": "qwen35-9b",
   "pipeline_fingerprint": "e74bcca07c77808e469ad574d01a823763a13fa34a397caf177c07fa236f348b",
   "reasons": {
@@ -140,6 +152,6 @@
     "output_tokens": 3600,
     "prefill_ms": 24000
   },
-  "version": "2026-09-07",
+  "version": "2026-09-13",
   "visuals_rendered": 3
 }
