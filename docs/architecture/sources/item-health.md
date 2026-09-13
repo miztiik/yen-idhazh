@@ -121,8 +121,9 @@ second call replays the first call's prompt and is answered for it, so
 `cached_tokens` over the item is non-zero on every item that took two calls and
 says nothing about either
 ([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
-**The small model's visual-planner call is not one of these**: it runs in the
-`visuals` job, hours after this row was committed, so no cell here can reach it.
+**The picture costs nothing extra here**: call 2 writes the summary and the plan
+in one reply, so what a picture cost is already inside the cells above and there
+is no second call to account for.
 
 **The row is a census, not an error log.** Successes and failures share one file
 because a rate needs its denominator beside its numerator.
@@ -561,7 +562,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 
 - [health.md](health.md) - the feed-grain ledger.
 - [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
-- [../publishing/visuals.md](../publishing/visuals.md) - what the visual planner spends, which this ledger deliberately does not carry.
+- [../publishing/visuals.md](../publishing/visuals.md) - what the picture costs, which this ledger deliberately does not carry.
 - [trust-boundary.md](trust-boundary.md) - how fetched bytes become sanitized text.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.

@@ -1156,7 +1156,7 @@ beside the share; plan 03 Row #2, 2026-09-05.
 ## The chart arm is a flow, and every drop leaves it as a named branch
 
 `Visuals drawn for articles` opens with one diagram of where items go between the
-visual planner reaching one and a visual reaching a page. It is drawn left to
+work stage reaching one and a visual reaching a page. It is drawn left to
 right, the direction the page reads and the order the pipeline runs its stages
 in, and it totals the whole open window rather than one day - a single day's four
 numbers are already legible in the table under it, and "where do items go" is a

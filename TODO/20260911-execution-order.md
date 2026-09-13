@@ -1,6 +1,6 @@
 # Execution order across the five open plans
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 **What this is.** One schedule over the five plan-docs that are open at once. Each of them proves its own rows do not collide; **nothing proved they do not collide with each other**, and nothing said what an orchestrator may dispatch on any given morning. This document is that answer and nothing else.
 
@@ -98,6 +98,8 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 **One number on this page moved on 2026-09-12, and it moved the wrong way.** Plan 11 gained a row - **#5b, "Call 1 and call 2 run in the pipeline"** - sitting between `11 #5` and `11 #6`, and `11 #6` now waits on it. The worker dispatched on `11 #6` found that no stage dispatches call 1 or call 2, so the row's own precondition was unmet and the flag its scope opens by flipping was never built. So plan 11 is **five live rows, not four**, and the chain that gates plan 23 row #7b is **one wave longer**: every row that waited on `11 #6` now waits on `11 #5b` as well, and `11 #5b` waits on `11 #3b`, which was outside the chain until today. The derived counts above are left as derived, per this page's own rule; what is corrected is the shape of the chain, which is what a schedule is for.
 
+**Plan 11 closed on 2026-09-13 and is off this page.** Rows `11 #6` and `11 #3h` landed together in one commit on the owner's ruling - *"moving forward is the only way, if there are issues we fix them. no reverting back."* **Every row of plan 11 has landed**, so the heaviest of the two poles above is gone: plan 23 row #7b's only cross-plan dependency is satisfied, and the eleven rows waiting behind it are one edge closer. The counts in section 0 are left as derived on 2026-09-11, per this page's own rule; the next row to re-derive them will find plan 11 with zero live rows.
+
 **Section 3's arithmetic moved later the same day, and this is the correction that sentence used to refuse.** It read "nothing else on this page moves - no file list changed", and then `11 #3b` changed its own in execution: it dropped `classify/calls.py`, `visual_planner.py`, `publish_day_metrics.py`, `test_classify.py` and `test_visual_planner.py`, which it does not write, and picked up eleven it could not avoid. **Four of those eleven collide with a live row of another plan.** `state/item-health/*.csv` is named by plans 23, 24, 25 and the growing-reads plan; `frontend/public/telemetry/*.csv` and `backend/utilities/migrate_item_health.py` and `backend/tests/test_publish_telemetry.py` are each named by plan 24; `frontend/scripts/build-canary.mjs` is named by plans 23 and 24. **`11 #3b` merged, so it takes no wave of its own - what this changes is who may run beside plan 24**, whose ledger rows now share a header-migration path and two committed shards with a row that has already rewritten both. The 84-file and 391-pair counts above are stale in the direction of more, and the next row to widen a list re-derives them rather than adding to this paragraph.
 
 ---
@@ -170,7 +172,7 @@ These are the ones a person composing a wave by reading two plan titles would ge
 
 | Edge | Where it is declared | Verified |
 | --- | --- | --- |
-| Plan 23 row #7b waits on plan 11 row 6 | Plan 23 section 1 Depends-on, and its section 0.4 | Yes. **Naming row 6 is enough**: plan 11 row 6 waits on row 5, and row 5 on row 4, so the whole chain is implied by one edge |
+| Plan 23 row #7b waits on plan 11 row 6 | Plan 23 section 1 Depends-on, and its section 0.4 | Yes. **Naming row 6 is enough**: plan 11 row 6 waits on row 5, and row 5 on row 4, so the whole chain is implied by one edge. **Satisfied 2026-09-13**: plan 11 row 6 landed and the whole chain with it |
 | **Four** rows of plan 23 wait on plan 24 row #1 | Plan 23 section 0.1, and the Depends-on of rows #14, #16, #17 and #21 | Yes, and the count is four rather than five. Plan 23 creates four new day-sharded trees - `classifications`, `vertical-proposals`, `lens-weights` and `counterfactual-scores`. **Plan 25 creates none.** Its row #9a adds columns to plan 23 row #21's ledger and its row #14 writes the day-metrics record that already exists |
 | Plan 25 row #12 waits on plan 23 row #14 | Plan 25 section 1, and its section 0.4 | Yes. And the return edge - plan 23 row #15 waits on plan 25 row #12 - is declared in plan 23 section 1 |
 

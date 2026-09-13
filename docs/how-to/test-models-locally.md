@@ -9,12 +9,11 @@ fast loop, not a different answer.
 This page operates the models. To evaluate and adopt a different summarizer,
 follow [evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md).
 
-There are four models in this project and they are tested differently:
+There are three models in this project and they are tested differently:
 
 | Model | Role | How you test it |
 | --- | --- | --- |
-| Qwen3.5-9B-Q4_K_M | writes the summaries | serve it, run `work`, read the eval rows |
-| Qwen3-4B-Q4_K_M | decides chart / diagram / nothing | serve it, run `visuals`, look at the SVG |
+| Qwen3.5-9B-Q4_K_M | writes the summaries and decides the picture | serve it, run `work`, read the eval rows and look at the SVG |
 | HHEM-2.1-Open | scores summaries against their source | it loads inside `work`; check `hhem` in the ledger |
 | all-MiniLM-L6-v2 | on-device search, in the browser | committed under `frontend/static/`; `npm run test:browser` |
 
@@ -56,22 +55,18 @@ A number from another build is a separate measurement.
 
 Every URL names a commit rather than a branch. A branch hands back whatever was
 uploaded last, so a download from one is not the file `config/idhazh.json`
-records the SHA-256 of. Both commits below are `models.visual_planner.revision` and
-`models.summarize.revision` in that file - copy them from there rather than from
-here, because there they are the values the pipeline itself fetches.
+records the SHA-256 of. The commit below is `models.summarize.revision` in that
+file - copy it from there rather than from
+here, because there it is the value the pipeline itself fetches.
 
 ```bash
 curl -L -o backend/models/Qwen3.5-9B-Q4_K_M.gguf \
- "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf?download=true"
-curl -L -o backend/models/Qwen3-4B-Q4_K_M.gguf \
- "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf?download=true"
+  "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf?download=true"
 ```
 
-5.29 GiB and 2.4 GB. The summarizer took 118 s to download on `ubuntu-latest` on
+5.29 GiB. The summarizer took 118 s to download on `ubuntu-latest` on
 2026-08-23, `n=1`; spread is unavailable, and the rate is not stable enough to
-extrapolate from. The visual planner's 4B took 32 s on a runner on 2026-08-22. Exact SHA-256
-of the summarizer:
-`03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`.
+extrapolate from. Exact SHA-256
 
 The retired incumbent Qwen3-8B-Q4_K_M is no longer configured and nothing in the
 pipeline fetches it. Fetch it only to reproduce a historical measurement, or to
@@ -147,8 +142,8 @@ print(" ".join(server_argv(
 PY
 ```
 
-This is the one place that program is written down. Point it at
-`settings.app.models.visual_planner` for the visual planner, or at another `config.load(...)`
+This is the one place that program is written down. Point it at another
+`config.load(...)`
 directory for a scratch config. On Windows, save the same program to a file and
 run it with `.venv\Scripts\python.exe <file>`; use `backend\bin\llama-server.exe`
 for the binary.
@@ -285,7 +280,7 @@ describes the configured summarizer:
 | Model | Published score | Measured here |
 | --- | --- | --- |
 | Qwen3-8B-Q4_K_M (retired incumbent, historical record) | 0.750 | **0.887** |
-| Qwen3-4B-Q4_K_M (the visual planner's model, not the summarizer) | 0.740 | **0.891** |
+| Qwen3-4B-Q4_K_M (the retired visual planner's model, not the summarizer) | 0.740 | **0.891** |
 
 Both beat their published number by about 0.14, and the two are within 0.004 of
 each other - well inside the 0.05 margin, so no switch. The verdict was still

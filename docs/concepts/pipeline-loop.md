@@ -74,18 +74,19 @@ Four invariants hold regardless of how the batches are sized:
  duplicate measurement after re-summarization; that is ledger de-duplication,
  not a worker skip. The intended identity contract and current gaps are in
  [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
-- **The visual planner records what it spent, and stops when it has spent it.** Each run
- manifest carries `items_routed` and `route_ms`, the stage total over the items
- the planner reached. Those are the wire keys the manifest froze; the Python is
- `items_decided` and `decision_ms`. `route_ms` is null when the stage never ran, which is a
- different fact from zero. The stage stops itself at `run.visual_planner_budget_minutes`,
- because a job killed at its own timeout skips its upload step and therefore
- discards every decision it had already made - measured on 2026-08-25, 88 decided
- items and 9 rendered charts thrown away, and the day published 145 items with
- no visuals at all. An item the stage never reached writes no payload, which is
- what `items_routed` already reports (Guardrail #10). It also skips what the day
- already published, because the assembler keeps the published copy and discards
- the new one - so re-deciding it is work no reader can ever see.
+- **The picture records what it cost.** Each run
+  manifest carries `items_routed` and `route_ms`, the total over the items the
+  work stage decided. Those are the wire keys the manifest froze; the Python is
+  `items_decided` and `decision_ms`. `route_ms` is null when nothing decided, which is a
+  different fact from zero. There is no stage clock any more: plan 11 row #6
+  retired the separate `visuals` job and its 40-minute budget, so a picture is
+  decided inside the shard that read the article and is bounded by
+  `run.shard_timeout_minutes` along with everything else the item costs. The
+  budget existed because a job killed at its own timeout skips its upload step
+  and therefore discards every decision it had already made - measured on
+  2026-08-25, 88 decided items and 9 rendered charts thrown away, and the day
+  published 145 items with no visuals at all. A shard now uploads what it drew
+  with the items it summarized, so there is no separate parcel to lose.
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
 - **Run counts stay run-scoped.** The day payload grows across runs. The run
  manifest does not. Each `runs[]` record says what that run planned, skipped,

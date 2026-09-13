@@ -122,11 +122,9 @@ the design:
 | --- | --- | --- |
 | Qwen3.5-9B decode, 4 threads (**the configured summarizer**) | 6.01 tok/s | `ubuntu-latest`, 2026-08-23 |
 | Qwen3-8B decode, 4 threads (retired incumbent, historical record) | 7.28 tok/s | `ubuntu-latest`, 2026-08-22 |
-| Qwen3-4B decode, 4 threads | 13.00 tok/s | same |
 | Blended seconds per article, retired incumbent (historical record) | 229 s | derived from the above |
 | Article length, p50 / p90 | 978 / 2769 words | 20 live articles, 2026-08-22 |
 | On-device search download | 43 MB | encoder + tokenizer + WASM |
-| `visuals` per item, 4B | 21.0 s | `ubuntu-latest`, 2026-08-24, n=148 |
 | One 512px CPU image, Z-Image-Turbo | ~79 min | `ubuntu-latest`, 2026-08-23 |
 
 There is no blended seconds-per-article figure for the configured summarizer.

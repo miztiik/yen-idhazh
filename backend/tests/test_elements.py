@@ -6,10 +6,10 @@ five committed injection canaries and the four captured pages - nine bounded
 fixtures, none of which a run appends to (Guardrail #12) - because a span that only
 holds on a hand-written string proves the string, not the pass.
 
-The second half of the oracle is that the candidate table is not the
-deduplicated fact list. An article stating one figure in two periods keeps both
-here and collapses to one in `visual_planner.numeric_facts`, and that
-difference is the whole reason this pass exists.
+The second half of the oracle is that the candidate table is not a deduplicated
+fact list. An article stating one figure in two periods keeps both here, where
+the retired planner's own reader collapsed it to one, and that difference is the
+whole reason this pass exists.
 
 Row 3 adds the third half. Two passes read the same bytes and both match
 `2026`, so a bare year is claimed as a date and never as a quantity, and no two
@@ -46,7 +46,6 @@ from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.elements import Candidates, date_elements, element_table, quantity_elements, settle
 from idhazh.fetch import FetchResult
-from idhazh.visual_planner import numeric_facts
 
 APP: Final = config.load(CONFIG_DIR).app
 ELEMENTS: Final = APP.elements
@@ -232,7 +231,6 @@ def test_one_figure_in_two_periods_survives_twice() -> None:
     """Decision 2. The repeat IS the series, and a trend chart is what it is for."""
     excerpts = [element.span_excerpt for element in kept(TWO_PERIODS)]
     assert excerpts.count("40 percent") == 2
-    assert [str(fact.value) for fact in numeric_facts(TWO_PERIODS)] == ["40"]
 
 
 def test_the_two_repeats_are_told_apart_by_where_they_sit() -> None:
@@ -249,24 +247,15 @@ def test_the_two_repeats_are_told_apart_by_where_they_sit() -> None:
         ("The rule takes effect in 2027.", ["2027"]),
     ],
 )
-def test_the_pass_keeps_what_the_planner_is_right_to_drop(text: str, excerpts: list[str]) -> None:
+def test_the_pass_keeps_what_a_chart_reader_is_right_to_drop(
+    text: str, excerpts: list[str]
+) -> None:
     """A magnitude at or below two, and a bare year. Both are candidates here.
 
     The number pattern is unchanged by row 3 and still matches a bare year. The
     table is where that claim loses to the date pass, not this function.
     """
     assert [element.span_excerpt for element in kept(text)] == excerpts
-    assert numeric_facts(text) == [], "the planner's own reader still drops them"
-
-
-def test_numeric_facts_still_behaves_the_way_its_own_caller_needs() -> None:
-    """Decision 4. This row adds a producer; it does not repair the old one.
-
-    Both halves matter: the repeat still collapses, and `15 m` is still fifteen
-    metres rather than fifteen million.
-    """
-    facts = numeric_facts("Output was 4,200 units. Again, 4200 units. The tower rose 15 m.")
-    assert [(str(fact.value), fact.unit) for fact in facts] == [("4200", "unit"), ("15", "m")]
 
 
 # --- The count is taken before the cap -------------------------------------

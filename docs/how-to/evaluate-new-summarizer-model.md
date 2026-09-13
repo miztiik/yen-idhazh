@@ -5,9 +5,9 @@
 Measure a candidate summarizer against the configured incumbent, decide whether
 it clears the bar, and change the model without losing reproducibility.
 
-This procedure is for the build-time summary model. The visual planner,
-faithfulness scorer and browser search model have different contracts and are
-not changed by it.
+This procedure is for the build-time summary model, which also decides the
+picture. The faithfulness scorer and browser search model have different
+contracts and are not changed by it.
 
 ## Capability boundary
 
@@ -424,8 +424,7 @@ hash to config there, and test the fingerprint and manifest paths before rollout
 
 ## 10. Cache transition and rollout
 
-The steady-state cache must hold the summary model and the visual planner's
-model. The
+The steady-state cache holds one model, the summarizer. The
 transition can temporarily hold the old summary model too and cross the 10 GB
 repository ceiling. Production derives the worker count from the plan as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
@@ -450,8 +449,6 @@ Delete only the old summary-model cache after the new commit is ready:
 ```bash
 gh cache delete <old-summary-cache-id>
 ```
-
-Keep the visual planner's cache.
 
 Then:
 
