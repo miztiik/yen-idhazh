@@ -174,7 +174,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 1 | Two docstrings defend a requirement the page retired | - | A | DONE #650 | p25-1 | #650 | worker |
 | 5 | The rail goes and the time lands under the heading | - | A | DONE #625 | p25-r5 | #625 | worker |
 | 2 | One order over the whole day, inside a frame a person set | 1 | B | DONE #653 | p25-2 | #653 | worker |
-| 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | IN-FLIGHT | p25-3 | - | worker |
+| 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | DONE #664 | p25-3 | #664 | worker |
 | 6 | The topic pills order by what is running | 2 | C | PENDING | - | - | - |
 | 4 | Carriage becomes a tie-break | 3 | D | PENDING | - | - | - |
 | 7 | A desk floor and a desk ceiling | 2 | D | PENDING | - | - | - |
