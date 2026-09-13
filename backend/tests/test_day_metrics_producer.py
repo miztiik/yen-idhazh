@@ -57,7 +57,7 @@ DATE = "2026-08-20"
 _RENDERED_CHART = DigestVisual(
     kind=VisualKind.CHART,
     state=VisualState.RENDERED,
-    path="digest/2026/08/20/energy-01/chart.svg",
+    data_path="digest/2026/08/20/energy-0000000001.json",
 )
 
 

@@ -173,7 +173,7 @@ def _day() -> DigestDay:
                 DigestVisual(
                     kind=VisualKind.CHART,
                     state=VisualState.RENDERED,
-                    path=f"digest/2026/08/20/{item_id}/chart.svg",
+                    data_path=f"digest/2026/08/20/{item_id}.json",
                 )
                 if charted
                 else None

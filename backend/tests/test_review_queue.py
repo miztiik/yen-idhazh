@@ -41,9 +41,24 @@ from utilities import review_queue
 pytestmark = pytest.mark.visual
 
 DATE: Final = "2026-08-21"
-#: A drawing with a tag in it, so an SVG that reached the sheet inline rather
-#: than through an `img` would be visible as markup in the page.
-DRAWING: Final = '<svg xmlns="http://www.w3.org/2000/svg"><title>drawn</title></svg>'
+#: One published visual, as the day directory holds it. Three bars the sheet
+#: draws itself: nothing renders an SVG any more, so the reviewer reads the
+#: comparison off marks this file states rather than off a picture.
+DRAWING: Final = (
+    '{"version":"2026-09-13T20:00","item_id":"ai-01","type":"bar",'
+    '"renderer_version":"2026-09-13",'
+    '"marks":['
+    '{"mark_id":"m0","text":"Denmark","value":null,"unit":null,'
+    '"element_id":"wind-1-0","derived":null},'
+    '{"mark_id":"m1","text":"Norway","value":null,"unit":null,'
+    '"element_id":"wind-1-1","derived":null},'
+    '{"mark_id":"m2","text":null,"value":"12","unit":"gw",'
+    '"element_id":"wind-1-2","derived":null},'
+    '{"mark_id":"m3","text":null,"value":"6","unit":"gw",'
+    '"element_id":"wind-1-3","derived":null}],'
+    '"encoding":{"category":["m0","m1"],"quantity":["m2","m3"],"quantity_x":[],'
+    '"time":[],"series":[],"size":[],"bins":[],"entity":[],"event_label":[]}}'
+)
 
 
 def _decision(item_id: str, **changes: object) -> VisualDecision:
@@ -74,7 +89,7 @@ def _rendered(item_id: str) -> VisualDecision:
     return _decision(
         item_id,
         visual_state=VisualState.RENDERED,
-        asset_path=f"digest/2026/08/21/{item_id}.svg",
+        data_path=f"digest/2026/08/21/{item_id}.json",
     )
 
 
@@ -84,7 +99,7 @@ def _refused(item_id: str) -> VisualDecision:
         item_id,
         kind=VisualKind.NONE,
         spec=None,
-        asset_path=None,
+        data_path=None,
         visual_state=VisualState.ABSENT,
         drafted_chart=True,
         none_reason=NoneReason.VALIDATION_FAILED,
@@ -92,12 +107,12 @@ def _refused(item_id: str) -> VisualDecision:
 
 
 def _render_failed(item_id: str) -> VisualDecision:
-    """The plan passed and the drawing did not arrive. The reader got nothing either way."""
+    """The plan compiled and its file did not land. The reader got nothing either way."""
     return _decision(
         item_id,
-        asset_path=None,
+        data_path=None,
         visual_state=VisualState.RENDER_FAILED,
-        failure_detail="the renderer refused the spec",
+        failure_detail="the data file could not be written: OSError",
     )
 
 
@@ -106,7 +121,7 @@ def _never_drafted(item_id: str) -> VisualDecision:
         item_id,
         kind=VisualKind.NONE,
         spec=None,
-        asset_path=None,
+        data_path=None,
         visual_state=VisualState.ABSENT,
         drafted_chart=False,
         none_reason=NoneReason.MODEL_DECLINED,
@@ -141,7 +156,7 @@ def build_a_day(
                 DigestVisual(
                     kind=VisualKind.CHART,
                     state=VisualState.RENDERED,
-                    path=decision.asset_path,
+                    data_path=decision.data_path,
                     alt=decision.alt_text,
                 )
                 if decision.visual_state is VisualState.RENDERED
@@ -175,8 +190,8 @@ def build_a_day(
         (items_dir / f"{item_id}{PAYLOAD_SUFFIX}").write_text(
             decision.to_json(), encoding="utf-8", newline="\n"
         )
-        if decision.asset_path is not None:
-            (digest_root.parent / decision.asset_path).write_text(
+        if decision.data_path is not None:
+            (digest_root.parent / decision.data_path).write_text(
                 drawing, encoding="utf-8", newline="\n"
             )
     return digest_root, run_root
@@ -337,7 +352,7 @@ def test_a_title_carrying_markup_reaches_the_sheet_as_words(tmp_path: Path) -> N
     sheet = (tmp_path / "review" / DATE / "index.html").read_text(encoding="utf-8")
     assert "<script>alert(1)</script>" not in sheet
     assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; more" in sheet
-    assert DRAWING not in sheet, "a drawing is referenced through an img, never inlined"
+    assert "Denmark" in sheet, "the sheet draws the bars it copied"
 
 
 def test_a_tree_over_budget_caps_every_population_and_records_both_numbers(

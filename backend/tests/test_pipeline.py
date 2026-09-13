@@ -53,6 +53,7 @@ from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
+from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -2868,7 +2869,7 @@ A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
 def a_published_day(public_root: Path, *, pretty: bool = False) -> Path:
     """One published day on disk, in the layout `published_days` globs for.
 
-    The pictures the payload names are drawn as well, because `_picture_faults`
+    The marks the payload names are written as well, because `_picture_faults`
     compares the two and a day naming a file that is not there is a fault rather
     than the clean day these tests need. `pretty` re-serialises the same payload
     over more bytes, which is what a re-encode does to a closed day.
@@ -2879,10 +2880,10 @@ def a_published_day(public_root: Path, *, pretty: bool = False) -> Path:
     where.mkdir(parents=True, exist_ok=True)
     for item in payload["items"]:
         visual = item.get("visual")
-        if visual and visual.get("path"):
-            drawing = public_root / visual["path"]
-            drawing.parent.mkdir(parents=True, exist_ok=True)
-            drawing.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
+        if visual and visual.get("data_path"):
+            marks = public_root / visual["data_path"]
+            marks.parent.mkdir(parents=True, exist_ok=True)
+            marks.write_text('{"item_id": "ai-01"}', encoding="utf-8")
     text = json.dumps(payload, indent=2) if pretty else json.dumps(payload)
     (where / "digest.json").write_text(text, encoding="utf-8")
     return where / "digest.json"
@@ -3480,17 +3481,21 @@ class TestTheWorkStageDispatchesBothCalls:
         public_root = common.PUBLIC_ROOT.parent
         for decision in drawn:
             assert decision.kind is VisualKind.CHART
-            assert decision.asset_path == asset_relpath(run_plan.date, decision.item_id), (
-                "a drawn chart is filed under its own item id and nothing else"
+            assert decision.data_path == asset_relpath(run_plan.date, decision.item_id), (
+                "a published chart is filed under its own item id and nothing else"
             )
-            asset = public_root / decision.asset_path
-            assert asset.is_file(), f"the payload names {decision.asset_path} and nothing wrote it"
-            markup = asset.read_text(encoding="utf-8")
-            assert markup.lstrip().startswith("<svg"), "the drawn bytes are an SVG"
-            assert "Denmark" in markup, (
-                "the drawn bars are named from the article's own entities, not from the plan's prose"
+            asset = public_root / decision.data_path
+            assert asset.is_file(), f"the payload names {decision.data_path} and nothing wrote it"
+            published = VisualData.read(asset)
+            named = [
+                mark.text
+                for mark in published.marks
+                if mark.mark_id in published.encoding.category
+            ]
+            assert "Denmark" in named, (
+                "the bars are named from the article's own entities, not from the plan's prose"
             )
-            assert decision.alt_text, "a drawn chart carries the words a screen reader gets"
+            assert decision.alt_text, "a published chart carries the words a screen reader gets"
             assert decision.spec, "the chart's own spec travels with the decision"
 
     def test_the_stamp_digests_the_two_prompts_instead(
