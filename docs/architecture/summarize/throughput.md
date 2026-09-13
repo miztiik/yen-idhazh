@@ -160,6 +160,30 @@ Two things follow for anyone reading a number off this page:
 One run is an observation, not a property. Re-run the utility after a few more
 days, and especially after a day where a shard died mid-item.
 
+### A reply the stage refused used to be missing from one side of this check
+
+The gap this check reports is not all noise, and until 2026-09-13 one named
+cause sat inside it. A reply that failed its shape wrote a summary whose five
+cost cells were the model's defaults of zero, and the census row dropped them
+entirely - so the server counted that request and `pool_ledger`, which skips a
+row with an empty `prefill_ms` or `input_tokens` cell, pooled none of it.
+
+**Measured on the committed ledger, 2026-09-13, three runs on the stock runner.**
+Run `2026-09-12-34717684802` carries one refused reply, and it is the whole of
+that run's disagreement: the ledger read 72,739 tokens over 3,918.41 s against
+the server's 73,616 over 3,936.07 s, which is **0.746 percent apart - one
+article consuming 15 percent of the 5 percent tolerance**. The two neighbouring
+runs carry no refused reply and match the server **to the token** (81,173 and
+72,219 on both sides), at 0.051 and 0.070 percent. Across the whole committed
+ledger 93 of 93 failed summarize rows carried no cost at all.
+
+The stage now hands the reply to the failure path and the census row carries the
+same five cells an ok row does, so a refused reply is pooled rather than skipped.
+What that costs a reader of a trend: the ledger's token and second totals step up
+on 2026-09-13 against the days before it, on the failure rate rather than on
+anything the model did. A cost cell left empty on a failed row written before
+that date means never recorded, not free.
+
 ## Nothing carries over between articles
 
 A common wrong reading of the logs is that the run "warms up" or "clogs up" -

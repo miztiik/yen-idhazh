@@ -173,6 +173,29 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T14:20",
+            change=(
+                "A failed summarize row carries the five cost cells and the call slots, "
+                "which it left empty whatever the reply had cost."
+            ),
+            why=(
+                "This is the ledger a cost question is answered from, and it was the layer "
+                "that dropped the numbers. The summary payload is where the defect was "
+                "filed, but reconcile_prefill reads this row, and this branch passed the "
+                "three stage timings and none of the five model cells - so a reply the "
+                "stage refused arrived here with the numbers in hand and left as blanks. "
+                "pool_ledger skips a row whose prefill_ms or input_tokens cell is empty, so "
+                "the server counted those requests and the ledger pooled none of them, and "
+                "the gap sat inside the 5 percent tolerance as unnamed drift. No field "
+                "moved: the cells and the slots have been nullable since 2026-09-12T16:20 "
+                "and the sum rule already binds them. A row an earlier run wrote keeps its "
+                "blanks, and on a failed summarize row written before this version an empty "
+                "cost cell means never recorded rather than free - which is the same reading "
+                "'a null is not a zero' already asks for in "
+                "docs/architecture/sources/item-health.md."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13",
             change=(
                 "Added the labels_truncated summarize failure code, source-neutral like "

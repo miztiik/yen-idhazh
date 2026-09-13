@@ -480,15 +480,45 @@ def trim_to_words(summary: str, ceiling: int) -> str:
     return " ".join(part.strip() for part in kept)
 
 
+def _cost_of(completion: Completion) -> CallCost:
+    """One reply's five numbers, as the call that produced them.
+
+    One builder for the ok path and the failed one, so a reply that was refused
+    is sized by the same arithmetic as a reply that published.
+    """
+    return CallCost(
+        kind=CallKind.SUMMARIZE,
+        prefill_ms=completion.prefill_ms,
+        decode_ms=completion.decode_ms,
+        input_tokens=completion.prompt_tokens,
+        output_tokens=completion.completion_tokens,
+        cached_tokens=min(completion.cached_tokens, completion.prompt_tokens),
+    )
+
+
 def _failed(
     article: Article,
     *,
     model_id: str,
     detail: str,
     generated_at: str,
+    completion: Completion | None = None,
     failure_code: FailureCode | None = None,
     length_action: LengthAction | None = None,
 ) -> Summary:
+    """An item that did not land, carrying what the attempt really cost.
+
+    **The reply is handed over wherever there was one.** Every gate below the
+    first two refuses text the server had already read a prompt for and written
+    an answer to, so the prefill and the decode were spent whatever the verdict
+    was. Recording zero there made a day that failed many replies read as a
+    cheap day, and `reconcile_prefill` absorbed the difference as drift.
+
+    A call that never returned is the one failure that really was free. The slot
+    stays empty rather than carrying an invented zero, which is what keeps a
+    pooled read skipping it instead of averaging it in.
+    """
+    cost = None if completion is None else _cost_of(completion)
     return Summary(
         version=Summary.schema_version(),
         item_id=article.item_id,
@@ -501,6 +531,12 @@ def _failed(
         status=SummaryStatus.FAILED,
         failure_code=failure_code,
         failure_detail=detail[:500],
+        call_1=cost,
+        input_tokens=0 if cost is None else cost.input_tokens,
+        output_tokens=0 if cost is None else cost.output_tokens,
+        prefill_ms=0 if cost is None else cost.prefill_ms,
+        decode_ms=0 if cost is None else cost.decode_ms,
+        cached_tokens=0 if cost is None else cost.cached_tokens,
     )
 
 
@@ -597,6 +633,7 @@ def to_summary(
             model_id=model_id,
             detail="the reply was cut off by the output budget, so it never closed its JSON",
             generated_at=generated_at,
+            completion=completion,
             failure_code=FailureCode.OUTPUT_TRUNCATED,
         )
     if completion.reasoned:
@@ -608,6 +645,7 @@ def to_summary(
                 "the flag did not take, or this build splits reasoning off the content"
             ),
             generated_at=generated_at,
+            completion=completion,
             failure_code=FailureCode.BAD_SHAPE,
         )
     try:
@@ -623,6 +661,7 @@ def to_summary(
             model_id=model_id,
             detail=f"the reply did not hold its shape: {type(error).__name__}",
             generated_at=generated_at,
+            completion=completion,
             failure_code=FailureCode.BAD_SHAPE,
         )
 
@@ -640,6 +679,7 @@ def to_summary(
             model_id=model_id,
             detail=verdict.detail,
             generated_at=generated_at,
+            completion=completion,
             failure_code=FailureCode.LENGTH_OUT_OF_RANGE,
             length_action=verdict.action,
         )
@@ -659,6 +699,7 @@ def to_summary(
                 "which republishes the article instead of summarizing it"
             ),
             generated_at=generated_at,
+            completion=completion,
             failure_code=FailureCode.COPIED_SOURCE,
         )
 
@@ -683,6 +724,7 @@ def to_summary(
                 model_id=model_id,
                 detail=f"the {field} may not be published: {leaked}",
                 generated_at=generated_at,
+                completion=completion,
                 failure_code=FailureCode.LEAKED_ADDRESS,
             )
 
@@ -690,14 +732,7 @@ def to_summary(
     # The stage makes one call today, so the item total is that call's numbers -
     # derived rather than transcribed, so a second call cannot be recorded in a
     # slot and left out of the total (`Summary` refuses that anyway).
-    cost = CallCost(
-        kind=CallKind.SUMMARIZE,
-        prefill_ms=completion.prefill_ms,
-        decode_ms=completion.decode_ms,
-        input_tokens=completion.prompt_tokens,
-        output_tokens=completion.completion_tokens,
-        cached_tokens=min(completion.cached_tokens, completion.prompt_tokens),
-    )
+    cost = _cost_of(completion)
     return Summary(
         version=Summary.schema_version(),
         item_id=article.item_id,

@@ -78,6 +78,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A failed summarize row carries the five cost cells and the call slots, which it left empty whatever the reply had cost.",
+      "version": "2026-09-13T14:20",
+      "why": "This is the ledger a cost question is answered from, and it was the layer that dropped the numbers. The summary payload is where the defect was filed, but reconcile_prefill reads this row, and this branch passed the three stage timings and none of the five model cells - so a reply the stage refused arrived here with the numbers in hand and left as blanks. pool_ledger skips a row whose prefill_ms or input_tokens cell is empty, so the server counted those requests and the ledger pooled none of them, and the gap sat inside the 5 percent tolerance as unnamed drift. No field moved: the cells and the slots have been nullable since 2026-09-12T16:20 and the sum rule already binds them. A row an earlier run wrote keeps its blanks, and on a failed summarize row written before this version an empty cost cell means never recorded rather than free - which is the same reading 'a null is not a zero' already asks for in docs/architecture/sources/item-health.md."
+    },
+    {
       "change": "Added the labels_truncated summarize failure code, source-neutral like every other code the model owns.",
       "version": "2026-09-13",
       "why": "The two-call path's labelling reply can run out of its output budget on an ordinary article - measured 2026-09-12, one article of three, 346 words, 900 tokens decoded and the JSON cut mid-string - and the item is then lost whole, because the call that writes the summary replays that reply and is never sent. It was recorded as bad_shape, which is also what a reply that held valid JSON and violated the schema records, and also what a stray reasoning channel records; the only thing separating them was a sentence in a log line. The same commit derives that budget from the labelling grammar instead of from the summariser's knob, and this counter is how anyone sees whether that worked - folded into output_truncated it would move with call 2's cuts and answer nothing. It is a separate member rather than a second reading of output_truncated because the two are two derivations over two grammars: two numbers to move, so two counts to read. No read-side migration is owed - the code is additive and no run has written it - but a reader trending bad_shape across 2026-09-13 sees a step down that nothing else in the CSV explains, and this entry is where that is written."
@@ -597,7 +602,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-13T14:20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -621,5 +626,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-13T14:20"
 }
