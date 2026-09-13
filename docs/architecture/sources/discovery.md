@@ -580,6 +580,21 @@ paywalled sources. This gives up its free articles to avoid known paid-page
 failures. The paywall detector refused the paid page and extracted no text
 from it. No access control was bypassed.
 
+Two more feeds were probed at 12:42 UTC on the same date and platform, with
+three articles sampled per feed. Both feeds returned HTTP 200, parsed without
+warnings, supplied 20 dated entries, and allowed the configured user agent
+under the robots policy. All six articles returned readable text with no
+detected paywall.
+
+| Feed | Address | Placement | Article sample |
+| --- | --- | --- | --- |
+| Eurykosmotron | `https://bengoertzel.substack.com/feed` | `ai`, tier 3, `analysis` | 3 readable articles; 2,376 to 3,129 words |
+| Think BRICS | `https://thinkbrics.substack.com/feed` | `world`, tier 3, `analysis` | 3 readable articles; 852 to 2,613 words |
+
+Both enter the live list at weight 1.0. Eurykosmotron is a personal AI and
+frontier-science blog. Think BRICS covers geopolitics and emerging economies.
+Neither feed is classified as an institution's announcements.
+
 This checks access from a developer machine, not from the GitHub runner or
 the accuracy of the writing. Admission does not promise every post is suitable
 for a summary. The existing freshness and article-processing rules are unchanged.

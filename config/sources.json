@@ -188,6 +188,17 @@
       "weight": 1.0
     },
     {
+      "id": "ben-goertzel",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Eurykosmotron",
+      "url": "https://bengoertzel.substack.com/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
       "id": "bleepingcomputer",
       "kind": "reporting",
       "retired_on": null,
@@ -1593,6 +1604,17 @@
       "tier": 2,
       "title": "The Hindu - International",
       "url": "https://www.thehindu.com/news/international/feeder/default.rss",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "think-brics",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Think BRICS",
+      "url": "https://thinkbrics.substack.com/feed",
       "vertical": "world",
       "weight": 1.0
     },
