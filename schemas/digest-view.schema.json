@@ -395,7 +395,7 @@
     },
     "DigestViewVisual": {
       "additionalProperties": false,
-      "description": "The rendered chart, as the `<img>` needs it.\n\n`kind` is not here. It is read at build time off the committed tree for the\nconsole's chart count, and a browser drawing the image has no use for it.",
+      "description": "The chart, as the browser that draws it needs it.\n\n`kind` is not here. It is read at build time off the committed tree for the\nconsole's chart count, and a browser that has already been handed the marks\nhas no use for it.\n\n**`data_path` is the whole of what a fetched story gets**, and it replaced\n`path` on 2026-09-13. The reader's browser draws the chart from that file, so\na projection that dropped the key would leave every story past the document's\nseed unable to ask for its own picture - which is every story on a dated page.",
       "properties": {
         "alt": {
           "anyOf": [
@@ -409,9 +409,10 @@
             }
           ],
           "default": null,
+          "description": "What the figure is labelled with. On a page that never runs a script it is the whole of what a reader receives for this visual.",
           "title": "Alt"
         },
-        "path": {
+        "data_path": {
           "anyOf": [
             {
               "maxLength": 512,
@@ -423,7 +424,8 @@
             }
           ],
           "default": null,
-          "title": "Path"
+          "description": "Where this visual's marks are, relative to frontend/public/. Null on a day published before the file existed - absent and null are the same fact, and both mean the story simply has no chart.",
+          "title": "Data Path"
         },
         "state": {
           "$ref": "#/$defs/VisualState"
@@ -473,6 +475,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "DigestViewVisual.path became data_path. The visual carries state, data_path and alt.",
+      "version": "2026-09-13T22:30",
+      "why": "The reader's browser draws the chart from the marks file and the pipeline draws nothing, so path named a drawing that no longer exists and data_path is what a story needs to ask for its own picture. This is a projection rebuilt on every build rather than a frozen payload, so no read side is owed here - but a shell cached before this change reads data_path as absent, which is the same fact it already reads on a day that never had one: the story simply has no chart. A shell cached after it reads a day projected before it the same way."
+    },
     {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
       "version": "2026-09-12T18:40",
@@ -627,7 +634,7 @@
       "title": "Runs"
     },
     "version": {
-      "default": "2026-09-12T18:40",
+      "default": "2026-09-13T22:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -654,5 +661,5 @@
   ],
   "title": "DigestView",
   "type": "object",
-  "version": "2026-09-12T18:40"
+  "version": "2026-09-13T22:30"
 }

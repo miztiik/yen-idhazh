@@ -195,7 +195,7 @@ backend/var/run/2026-08-22/items/*.article.json what was fetched
 backend/var/run/2026-08-22/items/*.summary.json what the model wrote
 backend/var/run/2026-08-22/items/*.eval.json what it scored
 frontend/public/digest/2026/08/22/digest.json the published day
-frontend/public/digest/2026/08/22/*.svg any rendered visual
+frontend/public/digest/2026/08/22/*.json any published visual
 state/scores.csv one row per scored item
 ```
 

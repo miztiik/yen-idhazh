@@ -46,6 +46,12 @@ Every string that reaches the HTML came off the open web or out of a model
 (Guardrail #11). It is escaped on the way in, and a drawing is referenced through an
 `img` rather than inlined, for the reason the published page uses one: an SVG
 inside an `img` cannot reach the document around it.
+
+**That is history since 2026-09-13.** Nothing draws an SVG any more - the
+reader's browser draws the chart and the pipeline publishes marks - so the sheet
+draws its own bars out of the same published file, as three divs and a width.
+A reviewer has to see the comparison to judge it, and a sheet that listed the
+figures in prose would be asking them to do the drawing in their head.
 """
 
 from __future__ import annotations
@@ -55,8 +61,9 @@ import html
 import logging
 import shutil
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
@@ -71,6 +78,7 @@ from idhazh.contracts.review_queue import (  # noqa: E402
     ReviewQueue,
     ReviewRow,
 )
+from idhazh.contracts.visual_data import VisualData  # noqa: E402
 from idhazh.contracts.visual_decision import (  # noqa: E402
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -118,7 +126,11 @@ article h3 { font-size: 1rem; margin: 0 0 .25rem; }
    rather than scrolling between them. The white ground is the page the
    renderer drew for: an SVG authored light and shown on a dark body loses its
    axis labels. */
-article img { background: #fff; border: 1px solid #8884; max-height: 20rem; max-width: 100%; }
+article .bars { display: grid; gap: 0.3rem; margin: 0.6rem 0; }
+article .bar { align-items: center; display: grid; gap: 0.5rem;
+  grid-template-columns: 10rem 1fr auto; }
+article .bar b { background: #4c6ef5; border-radius: 2px; font-size: 0; height: 1rem; }
+article .bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .why { color: #666; font-size: .875rem; margin: .25rem 0; }
 .empty { color: #666; font-style: italic; }
 """
@@ -179,7 +191,29 @@ def keep_counts(
     }
 
 
-def _card(row: ReviewRow) -> str:
+def _bars(data: VisualData) -> str:
+    """One item's marks as bars a reviewer can compare at a glance.
+
+    Widths are a share of the longest bar, which is the one comparison a
+    reviewer is being asked to judge. Every name is escaped on the way in: it is
+    a model's cut of a stranger's page (Guardrail #11).
+    """
+    held = {mark.mark_id: mark for mark in data.marks}
+    names = [held[mark_id].text or "" for mark_id in data.encoding.category]
+    figures = [Decimal(held[mark_id].value or "0") for mark_id in data.encoding.quantity]
+    longest = max((abs(figure) for figure in figures), default=Decimal(0))
+    if not names or len(names) != len(figures) or longest == 0:
+        return ""
+    rows = [
+        f'    <div class="bar"><span>{html.escape(name)}</span>'
+        f'<b style="width:{abs(figure) / longest:.1%}">.</b>'
+        f"<i>{html.escape(format(figure.normalize(), ',f'))}</i></div>"
+        for name, figure in zip(names, figures, strict=True)
+    ]
+    return '  <div class="bars">\n' + "\n".join(rows) + "\n  </div>"
+
+
+def _card(row: ReviewRow, bars: str) -> str:
     """One item, with every untrusted string escaped on the way in."""
     parts = [
         "<article>",
@@ -188,11 +222,10 @@ def _card(row: ReviewRow) -> str:
         ' rel="noreferrer noopener">the source</a>'
         f" &middot; {html.escape(row.item_id)}</p>",
     ]
-    if row.asset_relpath is not None:
-        parts.append(
-            f'  <img src="{html.escape(row.asset_relpath, quote=True)}" '
-            f'alt="{html.escape(row.alt_text or "", quote=True)}">'
-        )
+    if bars:
+        parts.append(bars)
+    if row.alt_text is not None:
+        parts.append(f'  <p class="why">{html.escape(row.alt_text)}</p>')
     if row.none_reason is not None:
         parts.append(f'  <p class="why">gate: {html.escape(row.none_reason.value)}</p>')
     if row.rationale is not None:
@@ -201,7 +234,12 @@ def _card(row: ReviewRow) -> str:
     return "\n".join(parts)
 
 
-def _sheet(date: str, census: Sequence[ReviewCensus], rows: Sequence[ReviewRow]) -> str:
+def _sheet(
+    date: str,
+    census: Sequence[ReviewCensus],
+    rows: Sequence[ReviewRow],
+    bars: Mapping[str, str],
+) -> str:
     """The contact sheet, one page a reviewer scrolls."""
     counted = {entry.population: entry for entry in census}
     summary = ", ".join(
@@ -230,7 +268,7 @@ def _sheet(date: str, census: Sequence[ReviewCensus], rows: Sequence[ReviewRow])
         shown = [row for row in rows if row.population is population]
         if not shown:
             parts.append('<p class="empty">Nothing in this population today.</p>')
-        parts.extend(_card(row) for row in shown)
+        parts.extend(_card(row, bars.get(row.item_id, "")) for row in shown)
         parts.append("</section>")
     parts.extend(["</body>", "</html>", ""])
     return "\n".join(parts)
@@ -279,7 +317,7 @@ def build(
             "day you produced yourself"
         )
 
-    # `asset_path` is relative to the published root, and the digest tree is one
+    # `data_path` is relative to the published root, and the digest tree is one
     # directory inside it.
     public_root = digest_root.parent
     found: dict[ReviewPopulation, list[tuple[VisualDecision, DigestItem]]] = {
@@ -295,9 +333,9 @@ def build(
 
     seen = {population: len(rows) for population, rows in found.items()}
     drawings = [
-        public_root / decision.asset_path
+        public_root / decision.data_path
         for decision, _ in found[ReviewPopulation.PUBLISHED]
-        if decision.asset_path is not None
+        if decision.data_path is not None
     ]
     weighed = sum(path.stat().st_size for path in drawings if path.is_file())
     weighed += CARD_BYTES * sum(seen.values())
@@ -309,14 +347,16 @@ def build(
     (out_dir / "assets").mkdir(parents=True, exist_ok=True)
 
     rows: list[ReviewRow] = []
+    bars: dict[str, str] = {}
     for population in ReviewPopulation:
         for decision, item in found[population][: keep[population]]:
             asset_relpath: str | None = None
-            if decision.asset_path is not None:
-                source = public_root / decision.asset_path
+            if decision.data_path is not None:
+                source = public_root / decision.data_path
                 if source.is_file():
                     asset_relpath = f"assets/{decision.item_id}{source.suffix}"
                     shutil.copyfile(source, out_dir / asset_relpath)
+                    bars[decision.item_id] = _bars(VisualData.read(source))
             rows.append(
                 ReviewRow(
                     item_id=decision.item_id,
@@ -336,7 +376,7 @@ def build(
         ReviewCensus(population=population, seen=seen[population], kept=keep[population])
         for population in ReviewPopulation
     ]
-    write_atomic(out_dir / "index.html", _sheet(date, census, rows))
+    write_atomic(out_dir / "index.html", _sheet(date, census, rows, bars))
     # Measured before the queue file is written, because a byte count inside a
     # document cannot include its own length.
     queue = ReviewQueue(

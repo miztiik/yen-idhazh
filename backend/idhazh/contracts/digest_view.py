@@ -78,21 +78,34 @@ from idhazh.contracts.visual_decision import VisualState
 
 
 class DigestViewVisual(Model):
-    """The rendered chart, as the `<img>` needs it.
+    """The chart, as the browser that draws it needs it.
 
     `kind` is not here. It is read at build time off the committed tree for the
-    console's chart count, and a browser drawing the image has no use for it.
+    console's chart count, and a browser that has already been handed the marks
+    has no use for it.
+
+    **`data_path` is the whole of what a fetched story gets**, and it replaced
+    `path` on 2026-09-13. The reader's browser draws the chart from that file, so
+    a projection that dropped the key would leave every story past the document's
+    seed unable to ask for its own picture - which is every story on a dated page.
     """
 
     state: VisualState
-    path: RelPath | None = None
-    alt: UntrustedLine | None = None
-
-    @model_validator(mode="after")
-    def _only_a_rendered_visual_has_a_path(self) -> Self:
-        if (self.state is VisualState.RENDERED) != (self.path is not None):
-            raise ValueError("a path is present exactly when the visual rendered")
-        return self
+    data_path: RelPath | None = Field(
+        default=None,
+        description=(
+            "Where this visual's marks are, relative to frontend/public/. Null on a day "
+            "published before the file existed - absent and null are the same fact, and "
+            "both mean the story simply has no chart."
+        ),
+    )
+    alt: UntrustedLine | None = Field(
+        default=None,
+        description=(
+            "What the figure is labelled with. On a page that never runs a script it is "
+            "the whole of what a reader receives for this visual."
+        ),
+    )
 
 
 class DigestViewItem(Model):
@@ -199,6 +212,23 @@ class DigestView(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T22:30",
+            change=(
+                "DigestViewVisual.path became data_path. The visual carries state, "
+                "data_path and alt."
+            ),
+            why=(
+                "The reader's browser draws the chart from the marks file and the "
+                "pipeline draws nothing, so path named a drawing that no longer exists "
+                "and data_path is what a story needs to ask for its own picture. This is "
+                "a projection rebuilt on every build rather than a frozen payload, so no "
+                "read side is owed here - but a shell cached before this change reads "
+                "data_path as absent, which is the same fact it already reads on a day "
+                "that never had one: the story simply has no chart. A shell cached after "
+                "it reads a day projected before it the same way."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T18:40",
             change=(

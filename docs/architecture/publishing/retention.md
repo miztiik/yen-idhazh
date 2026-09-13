@@ -56,7 +56,7 @@ set is what an unpublish has to answer for:
 | --- | --- | --- |
 | `frontend/public/digest/<Y>/<M>/<D>/digest.json` | day | remove |
 | `frontend/public/digest/<Y>/<M>/<D>/run.json` | day | remove |
-| `frontend/public/digest/<Y>/<M>/<D>/*.svg` | day | remove |
+| `frontend/public/digest/<Y>/<M>/<D>/<item_id>.json` | day | remove |
 | `frontend/public/assist/index/<Y>-<M>.json` and `.bin` | month | **rebuild**, never edit |
 | `frontend/public/telemetry/<Y>-<M>.csv` | month | rewrite without the day's rows |
 | `frontend/public/source-health.json` | whole site | rebuild |

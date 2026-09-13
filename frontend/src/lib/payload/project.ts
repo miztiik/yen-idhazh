@@ -41,7 +41,7 @@ type Json = Record<string, unknown>;
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-09-12T18:40';
+export const VIEW_VERSION = '2026-09-13T22:30';
 
 // The fields a page renders, and no others. Traced along the render path rather
 // than guessed: `DigestList` scopes and filters the list, and `DigestItem` with
@@ -130,7 +130,7 @@ export const ITEM_FIELDS: readonly string[] = [
 
 // The three `ItemVisual` reads. `kind` is read at build time off the committed
 // tree, for the console's chart count, and never from a staged copy.
-export const VISUAL_FIELDS: readonly string[] = ['state', 'path', 'alt'];
+export const VISUAL_FIELDS: readonly string[] = ['state', 'data_path', 'alt'];
 
 // The day-level keys carried over from the committed payload. `version` is the
 // other key on a staged day and it is minted rather than copied - the committed

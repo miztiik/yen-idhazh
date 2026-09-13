@@ -276,7 +276,7 @@ anywhere has to be repointed.
 | Selector | What it holds |
 | --- | --- |
 | `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree |
-| `-m visual` | The picture's gate and ladder, its validator, the spec compiler, both renderers, and the planted attacks aimed at the picture |
+| `-m visual` | The picture's gate and ladder, its validator, the compiler that turns a plan into published marks, and the planted attacks aimed at the picture |
 | `-m workflow` | The workflow YAML and the shell scripts under `.github/` |
 | `-m slow` | Every module whose average test runs over a second |
 | `-m "not slow"` | Everything else, which is most of the tests |
@@ -578,11 +578,11 @@ when the annotation comes off.
 
 **A second spec cannot run here at all, and it fails rather than skips when it
 is handed the canary.** `whole-day.spec.ts` draws the heaviest committed day
-whole - every story, every drawing, at 390 and 1440 CSS px, in both themes - and
-asks the four things a per-drawing check cannot see: whether the day ever
-finishes arriving, whether every drawing it published reached the page, whether
-any two of them turned out to be the same drawing, and whether every mark takes
-its colour from a page token rather than from the hex the renderer baked in. The
+whole - every story, every chart, at 390 and 1440 CSS px, in both themes - and
+asks the four things a per-chart check cannot see: whether the day ever
+finishes arriving, whether every chart it published reached the page, whether
+any two of them turned out to be the same picture, and whether every mark takes
+its colour from a page token. The
 canary is eight stories on one desk against a seed of fifteen, so it never
 fetches and never reaches that scale. A skip there would be a check that quietly
 stopped existing, so the module refuses to load unless the tree under test
@@ -590,6 +590,13 @@ serves exactly the days this repository has committed, and `playwright.config.ts
 keeps the file out of the default suite - `npm run test:browser` cannot reach it
 and neither can naming it on the command line, because `testIgnore` filters
 before an argument does.
+
+**It answers nothing about a committed day until a run publishes one under the
+new shape.** The 495 drawings that were committed before 2026-09-13 are deleted
+and no marks file was ever written for one, so every committed day currently
+publishes no chart at all ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
+The spec's own refusal is what says so rather than a green: it reports a day
+that declares no chart instead of passing over one.
 
 ```powershell
 npm run build

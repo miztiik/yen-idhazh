@@ -58,12 +58,12 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 
 
 def _read_visuals(root: Path, date: str) -> dict[str, str]:
-    """Where this run's decisions say their rendered assets landed.
+    """Where this run's decisions say their published marks landed.
 
-    `stage_assemble` copies each decision's `asset_path` into the day payload
+    `stage_assemble` copies each decision's `data_path` into the day payload
     verbatim, so the payload and the files on disk agree only while something
     keeps them agreeing. A stand-in that skipped this could not tell a day that
-    publishes a picture from a day that publishes a broken image.
+    publishes a picture from a day that points at a file nobody wrote.
     """
     items = root / "backend" / "var" / "run" / date / "items"
     if not items.is_dir():
@@ -71,9 +71,9 @@ def _read_visuals(root: Path, date: str) -> dict[str, str]:
     found: dict[str, str] = {}
     for path in sorted(items.glob("*.visual.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
-        asset = payload.get("asset_path")
-        if asset:
-            found[str(payload["item_id"])] = str(asset)
+        marks = payload.get("data_path")
+        if marks:
+            found[str(payload["item_id"])] = str(marks)
     return found
 
 

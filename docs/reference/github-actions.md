@@ -305,8 +305,15 @@ one path. `REFRESH_PATHS` cannot help: hand-back would delete this run's charts
 while the rebuilt `digest.json` still names them.
 
 Since 2026-08-27 a chart is filed under its item's own id, so two stories can no
-longer land on one path at all. What is left is two runs rendering the same item
-to different bytes, and `DROP_RACED_ASSETS_COMMAND` is the answer to that. Before
+longer land on one path at all. What is left is two runs **compiling** the same
+item to different bytes, and `DROP_RACED_ASSETS_COMMAND` is the answer to that.
+The word changed on 2026-09-13, when the build-time renderer was deleted: nothing
+renders, the reader's browser draws the chart, and what a run writes is the marks.
+The renderer's own non-determinism went with it, so an item compiled twice from
+unchanged inputs now writes identical bytes and git merges those without a
+conflict. The race did not go with it: the marks come from an article re-fetched
+from the open web, so a source page that moved between two runs' fetches still
+puts two different blobs on one path. Before
 each rebase attempt the loop lists the asset paths the tip already publishes -
 `git ls-tree -r --name-only FETCH_HEAD` over the same staged paths - and pipes
 them to that command, which deletes this run's copy of any of them. The tip's

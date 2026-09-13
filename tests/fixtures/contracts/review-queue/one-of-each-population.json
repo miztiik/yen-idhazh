@@ -23,7 +23,7 @@
   "rows": [
     {
       "alt_text": "Cost per million tokens, previous release against the new one.",
-      "asset_relpath": "assets/ai-01.svg",
+      "asset_relpath": "assets/ai-01.json",
       "item_id": "ai-01",
       "none_reason": null,
       "population": "published",

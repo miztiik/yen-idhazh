@@ -76,7 +76,7 @@ const RENDERED_FIELDS = [
 
 /** The three `ItemVisual` reads. `kind` is a build-time field of the committed
  * tree, for the console's chart count. */
-const VISUAL_FIELDS = ['alt', 'path', 'state'];
+const VISUAL_FIELDS = ['alt', 'data_path', 'state'];
 
 interface Day {
 	path: string;

@@ -27,7 +27,7 @@ flowchart LR
  subgraph repo["The repository - the only interface"]
  direction TB
  D1["frontend/public/digest/&lt;Y&gt;/&lt;M&gt;/&lt;D&gt;/digest.json"]
- D2["...&lt;vertical&gt;-&lt;NN&gt;.svg"]
+ D2["...&lt;item_id&gt;.json"]
  D3["state/scores.csv"]
  end
 

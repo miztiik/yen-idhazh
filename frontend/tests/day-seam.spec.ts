@@ -49,40 +49,35 @@ function reading(day: DigestDay): DigestDay {
 	return { ...day, items: orderByTime(day.items) };
 }
 
-/** The day with the drawings taken back out.
+/** Whether any seeded story arrived carrying a drawing.
  *
- * `dayShell` reads a seeded story's SVG off disk and hands it over with the
- * story, so from 2026-09-05 the halves put back together hold one thing the
- * loader's day does not. That is the point of the seed and not a leak: `markup`
- * is a build-time field, it never reaches a served day, and every other byte of
- * every story still has to survive the round trip. Removing it is what lets the
- * test below go on asking the question it was written to ask.
+ * **Nothing does, and that is the assertion rather than a control.** Between
+ * 2026-09-05 and 2026-09-13 `dayShell` read a seeded story's SVG off disk and
+ * handed the markup over with the story, so the halves put back together held
+ * one thing the loader's day did not and the test had to strip it. The reader's
+ * browser draws the chart now and the pipeline renders nothing, so there is no
+ * file to read and the two halves are the same shape again. A counter over
+ * inlined drawings could only ever return zero from here, which is a control
+ * that cannot fire - so it is inverted into the property that replaced it.
  */
-function withoutDrawings(day: DigestDay): DigestDay {
-	return {
-		...day,
-		items: day.items.map((item) => {
-			if (!item.visual) return item;
-			const { markup: _markup, ...visual } = item.visual as SeededVisual;
-			return { ...item, visual };
-		})
-	};
+function inlinedDrawings(items: DigestItem[]): number {
+	return items.filter((item) => (item.visual as SeededVisual | null)?.markup).length;
 }
 
 test.describe('the reading routes load a day in two halves', () => {
 	test('the halves put back together are the day the loader read', () => {
 		const dates = publishedDates(CANARY);
 		expect(dates.length, 'the canary tree published no day').toBeGreaterThan(0);
-		let drawings = 0;
+		let inlined = 0;
 		for (const date of dates) {
 			const whole = loadDay(date, CANARY);
 			expect(whole, `${date} did not load`).not.toBeNull();
 			for (const seed of SEEDS) {
 				const shell = dayShell(date, seed, { root: CANARY });
 				expect(shell, `${date} at a seed of ${seed} did not load`).not.toBeNull();
-				drawings += shell!.seed.filter((item) => (item.visual as SeededVisual)?.markup).length;
+				inlined += inlinedDrawings(shell!.seed);
 				expect(
-					JSON.stringify(withoutDrawings(wholeDay(shell!))),
+					JSON.stringify(wholeDay(shell!)),
 					`${date} at a seed of ${seed} rebuilt a different day`
 				).toBe(JSON.stringify(reading(whole!)));
 				// And the set is the set, whatever the order: a sort that dropped a
@@ -96,9 +91,11 @@ test.describe('the reading routes load a day in two halves', () => {
 				).toEqual(whole!.items.map((item) => item.item_id).sort());
 			}
 		}
-		// Without this the strip above could be removing nothing, and the test
-		// would read as green while checking a shape it no longer meets.
-		expect(drawings, 'no seeded story carried a drawing, so the strip proved nothing').toBeGreaterThan(0);
+		// The build draws nothing, so a seeded story carries a pointer and never a
+		// picture - and the two halves are therefore the same shape with nothing to
+		// strip. Asserted rather than assumed: a build that started inlining again
+		// would make the comparison above fail for a reason nobody could read.
+		expect(inlined, 'a seeded story arrived carrying a drawing the build no longer makes').toBe(0);
 	});
 
 	test('the seed is the head of the reading order and the rest is the tail', () => {

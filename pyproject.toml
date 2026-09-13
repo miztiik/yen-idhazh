@@ -37,11 +37,6 @@ dependencies = [
     # refuses anyway. Zero install cost: it is already in the tree. Beneficiary:
     # the reference dataset's split unit, plan 23 row #P2.
     "courlan>=1.3",
-    # Vega-Lite spec to SVG for the Render stage. The Vega toolchain compiled as
-    # a Rust extension, so it renders without Node and without a headless
-    # browser. Measured 2026-08-22 (Windows 11, 8 vCPU): 2568 ms for the first
-    # render in a process, 49 ms warm, ~7 KB of SVG. Beneficiary: Row #8.
-    "vl-convert-python>=1.9",
     # The sentence encoder for build-time embeddings, run through the SAME ONNX
     # file the browser loads - one artifact, two runtimes, no drift. Chosen over
     # torch plus transformers, which is roughly 800 MB of wheels for weights
@@ -220,7 +215,7 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # Measurement-only dependencies, absent from a default install and shipping no
 # type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["diffusers.*", "feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*", "vl_convert.*"]
+module = ["diffusers.*", "feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*"]
 ignore_missing_imports = true
 
 # `langfuse` is an optional extra, so CI type-checks without it installed and

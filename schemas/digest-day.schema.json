@@ -509,7 +509,7 @@
     },
     "DigestVisual": {
       "additionalProperties": false,
-      "description": "Where a story's picture is, and never the picture's own data.\n\nTwo pointers and no chart data, ever. The day payload is the record that a\nday happened and is never deleted, so anything held inside it could not age\nout and `retention.image_months` would have nothing to act on - which is why\nthe marks live in their own file and this says where (owner, 2026-09-13).",
+      "description": "Where a story's chart data is, and never the chart data itself.\n\nOne pointer and no chart data, ever. The day payload is the record that a\nday happened and is never deleted, so anything held inside it could not age\nout and `retention.image_months` would have nothing to act on - which is why\nthe marks live in their own file and this says where (owner, 2026-09-13).\n\n**`path` retired on 2026-09-13 and the frozen days still carry it.** It\nnamed the committed drawing, the drawing is deleted, and the reader's browser\ndraws from `data_path`. `Model` forbids a key it does not declare, so the 24\ndays written before this are read through a named pop rather than by widening\nthe model (`CLAUDE.md` section 11).",
       "properties": {
         "alt": {
           "anyOf": [
@@ -537,25 +537,11 @@
             }
           ],
           "default": null,
-          "description": "Where this visual's data landed, relative to frontend/public/, as digest/<Y>/<M>/<D>/<item_id>.json beside the drawing. Null on a day published before the file existed and on a visual whose data could not be written - absent reads as no data carried, never as an empty chart.",
+          "description": "Where this visual's data landed, relative to frontend/public/, as digest/<Y>/<M>/<D>/<item_id>.json beside the day payload. Null on a day published before the file existed and on a visual whose data could not be written - absent reads as no data carried, never as an empty chart.",
           "title": "Data Path"
         },
         "kind": {
           "$ref": "#/$defs/VisualKind"
-        },
-        "path": {
-          "anyOf": [
-            {
-              "maxLength": 512,
-              "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Path"
         },
         "state": {
           "$ref": "#/$defs/VisualState"
@@ -622,6 +608,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Retired DigestVisual.path, which named the committed drawing. A visual now carries kind, state, data_path and alt. The rendered-and-has-a-path rule went with it; the surviving rule is one-way - a data path means the marks were written.",
+      "version": "2026-09-13T22:30",
+      "why": "The reader's browser draws the chart from the data file and the pipeline draws nothing, so the 495 committed drawings are deleted and no path points anywhere. Model forbids a key it does not declare, so the 24 frozen days are read through a named pop of path rather than by widening the model. The old rule cannot survive the archive: those days are rendered and carry no data file, permanently, because back-filling one would mean re-fetching 495 source pages that have since moved and a chart compiled from today's page under an old day's date is a record of nothing. What a reader loses is named where the ruling is: every day published before this row loses its chart, for every reader and not only one with JavaScript off."
+    },
     {
       "change": "Added DigestVisual.data_path - where this visual's data file landed, beside the drawing it was compiled with. Optional and null by default. No chart data enters this payload.",
       "version": "2026-09-13T20:00",
@@ -782,7 +773,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-13T20:00",
+      "default": "2026-09-13T22:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -807,5 +798,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-13T20:00"
+  "version": "2026-09-13T22:30"
 }

@@ -55,7 +55,7 @@ what the story is about. Null is unknown, never "no second desk".
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -70,6 +70,7 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
     Url,
+    without_retired_keys,
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.run_plan import TimeSource
@@ -79,32 +80,55 @@ from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 
 class DigestVisual(Model):
-    """Where a story's picture is, and never the picture's own data.
+    """Where a story's chart data is, and never the chart data itself.
 
-    Two pointers and no chart data, ever. The day payload is the record that a
+    One pointer and no chart data, ever. The day payload is the record that a
     day happened and is never deleted, so anything held inside it could not age
     out and `retention.image_months` would have nothing to act on - which is why
     the marks live in their own file and this says where (owner, 2026-09-13).
+
+    **`path` retired on 2026-09-13 and the frozen days still carry it.** It
+    named the committed drawing, the drawing is deleted, and the reader's browser
+    draws from `data_path`. `Model` forbids a key it does not declare, so the 24
+    days written before this are read through a named pop rather than by widening
+    the model (`CLAUDE.md` section 11).
     """
 
     kind: VisualKind
     state: VisualState
-    path: RelPath | None = None
     data_path: RelPath | None = Field(
         default=None,
         description=(
             "Where this visual's data landed, relative to frontend/public/, as "
-            "digest/<Y>/<M>/<D>/<item_id>.json beside the drawing. Null on a day "
+            "digest/<Y>/<M>/<D>/<item_id>.json beside the day payload. Null on a day "
             "published before the file existed and on a visual whose data could not "
             "be written - absent reads as no data carried, never as an empty chart."
         ),
     )
     alt: UntrustedLine | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_retired_drawing_path(cls, data: Any) -> Any:
+        return without_retired_keys(data, "path")
+
     @model_validator(mode="after")
-    def _only_a_rendered_visual_has_a_path(self) -> Self:
-        if (self.state is VisualState.RENDERED) != (self.path is not None):
-            raise ValueError("a path is present exactly when the visual rendered")
+    def _a_data_path_means_the_marks_were_written(self) -> Self:
+        """One-way, because the archive cannot satisfy the other direction.
+
+        495 visuals across the 24 frozen days are `rendered` and carry no
+        `data_path`: row #1a published the data going forward and rewrote no
+        committed day, and no day will ever gain one - back-filling would mean
+        re-fetching 495 source pages that have since moved. So a rule tying
+        `rendered` to a present `data_path` would refuse the whole archive on
+        first read.
+
+        The direction that does hold catches the bug that can still happen: the
+        write and the state are set in one step, so a path recorded without the
+        state, or the reverse, is this project's own arithmetic being wrong.
+        """
+        if self.data_path is not None and self.state is not VisualState.RENDERED:
+            raise ValueError("a data path is present only on a visual that rendered")
         return self
 
 
@@ -442,6 +466,28 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T22:30",
+            change=(
+                "Retired DigestVisual.path, which named the committed drawing. A visual "
+                "now carries kind, state, data_path and alt. The rendered-and-has-a-path "
+                "rule went with it; the surviving rule is one-way - a data path means "
+                "the marks were written."
+            ),
+            why=(
+                "The reader's browser draws the chart from the data file and the pipeline "
+                "draws nothing, so the 495 committed drawings are deleted and no path "
+                "points anywhere. Model forbids a key it does not declare, so the 24 "
+                "frozen days are read through a named pop of path rather than by widening "
+                "the model. The old rule cannot survive the archive: those days are "
+                "rendered and carry no data file, permanently, because back-filling one "
+                "would mean re-fetching 495 source pages that have since moved and a "
+                "chart compiled from today's page under an old day's date is a record of "
+                "nothing. What a reader loses is named where the ruling is: every day "
+                "published before this row loses its chart, for every reader and not only "
+                "one with JavaScript off."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T20:00",
             change=(

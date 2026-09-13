@@ -1,13 +1,17 @@
-"""Render a planned spec to a file beside the day that names it.
+"""Write a compiled visual's data beside the day that names it.
 
-The asset lives next to the payload that references it, so a day is one
+The file lives next to the payload that references it, so a day is one
 directory a reader, a retention pass or a human with a file browser can reason
 about without an index.
+
+**One published file per visual since 2026-09-13**, and it is data rather than a
+picture: the reader's browser draws the chart and the pipeline never does
+(`docs/architecture/publishing/visuals.md`). The SVG writer that stood here is
+gone with the renderer.
 """
 
 from __future__ import annotations
 
-import json
 import re
 import tempfile
 from collections.abc import Iterable
@@ -18,26 +22,23 @@ from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.visual import VisualPlan
-from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
     VisualKind,
     VisualState,
 )
-from idhazh.render.chart import RenderError as ChartError
-from idhazh.render.chart import compile_bar, render_chart
+from idhazh.render.chart import CompileError, compile_bar
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
-SUFFIX: Final = ".svg"
-#: What a visual's published data is filed as, beside the drawing compiled with
-#: it. The day payload points at it and the reader's browser draws from it
-#: (`docs/architecture/publishing/visuals.md`).
-DATA_SUFFIX: Final = ".json"
+#: What a visual's published data is filed as. It was `.svg` until 2026-09-13,
+#: when the drawing moved into the reader's browser and the marks became the
+#: only thing the pipeline publishes for a picture.
+SUFFIX: Final = ".json"
 
 
 def asset_relpath(date: str, item_id: str) -> str:
-    """`digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, POSIX and digest-free.
+    """`digest/<YYYY>/<MM>/<DD>/<item_id>.json`, POSIX and digest-free.
 
     The name is the item's own id - the same `<vertical>-<id>` a reader already
     lands on as an anchor - so the path is a function of the item and of
@@ -48,6 +49,11 @@ def asset_relpath(date: str, item_id: str) -> str:
     read from a directory, so no two runs and no two shards can choose one path
     for two stories.
 
+    `digest.json` and `run.json` are the day's own payloads and sit in the same
+    directory. Neither can ever collide with one of these: an item id has to end
+    in a hyphen and a run of digits or sixteen base32 symbols, so no item is
+    called `digest` or `run`.
+
     Relative to `frontend/public/`, which is what the payload carries and what
     the page appends to its base path.
     """
@@ -55,34 +61,15 @@ def asset_relpath(date: str, item_id: str) -> str:
     return f"digest/{year}/{month}/{day}/{item_id}{SUFFIX}"
 
 
-def data_relpath(asset: str) -> str:
-    """Where this drawing's data goes: the same directory, the same stem, `.json`.
-
-    Derived from the drawing's own path rather than recomputed from the date and
-    the item, so two call sites cannot put the pair in two places. The identity
-    is still the item's - `asset_relpath` minted it and this only changes the
-    extension - so no two runs and no two shards can choose one data path for two
-    stories either.
-
-    `digest.json` and `run.json` are the day's own payloads and sit in the same
-    directory. Neither can ever collide with one of these: an item id has to end
-    in a hyphen and a run of digits or sixteen base32 symbols, so no item is
-    called `digest` or `run`.
-    """
-    if not asset.endswith(SUFFIX):
-        raise ValueError(f"a drawing's path ends in {SUFFIX}, and this one is {asset!r}")
-    return f"{asset.removesuffix(SUFFIX)}{DATA_SUFFIX}"
-
-
 def assets_in_day(public_root: Path, date: str) -> set[str]:
-    """Every file this day's directory holds for its items, as the writers file them.
+    """Every file this day's directory holds for its items, as the writer files them.
 
-    The inverse of `asset_relpath` and `data_relpath`: those ask what path an
-    item should have, this one asks what is actually on disk. Reading the
-    directory is no longer allowed to decide a *name* - that is what raced two
-    runs onto one path - but a caller that needs to compare the directory against
-    a payload has to read it. `idhazh validate-days` is that caller: a file no
-    item names is weight the reader pays for and will never see.
+    The inverse of `asset_relpath`: that one asks what path an item should have,
+    this one asks what is actually on disk. Reading the directory is no longer
+    allowed to decide a *name* - that is what raced two runs onto one path - but
+    a caller that needs to compare the directory against a payload has to read
+    it. `idhazh validate-days` is that caller: a file no item names is weight the
+    reader pays for and will never see.
 
     **What makes a file one of these is that it is named for an item**, which is
     also what tells it apart from the day's own payloads. `digest.json` and
@@ -100,8 +87,7 @@ def assets_in_day(public_root: Path, date: str) -> set[str]:
         return set()
     return {
         f"digest/{year}/{month}/{day}/{path.name}"
-        for suffix in (SUFFIX, DATA_SUFFIX)
-        for path in folder.glob(f"*{suffix}")
+        for path in folder.glob(f"*{SUFFIX}")
         if re.match(ITEM_ID_PATTERN, path.stem)
     }
 
@@ -121,15 +107,16 @@ def write_bytes_atomic(path: Path, payload: bytes) -> None:
 def drop_raced_assets(
     *, public_root: Path, items_dir: Path, published: Iterable[str]
 ) -> list[str]:
-    """Delete this run's copy of any asset the tip already publishes.
+    """Delete this run's copy of any published file the tip already holds.
 
     A run takes about three hours and the day is refreshed five times, so a
-    second run renders while the first is still summarizing and neither checkout
-    can see what the other has not pushed yet. Git cannot rebase two adds of one
-    path, and run `32869125768` lost a finished day right there.
+    second run compiles while the first is still summarizing and neither
+    checkout can see what the other has not pushed yet. Git cannot rebase two
+    adds of one path when the two blobs differ, and run `32869125768` lost a
+    finished day right there.
 
     Since the path is the item's id, a path both sides hold is **one story
-    rendered twice** - never two stories under one name. So there is nothing to
+    compiled twice** - never two stories under one name. So there is nothing to
     choose between: the tip's copy is published and a reader may already hold
     that address, and `assemble.build_day` keeps the tip's item over ours in any
     case, which makes our file the one nothing will reference. Dropping it is
@@ -140,10 +127,15 @@ def drop_raced_assets(
     point somewhere else is how an item ends up with a picture that is not
     filed under its own name.
 
-    **A visual's data file races exactly like its drawing**, for the same reason
-    and with the same answer: it is filed under the item's own id, so a path both
-    sides hold is one story compiled twice, and git cannot rebase two adds of one
-    path any better here than there.
+    **The renderer going did not retire this** (Fowler, 2026-09-13). Vega's
+    process-global clip-path counter made two renders of one item differ
+    reliably, and that cause left with the renderer - so an item compiled twice
+    from unchanged inputs now writes identical bytes, which git merges without
+    a conflict. The race itself stays, because the compiled marks come from a
+    plan and an element table derived from text re-fetched off the open web: a
+    source page that moved between two runs' fetches puts two different blobs on
+    one path. That is rarer than the counter was and exactly as expensive, which
+    is an argument for keeping the control rather than against it.
 
     `published` names what the tip holds, relative to `public_root`. Returns the
     paths it dropped, so the run log can name them.
@@ -152,55 +144,17 @@ def drop_raced_assets(
     dropped: list[str] = []
     for decision_path in sorted(items_dir.glob(f"*{PAYLOAD_SUFFIX}")):
         decision = VisualDecision.read(decision_path)
-        for relpath in (decision.asset_path, decision.data_path):
-            if relpath is None or relpath not in already:
-                continue
-            source = public_root / relpath
-            # A payload naming a file this checkout does not hold cannot collide
-            # with anything: nothing here would commit that path.
-            if not source.is_file():
-                continue
-            source.unlink()
-            dropped.append(relpath)
+        relpath = decision.data_path
+        if relpath is None or relpath not in already:
+            continue
+        source = public_root / relpath
+        # A payload naming a file this checkout does not hold cannot collide
+        # with anything: nothing here would commit that path.
+        if not source.is_file():
+            continue
+        source.unlink()
+        dropped.append(relpath)
     return dropped
-
-
-def render_visual(
-    decision: VisualDecision,
-    *,
-    public_root: Path,
-    relpath: str,
-) -> VisualDecision:
-    """Render, write, and return the decision carrying its outcome.
-
-    Every failure path returns a `render_failed` decision. None of them raises, so
-    a picture can never be the reason an item does not reach a reader.
-
-    No canvas size is passed in. A Vega-Lite spec carries its own width and
-    height, set from `visuals.canvas_width` where the spec is built.
-    """
-    if decision.kind is VisualKind.NONE or not decision.spec:
-        return decision
-
-    try:
-        payload = render_chart(decision.spec)
-        write_bytes_atomic(public_root / relpath, payload)
-    except ChartError as error:
-        return decision.model_copy(
-            update={
-                "visual_state": VisualState.RENDER_FAILED,
-                "failure_detail": str(error)[:200],
-            }
-        )
-    except OSError as error:
-        return decision.model_copy(
-            update={
-                "visual_state": VisualState.RENDER_FAILED,
-                "failure_detail": f"the asset could not be written: {type(error).__name__}",
-            }
-        )
-
-    return decision.model_copy(update={"visual_state": VisualState.RENDERED, "asset_path": relpath})
 
 
 def render_planned_visual(
@@ -212,72 +166,55 @@ def render_planned_visual(
     relpath: str,
     visuals: VisualsConfig,
 ) -> VisualDecision:
-    """A validated plan becomes a drawing on disk, or the item stays decided to nothing.
+    """A validated plan becomes a published data file, or the item stays decided to nothing.
 
     The whole path in one call: compile the plan over the article's elements,
-    draw the spec, write the file, and hand back the decision carrying the spec,
-    the alt text and where the picture landed. It exists so the one place a plan
-    turns into a published picture is one place rather than three call sites
-    that can each get the order wrong, and so no caller has to remember a `try`
-    around the compile.
+    write the marks where the day payload will point, and hand back the decision
+    carrying them. It exists so the one place a plan turns into a published
+    picture is one place rather than three call sites that can each get the
+    order wrong, and so no caller has to remember a `try` around the compile.
 
     **`decision` arrives as the `none` it is.** `VisualDecision` refuses a
     `chart` that carries no spec, and the spec is what this function makes - so
-    the item is decided to nothing until a plan compiles into a picture, and it
-    is promoted through the contract's own validation rather than around it.
+    the item is decided to nothing until a plan compiles, and it is promoted
+    through the contract's own validation rather than around it.
 
-    **A plan this build cannot draw stays `none`, and that is the contract's
-    ruling rather than a shortcut.** `render_failed` means a spec was drawn and
-    the drawing failed; a plan that never became a spec has no spec to record,
+    **A plan this build cannot compile stays `none`, and that is the contract's
+    ruling rather than a shortcut.** `render_failed` means marks were compiled
+    and the file did not land; a plan that never compiled has no spec to record,
     and the shape will not hold one. Which gate refused it is `none_reason`'s to
     say, and the caller sets it.
 
-    **The data is published after the drawing has landed, and never instead of
-    it.** The reader's browser is what draws the chart from 2026-09-13
+    **Nothing is drawn here and nothing is drawn anywhere in this repository.**
+    The reader's browser draws the chart from 2026-09-13
     ([`docs/architecture/publishing/visuals.md`](../../../docs/architecture/publishing/visuals.md)),
-    so the compiled marks are a published file rather than a run artifact. A
-    drawing with no data file is the honest record of a write that did not
-    happen and a reader of that day simply gets the drawing; a data file with no
-    drawing would be a file nothing points at, which is why the order is this way
-    round and not the other.
+    so the compiled marks are the last thing the pipeline writes for a picture
+    and the first thing the drawing code reads.
     """
     if decision.kind is not VisualKind.NONE:
         raise ValueError("a planned visual starts as an item decided to nothing")
     try:
-        drawn = compile_bar(plan, table, visuals=visuals)
-    except ChartError:
+        compiled = compile_bar(plan, table, visuals=visuals)
+    except CompileError:
         return decision
     planned = VisualDecision.model_validate(
         decision.model_dump(mode="json")
         | {
             "kind": VisualKind.CHART.value,
             "none_reason": None,
-            "spec": json.dumps(drawn.spec, separators=(",", ":"), sort_keys=True),
-            "alt_text": drawn.alt_text,
+            "spec": compiled.data.to_json(),
+            "alt_text": compiled.alt_text,
         }
     )
-    rendered = render_visual(planned, public_root=public_root, relpath=relpath)
-    if rendered.visual_state is not VisualState.RENDERED:
-        return rendered
-    return _with_published_data(rendered, drawn.data, public_root=public_root, relpath=relpath)
-
-
-def _with_published_data(
-    decision: VisualDecision,
-    data: VisualData,
-    *,
-    public_root: Path,
-    relpath: str,
-) -> VisualDecision:
-    """Write the marks beside the drawing, and record where - or record nothing.
-
-    An unwritable data file degrades the data and never the item: the story
-    still publishes, the drawing is still there, and `data_path` stays null,
-    which every reader of the payload is required to read as no data carried.
-    """
-    data_path = data_relpath(relpath)
     try:
-        write_bytes_atomic(public_root / data_path, data.to_json().encode("utf-8"))
-    except OSError:
-        return decision
-    return decision.model_copy(update={"data_path": data_path})
+        write_bytes_atomic(public_root / relpath, compiled.data.to_json().encode("utf-8"))
+    except OSError as error:
+        return planned.model_copy(
+            update={
+                "visual_state": VisualState.RENDER_FAILED,
+                "failure_detail": f"the data file could not be written: {type(error).__name__}",
+            }
+        )
+    return planned.model_copy(
+        update={"visual_state": VisualState.RENDERED, "data_path": relpath}
+    )

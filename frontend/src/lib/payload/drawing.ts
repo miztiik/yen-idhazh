@@ -36,12 +36,42 @@
  */
 const VISUAL_PATH = /^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9][a-z0-9_-]*\.svg$/;
 
+/** A published visual's data file, as a file we are allowed to ask for.
+ *
+ * The value comes off a committed payload rather than off the web, and it is
+ * still matched rather than trusted: it is about to be joined onto `base` and
+ * fetched, and a path that walked out of the digest tree would be taken all the
+ * same.
+ *
+ * **The name has to be an item's**, which the `.svg` pattern above never had to
+ * say because no day payload was ever called `<something>.svg`. It is now: the
+ * day's own `digest.json` and `run.json` sit in the same directory and carry the
+ * same extension. An item id ends in a hyphen and a run of digits or sixteen
+ * base32 symbols, so neither can ever look like one - and that is the same rule
+ * the writer, the retention prune and the bundle staging read, rather than four
+ * spellings of it.
+ */
+const VISUAL_DATA_PATH =
+	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
+
 /** What a drawing may not carry into the document. */
 const NOT_INERT = /<\s*(script|foreignObject|iframe|image|use|a|set|animate)\b|\son[a-z]+\s*=|javascript:/i;
 
-/** Whether this is a path this site published a drawing at. */
+/** Whether this is a path this site published a drawing at.
+ *
+ * **Nothing publishes one from 2026-09-13.** The build-time renderer is deleted
+ * and the 495 committed drawings with it, so this and `refusedDrawing` below
+ * are the read side of a day whose payload still names a `.svg`: the build asks
+ * for a file that is not there and the story is simply shorter. They go with
+ * the build-time inlining they serve, in the row that deletes it.
+ */
 export function publishedVisual(path: string): boolean {
 	return VISUAL_PATH.test(path);
+}
+
+/** Whether this is a path this site published a visual's marks at. */
+export function publishedVisualData(path: string): boolean {
+	return VISUAL_DATA_PATH.test(path);
 }
 
 /** Why this markup may not be drawn, or null when it may.
@@ -61,6 +91,11 @@ export function refusedDrawing(markup: string): string | null {
  * version this page does not hold is refused rather than read: the shape is
  * allowed to move, and a page that guessed at a later one would draw a chart
  * from data that means something else.
+ *
+ * **A renderer bump re-draws whole days or none.** One page must not draw two
+ * styles in one scroll, which reads as a broken site - so the set holds the
+ * versions this build can draw and a day compiled for any other one is simply
+ * shorter.
  */
 const RENDERERS = new Set(['2026-09-13']);
 

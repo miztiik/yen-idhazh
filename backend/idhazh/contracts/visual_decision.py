@@ -93,6 +93,25 @@ class VisualDecision(Contract):
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13T22:30",
+            change=(
+                "Retired asset_path. One published file per visual is left and data_path "
+                "names it, so the rendered-visual rule moved onto data_path and "
+                "spec's description says what the field now holds - the compiled marks, "
+                "as the published visual-data document."
+            ),
+            why=(
+                "The build-time renderer is deleted, so nothing writes an SVG and "
+                "asset_path had no producer. Two fields naming one file is the "
+                "spec_format failure again: a second name for a fact already carried, "
+                "whose only possible contribution is to disagree with it. No read side "
+                "is owed - this payload is written under gitignored backend/var/ and "
+                "travels as a one-day artifact, so the run that writes it is the run "
+                "that reads it, and Contract.read refuses a stamp it does not know "
+                "rather than guessing at one."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T20:00",
             change=(
                 "Added data_path, where this item's published visual data landed. "
@@ -310,28 +329,23 @@ class VisualDecision(Contract):
         default=None,
         description=(
             "The compiled drawing instruction, built here from the article's own "
-            "numbers and read back by whatever renderer the build that wrote it ships. "
-            "The grammar is the renderer's rather than this contract's - it is "
-            "Vega-Lite JSON while the build-time renderer runs - and naming one here "
-            "would date the field to a renderer this project has already changed once. "
-            "Null on an item decided to nothing."
-        ),
-    )
-    asset_path: RelPath | None = Field(
-        default=None,
-        description=(
-            "Relative POSIX path under frontend/public/, once rendered. Written as "
-            "digest/<Y>/<M>/<D>/<item_id>.svg since 2026-08-27; payloads before that "
-            "carry digest/<Y>/<M>/<D>/<vertical>-<NN>.svg and stay valid."
+            "numbers and read back by whatever draws it. Since 2026-09-13 that is the "
+            "reader's browser and this holds the published visual-data document, the "
+            "same bytes the file beside the day carries. The grammar is the drawing "
+            "code's rather than this contract's - it was Vega-Lite JSON while the "
+            "build-time renderer ran - and naming one here would date the field to a "
+            "renderer this project has already changed twice. Null on an item decided "
+            "to nothing."
         ),
     )
     data_path: RelPath | None = Field(
         default=None,
         description=(
             "Relative POSIX path under frontend/public/ to this visual's published "
-            "data, as digest/<Y>/<M>/<D>/<item_id>.json beside the drawing. Null on a "
-            "payload written before the file existed, and null where the drawing landed "
-            "and its data did not - absent reads as no data carried."
+            "data, as digest/<Y>/<M>/<D>/<item_id>.json beside the day payload that "
+            "points at it. Null on a payload written before the file existed, and null "
+            "where the compile landed and the write did not - absent reads as no data "
+            "carried."
         ),
     )
     alt_text: UntrustedLine | None = None
@@ -392,18 +406,14 @@ class VisualDecision(Contract):
             if self.none_reason is not None:
                 raise ValueError("only an item decided to nothing records the gate that refused it")
 
+        # The data file is the only thing a compiled visual publishes, so the
+        # rule that stood over `asset_path` stands here: `rendered` and a path
+        # arrive together in one `model_copy`, and a path on anything else names
+        # a file nothing wrote.
         if self.visual_state is VisualState.RENDERED:
-            if self.asset_path is None:
-                raise ValueError("a rendered visual must record where it landed")
-        elif self.asset_path is not None:
-            raise ValueError("only a rendered visual carries an asset_path")
-
-        # One-way on purpose. The data is written after the drawing has landed,
-        # so a data_path on anything else names a file nothing drew; a rendered
-        # drawing with no data_path is the honest record of a write that did not
-        # happen, and a reader of that day draws nothing rather than an empty
-        # chart.
-        if self.data_path is not None and self.visual_state is not VisualState.RENDERED:
+            if self.data_path is None:
+                raise ValueError("a rendered visual must record where its marks landed")
+        elif self.data_path is not None:
             raise ValueError("only a rendered visual carries a data_path")
 
         if (self.visual_state is VisualState.RENDER_FAILED) != (self.failure_detail is not None):

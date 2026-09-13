@@ -81,7 +81,10 @@ export function pythonModulesFor(selected: Selection): string[] {
 	const modules = selected.groups.includes('backend') ? ['pytest', 'xdist', 'ruff', 'mypy'] : [];
 	if (selected.tooling && !modules.includes('pytest')) modules.push('pytest');
 	if (selected.groups.some((group) => group !== 'logic')) {
-		modules.push('pydantic', 'feedparser', 'protego', 'trafilatura', 'onnxruntime', 'tokenizers', 'vl_convert');
+		// `vl_convert` was here until 2026-09-13. The reader's browser draws the chart
+		// and the pipeline renders nothing, so the package is not installed and probing
+		// for it fails every browser run on a correct environment.
+		modules.push('pydantic', 'feedparser', 'protego', 'trafilatura', 'onnxruntime', 'tokenizers');
 	}
 	return modules;
 }

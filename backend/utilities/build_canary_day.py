@@ -79,12 +79,19 @@ from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
-from idhazh.contracts.visual import VisualPlan
-from idhazh.contracts.visual_decision import VisualDecision, VisualKind
+from idhazh.contracts.visual import VisualPlan, VisualType
+from idhazh.contracts.visual_data import (
+    RENDERER_VERSION,
+    VisualData,
+    VisualEncoding,
+    VisualMark,
+)
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
-from idhazh.render import asset_relpath, render_planned_visual, render_visual
+from idhazh.render import asset_relpath, render_planned_visual
+from idhazh.render.write import write_bytes_atomic
 
 CANARY_DIR = Path("tests/fixtures/canaries")
 DATE = "2026-08-20"
@@ -111,49 +118,27 @@ SITE_BYTES_PER_DAY = 11_000
 # Two items carry a real visual, so the browser suite exercises the picture path
 # rather than proving it safe by never serving one.
 #
-# **The first is compiled, and the other two are written out here.** The first
-# is the one end-to-end drawing the fixture holds: a committed plan and a
-# committed element table go through `compile_bar`, so every bar on that story
-# can be re-derived from the article's own figures and a browser can check the
-# picture says what the table says. The other two are hand-written because they
-# carry cases a compiled plan cannot - a chart with no unit on its axis, and a
-# spec the Vega toolchain refuses.
+# **The first is compiled, and the second is written out here.** The first is
+# the one end-to-end visual the fixture holds: a committed plan and a committed
+# element table go through `compile_bar`, so every bar on that story can be
+# re-derived from the article's own figures and a browser can check the picture
+# says what the table says. The second is written here because it carries a case
+# a compiled plan cannot - bars with no unit on their axis.
 #
 # The compiled one reads the validator's own fixtures rather than a second copy
-# of them, so the drawing the browser reads back and the plan the backend oracle
+# of them, so the marks the browser reads back and the plan the backend oracle
 # compiles are one file. Editing either fixture moves both, which is the point.
 PLANNED_PLAN = Path("tests/fixtures/visual-validator/plans/passes.json")
 PLANNED_TABLE = Path("tests/fixtures/visual-validator/tables/wind.json")
 
-SECOND_CHART_SPEC = json.dumps(
-    {
-        "data": {
-            "values": [
-                {"label": "Filed", "value": 320},
-                {"label": "Reviewed", "value": 210},
-                {"label": "Approved", "value": 95},
-            ]
-        },
-        "encoding": {
-            "x": {"field": "value", "type": "quantitative"},
-            "y": {"field": "label", "sort": None, "type": "nominal"},
-        },
-        "height": 410,
-        "mark": {"color": "#4c6ef5", "type": "bar"},
-        "width": 680,
-    },
-    separators=(",", ":"),
-    sort_keys=True,
-)
-
-#: A spec the Vega toolchain refuses, so the third visual item is a chart that
-#: was planned and never drawn. The day needs one: `render_failed` is a state the
-#: reading page and the console both have to handle, and it is the only way left
-#: for a committed visual not to be a published chart.
-UNDRAWABLE_CHART_SPEC = json.dumps(
-    {"data": {"values": []}, "mark": "not-a-mark"},
-    separators=(",", ":"),
-    sort_keys=True,
+#: A second chart, with no unit on its axis. Three stages of one process, which
+#: a unit would not describe, so the drawing code has to lay out an axis that
+#: names no quantity. Written here rather than compiled because the resolver
+#: reads a unit off every element it measures.
+SECOND_CHART_MARKS: Final = (
+    ("Filed", "320"),
+    ("Reviewed", "210"),
+    ("Approved", "95"),
 )
 
 #: What the model was given on an item extract cut short, and so the length an
@@ -482,19 +467,19 @@ def lenses_for(index: int) -> list[str]:
 def visual_for(
     index: int, item_id: str, target: Path, *, visuals: VisualsConfig
 ) -> VisualDecision | None:
-    """A rendered chart on each of the first two items, and a failed one on the third.
+    """A published chart on each of the first two items, and a failed one on the third.
 
-    Two rendered, not one, because the browser suite's oracle is that every
+    Two published, not one, because the browser suite's oracle is that every
     promised picture is served - a single figure cannot show that the page draws
-    each story its own. The third is planned and never drawn, which is what keeps
-    a visual that is not a published chart on the day: the console counts
+    each story its own. The third is planned and never written, which is what
+    keeps a visual that is not a published chart on the day: the console counts
     rendered charts rather than visuals, and a fixture where the two numbers
     agree cannot tell the two readings apart.
 
-    **The first goes through the compiler.** Its spec and its alt text are built
+    **The first goes through the compiler.** Its marks and its alt text are built
     from a committed plan over a committed element table, so the day carries one
-    drawing whose every bar can be re-derived from the figures the article
-    states - which is what the browser suite reads back.
+    visual whose every bar can be re-derived from the figures the article states
+    - which is what the browser suite reads back.
     """
     # The payload stores `digest/<Y>/<M>/<D>/...`, so the root here is the parent
     # of the digest directory - exactly as the real pipeline does it.
@@ -523,16 +508,79 @@ def visual_for(
             visuals=visuals,
         )
     if index == 1:
-        spec = SECOND_CHART_SPEC
-        alt = "Bar chart. Filed 320 cases; Reviewed 210 cases; Approved 95 cases."
-    elif index == 2:
-        spec = UNDRAWABLE_CHART_SPEC
-        alt = "Bar chart. Coal 41 percent; Gas 22 percent; Wind 19 percent."
-    else:
-        return None
+        data = _unitless_bars(item_id)
+        written = decided(
+            VisualKind.CHART,
+            data.to_json(),
+            "Bar chart. Filed 320; Reviewed 210; Approved 95.",
+        )
+        write_bytes_atomic(public_root / relpath, data.to_json().encode("utf-8"))
+        return written.model_copy(
+            update={"visual_state": VisualState.RENDERED, "data_path": relpath}
+        )
+    if index == 2:
+        # Planned, and its file never landed. `render_failed` is a state the
+        # reading page and the console both have to handle, and with nothing
+        # drawn at build time a write that did not happen is the only way left
+        # for a committed visual not to be a published chart.
+        return decided(
+            VisualKind.CHART,
+            _unitless_bars(item_id).to_json(),
+            "Bar chart. Coal 41 percent; Gas 22 percent; Wind 19 percent.",
+        ).model_copy(
+            update={
+                "visual_state": VisualState.RENDER_FAILED,
+                "failure_detail": "the data file could not be written: OSError",
+            }
+        )
+    return None
 
-    return render_visual(
-        decided(VisualKind.CHART, spec, alt), public_root=public_root, relpath=relpath
+
+def _unitless_bars(item_id: str) -> VisualData:
+    """Three bars whose axis names no quantity, as a published visual-data document.
+
+    The element ids are shaped like the extractor's own - sentence, then offset -
+    because a mark's provenance is a real id or it is not provenance.
+    """
+    marks = [
+        VisualMark(
+            mark_id=f"m{index}",
+            text=name,
+            value=None,
+            unit=None,
+            element_id=f"canary-1-{index}",
+            derived=None,
+        )
+        for index, (name, _) in enumerate(SECOND_CHART_MARKS)
+    ]
+    marks += [
+        VisualMark(
+            mark_id=f"m{len(SECOND_CHART_MARKS) + index}",
+            text=None,
+            value=figure,
+            unit=None,
+            element_id=f"canary-2-{index}",
+            derived=None,
+        )
+        for index, (_, figure) in enumerate(SECOND_CHART_MARKS)
+    ]
+    return VisualData(
+        version=VisualData.schema_version(),
+        item_id=item_id,
+        type=VisualType.BAR,
+        renderer_version=RENDERER_VERSION,
+        marks=marks,
+        encoding=VisualEncoding(
+            category=[mark.mark_id for mark in marks[: len(SECOND_CHART_MARKS)]],
+            quantity=[mark.mark_id for mark in marks[len(SECOND_CHART_MARKS) :]],
+            quantity_x=[],
+            time=[],
+            series=[],
+            size=[],
+            bins=[],
+            entity=[],
+            event_label=[],
+        ),
     )
 
 
