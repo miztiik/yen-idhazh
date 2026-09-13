@@ -4946,6 +4946,58 @@ def test_the_two_counts_answer_two_questions() -> None:
     assert by_id[other["id"]].desk_count == other["count"] + 1
 
 
+# --- The second desk, and why a story never names a third -------------------
+
+
+def test_a_second_desk_that_repeats_the_first_is_refused() -> None:
+    """A story names at most two desks, which is the oracle of plan 25 row #8.
+
+    One name written twice reads as two desks to anything counting them and is
+    one desk to a reader. The rule is stated against the desk the day FILED the
+    story under, so it holds on an item whose `desk` is null and whose filing is
+    therefore the feed's own word.
+    """
+    payload = _desk_differs_payload()
+    assert payload["vertical"] == "energy" and payload["desk"] == "ai"
+
+    crossed = DigestItem.model_validate({**payload, "secondary_desk": "energy"})
+    assert crossed.secondary_desk == "energy", "the feed's word is a lawful second desk"
+
+    with pytest.raises(ValueError, match="secondary_desk repeats"):
+        DigestItem.model_validate({**payload, "secondary_desk": "ai"})
+
+    unfiled = {**payload, "desk": None}
+    with pytest.raises(ValueError, match="secondary_desk repeats"):
+        DigestItem.model_validate({**unfiled, "secondary_desk": "energy"})
+
+
+def test_an_item_published_before_the_second_desk_existed_reads_as_unknown() -> None:
+    """The read-side migration, proved by removing the key rather than by waiting.
+
+    Absent is nothing having named a second desk. It is never the story saying
+    it has none, which would be a claim about 9,353 committed items nobody made.
+    """
+    payload = _desk_differs_payload()
+    payload.pop("secondary_desk", None)
+    item = DigestItem.model_validate(payload)
+    assert item.secondary_desk is None
+
+
+def test_a_day_must_list_the_second_desk_a_story_names() -> None:
+    """A claim on a topic the day never listed is a claim nothing can honour.
+
+    `desk` is already checked this way. The second name is owed the same check,
+    because `assemble.build_day` lists every word any story holds and a payload
+    that skipped one would carry a topic with no display name and no count.
+    """
+    day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    listed = {ref["id"] for ref in day["verticals"]}
+    unlisted = next(name for name in ("world", "india", "business-economy") if name not in listed)
+    day["items"][0]["secondary_desk"] = unlisted
+    with pytest.raises(ValueError, match="names an unlisted second desk"):
+        DigestDay.model_validate(day)
+
+
 def test_a_day_written_before_desk_count_existed_still_reads() -> None:
     """Additive, so the 22 frozen days validate with the key absent everywhere."""
     day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
