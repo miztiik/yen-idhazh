@@ -1,0 +1,49 @@
+{
+  "events": [
+    {
+      "definition": "An organisation raised money from investors, or was valued in the course of doing so.",
+      "display_name": "Funding",
+      "id": "funding",
+      "keywords": [
+        "funding round",
+        "seed round",
+        "venture capital",
+        "raised"
+      ]
+    },
+    {
+      "definition": "A company sold its shares to the public for the first time.",
+      "display_name": "Stock market listing",
+      "id": "ipo",
+      "keywords": [
+        "ipo",
+        "initial public offering",
+        "went public",
+        "listed its shares"
+      ],
+      "retired_on": "2026-09-13",
+      "status": "retired"
+    }
+  ],
+  "lenses": [
+    {
+      "definition": "The story turns on semiconductors - who designs them, who makes them, or who is allowed to buy them.",
+      "display_name": "Chips",
+      "id": "chips",
+      "keywords": [
+        "chips",
+        "semiconductor",
+        "foundry"
+      ]
+    }
+  ],
+  "version": "2026-09-13",
+  "verticals": [
+    {
+      "definition": "The story turns on artificial intelligence - the models, the people building them, or what they are used for.",
+      "display_name": "AI",
+      "id": "ai",
+      "min_feeds": 1
+    }
+  ]
+}

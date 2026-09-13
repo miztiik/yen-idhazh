@@ -2973,7 +2973,11 @@ def test_every_offered_entry_of_the_committed_vocabulary_carries_its_sentence() 
             for item in taxonomy.lenses
             if item.status is LifecycleStatus.ACTIVE
         ),
-        *((item.id, item.definition) for item in taxonomy.events),
+        *(
+            (item.id, item.definition)
+            for item in taxonomy.events
+            if item.status is LifecycleStatus.ACTIVE
+        ),
     ]
     for entry_id, definition in offered:
         assert definition, f"{entry_id} is offered to the model with no definition"
@@ -4136,6 +4140,67 @@ def test_an_id_the_committed_vocabulary_no_longer_names_still_reads() -> None:
 
     with pytest.raises(ValidationError):
         DigestItem.model_validate({**payload, "lenses": ["Supply Chain"]})
+
+
+def test_a_retired_event_reaches_no_prompt_and_stops_matching() -> None:
+    """`status` is a control on an event too, and the block's bytes are the proof.
+
+    The same two assertions `test_a_draft_or_retired_entry_reaches_no_prompt`
+    makes for a lens, against the vocabulary that could not make them until
+    2026-09-13: `EventDef` extended plain `Model`, so a run had nothing to
+    filter on and offered a word the vocabulary had stopped carrying.
+
+    `tests/fixtures/taxonomy/retired-event.json` keeps both the tombstone's
+    sentence and its keywords on purpose. A tombstone that had given them up
+    would be silent whatever the code did, so the test would pass on a build
+    with no filter in it - and then the filter is what nobody would notice
+    losing. The live event beside it spells no `status` at all, which is the
+    other half: the change is additive with defaults, so an event written
+    before 2026-09-13 reads as active and nothing has to migrate.
+    """
+    offered = taxonomy_fixture("retired-event")
+    live = next(event for event in offered.events if event.id == "funding")
+    assert live.status is LifecycleStatus.ACTIVE, "an event with no status reads as active"
+    assert live.retired_on is None
+
+    payload = json.loads(offered.to_json())
+    for entry in payload["events"]:
+        if entry["status"] != LifecycleStatus.ACTIVE.value:
+            entry["definition"] = "a sentence no prompt may carry"
+
+    assert Taxonomy.model_validate(payload).definition_block() == offered.definition_block()
+    assert "ipo" not in offered.definition_block()
+    assert "Stock market listing" not in offered.definition_block()
+    assert "funding" in offered.definition_block(), "the live event must still be offered"
+
+    assert "ipo" not in offered.event_terms(), "a tombstone must stop matching"
+    assert "funding" in offered.event_terms()
+
+
+def test_a_published_item_carrying_a_retired_event_still_reads() -> None:
+    """The read-side half, and why retiring an event may not take a day's word away.
+
+    `tests/fixtures/digest/retired-lens-item.json` is a verbatim copy of a
+    committed item, and it carries two events of its own. Putting the fixture's
+    tombstone into that list is the case a retirement has to survive: the day is
+    frozen and the vocabulary moved, so the id has to keep reading and the
+    tombstone has to keep the words the day was published under.
+
+    It is the same rule `test_a_published_item_carrying_a_retired_lens_still_reads`
+    states for a lens. No committed event is retired today, so the tombstone
+    comes from the fixture rather than from `config/taxonomy.json` - which also
+    keeps the test off a file another row may edit.
+    """
+    taxonomy = taxonomy_fixture("retired-event")
+    tombstone = next(event for event in taxonomy.events if event.status is LifecycleStatus.RETIRED)
+    assert tombstone.retired_on, "a retired entry must carry the day it was retired"
+
+    payload = json.loads(read_text(FIXTURES_DIR / "digest" / "retired-lens-item.json"))
+    payload["events"] = [tombstone.id, "deal"]
+    item = DigestItem.model_validate(payload)
+
+    assert item.events == [tombstone.id, "deal"]
+    assert tombstone.display_name == "Stock market listing"
 
 
 def test_runs_are_append_only() -> None:

@@ -76,14 +76,18 @@ def test_an_absent_document_earns_no_tag() -> None:
 def test_every_lens_and_event_carries_terms() -> None:
     """An empty list is legal and silent, which is exactly how this shipped unwired.
 
-    Scoped to the lenses that still match. A tombstone keeps an id valid for the
-    days that published it and is dropped from `lens_terms`, so terms on one
-    would be dead weight that reads as live.
+    Scoped to the entries that still match. A tombstone keeps an id valid for the
+    days that published it and is dropped from `lens_terms` and `event_terms`, so
+    terms on one would be dead weight that reads as live. The event half was
+    unscoped until 2026-09-13 only because `EventDef` had no status to read; with
+    one, the first event anybody retires would have turned this red.
     """
-    live = [lens for lens in TAXONOMY.lenses if lens.status is not LifecycleStatus.RETIRED]
-    assert live, "a taxonomy with no live lens tags nothing"
-    assert [lens.id for lens in live if not lens.keywords] == []
-    assert [event.id for event in TAXONOMY.events if not event.keywords] == []
+    live_lenses = [lens for lens in TAXONOMY.lenses if lens.status is not LifecycleStatus.RETIRED]
+    live_events = [event for event in TAXONOMY.events if event.status is not LifecycleStatus.RETIRED]
+    assert live_lenses, "a taxonomy with no live lens tags nothing"
+    assert live_events, "a taxonomy with no live event tags nothing"
+    assert [lens.id for lens in live_lenses if not lens.keywords] == []
+    assert [event.id for event in live_events if not event.keywords] == []
 
 
 def test_every_watchlist_entity_carries_an_alias() -> None:
