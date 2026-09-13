@@ -30,7 +30,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1a | The payload carries the chart's data, and nothing draws it from there yet | - | A | DONE #687 | p12-r1a | #687 | worker |
-| 1b | The browser draws the chart, and the pipeline stops rendering | 1a | B | DONE | p12-r1b | - | worker |
+| 1b | The browser draws the chart, and the pipeline stops rendering | 1a | B | DONE #689 | p12-r1b | #689 | worker |
 | 2 | The drawing takes the width it is given | 1b | C | PENDING | - | - | - |
 | 3 | Numbers a reader can say out loud | 1b | C | PENDING | - | - | - |
 | 4 | The smallest label a person can read, and enough marks to be worth the space | 2, 3 | D | PENDING | - | - | - |
@@ -127,7 +127,9 @@ deletion plus a drawing over data already on the wire.
 ## 4. Row #2 - The drawing takes the width it is given
 
 - **Scope:** No fixed canvas. The box is a function of what is encoded and the space available, on phone, tablet and desktop.
-- **Files touched:** `frontend/src/lib/charts/**`, `frontend/src/lib/components/ItemVisual.svelte`, `config/idhazh.json` (`visuals.canvas_width` retired), `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/tests/**`, `docs/concepts/design-system.md`
+- **Files touched:** `frontend/src/lib/visual/**`, `frontend/src/lib/components/ItemVisual.svelte`, `config/idhazh.json` (`visuals.canvas_width` retired), `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/tests/item-visual.spec.ts`, `frontend/tests/layout-overflow.spec.ts`, `docs/concepts/design-system.md`
+- **The list said `frontend/src/lib/charts/**` until row #1b landed, and that was the console's engine** (corrected 2026-09-13). Row #1b put the digest renderer in `frontend/src/lib/visual/bar.ts`, and rejected alternative 3 of row #1b says the console keeps its own engine and is not migrated. A worker sent to `charts/**` would have rebuilt the wrong surface. `frontend/tests/**` was a glob and is now the two specs the row can actually move; widen it in the pull request if the work reaches further, and re-check the group before you do (section 0).
+- **Row #1b already measured the thing this row removes.** Its second oracle read **4.8 CSS px** for the smallest drawn string at 390 CSS px, against a `--text-xs` of 12, because the view box is 720 units and the figure takes the card's width so the browser scales it. The old renderer read 3.1 CSS px at the same width. **This row removes the scale; row #4 holds the result to the floor.** So the number to beat is 4.8 and it is a real reading on this tree, not the plan's original 3.1.
 - **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the section 12 smoke at 360, 390 and 1440 in both themes.
 - **Oracle:** At three widths, the drawn plot's width is within a stated tolerance of the container's content width - measured in a real browser, not asserted from the CSS.
 
@@ -151,7 +153,9 @@ deletion plus a drawing over data already on the wire.
 ## 5. Row #3 - Numbers a reader can say out loud
 
 - **Scope:** The display formatter: SI prefixes, one declared locale applied at build time, declared precision, shared by the compiler and the console.
-- **Files touched:** a shared formatter module under `frontend/src/lib/`, `config/idhazh.json` (`visuals.number_format`), `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/src/lib/charts/**`, `frontend/src/lib/console/**`, `frontend/tests/**`, `docs/concepts/design-system.md`
+- **Files touched:** a shared formatter module under `frontend/src/lib/`, `config/idhazh.json` (`visuals.number_format`), `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/src/lib/charts/**`, `frontend/src/lib/visual/**`, `frontend/src/lib/console/**`, `frontend/tests/**`, `docs/concepts/design-system.md`
+- **`frontend/src/lib/visual/**` joined the list on 2026-09-13 and `charts/**` stays on it, and the two entries are the row's whole point.** Row #1b put the digest renderer in `frontend/src/lib/visual/bar.ts` and left the console's engine in `charts/`, so there are now two paths that print a number and this row is the one that makes them print the same string. A list naming only one of the two cannot satisfy the cross-path oracle below.
+- **This row and row #2 share five files** - `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json` and `docs/concepts/design-system.md` - so they are ready together but **may not run in the same block**, whatever `Parallel-group C` says. The group was assigned before either list was checked against the tree (found 2026-09-13).
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; `npm run check`; build; `bundle-gate`; the browser suite.
 - **Oracle:** The same value formatted by the digest path and by the console path returns the identical string, asserted over a table of magnitudes spanning thousands to trillions. **Two formatters is how `2M` and `2,000,000` end up on one page**, and only a cross-path assertion catches it.
 
