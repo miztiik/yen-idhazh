@@ -2,7 +2,6 @@
   "date": "2026-08-27",
   "item_id": "ai-01",
   "output_digest": "3469c80fe6cf09abdc1ad5e9dca09031d233386da57930506138f7f5318e98bf",
-  "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "premise": "Example Lab published a smaller model today and said inference cost fell by about a third against the model it replaces. The post gives two numbers: 34 percent lower cost per million tokens, and a 2.1x throughput gain on commodity CPUs.",
   "run_id": "2026-08-27-1",
   "scorer_version": "hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-1;bands=0.80/0.50",

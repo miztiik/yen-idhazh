@@ -39,6 +39,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
+      "version": "2026-09-13T22:00",
+      "why": "It was the covariate a draw reported per stratum, and the stamp stopped being written on 2026-09-12. No row is migrated because none exists: state/labels.csv has never been written, which is the same reason the two entries below it migrate nothing either."
+    },
+    {
       "change": "pipeline_fingerprint is optional and nothing sets it.",
       "version": "2026-09-12T21:00",
       "why": "A draw reported the stamp per stratum and refused to call a mixed pool a calibration. The stamp stopped being written, so there is one pool at one scorer and the number is read rather than withheld."
@@ -145,20 +150,6 @@
       "title": "Output Digest",
       "type": "string"
     },
-    "pipeline_fingerprint": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Null since 2026-09-12. It was the covariate a draw reported per stratum; the stamp stopped being written, so a draw is one pool at one scorer.",
-      "title": "Pipeline Fingerprint"
-    },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
       "title": "Run Id",
@@ -219,7 +210,7 @@
       "$ref": "#/$defs/LabelVerdict"
     },
     "version": {
-      "default": "2026-09-12T21:00",
+      "default": "2026-09-13T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -246,5 +237,5 @@
   ],
   "title": "LabelRow",
   "type": "object",
-  "version": "2026-09-12T21:00"
+  "version": "2026-09-13T22:00"
 }
