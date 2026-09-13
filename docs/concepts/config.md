@@ -621,7 +621,7 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in `state/scores.csv`. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `runtime_counters_scrape` | `true` | The llama-server `GET /metrics` read, and so every row in `state/runtime-counters.csv`. |
-| `tracing_enabled` | `false` | Already off. True builds a span tree under `backend/var/traces/`. |
+| `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
 | `item_health_aggregate_keep_months` | `null` | Nothing by default. Null means a folded month is never removed. |
