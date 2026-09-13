@@ -436,7 +436,7 @@ truncation cap go up" was no. It was yes on 2026-09-09, when the window went to
 16,384 and the same 7,186-token worst run became 44 percent of it. The cap
 doubled to 10,000 that day and the panel's answer went back to no, at a worst
 case of about 86 percent. **It is yes again since 2026-09-13**, when the window
-went to 65,536 to hold the two-call pair and the same worst case became 21
+went to 49,152 to hold the two-call pair and the same worst case became 29
 percent - though what the panel measures is the single call, and the pair the
 window was actually raised for sizes at 39,284 of it
 ([`../summarize/prompt.md`](../summarize/prompt.md)). That is the panel working:

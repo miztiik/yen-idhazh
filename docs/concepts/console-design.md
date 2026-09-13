@@ -125,7 +125,7 @@ is already being printed. The cap has moved twice since - to 5,000 on 2026-08-29
 and to 10,000 on 2026-09-09 - and the count is still zero by arithmetic. The
 arithmetic tightened and then loosened again: the longest single-call prompt the
 cap can produce is about 14,100 tokens, which was 86 percent of a 16,384 window
-and is 21 percent of the 65,536 the window took on 2026-09-13
+and is 29 percent of the 49,152 the window took on 2026-09-13
 ([../reference/measurements.md](../reference/measurements.md)). **What that
 window was raised for is the two-call pair, which the counter does not read** -
 it sizes at 39,284 tokens

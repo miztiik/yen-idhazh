@@ -1075,7 +1075,7 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """Row 3 raised one role, because one role is what was measured.
 
     The visual planner is different weights with its own settings block, and
-    nothing has put a 65,536 window in front of them - so it keeps 8,192. That
+    nothing has put a 49,152 window in front of them - so it keeps 8,192. That
     is the whole reason the block sits on the entry rather than on `models`:
     a number measured against one model may not be inherited by another.
 
@@ -1085,7 +1085,7 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """
     models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
 
-    assert models.summarize.inference.n_ctx == 65536
+    assert models.summarize.inference.n_ctx == 49152
     assert models.summarize.inference.flash_attention == "on"
     assert models.visual_planner.inference.n_ctx == 8192
     assert InferenceConfig().n_ctx == 8192, (
@@ -1133,7 +1133,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
 
     The worst case is built from the measured expansion rather than from
     `TOKENS_PER_WORD`. At the committed cap of 10,000 that is 997 + 12,191 + 900
-    = 14,088 tokens of 65,536, which is 21 percent. **It is the smaller of the
+    = 14,088 tokens of 49,152, which is 29 percent. **It is the smaller of the
     two sums this file now holds and it is the one that is retiring**, so read
     `test_the_two_calls_fit_the_window_at_the_cap` before concluding the window
     has room: that one sizes 39,284 over the same cap.
@@ -1199,7 +1199,16 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     Both sides come from `config/` (Guardrail #6) and the arithmetic is measured
     rather than assumed: at the committed cap of 10,000 tokens and a menu of 256
     rows the prompt sizes at 28,041 and the sequence at 39,284 tokens, which is
-    60 percent of a 65,536 window with 26,252 spare.
+    80 percent of a 49,152 window with 9,868 spare.
+
+    **The 9,868 is a margin with a derivation, which is why it is not wider.**
+    It is 25 percent, the size of the one tokenizer miss on record - `measured`
+    says 1.585 tokens a word and the densest cap-length build delivered 1.952 -
+    rounded up to a whole multiple of 16,384 and of the 512-token batch. A wider
+    window costs almost nothing in memory and costs this assertion its reach:
+    the gate is the product on this path, and it cannot report a sequence that
+    grew until the sequence has outgrown the window. Ruled by Carmack,
+    2026-09-13, over the 65,536 this branch first carried.
 
     **At 32,768 this failed by 6,516 tokens and the failure was not theoretical.**
     Of eight cap-length articles built from committed corpus prose on 2026-09-13,

@@ -327,7 +327,7 @@ const RUN_DEFAULTS: RunConfig = {
 };
 const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
 // The CONTRACT default, not the committed window. `config/idhazh.json` pins
-// `models.summarize.inference.n_ctx` at 65536 since 2026-09-13 and every real
+// `models.summarize.inference.n_ctx` at 49152 since 2026-09-13 and every real
 // page reads that; this only fires for a checkout with no config file, and such
 // a checkout runs the summarizer on `InferenceConfig`'s own default of 8192.
 // Moving it to the committed value would have the console name a window the

@@ -135,7 +135,7 @@
         },
         "n_ctx": {
           "default": 8192,
-          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 65536 and models.visual_planner does not, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for 16384, 1024.00 for 32768 and 2048.00 for 65536, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
+          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 49152 and models.visual_planner does not, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for 16384, 1024.00 for 32768 and 2048.00 for 65536, which interpolates to 1536.00 MiB at the pinned 49152, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
           "minimum": 512,
           "title": "N Ctx",
           "type": "integer"

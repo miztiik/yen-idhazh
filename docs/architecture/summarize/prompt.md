@@ -588,8 +588,8 @@ the same token counts on a runner.
 | plus call 1's own output budget | 34,532 | `call_one_output_tokens()` is 6,491 |
 | plus the seam call 2 adds in front of its reply | 34,590 | `idhazh.measured.CALL_TWO_SEAM_TOKENS` |
 | plus the reply call 2's grammar may write | **39,284** | `call_two_output_tokens()` is 4,694 |
-| `models.summarize.inference.n_ctx` | 65,536 | `config/idhazh.json` |
-| **spare** | **26,252** | 60 percent of the window used |
+| `models.summarize.inference.n_ctx` | 49,152 | `config/idhazh.json` |
+| **spare** | **9,868** | 80 percent of the window used |
 
 **Call 1's reply is paid twice** - once as its own decode, once again inside
 call 2's prompt - which is why the pair is 2.8 times the single call's 14,088.
@@ -597,7 +597,7 @@ call 2's prompt - which is why the pair is 2.8 times the single call's 14,088.
 the cap, the element cap and the window from `config/` on both sides so it
 follows the next move of any of the three.
 
-**The window went to 65,536 rather than to the 32,768 an owner authorised.** The
+**The window went to 49,152 rather than to the 32,768 an owner authorised.** The
 authorisation on 2026-09-12 was given against a table that sized the pair at
 26,189 with 6,579 spare - one build, longest-first, and the mildest of the
 eight. Re-measured, three of the eight exceed 32,768 on their own and the worst
@@ -623,17 +623,29 @@ which is 128. One real row already reaches 256. So a menu at its cap costs
 8,733 tokens - 22 percent of the sequence - on better than one cap-length
 article in twenty.
 
-**What the window costs is memory, and memory is why 65,536 was affordable.**
+**What the window costs is memory, and memory is not what chose 49,152.**
 [`../../reference/measurements.md`](../../reference/measurements.md) carries the
 three arms; the short version is that KV runs 32 KiB a token over 8 attention
 layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever
-the window is - so 65,536 is 2,048.00 MiB of KV against 512.00 at 16,384, and
-1,584 MiB more all told. The runner's measured low-water free is 6.84 GiB
-against a 1.0 GiB bar. The weights train to 262,144, so nothing is scaled.
-**49,152 would also have cleared the sizing**; 65,536 was picked because the
-sizing is a sizing rather than a ceiling - the worst build tokenized at 1.952
-tokens a word against a recorded worst of 1.585 - and 512 MiB is cheap insurance
-against the next article that tokenizes harder.
+the window is - so 49,152 is 1,536.00 MiB of KV against 512.00 at 16,384, and
+1,056 MiB more all told. The runner's measured low-water free is 6.84 GiB
+against a 1.0 GiB bar. The weights train to 262,144, so nothing is scaled. Every
+candidate from 32,768 to 65,536 clears that bar by more than four times, so 528
+MiB either way is noise.
+
+**What chose 49,152 is the margin, and the margin has a derivation.** 39,284
+plus 25 percent is 49,105, and 49,152 is the next step that is a whole multiple
+of both 16,384 and the 512-token batch. The 25 percent is the size of the one
+tokenizer miss on record: `idhazh.measured.WORST_TOKENS_A_WORD` says 1.585
+tokens a word and the densest cap-length build delivered 1.952, 23 percent over.
+**65,536 fits too, costs 528 MiB more, and is what this row first shipped.** It
+was refused because it leaves 67 percent of the window spare, and the gate is
+the product on this path rather than the window: the assertion's job is to fail
+a merge when the sequence outgrows the window, and at 65,536 the sequence can
+grow by two thirds before anybody hears about it. At 49,152 it can grow a
+quarter - one more tokenizer surprise the size of the one already on record.
+Ruled by Carmack, 2026-09-13. **Re-derive it when the truncation cap is fixed or
+`elements.max_per_article` moves.**
 
 **When the sizing is wrong anyway, the failure now has a name.** With
 `--no-context-shift` a decode that runs into the wall stops there rather than
@@ -806,7 +818,7 @@ and leaves 117 tokens of margin across the two-call sequence at 32,768. The row
 that owns the window called 75 tokens "luck rather than a margin", and 117 is
 the same thing. Refused by Carmack, 2026-09-13. **Re-measured the same day, the
 premise was worse than that: the pair sizes at 39,284 tokens, so at 32,768 there
-was no margin at all and the window went to 65,536.**
+was no margin at all and the window went to 49,152.**
 
 **Rejected: clamping the budget against `n_ctx`.** A `min()` silently shrinks
 the budget, which reproduces the exact failure being fixed - a quiet cut with
