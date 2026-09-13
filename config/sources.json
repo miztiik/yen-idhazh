@@ -628,13 +628,24 @@
       "weight": 1.0
     },
     {
-      "id": "france24",
+      "id": "france24-asia-pacific",
       "kind": "reporting",
       "retired_on": null,
       "status": "active",
       "tier": 2,
-      "title": "France 24",
-      "url": "https://www.france24.com/en/rss",
+      "title": "France 24 - Asia-Pacific",
+      "url": "https://www.france24.com/en/asia-pacific/rss",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "france24-europe",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "France 24 - Europe",
+      "url": "https://www.france24.com/en/europe/rss",
       "vertical": "world",
       "weight": 1.0
     },
@@ -1110,17 +1121,6 @@
       "title": "The New Humanitarian",
       "url": "https://www.thenewhumanitarian.org/rss.xml",
       "vertical": "world",
-      "weight": 1.0
-    },
-    {
-      "id": "newslaundry",
-      "kind": "analysis",
-      "retired_on": null,
-      "status": "active",
-      "tier": 2,
-      "title": "Newslaundry",
-      "url": "https://www.newslaundry.com/stories.rss",
-      "vertical": "india",
       "weight": 1.0
     },
     {
@@ -1975,6 +1975,17 @@
       "weight": 1.0
     },
     {
+      "id": "france24",
+      "kind": "reporting",
+      "retired_on": "2026-09-13",
+      "status": "retired",
+      "tier": 2,
+      "title": "France 24",
+      "url": "https://www.france24.com/en/rss",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
       "id": "ft-companies",
       "kind": "reporting",
       "retired_on": "2026-08-29",
@@ -2103,6 +2114,17 @@
       "tier": 2,
       "title": "NDTV",
       "url": "https://feeds.feedburner.com/ndtvnews-top-stories",
+      "vertical": "india",
+      "weight": 1.0
+    },
+    {
+      "id": "newslaundry",
+      "kind": "analysis",
+      "retired_on": "2026-09-13",
+      "status": "retired",
+      "tier": 2,
+      "title": "Newslaundry",
+      "url": "https://www.newslaundry.com/stories.rss",
       "vertical": "india",
       "weight": 1.0
     },
