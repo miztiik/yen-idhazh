@@ -244,7 +244,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | 5 | The item id becomes sixteen characters of base32 | - | A | DONE #642 | p23-5 | #642 | worker |
 | P1 | The property section 0a names, restated | - | A | DONE #608 | p23-p1 | #608 | worker |
 | 20 | The order of the day, written down | - | A | DONE #658 | p23-20 | #658 | worker |
-| P2 | The reference dataset, built so a number cannot flatter us | - | B | IN-FLIGHT | p23-p2 | - | worker |
+| P2 | The reference dataset, built so a number cannot flatter us | - | B | DONE #661 | p23-p2 | #661 | worker |
 | P4 | What one more call costs on the runner | - | B | DONE #623 | p23-p4 | #623 | worker |
 | 1a | The fingerprint stops gating and stops being read | - | C | DONE #647 | p23-1a | #647 | worker |
 | P5 | Which distribution the runtime reports at a masked token | - | C | PENDING | - | - | - |
