@@ -161,7 +161,7 @@ Four facts decide it, and all four were checked on 2026-09-11 rather than assume
 | 5 | `state/item-health/` files by day | 1, 3, 4 | C | DONE #656 | p24-5 | #656 | worker |
 | 6 | `state/feed-health/` files by day | 1, 3 | D | DONE #662 | p24-6 | #662 | worker |
 | 7 | `state/seen/` files by day | 1, 3 | E | DONE #665 | p24-7 | #665 | worker |
-| 8 | `state/scores/` and `state/score-index/` file by day | 1, 2, 3 | F | PENDING | - | - | - |
+| 8 | `state/scores/` and `state/score-index/` file by day | 1, 2, 3 | F | IN-FLIGHT | p24-8 | - | worker |
 
 **What a parallel group means, stated so a worker can check it.** **Within one group, no two rows may write the same file.** A glob counts as every file it covers, so there are no globs in this plan. Where a row names a directory it says what it creates in it, and nothing else in the plan writes there.
 
