@@ -145,6 +145,8 @@ Expect to redo it on every rebase. Two guards make the redo safe: refuse to writ
 
 **A MERGE does the same thing and never conflicts, which is worse.** Union merge has no conflict state, so `git merge origin/main` over a rewritten shard exits 0, prints `Auto-merging`, and leaves one file with two headers and two row widths. Any recipe that waits for a conflict marker misses it. Make the repair unconditional after every merge and every rebase.
 
+**A change of grain fails in the directory rather than in the file, so census the directory.** Moving a store from `<YYYY-MM>.csv` to `<YYYY>/<MM>/<DD>.csv` deletes a file the scheduled `digest.yml` run is still appending to: that run is pinned to the sha it started on, so it keeps writing the month shard your branch removed. After the merge the store holds both grains. Nothing reads as corrupt - `day_partition.day_files` refuses a name it cannot place, so every read of that store stops instead. `state/scores/` was migrated twice on 2026-09-13 for this. Restore the store from the trunk and re-run the migration utility; do not resolve by hand, and count the files in the directory afterwards rather than only reading the one you edited.
+
 **`frontend/public/telemetry/*.csv` is the opposite case, and the conflict it raises is the feature.** That path is deliberately not union-merged, so a branch that widens the projection collides loudly. The cause is not another agent: a scheduled `digest.yml` run stages that directory from a checkout pinned to its start sha, so a run in flight while your pull request is open republishes both shards with the **old** publisher. Both sides are machine output, so keep neither:
 
 ```powershell
