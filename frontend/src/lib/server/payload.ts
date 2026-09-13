@@ -897,12 +897,26 @@ export interface SourceHealthRow {
 	opportunities: number;
 	publications: number;
 	source_failures: number;
+	/** The multiplier the ranker applied to this feed's authority on the run that
+	 * wrote this view. Read, never recomputed: a page that reduced the feed-health
+	 * rows again would be a second verdict on a question the run already answered. */
+	reliability: number;
+	/** Evidence-bearing reads behind that factor. Zero means the 1.0 beside it is
+	 * the default a feed with no evidence scores rather than a perfect record, and
+	 * the page draws those two differently. */
+	reliability_reads: number;
 }
 
 /** The published source-health view, as the console reads it. */
 export interface SourceHealthView {
 	generated_at: string;
 	run_id: string;
+	/** The one line the page opens with. Never absent and never empty. */
+	headline_sentence: string;
+	/** The furthest down the ranker discounts a feed, and the mark on every bar. */
+	reliability_floor: number;
+	/** How far back the factor was reduced, in days. */
+	reliability_window_days: number;
 	min_complete_days: number;
 	complete_dates: number;
 	yield_readable: boolean;
