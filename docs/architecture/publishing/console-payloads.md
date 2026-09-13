@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-13
 
 The operator console reads twelve datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
