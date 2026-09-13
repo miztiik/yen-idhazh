@@ -113,6 +113,19 @@ def month_of(day_file: Path) -> str:
     return f"{day_file.parent.parent.name}-{day_file.parent.name}"
 
 
+def date_of(day_file: Path) -> str:
+    """The `<YYYY-MM-DD>` a day file holds, read off its own path.
+
+    The peer of `month_of`, and both exist because a boundary is either a month
+    or a day. `retention.prune_telemetry` and `prune_feed_health` compare a month
+    because their knobs are months; `prune_seen` compares a day, because its knob
+    is `collect.seen_window_days` and `days_in_window` hands it days. A caller
+    with a day boundary that spelled this itself would be the second place the
+    path layout is written down.
+    """
+    return f"{month_of(day_file)}-{day_file.stem}"
+
+
 def days_by_month(root: Path) -> dict[str, list[Path]]:
     """Every day file under `root`, grouped by its month, oldest month first.
 

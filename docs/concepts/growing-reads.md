@@ -213,7 +213,7 @@ listed: its cover is its argument. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `ledger.load_seen` | month shards of `state/seen/` | `collect.seen_window_days`, committed at 90 |
+| `ledger.load_seen` | day files of `state/seen/` | `collect.seen_window_days`, committed at 90 |
 | `ledger.load_health` | day files of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
 | `ledger.load_item_health` | day files of `state/item-health/` | the caller's `within_days` |
 | `ledger.reliability` | the feed-health day files in range | `collect.reliability_window_days` |

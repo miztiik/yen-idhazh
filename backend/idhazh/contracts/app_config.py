@@ -703,8 +703,11 @@ class CollectConfig(Model):
         default=90,
         ge=1,
         description=(
-            "How far back the first-sight store is consulted. Older shards stay "
-            "committed and readable; they are just not evidence about today."
+            "How far back the first-sight store is consulted. It is counted in days "
+            "and the store files by day, so the window names the files it opens and "
+            "the prune keeps exactly those. Older day files stay committed and "
+            "readable until that prune reaches them; they are just not evidence "
+            "about today."
         ),
     )
     published_window_days: int = Field(

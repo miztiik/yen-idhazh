@@ -723,7 +723,7 @@ is not what bounds them:
 
 **Two more ages sit outside this block**, because each is a read cover first and
 a cleanup age second: `observability.trace_window_days` bounds `state/traces/`,
-and `collect.seen_window_days` bounds `state/seen/` by naming the shards the
+and `collect.seen_window_days` bounds `state/seen/` by naming the day files the
 reader opens.
 
 **Null keeps a summary indefinitely, and a finite value must sit above its own
@@ -844,7 +844,7 @@ evidence, the quarantine reads 31 days, and the console reaches at most 366 - so
 no older total has a reader, and writing one would persist a shape nothing
 consumes. That is why the table above gives it a full-grain age and no summary
 beside it. `state/seen/` is not on that list at all because it is a lookup rather
-than a measurement: an out-of-window shard is deleted through
+than a measurement: an out-of-window day file is deleted through
 `collect.seen_window_days`.
 
 **And the step ships in dry run.** It prints every file a live run would remove
@@ -852,13 +852,16 @@ and removes none of them. `.github/workflows/prune.yml` squashes and force-pushe
 `main` on a schedule, so a state file deleted here stops being recoverable from
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning the deletion on is a one-line
-commit of its own. Measured on this checkout on 2026-09-03: a live run today
-removes nothing, the first file any store loses is `state/seen/2026-08.csv` on
-**2026-11-30**, and the first files the fourteen-month rules take are the day
+commit of its own. Measured on this checkout on 2026-09-13: a live run today
+removes nothing, the first file any store loses is `state/seen/2026/08/23.csv` on
+**2026-11-22**, and the first files the fourteen-month rules take are the day
 files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`,
 the day files under `state/feed-health/2026/08/` and `state/scores/2026-08.csv`,
-together, on **2027-10-01**. Reading committed
-files against a fixed calendar is deterministic, so the spread is zero.
+together, on **2027-10-01**. The sight date was 2026-11-30 while that ledger
+filed by month, because a whole month shard survived if any of its days was in
+range; at day grain the file the window stops naming is the file that goes.
+Reading committed files against a fixed calendar is deterministic, so the spread
+is zero.
 
 ## Reader surface
 
