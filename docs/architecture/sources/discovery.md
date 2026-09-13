@@ -543,6 +543,86 @@ Admission remains a curator's decision. Ongoing feed availability and article
 yield answer different questions and have different controls; see
 [health.md](health.md#per-source-yield-is-measured-and-since-2026-09-06-it-speaks).
 
+### The 2026-09-13 Substack feed additions
+
+One production-path probe ran on a Windows developer machine at
+2026-09-13 12:28 UTC, with `--articles 3`. Each feed returned HTTP 200,
+parsed without warnings, and supplied 20 dated entries. The robots policy
+allowed all three feeds. All nine sampled pages returned HTTP 200 without a
+detected paywall. Word counts below describe that sample, not future quality.
+
+| Feed | Address | Placement | Article sample |
+| --- | --- | --- | --- |
+| Paul Walsh | `https://paulfwalsh.substack.com/feed` | `ai`, tier 3, `analysis` | 3 readable articles; 743 to 1,113 words |
+| Policy Wire | `https://policywire.substack.com/feed` | `world`, tier 3, `analysis` | 3 readable articles; 105 to 243 words |
+| ERINGER | `https://roberteringer.substack.com/feed` | `world`, tier 3, `community` | 2 substantive articles, 622 to 959 words; 1 image post with only 6 extracted words |
+
+All three enter the live list at weight 1.0. Paul Walsh covers technology,
+surveillance and AI policy. Policy Wire covers global affairs. ERINGER mixes
+political commentary, serial writing and image posts. Its six-word result is
+not evidence of a readable article, even though the probe reported `ok`.
+The two substantive articles establish its current access pass.
+
+Three further feeds were probed at 12:35 UTC on the same date and platform,
+with the same three-page sample. Each returned HTTP 200 with 20 dated entries,
+no parser warning and robots permission for the configured user agent.
+
+| Feed | Address | Decision | Article sample |
+| --- | --- | --- | --- |
+| MTS | `https://mtslive.substack.com/feed` | Added to `ai`, tier 3, `community` | 3 readable articles; 645 to 790 words |
+| Oligarch Watch | `https://oligarchwatch.substack.com/feed` | Not added: paid article in the sample | 2 readable articles, 2,458 to 2,568 words; 1 publisher-declared paywall |
+| Getting Out of Control | `https://outofcontrol.substack.com/feed` | Added to `ai`, tier 3, `analysis` | 3 readable articles; 344 to 6,291 words |
+
+Both additions start at weight 1.0. MTS publishes AI news roundups; Getting
+Out of Control's sampled posts discuss AI policy. Oligarch Watch passed the
+utility's any-one-success check but stays out under the existing rule against
+paywalled sources. This gives up its free articles to avoid known paid-page
+failures. The paywall detector refused the paid page and extracted no text
+from it. No access control was bypassed.
+
+Two more feeds were probed at 12:42 UTC on the same date and platform, with
+three articles sampled per feed. Both feeds returned HTTP 200, parsed without
+warnings, supplied 20 dated entries, and allowed the configured user agent
+under the robots policy. All six articles returned readable text with no
+detected paywall.
+
+| Feed | Address | Placement | Article sample |
+| --- | --- | --- | --- |
+| Eurykosmotron | `https://bengoertzel.substack.com/feed` | `ai`, tier 3, `analysis` | 3 readable articles; 2,376 to 3,129 words |
+| Think BRICS | `https://thinkbrics.substack.com/feed` | `world`, tier 3, `analysis` | 3 readable articles; 852 to 2,613 words |
+
+Both enter the live list at weight 1.0. Eurykosmotron is a personal AI and
+frontier-science blog. Think BRICS covers geopolitics and emerging economies.
+Neither feed is classified as an institution's announcements.
+
+This checks access from a developer machine, not from the GitHub runner or
+the accuracy of the writing. Admission does not promise every post is suitable
+for a summary. The existing freshness and article-processing rules are unchanged.
+
+### The 2026-09-13 security feed additions
+
+One production-path probe ran on a Windows developer machine at
+2026-09-13 12:14 UTC, with `--articles 3`. Both feeds returned HTTP 200,
+allowed the configured user agent under the robots policy, and parsed without
+warnings. All six sampled pages returned HTTP 200 and readable text, with no
+detected paywall. The word ranges below are the minimum and maximum across
+the first three entries in each feed, not a representative quality estimate.
+
+| Feed | Address | Placement | Probe result |
+| --- | --- | --- | --- |
+| BleepingComputer | `https://www.bleepingcomputer.com/feed/` | `ai`, tier 2, `reporting` | 15 of 15 entries dated; 3 of 3 articles readable, 362 to 790 words |
+| tl;dr sec | `https://rss.beehiiv.com/feeds/xgTKUmMmUm.xml` | `ai`, tier 3, `community` | 20 of 20 entries dated; 3 of 3 issues readable, 1,973 to 2,901 words |
+
+Both start at weight 1.0 on the existing AI and technology desk. BleepingComputer
+adds security reporting. tl;dr sec contains weekly security roundups and
+commentary by Clint Gibler. Its entry admits newsletter issues, not discovery
+of the articles they link to. The existing freshness limit stays unchanged;
+adding a weekly feed does not make old issues eligible.
+
+This establishes access from that developer machine on that date, not access
+from a GitHub runner, permission to train on the text, or summary quality.
+The source shape and historical health records are unchanged.
+
 ### The 2026-09-09 finance curation
 
 Owner decision, 2026-09-09: add these four feeds and retire the existing
