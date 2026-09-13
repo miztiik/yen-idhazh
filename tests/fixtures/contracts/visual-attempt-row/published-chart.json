@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-11",
+  "decision": "visual",
+  "downgrade_depth": 0,
+  "elements_found": 22,
+  "family": "chart",
+  "item_id": "energy-a7k3m9p2r5t8v1w4",
+  "marks": 6,
+  "none_reason": null,
+  "potential_primary": "chartable",
+  "rejection_reason": null,
+  "run_id": "2026-09-11-17421903",
+  "state": "rendered",
+  "version": "2026-09-13T23:50"
+}

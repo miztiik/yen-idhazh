@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-11",
+  "decision": "none",
+  "downgrade_depth": null,
+  "elements_found": null,
+  "family": null,
+  "item_id": "policy-k9m2n4p6q8r1s3t5",
+  "marks": null,
+  "none_reason": null,
+  "potential_primary": null,
+  "rejection_reason": null,
+  "run_id": "2026-09-11-17421903",
+  "state": "absent",
+  "version": "2026-09-13T23:50"
+}

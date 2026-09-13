@@ -46,12 +46,17 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
-from enum import StrEnum
 from typing import Final, NamedTuple
 
 from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.element import Element, ElementTable
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
+
+# The nine checks were declared here with a note saying they move into
+# `contracts/` on the day something persists them. `VisualAttemptRow` persists
+# one as `rejection_reason`, so they moved; this import is what keeps the
+# vocabulary one list rather than two.
+from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.elements import read_value
 from idhazh.visual_vocabulary import (
     PLAN_VOCABULARY_VERSION,
@@ -60,36 +65,6 @@ from idhazh.visual_vocabulary import (
     VALUE_ROLES,
     commensurable,
 )
-
-
-class ValidatorCheck(StrEnum):
-    """The nine checks, in the order the validator runs them.
-
-    Each member is the property that must HOLD, not the failure - the same way
-    `span_integrity_pass` and `derived_provenance_complete` are named. A caller
-    records the member, so this is the vocabulary a later ledger column carries;
-    it moves into `contracts/` on the day something persists it.
-    """
-
-    #: Every element the plan declares is one the article's table holds.
-    ELEMENT_EXISTS = "element_exists"
-    #: Each element's kind fits the channel it fills.
-    SEMANTICALLY_COMPATIBLE = "semantically_compatible"
-    #: Within one measured channel, every unit is convertible or identical.
-    UNITS_CONVERTIBLE = "units_convertible"
-    #: The filled roles are the ones this type declares.
-    ROLES_VALID_FOR_TYPE = "roles_valid_for_type"
-    #: The marks fit between the two committed chart-point knobs - and for a
-    #: histogram, whose marks are its bins, there is a value for every bin.
-    ENOUGH_DATA = "enough_data"
-    #: No element fills one channel twice.
-    NO_DUPLICATE_IN_ROLE = "no_duplicate_in_role"
-    #: Every drawn figure reads out of the characters the element names.
-    NO_INVENTED_VALUES = "no_invented_values"
-    #: Every numeral in the prose is one a cited element states.
-    NUMERALS_MATCHED = "numerals_matched"
-    #: The plan met the vocabulary this build holds.
-    PLAN_VERSION_CURRENT = "plan_version_current"
 
 
 class Rejection(NamedTuple):

@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "ElementClass": {
+      "description": "What one article's numbers say it could carry, and nothing else.\n\n**Three classes, and the count is the point.** The visual programme names\nfive, and only two of them are a question about numbers. `comparative` and\n`processual` are claims about how an article is written, so they have no\nquery yet and land with the diagram plan. Anything reporting per class before\nthen names three and says so, rather than letting a reader take three for the\nwhole taxonomy.\n\nThe query rests on the element table's Tier 1 fields alone - `kind`, `value`\nand `unit` - so it is byte-exact and carries no model judgement.\n`idhazh.elements.classify` is the query; this is its vocabulary, and\n`docs/architecture/extraction/elements.md` is the page that owns it.\n\n**It is declared here rather than beside the element contract**, with the\nthree other closed vocabularies this census row carries, because\n`contracts/element.py` sits above `contracts/article.py`, which sits above\nthis module. A label a census row persists has to be declared at or below the\nrow's own level, and this is the level.",
+      "enum": [
+        "chartable",
+        "narrative",
+        "unclassified"
+      ],
+      "title": "ElementClass",
+      "type": "string"
+    },
+    "NoneReason": {
+      "description": "Which gate decided this item carries no picture.\n\n`none` is the majority outcome by design - two items in three - so a `none`\nwith no cause makes the largest number an operator reads the one that\nexplains nothing.\n\n**One member per gate, never one per call site.** The reachability gate\nrefuses in two places and both record `not_reachable`, because what an\noperator acts on is the gate rather than the line of code.\n\n**And one member per gate that has a writer.** The design record names six\ngates and the two-call flow adds a seventh; the potential class, the novelty\nfloor, the sufficiency bar and the per-visual byte cap are not built, so a\nmember for each would be a word nobody can produce, nobody can retire and\nnobody can tell from a bug. Each arrives as an additive member with the row\nthat builds its gate.\n\nThe single-call planner these five replace writes nothing here. Its causes\nare sentences in `rationale` and several of them - no summary to illustrate,\na reply that lost its shape, a kind with no renderer - are not gates at all,\nso typing them into this vocabulary would be work the row that retires that\nplanner deletes.",
+      "enum": [
+        "not_reachable",
+        "model_declined",
+        "validation_failed",
+        "output_budget_cut",
+        "window_exhausted"
+      ],
+      "title": "NoneReason",
+      "type": "string"
+    },
+    "PlanDecision": {
+      "description": "Whether this story wants a picture at all.\n\n`none` is the common and correct answer, and it is a decision rather than an\nabsence - a plan that declines still records why it declined and how sure it\nwas, so a refusal is legible.",
+      "enum": [
+        "visual",
+        "none"
+      ],
+      "title": "PlanDecision",
+      "type": "string"
+    },
+    "ValidatorCheck": {
+      "description": "The nine checks, in the order the validator runs them.\n\nEach member is the property that must HOLD, not the failure - the same way\n`span_integrity_pass` and `derived_provenance_complete` are named.\n\n**It lives in `contracts/` because a ledger column now carries it.** It was\ndeclared in `idhazh.visual_validator` beside the code that runs the checks,\nwith a note saying it moves here on the day something persists it. That day\nis this one: `rejection_reason` is a fold key term, so the vocabulary has to\nbe declared at or below the level of the row that persists it (CLAUDE.md\nsection 4). `visual_validator` imports it from here, so there is still one\nlist and not two.",
+      "enum": [
+        "element_exists",
+        "semantically_compatible",
+        "units_convertible",
+        "roles_valid_for_type",
+        "enough_data",
+        "no_duplicate_in_role",
+        "no_invented_values",
+        "numerals_matched",
+        "plan_version_current"
+      ],
+      "title": "ValidatorCheck",
+      "type": "string"
+    },
+    "VisualFamily": {
+      "description": "Which vocabulary a plan's type belongs to.\n\nCoarser than the type and stable across a downgrade within a family, which\nis what makes it a stratum term: a `pie` stepped down to a `stacked_bar` is\nstill a composition, and comparing the two as one group is comparing like\nwith like. A cross-family move is refused by the ladder, so a family never\nchanges under an attempt.\n\nFour families, and every declarable type belongs to exactly one - the check\nis at the bottom of this module rather than in a docstring, because a type\nin no family would be folded into a group nobody chose.",
+      "enum": [
+        "chart",
+        "composition",
+        "diagram",
+        "infographic"
+      ],
+      "title": "VisualFamily",
+      "type": "string"
+    },
+    "VisualState": {
+      "description": "What became of the visual. \"Could not make it\" and \"made it then threw it\naway\" are different facts, so they never share a member.",
+      "enum": [
+        "absent",
+        "rendered",
+        "render_failed"
+      ],
+      "title": "VisualState",
+      "type": "string"
+    }
+  },
+  "$id": "visual-attempt-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one row per attempt at a visual, carrying the eight terms the fold groups on and the two columns it keeps a distribution of. No writer yet.",
+      "version": "2026-09-13T23:50",
+      "why": "The fold this store takes at the window edge deletes the full-grain shard, so the group key has to be settled before the first row is written - a key settled narrow cannot be widened later against data that no longer exists. Settling it needs the shape it is a key OVER, so the attempt row is declared here at the grain the fold reads and widened by the row that builds the writer."
+    }
+  ],
+  "description": "One attempt at one picture, on one run: the full grain the fold replaces.\n\n**One row per attempt, never one per published visual.** A per-publication\nledger leaves every refusal uncommitted, so the machine loop stops being\nauditable while still being the gate, and a later run cannot tell a refused\nvisual from one never attempted.\n\nThis is the shape the fold reads. It carries the eight terms of `FOLD_KEY`\nand the two measured columns the folded row keeps a distribution of, and\nnothing else yet: the join key a human label needs, and a typed reason for\nevery one of the six gates, arrive with the row that writes the ledger.\nBoth are additive.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "decision": {
+      "$ref": "#/$defs/PlanDecision",
+      "description": "Whether this attempt proposed a picture at all. Half of the key."
+    },
+    "downgrade_depth": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The deepest rung of the downgrade ladder this attempt reached. Zero means the plan was accepted or refused as drafted. It is recorded on a refused attempt as well as a published one, because a keep rate by depth needs a denominator at that depth. Empty where no plan was drafted.",
+      "title": "Downgrade Depth"
+    },
+    "elements_found": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Tier 1 elements the extraction pass kept for this article. The raw count, banded into the key by band_of and kept whole as a distribution on the folded row. Empty on the same terms as potential_primary.",
+      "title": "Elements Found"
+    },
+    "family": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VisualFamily"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which vocabulary the attempted type belongs to. Empty where no plan named a type, which is every attempt refused before a plan was drafted."
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "marks": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many marks the accepted plan drew, in the channel its type counts in. The ladder's own currency: each rung reads a percentile of the depth-0 published mark counts, so this is the population that floor is taken over. Empty on an attempt that proposed nothing.",
+      "title": "Marks"
+    },
+    "none_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NoneReason"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which gate decided this item carries no picture. Empty on an attempt that proposed one, and on a refusal by a producer that recorded no gate - empty reads as nothing said which, never as a gate named none."
+    },
+    "potential_primary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ElementClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the article's own numbers say it could have carried. Empty on the same terms as the item-health census: the extraction pass did not run, or its spans would not re-slice. Three classes and not five, which is that census's own settled reading - the other two are claims about language and have no query yet, and they arrive here as members rather than as a term."
+    },
+    "rejection_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ValidatorCheck"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The FIRST validator check that did not hold. The validator runs its nine checks in order and a refused plan usually fails several, so one cell holds the first rather than a list: a list in a CSV cell is unaggregatable, and the check an operator acts on is the one that fired first. Empty where no plan reached the validator."
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/VisualState",
+      "description": "What became of the visual. `rendered` is the one value that means a reader saw it, so it is the numerator of every keep rate here."
+    },
+    "version": {
+      "default": "2026-09-13T23:50",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "item_id",
+    "decision",
+    "state"
+  ],
+  "title": "VisualAttemptRow",
+  "type": "object",
+  "version": "2026-09-13T23:50"
+}

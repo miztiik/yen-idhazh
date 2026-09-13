@@ -27,7 +27,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The fold key, decided before anything writes a row | - | A | IN-FLIGHT | p19-r1 | - | worker |
+| 1 | The fold key, decided before anything writes a row | - | A | DONE #686 | p19-r1 | #686 | worker |
 | 2 | A stage of its own | 1 | B | PENDING | - | - | - |
 | 3 | One row per attempt, and a reason for every refusal | 2 | C | PENDING | - | - | - |
 | 4 | What a re-render needs, and where a rejected plan lives | 3 | D | PENDING | - | - | - |

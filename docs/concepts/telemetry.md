@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-13
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -157,6 +157,47 @@ when only the first existed.
 A worker records only items that have settled. An item whose summary payload is
 simply not written yet was interrupted, not failed, and assemble classifies it
 later once the difference no longer matters.
+
+## The visual ledger, and the eight terms that outlive it
+
+`state/visuals/<YYYY-MM>.csv` is the third committed record here: one row per
+**attempt** at a picture, not one per published visual. A per-publication ledger
+would leave every refusal uncommitted, so the machine loop would stop being
+auditable while still being the gate. `none` is the majority outcome by design,
+which is exactly why a `none` with no recorded cause makes the largest number an
+operator reads the one that explains nothing.
+
+`observability.visuals_full_grain_months` is where that stops being readable
+attempt by attempt. Past it the month folds to `state/visual-aggregate/` and the
+attempts are deleted, so **what the fold keeps is the whole of what anybody can
+ever ask of an old month.** That key is settled and it is eight terms:
+
+| Half | Terms | The question it keeps answerable |
+| --- | --- | --- |
+| Cause | `date`, `decision`, `none_reason`, `rejection_reason` | which gate refused most, and which check inside the validator |
+| Stratum | `potential_primary`, `family`, `element_band`, `downgrade_depth` | how the classes differ, and how the keep rate moved with downgrade depth |
+
+The counts are stored and the rate is not: `attempts` and `published` can be
+added across groups and a rate cannot, so a console divides rather than averaging
+averages. Each measured column keeps a count, both ends and the three quartiles -
+a **distribution and never a mean**, because a bimodal spread is the interesting
+finding and a mean reports the empty middle between two clumps.
+
+**Two columns carry a distribution, and a third was deliberately left out.**
+`elements` is the raw count the band came from, so a reader keeps both the
+stratum and the spread inside it. `marks` is the ladder's own currency - each
+rung reads a percentile of the depth-0 published mark counts, so folding that
+population away would leave every floor computed from nothing, which the ladder
+reads as a refusal rather than as a fault. `decision_ms` is not one of them: how
+long the planner took is the span tree's question, and this project holds a
+committed rollup's measured columns disjoint from every ledger's for the reason
+[the rollup restates nothing](#the-committed-rollup) gives.
+
+**The fold is in `retention.fold_visual_month` and the pass that deletes is not
+written yet**, because nothing writes the store. The key is settled first because
+the fold is the one decision here that cannot be revised; the pass lands with the
+writer. [adaptive-pruning.md](adaptive-pruning.md#the-visual-fold-key-is-eight-terms-and-it-could-not-wait)
+carries the argument for each term and the measurement behind the bands.
 
 ## No network sink
 

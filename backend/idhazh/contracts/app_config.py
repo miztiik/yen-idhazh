@@ -1799,6 +1799,31 @@ class ObservabilityConfig(Model):
             "scores_full_grain_months."
         ),
     )
+    visuals_full_grain_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long state/visuals/ stays readable attempt by attempt. Past it a month "
+            "is folded to the eight-term group VisualAggregateRow declares and the "
+            "full-grain shard goes, so a reader keeps every cause breakdown and every "
+            "stratum and loses the per-attempt row and its join key. Fourteen matches "
+            "the two ledgers it is read beside; a shorter one would leave a day whose "
+            "failures are still readable and whose refused pictures are not. It is NOT "
+            "in full_grain_months() yet, and the reason is that no console read opens "
+            "one of these shards today - the panels that will are their own plan, and "
+            "the window joins that check in the same commit as the first of them."
+        ),
+    )
+    visual_aggregate_keep_months: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Months after which a folded visual month is removed outright. Null means "
+            "never, on the same argument as the other two aggregates: the fold is the "
+            "only record that a gate ever refused anything, and it is kilobytes. Set, "
+            "it must sit ABOVE visuals_full_grain_months."
+        ),
+    )
     public_telemetry_keep_months: int = Field(
         default=14,
         ge=1,
@@ -1974,6 +1999,7 @@ class ObservabilityConfig(Model):
         for kept, full_grain in (
             ("item_health_aggregate_keep_months", "item_health_full_grain_months"),
             ("score_archive_keep_months", "scores_full_grain_months"),
+            ("visual_aggregate_keep_months", "visuals_full_grain_months"),
         ):
             months: int | None = getattr(self, kept)
             if months is not None and months <= getattr(self, full_grain):
@@ -3638,6 +3664,25 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T23:50",
+            change=(
+                "observability.visuals_full_grain_months added, defaulting to 14, and "
+                "observability.visual_aggregate_keep_months added, defaulting to null. "
+                "The second must sit above the first, which the existing pair validator "
+                "now checks for all three folded stores."
+            ),
+            why=(
+                "state/visuals/ takes the fold policy, and a fold needs an age or it "
+                "never happens. It is a named per-store window rather than a share of "
+                "anybody else's, because the visual ledger answers a different question "
+                "from the item-health census and from the eval ledger, and one number "
+                "standing for three stores is the knob this project already removed "
+                "once. Fourteen matches the two it is read beside. The pair rule is the "
+                "same rule the other two aggregates carry: a summary set to expire "
+                "before the rows it replaces would delete a month that was never folded."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T23:30",
             change=(
