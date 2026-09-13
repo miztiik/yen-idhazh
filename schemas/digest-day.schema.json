@@ -229,6 +229,20 @@
           "description": "The item the default view keeps for this story. Null on the item that is kept and on an item nothing grouped with. Nothing is unpublished: a collapsed item keeps its place in this list, its anchor and its archive entry.",
           "title": "Same Story As"
         },
+        "secondary_desk": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The one other desk this story has a claim to, and the desk the day sends it to when the one it is on is over its ceiling. It never equals the desk the day filed the story under, so a story names at most two desks. Null says nothing has named a second one, and is never read as 'no second desk'. No page draws it yet: `count` and `desk_count` both still answer for the desk a story is filed under.",
+          "title": "Secondary Desk"
+        },
         "source_form": {
           "$ref": "#/$defs/SourceForm",
           "default": "article",
@@ -593,6 +607,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added DigestItem.secondary_desk - the one other desk a story has a claim to. A story names at most two desks and the second never equals the first. count and desk_count both keep their meanings.",
+      "version": "2026-09-13",
+      "why": "The desk ceiling shipped on 2026-09-13 sends an over-ceiling story to a second desk, and the only second desk available was the word the FEED declares - so the move overwrote the desk the story was read as and lost it. The story now keeps that claim: the move swaps the two, which stops a crowding rule erasing what a story is about. Neither count moves, and that is deliberate. A pill is a promise about what the desk page lists, so the number and the page widen in one commit or neither does - and the page half needs a render test in frontend/tests/, which a second worker holds. Ruled by Editor, 2026-09-13. Additive and optional: null is unknown rather than 'no second desk', so no committed day is rewritten and none has to be - 24 days and 9,353 items, 0 of which carry a read desk of any kind, measured 2026-09-13 (section 11)."
+    },
+    {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
       "version": "2026-09-12T18:40",
       "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
@@ -742,7 +761,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-12T18:40",
+      "default": "2026-09-13",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -767,5 +786,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-12T18:40"
+  "version": "2026-09-13"
 }

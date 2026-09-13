@@ -1,6 +1,6 @@
 # Taxonomy
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 The words this project puts on a story, and which word answers which question.
 
@@ -50,6 +50,15 @@ read: it decides the heading, the pill, and the `/<date>/<desk>/` route.
 null desk is the ordinary state and means nothing has read the article; a page
 falls back to the vertical, and a null is never read as a desk of its own.
 Nothing fills the field today - the run that will is a later row.
+
+**A story may have one more claim, and it is a claim rather than a filing.**
+`DigestItem.secondary_desk` is the one other desk the same reading named, and it
+takes an id out of the same list again. It is where the day sends a story whose
+desk is over its ceiling, and after such a move the two swap, so the story keeps
+its claim on the desk it left. It never equals the desk the day filed the story
+under, so a story names at most two desks. No page draws it yet and both counts
+below still answer for the desk a story is filed under
+([placement.md](placement.md#what-the-number-on-a-pill-promises)).
 
 **Two counts, because the two words count different things.**
 `DigestVerticalRef.count` is stories whose carrying feed declares this vertical,

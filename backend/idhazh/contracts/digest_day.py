@@ -45,6 +45,12 @@ itself, and it is what `item_id` is addressed from, so it never moves. A desk is
 where the day publishes the story. They agree on every story nothing has
 relabelled, and `desk` is null there - absent is unknown, and a reader falls
 back to the vertical rather than reading a null as a desk.
+
+`secondary_desk` is the one other desk a story has a claim to, and a story never
+names more than these two. It is where the day sends the story when the desk it
+is on is over its ceiling, and after such a move the two swap - so the story
+keeps its claim on the desk it left rather than having a crowding rule erase
+what the story is about. Null is unknown, never "no second desk".
 """
 
 from __future__ import annotations
@@ -218,6 +224,17 @@ class DigestItem(Model):
             "`vertical`; null is never read as a desk of its own."
         ),
     )
+    secondary_desk: Slug | None = Field(
+        default=None,
+        description=(
+            "The one other desk this story has a claim to, and the desk the day sends "
+            "it to when the one it is on is over its ceiling. It never equals the desk "
+            "the day filed the story under, so a story names at most two desks. Null "
+            "says nothing has named a second one, and is never read as 'no second "
+            "desk'. No page draws it yet: `count` and `desk_count` both still answer "
+            "for the desk a story is filed under."
+        ),
+    )
     title: UntrustedLine
     source_url: Url
     source_id: Slug
@@ -344,6 +361,17 @@ class DigestItem(Model):
         return self
 
     @model_validator(mode="after")
+    def _a_story_names_at_most_two_desks(self) -> Self:
+        """The second desk is a second one, so it cannot be the first.
+
+        A story filed under one name and claiming the same name twice reads as
+        two desks to anything counting them, and is one desk to a reader.
+        """
+        if self.secondary_desk is not None and self.secondary_desk == (self.desk or self.vertical):
+            raise ValueError("secondary_desk repeats the desk the day filed the story under")
+        return self
+
+    @model_validator(mode="after")
     def _a_revision_names_the_run_that_wrote_it(self) -> Self:
         if (self.updated_at is None) != (self.updated_by_run is None):
             raise ValueError("a revision carries both updated_at and updated_by_run")
@@ -397,6 +425,28 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "Added DigestItem.secondary_desk - the one other desk a story has a "
+                "claim to. A story names at most two desks and the second never equals "
+                "the first. count and desk_count both keep their meanings."
+            ),
+            why=(
+                "The desk ceiling shipped on 2026-09-13 sends an over-ceiling story to a "
+                "second desk, and the only second desk available was the word the FEED "
+                "declares - so the move overwrote the desk the story was read as and "
+                "lost it. The story now keeps that claim: the move swaps the two, which "
+                "stops a crowding rule erasing what a story is about. Neither count "
+                "moves, and that is deliberate. A pill is a promise about what the desk "
+                "page lists, so the number and the page widen in one commit or neither "
+                "does - and the page half needs a render test in frontend/tests/, which "
+                "a second worker holds. Ruled by Editor, 2026-09-13. Additive and "
+                "optional: null is unknown rather than 'no second desk', so no committed "
+                "day is rewritten and none has to be - 24 days and 9,353 items, 0 of "
+                "which carry a read desk of any kind, measured 2026-09-13 (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T18:40",
             change=(
@@ -684,6 +734,8 @@ class DigestDay(Contract):
                 raise ValueError(f"item {item.item_id} names an unlisted vertical")
             if item.desk is not None and item.desk not in counted:
                 raise ValueError(f"item {item.item_id} names an unlisted desk")
+            if item.secondary_desk is not None and item.secondary_desk not in counted:
+                raise ValueError(f"item {item.item_id} names an unlisted second desk")
         for vertical_id, count in counted.items():
             actual = sum(1 for item in self.items if item.vertical == vertical_id)
             if actual != count:
