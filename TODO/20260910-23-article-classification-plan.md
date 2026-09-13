@@ -253,7 +253,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | 3 | Lens and event ids become slugs, and a retired id keeps its tombstone | 2 | E | DONE #619 | p23-r3 | #619 | worker |
 | 7a | The classification code gets its own package | - | E | DONE #629 | p23-7a | #629 | worker |
 | 4 | An event gets a lifecycle | 3 | F | DONE #663 | p23-4 | #663 | worker |
-| 13 | The encoder alarm | 3 | F | PENDING | - | - | - |
+| 13 | The encoder alarm | 3 | F | IN-FLIGHT | p23-13 | - | worker |
 | 6 | The desk is a new field, and the feed's word stays where it is | 3 | G | DONE #620 | p23-r6 | #620 | worker |
 | 7b | The two calls become a DAG, and every label rides in the first | 7a, P4, 6, plan 11 row 6 | H | PENDING | - | - | - |
 | 8 | Call 1 labels: desk, lenses, article kind | 7b, 2 | I | PENDING | - | - | - |
