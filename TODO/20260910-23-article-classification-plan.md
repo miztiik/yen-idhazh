@@ -268,7 +268,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | 16 | A vertical is proposed into a channel and promoted by a person | 14, 6, 8, plan 24 row #1 | N | PENDING | - | - | - |
 | 19 | The keyword lenses retire, or they do not | 14, 13, 8 | N | PENDING | - | - | - |
 | 17 | The lens weight learns every run, and a run never writes `config/` | 14, 21, 20, plan 24 row #1 | O | PENDING | - | - | - |
-| 1b | The fingerprint field is dropped from the contracts | 1a | P | PENDING | - | - | - |
+| 1b | The fingerprint field is dropped from the contracts | 1a | P | IN-FLIGHT | p23-1b | - | worker |
 
 **What a parallel group means, stated so a worker can check it.** **Within one group, no two rows may write the same file.** A glob counts as every file it covers, so `backend/tests/**` and `schemas/**` collide with any named file underneath them - and a row that edits any model under `backend/idhazh/contracts/` counts as writing every schema its edit regenerates, because the drift gate fails on a byte. **No glob survives in this plan.** Row #5 carried the last one - `every file under schemas/` - and it was wrong: the widened `ITEM_ID_PATTERN` regenerates **13 of the 44 schemas**, measured by exporting and diffing on 2026-09-12, because only 13 contracts carry an item id. The row names those 13 and nothing else in the plan writes any of them. Every row's `Files touched` list names files, and where a directory is named the row says what it creates in it and nothing else in the plan writes there.
 
