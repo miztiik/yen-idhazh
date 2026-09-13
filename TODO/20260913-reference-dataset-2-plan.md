@@ -154,7 +154,7 @@ Table F - Status Reckoner
 | F4 | 4 | Build the manifest, publisher keys and totals | 3 | D | DONE | refdata2 | direct | - |
 | F5 | 5 | Add resumable extraction through existing helpers | 4 | E | DONE | refdata2 | direct | - |
 | F6 | 6 | Run and review a small extraction pilot | 5 | F | DONE (run 2026-09-13; the bulk fetch waits on the review) | refdata2 | direct | - |
-| F7 | 7 | Validate the utility with offline tests | 6 | G | PENDING | - | - | - |
+| F7 | 7 | Validate the utility with offline tests | 6 | G | DONE (tests shipped with each step; the pilot's one gap closed) | refdata2 | direct | - |
 | F8 | 8 | Extract the full URL list | 7 | H | PENDING | - | - | - |
 | F9 | 9 | Export extraction arrays and metadata | 8 | I | PENDING | - | - | - |
 | F10 | 10 | Verify and freeze the extraction | 9 | J | PENDING | - | - | - |
