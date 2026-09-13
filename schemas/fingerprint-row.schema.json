@@ -2,7 +2,7 @@
   "$defs": {
     "PipelineInputs": {
       "additionalProperties": false,
-      "description": "Every input that can move an output, and nothing that cannot.\n\n`host_cpu` is deliberately absent: it is the one field that explains a\ndeterminism violation, and including it would make every runner a different\nfingerprint, which would hide the violation it exists to expose.",
+      "description": "Every input that can move an output, and nothing that cannot.\n\nThis is the recorded input manifest. It hangs off `RunRecord.inputs`, it is\nread by a person and by the one alarm that compares two runs, and nothing\nanywhere decides anything on it.\n\nDelete it and exactly one thing changes on the whole site: a rule disappears\nfrom two console charts. Not one figure moves and not one row vanishes. A\ngate fails that test by construction; a record passes it.\n\n`host_cpu` is deliberately absent: it is the one field that explains a\ndeterminism violation, and a run's own processor is luck rather than a\nchoice anybody made.",
       "properties": {
         "chat_template_sha256": {
           "pattern": "^[0-9a-f]{64}$",
@@ -116,6 +116,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "pipeline_fingerprint is optional, and nothing writes this row any more.",
+      "version": "2026-09-12T21:00",
+      "why": "The ledger existed to expand a digest that gated a skip nobody wired. The digest went, so the writer went. The ten committed rows still read back, and the rebuilt-not-trusted check still holds wherever a stamp is present."
+    },
+    {
       "change": "Digest the five runtime knobs that move the logits, as `runtime_flags`.",
       "version": "2026-08-26",
       "why": "cache_type_k, cache_type_v, flash_attention, n_parallel and n_threads_batch each change the arithmetic the runtime does, so one of them could rewrite a summary while the stamp held still. Every fingerprint moves, which is why it rides the model swap's reset rather than spending a second one. The ledger carried a header and no rows, so nothing written before this had to migrate."
@@ -126,7 +131,7 @@
       "why": "A fingerprint nobody can expand is meaningless hex three years from now."
     }
   ],
-  "description": "One row of `state/fingerprints.csv`, appended the first time a stamp is seen.",
+  "description": "One row of the retired `state/fingerprints.csv`. Nothing writes it.\n\nKept only so the ten rows already committed can be read back. It goes with\nthe field, in the commit that drops `pipeline_fingerprint` from every model.",
   "properties": {
     "first_seen_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
@@ -148,19 +153,27 @@
       "$ref": "#/$defs/PipelineInputs"
     },
     "pipeline_fingerprint": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Pipeline Fingerprint",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Null since 2026-09-12. Nothing builds a stamp and nothing writes a row.",
+      "title": "Pipeline Fingerprint"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-09-12T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
     }
   },
   "required": [
-    "pipeline_fingerprint",
     "first_seen_run",
     "first_seen_at",
     "inputs",
@@ -168,5 +181,5 @@
   ],
   "title": "FingerprintRow",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-09-12T21:00"
 }

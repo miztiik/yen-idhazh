@@ -435,6 +435,116 @@
       "title": "ItemScore",
       "type": "object"
     },
+    "PipelineInputs": {
+      "additionalProperties": false,
+      "description": "Every input that can move an output, and nothing that cannot.\n\nThis is the recorded input manifest. It hangs off `RunRecord.inputs`, it is\nread by a person and by the one alarm that compares two runs, and nothing\nanywhere decides anything on it.\n\nDelete it and exactly one thing changes on the whole site: a rule disappears\nfrom two console charts. Not one figure moves and not one row vanishes. A\ngate fails that test by construction; a record passes it.\n\n`host_cpu` is deliberately absent: it is the one field that explains a\ndeterminism violation, and a run's own processor is luck rather than a\nchoice anybody made.",
+      "properties": {
+        "chat_template_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Chat Template Sha256",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "model_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Sha256",
+          "type": "string"
+        },
+        "n_batch": {
+          "minimum": 1,
+          "title": "N Batch",
+          "type": "integer"
+        },
+        "n_ctx": {
+          "minimum": 1,
+          "title": "N Ctx",
+          "type": "integer"
+        },
+        "n_threads": {
+          "minimum": 1,
+          "title": "N Threads",
+          "type": "integer"
+        },
+        "n_ubatch": {
+          "minimum": 1,
+          "title": "N Ubatch",
+          "type": "integer"
+        },
+        "output_schema_sha256": {
+          "description": "The constrained-decoding schema. Its shape is the only guard on the output.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Schema Sha256",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "runner_class": {
+          "minLength": 1,
+          "title": "Runner Class",
+          "type": "string"
+        },
+        "runtime_build": {
+          "description": "The llama.cpp build the weights were decoded by.",
+          "minLength": 1,
+          "title": "Runtime Build",
+          "type": "string"
+        },
+        "runtime_flags": {
+          "description": "One canonical spelling of the runtime knobs that move the arithmetic.",
+          "minLength": 1,
+          "title": "Runtime Flags",
+          "type": "string"
+        },
+        "sampling": {
+          "description": "One canonical spelling of the decoding parameters.",
+          "minLength": 1,
+          "title": "Sampling",
+          "type": "string"
+        },
+        "sanitizer_version": {
+          "minLength": 1,
+          "title": "Sanitizer Version",
+          "type": "string"
+        },
+        "truncation_cap_tokens": {
+          "minimum": 1,
+          "title": "Truncation Cap Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_sha256",
+        "quantisation",
+        "runtime_build",
+        "chat_template_sha256",
+        "prompt_sha256",
+        "output_schema_sha256",
+        "truncation_cap_tokens",
+        "sampling",
+        "runtime_flags",
+        "n_ctx",
+        "n_batch",
+        "n_ubatch",
+        "n_threads",
+        "runner_class",
+        "extractor_version",
+        "sanitizer_version"
+      ],
+      "title": "PipelineInputs",
+      "type": "object"
+    },
     "ScorerIdentity": {
       "additionalProperties": false,
       "description": "Which instrument read the summaries.\n\n`pinned` is false when the revision is a branch name. The faithfulness gate\nrefuses to run on an unpinned scorer: a floor measured with an instrument\nthat can move overnight measures an unknown instrument.",
@@ -480,6 +590,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "A shard and a report carry `inputs`, the recorded input manifest, and pipeline_fingerprint is optional on both.",
+      "version": "2026-09-12T21:00",
+      "why": "A qualification run stamped its controls so two candidates could be shown to have run under one pipeline. The stamp stopped being built, so the field is recorded when a caller has one and absent otherwise."
+    },
     {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
       "version": "2026-09-12T18:40",
@@ -537,6 +652,18 @@
       "title": "Elapsed Seconds",
       "type": "number"
     },
+    "inputs": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PipelineInputs"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the controls ran under, named field by field. One value across every shard, and it is what proves two candidates were measured on one pipeline. Recorded and never compared to decide anything."
+    },
     "observations": {
       "items": {
         "$ref": "#/$defs/ItemObservation"
@@ -545,10 +672,18 @@
       "type": "array"
     },
     "pipeline_fingerprint": {
-      "description": "The stamp the controls produced. One value across every shard.",
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Pipeline Fingerprint",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Null since 2026-09-12. The stamp gates nothing and no writer fills it.",
+      "title": "Pipeline Fingerprint"
     },
     "planned": {
       "description": "Addresses this shard was handed.",
@@ -587,7 +722,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-09-12T18:40",
+      "default": "2026-09-12T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -602,12 +737,11 @@
     "repeats",
     "candidate",
     "scorer",
-    "pipeline_fingerprint",
     "corpus_registered_at",
     "planned",
     "elapsed_seconds"
   ],
   "title": "QualificationShard",
   "type": "object",
-  "version": "2026-09-12T18:40"
+  "version": "2026-09-12T21:00"
 }

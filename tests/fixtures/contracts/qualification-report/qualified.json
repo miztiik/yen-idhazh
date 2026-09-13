@@ -113,6 +113,7 @@
       "threshold": "see the row"
     }
   ],
+  "inputs": null,
   "pipeline_fingerprint": "5555555555555555555555555555555555555555555555555555555555555555",
   "planned": 30,
   "qualified": true,

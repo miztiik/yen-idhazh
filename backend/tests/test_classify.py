@@ -1620,7 +1620,6 @@ class TestARepliedCutByTheBudget:
             article_ok,
             recovered,
             model_id="m",
-            pipeline_fingerprint="0" * 64,
             generated_at="2026-09-10T00:00:00Z",
             prompt_config=config.load(CONFIG_DIR).app.summarize,
         )
@@ -1642,7 +1641,6 @@ class TestARepliedCutByTheBudget:
             article_ok,
             cut,
             model_id="m",
-            pipeline_fingerprint="0" * 64,
             generated_at="2026-09-10T00:00:00Z",
         )
 

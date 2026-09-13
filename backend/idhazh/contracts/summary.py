@@ -54,6 +54,15 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T21:00",
+            change="pipeline_fingerprint is optional and nothing sets it.",
+            why=(
+                "Skip-if-fingerprint-matches was never wired to a caller, so the stamp "
+                "cost every summary a digest and bought no skip. What produced a summary "
+                "is recorded on the run record instead, where it gates nothing."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T18:40",
             change=(
                 "item_id accepts a second shape: sixteen Crockford base32 symbols "
@@ -210,8 +219,12 @@ class Summary(Contract):
     summary: str | None = None
     key_points: list[str] = Field(default_factory=list)
 
-    pipeline_fingerprint: Sha256 = Field(
-        description="The stamp of every input that could have moved this text."
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description=(
+            "Null since 2026-09-12. The stamp gated a skip nothing was ever wired to, so "
+            "no writer fills it; what produced a summary is recorded on the run record."
+        ),
     )
     output_digest: Sha256 = Field(
         description="Digest of the words only. Recomputed on read, never trusted."

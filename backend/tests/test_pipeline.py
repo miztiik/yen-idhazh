@@ -43,7 +43,7 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
-from idhazh.contracts.fingerprint import FingerprintRow
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
@@ -58,7 +58,7 @@ from idhazh.evals import metrics, sampling, writer
 from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
 from idhazh.evals.score import band, to_eval_row, verdict
 from idhazh.fetch import FetchResult
-from idhazh.fingerprint import read_ledger, text_digest
+from idhazh.fingerprint import prose_changed_alone, text_digest
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.llm.server import parse_completion
 
@@ -1038,7 +1038,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_UNREACHABLE}
 
 
-# --- The stamp ledger ---------------------------------------------------------
+# --- The recorded input manifest ----------------------------------------------
 
 
 def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
@@ -1053,15 +1053,14 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
-    monkeypatch.setattr(cli, "FINGERPRINTS", tmp_path / "state" / "fingerprints.csv")
 
 
 def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
     """One whole run over captured pages, with no model and no network (Guardrail #7).
 
-    The summaries fail, which is the point: the stamp describes the pipeline
-    rather than the words, so it has to reach the ledger on a day the model was
-    unreachable too.
+    The summaries fail, which is the point: the record describes the pipeline
+    rather than the words, so it has to reach the run record on a day the model
+    was unreachable too.
     """
     cli.stage_work(
         run_plan,
@@ -1073,29 +1072,25 @@ def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
     cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
 
-def score_one_item(items_dir: Path, run_plan: RunPlan) -> str:
-    """Stand in for the scorer, which needs weights this suite does not download.
-
-    The stamp is the one the work stage has just observed, so the summary and
-    the eval payload carry exactly what a scored run would have put on them.
-    Returns that stamp.
-    """
-    stamp_path = next(iter(sorted(items_dir.glob("*.fingerprint.json"))))
-    stamp = FingerprintRow.from_json(read_text(stamp_path)).pipeline_fingerprint
+def score_one_item(items_dir: Path, run_plan: RunPlan) -> None:
+    """Stand in for the scorer, which needs weights this suite does not download."""
     item = run_plan.items[0]
-    scored = summary().model_copy(
-        update={"item_id": item.item_id, "url_key": item.url_key, "pipeline_fingerprint": stamp}
-    )
+    scored = summary().model_copy(update={"item_id": item.item_id, "url_key": item.url_key})
     (items_dir / f"{item.item_id}.summary.json").write_text(scored.to_json(), encoding="utf-8")
-    evaluated = row(url_key=item.url_key, pipeline_fingerprint=stamp)
+    evaluated = row(url_key=item.url_key)
     (items_dir / f"{item.item_id}.eval.json").write_text(evaluated.to_json(), encoding="utf-8")
-    return stamp
 
 
-def test_a_run_records_its_stamp_in_the_committed_ledger_exactly_once(
+def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The oracle: every stamp in the committed scores expands to one ledger row."""
+    """The oracle: the stage that can observe the inputs is not the stage that records them.
+
+    Only the work shard sees the weights the runtime opened, the build that
+    decoded them and the template the server will apply, and its checkout is
+    thrown away when the shard ends. So it writes one payload beside the items it
+    produced and `stage_assemble`, which owns the run record, hangs it on the run.
+    """
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
@@ -1108,18 +1103,73 @@ def test_a_run_records_its_stamp_in_the_committed_ledger_exactly_once(
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    stamp = score_one_item(items_dir, run_plan)
+    score_one_item(items_dir, run_plan)
     cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
-    committed = tmp_path / "state" / "fingerprints.csv"
-    expansions = read_ledger(committed)
-    with (tmp_path / "state" / "scores" / "2026-08.csv").open(encoding="utf-8", newline="") as handle:
-        scored = {record["pipeline_fingerprint"] for record in csv.DictReader(handle)}
+    written = cli._recorded_inputs(items_dir)
+    manifest = RunManifest.from_json(
+        read_text(tmp_path / "public" / "digest" / "2026" / "08" / "21" / "run.json")
+    )
 
-    assert scored == {stamp}
-    assert set(expansions) == {stamp}
-    assert expansions[stamp].first_seen_run == run_plan.run_id
-    assert ledger.read_header(committed) == FingerprintRow.csv_columns()
+    assert (items_dir / cli.INPUTS_PAYLOAD).is_file()
+    assert written is not None
+    assert manifest.runs[-1].inputs == written
+    assert not manifest.runs[-1].pipeline_fingerprints, "the stamp was retired and nothing fills it"
+
+
+def test_an_assemble_that_saw_no_work_shard_records_no_inputs(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Absent is a reading of its own, and it is not a manifest of defaults.
+
+    A run record that invented an input set would say the weights and the build
+    were observed when nothing observed them (Guardrail #10).
+    """
+    isolate_ledgers(tmp_path, monkeypatch)
+    items_dir = tmp_path / "run" / plan().date / "items"
+    items_dir.mkdir(parents=True)
+
+    assert cli._recorded_inputs(items_dir) is None
+
+
+def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The three fields this row replaced were two literals and a model slug."""
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    work_then_assemble(run_plan, settings)
+
+    recorded = cli._recorded_inputs(tmp_path / "run" / run_plan.date / "items")
+
+    assert recorded is not None
+    assert recorded.runtime_build != "llama-server-local"
+    assert recorded.runner_class != "local"
+    assert recorded.chat_template_sha256 != text_digest(settings.app.models.summarize.id)
+
+
+def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The one alarm that survived the gate fires on a change and on nothing else.
+
+    Two runs of the same configuration moved nothing, so the run that follows
+    publishes with no warning. The alarm compares against one earlier manifest
+    the caller already holds, so it costs the same on a repository of one
+    published day and of a thousand (Guardrail #12).
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    work_then_assemble(run_plan, settings)
+
+    recorded = cli._recorded_inputs(tmp_path / "run" / run_plan.date / "items")
+    assert recorded is not None
+
+    assert prose_changed_alone(recorded, recorded) == ()
+    reworded = recorded.model_copy(update={"prompt_sha256": "b" * 64})
+    assert prose_changed_alone(recorded, reworded) == ("prompt_sha256",)
 
 
 def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
@@ -1166,41 +1216,6 @@ def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
 
     traces = list((cli.STATE_ROOT / telemetry.TRACES_DIRNAME).rglob("*.jsonl"))
     assert traces, "no committed trace was written under state/traces/"
-
-
-def test_a_second_run_with_the_same_inputs_appends_no_stamp(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """The ledger records what a stamp meant, never how often the job ran."""
-    run_plan = plan()
-    settings = config.load(CONFIG_DIR)
-    isolate_ledgers(tmp_path, monkeypatch)
-    work_then_assemble(run_plan, settings)
-    committed = tmp_path / "state" / "fingerprints.csv"
-    after_one_run = committed.read_bytes()
-
-    work_then_assemble(run_plan, settings)
-
-    assert committed.read_bytes() == after_one_run
-    assert len(read_ledger(committed)) == 1
-
-
-def test_the_stamp_records_the_run_and_never_a_placeholder(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """The three fields this row replaced were two literals and a model slug."""
-    run_plan = plan()
-    settings = config.load(CONFIG_DIR)
-    isolate_ledgers(tmp_path, monkeypatch)
-    work_then_assemble(run_plan, settings)
-
-    stamped = next(iter(read_ledger(tmp_path / "state" / "fingerprints.csv").values()))
-
-    assert stamped.inputs.runtime_build != "llama-server-local"
-    assert stamped.inputs.runner_class != "local"
-    assert stamped.inputs.chat_template_sha256 != text_digest(settings.app.models.summarize.id)
-    assert stamped.host_cpu.strip()
-    assert stamped.first_seen_run == run_plan.run_id
 
 
 # --- The window between the day write and the published ledger ----------------
@@ -2361,7 +2376,7 @@ def test_the_manifest_records_what_ran_against_what() -> None:
     assert isinstance(manifest, RunManifest)
     assert manifest.runs[-1].run_id == "2026-08-21-1"
     assert manifest.runs[-1].config_digests
-    assert manifest.runs[-1].pipeline_fingerprints
+    assert manifest.runs[-1].inputs is None, "no work shard recorded any, so none is recorded"
 
 
 def test_the_run_records_the_scoring_shape_that_decided_its_order() -> None:
@@ -3358,22 +3373,23 @@ def without_clocks(summary: Summary) -> dict[str, Any]:
     return payload
 
 
-def only_stamp(items: Path) -> FingerprintRow:
-    """The one pipeline stamp a single-shard run leaves, named by itself.
+def recorded_inputs(items: Path) -> PipelineInputs:
+    """What the shard recorded about its own run, named by itself.
 
-    More than one means the stage observed two configurations in one shard,
-    which is a finding rather than something to pick from.
+    One name a run rather than one a shard: every shard observes the same
+    configuration, so `INPUTS_PAYLOAD` settles by atomic rename and there is
+    nothing to pick from.
     """
-    stamps = sorted(items.glob("*.fingerprint.json"))
-    assert len(stamps) == 1, f"one shard, one stamp, got {[path.name for path in stamps]}"
-    return FingerprintRow.read(stamps[0])
+    recorded = cli._recorded_inputs(items)
+    assert recorded is not None, "the shard summarized something and recorded no inputs"
+    return recorded
 
 
 class TestTheFlagOffLeavesTodaysPipelineWhereItWas:
     """The acceptance gate. This row lands with the flag off, so the whole of
     what a reader gets on the day it merges is what the flag-off path produces -
     and the change that could move it is invisible in a diff, because the
-    pipeline stamp is computed once a shard and written into every payload."""
+    recorded inputs are observed once a shard and written once for the run."""
 
     def test_one_request_an_item_and_no_second_one(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
@@ -3389,9 +3405,9 @@ class TestTheFlagOffLeavesTodaysPipelineWhereItWas:
     ) -> None:
         """Same bytes, and the comparison is against `summarize.to_summary` rather
         than against an earlier copy of itself. That is what can fail: the stage
-        picks the prompt config, the evaluation bounds and the stamp, and a
-        two-call path wired into the wrong branch would change one of the three
-        while every payload still validated."""
+        picks the prompt config and the evaluation bounds, and a two-call path
+        wired into the wrong branch would change one of the two while every
+        payload still validated."""
         reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
         completion = parse_completion(reply.decode("utf-8"))
         settings = two_call_settings(False)
@@ -3405,7 +3421,6 @@ class TestTheFlagOffLeavesTodaysPipelineWhereItWas:
                 article,
                 completion,
                 model_id=settings.app.models.summarize.id,
-                pipeline_fingerprint=written.pipeline_fingerprint,
                 generated_at=written.generated_at,
                 prompt_config=settings.app.summarize,
                 evaluation=settings.app.evaluation,
@@ -3415,14 +3430,15 @@ class TestTheFlagOffLeavesTodaysPipelineWhereItWas:
     def test_the_stamp_still_digests_the_single_call_prompt(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
-        """The stamp is what a re-run compares against, so moving it with the flag
-        off would re-summarize every item in the archive for nothing."""
+        """The recorded prompt digest is what `prose_changed_alone` compares, so
+        pointing it at the wrong builder with the flag off would report a prose
+        change on every run and never on the one that moved."""
         reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
         settings = two_call_settings(False)
 
         _run_plan, items, _served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
 
-        assert only_stamp(items).inputs.prompt_sha256 == text_digest(
+        assert recorded_inputs(items).prompt_sha256 == text_digest(
             summarize.prompt_inputs(settings.app.summarize)
         )
 
@@ -3493,8 +3509,8 @@ class TestTheFlagOnDispatchesBothCalls:
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
         """The two calls render their own bytes, so the turn markers decide what
-        the model reads and nothing else in the stamp reaches them. A marker edit
-        would move every reply while the ledger said `unchanged`."""
+        the model reads and nothing else in the record reaches them. A marker edit
+        would move every reply while the record said the ask held still."""
         settings = two_call_settings(True)
 
         _run_plan, items, _served = worked(
@@ -3504,7 +3520,7 @@ class TestTheFlagOnDispatchesBothCalls:
             replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
         )
 
-        stamped = only_stamp(items).inputs.prompt_sha256
+        stamped = recorded_inputs(items).prompt_sha256
         assert stamped == text_digest(
             calls.prompt_inputs(
                 settings.app.summarize, inference=settings.app.models.summarize.inference

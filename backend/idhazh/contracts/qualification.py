@@ -41,6 +41,7 @@ from idhazh.contracts.base import (
     UrlKey,
     canonical_json,
 )
+from idhazh.contracts.fingerprint import PipelineInputs
 
 
 class GateName(StrEnum):
@@ -259,6 +260,18 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T21:00",
+            change=(
+                "A shard and a report carry `inputs`, the recorded input manifest, and "
+                "pipeline_fingerprint is optional on both."
+            ),
+            why=(
+                "A qualification run stamped its controls so two candidates could be shown "
+                "to have run under one pipeline. The stamp stopped being built, so the "
+                "field is recorded when a caller has one and absent otherwise."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T18:40",
             change=(
                 "item_id accepts a second shape: sixteen Crockford base32 symbols "
@@ -304,8 +317,17 @@ class QualificationShard(Contract):
     repeats: int = Field(ge=1)
     candidate: CandidateIdentity
     scorer: ScorerIdentity
-    pipeline_fingerprint: Sha256 = Field(
-        description="The stamp the controls produced. One value across every shard."
+    inputs: PipelineInputs | None = Field(
+        default=None,
+        description=(
+            "What the controls ran under, named field by field. One value across every "
+            "shard, and it is what proves two candidates were measured on one pipeline. "
+            "Recorded and never compared to decide anything."
+        ),
+    )
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description="Null since 2026-09-12. The stamp gates nothing and no writer fills it.",
     )
     corpus_registered_at: Timestamp = Field(
         description="When the hashes were written. Before any output was viewed."
@@ -348,7 +370,14 @@ class QualificationReport(Contract):
     runner: str = Field(min_length=1)
     candidate: CandidateIdentity
     scorer: ScorerIdentity
-    pipeline_fingerprint: Sha256
+    inputs: PipelineInputs | None = Field(
+        default=None,
+        description="What the controls ran under, as every shard recorded it.",
+    )
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description="Null since 2026-09-12. The stamp gates nothing and no writer fills it.",
+    )
     corpus_digest: Sha256 = Field(
         description="Digest over the frozen item hashes. Two runs on one corpus share it."
     )

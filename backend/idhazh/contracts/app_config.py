@@ -1328,20 +1328,9 @@ class EvaluationConfig(Model):
         ge=1,
         description=(
             "Distinct run-days at one scorer version before a draw is worth finalising. "
-            "A draw over one day is a draw over one day's sources. The pipeline "
-            "fingerprint is reported per stratum rather than required to hold still: "
-            "requiring both made the gate unreachable, and no pair has ever held for "
-            "more than three consecutive run-days."
-        ),
-    )
-    label_min_stratum_rows: int = Field(
-        default=20,
-        ge=1,
-        description=(
-            "Rows one pipeline must contribute to a draw before a result read off that "
-            "stratum may move a threshold. Below it the stratum is printed and marked "
-            "too thin to cut on, because a rate over a handful of rows from one producer "
-            "is noise wearing a decimal point (Guardrail #10)."
+            "A draw over one day is a draw over one day's sources. It is the only "
+            "collection requirement: a draw is one pool at one scorer, and the figure "
+            "read off it is reported rather than withheld."
         ),
     )
     golden_set_size: int = Field(default=20, ge=1)
@@ -3451,6 +3440,23 @@ class AppConfig(Contract):
                 "Pages ceiling. 12 and 14 months are 18.6 MiB either side of it "
                 "against a one-spread band of 47.6 MiB, so the byte budget cannot "
                 "separate them and the owner's 13 stands (Carmack, 2026-09-13)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-12T21:00",
+            change=(
+                "evaluation.label_min_stratum_rows is REMOVED, and "
+                "evaluation.label_min_run_days no longer mentions a pipeline stratum."
+            ),
+            why=(
+                "It bounded how few rows one pipeline stamp could contribute to a draw "
+                "before a result read off that stratum was refused. The stamp stopped "
+                "being written on 2026-09-12, so a draw is one pool at one scorer and "
+                "there is no stratum left to be thin. config/idhazh.json never set the "
+                "key, so the committed file is unchanged. BREAKING for a file that sets "
+                "it - the read-side migration is that the key is dropped rather than "
+                "defaulted, and a config carrying it is refused rather than silently "
+                "ignored."
             ),
         ),
         ChangelogEntry(

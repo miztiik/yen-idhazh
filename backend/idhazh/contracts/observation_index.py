@@ -17,10 +17,10 @@ score shard holds, and the writer reads that instead of the rows.
 
 **The declared cover is every observation identity, with nothing forgotten.**
 That is deliberate, and it is why this is an index and not a clock. The identity
-`("url_key", "pipeline_fingerprint", "output_digest", "scorer_version")` carries
-no date on purpose - re-measuring an article a year later under an unchanged
-pipeline is the same measurement, and a window that forgot it would let a
-duplicate row through and quietly overstate how much the ledger had measured.
+`("url_key", "output_digest", "scorer_version")` carries no date on purpose -
+re-measuring an article a year later is the same measurement, and a window that
+forgot it would let a duplicate row through and quietly overstate how much the
+ledger had measured.
 
 A row is a ten-character stamp, a comma, sixty-four hex characters and a
 newline: 76 bytes, fixed by construction rather than by a corpus. Measured on

@@ -31,6 +31,7 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.score_archive import ScoreCohort
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import archive as score_archive
@@ -873,6 +874,50 @@ ARCHIVE_KEY_COLUMNS: frozenset[str] = frozenset(
 )
 
 
+def test_a_prompt_change_inside_a_month_no_longer_withholds_the_month_figure(
+    tmp_path: Path,
+) -> None:
+    """A quality number exists where there used to be an absence.
+
+    `tests/fixtures/evals/prompt-changed-window.csv` is three rows of one day,
+    one run, one model and one scorer, whose middle row was written under a
+    different `pipeline_fingerprint` - the shape a reworded prompt produced every
+    time somebody shipped one. While the stamp was part of the cohort key that
+    day summarised as two cohorts of two rows and one row, so the month had no
+    faithfulness figure over its own window, only fragments of one.
+
+    Measured on the base commit 0e049ed8, 2026-09-12: two cohorts, means 0.85
+    over two rows and 0.70 over one. Here: one cohort, three rows, 0.80.
+
+    A fixture rather than the committed ledger, because asserting on a live run
+    would assert on whatever the pipeline published that morning
+    (`CLAUDE.md` section 13).
+    """
+    shard = tmp_path / "2026-09.csv"
+    shutil.copyfile(FIXTURES_DIR / "evals" / "prompt-changed-window.csv", shard)
+
+    summary = score_archive.summarise(shard, observation_key=writer.OBSERVATION_KEY)
+
+    assert len(summary.cohorts) == 1, (
+        "one day, one run, one model and one scorer is one cohort - "
+        "a reworded prompt inside the month is not a second population"
+    )
+    faithfulness = summary.cohorts[0].measurements["hhem"]
+    assert faithfulness.n == 3
+    assert faithfulness.sum / faithfulness.n == pytest.approx(0.80)
+
+
+def test_the_archived_cohort_no_longer_knows_what_produced_it() -> None:
+    """The stamp leaves the cohort key, and the field stays on the shape.
+
+    Relaxing rather than removing is what lets an archive written before today
+    still validate. The field is dropped, with its read-side migration, in its
+    own commit.
+    """
+    assert "pipeline_fingerprint" not in score_archive.COHORT_KEY
+    assert "pipeline_fingerprint" in ScoreCohort.model_fields
+
+
 def test_every_column_of_the_eval_row_is_filed_somewhere_in_the_archive() -> None:
     """A column that falls out of the archive stops existing fourteen months later.
 
@@ -1354,20 +1399,55 @@ def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) 
 # the ledger already holds. `rebuild_index` is the repair; the fixture below is
 # the check.
 #
-# This fixture is committed rather than built, unlike every other one in this
-# file. The shape under test IS a pair of files that disagree, and a tree a
-# test writes through the writer cannot hold a digest the writer would never
-# mint. It is four files and nothing appends to it, so it is fixed in size
-# (Guardrail #12).
+# The rows are committed and the disagreement is built on top of them. A
+# committed index cannot say what it means for long: its digests are minted over
+# `OBSERVATION_KEY`, so the day that key moves every one of them stops matching
+# the rows beside it, both faults below turn into the same fault, and every
+# assertion here passes on a fixture that no longer holds the shape it names.
+# Rebuilding the index and then spoiling it in one direction per month costs two
+# file writes and says what it means on any key. The rows are three shards and
+# nothing appends to them, so the tree is fixed in size (Guardrail #12).
 
 INDEX_REBUILD: Final = FIXTURES_DIR / "evals" / "index-rebuild"
 REBUILD_MONTHS: Final = ("2026-01", "2026-02")
 
+#: A digest no row can produce - a run of one character rather than a hash of
+#: anything, which makes it impossible rather than merely unlikely.
+ROLLED_BACK: Final = "f" * 64
+
+
+def _index_rows(state: Path, month: str) -> list[dict[str, str]]:
+    with writer.index_path(state, month).open("r", encoding="utf-8", newline="") as handle:
+        return sorted(csv.DictReader(handle), key=lambda row: row["observation_digest"])
+
+
+def _write_index(state: Path, month: str, rows: Sequence[dict[str, str]]) -> None:
+    """One month's index, written to the file rather than through the writer.
+
+    The writer can only mint a digest its own rows produce, and a digest the rows
+    cannot produce is half of what this section is about.
+    """
+    with writer.index_path(state, month).open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
+        out.writeheader()
+        out.writerows(rows)
+
 
 def _drifted_tree(tmp_path: Path) -> Path:
-    """The committed fixture, copied, because a test may not write into a fixture."""
+    """The committed rows, with each month's index spoilt in one direction.
+
+    `2026-01` gains a digest no row of that month can produce, which is what a
+    restore that rolled a row back leaves behind. `2026-02` loses one its rows do
+    produce, which is what a fill a crash cut short leaves behind. Two faults on
+    opposite sides of the answer, so a one-directional check cannot pass.
+    """
     state = tmp_path / "state"
     shutil.copytree(INDEX_REBUILD, state)
+    writer.rebuild_index(state, REBUILD_MONTHS)
+
+    grown = _index_rows(state, "2026-01")
+    _write_index(state, "2026-01", [*grown, {**grown[0], "observation_digest": ROLLED_BACK}])
+    _write_index(state, "2026-02", _index_rows(state, "2026-02")[1:])
     return state
 
 
