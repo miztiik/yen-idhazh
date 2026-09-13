@@ -27,7 +27,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The fold key, decided before anything writes a row | - | A | PENDING | - | - | - |
+| 1 | The fold key, decided before anything writes a row | - | A | IN-FLIGHT | p19-r1 | - | worker |
 | 2 | A stage of its own | 1 | B | PENDING | - | - | - |
 | 3 | One row per attempt, and a reason for every refusal | 2 | C | PENDING | - | - | - |
 | 4 | What a re-render needs, and where a rejected plan lives | 3 | D | PENDING | - | - | - |
@@ -37,7 +37,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 2. Row #1 - The fold key, decided before anything writes a row
 
 - **Scope:** The group key `state/visuals/` folds to at the window edge, and the shape of the folded row.
-- **Files touched:** `backend/idhazh/contracts/visual_telemetry.py` (the schema description), `backend/idhazh/retention.py`, `config/idhazh.json` (the named window), `docs/concepts/adaptive-pruning.md`, `docs/concepts/telemetry.md`
+- **Files touched:** `backend/idhazh/contracts/visual_telemetry.py` (**new** - the contract and its schema description), `backend/idhazh/contracts/export.py` (the new contract is registered here or no schema is generated), `backend/idhazh/retention.py`, `config/idhazh.json` (the named window), `docs/concepts/adaptive-pruning.md`, `docs/concepts/telemetry.md`
+- **Checked against the tree, 2026-09-13.** Neither `backend/idhazh/contracts/visual_telemetry.py` nor `state/visuals/` exists - the row reads as if the contract were already there and it is not, so this row writes it. The eight directories under `state/` today are `day-metrics`, `feed-health`, `item-health`, `published`, `score-index`, `scores`, `seen` and `visual-prunes`. `backend/idhazh/contracts/export.py` was missing from the list: `CONTRACTS` there is a hand-written tuple with one import line per contract, so a contract absent from it generates no schema and the drift gate stays green while proving nothing.
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** Folding a fixture month and then asking the aggregate the four questions the console must answer - which gate refused most, how keep rate moved with downgrade depth, how the classes differ, how the distribution is shaped - returns an answer for all four. **A fold that loses one of them has lost it for ever.**
 
