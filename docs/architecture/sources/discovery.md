@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-13
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -789,6 +789,7 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 ## See also
 
 - [freshness.md](freshness.md) - the run cadence, how age is scored, and what stops an article publishing twice.
+- [../../concepts/placement.md](../../concepts/placement.md) - what the day does with these scores: one order over every story, and the frame over its head.
 - [health.md](health.md) - what every feed did on every run, and the quarantine that reads it.
 - [trust-boundary.md](trust-boundary.md) - what happens to the text once a discovered link is fetched.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Collect stage and the invariants that hold across all stages.
