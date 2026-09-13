@@ -34,15 +34,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 13 | 15 | 3 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 7 | 7 | 1 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 8 | 6 | 3 |
 
-## In flight - 1
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #7 | 25 | D | A desk floor and a desk ceiling | p25-7 |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 19
+## Ready now - 21
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -68,9 +67,11 @@ section 3 is where it is answered.
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
+| #8 | 25 | E | A story cross-files to a second desk | 7 |
+| #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
-## Waiting on another row - 60
+## Waiting on another row - 58
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -129,10 +130,8 @@ section 3 is where it is answered.
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
-| #8 | 25 | E | A story cross-files to a second desk | 7 is IN-FLIGHT |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
-| #10 | 25 | F | The `assemble` consolidation | 7 is IN-FLIGHT; 8 is PENDING |
-| #14 | 25 | G | A target distribution, and the day's distance from it | 7 is IN-FLIGHT |
+| #10 | 25 | F | The `assemble` consolidation | 8 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 
 ## Finished - 16 plans with no live row
