@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 5 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 14 | 12 | 2 | 2 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 14 | 12 | 2 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -37,15 +37,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 7 | 1 | 0 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 6 | 8 | 2 |
 
-## In flight - 3
+## In flight - 4
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
+| #6 | 11 | F | The small model, its job and its cache go | p11-6b |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | p23-1b |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | p24-8 |
 | #6 | 25 | C | The topic pills order by what is running | p25-6 |
 
-## Ready now - 21
+## Ready now - 20
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -57,7 +58,6 @@ section 3 is where it is answered.
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3h | 11 | C8 | A two-call item that failed on call 1 reports no cost at all | 3g |
-| #6 | 11 | F | The small model, its job and its cache go | 5b |
 | #1 | 12 | A | A new engine behind the same seam | - |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
@@ -121,7 +121,7 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is PENDING |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is IN-FLIGHT |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
 | #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is PENDING; 8 is PENDING |
