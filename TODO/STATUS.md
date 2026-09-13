@@ -33,20 +33,17 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 10 | 18 | 5 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 5 | 3 | 2 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 4 | 10 | 3 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 11 | 17 | 5 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 6 | 2 | 2 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 5 | 9 | 4 |
 
-## In flight - 4
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #3f | 11 | C6 | The window is sized for two calls | p11-3f |
-| #4 | 23 | F | An event gets a lifecycle | p23-4 |
-| #6 | 24 | D | `state/feed-health/` files by day | p24-6 |
-| #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | p25-3 |
 
-## Ready now - 26
+## Ready now - 27
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -78,10 +75,11 @@ section 3 is where it is answered.
 | #7 | 24 | E | `state/seen/` files by day | 1, 3 |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 1, 2, 3 |
 | #6 | 25 | C | The topic pills order by what is running | 2 |
+| #4 | 25 | D | Carriage becomes a tie-break | 3 |
 | #7 | 25 | D | A desk floor and a desk ceiling | 2 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
-## Waiting on another row - 60
+## Waiting on another row - 59
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -139,9 +137,8 @@ section 3 is where it is answered.
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
-| #4 | 25 | D | Carriage becomes a tie-break | 3 is IN-FLIGHT |
 | #8 | 25 | E | A story cross-files to a second desk | 7 is PENDING |
-| #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3 is IN-FLIGHT; plan 23 row #21 is PENDING |
+| #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
 | #10 | 25 | F | The `assemble` consolidation | 7 is PENDING; 8 is PENDING |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
