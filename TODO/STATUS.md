@@ -35,16 +35,17 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 12 | 16 | 3 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 7 | 1 | 0 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 6 | 8 | 3 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 6 | 8 | 2 |
 
-## In flight - 2
+## In flight - 3
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | p23-1b |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | p24-8 |
+| #6 | 25 | C | The topic pills order by what is running | p25-6 |
 
-## Ready now - 22
+## Ready now - 21
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -71,7 +72,6 @@ section 3 is where it is answered.
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
-| #6 | 25 | C | The topic pills order by what is running | 2 |
 | #7 | 25 | D | A desk floor and a desk ceiling | 2 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
