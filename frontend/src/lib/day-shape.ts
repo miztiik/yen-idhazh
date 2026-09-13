@@ -10,6 +10,7 @@
  * asserts.
  */
 
+import { AUTO_DISCOVERED_DESKS } from './payload/desks';
 import type { DigestItem, DigestLead, DigestVerticalRef, SeededVisual } from './payload/types';
 
 /** The arrived stories, with the seeded ones keeping the drawing they came with.
@@ -73,47 +74,83 @@ export interface LeadingStory {
 
 /** The topic row split into the pills that stay out and the pills that fold away. */
 export interface PillSplit {
-	/** On the row, in the payload's own topic order. */
+	/** On the row, biggest desk first. */
 	shown: DigestVerticalRef[];
-	/** Inside the disclosure, in the payload's own topic order. */
+	/** Inside the disclosure, in the same order the row reads. */
 	folded: DigestVerticalRef[];
 }
 
-/** Which topic pills stay on the row, and which go inside the `+N more` control.
+/** The topic row in the order it is read, and the pills that fold away.
  *
- * The cut is decided by each topic's story count, at build time. It cannot be
- * decided by measuring the row: every page here is prerendered, so a row that
- * measures itself is wrong until a script runs, which is the one moment a
- * static site is supposed to be already finished.
+ * **The row leads with the desk holding most of today.** That is what a way in
+ * is for. It replaces the payload's alphabetical order, which told a reader
+ * what the desks are called and nothing about what is running.
  *
- * The topic the reader is on is always on the row. Folding it away would hide
- * the only mark saying where they are, and it is the one pill they came for.
+ * **A desk only passes a desk it is ahead of by `moveMin` stories.** The row is
+ * redrawn at every publish, so without a margin a one-story lead moves a
+ * control the reader is pointing at, and the reason it moved is a difference
+ * too small to read off the counts on the pills. With the margin the reason is
+ * always visible: the desk in front is ahead by at least `moveMin`, and the
+ * numbers on the pills say so. Below the margin the payload's own order stands,
+ * which is why a smaller count can sit ahead of a bigger one - measured
+ * 2026-09-13 over the 23 committed days carrying all five desks, that is one
+ * adjacent pair in 92 at the committed margin of 2, and it reads 1 ahead of 2.
  *
- * Order is the payload's, in both halves, never the count order the cut used.
- * `day.items` is grouped by desk and the pills already read alphabetically, so
- * re-sorting by size would move a topic between two days for a reason a reader
- * cannot see.
+ * This is the answer to the objection this docstring used to record. Ordering
+ * by raw count was refused because a topic would move between two days for a
+ * reason a reader cannot see. The margin is what answers it; wanting the
+ * feature never did.
  *
- * The cut reads `deskCount`, because it is deciding which topics a reader sees
- * most of - and the number on the row is the number of stories the row leads to.
+ * **It is arithmetic over the payload, never a measurement of the row.** One
+ * order is computed in the backend and published (`frontend.md`), so a row that
+ * measured itself on the reader's device could disagree with the order the
+ * payload carries, and two readers of one shared link would see two pages. The
+ * page this draws is not prerendered - `/[date]/` and `/[date]/[vertical]/`
+ * both set `ssr = false` - so prerendering is not the reason and never was.
+ *
+ * **The topic the reader is on is always on the row.** Folding it away would
+ * hide the only mark saying where they are, and it is the one pill they came
+ * for.
+ *
+ * **A curated desk is never folded away; an auto-created one may be.** A desk a
+ * person put in `config/taxonomy.json` is a promise the site makes. A desk a
+ * model proposed is a suggestion, and hiding a suggestion costs a reader
+ * nothing. `AUTO_DISCOVERED_DESKS` is empty today, so nothing folds on any real
+ * day and the fixtures are what drive that branch.
+ *
+ * Nothing here bounds how tall the row gets: `limit` caps only the auto-created
+ * desks, so the row's height is the length of `config/taxonomy.json`, and
+ * adding a desk there is the only thing that changes it.
+ *
+ * Both halves read `deskCount`, because the row is deciding which topics a
+ * reader sees most of - and the number on a pill is the number of stories that
+ * pill leads to.
  */
 export function splitPills(
 	verticals: DigestVerticalRef[],
 	active: string | null,
-	limit: number
+	limit: number,
+	moveMin: number,
+	auto: ReadonlySet<string> = AUTO_DISCOVERED_DESKS
 ): PillSplit {
-	if (verticals.length <= limit) return { shown: verticals, folded: [] };
-	const keep = new Set(
-		[...verticals]
-			.sort((a, b) => deskCount(b) - deskCount(a) || a.id.localeCompare(b.id))
-			.slice(0, Math.max(limit, 1))
-			.map((vertical) => vertical.id)
-	);
-	if (active !== null) keep.add(active);
-	return {
-		shown: verticals.filter((vertical) => keep.has(vertical.id)),
-		folded: verticals.filter((vertical) => !keep.has(vertical.id))
-	};
+	const row = [...verticals];
+	// An insertion sort rather than a comparator: "ahead by a margin" is not a
+	// total order, and `Array.sort` given one returns whatever the engine feels
+	// like. Each swap here is a desk passing one desk it genuinely beats.
+	const margin = Math.max(moveMin, 1);
+	for (let i = 1; i < row.length; i += 1) {
+		for (let j = i; j > 0 && deskCount(row[j]) - deskCount(row[j - 1]) >= margin; j -= 1) {
+			[row[j - 1], row[j]] = [row[j], row[j - 1]];
+		}
+	}
+	const keep = Math.max(limit, 1);
+	const shown: DigestVerticalRef[] = [];
+	const folded: DigestVerticalRef[] = [];
+	for (const vertical of row) {
+		const stays = shown.length < keep || !auto.has(vertical.id) || vertical.id === active;
+		(stays ? shown : folded).push(vertical);
+	}
+	return { shown, folded };
 }
 
 /** A thin desk's shortfall, in the two numbers its sentence needs. */
