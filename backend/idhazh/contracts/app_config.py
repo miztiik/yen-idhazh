@@ -2355,6 +2355,77 @@ class AssembleConfig(Model):
     )
 
 
+class PlacementConfig(Model):
+    """The frame a person sets over the head of the published day.
+
+    Nobody reads this digest before it publishes and it publishes five times a
+    day, so a standing editorial decision can only reach a reader as arithmetic
+    that runs without one. These three numbers are that decision. The rule they
+    express and the measurements behind them are in docs/concepts/placement.md.
+
+    Every cap here displaces and none of them shortens: a story a cap holds out
+    of the head keeps its place in the day, lower down. A reader cannot see what
+    was left out, so leaving something out is the one thing a frame may not buy.
+    """
+
+    head_items: int = Field(
+        default=20,
+        ge=0,
+        description=(
+            "How many of the day's first stories the frame governs. A COUNT and never "
+            "a share: what a reader sees before deciding whether to scroll does not "
+            "grow with the day, and a share of a 731-story day is a head nobody "
+            "reaches (Jony, 2026-09-11). The stream pages at twelve, so 20 is the "
+            "cold load plus one page action. Past this slot the order is the score's "
+            "alone. 0 switches the frame off and publishes the score's order whole."
+        ),
+    )
+    max_desk_in_head: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "How many of the first head_items stories one desk may hold. 5 of 20 with "
+            "five desks is the largest cap that still guarantees three different desks "
+            "in the first twelve stories - the cold load - and four in the first "
+            "twenty; 6 guarantees only two in the first twelve. Set on what the reader "
+            "is guaranteed rather than on how often it fires, because measurement "
+            "killed the alternative: over the 13 committed days carrying rank_score, "
+            "read 2026-09-13 on Intel Core i7-1265U / Windows 11 / Python 3.14.2, the "
+            "biggest desk in the top 20 ran at a median of 12 and reached all 20 on "
+            "2026-09-07, so EVERY cap from 4 to 10 fires on 85 percent of days or more "
+            "and 'rarely binds' was not available to buy. Ruled 5 by Jony and by "
+            "Editor independently. Raising it costs desks on the first screen; "
+            "lowering it to 4 pins the head at four of each desk every day, which is a "
+            "quota rather than a cap and cannot report a day one desk genuinely owned."
+        ),
+    )
+    head_no_repeat: int = Field(
+        default=10,
+        ge=0,
+        description=(
+            "How far down the head one feed may not repeat. No feed holds more than "
+            "one of the first this-many stories. Measured over the same 13 days, the "
+            "biggest feed in the first ten ran from 3 to 8, so this is load-bearing "
+            "rather than decorative. 0 switches the feed rule off and leaves the desk "
+            "cap alone."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _window_fits_the_head(self) -> Self:
+        """A no-repeat window wider than the head governs slots the frame does not.
+
+        It would read as a live rule and do nothing past head_items, which is the
+        kind of dead knob a later reader treats as load-bearing.
+        """
+        if self.head_no_repeat > self.head_items:
+            raise ValueError(
+                "head_no_repeat is a window inside the head, so it cannot be wider "
+                "than head_items"
+            )
+        return self
+
+
 class ThemeChoice(StrEnum):
     """The two themes. There is no third member for "follow the device".
 
@@ -3430,6 +3501,28 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13T12:00",
+            change=(
+                "Added the placement block - placement.head_items 20, "
+                "placement.max_desk_in_head 5 and placement.head_no_repeat 10. "
+                "Additive and defaulted, so a config/idhazh.json written before this "
+                "still loads and needs no read-side migration; the committed file "
+                "sets all three explicitly, which is what makes the frame visible to "
+                "an operator reading it."
+            ),
+            why=(
+                "The published day now has one order over the whole day instead of a "
+                "desk-blocked one, and these are the two standing editorial decisions "
+                "that bound its head: how much of it one desk may hold, and how far "
+                "down it one feed may repeat. Nobody reads the digest before it "
+                "publishes and it publishes five times a day, so an editor's judgement "
+                "can only reach a reader as arithmetic. Measured 2026-09-13 over the "
+                "13 committed days carrying rank_score: the biggest desk in the top 20 "
+                "ran at a median of 12 and reached all 20 on 2026-09-07, and the "
+                "biggest feed in the first ten ran from 3 to 8."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change=(
@@ -5751,6 +5844,7 @@ class AppConfig(Contract):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     assemble: AssembleConfig = Field(default_factory=AssembleConfig)
+    placement: PlacementConfig = Field(default_factory=PlacementConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     assist: AssistConfig = Field(default_factory=AssistConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)

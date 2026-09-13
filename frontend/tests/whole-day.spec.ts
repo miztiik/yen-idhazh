@@ -149,7 +149,7 @@ const SERVED = JSON.parse(
 ) as DigestDay;
 
 /** The day in the order the page draws it, which is newest first and not the
- * desk-blocked order the payload publishes. */
+ * scored order the payload publishes. */
 const ITEMS: DigestItem[] = orderByTime(SERVED.items);
 /** Every story that published a drawing. What the page must end up holding. */
 const DRAWN = ITEMS.filter((item) => item.visual?.state === 'rendered' && item.visual.path);
