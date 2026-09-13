@@ -17,6 +17,7 @@ import json
 import re
 import socket
 import threading
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Final
@@ -1262,6 +1263,138 @@ def test_a_runtime_that_reports_no_timings_costs_the_item_nothing() -> None:
     assert reply.decode_ms == 0
     assert reply.cached_tokens == 0
     assert summarised("ok").status is SummaryStatus.OK
+
+
+#: The floor that refuses a reply for its length, and the only length that still
+#: fails an item - `test_the_tolerance_comes_from_config` owns the rule. The band
+#: is sized around the recorded reply rather than far above it, because the
+#: decoder rail is a character budget derived from the band: a band that asked
+#: for far more would refuse the reply for its shape, and this case would pass on
+#: a failure code that is not the one under test.
+FLOORED: Final = SummarizeConfig(
+    bands=[
+        SummaryBand(
+            min_source_words=0,
+            target_words_min=80,
+            target_words_max=130,
+            key_points_min=2,
+            key_points_max=3,
+        )
+    ],
+    length_policy=LengthPolicy(absolute_floor_words=75, floor_applies_above_source_words=0),
+)
+
+#: One case per `_failed` site in `to_summary` that has a reply in hand. Six
+#: sites and five codes, because `bad_shape` answers to two different gates.
+REFUSED_A_REPLY: Final = ("truncated", "reasoned", "unparseable", "too-short", "copied", "leaked")
+
+
+def refused(case: str) -> tuple[Completion, str, SummarizeConfig | None]:
+    """Run 32742672105's recorded reply, varied only where one gate reads it.
+
+    The envelope never changes, so the five numbers under test are the ones the
+    server reported rather than numbers a test wrote down. What varies is the
+    content, the stop reason or the config - whichever the gate under test
+    reads - and each varied body is itself a recorded reply.
+    """
+    recorded = completion("timed")
+    match case:
+        case "truncated":
+            return replace(recorded, finish_reason="length"), "ok", None
+        case "reasoned":
+            return replace(recorded, reasoning=completion("reasoning-channel").reasoning), "ok", None
+        case "unparseable":
+            return replace(recorded, content=completion("obeyed-the-injection").content), "ok", None
+        case "too-short":
+            return recorded, "ok", FLOORED
+        case "copied":
+            return replace(recorded, content=completion("copied-the-source").content), "brief", None
+        case "leaked":
+            return replace(recorded, content=completion("leaked-the-address").content), "ok", None
+        case _:
+            raise AssertionError(f"no recorded reply for {case}")
+
+
+@pytest.mark.parametrize("case", REFUSED_A_REPLY, ids=REFUSED_A_REPLY)
+def test_a_reply_that_failed_its_shape_still_reports_what_it_cost(case: str) -> None:
+    """Defect 19: the server had already been paid by the time the gate refused.
+
+    A day that failed many replies read as a cheap day, because the five cost
+    cells carried the model's defaults of zero. They are what the server said.
+    """
+    reply, source, ask = refused(case)
+    assert reply.prompt_tokens and reply.completion_tokens, "a free reply would prove nothing"
+
+    result = to_summary(
+        article(source), reply, model_id="m", generated_at=GENERATED_AT, prompt_config=ask
+    )
+
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is not None
+    assert result.prefill_ms == reply.prefill_ms
+    assert result.decode_ms == reply.decode_ms
+    assert result.input_tokens == reply.prompt_tokens
+    assert result.output_tokens == reply.completion_tokens
+    assert result.cached_tokens == reply.cached_tokens
+
+
+def test_the_six_sites_that_hold_a_reply_cover_five_codes() -> None:
+    """The cases above are the failure vocabulary and not a sample of it.
+
+    A code added to the summarize stage without a case here would leave one
+    `_failed` site writing zero again, which is the defect back on one path.
+    """
+    codes = set()
+    for case in REFUSED_A_REPLY:
+        reply, source, ask = refused(case)
+        result = to_summary(
+            article(source), reply, model_id="m", generated_at=GENERATED_AT, prompt_config=ask
+        )
+        codes.add(result.failure_code)
+    assert codes == {
+        FailureCode.OUTPUT_TRUNCATED,
+        FailureCode.BAD_SHAPE,
+        FailureCode.LENGTH_OUT_OF_RANGE,
+        FailureCode.COPIED_SOURCE,
+        FailureCode.LEAKED_ADDRESS,
+    }
+
+
+def test_a_failed_row_names_the_call_that_spent_it() -> None:
+    """The same validator binds a failed row as an ok one, with no lenient path.
+
+    `Summary` refuses a flat total that is not the sum over the recorded slots,
+    so a writer cannot fill the cells and leave the slot empty - which is what
+    keeps `reconcile_prefill` and the console's pooled rates correct.
+    """
+    reply, source, ask = refused("copied")
+    result = to_summary(
+        article(source), reply, model_id="m", generated_at=GENERATED_AT, prompt_config=ask
+    )
+
+    assert result.call_1 is not None
+    assert result.call_1.kind is CallKind.SUMMARIZE
+    assert result.call_2 is None
+    for field in ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens"):
+        assert getattr(result.call_1, field) == getattr(result, field)
+
+    with pytest.raises(ValidationError, match="sum over the recorded calls"):
+        Summary.model_validate(result.model_dump(mode="json") | {"output_tokens": 1})
+
+
+def test_a_call_that_never_returned_is_the_one_failure_that_really_was_free() -> None:
+    """No reply means no numbers, and an invented zero would be the same defect.
+
+    Two of the eight sites have no completion to hand over: the article never
+    extracted, so nothing was sent, and the model never answered. Both leave the
+    slot empty, which is what `reconcile_prefill` skips rather than pools.
+    """
+    for source, reply in (("ok", None), ("fetch-failed", None)):
+        result = to_summary(article(source), reply, model_id="m", generated_at=GENERATED_AT)
+        assert result.status is SummaryStatus.FAILED
+        assert result.call_1 is None
+        assert result.input_tokens == 0
+        assert result.prefill_ms == 0
 
 
 def test_a_reply_claiming_more_cache_than_prompt_is_refused() -> None:

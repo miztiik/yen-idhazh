@@ -754,6 +754,9 @@ def classify_item(
 
     if summary.status is not SummaryStatus.OK:
         code = summary.failure_code or FailureCode.UNKNOWN
+        # A reply the stage refused was still read and still written, so this row
+        # carries the same five cells an ok row does. They are null only where no
+        # call returned, which is what `reconcile_prefill` skips rather than pools.
         return _row(
             planned=planned,
             date=date,
@@ -769,6 +772,12 @@ def classify_item(
             fetch_ms=summary.fetch_ms,
             extract_ms=summary.extract_ms,
             summarize_ms=summary.summarize_ms,
+            prefill_ms=summary.prefill_ms if summary.call_1 is not None else None,
+            decode_ms=summary.decode_ms if summary.call_1 is not None else None,
+            input_tokens=summary.input_tokens if summary.call_1 is not None else None,
+            output_tokens=summary.output_tokens if summary.call_1 is not None else None,
+            cached_tokens=summary.cached_tokens if summary.call_1 is not None else None,
+            calls=(summary.call_1, summary.call_2),
             detail=(
                 detail_cell("summary failure was not typed")
                 if code is FailureCode.UNKNOWN
