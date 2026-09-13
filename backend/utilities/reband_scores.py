@@ -78,13 +78,13 @@ def read_rows(path: Path) -> list[dict[str, str]]:
 
 
 def read_ledger(state_dir: Path) -> list[dict[str, str]]:
-    """Every committed row, oldest month first.
+    """Every committed row, oldest day first.
 
-    The ledger is a directory of month shards, so a re-band that opened one file
+    The ledger is a tree of day files, so a re-band that opened one file
     would report on whatever slice of history that file happened to be. Reading
-    every shard is what makes the percentages below percentages of the ledger.
+    every day is what makes the percentages below percentages of the ledger.
 
-    Each shard's columns are checked on its own: a month written before a column
+    Each day's columns are checked on its own: a day written before a column
     existed has to fail by name here rather than arrive as a missing key inside
     the arithmetic.
 
@@ -93,8 +93,8 @@ def read_ledger(state_dir: Path) -> list[dict[str, str]]:
     and only a message that says so stops somebody re-running this and believing
     the pipeline never scored anything.
     """
-    shards = writer.ledger_shards(state_dir)
-    if not shards:
+    days = writer.ledger_days(state_dir)
+    if not days:
         summarised = archive.archived_months(state_dir)
         if summarised:
             raise ValueError(
@@ -103,9 +103,10 @@ def read_ledger(state_dir: Path) -> list[dict[str, str]]:
                 f"summaries, and a band is a function of one row. {archive.RAW_WINDOW_NOTE}"
             )
         raise ValueError(
-            f"{(state_dir / writer.LEDGER_DIRNAME).as_posix()} holds no <YYYY-MM>.csv shard"
+            f"{(state_dir / writer.LEDGER_DIRNAME).as_posix()} holds no "
+            f"<YYYY>/<MM>/<DD>.csv day file"
         )
-    return [row for shard in shards for row in read_rows(shard)]
+    return [row for day in days for row in read_rows(day)]
 
 
 def reband(rows: Iterable[dict[str, str]], config: EvaluationConfig) -> RebandReport:

@@ -2676,12 +2676,12 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
 def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
     """The bound, mirrored where a workflow that drops it reds (Guardrail #12).
 
-    A run appends only to the shard its own date routes to, so a repeat the union
-    merge left can only be in a file that run wrote, and the date names it. Drop
-    the flag and `cli.stage_dedupe_ledgers` walks every feed-health shard, every
-    item-health shard and every score shard the archive holds - a bill that rises
-    every month for an answer already given, because a finished month was settled
-    when it was written and cannot change again.
+    A run appends only to the partition its own date routes to, so a repeat the
+    union merge left can only be in a file that run wrote, and the date names it.
+    Drop the flag and `cli.stage_dedupe_ledgers` walks every feed-health day,
+    every item-health day and every score day the archive holds - a bill that
+    rises every day for an answer already given, because a finished partition was
+    settled when it was written and cannot change again.
 
     The command refuses to run with no cover at all, so a workflow that lost the
     flag fails its commit step rather than quietly reading the archive. This
@@ -3238,13 +3238,13 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     is the file that decides, and a second implementation of its globbing could
     agree with this test and disagree with the merge.
     """
-    # The file each staged path resolves to. `state/item-health/` files by day
-    # and the other two directories by month, so the union driver has to reach
-    # both shapes - `state/**/*.csv` is the attribute line that does it.
+    # The file each staged path resolves to. All four directories file by day
+    # now, so the union driver has to reach a nested path - `state/**/*.csv` is
+    # the attribute line that does it.
     written = {
         "state/item-health": ledger.item_health_relpath(SUBSTITUTED_DATE),
-        "state/scores": f"state/scores/{SUBSTITUTED_DATE[:7]}.csv",
-        "state/score-index": f"state/score-index/{SUBSTITUTED_DATE[:7]}.csv",
+        "state/scores": score_writer.ledger_relpath(SUBSTITUTED_DATE),
+        "state/score-index": score_writer.index_relpath(SUBSTITUTED_DATE),
         "state/runtime-counters.csv": "state/runtime-counters.csv",
     }
     assert set(written) == set(COMMIT_STAGED_PATHS["work"])
@@ -3784,7 +3784,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     assert manifest["runs"] == day["runs"]
 
     published = _rows(_git(origin, env, "show", f"main:{ledger.published_relpath(date)}"))
-    scores = _rows(_git(origin, env, "show", f"main:state/scores/{month}.csv"))
+    scores = _rows(_git(origin, env, "show", f"main:{score_writer.ledger_relpath(date)}"))
     health = _rows(_git(origin, env, "show", f"main:{ledger.item_health_relpath(date)}"))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
     # Exactly once each. Two of these ledgers append blind, so a rebuild against

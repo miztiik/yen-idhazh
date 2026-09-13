@@ -33,7 +33,7 @@ from conftest import (
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config, extract, ledger, rank, summarize, telemetry
+from idhazh import assemble, cli, config, day_partition, extract, ledger, rank, summarize, telemetry
 from idhazh.classify import calls
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig, ObservabilityConfig
 from idhazh.contracts.article import Article
@@ -596,19 +596,19 @@ def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
     state = tmp_path / "state"
     assert writer.append(state, [row()]) == 1
     assert writer.append(state, [row(item_id="ai-02", output_digest="b" * 64)]) == 1
-    shards = writer.ledger_shards(state)
-    assert len(shards) == 1, "both rows are the same month, so they share a shard"
-    with shards[0].open(encoding="utf-8") as handle:
+    days = writer.ledger_days(state)
+    assert len(days) == 1, "both rows are the same day, so they share a file"
+    with days[0].open(encoding="utf-8") as handle:
         lines = list(csv.reader(handle))
     assert len(lines) == 3
     assert tuple(lines[0]) == writer.columns()
 
 
-def test_two_months_of_rows_land_in_two_shards(tmp_path: Path) -> None:
-    """A run either side of a month boundary writes both, and neither is wrong.
+def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
+    """A run either side of midnight writes both, and neither is wrong.
 
     The row's own `date` files it, not the day the writer happened to run, so a
-    replay of an older day cannot put September's rows in August's shard.
+    replay of an older day cannot put September's rows in August's file.
     """
     state = tmp_path / "state"
     august = row()
@@ -616,7 +616,10 @@ def test_two_months_of_rows_land_in_two_shards(tmp_path: Path) -> None:
 
     assert writer.append(state, [september, august]) == 2
 
-    assert [shard.stem for shard in writer.ledger_shards(state)] == ["2026-08", "2026-09"]
+    assert [day_partition.date_of(day) for day in writer.ledger_days(state)] == [
+        august.date,
+        september.date,
+    ]
     assert [record["date"] for record in writer.records(state)] == [august.date, september.date]
 
 
@@ -631,24 +634,25 @@ def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) 
     assert writer.append(state, [row()]) == 1
     again = row(date="2026-08-22", run_id="2026-08-22-1", item_id="ai-07")
     assert writer.append(state, [again]) == 0
-    with writer.ledger_shards(state)[0].open(encoding="utf-8") as handle:
+    with writer.ledger_days(state)[0].open(encoding="utf-8") as handle:
         assert len(list(csv.reader(handle))) == 2
 
 
 def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -> None:
-    """Dedupe spans the shards, or sharding would quietly reopen the door.
+    """Dedupe spans the partitions, or filing by day would quietly reopen the door.
 
     The promise is that a count over the ledger is a count of items. A dedupe
-    scoped to the shard being written would let August's measurement come back
+    scoped to the day being written would let August's measurement come back
     in September as a second row about the same thing.
     """
     state = tmp_path / "state"
-    assert writer.append(state, [row()]) == 1
+    held = row()
+    assert writer.append(state, [held]) == 1
 
     later = row(date="2026-09-14", run_id="2026-09-14-1", item_id="ai-07")
 
     assert writer.append(state, [later]) == 0
-    assert [shard.stem for shard in writer.ledger_shards(state)] == ["2026-08"]
+    assert [day_partition.date_of(day) for day in writer.ledger_days(state)] == [held.date]
 
 
 def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:
@@ -661,7 +665,7 @@ def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path)
     """The dedupe spans the archives too, or deleting a shard reopens the door.
 
     Sharding was the first way this could break and the fix was to read every
-    shard. Archiving is the second: a month past
+    partition. Archiving is the second: a month past
     `observability.scores_full_grain_months` has no rows left to read at all, so
     a dedupe over the rows alone would call every measurement in it new on the
     day it was deleted - and a count over the ledger would stop being a count of
@@ -669,14 +673,18 @@ def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path)
     """
     state = tmp_path / "state"
     assert writer.append(state, [row()]) == 1
-    shard = writer.ledger_shards(state)[0]
-    summary = score_archive.summarise(shard, observation_key=writer.OBSERVATION_KEY)
-    score_archive.write(score_archive.archive_path(state, shard.stem), summary)
-    shard.unlink()
+    days = writer.ledger_days(state)
+    month = day_partition.month_of(days[0])
+    summary = score_archive.summarise(
+        days, month=month, observation_key=writer.OBSERVATION_KEY
+    )
+    score_archive.write(score_archive.archive_path(state, month), summary)
+    for day in days:
+        day.unlink()
 
-    assert not writer.ledger_shards(state)
+    assert not writer.ledger_days(state)
     assert writer.append(state, [row(date="2026-09-14", run_id="2026-09-14-1")]) == 0
-    assert not writer.ledger_shards(state), "the archived measurement was written again"
+    assert not writer.ledger_days(state), "the archived measurement was written again"
 
 
 def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:
@@ -703,18 +711,41 @@ def test_the_ledger_columns_match_the_contract() -> None:
     assert writer.columns() == EvalRow.csv_columns()
 
 
+def _newest_committed_day() -> Path | None:
+    """The newest committed score day file, found by three bounded listings.
+
+    Newest year, then newest month, then newest day. That costs at most twelve
+    plus thirty-one directory entries however long the project runs, where
+    `writer.ledger_days` walks every partition on record and gains one a day
+    (`CLAUDE.md` section 13, Guardrail #12).
+    """
+    root = REPO_ROOT / STATE_DIRNAME / writer.LEDGER_DIRNAME
+    at = root
+    for _ in range(2):
+        names = sorted(entry.name for entry in at.iterdir() if entry.is_dir())
+        if not names:
+            return None
+        at = at / names[-1]
+    days = sorted(at.glob("*.csv"))
+    return days[-1] if days else None
+
+
 def test_the_committed_ledger_carries_todays_columns() -> None:
     """The header is written once, and the file is appended to forever.
 
     A contract that grew a column while the committed header did not would put
     more cells on tomorrow's row than the header names, and the dashboard reads
     cells by position.
+
+    **The newest day and not every day**, because the newest is the one the next
+    run appends to, and `writer.append` checks exactly the days it writes. An
+    older day file nothing writes to cannot be corrupted by a run, and walking
+    all of them would cost one more open a day for ever.
     """
-    shards = writer.ledger_shards(REPO_ROOT / STATE_DIRNAME)
-    if not shards:
+    newest = _newest_committed_day()
+    if newest is None:
         pytest.skip("no ledger committed yet")
-    for shard in shards:
-        assert writer.read_header(shard) == writer.columns(), shard.name
+    assert writer.read_header(newest) == writer.columns(), newest.name
 
 
 def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
@@ -723,22 +754,24 @@ def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
     `require_matching_header` compares the header tuple exactly, so the commit
     that gave the contract a `source_digest` column stopped the committed ledger
     loading until the file was widened by the same column. This appends to a byte
-    copy of what is committed, which is the run a release blocker would fail.
+    copy of the newest committed day, which is the run a release blocker would
+    fail - and it is one file rather than every committed day, for the reason
+    above.
     """
-    committed = writer.ledger_shards(REPO_ROOT / STATE_DIRNAME)
-    if not committed:
+    newest = _newest_committed_day()
+    if newest is None:
         pytest.skip("no ledger committed yet")
+    date = day_partition.date_of(newest)
     state = tmp_path / "state"
-    (state / writer.LEDGER_DIRNAME).mkdir(parents=True)
-    for shard in committed:
-        (state / writer.LEDGER_DIRNAME / shard.name).write_bytes(shard.read_bytes())
-    newest = state / writer.LEDGER_DIRNAME / committed[-1].name
-    before = newest.read_text(encoding="utf-8").count("\n")
+    copied = writer.ledger_path(state, date)
+    copied.parent.mkdir(parents=True)
+    copied.write_bytes(newest.read_bytes())
+    before = copied.read_text(encoding="utf-8").count("\n")
 
-    assert writer.append(state, [row(url_key="d" * 64, date=f"{committed[-1].stem}-01")]) == 1
+    assert writer.append(state, [row(url_key="d" * 64, date=date)]) == 1
 
-    assert writer.read_header(newest) == writer.columns()
-    assert newest.read_text(encoding="utf-8").count("\n") == before + 1
+    assert writer.read_header(copied) == writer.columns()
+    assert copied.read_text(encoding="utf-8").count("\n") == before + 1
 
 
 def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path) -> None:
@@ -766,10 +799,10 @@ def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
     """Silent corruption is the alternative, and it is unrecoverable once shipped."""
     state = tmp_path / "state"
     writer.append(state, [row()])
-    shard = writer.ledger_shards(state)[0]
-    kept = shard.read_text(encoding="utf-8").split("\n")
+    day = writer.ledger_days(state)[0]
+    kept = day.read_text(encoding="utf-8").split("\n")
     kept[0] = ",".join(writer.columns()[:-1])
-    shard.write_text("\n".join(kept), encoding="utf-8")
+    day.write_text("\n".join(kept), encoding="utf-8")
     with pytest.raises(ValueError, match="Migrate the ledger"):
         writer.append(state, [row(item_id="ai-02")])
 
@@ -2891,7 +2924,7 @@ def test_a_run_with_the_scorer_off_writes_no_row_and_names_no_instrument(
 
     assert record.evaluation_enabled is False
     assert record.scorer_version is None
-    assert not writer.ledger_shards(tmp_path / "state")
+    assert not writer.ledger_days(tmp_path / "state")
 
 
 def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
