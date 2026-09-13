@@ -45,8 +45,8 @@
       "vertical": "ai",
       "visual": {
         "alt": "Cost per million tokens, previous release against the new one.",
+        "data_path": "digest/2026/08/21/ai-01.json",
         "kind": "chart",
-        "path": "digest/2026/08/21/ai-01.svg",
         "state": "rendered"
       },
       "watchlist_hit": null

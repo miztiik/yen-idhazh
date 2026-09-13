@@ -36,6 +36,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Retired asset_path. One published file per visual is left and data_path names it, so the rendered-visual rule moved onto data_path and spec's description says what the field now holds - the compiled marks, as the published visual-data document.",
+      "version": "2026-09-13T22:30",
+      "why": "The build-time renderer is deleted, so nothing writes an SVG and asset_path had no producer. Two fields naming one file is the spec_format failure again: a second name for a fact already carried, whose only possible contribution is to disagree with it. No read side is owed - this payload is written under gitignored backend/var/ and travels as a one-day artifact, so the run that writes it is the run that reads it, and Contract.read refuses a stamp it does not know rather than guessing at one."
+    },
+    {
+      "change": "Added data_path, where this item's published visual data landed. Optional, null by default, and refused on a decision whose visual did not render. spec's description stops naming Vega-Lite: it now says what the field is for and leaves the grammar to the renderer.",
+      "version": "2026-09-13T20:00",
+      "why": "The owner ruled on 2026-09-13 that the reader's browser draws the chart and the pipeline never draws one, so the compiled data is published and the decision has to record where. It is a second path beside asset_path rather than a derivation of it, for the reason asset_path is stored rather than derived: a path a later build recomputes is a path a later build can recompute differently. The description moves now because a description IS the field's meaning (CLAUDE.md section 11), and the row that deletes the build-time renderer changes what the field holds - naming the grammar here would make this contract wrong on the day that lands rather than on the day somebody remembered. Nothing is owed on the read side either way: this payload is written under gitignored backend/var/ and travels as a one-day artifact, so the run that writes it is the run that reads it."
+    },
+    {
       "change": "NoneReason takes a fifth member, window_exhausted. Additive: no payload written before today can carry it, and every reader that handled four members handles five.",
       "version": "2026-09-13",
       "why": "Under --no-context-shift a reply that runs into the wall of the context window comes back on an ordinary HTTP 200 with the same finish_reason as a reply that spent its whole output budget, so the two were one member and an operator could not tell them apart. They are different work: a budget cut is the reply shape's arithmetic, and a window cut is models.summarize.inference.n_ctx against extract.truncation_cap_tokens. The arithmetic that separates them needs nothing new - the server already reports the prompt's token count, and call 2's budget is derived from its own grammar - so the member costs one comparison at the one call site that writes it."
@@ -113,7 +123,7 @@
       "title": "Asked The Model",
       "type": "boolean"
     },
-    "asset_path": {
+    "data_path": {
       "anyOf": [
         {
           "maxLength": 512,
@@ -125,8 +135,8 @@
         }
       ],
       "default": null,
-      "description": "Relative POSIX path under frontend/public/, once rendered. Written as digest/<Y>/<M>/<D>/<item_id>.svg since 2026-08-27; payloads before that carry digest/<Y>/<M>/<D>/<vertical>-<NN>.svg and stay valid.",
-      "title": "Asset Path"
+      "description": "Relative POSIX path under frontend/public/ to this visual's published data, as digest/<Y>/<M>/<D>/<item_id>.json beside the day payload that points at it. Null on a payload written before the file existed, and null where the compile landed and the write did not - absent reads as no data carried.",
+      "title": "Data Path"
     },
     "decided_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
@@ -216,7 +226,7 @@
         }
       ],
       "default": null,
-      "description": "The Vega-Lite JSON the renderer draws, built here from the article's own numbers. Null on an item decided to nothing.",
+      "description": "The compiled drawing instruction, built here from the article's own numbers and read back by whatever draws it. Since 2026-09-13 that is the reader's browser and this holds the published visual-data document, the same bytes the file beside the day carries. The grammar is the drawing code's rather than this contract's - it was Vega-Lite JSON while the build-time renderer ran - and naming one here would date the field to a renderer this project has already changed twice. Null on an item decided to nothing.",
       "title": "Spec"
     },
     "url_key": {
@@ -225,7 +235,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-13T22:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -244,5 +254,5 @@
   ],
   "title": "VisualDecision",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-13T22:30"
 }

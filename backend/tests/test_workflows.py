@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import copy
 import csv
 import datetime
@@ -596,7 +597,7 @@ RUN_ARTIFACTS: Final = "backend/var/run"
 # and a decision payload saying where it landed. The name is the item's own id,
 # so a path both runs hold is that one item rendered twice.
 RACED_ITEM_ID: Final = "energy-0000000001"
-RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_ID}.svg"
+RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_ID}.json"
 
 
 _PARSED_WORKFLOWS: dict[str, dict[str, object]] | None = None
@@ -683,6 +684,134 @@ def _run_bodies(workflow: dict[str, object]) -> list[str]:
         for step in _steps(workflow, job_name)
         if isinstance(script := step.get("run"), str)
     ]
+
+
+CONFIG_FILE_NAME: Final = "idhazh.json"
+
+
+def _inline_programs(script: str) -> list[str]:
+    """Every Python program a shell step carries, heredoc or `-c` one-liner.
+
+    Both spellings index the config, so both are in scope. A step that carries
+    neither contributes nothing and is not an error.
+    """
+    programs: list[str] = re.findall(
+        r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL
+    )
+    programs.extend(re.findall(r"python3?\s+-c\s+'([^']*)'", script))
+    return programs
+
+
+def _reads_the_config_file(node: ast.AST, aliases: frozenset[str]) -> bool:
+    return any(
+        (
+            isinstance(inner, ast.Constant)
+            and isinstance(inner.value, str)
+            and inner.value.endswith(CONFIG_FILE_NAME)
+        )
+        or (isinstance(inner, ast.Name) and inner.id in aliases)
+        for inner in ast.walk(node)
+    )
+
+
+def _parses_json(node: ast.AST) -> bool:
+    return any(
+        isinstance(inner, ast.Attribute)
+        and inner.attr in {"load", "loads"}
+        and isinstance(inner.value, ast.Name)
+        and inner.value.id == "json"
+        for inner in ast.walk(node)
+    )
+
+
+def _own_nodes(scope: ast.AST) -> list[ast.AST]:
+    """Every node a scope owns, without descending into a nested function.
+
+    Name tracking has to stop at a function boundary. The runtime sweep binds a
+    local `path` to its copy of the config, and the module around it binds the
+    same name to each summary file it reads; merging the two would resolve one
+    against the other.
+    """
+    owned: list[ast.AST] = []
+    stack: list[ast.AST] = list(ast.iter_child_nodes(scope))
+    while stack:
+        node = stack.pop()
+        owned.append(node)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+    return owned
+
+
+def _config_mapping_names(nodes: list[ast.AST]) -> frozenset[str]:
+    """The names one scope binds to a parsed `idhazh.json`.
+
+    Two spellings reach the file: a direct `json.load(open(...))`, and a copy
+    of `config/` re-read through a path built earlier. Keying on the filename
+    rather than on one call shape is what lets this see the copy the runtime
+    sweep writes. The scan repeats until it stops growing, so a path built two
+    statements before it is read is still recognised.
+    """
+    aliases: set[str] = set()
+    mappings: set[str] = set()
+    while True:
+        before = (frozenset(aliases), frozenset(mappings))
+        for node in nodes:
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if not isinstance(target, ast.Name):
+                continue
+            if not _reads_the_config_file(node.value, frozenset(aliases)):
+                continue
+            if isinstance(node.value, ast.Call) and _parses_json(node.value):
+                mappings.add(target.id)
+            else:
+                aliases.add(target.id)
+        if before == (frozenset(aliases), frozenset(mappings)):
+            return frozenset(mappings)
+
+
+def _config_key_paths(program: str) -> list[tuple[str, ...]]:
+    """Every literal key path an inline program indexes on the parsed config.
+
+    A chain nested inside a longer one is skipped, because resolving the longest
+    chain resolves every prefix of it. A key that is not a literal string cannot
+    be resolved here and is left to the step itself.
+    """
+    tree = ast.parse(program)
+    scopes: list[ast.AST] = [tree]
+    scopes.extend(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    )
+    found: list[tuple[str, ...]] = []
+    for scope in scopes:
+        nodes = _own_nodes(scope)
+        mappings = _config_mapping_names(nodes)
+        nested = {id(node.value) for node in nodes if isinstance(node, ast.Subscript)}
+        for node in nodes:
+            if not isinstance(node, ast.Subscript) or id(node) in nested:
+                continue
+            keys: list[str] = []
+            current: ast.expr = node
+            while isinstance(current, ast.Subscript):
+                key = current.slice
+                if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+                    keys.clear()
+                    break
+                keys.append(key.value)
+                current = current.value
+            if not keys:
+                continue
+            if (isinstance(current, ast.Name) and current.id in mappings) or (
+                isinstance(current, ast.Call)
+                and _parses_json(current)
+                and _reads_the_config_file(current, frozenset())
+            ):
+                found.append(tuple(reversed(keys)))
+    return found
 
 
 def _names_the_input(text: str, name: str) -> bool:
@@ -1299,21 +1428,21 @@ def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> 
 
 
 def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
-    """One rendered chart, exactly as the visuals job's artifact leaves it.
+    """One published visual, exactly as the work job's artifact leaves it.
 
-    An SVG under the day's directory and a real `VisualDecision` beside the run's items
-    saying where it landed. `body` is what makes two renders of one item differ,
-    which is the only case that can now put two adds on one path - identical
-    bytes are the case git resolves on its own.
+    A marks file under the day's directory and a real `VisualDecision` beside the
+    run's items saying where it landed. `body` is what makes two compiles of one
+    item differ, which is the only case that can now put two adds on one path -
+    identical bytes are the case git resolves on its own.
     """
-    _write(repo / "frontend" / "public" / relpath, f"<svg>{body or item_id}</svg>\n")
+    _write(repo / "frontend" / "public" / relpath, f'{{"item_id": "{body or item_id}"}}\n')
     decision = VisualDecision(
         version=VisualDecision.schema_version(),
         item_id=item_id,
         url_key=hashlib.sha256(item_id.encode("ascii")).hexdigest(),
         kind=VisualKind.CHART,
-        spec='{"mark": "bar"}',
-        asset_path=relpath,
+        spec='{"marks": []}',
+        data_path=relpath,
         visual_state=VisualState.RENDERED,
         model_id="qwen3-4b",
         decided_at=f"{date}T00:00:00Z",
@@ -3744,7 +3873,7 @@ def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -
     """
     date = SUBSTITUTED_DATE
     raced, fresh = RACED_ITEM_ID, "energy-0000000002"
-    fresh_asset = f"digest/{date.replace('-', '/')}/{fresh}.svg"
+    fresh_asset = f"digest/{date.replace('-', '/')}/{fresh}.json"
     staged_paths, settings = _commit_call("assemble")
     settings = {
         **settings,
@@ -3789,10 +3918,10 @@ def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -
     # The published address still holds the bytes that were published under it,
     # rather than this run's second attempt at the same picture.
     assert _git(origin, env, "show", f"main:frontend/public/{RACED_ASSET}") == (
-        f"<svg>{raced}</svg>\n"
+        f'{{"item_id": "{raced}"}}\n'
     )
     assert _git(origin, env, "show", f"main:frontend/public/{fresh_asset}") == (
-        f"<svg>{fresh}</svg>\n"
+        f'{{"item_id": "{fresh}"}}\n'
     )
     assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
 
@@ -3983,6 +4112,38 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
         _run_the_inline_program(script, tmp_path)
+
+
+def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> None:
+    """A key that moved is a `KeyError` on the runner, and nothing earlier looks.
+
+    The inline programs index `config/idhazh.json` by literal key. The schema
+    cannot catch a stale one: the runtime sweep reads its copy as a plain dict,
+    indexes it, and only validates the result afterwards, so the index raises
+    first. This is the one place a renamed or moved knob is caught before a job
+    spends a runner minute reaching for it.
+    """
+    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    for filename, workflow in sorted(_load_workflows().items()):
+        for script in _run_bodies(workflow):
+            for program in _inline_programs(script):
+                for keys in _config_key_paths(program):
+                    seen.add((filename, keys))
+                    node: object = committed
+                    for depth, key in enumerate(keys):
+                        assert isinstance(node, dict) and key in node, (
+                            f"{filename} indexes config/idhazh.json at "
+                            f"{'.'.join(keys)}, and there is no "
+                            f"{'.'.join(keys[: depth + 1])}"
+                        )
+                        node = cast(dict[str, object], node)[key]
+
+    # The sweep rewrites its own copy of the config, which is the read that went
+    # stale. Naming it keeps this test from passing by finding nothing.
+    assert ("measure.yml", ("models", "summarize", "inference")) in seen
+
+
 def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     """Every part of what the entry holds, and all of them from one source.
 

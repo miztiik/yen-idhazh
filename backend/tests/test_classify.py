@@ -8,8 +8,8 @@ changed a request body would have shipped looking like a rename.
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from math import ceil
+from os.path import commonprefix
 from typing import Any
 
 import pytest
@@ -69,7 +69,9 @@ from idhazh.classify.calls import (
 from idhazh.contracts.app_config import (
     ElementsConfig,
     InferenceConfig,
+    ModelEntry,
     SummarizeConfig,
+    TurnsConfig,
     VisualsConfig,
 )
 from idhazh.contracts.article import Article
@@ -83,6 +85,15 @@ from idhazh.llm.server import Completion, continued_prompt, post, render_prompt,
 from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
+
+
+def configured() -> ModelEntry:
+    """The summarizer entry the committed config names, turn envelope included.
+
+    Read through `config.load`, which is what a stage calls, so a test never
+    reaches the markers by a second route.
+    """
+    return config.load(CONFIG_DIR).app.models.summarize
 
 #: How to re-record after a DELIBERATE prompt or bound change. Nothing else may
 #: move these bytes, which is the whole point of the file. It rewrites the two
@@ -117,15 +128,18 @@ def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         article, config=ElementsConfig(max_per_article=inputs["elements_max_per_article"])
     )
     reply = json.loads(read_text(REPO_ROOT / inputs["call_one_reply"]))
+    turns = TurnsConfig.model_validate(inputs["turns"])
     call_one = build_call_one_request(
         article,
         table,
         model_id=inputs["model_id"],
         inference=InferenceConfig.model_validate(inputs["inference"]),
+        turns=turns,
     )
     call_two = build_call_two_request(
         call_one,
         reply["choices"][0]["message"]["content"],
+        turns=turns,
         source_words=article.band_source_words,
     )
     return call_one, call_two
@@ -216,14 +230,21 @@ class TestThePromptBytes:
 
         Both reply openings, because the one a prompt ends with is chosen by the
         thinking flag and a wrong pair would be invisible on the default arm.
+
+        **The recording and the entry name the same weights.** The fixture says
+        which bytes the server had loaded and `turns.declared_for` says which
+        bytes the markers were recorded for, so a swap that moved one and not
+        the other fails here rather than rendering quietly.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
         system, user = recorded["system"], recorded["user"]
+        entry = configured()
 
-        assert render_prompt(system=system, user=user, thinking=False) == (
+        assert entry.turns.declared_for == recorded["weights_sha256"]
+        assert render_prompt(system=system, user=user, thinking=False, turns=entry.turns) == (
             recorded["generation_prompt"]
         )
-        assert render_prompt(system=system, user=user, thinking=True) == (
+        assert render_prompt(system=system, user=user, thinking=True, turns=entry.turns) == (
             recorded["generation_prompt_thinking"]
         )
 
@@ -237,11 +258,15 @@ class TestThePromptBytes:
         first one extended.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
+        turns = configured().turns
         opening = recorded["generation_prompt"] + recorded["reply"]
         ours = continued_prompt(
-            render_prompt(system=recorded["system"], user=recorded["user"], thinking=False),
+            render_prompt(
+                system=recorded["system"], user=recorded["user"], thinking=False, turns=turns
+            ),
             reply=recorded["reply"],
             user=recorded["question"],
+            turns=turns,
         )
 
         assert not recorded["continued_prompt"].startswith(opening)
@@ -250,15 +275,59 @@ class TestThePromptBytes:
     def test_a_prompt_that_does_not_end_on_a_reply_opening_is_refused(self) -> None:
         """Nothing may be appended to a prompt whose end nobody recognises."""
         with pytest.raises(ValueError, match="reply opening"):
-            continued_prompt("a prompt that stops mid-sentence", reply="{}", user="and then?")
+            continued_prompt(
+                "a prompt that stops mid-sentence",
+                reply="{}",
+                user="and then?",
+                turns=configured().turns,
+            )
 
-    def test_every_marker_is_read_from_the_asset_and_none_is_written_here(self) -> None:
-        """The substitution test: move the asset and the bytes move with it."""
-        markers = turn_markers()
-        moved = replace(markers, turn_closing="<<END>>")
+    def test_every_marker_is_read_from_the_entry_and_none_is_written_here(self) -> None:
+        """The substitution test: move the config and the bytes move with it."""
+        turns = configured().turns
+        markers = turn_markers(turns)
+        moved = turn_markers(turns.model_copy(update={"turn_closing": "<<END>>"}))
 
         assert markers.turn("user", "hello").endswith(markers.turn_closing)
         assert moved.turn("user", "hello").endswith("<<END>>")
+
+    def test_two_entries_in_one_process_render_their_own_turns(self) -> None:
+        """The lookup is keyed by the entry, so a bench holding two gets two.
+
+        It was a single-slot cache with no argument until 2026-09-13, which
+        answered the first entry's markers to the second one - and the grammar
+        would have accepted every reply.
+        """
+        incumbent = configured().turns
+        candidate = incumbent.model_copy(
+            update={"turn_opening": "[$role]\n", "turn_closing": "[end]\n"}
+        )
+
+        assert turn_markers(incumbent).turn("user", "hi") != turn_markers(candidate).turn(
+            "user", "hi"
+        )
+        assert turn_markers(candidate).turn("user", "hi") == "[user]\nhi[end]\n"
+
+    def test_a_shorter_reply_opening_cannot_shadow_a_longer_one(self) -> None:
+        """Built rather than drawn from config, because the incumbent is safe by luck.
+
+        `opening_of` matches on a suffix. Here the plain opening IS a suffix of
+        the thinking one, so a first-match-wins reader would splice a thinking
+        continuation with the plain opening and break the prefix the two calls
+        exist to keep. Longest-first makes that unreachable.
+        """
+        turns = TurnsConfig(
+            turn_opening="<turn $role>",
+            turn_closing="</turn>",
+            reply_opening="<turn assistant>",
+            reply_opening_thinking="<thinking><turn assistant>",
+        )
+        markers = turn_markers(turns)
+
+        assert markers.opening_of("..." + turns.reply_opening_thinking) == (
+            turns.reply_opening_thinking
+        )
+        assert markers.opening_of("..." + turns.reply_opening) == turns.reply_opening
 
 
 # --- Call 1: the model reads the article and points at it --------------------
@@ -567,13 +636,15 @@ class TestCallOnePrompting:
             call_one_user_turn(article_ok, a_table(dense))
 
     def test_the_request_hands_the_decoder_the_reply_shape(self, dense: Article) -> None:
+        entry = configured()
         payload = build_call_one_request(
             dense,
             a_table(dense),
             model_id="m",
-            inference=config.load(CONFIG_DIR).app.models.summarize.inference,
+            inference=entry.inference,
+            turns=entry.turns,
         )
-        markers = turn_markers()
+        markers = turn_markers(entry.turns)
         assert payload["json_schema"] == call_one_schema()
         assert payload["prompt"].startswith(markers.turn("system", call_one_system_prompt()))
         assert "4,200 megawatt hours" in payload["prompt"]
@@ -1231,11 +1302,13 @@ def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
     zero.
     """
     table = element_table(article_ok, config=ElementsConfig())
+    entry = configured()
     payload = build_call_one_request(
         article_ok,
         table,
         model_id="m",
-        inference=config.load(CONFIG_DIR).app.models.summarize.inference,
+        inference=entry.inference,
+        turns=entry.turns,
     )
     body = (CALL_ONE_REPLIES / "labelled.json").read_bytes()
 
@@ -1280,7 +1353,10 @@ def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
 
 def call_two_payload(article: Article, reply: str = "{}") -> dict[str, Any]:
     return build_call_two_request(
-        call_one_payload(article), reply, source_words=article.band_source_words
+        call_one_payload(article),
+        reply,
+        turns=configured().turns,
+        source_words=article.band_source_words,
     )
 
 
@@ -1378,8 +1454,8 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         article is thousands of tokens where this row moved hundreds.
         """
         ask = config.load(CONFIG_DIR).app.summarize
-        inference = config.load(CONFIG_DIR).app.models.summarize.inference
-        markers = turn_markers()
+        entry = configured()
+        markers = turn_markers(entry.turns)
         opening = markers.turn("system", call_one_system_prompt(ask))
 
         for article in (dense, article_ok):
@@ -1387,7 +1463,8 @@ class TestTheInstructionsSitInFrontOfTheArticle:
                 article,
                 a_table(article),
                 model_id="m",
-                inference=inference,
+                inference=entry.inference,
+                turns=entry.turns,
                 prompt_config=ask,
             )
             assert payload["prompt"].startswith(opening)
@@ -1458,7 +1535,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
 
 class TestCallTwoShape:
     def test_call_ones_reply_is_replayed_as_the_assistant_turn(self, dense: Article) -> None:
-        markers = turn_markers()
+        markers = turn_markers(configured().turns)
         first = call_one_payload(dense)
         prompt = call_two_payload(dense, '{"labels": []}')["prompt"]
 
@@ -1566,9 +1643,9 @@ class TestTheDerivedBudget:
         assert [
             second[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")
         ] == [first[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")]
-        assert second["prompt"].endswith(turn_markers().opening_of(first["prompt"])), (
-            "the reply opening is read off call 1's prompt, so the two cannot disagree"
-        )
+        assert second["prompt"].endswith(
+            turn_markers(configured().turns).opening_of(first["prompt"])
+        ), "the reply opening is read off call 1's prompt, so the two cannot disagree"
 
 
 class TestARepliedCutByTheBudget:
@@ -1741,4 +1818,123 @@ def test_a_recorded_call_two_reply_parses_over_a_loopback_socket(article_ok: Art
     assert reply.visual is not None
     assert reply.visual.decision == "visual"
     assert set(reply.visual.element_ids) <= {one.element_id for one in labelled.elements}
+
+
+# --- What the prefix cache actually returned, on a real run ------------------
+
+DAG_ITEMS = FIXTURES_DIR / "planner" / "dag-three-items.json"
+
+#: How far below call 1's prompt length call 2's cache hit may sit and still
+#: count as covering it.
+#:
+#: **It is one token, and it is not a percentage.** A percentage would be a
+#: tolerance, and a tolerance hides the failure this is guarding against: a
+#: prefix that got shorter because something item-specific moved in front of it
+#: would sit comfortably inside any percentage worth writing. One token is the
+#: re-tokenisation boundary. llama-server matches the cache on the tokenised
+#: prompt, and the last token of a prefix can merge with the first character of
+#: what follows it - so the reusable prefix is the whole of call 1's prompt, or
+#: that minus its final token, and never anything in between. Anything further
+#: below is a cache that was evicted or never asked for.
+CACHE_REPLAY_SLACK_TOKENS = 1
+
+
+def dag_items() -> list[dict[str, Any]]:
+    """Consecutive items of one shard, with what the server reported for each.
+
+    Read from a fixture and never from `state/`: the ledger is a collection
+    every run appends to, so a test that opened it would cost more every day and
+    would be asking whether the data is well formed rather than whether the code
+    is (CLAUDE.md section 13, Guardrail #12).
+    """
+    return list(json.loads(read_text(DAG_ITEMS))["items"])
+
+
+def test_call_two_reuses_the_whole_of_call_ones_prompt() -> None:
+    """The saving the two-call design was bought with, read off the server.
+
+    Call 2's prompt IS call 1's prompt plus call 1's reply, so a correct run
+    prefills only the seam and the new turn. What the server reports as cached
+    is the measurement of that, and it is the one number that tells a working
+    prefix cache from a broken one: without it the article is prefilled twice
+    and the stage costs about double, on ordinary HTTP 200s, with nothing in any
+    log to say so.
+
+    The floor is call 1's prompt rather than call 2's, because call 1's reply
+    sits between them and its length varies per item. Reaching call 1's prompt
+    length is the whole of the claim - the reply's own cache hit is a bonus this
+    does not depend on.
+    """
+    for item in dag_items():
+        cached = item["call_2"]["cached_tokens"]
+        floor = item["call_1"]["input_tokens"] - CACHE_REPLAY_SLACK_TOKENS
+        assert cached >= floor, (
+            f"{item['item_id']}: call 2 reused {cached} tokens against a call 1 prompt "
+            f"of {item['call_1']['input_tokens']}, so the prefix was evicted between "
+            "the two calls of one item"
+        )
+
+
+def test_the_shared_opening_is_still_cached_on_the_items_after_the_first() -> None:
+    """One slot, many items - and the turn in front of every article survives.
+
+    `n_parallel` is 1, so item 2's call 1 lands in the slot item 1's call 2 left.
+    Everything after the shared opening is item 1's, so what item 2 can reuse is
+    exactly the opening - and it does, at the same figure every time, which is
+    what an unchanged shared prefix looks like from the server's side.
+
+    **The figure itself is not asserted, and that is deliberate.** It was 1,755
+    tokens on the recorded run and it is not 1,755 today, because the prompt
+    files have been edited since. A test that pinned the number would go red the
+    next time somebody improved a sentence - a date on the calendar rather than
+    a change anybody made. What cannot drift is that every item after the first
+    reports the same non-zero prefix.
+    """
+    items = dag_items()
+    assert len(items) >= 3, "two items cannot tell a shared prefix from a coincidence"
+
+    shared = {item["call_1"]["cached_tokens"] for item in items[1:]}
+    assert len(shared) == 1, (
+        f"the shared opening was cached at {sorted(shared)} across consecutive items, "
+        "so something in front of the article varies per item"
+    )
+    assert shared.pop() > 0, "no item reused the opening, so the slot was evicted"
+
+
+def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
+    """Python decides what call 2 asks for, and the decision sits behind the cache.
+
+    The gate is code reading call 1's reply, not a second dispatch and not a
+    schema conditional: an item whose labels cannot support a picture still
+    sends exactly two calls, and the three things suppression changes - the last
+    line of the trailing turn, the decoder shape and the output budget - all sit
+    after the system turn, the article and call 1's reply.
+
+    That is what keeps the gate free. A gate that moved one byte in front of the
+    article would cost a full prefill on every item it fired for, which is more
+    than the decode it saves.
+    """
+    article = Article.from_json(read_text(FIXTURES_DIR / "contracts" / "article" / "ok.json"))
+    first = call_one_payload(article)
+    reply = json.loads(read_text(CALL_ONE_REPLIES / "labelled.json"))["choices"][0][
+        "message"
+    ]["content"]
+
+    asked = build_call_two_request(first, reply, turns=configured().turns, plan=True)
+    suppressed = build_call_two_request(
+        first, reply, turns=configured().turns, plan=False
+    )
+    opening = str(first["prompt"])
+
+    assert str(asked["prompt"]).startswith(opening)
+    assert str(suppressed["prompt"]).startswith(opening)
+    shared = commonprefix([str(asked["prompt"]), str(suppressed["prompt"])])
+    assert len(shared) >= len(opening) + len(reply), (
+        "suppressing the plan moved something in front of call 1's reply, so a gated "
+        "item cannot reuse the prefix an ungated one left"
+    )
+    assert asked["n_predict"] == CALL_TWO_BUDGET_TOKENS
+    assert suppressed["n_predict"] < asked["n_predict"]
+    assert asked["cache_prompt"] is True
+    assert suppressed["cache_prompt"] is True
 

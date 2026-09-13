@@ -9,10 +9,10 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Mapping
-from dataclasses import replace
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
@@ -26,7 +26,7 @@ from idhazh import (
     telemetry,
     visual_planner,
 )
-from idhazh.classify import calls
+from idhazh.classify import calls, dag
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
@@ -161,10 +161,12 @@ def stage_work(
         runtime_build=runtime_build(),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         # The two calls render their own bytes, so the chat template above no
-        # longer reaches what the model reads and the turn markers do. Handing
-        # over the rendered pair is what digests the markers, all four prompt
-        # files and the turn order together.
-        prompt=calls.prompt_inputs(settings.app.summarize, inference=inference),
+        # longer reaches what the model reads and the entry's turn envelope
+        # does. Handing over the rendered pair is what digests the envelope, all
+        # four prompt files and the turn order together.
+        prompt=calls.prompt_inputs(
+            settings.app.summarize, turns=model.turns, inference=inference
+        ),
         output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
@@ -479,6 +481,37 @@ def _drawn(
     )
 
 
+@dataclass(slots=True)
+class _Progress:
+    """What one item has produced so far, as the walk moves through the nodes.
+
+    Mutable and opened per item on purpose: the sequence is item-major, so
+    nothing here outlives the article it was opened for. Each node reads what
+    the node before it left, which is the dependency the order exists to honour
+    - call 2's prompt IS call 1's prompt plus call 1's reply, so call 2 cannot
+    be built until call 1 has answered and its reply has been held to a schema.
+
+    `table` is written twice: the element table the extractor cut, and then the
+    same table with call 1's labels anchored into it. One field rather than two
+    because the second is the first, corrected - and a node behind this one that
+    read the unlabelled copy would be reading a table the model has already
+    improved on.
+    """
+
+    first: dict[str, Any] | None = None
+    one: Completion | None = None
+    two: Completion | None = None
+    table: ElementTable | None = None
+    wants_a_plan: bool = False
+    summary: Summary | None = None
+
+
+#: One node of the sequence, run. It returns nothing when the item may go on,
+#: and the answer that ends the item when it may not - which is what `dag.walk`
+#: stops on.
+_NodeBody = Callable[[dag.CallNode], "_TwoCalls | None"]
+
+
 def _two_calls_one_item(
     article: Article,
     settings: config.Settings,
@@ -489,6 +522,21 @@ def _two_calls_one_item(
     tracer: telemetry.Tracer | None = None,
 ) -> _TwoCalls:
     """One article read once, labelled, summarized and drawn - in two adjacent calls.
+
+    **The order is `classify.dag.NODES` and this function does not own it.** The
+    sequence is declared once, as data, with each node's decode budget beside
+    it, because the window has to hold the whole thing and a sequence assembled
+    a statement at a time is a budget nobody ever checks whole. Adding a call
+    here is not possible without adding a node there, where the import-time
+    guard prices it.
+
+    **An article the sequence cannot hold is refused before call 1 is sent.**
+    `dag.fits_the_window` sizes call 1's prompt, both decode budgets and the
+    seam between the turns against `n_ctx`, and an article over it lands as
+    `FailureCode.CONTEXT_EXCEEDED`. Admitting it is the silent failure:
+    `--no-context-shift` means the decode stops at the wall on an ordinary HTTP
+    200, `recovered_completion` salvages the summary, and the item publishes
+    looking finished with its picture quietly gone.
 
     **Adjacent per item, and that is a correctness rule rather than a layout
     taste.** `models.summarize.inference` pins `n_parallel` to 1, so the server
@@ -549,103 +597,155 @@ def _two_calls_one_item(
 
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
-        with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
-            # A table that cannot re-slice its own output raises here rather than
-            # degrading, which is `elements.element_table`'s own ruling: at this
-            # point the text is in hand and it is the string the excerpts came
-            # from, so a mismatch is this process's arithmetic being wrong on
-            # every article that took the same path, not this item being odd.
-            table = elements.element_table(article, config=settings.app.elements)
-            first = calls.build_call_one_request(
-                article,
-                table,
-                model_id=model_id,
-                inference=inference,
-                prompt_config=settings.app.summarize,
-            )
-            rendered = str(first["prompt"])
-            first_digest = text_digest(rendered)
-            span.set(telemetry.AttrKey.PROMPT_DIGEST, first_digest)
-            span.set(telemetry.AttrKey.PROMPT_CHARS, len(rendered))
-        one, no_reply = _ask_the_model(
-            first,
-            article,
-            model_id=model_id,
-            endpoint=rendered_endpoint,
-            timeout=timeout,
-            prompt_digest=first_digest,
-            run_id=run_id,
-            trace=trace,
-        )
-        if one is None:
-            return failed(no_reply)
-        if one.hit_the_budget:
-            LOG.warning(
-                "the labelling reply ran out of its output budget id=%s tokens=%s",
-                article.item_id,
-                one.completion_tokens,
-            )
-            return failed(FailureCode.LABELS_TRUNCATED, one)
+        so_far = _Progress()
 
-        text = article.text or ""
-        try:
-            labelled = calls.anchored(
-                table,
-                text,
-                calls.parse_call_one(one.content),
-                config=settings.app.elements,
-                label_source=model_id,
-                entity_slugs=_watchlist_slugs(settings),
-            )
-        except (ValidationError, ValueError, json.JSONDecodeError) as error:
-            LOG.warning(
-                "the labelling reply did not hold its shape id=%s reason=%s",
-                article.item_id,
-                type(error).__name__,
-            )
-            return failed(FailureCode.BAD_SHAPE, one)
-
-        wants_a_plan = visual_planner.plan_is_reachable(labelled, visuals=settings.app.visuals)
-        with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
-            second = calls.build_call_two_request(
-                first,
-                one.content,
-                prompt_config=settings.app.summarize,
-                source_words=article.band_source_words,
-                brief=article.brief,
-                plan=wants_a_plan,
-            )
-            second_rendered = str(second["prompt"])
-            span.set(telemetry.AttrKey.PROMPT_CHARS, len(second_rendered))
-        two, no_reply = _ask_the_model(
-            second,
-            article,
-            model_id=model_id,
-            endpoint=rendered_endpoint,
-            timeout=timeout,
-            prompt_digest=text_digest(second_rendered),
-            run_id=run_id,
-            trace=trace,
-        )
-        if two is None:
-            return failed(no_reply, one)
-
-        with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
-            half = _summary_half_of(two)
-            summary = _split_the_cost(
-                summarize.to_summary(
+        def label(_node: dag.CallNode) -> _TwoCalls | None:
+            """Call 1: the element table, and every label and score over it."""
+            with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
+                # A table that cannot re-slice its own output raises here rather
+                # than degrading, which is `elements.element_table`'s own ruling:
+                # at this point the text is in hand and it is the string the
+                # excerpts came from, so a mismatch is this process's arithmetic
+                # being wrong on every article that took the same path, not this
+                # item being odd.
+                table = elements.element_table(article, config=settings.app.elements)
+                so_far.table = table
+                if not dag.fits_the_window(
                     article,
-                    half if half is not None else two,
-                    model_id=model_id,
-                    generated_at=generated_at,
+                    inference,
+                    menu_rows=len(table.elements),
                     prompt_config=settings.app.summarize,
-                    evaluation=settings.app.evaluation,
-                    no_reply=no_reply,
-                ),
-                one,
-                two,
+                ):
+                    LOG.warning(
+                        "the sequence would not fit the window id=%s tokens=%s menu=%s",
+                        article.item_id,
+                        article.token_count,
+                        len(table.elements),
+                    )
+                    return failed(FailureCode.CONTEXT_EXCEEDED)
+                first = calls.build_call_one_request(
+                    article,
+                    table,
+                    model_id=model_id,
+                    inference=inference,
+                    turns=model.turns,
+                    prompt_config=settings.app.summarize,
+                )
+                so_far.first = first
+                rendered = str(first["prompt"])
+                first_digest = text_digest(rendered)
+                span.set(telemetry.AttrKey.PROMPT_DIGEST, first_digest)
+                span.set(telemetry.AttrKey.PROMPT_CHARS, len(rendered))
+            one, no_reply = _ask_the_model(
+                first,
+                article,
+                model_id=model_id,
+                endpoint=rendered_endpoint,
+                timeout=timeout,
+                prompt_digest=first_digest,
+                run_id=run_id,
+                trace=trace,
             )
-            telemetry.summary_attributes(span, summary)
+            if one is None:
+                return failed(no_reply)
+            so_far.one = one
+            if one.hit_the_budget:
+                LOG.warning(
+                    "the labelling reply ran out of its output budget id=%s tokens=%s",
+                    article.item_id,
+                    one.completion_tokens,
+                )
+                return failed(FailureCode.LABELS_TRUNCATED, one)
+
+            text = article.text or ""
+            try:
+                so_far.table = calls.anchored(
+                    table,
+                    text,
+                    calls.parse_call_one(one.content),
+                    config=settings.app.elements,
+                    label_source=model_id,
+                    entity_slugs=_watchlist_slugs(settings),
+                )
+            except (ValidationError, ValueError, json.JSONDecodeError) as error:
+                LOG.warning(
+                    "the labelling reply did not hold its shape id=%s reason=%s",
+                    article.item_id,
+                    type(error).__name__,
+                )
+                return failed(FailureCode.BAD_SHAPE, one)
+            return None
+
+        def summarize_and_plan(_node: dag.CallNode) -> _TwoCalls | None:
+            """Call 2: the summary and the visual plan, on call 1's own prompt."""
+            first, one, labelled = so_far.first, so_far.one, so_far.table
+            if first is None or one is None or labelled is None:
+                raise TypeError(
+                    "the summary node ran without call 1's prompt, reply and anchored "
+                    "table - `dag.walk` stops at the first node that ends the item, so "
+                    "reaching here means a node returned None after a failure"
+                )
+            so_far.wants_a_plan = visual_planner.plan_is_reachable(
+                labelled, visuals=settings.app.visuals
+            )
+            with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
+                second = calls.build_call_two_request(
+                    first,
+                    one.content,
+                    turns=model.turns,
+                    prompt_config=settings.app.summarize,
+                    source_words=article.band_source_words,
+                    brief=article.brief,
+                    plan=so_far.wants_a_plan,
+                )
+                second_rendered = str(second["prompt"])
+                span.set(telemetry.AttrKey.PROMPT_CHARS, len(second_rendered))
+            two, no_reply = _ask_the_model(
+                second,
+                article,
+                model_id=model_id,
+                endpoint=rendered_endpoint,
+                timeout=timeout,
+                prompt_digest=text_digest(second_rendered),
+                run_id=run_id,
+                trace=trace,
+            )
+            if two is None:
+                return failed(no_reply, one)
+            so_far.two = two
+
+            with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
+                half = _summary_half_of(two)
+                so_far.summary = _split_the_cost(
+                    summarize.to_summary(
+                        article,
+                        half if half is not None else two,
+                        model_id=model_id,
+                        generated_at=generated_at,
+                        prompt_config=settings.app.summarize,
+                        evaluation=settings.app.evaluation,
+                        no_reply=no_reply,
+                    ),
+                    one,
+                    two,
+                )
+                telemetry.summary_attributes(span, so_far.summary)
+            return None
+
+        bodies: Mapping[dag.CallName, _NodeBody] = {
+            dag.CallName.LABEL: label,
+            dag.CallName.SUMMARIZE_AND_PLAN: summarize_and_plan,
+        }
+        lost = dag.walk(lambda node: bodies[node.name](node))
+        if lost is not None:
+            return lost
+        summary, two, labelled = so_far.summary, so_far.two, so_far.table
+        wants_a_plan = so_far.wants_a_plan
+        if summary is None or two is None or labelled is None:
+            raise TypeError(
+                "every node of the sequence answered and the item is still empty - "
+                "a node returned None without leaving its product behind"
+            )
         telemetry.summary_attributes(stage_span, summary)
 
     if summary.status is not SummaryStatus.OK:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -222,12 +223,18 @@ class RecordedEndpoint:
     count, so a test can assert the pair rather than infer it from what came
     back - and an item that sent one call where the cycle expects two shows up
     there rather than as a reply that will not parse three items later.
+
+    `sent` is every request body, in the order they arrived. A cycle of replies
+    cannot tell a caller that ran call 1 three times from one that alternated,
+    because both read the same bytes back; the requests can, which is what makes
+    the item-major rule assertable rather than readable.
     """
 
     def __init__(self, status: int, *bodies: bytes) -> None:
         if not bodies:
             raise ValueError("a recorded endpoint replays at least one body")
         served: list[int] = []
+        sent: list[dict[str, Any]] = []
         replies = bodies
 
         class Handler(BaseHTTPRequestHandler):
@@ -245,7 +252,8 @@ class RecordedEndpoint:
                 self.wfile.write(template)
 
             def do_POST(self) -> None:
-                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                sent.append(json.loads(raw))
                 body = replies[len(served) % len(replies)]
                 served.append(1)
                 self.send_response(status)
@@ -258,12 +266,18 @@ class RecordedEndpoint:
                 return None
 
         self._served = served
+        self._sent = sent
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
     @property
     def served(self) -> int:
         return len(self._served)
+
+    @property
+    def sent(self) -> list[dict[str, Any]]:
+        """Every request body this endpoint was posted, in arrival order."""
+        return list(self._sent)
 
     @property
     def endpoint(self) -> str:
@@ -296,9 +310,11 @@ def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> Ele
 
 
 def call_one_payload(article: Article) -> dict[str, Any]:
+    entry = config.load(CONFIG_DIR).app.models.summarize
     return build_call_one_request(
         article,
         a_table(article),
         model_id="m",
-        inference=config.load(CONFIG_DIR).app.models.summarize.inference,
+        inference=entry.inference,
+        turns=entry.turns,
     )

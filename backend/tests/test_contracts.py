@@ -29,7 +29,8 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import cli, day_partition, ledger, source_health
+from idhazh import cli, config, day_partition, ledger, source_health
+from idhazh.classify import dag
 from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
 from idhazh.cli import main
 from idhazh.contracts import canonical_json, derive_url_key
@@ -43,6 +44,8 @@ from idhazh.contracts.app_config import (
     ConsoleConfig,
     EvaluationConfig,
     InferenceConfig,
+    ModelEntry,
+    ModelRef,
     ModelsConfig,
     ObservabilityConfig,
     PageWeightConfig,
@@ -94,7 +97,7 @@ from idhazh.contracts.public_eval import PublicEvalRow
 from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
-from idhazh.contracts.run_manifest import ModelRole, RunManifest, VerticalCount
+from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, VerticalCount
 from idhazh.contracts.run_plan import (
     PUBLISHED_AGE_BANDS,
     PublishedAgeBand,
@@ -123,6 +126,7 @@ from idhazh.contracts.visual import (
     unbounded_leaves,
     worst_case_reply_characters,
 )
+from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.extract import TOKENS_PER_WORD
@@ -1058,13 +1062,16 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
 
     The fresh-clone arm drops the settings block and the weights digest
     together. Those two move as a pair now: an entry that names measured bytes
-    under a block declared for nothing is refused.
+    under a block declared for nothing is refused - and the turn envelope obeys
+    the same rule, so its digest goes with them. The markers themselves stay,
+    because they have no default and a clone that forgot them would not load.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     models = committed.models.model_dump()
     for entry in models.values():
         del entry["inference"]
         entry["sha256"] = None
+        entry["turns"]["declared_for"] = None
     fresh = AppConfig.model_validate({"models": models})
 
     assert fresh.models.summarize.inference.metrics is True, "a fresh clone must count"
@@ -1151,7 +1158,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
 
 
 def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """Call 1's prompt at the cap, and the whole two-call sequence behind it.
+    """Call 1's prompt at the cap, and the whole sequence behind it.
 
     A second derivation and not a widening of the one above, because the two
     paths render different prompts. The single call sends one system turn and
@@ -1160,30 +1167,46 @@ def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     date the extractor already cut - then pays for its own reply twice, once as
     a decode and once again inside call 2's prompt.
 
-    Three terms rather than one, and each reads something:
-
-    - the scaffold is fixed, and moves when a prompt file is edited;
-    - the per-word rate covers the article and its sentence addresses, and moves
-      when prose tokenizes harder;
-    - the menu is `elements.max_per_article` rows, so **the one config knob that
-      is not the cap or the window still moves this sum.**
-
-    The budgets come from `classify.calls`, which re-derives both on import from
-    the reply shapes' own bounds - so a `maxItems` that moves moves this too.
+    **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
+    It used to be written out here, which put the number the production path
+    never checked and the number this file asserts in two places - and two
+    derivations of one quantity disagree the first time a term moves. The three
+    terms of the prompt and the per-turn seam are documented where they are
+    computed; what stays here is the cap, the knob and the window, all three
+    read from `config/` (Guardrail #6).
     """
-    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
-    prompt = (
-        CALL_ONE_SCAFFOLD_TOKENS
-        + int(cut_words * CALL_ONE_BODY_TOKENS_A_WORD)
-        + int(committed.elements.max_per_article * CALL_ONE_MENU_TOKENS_A_ROW)
+    rows = committed.elements.max_per_article
+    cap = committed.extract.truncation_cap_tokens
+    return (
+        dag.first_prompt_tokens(cap, menu_rows=rows),
+        dag.sequence_tokens(cap, menu_rows=rows, prompt_config=committed.summarize),
     )
-    sequence = (
-        prompt
-        + call_one_output_tokens()
-        + CALL_TWO_SEAM_TOKENS
-        + call_two_output_tokens(committed.summarize)
+
+
+def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
+    """A third call is a design change, and this is what makes it stop being quiet.
+
+    Every node's reply is paid twice - once as its own decode, and once again
+    inside the prompt of every node behind it - so a third call does not cost a
+    third of the sequence, it costs its own budget plus a seam plus the prompt
+    it drags forward. At the committed window that is the difference between 80
+    percent full and over.
+
+    The import-time guard in `classify.dag` fires first and says the same thing.
+    This test exists because a guard inside the module a change is editing is a
+    guard that change can edit; a row that adds a node has to come here and say
+    so as well, which is the point at which ESCALATE trigger 6 of
+    `TODO/20260910-23-article-classification-plan.md` section 12a has fired.
+
+    **A labelling row does not add a node.** It adds a field to call 1's reply
+    shape, and `call_one_output_tokens` re-derives the budget from the shape's
+    own bounds on import.
+    """
+    assert len(dag.NODES) == dag.NODE_COUNT == 2
+    assert [node.name.value for node in dag.NODES] == ["label", "summarize_and_plan"]
+    assert {node.name.value for node in dag.NODES} <= {kind.value for kind in CallKind}, (
+        "a node the ledger has no CallKind for records its cost as nothing"
     )
-    return prompt, sequence
 
 
 def test_the_two_calls_fit_the_window_at_the_cap() -> None:
@@ -2119,6 +2142,129 @@ def test_a_run_manifest_written_before_the_settings_moved_still_reads() -> None:
     assert entry.inference.n_ctx == 8192, "the contract default, not a guess"
 
 
+# --- The turn envelope: on the entry a person declares, and only there --------
+
+
+def turns_of(raw: dict[str, Any], role: str = "summarize") -> dict[str, Any]:
+    block: dict[str, Any] = raw["models"][role]["turns"]
+    return block
+
+
+def test_a_model_swap_can_no_longer_inherit_markers_nothing_declared_for_it() -> None:
+    """The Oracle for the envelope, and the same rule the settings block obeys.
+
+    A wrong marker is worse than a wrong number: it renders a prompt with no
+    turn structure that the decoder's grammar still accepts, so the run
+    publishes a plausible day and nothing anywhere raises.
+
+    The swap here is the half-done one - `inference` re-declared for the new
+    weights and `turns` left behind - because a swap that moved neither block is
+    already refused by the settings gate above and would prove nothing here.
+    """
+    committed = AppConfig.model_validate(json.loads(read_text(CONFIG_DIR / "idhazh.json")))
+    assert committed.models.summarize.turns.declared_for == committed.models.summarize.sha256
+
+    raw = swapped_summarizer()
+    raw["models"]["summarize"]["inference"]["declared_for"] = "1" * 64
+    with pytest.raises(ValidationError) as raised:
+        AppConfig.model_validate(raw)
+    message = str(raised.value)
+    assert "models.summarize.turns" in message, "the message names the block"
+    assert "re-record them for these weights" in message, "and what to do about it"
+    assert "1" * 64 in message, "and the weights the entry now names"
+
+
+def test_an_entry_with_no_turn_envelope_at_all_is_refused() -> None:
+    """Required with no default. An entry that forgets its markers fails at load."""
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    del raw["models"]["summarize"]["turns"]
+    with pytest.raises(ValidationError, match="turns"):
+        AppConfig.model_validate(raw)
+
+
+@pytest.mark.parametrize("marker", ["turn_closing", "reply_opening", "reply_opening_thinking"])
+def test_an_empty_marker_is_refused(marker: str) -> None:
+    """`continued_prompt` splices call 2 onto `turn_closing`.
+
+    An empty seam joins two turns into one, the grammar still answers, and the
+    prefix the two-call design rests on is gone with nothing to read it off.
+    """
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    turns_of(raw)[marker] = ""
+    with pytest.raises(ValidationError, match="at least 1 character"):
+        AppConfig.model_validate(raw)
+
+
+@pytest.mark.parametrize("opening", ["<|im_start|>\n", "<|im_start|>$speaker\n"])
+def test_a_turn_opening_that_names_no_role_is_refused(opening: str) -> None:
+    """A substitution over a string that names nothing returns it unchanged.
+
+    Every turn then renders with no role header, the prompt is still
+    syntactically fine, and no reader downstream can tell. The second arm is the
+    renamed placeholder, which raises at the first render rather than at load -
+    late, and in the middle of a shard.
+    """
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    turns_of(raw)["turn_opening"] = opening
+    with pytest.raises(ValidationError, match=re.escape("must name $role")):
+        AppConfig.model_validate(raw)
+
+
+def test_a_run_records_which_weights_ran_and_not_how_their_turns_are_written() -> None:
+    """The split the envelope is required on one shape and absent from the other for.
+
+    `ModelUse` embeds `ModelRef`, and no `model_ref` a run has ever written
+    carries markers - requiring it there would stop this build reading them
+    (`CLAUDE.md` section 11). So the entry is narrowed on the way into the
+    record, and this asserts the narrowing rather than trusting it: a leaked
+    `turns` would pass `extra="forbid"` on write and fail on the next read.
+
+    What is given up is that `run.json` never says how the turns were written.
+    `RunRecord.inputs.prompt_sha256` digests both turns rendered through them,
+    so a marker that moved still moves the stamp.
+    """
+    entry = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models.summarize
+    assert "turns" not in ModelRef.model_fields
+    assert "turns" in ModelEntry.model_fields
+
+    use = ModelUse(role=ModelRole.SUMMARIZE, model_ref=entry)
+    recorded = json.loads(use.model_dump_json())
+
+    assert "turns" not in recorded["model_ref"]
+    assert recorded["model_ref"]["sha256"] == entry.sha256
+    ModelUse.model_validate(recorded), "and the record it wrote reads back"
+
+
+def test_the_retired_marker_file_is_refused_if_it_comes_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file nothing reads is a set of markers an operator believes are live.
+
+    The package directory is exactly where somebody would put them back, so the
+    path is checked rather than forgotten. Proved by making the file and watching
+    the refusal, never by asserting it is absent - an assertion that it is absent
+    passes on a tree where the check does not exist.
+
+    The file is made at a redirected path, and the real one is pinned by a
+    separate assertion. The suite runs several processes over one working tree,
+    so a file written into the package refuses every config load a sibling
+    process happens to be making at that moment.
+    """
+    assert config.RETIRED_TURN_MARKERS == (
+        REPO_ROOT / "backend" / "idhazh" / "prompts" / "turn_markers.json"
+    ), "the check must name the package directory, which is where they would come back"
+    assert not config.RETIRED_TURN_MARKERS.exists(), "the row deleted it"
+
+    came_back = tmp_path / "turn_markers.json"
+    came_back.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(config, "RETIRED_TURN_MARKERS", came_back)
+    with pytest.raises(ValueError, match=re.escape("models.<role>.turns")):
+        config.load(CONFIG_DIR)
+
+    monkeypatch.undo()
+    assert config.load(CONFIG_DIR).app.models.summarize.turns.turn_closing
+
+
 def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     """A summary costs kilobytes and is what makes a year-over-year claim citable."""
     fresh = ObservabilityConfig()
@@ -2799,11 +2945,11 @@ def test_no_hash_appears_in_any_published_path() -> None:
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     for item in day.items:
         assert not HEX_DIGEST.search(item.item_id)
-        if item.visual is not None and item.visual.path is not None:
-            assert not HEX_DIGEST.search(item.visual.path)
+        if item.visual is not None and item.visual.data_path is not None:
+            assert not HEX_DIGEST.search(item.visual.data_path)
     decision = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
-    assert decision.asset_path is not None
-    assert not HEX_DIGEST.search(decision.asset_path)
+    assert decision.data_path is not None
+    assert not HEX_DIGEST.search(decision.data_path)
 
 
 def test_an_item_id_reads_in_both_shapes_and_the_pattern_never_contracts() -> None:
@@ -4065,10 +4211,48 @@ def test_an_item_decided_to_nothing_carries_no_spec() -> None:
         VisualDecision.model_validate(payload)
 
 
-def test_only_a_rendered_visual_has_an_asset_path() -> None:
-    payload = mutate(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json", visual_state="absent")
-    with pytest.raises(ValueError, match="asset_path"):
-        VisualDecision.model_validate(payload)
+def test_a_day_still_carrying_the_retired_drawing_path_reads() -> None:
+    """The read-side migration `path` owes, proved by putting the key back.
+
+    Every one of the 24 committed days names a `.svg` on every rendered visual,
+    and none of them is ever rewritten. `Model` forbids a key it does not
+    declare, so without the named pop those days stop parsing the day this
+    lands - `validate-days` red, the build red, the release blocked. Driven by
+    adding the key to a fixture rather than by counting how many committed days
+    still carry it, because a count of a growing collection is a check timed to
+    go red on a date nobody chose (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    carried = 0
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"]["path"] = "digest/2026/08/21/ai-01.svg"
+            carried += 1
+    assert carried, "the fixture stopped carrying a visual, so this proves nothing"
+
+    day = DigestDay.model_validate(payload)
+
+    assert [item.visual.data_path for item in day.items if item.visual] == [
+        "digest/2026/08/21/ai-01.json"
+    ] * carried
+    assert "path" not in day.items[0].visual.model_dump() if day.items[0].visual else True
+
+
+def test_a_visual_carrying_a_data_path_must_have_rendered() -> None:
+    """One-way, and this is the direction that can hold.
+
+    The other direction cannot: 495 visuals across the 24 frozen days are
+    `rendered` and carry no data file, permanently, because back-filling one
+    would mean re-fetching 495 source pages that have since moved. So what is
+    asserted is that a path never appears without the state that produced it.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"]["state"] = "absent"
+
+    with pytest.raises(ValueError, match="data path"):
+        DigestDay.model_validate(payload)
 
 
 def test_hhem_delta_is_rebuilt_not_trusted() -> None:
@@ -4588,6 +4772,186 @@ def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> 
     absent = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json"))
     del absent["drafted_chart"]
     assert VisualDecision.model_validate(absent).drafted_chart is False
+
+
+def test_a_visual_published_before_the_data_file_reads_as_carrying_none() -> None:
+    """The read-side migration, proved by removing the key rather than by waiting.
+
+    Every day in the archive was published before a browser drew anything, so
+    every committed `visual` block lacks `data_path` entirely. Absent has to read
+    as no data carried - one sentence, and it is the sentence that decides
+    whether 24 days keep rendering. Asserting it against a fixture with the key
+    cut out is what makes it provable today; counting how many committed days
+    still lack it would be a check timed to go red on a date nobody chose
+    (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    carried = 0
+    for item in payload["items"]:
+        if item["visual"] is not None:
+            item["visual"].pop("data_path", None)
+            carried += 1
+    assert carried, "the fixture stopped carrying a visual, so this proves nothing"
+
+    day = DigestDay.model_validate(payload)
+
+    assert [item.visual.data_path for item in day.items if item.visual] == [None] * carried
+
+
+def test_a_rendered_decision_must_record_where_its_marks_landed() -> None:
+    """The other half of the rule, one stage earlier.
+
+    This payload is a one-day run artifact under gitignored `backend/var/`, so
+    the run that writes it is the run that reads it and no older shape is ever
+    opened. That is what lets the rule here be both ways round where the
+    published day's can only be one.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
+    payload.pop("data_path", None)
+
+    with pytest.raises(ValueError, match="where its marks landed"):
+        VisualDecision.model_validate(payload)
+
+
+def test_only_a_rendered_visual_carries_data() -> None:
+    """A path to a file the renderer never wrote is a 404 the payload asked for."""
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json",
+        data_path="digest/2026/08/22/ai-01.json",
+    )
+    with pytest.raises(ValueError, match="rendered visual"):
+        VisualDecision.model_validate(payload)
+
+
+VISUAL_DATA_FIXTURE: Final = (
+    CONTRACT_FIXTURES_DIR / "visual-data" / "bars-from-the-committed-plan.json"
+)
+
+
+def _visual_data() -> dict[str, Any]:
+    """The one fitting case, compiled from the committed plan by the real compiler."""
+    payload: dict[str, Any] = json.loads(read_text(VISUAL_DATA_FIXTURE))
+    return payload
+
+
+def test_a_visual_data_document_states_the_renderer_it_was_compiled_for() -> None:
+    """One home for the version, and this is it.
+
+    `spec_format` carried the same idea in two places and the two disagreed on
+    2026-09-05T18:00. So a mark never states a version, a decision never states
+    one, and the day payload never states one - the document a browser reads
+    states it, because that is the document whose shape can move.
+    """
+    data = VisualData.model_validate(_visual_data())
+
+    assert data.renderer_version == RENDERER_VERSION
+    assert "renderer_version" not in data.marks[0].model_dump()
+
+
+def _derived(payload: dict[str, Any], value: str, unit: str | None) -> dict[str, Any]:
+    """A chain of the shape `DerivedValue` declares, over elements the article has.
+
+    A `sum` reads at least two elements and no unit table, so the inputs are the
+    fixture's own quantity elements rather than invented ids - a chain naming an
+    element nobody extracted would be refused for that instead, and the test
+    would pass while proving something else.
+    """
+    reads = [mark["element_id"] for mark in payload["marks"] if mark["element_id"]]
+    return {
+        "version": "2026-08-21",
+        "function": "sum",
+        "inputs": [read for read in reads if read.startswith("quantity-")][:2],
+        "value": value,
+        "unit": unit,
+        "source_unit": None,
+        "unit_table_version": None,
+        "bin_lower": None,
+        "bin_upper": None,
+    }
+
+
+def test_a_mark_came_from_the_article_or_from_a_chain_and_never_from_neither() -> None:
+    """A drawn number with no provenance is the thing this subsystem exists to refuse."""
+    payload = _visual_data()
+    payload["marks"][0]["element_id"] = None
+
+    with pytest.raises(ValueError, match="never both, and never neither"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_may_not_claim_two_provenances_at_once() -> None:
+    payload = _visual_data()
+    payload["marks"][0]["derived"] = _derived(payload, "1200", "mw")
+
+    with pytest.raises(ValueError, match="never both, and never neither"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_that_says_nothing_and_measures_nothing_is_refused() -> None:
+    """It would draw a bar with no name and no length. Nothing to look at."""
+    payload = _visual_data()
+    payload["marks"][0]["text"] = None
+
+    with pytest.raises(ValueError, match="names something or measures something"):
+        VisualData.model_validate(payload)
+
+
+def test_a_unit_with_no_figure_beside_it_is_refused() -> None:
+    payload = _visual_data()
+    payload["marks"][0]["unit"] = "mw"
+
+    with pytest.raises(ValueError, match="unit"):
+        VisualData.model_validate(payload)
+
+
+def test_a_channel_that_names_a_mark_the_document_lacks_is_refused() -> None:
+    """The browser would draw a bar short, and be right to."""
+    payload = _visual_data()
+    payload["encoding"]["category"].append("m99")
+
+    with pytest.raises(ValueError, match="does not carry"):
+        VisualData.model_validate(payload)
+
+
+def test_a_mark_nothing_draws_is_refused_rather_than_shipped() -> None:
+    """Bytes on the wire that reach no pixel. Either the plan or the channel is wrong."""
+    payload = _visual_data()
+    payload["encoding"]["category"] = payload["encoding"]["category"][:-1]
+
+    with pytest.raises(ValueError, match="no channel draws"):
+        VisualData.model_validate(payload)
+
+
+def test_one_mark_may_not_be_drawn_in_two_channels() -> None:
+    """A name that is also a length draws a bar whose label is its own size."""
+    payload = _visual_data()
+    payload["encoding"]["entity"] = [payload["encoding"]["category"][0]]
+
+    with pytest.raises(ValueError, match="two channels"):
+        VisualData.model_validate(payload)
+
+
+def test_two_marks_may_not_share_an_id() -> None:
+    """The channels address marks by id, so a repeat makes a channel ambiguous."""
+    payload = _visual_data()
+    payload["marks"][1]["mark_id"] = payload["marks"][0]["mark_id"]
+
+    with pytest.raises(ValueError, match="share one id"):
+        VisualData.model_validate(payload)
+
+
+def test_a_derived_mark_is_drawn_at_the_figure_its_chain_computed() -> None:
+    """Otherwise the bar and the provenance under it are two different numbers."""
+    payload = _visual_data()
+    figure = payload["encoding"]["quantity"][0]
+    chain = _derived(payload, "99", "mw")
+    for mark in payload["marks"]:
+        if mark["mark_id"] == figure:
+            mark["element_id"] = None
+            mark["derived"] = chain
+
+    with pytest.raises(ValueError, match="chain computed"):
+        VisualData.model_validate(payload)
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:

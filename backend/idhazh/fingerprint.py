@@ -31,7 +31,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import InferenceConfig, ModelRef
+from idhazh.contracts.app_config import InferenceConfig, ModelEntry, ModelRef
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
 
@@ -171,20 +171,27 @@ def runtime_flags_spelling(inference: InferenceConfig) -> str:
 
 
 class Undigested(NamedTuple):
-    """Why one inference knob sits outside the recorded manifest."""
+    """Why one model-shaped knob sits outside the recorded manifest."""
 
     moves_logits: bool
     reason: str
 
 
-#: Every `InferenceConfig` knob the manifest does not carry, and why each one is out.
+#: Every `InferenceConfig` and `ModelEntry` field the manifest does not carry,
+#: and why each one is out.
 #:
-#: Every knob left here is one that cannot move an output. The five that could -
-#: `cache_type_k`, `cache_type_v`, `flash_attention`, `n_parallel` and
-#: `n_threads_batch` - were listed here as known blind spots until 2026-08-26
-#: and are now folded into `runtime_flags`.
+#: Every field left here is one that cannot move an output. The five inference
+#: knobs that could - `cache_type_k`, `cache_type_v`, `flash_attention`,
+#: `n_parallel` and `n_threads_batch` - were listed here as known blind spots
+#: until 2026-08-26 and are now folded into `runtime_flags`.
 #:
-#: The set is closed: a knob that is neither here nor recorded fails the
+#: **The universe is both shapes, not just `InferenceConfig`.** It was the
+#: inference block alone until 2026-09-13, which was closed over the wrong set
+#: the moment a model-shaped fact lived outside that block: `turns` moved onto
+#: the entry and would have sat in no stamp and in no closed set, with no test
+#: saying so.
+#:
+#: The set is closed: a field that is neither here nor recorded fails the
 #: contract test in `backend/tests/test_fingerprint.py`.
 NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
     {
@@ -193,6 +200,21 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             "Names the weights the block is set for. The manifest already carries those "
             "bytes as model_sha256, so recording it twice would say a swap happened "
             "twice.",
+        ),
+        "file": Undigested(
+            False,
+            "The filename inside the repository. model_sha256 is the bytes that were "
+            "opened, and a rename cannot move one of them.",
+        ),
+        "hf_base_repo": Undigested(
+            False,
+            "Where a fine-tune would train from. Nothing in a digest run reads it, and "
+            "the weights it points at are not the weights that decoded.",
+        ),
+        "id": Undigested(
+            False,
+            "The alias the server is started under. It labels a run; model_sha256 says "
+            "which bytes produced it, and renaming the entry renames no logit.",
         ),
         "load_mode": Undigested(
             False, "mmap and mlock move where the weights sit, not what they hold."
@@ -209,12 +231,35 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
         "priority": Undigested(
             False, "Scheduler priority changes when work runs, not what it produces."
         ),
+        "repo": Undigested(
+            False,
+            "Where the file was pulled from. The download is checked against "
+            "model_sha256, so the source cannot change what ran.",
+        ),
+        "revision": Undigested(
+            False,
+            "The hub commit the download names. It is what makes model_sha256 "
+            "reproducible; it is not a second statement about the bytes.",
+        ),
         "startup_warmup": Undigested(
             False, "A pass before the run. It decodes nothing that we keep."
         ),
         "request_timeout_minutes": Undigested(
             False, "A clock bound on one call. It stops a call, it does not reword one."
         ),
+    }
+)
+
+#: Where a `ModelEntry` field arrives in the manifest when it is not carried
+#: under its own name. `turns` is folded into `prompt_sha256` because
+#: `classify.calls.prompt_inputs` renders both turns through the envelope, and
+#: that is the whole of the envelope's reach: `run_manifest.ModelUse` embeds the
+#: recorded `ModelRef`, which carries no markers at all.
+MODEL_FIELD_SPELLING: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "inference": "sampling",
+        "sha256": "model_sha256",
+        "turns": "prompt_sha256",
     }
 )
 
@@ -231,6 +276,22 @@ def digested_inference_fields() -> frozenset[str]:
     folded = {pair.split("=", 1)[0] for spelling in spellings for pair in spelling.split(";")}
     reaches_the_digest = frozenset(PipelineInputs.model_fields) | frozenset(folded)
     return frozenset(InferenceConfig.model_fields) & reaches_the_digest
+
+
+def digested_model_fields() -> frozenset[str]:
+    """The `ModelEntry` fields the manifest carries, read back from the manifest.
+
+    `quantisation` reaches it under its own name. The other three arrive under a
+    manifest field of a different name, and `MODEL_FIELD_SPELLING` is where that
+    is written down - each entry is checked against `PipelineInputs`, so a
+    manifest field that is renamed away drops its claim rather than keeping it.
+    """
+    carried = frozenset(PipelineInputs.model_fields)
+    return frozenset(
+        name
+        for name in ModelEntry.model_fields
+        if name in carried or MODEL_FIELD_SPELLING.get(name, "") in carried
+    )
 
 
 def build_inputs(

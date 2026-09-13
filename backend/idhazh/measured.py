@@ -34,13 +34,24 @@ asserted instead. No means it is a design statement and it is welcome. And where
 a number must exist, prefer putting the direction it may not move into the type -
 `retention.pages_hard_cap_mb` is bounded `le=PAGES_HARD_CAP_MB`, so the loose
 failure is unrepresentable rather than merely unlikely.
+
+**A count of tokens also says which weights counted them.** A second and a
+resident set belong to the box that took them, so a timing record names hardware
+and nothing else. A token count belongs to the tokenizer, the tokenizer ships
+inside the weights, and a swap therefore invalidates every such reading at one
+stroke while leaving each one looking fine. So a tokenizer reading is a
+`TokenizerMeasured` and carries the weights digest as `subject`, and
+`refuse_a_reading_taken_against_other_weights` is what says so out loud.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from typing import Final, Literal
+
+from idhazh.contracts.base import Sha256
 
 Kind = Literal["measurement", "judgement"]
 
@@ -61,6 +72,123 @@ class Measured:
         for field in ("measures", "method", "when_it_fires", "why_a_number"):
             if not getattr(self, field).strip():
                 raise ValueError(f"{field} is empty: a number with no {field} is an estimate")
+
+
+@dataclass(frozen=True, kw_only=True)
+class TokenizerMeasured(Measured):
+    """A reading taken through a model's tokenizer, pinned to the weights that gave it.
+
+    `subject` has no default on purpose. A tokenizer reading that omits it fails
+    `mypy backend`, and a pin on a timing record cannot be written at all, so
+    neither bad state needs a refusal test - the type refuses both. `kw_only` is
+    on this class alone, so `Measured` and every call site of it are untouched.
+
+    Only the pattern is not checked here. `Sha256` is a pydantic alias and does
+    nothing in a plain dataclass, and the gate below already refuses a digest
+    that is not the configured one, which a malformed digest never is.
+    """
+
+    subject: Sha256
+
+
+#: The weights every tokenizer reading below was taken against, named for the file
+#: rather than for the configuration slot it currently fills. A swap does not edit
+#: this line - it adds the new weights beside it and retakes the readings that move.
+#: `config/idhazh.json` is where the value in force lives; this is a historical
+#: fact about a reading and is a literal for that reason (Guardrail #6).
+QWEN35_9B_Q4_K_M: Final[Sha256] = "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+
+
+@dataclass(frozen=True)
+class Unreached:
+    """A tokenizer-shaped constant that lives outside this module, so the gate is blind to it."""
+
+    module: str
+    constant: str
+    why: str
+
+
+#: What the gate cannot see: three constants written as bare literals in other
+#: modules, every one of them shaped by a vocabulary, none of them a record here.
+#: The 8B-to-9B move on 2026-08-27 already left all three behind, so this is a
+#: correction rather than a precaution.
+#:
+#: **Removal condition:** row #13 of `TODO/20260913-28-model-swap-plan.md` retakes
+#: all three against the configured weights and brings them in here as records.
+#: This tuple goes with them.
+UNREACHED_BY_THIS_GATE: Final = (
+    Unreached(
+        module="backend/idhazh/contracts/taxonomy.py",
+        constant="DefinitionText",
+        why=(
+            "bounded at 240 characters, sized on 30 definition sentences that measured "
+            "805 tokens together against the retired Qwen3-8B-Q4_K_M on 2026-09-11"
+        ),
+    ),
+    Unreached(
+        module="backend/idhazh/contracts/visual.py",
+        constant="WORST_CASE_REPLY_CHARACTERS",
+        why=(
+            "3,767, and the empty-role cost it rests on - 28 tokens on a plan that "
+            "declines and 23 on a four-bar one - tokenized against the retired "
+            "Qwen3-8B-Q4_K_M on 2026-09-09. Both output budgets derive from it"
+        ),
+    ),
+    Unreached(
+        module="backend/idhazh/extract.py",
+        constant="TOKENS_PER_WORD",
+        why=(
+            "1.3, which places every truncation point in the pipeline. A tokens-a-word "
+            "ratio is a property of the vocabulary and moves when the vocabulary does"
+        ),
+    ),
+)
+
+
+def refuse_a_reading_taken_against_other_weights(
+    *, configured_sha256: str, records: Iterable[Measured]
+) -> None:
+    """Refuse any tokenizer reading pinned to weights the configuration no longer names.
+
+    Both arguments are handed in rather than read here, for two reasons.
+    `contracts/` is the bottom of the dependency graph and cannot import this
+    module, so an `AppConfig` validator is not an available placement and this
+    module opens no file. And a gate that reads its own inputs cannot be driven
+    from a built record, which is what the arm proving it bites needs
+    (`CLAUDE.md` section 13).
+
+    The refusal carries `UNREACHED_BY_THIS_GATE`. This gate has exactly one
+    trigger - the configured digest no longer matching a pinned reading - and
+    that same swap is what makes those three stale, so they are the rest of the
+    same failure rather than noise on an unrelated one. The person swapping a
+    model is reading `config/idhazh.json` and a failing gate, not this module.
+    """
+    stale = [
+        record
+        for record in records
+        if isinstance(record, TokenizerMeasured) and record.subject != configured_sha256
+    ]
+    if not stale:
+        return
+    readings = "\n".join(
+        f"  - {record.measures}\n"
+        f"    taken {record.taken_on.isoformat()} against {record.subject}\n"
+        f"    to retake it: {record.when_it_fires}"
+        for record in stale
+    )
+    unreached = "\n".join(
+        f"  - {site.module} {site.constant} - {site.why}" for site in UNREACHED_BY_THIS_GATE
+    )
+    raise ValueError(
+        f"{len(stale)} tokenizer reading(s) name weights the configuration does not.\n"
+        f"the configured weights are {configured_sha256}\n"
+        f"{readings}\n"
+        "Retake each one against the configured weights and replace the record. A reading "
+        "is a variable and not a log entry, so the old one goes (Guardrail #10).\n"
+        f"{len(UNREACHED_BY_THIS_GATE)} more tokenizer-shaped constants sit outside this "
+        "module and this gate cannot reach them. The same swap made them stale:\n"
+        f"{unreached}"
+    )
 
 
 SITE_GROWTH_KB_A_DAY: Final = Measured(
@@ -111,19 +239,24 @@ WARNING_DAYS_REQUIRED: Final = Measured(
     kind="judgement",
 )
 
-PROMPT_OVERHEAD_TOKENS: Final = Measured(
+PROMPT_OVERHEAD_TOKENS: Final = TokenizerMeasured(
     value=997,
     measures="what the summarize prompt costs before a word of the article reaches it",
     taken_on=date(2026, 9, 9),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "a least-squares fit of input_tokens against source_words over the 4,117 "
         "published items in state/item-health/2026-09.csv, written by stock "
         "ubuntu-latest runners. The shortest items on the shard - 3 words each - "
-        "measured 980 to 985 tokens directly, so the constant reads off the data twice."
+        "measured 980 to 985 tokens directly, so the constant reads off the data twice. "
+        "Every row on that shard was served by the weights in `subject`, which have "
+        "been the configured ones since 2026-08-27."
     ),
     when_it_fires=(
-        "the system prompt, the fence or the instructions changed. Re-fit against the "
-        "newest month shard; the window-fit check reads this value and the cap together."
+        "the system prompt, the fence or the instructions changed, or the weights moved. "
+        "Re-fit against the newest month shard; the window-fit check reads this value "
+        "and the cap together. A different vocabulary counts the same prompt "
+        "differently, so a swap retires this reading whatever the prompt says."
     ),
     why_a_number=(
         "it is a term in an arithmetic check that the context window fits the worst "
@@ -132,10 +265,11 @@ PROMPT_OVERHEAD_TOKENS: Final = Measured(
     ),
 )
 
-WORST_TOKENS_A_WORD: Final = Measured(
+WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
     value=1.585,
     measures="the highest tokens a word any published item has reached",
     taken_on=date(2026, 9, 9),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "(7,093 - 997) / 3,846 over the same shard. extract.truncate_to_tokens spends "
         "the cap at 1.3 tokens a word, so a body tokenizing above that overruns the "
@@ -144,8 +278,10 @@ WORST_TOKENS_A_WORD: Final = Measured(
         "causes trouble."
     ),
     when_it_fires=(
-        "an article tokenized harder than any before it. Raise this to what it "
-        "measured and re-check the cap against the window - the two are one decision."
+        "an article tokenized harder than any before it, or the weights moved. Raise "
+        "this to what it measured and re-check the cap against the window - the two are "
+        "one decision. A ratio of tokens to words is a property of the vocabulary as "
+        "much as of the prose, so a swap retires this reading on its own."
     ),
     why_a_number=(
         "the same arithmetic as PROMPT_OVERHEAD_TOKENS and the same answer: a ratio "
@@ -161,11 +297,11 @@ WORST_TOKENS_A_WORD: Final = Measured(
 #: tokenizes harder, the per-row rate when the menu's layout changes, and the
 #: seam when call 2's trailing turn is reworded. One number would hide which.
 #:
-#: All four were taken together on 2026-09-13 against
-#: `backend/models/Qwen3.5-9B-Q4_K_M.gguf` through `llama-server`'s own
+#: All four were taken together on 2026-09-13 through `llama-server`'s own
 #: `/tokenize`, on a laptop (i7-1265U, 32 GiB, four other agents live). A
 #: tokenizer reading is not a timing, so the hardware bounds nothing here: the
-#: same weights return the same token counts on a runner.
+#: same weights return the same token counts on a runner. Which weights is
+#: `subject` on each record, and `QWEN35_9B_Q4_K_M` is what names the file.
 #:
 #: **The cap-length article had to be built.** The committed corpus's longest
 #: body is 3,846 words against a cut point of 7,692, so every reading below comes
@@ -174,10 +310,11 @@ WORST_TOKENS_A_WORD: Final = Measured(
 #: `CLAUDE.md` section 13 is the rule: where the awkward shape is the point, the
 #: shape is built, because a built one carries the case the archive never produced.
 
-CALL_ONE_SCAFFOLD_TOKENS: Final = Measured(
+CALL_ONE_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     value=2167,
     measures="what call 1's prompt costs before a word of the article or a menu row lands",
     taken_on=date(2026, 9, 13),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "rendered `build_call_one_request` over a seven-word article with an empty "
         "candidate menu and tokenized the whole prompt. The system turn alone is "
@@ -186,8 +323,8 @@ CALL_ONE_SCAFFOLD_TOKENS: Final = Measured(
         "997 because call 1's system turn carries both jobs since row #3e."
     ),
     when_it_fires=(
-        "a prompt file under backend/idhazh/prompts/ changed, or a turn marker moved. "
-        "Re-render the same seven-word article and tokenize it again."
+        "a prompt file under backend/idhazh/prompts/ changed, a turn marker moved, or "
+        "the weights moved. Re-render the same seven-word article and tokenize it again."
     ),
     why_a_number=(
         "it is the constant term of the arithmetic that checks the two-call sequence "
@@ -196,10 +333,11 @@ CALL_ONE_SCAFFOLD_TOKENS: Final = Measured(
     ),
 )
 
-CALL_ONE_BODY_TOKENS_A_WORD: Final = Measured(
+CALL_ONE_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     value=2.2285,
     measures="the article and its sentence addresses, per word of the cut article",
     taken_on=date(2026, 9, 13),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "(15,014 + 2,127) / 7,692 on the densest of the eight cap-length builds. The "
         "body is 15,014 tokens and the `[sNN] ` addresses in front of each sentence "
@@ -207,8 +345,9 @@ CALL_ONE_BODY_TOKENS_A_WORD: Final = Measured(
         "top of it is what a window has to hold."
     ),
     when_it_fires=(
-        "prose tokenized harder than this, or `numbered_sentences` changed how it "
-        "addresses a sentence. Rebuild the cap-length arms and re-take the worst."
+        "prose tokenized harder than this, `numbered_sentences` changed how it "
+        "addresses a sentence, or the weights moved. Rebuild the cap-length arms and "
+        "re-take the worst."
     ),
     why_a_number=(
         "a ratio has to be a number to be multiplied by a word count. It moves when "
@@ -217,10 +356,11 @@ CALL_ONE_BODY_TOKENS_A_WORD: Final = Measured(
     ),
 )
 
-CALL_ONE_MENU_TOKENS_A_ROW: Final = Measured(
+CALL_ONE_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
     value=34.115,
     measures="one row of call 1's candidate menu, in tokens",
     taken_on=date(2026, 9, 13),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "8,665 / 254 on the worst of the eight cap-length builds; the spread across "
         "them is 27.2 to 34.1. A row is `[element_id] excerpt = value unit (sentence "
@@ -231,8 +371,9 @@ CALL_ONE_MENU_TOKENS_A_ROW: Final = Measured(
         "7,692 words against a cap of 256."
     ),
     when_it_fires=(
-        "`candidate_menu` changed what a row prints, or `element_id` changed length. "
-        "Re-tokenize the menu of the same builds and re-take the worst per row."
+        "`candidate_menu` changed what a row prints, `element_id` changed length, or "
+        "the weights moved. Re-tokenize the menu of the same builds and re-take the "
+        "worst per row."
     ),
     why_a_number=(
         "it is the per-row term of the same arithmetic, and it is the one term that "
@@ -242,10 +383,11 @@ CALL_ONE_MENU_TOKENS_A_ROW: Final = Measured(
     ),
 )
 
-CALL_TWO_SEAM_TOKENS: Final = Measured(
+CALL_TWO_SEAM_TOKENS: Final = TokenizerMeasured(
     value=58,
     measures="what call 2 adds in front of its own reply, beyond call 1's prompt and reply",
     taken_on=date(2026, 9, 13),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "tokenized call 2's whole prompt and subtracted call 1's prompt and the reply "
         "between them, over both plan states and two reply strings. 53 with the plan "
@@ -253,8 +395,8 @@ CALL_TWO_SEAM_TOKENS: Final = Measured(
         "suppressed shape is the one that has to fit when the window is tightest."
     ),
     when_it_fires=(
-        "`call_two_user_turn` was reworded or a turn marker moved. Re-tokenize both "
-        "prompts on the same build and subtract again."
+        "`call_two_user_turn` was reworded, a turn marker moved, or the weights moved. "
+        "Re-tokenize both prompts on the same build and subtract again."
     ),
     why_a_number=(
         "it is the last term of the two-call sum. Small, and worth a record anyway: "

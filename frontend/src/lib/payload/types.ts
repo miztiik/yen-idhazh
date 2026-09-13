@@ -25,8 +25,64 @@ export type TimeSource = 'feed' | 'first_seen' | 'unknown';
 export interface DigestVisual {
 	kind: string;
 	state: string;
-	path: string | null;
+	/** Where this visual's marks are, relative to `frontend/public/`. Null where
+	 * the compile landed and the write did not, and **absent** on a day published
+	 * before the file existed - both readings are the same one: no data carried,
+	 * never an empty chart. */
+	data_path?: string | null;
+	/** Where the drawing was, before the reader's browser took over the drawing.
+	 *
+	 * **Retired from the contract on 2026-09-13** and kept here as the read side:
+	 * the 24 days published before that carry the key on every rendered visual,
+	 * and the build still reads those files off disk. Nothing points anywhere -
+	 * the 495 drawings are deleted - so the build asks for a file that is not
+	 * there and the story is simply shorter. It goes with the build-time inlining
+	 * that reads it. */
+	path?: string | null;
 	alt: string | null;
+}
+
+/** One thing a drawing puts on the page, mirroring `schemas/visual-data.schema.json`.
+ *
+ * A mark is one entry in one channel - a bar's name or a bar's length, never
+ * both halves of a bar - which is what gives a channel a length of its own.
+ * `element_id` and `derived` are the provenance and exactly one of them is set;
+ * the browser draws `text` and `value` and never reads inside the chain. */
+export interface VisualMark {
+	mark_id: string;
+	text: string | null;
+	value: string | null;
+	unit: string | null;
+	element_id: string | null;
+	derived: unknown | null;
+}
+
+/** Which marks fill which channel. Every role a key, an unused one empty. */
+export interface VisualEncoding {
+	category: string[];
+	quantity: string[];
+	quantity_x: string[];
+	time: string[];
+	series: string[];
+	size: string[];
+	bins: string[];
+	entity: string[];
+	event_label: string[];
+}
+
+/** One published visual's marks, as `digest/<Y>/<M>/<D>/<item_id>.json` holds them.
+ *
+ * Fetched rather than inlined, and checked by `refusedVisualData` in
+ * `./drawing` before anything is drawn from it. `renderer_version` is what the
+ * page checks it knows: the drawing contract can move, and a page that guessed
+ * at a later one would draw a chart from data that means something else. */
+export interface VisualData {
+	version: string;
+	item_id: string;
+	type: string;
+	renderer_version: string;
+	marks: VisualMark[];
+	encoding: VisualEncoding;
 }
 
 /** A visual as the build hands it to a component: the committed fields, plus

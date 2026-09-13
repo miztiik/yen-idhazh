@@ -1,67 +1,66 @@
 import { expect, test, type Page } from '@playwright/test';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { keepDrawings } from '../src/lib/day-shape';
-import { publishedVisual, refusedDrawing } from '../src/lib/payload/drawing';
-import { projectDay } from '../src/lib/payload/project';
-import { whenNear } from '../src/lib/reveal';
-import { dayShell, publishedDates } from '../src/lib/server/payload';
-import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
+import { publishedVisualData, refusedVisualData } from '../src/lib/payload/drawing';
+import { drawBars } from '../src/lib/visual/bar';
+import type { VisualData } from '../src/lib/payload/types';
 import { dayReady } from './support/day-ready';
 
 /**
- * A published drawing has to read the page it is printed on.
+ * The reader's browser draws the chart, and the pipeline never draws one.
  *
- * Until 2026-09-05 every chart shipped inside an `img`. That is a separate
- * document: it reads none of the page's custom properties, so the renderer's
- * baked colours were the only colours it could ever have - black axis type on a
- * near-black card. The stories a prerendered document carries now hold the
- * drawing itself, and the page repaints it from its own tokens.
+ * Owner ruling, 2026-09-13. Until then the chart was an SVG the pipeline
+ * rendered at build time, committed, and the page inlined so it could be
+ * repainted from the page's own tokens. Now the payload carries a pointer, the
+ * browser fetches the marks, and `$lib/visual/bar` decides where every one of
+ * them sits.
  *
- * **The grid-line arm below is the one part of this file no reader has ever
- * needed.** Counted 2026-09-05 over all 351 drawings the 15 committed days
- * hold: every one carries a bar, an axis label and an axis line, and none
- * carries a grid line, because `chart_spec()` writes `"axis": {"grid": false}`
- * on every spec it builds. The canary fixture's spec is hand-written and leaves
- * the grid at the renderer's default, so this file is the only place
- * `--chart-grid` is exercised at all. It is checked anyway, as insurance for
- * the day a renderer starts emitting a grid - baked at #ddd, that grid would be
- * near-white across the bars on the dark theme.
+ * **What the reader gives up is asserted here rather than described.** A page
+ * that never runs a script draws no chart, so the figure's `aria-label` is the
+ * whole of what such a reader receives - and the arm below reads it back off a
+ * real page to say it is there.
  *
- * **The `img` is gone rather than kept for the stories past that seed.** Those
- * fetch the same file and inline the same markup, so one scroll shows one
- * treatment; a drawing that does not arrive leaves the story shorter and draws
- * nothing at all. The canary day is eight stories against a seed of fifteen, so
- * nothing here can reach that fetch in a browser - what this file holds is the
- * refusal the browser runs before the fetched markup is allowed into the
- * document, and the page-wide assertion that no story is left on an image.
- *
- * **The oracle is an equality against a token, never against a hex.** Each test
- * below plants a probe element, sets its `background-color` to the same custom
- * property the stylesheet routes the mark to, and reads what the document
- * computed. The two themes give that property two different values, so a
- * drawing that kept a baked colour fails one arm whichever colour it kept - and
- * a test written against a literal would have to be edited every time the
- * palette moves, which is how a colour test stops being one.
- *
- * **The watcher arm at the foot of this file is driven directly rather than in
- * a browser, for the same reason the fetch is not exercised here.** A waiting
- * story is one past the document's seed, the seed is fifteen and the canary day
- * is eight, so a canary page holds no waiting story and a count taken there
- * would read zero however many watchers the page builds. The reveal is a rule
- * the fixture cannot stress, so it lives in its own module and the test drives
- * it with a stand-in watcher; the browser half is the section 12 smoke on the
- * real build, where a day has stories past the seed.
+ * Driven from the canary day, never from `frontend/public/digest/` - the cost of
+ * this file may not rise because a run published more (Guardrail #12).
  */
 
 const ROOT = resolve(process.cwd(), '..');
 const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
 
-/** The canary day, which publishes one chart and one diagram. */
+/** The canary day, which publishes two charts and one that never landed. */
 const DAY = '/2026-08-20/';
 
 const THEMES = ['light', 'dark'] as const;
+
+/** One mark as the page drew it, in the drawing's own coordinate space. */
+interface DrawnBar {
+	name: string;
+	stated: string;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** Every bar on the page, read off the elements the browser actually placed. */
+function drawnBars(page: Page): Promise<DrawnBar[][]> {
+	return page.evaluate(() =>
+		[...document.querySelectorAll('main article figure svg')].map((svg) => {
+			const names = [...svg.querySelectorAll('text.name')].map((node) => node.textContent ?? '');
+			const figures = [...svg.querySelectorAll('text.figure')].map(
+				(node) => node.textContent ?? ''
+			);
+			return [...svg.querySelectorAll('rect.bar')].map((rect, at) => ({
+				name: names[at] ?? '',
+				stated: figures[at] ?? '',
+				x: Number(rect.getAttribute('x')),
+				y: Number(rect.getAttribute('y')),
+				width: Number(rect.getAttribute('width')),
+				height: Number(rect.getAttribute('height'))
+			}));
+		})
+	);
+}
 
 /** What the document computes for a token, read the way the page reads it.
  *
@@ -84,36 +83,104 @@ function tokenColour(page: Page, token: string): Promise<string> {
 function painted(page: Page, selector: string, property: 'fill' | 'stroke'): Promise<string[]> {
 	return page.evaluate(
 		({ selector: query, property: name }) =>
-			[...document.querySelectorAll(`main figure ${query}`)].map(
-				(node) => getComputedStyle(node).getPropertyValue(name)
+			[...document.querySelectorAll(`main figure ${query}`)].map((node) =>
+				getComputedStyle(node).getPropertyValue(name)
 			),
 		{ selector, property }
 	);
 }
 
 async function wearing(page: Page, theme: string): Promise<void> {
-	await page.evaluate((chosen) => document.documentElement.setAttribute('data-theme', chosen), theme);
+	await page.evaluate(
+		(chosen) => document.documentElement.setAttribute('data-theme', chosen),
+		theme
+	);
 	// A locator assertion rather than a polled evaluate: the client router does
 	// its own first navigation, and an evaluate under a poll loses its context to
 	// it (docs/reference/agent-notes.md).
 	await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 }
 
-test.describe('the drawing is in the document', () => {
-	/** A dated page holds nothing until its day arrives.
-	 *
-	 * Until 2026-09-09 the document carried the head of its day, so a `goto` was
-	 * enough to read a story off the page. One shell answers every dated address
-	 * now and the day is fetched, so an assertion made straight after `goto`
-	 * measures an empty page - and an absence check passes on one by accident.
-	 */
-	const drawn = async (page: Page, route: string) => {
-		await page.goto(route);
-		await dayReady(page);
-	};
+/** The day, with every chart it is going to draw already drawn.
+ *
+ * **The scroll is not optional.** A story asks for its marks when it is nearly
+ * on screen, so a `goto` and a wait draws whatever happened to start near the
+ * top - and a comparison taken over that is a comparison over a different set
+ * of stories each time. One viewport at a time, because a jump to the bottom
+ * steps over every slot in between
+ * (`docs/reference/agent-notes/browser.md`).
+ *
+ * **It waits for the count to settle rather than for the slots to empty.** A
+ * story whose marks were refused keeps its zero-height slot for ever, which is
+ * the degrade rule working - so a wait on "no slot is left" can only pass on a
+ * day where nothing was refused, which is the one case the refusal arms are not
+ * testing.
+ */
+async function drawnDay(page: Page, route = DAY): Promise<void> {
+	await page.goto(route);
+	await dayReady(page);
+	await page.evaluate(async () => {
+		for (let at = 0; at < document.body.scrollHeight; at += window.innerHeight) {
+			window.scrollTo(0, at);
+			await new Promise((wake) => setTimeout(wake, 60));
+		}
+		window.scrollTo(0, 0);
+	});
+	let settled = -1;
+	await expect
+		.poll(async () => {
+			const now = await page.locator('main article figure svg').count();
+			const same = now === settled;
+			settled = now;
+			return same;
+		})
+		.toBe(true);
+}
 
-	test('a seeded story carries one svg and no image', async ({ page }) => {
-		await drawn(page, DAY);
+/** Every marks file the canary day declares, in payload order.
+ *
+ * Read off the committed canary payload rather than off the page, so an arm
+ * that stops a fetch still knows what the day promised.
+ */
+function declared(): string[] {
+	const day = join(CANARY, '2026', '08', '20');
+	const payload = JSON.parse(readFileSync(join(day, 'digest.json'), 'utf8')) as {
+		items: { visual: { state: string; data_path?: string | null } | null }[];
+	};
+	const paths: string[] = [];
+	for (const item of payload.items) {
+		if (item.visual?.state === 'rendered' && item.visual.data_path) paths.push(item.visual.data_path);
+	}
+	return paths;
+}
+
+/** The first bar name of every chart the page drew, which names the chart. */
+function drawnCharts(page: Page): Promise<string[]> {
+	return page.evaluate(() =>
+		[...document.querySelectorAll('main article figure svg')].map(
+			(svg) => svg.querySelector('text.name')?.textContent ?? ''
+		)
+	);
+}
+
+/** The marks file behind a chart the page drew, found by its first bar name.
+ *
+ * The page runs newest first and the payload publishes in scored order, so the
+ * two lists are not the same order - and an arm that assumed they were would
+ * refuse the wrong file and pass for the wrong reason.
+ */
+function fileDrawing(name: string): string {
+	for (const path of declared()) {
+		const data = JSON.parse(readFileSync(join(CANARY, '..', path), 'utf8')) as VisualData;
+		const first = data.marks.find((mark) => mark.mark_id === data.encoding.category[0]);
+		if ((first?.text ?? '') === name) return path;
+	}
+	throw new Error(`no canary marks file draws a first bar called ${JSON.stringify(name)}`);
+}
+
+test.describe('the browser draws the chart', () => {
+	test('a story with marks carries one drawing and no image', async ({ page }) => {
+		await drawnDay(page);
 		const figures = await page.evaluate(() =>
 			[...document.querySelectorAll('main article figure')].map((figure) => ({
 				svg: figure.querySelectorAll('svg').length,
@@ -124,24 +191,20 @@ test.describe('the drawing is in the document', () => {
 		expect(figures.length, 'the canary day drew no visual at all').toBeGreaterThan(0);
 		for (const figure of figures) {
 			expect(figure.svg, 'a figure holds none or more than one drawing').toBe(1);
-			expect(figure.img, 'a seeded story is still on the image carrier').toBe(0);
+			expect(figure.img, 'a story arrived on the image carrier').toBe(0);
 		}
 	});
 
 	test('no story anywhere on the page is left on an image', async ({ page }) => {
-		// The half of row 2's oracle a canary day can answer. The carrier is gone
-		// rather than kept for the stories past the seed, so the page-wide count is
-		// zero and not "zero among the seeded ones" - two treatments on one scroll
-		// is what reads as a broken site.
-		await drawn(page, DAY);
+		await drawnDay(page);
 		await expect(page.locator('main img')).toHaveCount(0);
 	});
 
 	test('the drawing keeps the sentence that repeats its numbers', async ({ page }) => {
-		// The visual is never the only carrier of a fact, and an inlined svg has
-		// no `alt` to carry it. The label moves to the figure, which `role="img"`
-		// makes one named image rather than a tree of unnamed marks.
-		await drawn(page, DAY);
+		// The visual is never the only carrier of a fact, and it is the WHOLE of
+		// what a reader with JavaScript off receives - the drawing is built by a
+		// script now, and this sentence is not.
+		await drawnDay(page);
 		const labels = await page
 			.locator('main article figure[role="img"]')
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
@@ -149,66 +212,122 @@ test.describe('the drawing is in the document', () => {
 		for (const label of labels) expect(label.length).toBeGreaterThan(0);
 	});
 
-	test('a drawing is fetched once and inlined, never left on an image', async ({ page }) => {
-		// **This is what a dated page stopped getting for free on 2026-09-09.**
-		// Until then the document carried the head of its day with each drawing
-		// read off disk and serialised into it, so a seeded story cost no request
-		// at all - and this asserted exactly that. One shell answers every dated
-		// address now, so the document carries no story and every drawing on a
-		// dated page is fetched. That is the trade the row makes, and hiding it
-		// behind a deleted test would be the dishonest half of it.
-		//
-		// What survives is the guarantee that matters. A drawing is asked for ONCE
-		// - twice would be the carrier and the fetch both running - and what lands
-		// is inlined markup rather than an `<img>`, so it reads the page's own
-		// colours and runs the same refusal `$lib/payload/drawing.ts` runs at
-		// build time. `/` still inlines its seed's drawings and asks for none of
-		// them, which the arm below holds.
+	test('a visual is asked for once, as data rather than as a picture', async ({ page }) => {
 		const asked: string[] = [];
 		page.on('request', (request) => {
-			if (request.url().endsWith('.svg')) asked.push(request.url());
+			const url = request.url();
+			if (/\/digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9-]+\.json$/.test(url)) asked.push(url);
 		});
 		await page.goto(DAY, { waitUntil: 'networkidle' });
 
-		const drawings = await page.locator('main article figure svg').count();
-		expect(drawings, 'the canary day drew no visual at all').toBeGreaterThan(0);
-		expect(asked.length, 'a drawing was asked for more than once').toBe(new Set(asked).size);
-		await expect(page.locator('main img'), 'a drawing arrived on the image carrier').toHaveCount(0);
+		expect(asked.length, 'no story asked for its marks').toBeGreaterThan(0);
+		expect(asked.length, 'a visual was asked for more than once').toBe(new Set(asked).size);
+		await expect(page.locator('main img'), 'a drawing arrived on an image').toHaveCount(0);
+		expect(
+			await page.locator('main article figure svg rect.bar').count(),
+			'nothing was drawn from what arrived'
+		).toBeGreaterThan(0);
 	});
 
-	test('the home page asks for no drawing its own document carries', async ({ page }) => {
-		// `/` carried its whole day inline until 2026-09-10 and carries a seed now,
-		// so a story past the seed asks for its own drawing and that is the change
-		// working. What may never happen is the page asking again for a picture it
-		// already drew: a served day carries `visual.path` and never `visual.markup`,
-		// so a page that swapped the seed for the fetched day outright would throw
-		// away every drawing on screen and re-fetch it. This caught exactly that.
-		const asked: string[] = [];
-		page.on('request', (request) => {
-			if (request.url().endsWith('.svg')) asked.push(request.url());
+	test('a story whose marks never arrive is simply shorter', async ({ page }) => {
+		// The degrade rule, made to fire on a real page.
+		//
+		// **One story's file is refused and its sibling is left alone**, because a
+		// day where nothing drew is equally consistent with the arm never having
+		// run (`docs/reference/agent-notes/browser.md`). The control is the other
+		// chart, which has to still be there.
+		await drawnDay(page);
+		const both = await drawnCharts(page);
+		expect(both.length, 'the canary day drew fewer than two charts').toBe(2);
+
+		const refused = fileDrawing(both[0]);
+		await page.route(`**/${refused}`, (route) => route.fulfill({ status: 404, body: '' }));
+		await drawnDay(page);
+
+		const left = await drawnCharts(page);
+		expect(left, 'the refused story kept its chart').not.toContain(both[0]);
+		expect(left, 'the control story lost its chart too').toContain(both[1]);
+		await expect(page.locator('main img')).toHaveCount(0);
+		expect(
+			await page.locator('main article').count(),
+			'the stories went with the chart'
+		).toBeGreaterThan(0);
+	});
+
+	test('a story whose marks do not fit their type is simply shorter', async ({ page }) => {
+		// Four names against three figures: the mis-shaped payload the flat mark
+		// pool exists to be able to express, and the one the page has to refuse
+		// rather than draw short. Its sibling is the control again.
+		await drawnDay(page);
+		const both = await drawnCharts(page);
+		expect(both.length, 'the canary day drew fewer than two charts').toBe(2);
+
+		const broken = fileDrawing(both[0]);
+		await page.route(`**/${broken}`, async (route) => {
+			const data = (await (await route.fetch()).json()) as VisualData;
+			data.encoding.quantity = data.encoding.quantity.slice(0, -1);
+			return route.fulfill({ json: data });
 		});
-		await page.goto('/', { waitUntil: 'networkidle' });
-		expect(await page.locator('main article figure svg').count()).toBeGreaterThan(0);
-		expect(asked, 'the home page re-fetched a drawing its own document carries').toEqual([]);
+		await drawnDay(page);
+
+		const left = await drawnCharts(page);
+		expect(left, 'a mis-shaped document was drawn').not.toContain(both[0]);
+		expect(left, 'the control story lost its chart too').toContain(both[1]);
+	});
+});
+
+test.describe('THE ORACLE: one set of marks draws one picture', () => {
+	/**
+	 * The row's own oracle: the same data drawn twice in one page session and
+	 * once in a fresh page load produces the same marks - same count, same
+	 * values, same positions after rounding.
+	 *
+	 * It replaces a build-time one that compared two renders of a spec for byte
+	 * identity. That one passed for the wrong reason - its spec carried no title,
+	 * so it emitted no clip path, and the renderer's clip-path counter was
+	 * process-global. Determinism moved to the data and the drawing code, and
+	 * this is where it is now checked.
+	 */
+
+	test('a redraw in one session places every mark where the first draw did', async ({ page }) => {
+		await drawnDay(page);
+		const first = await drawnBars(page);
+		expect(first.flat().length, 'the canary day drew no bar').toBeGreaterThan(0);
+
+		// Away and back through the client router, so the component unmounts, the
+		// fetch runs again and the geometry is recomputed inside one page session.
+		await page.getByRole('link', { name: /archive/i }).first().click();
+		await page.waitForURL(/archive/);
+		await drawnDay(page);
+
+		expect(await drawnBars(page)).toEqual(first);
+	});
+
+	test('a fresh page load places every mark where the first load did', async ({ page }) => {
+		await drawnDay(page);
+		const first = await drawnBars(page);
+
+		await page.reload();
+		await dayReady(page);
+		await expect(page.locator('main article figure svg rect.bar').first()).toBeVisible();
+
+		expect(await drawnBars(page)).toEqual(first);
 	});
 });
 
 test.describe('THE ORACLE: a drawn bar is a figure the article states', () => {
 	/**
-	 * The canary day's first drawing is compiled rather than written out by
-	 * hand: `build_canary_day.py` puts the committed plan below through
-	 * `compile_bar` over the committed element table below, and the file the
-	 * page fetches is what came out. So the numbers on the page can be re-derived
-	 * here from the same table the compiler read, and a chart that shows numbers
-	 * can be told from a chart that shows THIS article's numbers.
-	 *
-	 * Driven from the canary, never from `frontend/public/digest/` - the cost of
-	 * this file may not rise because a run published more (Guardrail #12).
+	 * The canary day's first visual is compiled rather than written out by hand:
+	 * `build_canary_day.py` puts the committed plan below through `compile_bar`
+	 * over the committed element table below, and the file the page fetches is
+	 * what came out. So the numbers on the page can be re-derived here from the
+	 * same table the compiler read, and a chart that shows numbers can be told
+	 * from a chart that shows THIS article's numbers.
 	 */
 	const FIXTURES = resolve(ROOT, 'tests', 'fixtures', 'visual-validator');
-	const PLAN = JSON.parse(
-		readFileSync(join(FIXTURES, 'plans', 'passes.json'), 'utf8')
-	) as { encodings: { category: string[]; quantity: string[] } };
+	const PLAN = JSON.parse(readFileSync(join(FIXTURES, 'plans', 'passes.json'), 'utf8')) as {
+		encodings: { category: string[]; quantity: string[] };
+	};
 	const TABLE = JSON.parse(readFileSync(join(FIXTURES, 'tables', 'wind.json'), 'utf8')) as {
 		elements: { element_id: string; span_excerpt: string; value: string | null }[];
 	};
@@ -220,365 +339,196 @@ test.describe('THE ORACLE: a drawn bar is a figure the article states', () => {
 	const FIGURES = PLAN.encodings.quantity.map((id) => Number(STATED.get(id)?.value));
 
 	test('every bar on the page is as long as the figure its element states', async ({ page }) => {
-		await page.goto(DAY, { waitUntil: 'networkidle' });
-		await dayReady(page);
+		await drawnDay(page);
 
-		const figure = page.locator(
-			`main article figure[role="img"][aria-label*="${NAMES[0]}"]`
-		);
-		await expect(figure, `no drawing on ${DAY} is the compiled one`).toHaveCount(1);
-		await expect(figure.locator('.mark-rect > path')).toHaveCount(NAMES.length);
-
-		const bars = await figure.locator('.mark-rect > path').evaluateAll((paths) =>
-			paths.map((path) => ({
-				label: (path.getAttribute('aria-label') ?? '').replace(/^.*label: /, ''),
-				width: Number(/^M0,0h([0-9.]+)/.exec(path.getAttribute('d') ?? '')?.[1])
-			}))
+		const charts = await drawnBars(page);
+		const compiled = charts.find((bars) => bars[0]?.name === NAMES[0]);
+		expect(compiled, `no drawing on ${DAY} is the compiled one`).toBeDefined();
+		expect(compiled!.map((bar) => bar.name)).toEqual(NAMES);
+		expect(compiled!.map((bar) => bar.stated)).toEqual(
+			PLAN.encodings.quantity.map((id) => STATED.get(id)?.value)
 		);
 
-		// Each bar is named by the element's own characters, in the plan's order.
-		expect(bars.map((bar) => bar.label)).toEqual(NAMES);
-		// And one pixel is the same quantity on every one of them. A bar drawn
-		// from another story's figure, or a channel read in the wrong order, puts
-		// a second entry in this set.
-		const scales = bars.map((bar, at) => Number((bar.width / FIGURES[at]).toPrecision(9)));
-		expect(new Set(scales).size, `the bars are drawn at ${[...new Set(scales)]}`).toBe(1);
+		// One pixel is the same quantity on every bar. A bar drawn from another
+		// story's figure, or a channel read in the wrong order, puts a second
+		// entry in this set. The longest bar sets the scale, so it is compared
+		// against the longest figure rather than against an invented span.
+		const longest = Math.max(...FIGURES);
+		const widest = Math.max(...compiled!.map((bar) => bar.width));
+		for (const [at, bar] of compiled!.entries()) {
+			expect(
+				Math.abs(bar.width - Math.round((FIGURES[at] / longest) * widest)),
+				`${bar.name} is drawn at ${bar.width} for a figure of ${FIGURES[at]}`
+			).toBeLessThanOrEqual(1);
+		}
+	});
+});
+
+test.describe('THE ORACLE: a drawn string can be measured against the floor', () => {
+	/**
+	 * The second oracle, because the first one cannot see the reader. This row
+	 * asserts only that the browser path can be MEASURED at all - enforcing the
+	 * legibility floor is row #4's job, and row #4 cannot start until something
+	 * measurable is drawing.
+	 */
+	test.use({ viewport: { width: 390, height: 900 } });
+
+	test('every drawn string resolves to a size on a 390 px screen', async ({ page }) => {
+		await drawnDay(page);
+
+		const sizes = await page.evaluate(() => {
+			const floor = getComputedStyle(document.documentElement).getPropertyValue('--text-xs');
+			const probe = document.createElement('div');
+			probe.style.fontSize = floor;
+			document.body.append(probe);
+			const px = parseFloat(getComputedStyle(probe).fontSize);
+			probe.remove();
+			const drawn = [...document.querySelectorAll('main figure svg text')].map((node) => {
+				const rect = node.getBoundingClientRect();
+				return { text: node.textContent ?? '', px: rect.height };
+			});
+			return { floor: px, drawn };
+		});
+
+		expect(sizes.floor, '--text-xs did not resolve to a size').toBeGreaterThan(0);
+		expect(sizes.drawn.length, 'the drawing carries no string to measure').toBeGreaterThan(0);
+		for (const string of sizes.drawn) {
+			expect(string.px, `"${string.text}" has no measurable height`).toBeGreaterThan(0);
+		}
 	});
 });
 
 test.describe('THE ORACLE: every drawn colour comes from a token', () => {
 	test('a bar takes the page own chart colour, in both themes', async ({ page }) => {
-		await page.goto(DAY);
+		await drawnDay(page);
 		const seen: Record<string, string> = {};
 		for (const theme of THEMES) {
 			await wearing(page, theme);
 			const token = await tokenColour(page, '--chart-1');
-			const bars = await painted(page, '.mark-rect > path', 'fill');
+			const bars = await painted(page, 'rect.bar', 'fill');
 			expect(bars.length, `${theme}: the canary chart drew no bar`).toBeGreaterThan(0);
-			for (const bar of bars) expect(bar, `${theme}: a bar kept a baked colour`).toBe(token);
+			for (const bar of bars) expect(bar, `${theme}: a bar is not on the token`).toBe(token);
 			seen[theme] = token;
 		}
 		// The half a literal cannot pass. One hex satisfies one arm at most.
 		expect(seen.light, 'the two themes paint --chart-1 the same').not.toBe(seen.dark);
 	});
 
-	test('the axis type takes the page own text colour, in both themes', async ({ page }) => {
-		await page.goto(DAY);
+	test('the drawn type takes the page own text colours, in both themes', async ({ page }) => {
+		await drawnDay(page);
 		for (const theme of THEMES) {
 			await wearing(page, theme);
-			const token = await tokenColour(page, '--color-text-secondary');
-			const labels = await painted(page, '.mark-text text', 'fill');
-			expect(labels.length, `${theme}: the canary chart drew no axis type`).toBeGreaterThan(0);
-			for (const label of labels) {
-				expect(label, `${theme}: axis type kept the renderer's black`).toBe(token);
+			const quiet = await tokenColour(page, '--color-text-secondary');
+			const ink = await tokenColour(page, '--color-text');
+			expect(quiet, `${theme}: the two text tokens are the same colour`).not.toBe(ink);
+
+			const names = await painted(page, 'text.name', 'fill');
+			expect(names.length, `${theme}: the chart drew no bar name`).toBeGreaterThan(0);
+			for (const name of names) expect(name, `${theme}: a bar name is not on a token`).toBe(quiet);
+
+			const figures = await painted(page, 'text.figure', 'fill');
+			expect(figures.length, `${theme}: the chart drew no figure`).toBeGreaterThan(0);
+			for (const figure of figures) {
+				expect(figure, `${theme}: a figure is not on the page ink`).toBe(ink);
 			}
 		}
 	});
 
-	test('the axis lines and the grid take their own tokens, in both themes', async ({ page }) => {
-		await page.goto(DAY);
+	test('the axis line takes its own token, in both themes', async ({ page }) => {
+		await drawnDay(page);
 		for (const theme of THEMES) {
 			await wearing(page, theme);
 			const axis = await tokenColour(page, '--chart-axis');
-			const grid = await tokenColour(page, '--chart-grid');
-			expect(axis, `${theme}: an axis and its grid are the same colour`).not.toBe(grid);
-
-			const rules = await painted(page, '.mark-rule:not(.role-axis-grid) line', 'stroke');
-			expect(rules.length, `${theme}: the canary chart drew no axis line`).toBeGreaterThan(0);
-			for (const rule of rules) expect(rule, `${theme}: an axis line kept its baked grey`).toBe(axis);
-
-			const grids = await painted(page, '.role-axis-grid line', 'stroke');
-			expect(grids.length, `${theme}: the canary chart drew no grid line`).toBeGreaterThan(0);
-			for (const line of grids) expect(line, `${theme}: a grid line kept its baked grey`).toBe(grid);
-		}
-	});
-
-	test('a drawing that paints itself in currentColor takes the page ink', async ({ page }) => {
-		// The diagram, which is not a chart and carries no class to aim at. Inside
-		// an `img` its `currentColor` could only ever resolve to black; in the
-		// document it is whatever the card is printing in.
-		await page.goto(DAY);
-		for (const theme of THEMES) {
-			await wearing(page, theme);
-			const ink = await tokenColour(page, '--color-text');
-			const colours = await page.evaluate(() =>
-				[...document.querySelectorAll('main article figure svg')].map(
-					(node) => getComputedStyle(node).color
-				)
-			);
-			expect(colours.length).toBeGreaterThan(0);
-			for (const colour of colours) expect(colour, `${theme}: the drawing is not inheriting the page ink`).toBe(ink);
+			const rules = await painted(page, 'line.axis', 'stroke');
+			expect(rules.length, `${theme}: the chart drew no axis line`).toBeGreaterThan(0);
+			for (const rule of rules) expect(rule, `${theme}: an axis line is not on the token`).toBe(axis);
 		}
 	});
 });
 
-test.describe('the drawing survives the rest of the day arriving', () => {
-	/** What a reading route hands `keepDrawings`: the day it seeded, and the same
-	 * day as the served copy carries it - which is to say without the drawings,
-	 * because `project.ts` keeps three named fields of a visual and this is not
-	 * one of them. */
-	function seededAndServed(): { seeded: DigestItem[]; served: DigestItem[] } {
-		for (const date of publishedDates(CANARY)) {
-			const shell = dayShell(date, 500, { root: CANARY });
-			const seeded = shell?.seed ?? [];
-			if (!seeded.some((item) => (item.visual as SeededVisual | null)?.markup)) continue;
-			const served = JSON.parse(projectDay(JSON.stringify({ items: seeded }))).items as DigestItem[];
-			return { seeded, served };
-		}
-		throw new Error('no canary day seeds a drawing');
+test.describe('what may not be drawn', () => {
+	/** The compiled marks the canary publishes, read off disk. */
+	function compiled(): VisualData {
+		return JSON.parse(readFileSync(join(CANARY, '..', declared()[0]), 'utf8')) as VisualData;
 	}
 
-	test('a served story gets the drawing its seeded copy came with', () => {
-		// The defect this closes: `arrived = whole.items` swaps the seed out for
-		// the fetched copy, so a day page inlined its drawing and then replaced it
-		// with an image a second later.
-		const { seeded, served } = seededAndServed();
+	test('the ordinary document is accepted, so the refusals below mean something', () => {
+		const data = compiled();
 		expect(
-			served.some((item) => (item.visual as SeededVisual | null)?.markup),
-			'the served projection is carrying markup, which is the byte cost the seed exists to avoid'
-		).toBe(false);
-
-		const kept = keepDrawings(seeded, served);
-		const drawn = seeded.filter((item) => (item.visual as SeededVisual | null)?.markup);
-		expect(drawn.length).toBeGreaterThan(0);
-		for (const item of drawn) {
-			const after = kept.find((story) => story.item_id === item.item_id);
-			expect((after?.visual as SeededVisual | null)?.markup, `${item.item_id} lost its drawing`).toBe(
-				(item.visual as SeededVisual).markup
-			);
-		}
-		expect(kept.map((item) => item.item_id), 'the swap changed the list').toEqual(
-			served.map((item) => item.item_id)
-		);
-	});
-
-	test('a story the document never seeded is handed back untouched', () => {
-		const { served } = seededAndServed();
-		expect(keepDrawings([], served)).toBe(served);
-	});
-});
-
-test.describe('what may not be drawn, on either side of the move', () => {
-	/** The canary's first published drawing: the day it is on, the story it
-	 * belongs to, and the path it is served from. */
-	function drawn(): { date: string; itemId: string; path: string } {
-		for (const date of publishedDates(CANARY)) {
-			for (const item of dayShell(date, 500, { root: CANARY })?.seed ?? []) {
-				if (item.visual?.state === 'rendered' && item.visual.path) {
-					return { date, itemId: item.item_id, path: item.visual.path };
-				}
-			}
-		}
-		throw new Error('no canary day publishes a rendered visual');
-	}
-
-	/** That drawing's visual, after the file behind it was replaced.
-	 *
-	 * The whole canary tree is copied first, so the planted bytes can never
-	 * reach the tree a build reads.
-	 */
-	function planted(markup: string): SeededVisual | null {
-		const { date, itemId, path } = drawn();
-		const root = mkdtempSync(join(tmpdir(), 'item-visual-'));
-		try {
-			cpSync(CANARY, join(root, 'digest'), { recursive: true });
-			writeFileSync(join(root, path), markup, 'utf8');
-			const shell = dayShell(date, 500, { root: join(root, 'digest') })!;
-			return shell.seed.find((item) => item.item_id === itemId)?.visual ?? null;
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
-	}
-
-	test('the ordinary drawing does inline, so the refusals below mean something', () => {
-		const source = readFileSync(join(CANARY, '..', drawn().path), 'utf8');
-		expect(planted(source)?.markup, 'a clean drawing was refused, so every case below is vacuous').toBe(
-			source
-		);
-		expect(refusedDrawing(source), 'the browser would refuse a drawing the build accepted').toBeNull();
-		expect(publishedVisual(drawn().path), 'a published path was not recognised as one').toBe(true);
+			refusedVisualData(data),
+			'a clean document was refused, so every case below is vacuous'
+		).toBeNull();
+		expect(drawBars(data).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
 	});
 
 	for (const [name, path] of [
 		['a walk out of the digest tree', 'digest/2026/08/20/../../../../etc/passwd'],
-		['an address somewhere else', 'https://example.invalid/x.svg'],
-		['a file that is not a drawing', 'digest/2026/08/20/ai.js'],
-		['a date that is not one', 'digest/20xx/08/20/ai.svg']
+		['an address somewhere else', 'https://example.invalid/x.json'],
+		['a file that is not a visual', 'digest/2026/08/20/ai.js'],
+		['the day payload itself', 'digest/2026/08/20/digest.json'],
+		['a date that is not one', 'digest/20xx/08/20/ai.json']
 	] as const) {
 		test(`${name} is never asked for`, () => {
-			// The path is about to be joined onto a directory and read, or onto
-			// `base` and fetched. It came off a committed payload rather than off the
-			// web and it is still matched rather than trusted (Guardrail #11).
-			expect(publishedVisual(path), `${path} was accepted as a published drawing`).toBe(false);
+			// The path is about to be joined onto `base` and fetched. It came off a
+			// committed payload rather than off the web and it is still matched
+			// rather than trusted (Guardrail #11).
+			expect(publishedVisualData(path), `${path} was accepted as a published visual`).toBe(false);
 		});
 	}
 
-	for (const [name, markup] of [
-		['a script element', '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("//x")</script></svg>'],
-		['an inline handler', '<svg xmlns="http://www.w3.org/2000/svg"><rect onload="fetch(\'//x\')"/></svg>'],
-		['embedded html', '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><b>x</b></foreignObject></svg>'],
-		['a link out', '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:fetch(1)"><rect/></a></svg>'],
-		['a fetched image', '<svg xmlns="http://www.w3.org/2000/svg"><image href="//x/y.png"/></svg>'],
-		['something that is not a drawing at all', '<!doctype html><html><body>hi</body></html>']
-	] as const) {
-		test(`${name} is not drawn`, () => {
-			// Guardrail #11. A chart's labels are written by a model that read a
-			// stranger's page, so the moment the drawing stops being an `img` it is
-			// markup in our own origin and the check is the control, not a promise.
-			const visual = planted(markup);
-			expect(visual?.markup ?? null, `${name} reached the document`).toBeNull();
-			// The story keeps its `path`, because that is a committed field and this
-			// build does not rewrite the day. What it does not keep is a picture: the
-			// browser asks for the same file and runs the line below over the answer,
-			// so a story whose drawing is refused is a shorter story and never a
-			// broken-image glyph.
-			expect(visual?.path, `${name} rewrote the committed payload`).toBeTruthy();
-			expect(
-				refusedDrawing(markup),
-				`${name} would reach the document through the fetch instead`
-			).not.toBeNull();
-		});
-	}
-});
-
-/** A stand-in for the browser's watcher that counts what the page built.
- *
- * The page never builds one of these in a browser - it builds the browser's
- * own. What this class adds is a count, a record of which stories are being
- * watched, and a way to say "this story just crossed" without a viewport.
- */
-class Watching {
-	/** How many watchers the page has built. The number this row is about. */
-	static built = 0;
-	/** Every watcher built, so a test can deliver a crossing through the live one. */
-	static all: Watching[] = [];
-
-	readonly watched = new Set<Element>();
-	readonly margin: string;
-
-	constructor(
-		private readonly report: (entries: IntersectionObserverEntry[]) => void,
-		options?: IntersectionObserverInit
-	) {
-		Watching.built += 1;
-		Watching.all.push(this);
-		this.margin = options?.rootMargin ?? '';
-	}
-
-	observe(node: Element): void {
-		this.watched.add(node);
-	}
-
-	unobserve(node: Element): void {
-		this.watched.delete(node);
-	}
-
-	disconnect(): void {
-		this.watched.clear();
-	}
-
-	/** What the browser does when stories cross the margin, or leave it. */
-	crosses(nodes: Element[], near = true): void {
-		this.report(
-			nodes.map((target) => ({ target, isIntersecting: near }) as IntersectionObserverEntry)
-		);
-	}
-}
-
-test.describe('THE ORACLE: one watcher, however many stories are waiting', () => {
-	test.beforeAll(() => {
-		// Node has no watcher of its own, so this installs one rather than
-		// replacing one. Removed again below so nothing else in the process
-		// inherits it.
-		globalThis.IntersectionObserver = Watching as unknown as typeof IntersectionObserver;
+	test('a published marks path is recognised as one', () => {
+		expect(publishedVisualData('digest/2026/08/20/energy-4821903756.json')).toBe(true);
 	});
 
-	test.afterAll(() => {
-		Reflect.deleteProperty(globalThis, 'IntersectionObserver');
-	});
-
-	/** One waiting story's slot. The module only ever uses it as a key. */
-	function slot(name: string): Element {
-		return { nodeName: name } as unknown as Element;
-	}
-
-	/** The one watcher the page is allowed to hold. */
-	function watcher(): Watching {
-		expect(Watching.all.length, 'the page is holding more than one watcher').toBe(1);
-		return Watching.all[0];
-	}
-
-	test('one watcher serves every waiting story, however many are waiting', () => {
-		// Until 2026-09-06 each waiting story built its own watcher, so this count
-		// was the number of stories: a day that published more drawings held more
-		// watchers, for the life of the page. That is a cost that rises because a
-		// run published more, which CLAUDE.md Guardrail #12 refuses.
-		const drawn: string[] = [];
-		const forget: Array<() => void> = [];
-		const waitFor = (stories: number): void => {
-			for (let n = 0; n < stories; n += 1) {
-				const name = `story-${forget.length}`;
-				forget.push(whenNear(slot(name), () => drawn.push(name)));
+	for (const [name, breaks] of [
+		[
+			'a renderer this page does not know',
+			(data: VisualData) => {
+				data.renderer_version = '2099-01-01';
 			}
-		};
+		],
+		[
+			'a type this page cannot draw',
+			(data: VisualData) => {
+				data.type = 'pie';
+			}
+		],
+		[
+			'four names against three figures',
+			(data: VisualData) => {
+				data.encoding.quantity = data.encoding.quantity.slice(0, -1);
+			}
+		],
+		[
+			'a channel naming a mark that is not carried',
+			(data: VisualData) => {
+				data.encoding.category = [...data.encoding.category.slice(1), 'm99'];
+			}
+		],
+		[
+			'a bar with no figure',
+			(data: VisualData) => {
+				const drawn = data.marks.find((mark) => mark.value !== null);
+				if (drawn) drawn.value = null;
+			}
+		],
+		[
+			'no marks at all',
+			(data: VisualData) => {
+				data.marks = [];
+			}
+		]
+	] as const) {
+		test(`${name} is refused rather than drawn`, () => {
+			const data = compiled();
+			breaks(data);
+			expect(refusedVisualData(data), `${name} was accepted`).not.toBeNull();
+		});
+	}
 
-		waitFor(1);
-		expect(Watching.built, 'one waiting story built no watcher').toBe(1);
-		waitFor(49);
-		expect(Watching.built, '50 waiting stories built more than one watcher').toBe(1);
-		waitFor(450);
-		expect(Watching.built, '500 waiting stories built more than one watcher').toBe(1);
-
-		expect(watcher().watched.size, 'the one watcher is not watching every waiting story').toBe(500);
-		expect(watcher().margin, 'the shared watcher lost the one-screen margin').toBe('100% 0px');
-		expect(drawn, 'a story asked for its drawing before it was anywhere near').toEqual([]);
-
-		for (const stop of forget) stop();
-		expect(watcher().watched.size, 'a story that left the page is still watched').toBe(0);
-	});
-
-	test('a story that comes near draws, once, and its neighbours do not', () => {
-		const drawn: string[] = [];
-		const names = ['first', 'second', 'third'];
-		const slots = names.map((name) => slot(name));
-		const forget = slots.map((node, index) => whenNear(node, () => drawn.push(names[index])));
-		try {
-			watcher().crosses([slots[1]]);
-			expect(drawn, 'the crossing drew the wrong story, or drew more than one').toEqual(['second']);
-			expect(watcher().watched.has(slots[1]), 'a story that drew is still watched').toBe(false);
-			expect(watcher().watched.has(slots[0]), 'a story that did not cross was dropped').toBe(true);
-			expect(watcher().watched.has(slots[2]), 'a story that did not cross was dropped').toBe(true);
-
-			// The reader scrolls it past and back. The story already has its answer.
-			watcher().crosses([slots[1]]);
-			expect(drawn, 'a story asked for the same drawing twice').toEqual(['second']);
-		} finally {
-			for (const stop of forget) stop();
-		}
-	});
-
-	test('a story reported as not near keeps waiting', () => {
-		const drawn: string[] = [];
-		const node = slot('below the fold');
-		const stop = whenNear(node, () => drawn.push('below the fold'));
-		try {
-			watcher().crosses([node], false);
-			expect(drawn, 'a story drew on a report that it is not near').toEqual([]);
-			expect(watcher().watched.has(node), 'a story still below the fold stopped being watched').toBe(
-				true
-			);
-		} finally {
-			stop();
-		}
-	});
-
-	test('a story that leaves the page is neither watched nor drawn', () => {
-		const drawn: string[] = [];
-		const node = slot('gone');
-		whenNear(node, () => drawn.push('gone'))();
-		expect(watcher().watched.has(node), 'a story that left the page is still watched').toBe(false);
-		// A browser can still deliver a crossing it recorded before the unwatch.
-		watcher().crosses([node]);
-		expect(drawn, 'a story that left the page still asked for its drawing').toEqual([]);
+	test('a document that is not one at all is refused', () => {
+		expect(refusedVisualData(null)).not.toBeNull();
+		expect(refusedVisualData('<svg/>')).not.toBeNull();
+		expect(refusedVisualData([])).not.toBeNull();
 	});
 });
