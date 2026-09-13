@@ -38,11 +38,12 @@ from typing import Any, Final
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from pytest import MonkeyPatch
 
-from idhazh import cli, config, telemetry
+from idhazh import config, telemetry
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
+from idhazh.stages.work import stage_work, trace_sink
 
 #: What prose looks like. The shape rule refuses it on the space alone.
 SENTINEL_SENTENCE: Final = "Kumquat lanternfish barometer, nine four two seven."
@@ -224,7 +225,7 @@ def trace_a_run(
     monkeypatch.setattr(common, "EVIDENCE_ROOT", tmp_path / "evidence")
 
     with RecordedCompletionEndpoint(*reply) as server:
-        cli.stage_work(
+        stage_work(
             run_plan,
             settings=traced_settings(),
             scorer=None,
@@ -341,7 +342,7 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
     assert not settings.app.observability.tracing_enabled
 
     with RecordedCompletionEndpoint(*completion_carrying(SENTINEL_REPLY)) as server:
-        cli.stage_work(
+        stage_work(
             run_plan,
             settings=settings,
             scorer=None,
@@ -414,7 +415,7 @@ def test_a_named_host_with_no_package_falls_back_to_the_file(
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-fixture")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-fixture")
 
-    sink = cli.trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
+    sink = trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
 
     assert isinstance(sink, telemetry.FileSink | telemetry.FanOut)
 
@@ -431,7 +432,7 @@ def test_a_host_is_never_reached_unless_all_three_variables_are_set(
         for variable in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
             monkeypatch.delenv(variable, raising=False)
         monkeypatch.setenv(named, "set")
-        sink = cli.trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
+        sink = trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
         assert isinstance(sink, telemetry.FileSink)
 
 

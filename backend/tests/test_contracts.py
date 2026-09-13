@@ -29,9 +29,9 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import day_partition, ledger, source_health
+from idhazh import cli, day_partition, ledger, source_health
 from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
-from idhazh.cli import main, stage_validate_days
+from idhazh.cli import main
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
@@ -135,6 +135,7 @@ from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
 from idhazh.retention import oldest_month_kept
+from idhazh.stages.validate_days import stage_validate_days
 from utilities import build_canary_day
 
 pytestmark = pytest.mark.contract
@@ -2162,44 +2163,46 @@ def test_the_rest_rule_reads_the_knob_the_committed_config_spells() -> None:
     assert "after_failures=collect.availability_strikes_before_rest" in source
 
 
-def test_no_test_redirects_a_name_the_router_only_re_exports() -> None:
-    """A redirect has to reach the module the stage reads the name from.
+def test_the_router_exposes_no_name_a_stage_owns() -> None:
+    """`idhazh.cli` picks which stage runs. It is never a second name for one.
 
-    `idhazh.cli` re-exports every stage and several of their helpers so a caller
-    keeps naming what it always named. That makes one shape of redirect silent:
-    `setattr(cli, "_picture_faults", ...)` rebinds the router's name, the stage
-    goes on calling the shipped rule out of its own module, and the test passes
-    against the thing it meant to replace. So a redirect must name the module
-    that defines the name.
+    A re-export reads as convenience and costs two things. It is an import path
+    nobody declared - a caller writes `cli.stage_work` and the router becomes
+    the listed home of code it does not contain, so the next reader looks for
+    the work in the wrong file. And it makes one shape of redirect silent:
+    `setattr(cli, "_picture_faults", ...)` rebinds the router's copy while the
+    stage goes on calling the shipped rule out of its own module, so the test
+    passes against the thing it meant to replace.
 
-    The roots are covered another way - `cli` does not re-export them at all, so
-    a redirect left on one raises. This is the half of the rule a re-export can
-    still hide.
+    So the router imports stage modules and never the names inside them. This
+    reads the imported module rather than its source, because an import written
+    anywhere in the chain republishes a name just as effectively as one written
+    in `cli.py`.
     """
-    router = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
-    declared = {
-        node.name
-        for node in router.body
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
-    }
+    owned: dict[str, str] = {}
+    for path in sorted((REPO_ROOT / "backend" / "idhazh" / "stages").glob("*.py")):
+        if path.stem == "__init__":
+            continue
+        for node in ast.parse(read_text(path)).body:
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                owned.setdefault(node.name, path.stem)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                owned.setdefault(node.target.id, path.stem)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        owned.setdefault(target.id, path.stem)
+    assert owned, "no stage modules were read, so this test proves nothing"
 
-    stale: list[str] = []
-    for path in sorted((REPO_ROOT / "backend" / "tests").glob("*.py")):
-        for node in ast.walk(ast.parse(read_text(path))):
-            if not isinstance(node, ast.Call) or len(node.args) < 2:
-                continue
-            if not isinstance(node.func, ast.Attribute) or node.func.attr != "setattr":
-                continue
-            target, attribute = node.args[0], node.args[1]
-            if not isinstance(target, ast.Name) or target.id != "cli":
-                continue
-            if not isinstance(attribute, ast.Constant) or not isinstance(attribute.value, str):
-                continue
-            if attribute.value not in declared:
-                stale.append(f"{path.name}:{node.lineno} redirects cli.{attribute.value}")
-
-    assert not stale, "redirect the module that defines the name, not the router: " + "; ".join(
-        stale
+    leaked = sorted(
+        f"cli.{name} is really idhazh.stages.{stem}.{name}"
+        for name, stem in owned.items()
+        if not name.startswith("__") and hasattr(cli, name)
+    )
+    assert not leaked, (
+        "the router re-exports a name a stage owns, so a caller can reach the stage "
+        "through cli and a redirect left on cli would bind a copy nothing reads. "
+        "Import the module, not the name: " + "; ".join(leaked)
     )
 
 
