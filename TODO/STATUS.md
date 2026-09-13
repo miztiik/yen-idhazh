@@ -21,8 +21,8 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 8 | 6 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 1 | 6 | 0 |
-| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 0 |
+| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 2 | 5 | 2 |
+| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 1 | 5 | 1 |
@@ -36,17 +36,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
 | [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 0 | 13 | 0 |
 
-## In flight - 5
+## In flight - 4
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #1b | 12 | B | The browser draws the chart, and the pipeline stops rendering | p12-r1b |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
 | #1 | 28 | A | The runtime sweep reaches for a key that is not there | p28-r1 |
 | #2 | 28 | A | The turn envelope moves onto the model entry | p28-r2 |
 | #3 | 28 | A | Every tokenizer-shaped constant names the weights it was taken against | p28-r3 |
 
-## Ready now - 20
+## Ready now - 23
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -57,6 +56,9 @@ section 3 is where it is answered.
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
+| #2 | 12 | C | The drawing takes the width it is given | 1b |
+| #3 | 12 | C | Numbers a reader can say out loud | 1b |
+| #3 | 13 | C | The fuse comes out, and one run is watched | 2, plan 12 row #1b |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
@@ -75,7 +77,7 @@ section 3 is where it is answered.
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 
-## Waiting on another row - 63
+## Waiting on another row - 60
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -84,12 +86,9 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #2 | 12 | C | The drawing takes the width it is given | 1b is IN-FLIGHT |
-| #3 | 12 | C | Numbers a reader can say out loud | 1b is IN-FLIGHT |
 | #4 | 12 | D | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | E | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | F | A whole day, again | 5 is PENDING |
-| #3 | 13 | C | The fuse comes out, and one run is watched | plan 12 row #1b is IN-FLIGHT |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
