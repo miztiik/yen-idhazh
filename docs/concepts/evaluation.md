@@ -383,7 +383,7 @@ at `/console/model/` draws one figure a band, over the same window the panels
 beside it name.
 
 **The baseline is 11 of 89 key points, 12.4 percent** (section 10.5 of the
-visual-planner disposition), measured over the committed corpus before Rows 1 to 3
+2026-09-02 picture disposition), measured over the committed corpus before Rows 1 to 3
 took effect. It is a baseline, not a result: the number a later run has to beat,
 recomputed from the committed key points and summaries whenever it is quoted
 (Guardrail #10). The per-band figure the console draws is a mean of per-item shares

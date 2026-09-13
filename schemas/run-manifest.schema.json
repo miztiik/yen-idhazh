@@ -135,7 +135,7 @@
         },
         "n_ctx": {
           "default": 8192,
-          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 49152 and models.visual_planner does not, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for 16384, 1024.00 for 32768 and 2048.00 for 65536, which interpolates to 1536.00 MiB at the pinned 49152, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
+          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 49152, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for 16384, 1024.00 for 32768 and 2048.00 for 65536, which interpolates to 1536.00 MiB at the pinned 49152, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
           "minimum": 512,
           "title": "N Ctx",
           "type": "integer"
@@ -574,7 +574,7 @@
         },
         "items_prefiltered": {
           "default": 0,
-          "description": "Items the router decided without asking the model, because no enabled visual kind could survive the checks. Counted separately so a chart rate is never quoted against items_routed alone.",
+          "description": "Items the retired visual planner decided without asking the model, because no enabled visual kind could survive the checks. Counted separately so a chart rate is never quoted against items_routed alone. **Zero on every run since plan 11 row #6**: call 2 writes the summary and the plan in one reply, so the model is asked on every item and the gate then decides what to do with the plan. Kept because the committed archive carries non-zero values a reader of an older day still needs.",
           "minimum": 0,
           "title": "Items Prefiltered",
           "type": "integer"
@@ -804,6 +804,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "items_prefiltered keeps its shape and gains a sentence: no run writes a non-zero value any more. No field moved, so this is not breaking and no payload needs migrating.",
+      "version": "2026-09-13T23:30",
+      "why": "Plan 11 row #6 retired the visual planner stage, which was the only producer of a decision made without asking a model. Call 2 writes the summary and the plan in one reply, so every item's model is asked. The column stays because the committed archive carries non-zero values, and a reader of one of those days needs the field to mean what it meant then - but a field that can only read zero from here on has to say so where somebody about to quote it will look."
+    },
+    {
       "change": "Removed pipeline_fingerprints from a run record. BREAKING.",
       "version": "2026-09-13T22:00",
       "why": "`inputs` has recorded the same seventeen facts by name since 2026-09-12 and nothing has filled the list since, so it was a shape every future author of this manifest had to ask about. Removing it is breaking, because contracts.base.Model sets extra='forbid' and all 23 committed frontend/public/digest/**/run.json files carry the key. The read-side migration ships in this commit and is expected to be permanent: a published day is frozen, so `_drop_retired_keys` pops the one named key before validation and the condition that would let it go is written on the line that declares it."
@@ -910,7 +915,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-13T22:00",
+      "default": "2026-09-13T23:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -922,5 +927,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-13T22:00"
+  "version": "2026-09-13T23:30"
 }

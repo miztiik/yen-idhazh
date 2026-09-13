@@ -1,15 +1,17 @@
 """Every quantity and every date one article states, and the characters that prove each.
 
 The candidate pass. It reads the article's own bytes with two patterns, and for
-every quantity and every date it matches it keeps three things the visual
-planner throws away: where the fact starts, where it ends, and the verbatim
-slice between them. Those offsets are not new work - `visual_planner.numeric_facts`
-has always computed them and always discarded them.
+every quantity and every date it matches it keeps three things the retired
+visual planner threw away: where the fact starts, where it ends, and the
+verbatim slice between them. Those offsets were never new work - the planner's
+`numeric_facts` computed them and discarded them, and this module is where they
+are kept.
 
-**This pass keeps what `numeric_facts` is right to drop.** That function picks a
-few bars for one chart, so it collapses a figure repeated across two periods
-into one fact, drops a magnitude at or below two, drops a bare year, and stops
-at sixteen. Every one of those is correct for choosing bars and wrong for a
+**This pass keeps what `numeric_facts` was right to drop.** That function picked
+a few bars for one chart, so it collapsed a figure repeated across two periods
+into one fact, dropped a magnitude at or below two, dropped a bare year, and
+stopped at sixteen. Every one of those is correct for choosing bars and wrong
+for a
 candidate set: the collapsed repeat is exactly the series a trend chart exists
 to show. Nothing here dedupes and nothing here drops on size. `numeric_facts`
 is untouched and still behaves that way for the planner that calls it.
@@ -31,8 +33,7 @@ can produce is ten characters.
 **The number pattern lives here now.** It moved off `visual_planner` with the
 magnitude table, the percent set, the unit stop list, the year range and
 `normalise_unit`, because two passes read the same vocabulary and the fact pass
-is the lower of the two. The planner imports them back and reads them exactly
-as it did.
+is the lower of the two. The planner is gone and this pass kept them.
 
 **A table is re-sliced before it leaves this module.** `element_table` cuts the
 text at every span it is about to return and refuses a table it cannot cut, so
@@ -99,7 +100,7 @@ PERCENT: Final[frozenset[str]] = frozenset({"percent", "per cent", "%"})
 
 # A bare four-digit integer in this range reads as a calendar year rather than
 # as a measurement. It lives with the number pattern because it is a fact about
-# the same bytes, and `visual_planner` reads it back.
+# the same bytes.
 YEAR_MIN: Final = 1900
 YEAR_MAX: Final = 2100
 
@@ -483,11 +484,10 @@ def classify(table: ElementTable, *, min_chart_points: int) -> ElementClass:
     """Which of the three classes one article's numbers put it in.
 
     **Distinct quantities per unit, because a bar chart cannot draw the same
-    figure twice.** `visual_planner.same_unit_bars` groups the chosen bars by
-    unit and the bars are distinct by construction, so counting a repeated
-    figure here would call an article chartable that no planner could ever draw -
-    and `extractable_but_unused_rate` would carry that gap for ever while
-    claiming to measure the planner.
+    figure twice.** A chart's bars must share one unit and are distinct by
+    construction, so counting a repeated figure here would call an article
+    chartable that nothing could ever draw - and `extractable_but_unused_rate`
+    would carry that gap for ever while claiming to measure the picture.
 
     **The empty unit is a group like any other**, which is the reading
     `chart_is_reachable` already takes: `numeric_facts` writes an empty unit when

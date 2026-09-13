@@ -1086,7 +1086,6 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
 
     assert models.summarize.inference.n_ctx == 49152
     assert models.summarize.inference.flash_attention == "on"
-    assert models.visual_planner.inference.n_ctx == 8192
     assert InferenceConfig().n_ctx == 8192, (
         "the default is the conservative window for weights nobody has measured"
     )
@@ -2074,13 +2073,19 @@ def test_the_one_shared_settings_block_is_refused_by_name() -> None:
     Refused rather than lifted onto both entries. A lift is the silent
     inheritance this row exists to end: it would hand a swapped entry the
     numbers the previous weights were measured on and raise nothing.
+
+    It is the one entry in this map with a replacement to name. The other two
+    are roles that were retired outright, so they carry an empty string and the
+    refusal says so rather than inventing a successor.
     """
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     raw["models"]["inference"] = {"n_ctx": 8192}
     with pytest.raises(ValidationError) as raised:
         AppConfig.model_validate(raw)
     assert "models.inference is now models.<role>.inference" in str(raised.value)
-    assert dict(SUPERSEDED_MODELS_NAMES) == {"inference": "<role>.inference"}
+    assert SUPERSEDED_MODELS_NAMES["inference"] == "<role>.inference"
+    assert not SUPERSEDED_MODELS_NAMES["visual_planner"]
+    assert not SUPERSEDED_MODELS_NAMES["route"]
 
 
 def test_every_committed_model_entry_declares_the_weights_its_settings_are_for() -> None:
@@ -2283,46 +2288,65 @@ def test_a_config_written_before_observability_existed_still_reads() -> None:
     assert AppConfig.model_validate(payload).observability == ObservabilityConfig()
 
 
-def test_a_config_spelling_the_old_route_names_reads_as_the_new_ones() -> None:
-    """Section 11's release blocker again, on three keys renamed on one day.
+@pytest.mark.parametrize(
+    ("block", "knob"),
+    [
+        ("models", "visual_planner"),
+        ("models", "route"),
+        ("run", "two_calls_per_item"),
+        ("run", "visual_planner_budget_minutes"),
+        ("run", "route_budget_minutes"),
+        ("finetune", "student"),
+    ],
+)
+def test_a_config_still_spelling_a_retired_knob_is_refused_by_name(block: str, knob: str) -> None:
+    """Section 11's read-side migration for plan 11 row #6, one key at a time.
 
-    `models.route`, `run.route_budget_minutes` and a `finetune` role naming
-    `route` all moved on 2026-09-05. The proof is not that the file has a
-    migration in it - it is that the two spellings land on the same object, so a
-    config an operator wrote yesterday runs today's build and computes the same
-    thing.
+    Six spellings died with the visual planner: the four keys the row deleted,
+    and the two older names that used to be read as two of them. A rename onto a
+    deleted key is worse than no migration at all - it takes an operator's
+    number, files it under a key nothing reads, and raises nothing - so the
+    rename went and this refusal took its place.
+
+    Every model here forbids unknown keys, so any of these already fails. What
+    the row owes is that it fails by NAME: "extra inputs are not permitted" does
+    not tell an operator their planner is gone.
     """
-    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    yesterday = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    yesterday["models"]["route"] = yesterday["models"].pop("visual_planner")
-    yesterday["run"]["route_budget_minutes"] = yesterday["run"].pop(
-        "visual_planner_budget_minutes"
-    )
-    yesterday["finetune"]["student"] = "route"
-    assert "route" not in committed["models"], "the committed file spells the new key"
-    assert "route_budget_minutes" not in committed["run"]
-    assert committed["finetune"]["student"] != "route"
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    assert knob not in payload[block], "the committed file must not spell the retired knob"
+    payload[block][knob] = payload[block].get("summarize", 1)
 
-    assert AppConfig.model_validate(yesterday) == AppConfig.model_validate(committed)
+    with pytest.raises(ValidationError, match=re.escape(f"{block}.{knob}")):
+        AppConfig.model_validate(payload)
 
 
-def test_a_config_spelling_a_renamed_knob_twice_over_is_refused() -> None:
-    """Two spellings of one knob is two sources of truth, and one loses in silence.
+def test_a_retired_knob_is_not_offered_a_replacement_that_does_not_exist() -> None:
+    """The refusal says the knob is gone, never that it moved somewhere.
 
-    The same file repeating itself is fine - it says one thing twice. The
-    refusal is for the file that says two different things, where taking either
-    one leaves an operator believing a number nothing reads.
+    `refuse_a_removed_knob` reads an empty replacement as "gone and nothing
+    replaces it". Pointing a lost operator at a key that is also missing is the
+    same defect one level down, and it is the one this wording exists to avoid.
     """
-    agreeing = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    agreeing["run"]["route_budget_minutes"] = agreeing["run"]["visual_planner_budget_minutes"]
-    assert AppConfig.model_validate(agreeing).run.visual_planner_budget_minutes == 40
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    payload["run"]["two_calls_per_item"] = True
 
-    disagreeing = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    disagreeing["run"]["route_budget_minutes"] = (
-        disagreeing["run"]["visual_planner_budget_minutes"] + 5
-    )
-    with pytest.raises(ValidationError, match=re.escape("run.route_budget_minutes is now")):
-        AppConfig.model_validate(disagreeing)
+    with pytest.raises(ValidationError, match="is gone and nothing replaces it"):
+        AppConfig.model_validate(payload)
+
+
+def test_a_finetune_teacher_still_naming_the_retired_model_is_answered_by_name() -> None:
+    """A role is spelled as a VALUE, so the key check cannot see it.
+
+    `models.visual_planner` is refused as a key by the map above. A teacher
+    naming that role is a string inside a legal key, and without this it would
+    fail as "must name one of models: summarize" - which reads as a typo rather
+    than as a model that was retired.
+    """
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    payload["finetune"]["teacher"] = "visual_planner"
+
+    with pytest.raises(ValidationError, match="retired with the visuals stage"):
+        AppConfig.model_validate(payload)
 
 
 def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:

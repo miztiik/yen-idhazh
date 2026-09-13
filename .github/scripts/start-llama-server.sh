@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
 # Start llama-server for one role and prove the process survived the start.
 #
-# Two jobs do this: `work` serves the summarizer, `visuals` serves the visual
-# planner.
-# The bodies were 80.6 percent identical inline shell, differing only in which
-# `models.<role>` config block to read and what to call the log and the pid
-# file. Two copies of a start sequence drift, and the copy that drifts is
-# whichever one nobody looked at this week - so there is one, and a test runs
-# it rather than reading it.
+# One job does this today: `work` serves the summarizer. It was two until plan
+# 11 row #6 retired the visual planner, and the bodies were 80.6 percent
+# identical inline shell, differing only in which `models.<role>` config block
+# to read and what to call the log and the pid file. The script stays a script
+# rather than folding back inline: a test runs it rather than reading it, and
+# `shellcheck` covers it.
 #
 # The argv itself is still built by `idhazh.llm.server.server_argv`, which is
 # the single place a llama-server flag may be spelled (Guardrail #6). This script
 # never names one.
 #
 # Usage: start-llama-server.sh <role> <name>
-#   role  the attribute on settings.app.models - `summarize` or `visual_planner`
+#   role  the attribute on settings.app.models - `summarize`
 #   name  the stem for <name>.log and <name>.pid
 #
 # Reads LLAMA_WEIGHTS and LLAMA_PORT from the environment.
@@ -29,9 +28,9 @@ ROLE="$1"
 NAME="$2"
 
 case "$ROLE" in
-	summarize | visual_planner) ;;
+	summarize) ;;
 	*)
-		echo "unknown role ${ROLE} - expected summarize or visual_planner" >&2
+		echo "unknown role ${ROLE} - expected summarize" >&2
 		exit 2
 		;;
 esac
