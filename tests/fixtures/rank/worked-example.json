@@ -1,0 +1,68 @@
+{
+  "why": "The candidate set the worked example on docs/concepts/placement.md walks. Built rather than sampled: it fires every term of the stage-1 score at least once, which no real day is guaranteed to do, and it holds the case the page exists to explain - a story with four bonuses losing to a story with none.",
+  "now": "2026-09-13T12:00:00Z",
+  "stories": [
+    {
+      "name": "A ministry statement a wire service also carried",
+      "shows": "Carriage doubles the authority term. Nothing else fires.",
+      "vertical": "world",
+      "carriers": [
+        {
+          "source_id": "ministry-press",
+          "tier": "institution",
+          "weight": 1.0,
+          "canonical_url": "https://example.gov/press/rates-decision"
+        },
+        {
+          "source_id": "wire-two",
+          "tier": "trade_press",
+          "weight": 1.0,
+          "canonical_url": "https://example.gov/press/rates-decision"
+        }
+      ],
+      "reliability": {},
+      "watchlist_hit": false,
+      "on_front_page": false,
+      "lens_bonus": 0.0,
+      "appeared": "2026-09-13T06:00:00Z"
+    },
+    {
+      "name": "A trade-press scoop on a watchlist company, from a front page",
+      "shows": "Every bonus fires at once: watchlist, front page, the heaviest lens, and an hour-old story's recency.",
+      "vertical": "ai",
+      "carriers": [
+        {
+          "source_id": "trade-weekly",
+          "tier": "trade_press",
+          "weight": 1.0,
+          "canonical_url": "https://example.com/trade/fab-delay"
+        }
+      ],
+      "reliability": {},
+      "watchlist_hit": true,
+      "on_front_page": true,
+      "lens_bonus": 0.3,
+      "appeared": "2026-09-13T11:00:00Z"
+    },
+    {
+      "name": "A community post on a feed we turned down",
+      "shows": "Both multipliers below 1.0 at once - a hand-set feed weight and a reliability factor the ledger derived.",
+      "vertical": "ai",
+      "carriers": [
+        {
+          "source_id": "forum-digest",
+          "tier": "community",
+          "weight": 0.5,
+          "canonical_url": "https://example.net/forum/thread-4412"
+        }
+      ],
+      "reliability": {
+        "forum-digest": 0.8
+      },
+      "watchlist_hit": false,
+      "on_front_page": false,
+      "lens_bonus": 0.0,
+      "appeared": "2026-09-12T16:00:00Z"
+    }
+  ]
+}
