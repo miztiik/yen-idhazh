@@ -175,7 +175,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 5 | The rail goes and the time lands under the heading | - | A | DONE #625 | p25-r5 | #625 | worker |
 | 2 | One order over the whole day, inside a frame a person set | 1 | B | DONE #653 | p25-2 | #653 | worker |
 | 3 | `rank_score` orders the stream, and its terms are the editor's | 2 | C | DONE #664 | p25-3 | #664 | worker |
-| 6 | The topic pills order by what is running | 2 | C | PENDING | - | - | - |
+| 6 | The topic pills order by what is running | 2 | C | IN-FLIGHT | p25-6 | - | worker |
 | 4 | Carriage becomes a tie-break | 3 | D | DONE #667 | p25-4 | #667 | worker |
 | 7 | A desk floor and a desk ceiling | 2 | D | PENDING | - | - | - |
 | 8 | A story cross-files to a second desk | 7 | E | PENDING | - | - | - |
@@ -407,7 +407,8 @@ Ruled by Susan, 2026-09-11, with Jony on what may leave the page.
 ## 7. Row #6 - The topic pills order by what is running
 
 - **Scope:** The topic pill row orders by how much of the day each desk holds, refreshed at every publish, with a margin that stops a desk swapping places for one story. The fold threshold moves from 8 to 5.
-- **Files touched:** `frontend/src/lib/day-shape.ts`, `frontend/src/lib/components/FilterBar.svelte`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/filter-bar.spec.ts`, `frontend/tests/topics.spec.ts`, `docs/architecture/publishing/frontend.md`
+- **Files touched:** `frontend/src/lib/day-shape.ts`, `frontend/src/lib/components/FilterBar.svelte`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/filter-bar.spec.ts`, `frontend/tests/topics.spec.ts`, `frontend/tests/layout-overflow.spec.ts`, `backend/tests/test_appearance_config.py`, `tests/fixtures/contracts/appearance-config/committed.json`, `tests/fixtures/contracts/appearance-config/defaults.json`, `docs/architecture/publishing/frontend.md`. **Widened by four paths on 2026-09-13, before dispatch.** `layout-overflow.spec.ts` imports `splitPills` and drives it at four call sites, so a signature or behaviour change reaches it; and a new `AppearanceConfig` field breaks `test_fixture_round_trips_byte_identically` unless both committed fixtures gain the key in sorted order, while `test_appearance_config.py` reads the schema stamp against the newest changelog entry.
+- **The docstring carries a SECOND stale sentence, and this row is what fixes it.** `splitPills`'s comment opens "every page here is prerendered, so a row that measures itself is wrong until a script runs" - which is the claim decision 5 below already corrected in this plan and which still stands in the code. The row rewrites the docstring anyway; rewrite both sentences rather than leaving the corrected refusal above an uncorrected reason. Found before dispatch, 2026-09-13.
 - **Acceptance gates:** `GATE-WEB`, `GATE-BROWSER`, `GATE-SCHEMA`, `GATE-SUITE`, and the section 12 browser smoke. Plus:
   - `schemas/appearance-config.schema.json` carries today's `version` and a `changelog` entry;
   - `splitPills`'s docstring is rewritten rather than contradicted (decision 1).
