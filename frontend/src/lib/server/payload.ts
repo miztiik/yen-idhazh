@@ -886,6 +886,11 @@ export interface RunRecord {
 	 * measured time, and printing that as zero minutes reads as a stage that was
 	 * free rather than one that is missing. */
 	decisionMs: number | null;
+	/** What this run summarized with, named field by field, or null where the
+	 * manifest predates the record or the run summarized nothing. It is what the
+	 * model-change boundary compares; nothing else reads it and nothing decides
+	 * on it. */
+	inputs: Record<string, unknown> | null;
 }
 
 export interface RunSummary {
@@ -939,7 +944,11 @@ export function loadManifests(
 							chartsDrafted: Number(run.charts_drafted ?? 0) || 0,
 							// The manifest writes an integer or a literal null. `Number(null)` is 0,
 							// so coercing here would turn "never measured" into "measured zero".
-							decisionMs: typeof run.route_ms === 'number' ? run.route_ms : null
+							decisionMs: typeof run.route_ms === 'number' ? run.route_ms : null,
+							inputs:
+								typeof run.inputs === 'object' && run.inputs !== null
+									? (run.inputs as Record<string, unknown>)
+									: null
 			}));
 			const last = runs.at(-1) ?? {};
 			const models = runs.flatMap((run) =>

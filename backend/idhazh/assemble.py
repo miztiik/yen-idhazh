@@ -37,6 +37,7 @@ from idhazh.contracts.digest_day import (
     DigestVisual,
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
@@ -1205,6 +1206,7 @@ def build_manifest(
     config_digests: Sequence[ConfigDigest],
     site_bytes: int,
     site_files: int,
+    inputs: PipelineInputs | None = None,
     determinism_violations: int = 0,
     note: str | None = None,
     item_health_rows: Sequence[ItemHealthRow] | None = None,
@@ -1278,8 +1280,8 @@ def build_manifest(
             )
             for vertical in plan.verticals
         ],
-        pipeline_fingerprints=sorted({summary.pipeline_fingerprint for summary in summaries}),
         determinism_violations=determinism_violations,
+        inputs=inputs,
         site_bytes=site_bytes,
         site_files=site_files,
         evaluation_enabled=evaluation_enabled,

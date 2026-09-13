@@ -53,6 +53,15 @@ class PublicEvalRow(Contract):
     __schema_stem__: ClassVar[str] = "public-eval"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T21:00",
+            change="pipeline_fingerprint is optional and nothing sets it.",
+            why=(
+                "The stamp stopped being a gate, so the ledger row this mirrors no longer "
+                "carries one. The column stays, because the two committed months hold "
+                "values in it and a published file is never rewritten."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-09",
             change=(
                 "Initial shape: the score ledger's own measurements, typed, with "
@@ -95,7 +104,13 @@ class PublicEvalRow(Contract):
     source_word_count: int | None = Field(default=None, ge=0)
     source_seen_word_count: int = Field(default=0, ge=0)
     summary_word_count: int = Field(ge=0)
-    pipeline_fingerprint: Sha256
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
+        description=(
+            "Null on every row written after 2026-09-12. It stays a column of the "
+            "published file because the committed months carry values in it."
+        ),
+    )
     output_digest: Sha256
     determinism_violation: bool = False
     scorer_version: str = Field(min_length=1)

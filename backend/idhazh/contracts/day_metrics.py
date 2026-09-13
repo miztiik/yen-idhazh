@@ -326,6 +326,16 @@ class DayMetrics(Contract):
     __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T21:00",
+            change="pipeline_fingerprint is optional and nothing sets it.",
+            why=(
+                "The stamp stopped being a gate and stopped being the eval window's key, "
+                "so no writer fills it. Relaxing rather than removing: every payload "
+                "already on disk still validates, and the field is dropped in its own "
+                "commit with the read-side migration that lets an older payload parse."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-08T21:00",
             change="Added the nullable extraction block.",
             why=(
@@ -375,11 +385,14 @@ class DayMetrics(Contract):
             "reader compares against the next day to find a model change (finding 70)."
         )
     )
-    pipeline_fingerprint: Sha256 = Field(
+    pipeline_fingerprint: Sha256 | None = Field(
+        default=None,
         description=(
-            "The digest of the declared settings the day ran under, as EvalRow carries it. "
-            "Not additive - the boundary a model-change reading is drawn on (finding 70)."
-        )
+            "The digest of the declared settings the day ran under, as EvalRow carried it. "
+            "Null on every day written after 2026-09-12: the stamp stopped being a gate "
+            "and no writer fills it. A model-change boundary is read from the run "
+            "record's recorded inputs instead."
+        ),
     )
 
     items_published: int = Field(ge=0, description="Items in the day's published set. Additive.")
