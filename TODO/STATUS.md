@@ -19,7 +19,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 4 | 3 | 2 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 5 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 14 | 11 | 3 | 2 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
@@ -33,21 +33,19 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 9 | 19 | 5 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 10 | 18 | 6 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 5 | 3 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 4 | 10 | 3 |
 
-## In flight - 5
+## In flight - 3
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #20 | 20260823-known-defects-plan | - | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | - |
 | #3f | 11 | C6 | The window is sized for two calls | p11-3f |
-| #P2 | 23 | B | The reference dataset, built so a number cannot flatter us | p23-p2 |
 | #6 | 24 | D | `state/feed-health/` files by day | p24-6 |
 | #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | p25-3 |
 
-## Ready now - 26
+## Ready now - 27
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -72,6 +70,7 @@ section 3 is where it is answered.
 | #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 |
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
+| #P3 | 23 | D | A person labels the dev split and the test split | P2 |
 | #4 | 23 | F | An event gets a lifecycle | 3 |
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
@@ -82,7 +81,7 @@ section 3 is where it is answered.
 | #7 | 25 | D | A desk floor and a desk ceiling | 2 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
-## Waiting on another row - 61
+## Waiting on another row - 60
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -128,7 +127,6 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #P3 | 23 | D | A person labels the dev split and the test split | P2 is IN-FLIGHT |
 | #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is PENDING |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
