@@ -652,6 +652,36 @@ def plan_lost_to_the_budget(
     )
 
 
+def plan_lost_to_the_window(
+    summary: Summary, *, model_id: str, decided_at: str, version: str
+) -> VisualDecision:
+    """The same cut reply, when the window and not the budget is what stopped it.
+
+    Both arrive as one thing - a reply that stopped because it hit a wall - and
+    the server reports them identically, so only arithmetic tells them apart:
+    a prompt with less room left in front of it than call 2's grammar may write
+    ran into the window. The caller does that comparison; this writes the answer.
+
+    It is a separate member because it asks an operator for different work. A
+    budget cut is the reply shape's own arithmetic and the fix is in the
+    grammar. This one is the article in front of the reply, and the fix is
+    `models.summarize.inference.n_ctx` beside `extract.truncation_cap_tokens` -
+    two knobs, one decision. A run of these says the window is too narrow for
+    the cap, which is a sentence no count of `output_budget_cut` can make.
+    """
+    return _nothing(
+        summary,
+        model_id=model_id,
+        reason=(
+            "the article and the labelling reply filled the window, so the reply "
+            "was cut at the wall before the plan was written"
+        ),
+        decided_at=decided_at,
+        version=version,
+        none_reason=NoneReason.WINDOW_EXHAUSTED,
+    )
+
+
 # --- The gate that refuses before the plan is drafted ------------------------
 
 

@@ -57,7 +57,7 @@ class NoneReason(StrEnum):
     nobody can tell from a bug. Each arrives as an additive member with the row
     that builds its gate.
 
-    The single-call planner these four replace writes nothing here. Its causes
+    The single-call planner these five replace writes nothing here. Its causes
     are sentences in `rationale` and several of them - no summary to illustrate,
     a reply that lost its shape, a kind with no renderer - are not gates at all,
     so typing them into this vocabulary would be work the row that retires that
@@ -78,6 +78,13 @@ class NoneReason(StrEnum):
     #: The reply ran out of output budget after the summary closed, so the plan
     #: was never written. The item publishes; the picture is what was lost.
     OUTPUT_BUDGET_CUT = "output_budget_cut"
+    #: The reply was cut at the end of the context window rather than at the end
+    #: of its budget: the article and call 1's reply in front of it left less room
+    #: than call 2's grammar may write. Separate from `output_budget_cut` because
+    #: the two ask an operator for different things - a budget cut says look at
+    #: the reply shape, and this one says look at
+    #: `models.summarize.inference.n_ctx` beside `extract.truncation_cap_tokens`.
+    WINDOW_EXHAUSTED = "window_exhausted"
 
 
 class VisualDecision(Contract):
@@ -85,6 +92,26 @@ class VisualDecision(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "NoneReason takes a fifth member, window_exhausted. Additive: no "
+                "payload written before today can carry it, and every reader that "
+                "handled four members handles five."
+            ),
+            why=(
+                "Under --no-context-shift a reply that runs into the wall of the "
+                "context window comes back on an ordinary HTTP 200 with the same "
+                "finish_reason as a reply that spent its whole output budget, so the "
+                "two were one member and an operator could not tell them apart. They "
+                "are different work: a budget cut is the reply shape's arithmetic, and "
+                "a window cut is models.summarize.inference.n_ctx against "
+                "extract.truncation_cap_tokens. The arithmetic that separates them "
+                "needs nothing new - the server already reports the prompt's token "
+                "count, and call 2's budget is derived from its own grammar - so the "
+                "member costs one comparison at the one call site that writes it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T18:40",
             change=(

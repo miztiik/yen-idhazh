@@ -1,12 +1,13 @@
 {
   "$defs": {
     "NoneReason": {
-      "description": "Which gate decided this item carries no picture.\n\n`none` is the majority outcome by design - two items in three - so a `none`\nwith no cause makes the largest number an operator reads the one that\nexplains nothing.\n\n**One member per gate, never one per call site.** The reachability gate\nrefuses in two places and both record `not_reachable`, because what an\noperator acts on is the gate rather than the line of code.\n\n**And one member per gate that has a writer.** The design record names six\ngates and the two-call flow adds a seventh; the potential class, the novelty\nfloor, the sufficiency bar and the per-visual byte cap are not built, so a\nmember for each would be a word nobody can produce, nobody can retire and\nnobody can tell from a bug. Each arrives as an additive member with the row\nthat builds its gate.\n\nThe single-call planner these four replace writes nothing here. Its causes\nare sentences in `rationale` and several of them - no summary to illustrate,\na reply that lost its shape, a kind with no renderer - are not gates at all,\nso typing them into this vocabulary would be work the row that retires that\nplanner deletes.",
+      "description": "Which gate decided this item carries no picture.\n\n`none` is the majority outcome by design - two items in three - so a `none`\nwith no cause makes the largest number an operator reads the one that\nexplains nothing.\n\n**One member per gate, never one per call site.** The reachability gate\nrefuses in two places and both record `not_reachable`, because what an\noperator acts on is the gate rather than the line of code.\n\n**And one member per gate that has a writer.** The design record names six\ngates and the two-call flow adds a seventh; the potential class, the novelty\nfloor, the sufficiency bar and the per-visual byte cap are not built, so a\nmember for each would be a word nobody can produce, nobody can retire and\nnobody can tell from a bug. Each arrives as an additive member with the row\nthat builds its gate.\n\nThe single-call planner these five replace writes nothing here. Its causes\nare sentences in `rationale` and several of them - no summary to illustrate,\na reply that lost its shape, a kind with no renderer - are not gates at all,\nso typing them into this vocabulary would be work the row that retires that\nplanner deletes.",
       "enum": [
         "not_reachable",
         "model_declined",
         "validation_failed",
-        "output_budget_cut"
+        "output_budget_cut",
+        "window_exhausted"
       ],
       "title": "NoneReason",
       "type": "string"

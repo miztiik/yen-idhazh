@@ -1771,14 +1771,33 @@ def _decide_the_visual(
 ) -> VisualDecision:
     """Which of the routes to a picture, or to none, this reply took.
 
-    Five outcomes and four `none_reason` members, because the member names the
+    Six outcomes and five `none_reason` members, because the member names the
     gate rather than the call site: a reply whose plan half will not hold
     `VisualPlan`'s own rules and a plan the compiler could not draw are one
     answer to an operator - a plan was drafted and this build refuses it.
+
+    **A cut reply is two different findings and the server reports one.** Under
+    `--no-context-shift` a decode that runs into the end of the window stops
+    exactly as a decode that spends its output budget does, on an ordinary HTTP
+    200 with `finish_reason` of `length`. Only the arithmetic tells them apart,
+    and it needs nothing this function does not already hold: the server counted
+    the prompt, and call 2's budget is derived from its own grammar. Less room
+    left than the grammar may write means the window was the wall.
     """
     if not wants_a_plan:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if two.hit_the_budget:
+        inference = settings.app.models.summarize.inference
+        asked_for = calls.call_two_output_tokens(settings.app.summarize)
+        if two.prompt_tokens + asked_for > inference.n_ctx:
+            LOG.warning(
+                "the window stopped the plan id=%s prompt=%s budget=%s n_ctx=%s",
+                summary.item_id,
+                two.prompt_tokens,
+                asked_for,
+                inference.n_ctx,
+            )
+            return visual_planner.plan_lost_to_the_window(summary, **stamp)
         return visual_planner.plan_lost_to_the_budget(summary, **stamp)
     try:
         reply = calls.parse_call_two(

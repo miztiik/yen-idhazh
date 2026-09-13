@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-13
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -416,14 +416,17 @@ is strictly better than window 1000 with sample 1000 - the same training time,
 twice the pool to sample a diverse 1000 from, at 154 MB of history a year instead
 of 77 MB.
 
-**`sequence_length` is `models.<teacher>.inference.n_ctx` and not a second
-derivation.** A training row is a prompt the pipeline could have sent and an
-answer it could have returned, so it is the same sequence the server sizes: 997
-tokens of prompt overhead, up to 12,191 for the longest and hardest-tokenizing
-article `extract.truncation_cap_tokens` lets through, and 900 of answer - 14,088
-of 16,384, or 86 percent. Both windows are asserted against that one sum in
-`backend/tests/test_contracts.py`, so a later move of the cap fails rather than
-drifts.
+**`sequence_length` sizes the single call, and it stopped being
+`models.<teacher>.inference.n_ctx` on 2026-09-13.** A training row is a prompt
+the pipeline could have sent and an answer it could have returned, and the
+corpus holds single-call rows - so the sum it has to cover is 997 tokens of
+prompt overhead, up to 12,191 for the longest and hardest-tokenizing article
+`extract.truncation_cap_tokens` lets through, and 900 of answer: 14,088 of
+16,384, or 86 percent. The serving window went to 49,152 the same day to hold
+the two-call pair, which nothing trains on. Both windows are still asserted in
+`backend/tests/test_contracts.py` and against the cap, so a later move of the
+cap fails rather than drifts - **against two sums now rather than one**, because
+the two paths render different prompts.
 
 **A training window narrower than the production cap fails silently, so the two
 are asserted against one sum.** The wrangler and the notebook drop an

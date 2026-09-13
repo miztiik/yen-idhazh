@@ -139,6 +139,14 @@ header, a pointer and the band numbers row #3e keeps.
 
 Both prompts rendered and tokenised, no decode:
 
+**Superseded on 2026-09-13 by
+[`2026-09-13-two-call-window-sizing.md`](2026-09-13-two-call-window-sizing.md),
+and the numbers below are left as taken.** Two things moved. Call 1's output
+budget stopped being `max_output_tokens` when row #3g derived it from the
+grammar - 900 to 6,491 - and the 400-token stand-in for call 1's reply was never
+a budget at all. And this table is **one** cap-length build; the later record
+measures eight, and this one is the mildest of them.
+
 | Term | Tokens | Where it comes from |
 | --- | --- | --- |
 | call 1's prompt | 14,306 | rendered and tokenised by this server |

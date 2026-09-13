@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-13
 
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
@@ -122,12 +122,16 @@ a truncation cap of 2,500 tokens no prompt could reach the window the machine
 read with, so the count was zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
 is already being printed. The cap has moved twice since - to 5,000 on 2026-08-29
-and to 10,000 on 2026-09-09 - and the count is still zero by arithmetic, but the
-arithmetic is tighter: the longest prompt the cap can produce is about 14,100
-tokens of a 16,384 window, where it was about 4,200 of 8,192
-([../reference/measurements.md](../reference/measurements.md)). This counter is
-now the one that would catch the next move going too far, rather than a
-formality.
+and to 10,000 on 2026-09-09 - and the count is still zero by arithmetic. The
+arithmetic tightened and then loosened again: the longest single-call prompt the
+cap can produce is about 14,100 tokens, which was 86 percent of a 16,384 window
+and is 29 percent of the 49,152 the window took on 2026-09-13
+([../reference/measurements.md](../reference/measurements.md)). **What that
+window was raised for is the two-call pair, which the counter does not read** -
+it sizes at 39,284 tokens
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). So
+this counter would catch the next move of the cap going too far for the path it
+watches, and the pair has an assertion of its own.
 
 ### A section keeps the sentence that decides and loses the sentence that narrates
 
