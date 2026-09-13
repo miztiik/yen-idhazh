@@ -2,9 +2,15 @@
 
 A movement in live article lengths warrants inspection; it does not prove an
 extraction failure. A source can publish shorter stories without changing its
-page template. Score-dependent comparisons require matching model, scorer and
-pipeline identities. Each metric needs enough distinct measured articles on
-both sides, and an unmeasured comparison is never reported as healthy.
+page template. Score-dependent comparisons require a matching model and scorer.
+Each metric needs enough distinct measured articles on both sides, and an
+unmeasured comparison is never reported as healthy.
+
+The pipeline stamp was a third part of that identity until 2026-09-12, and it is
+what made the comparison unreachable: the stamp moved on any of seventeen
+inputs, so a reworded prompt inside a window split the window in two and both
+halves fell under the minimum. Nothing was compared, and nothing compared reads
+as no drift at every call site.
 """
 
 from __future__ import annotations
@@ -31,7 +37,7 @@ DRIFT_VERSION: Final = "idhazh-drift-3"
 FAILURE_RATE_MAX: Final = 0.20
 GITHUB_ISSUE_BODY_MAX_BYTES: Final = 65536
 
-type Series = tuple[str, str, str]
+type Series = tuple[str, str]
 
 
 class Alert(StrEnum):
@@ -58,14 +64,13 @@ class Observation:
     source_word_count: int | None
     model_id: str = ""
     scorer_version: str = ""
-    pipeline_fingerprint: str = ""
     url_key: str = ""
     scored_at: str = ""
     date: str = ""
 
     @property
     def series(self) -> Series:
-        return self.model_id, self.scorer_version, self.pipeline_fingerprint
+        return self.model_id, self.scorer_version
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +124,6 @@ def _observation(row: Mapping[str, str]) -> Observation:
         words,
         model_id=row.get("model_id", ""),
         scorer_version=row.get("scorer_version", ""),
-        pipeline_fingerprint=row.get("pipeline_fingerprint", ""),
         url_key=row.get("url_key", ""),
         scored_at=row.get("scored_at") or row["date"],
         date=row["date"],
@@ -263,13 +267,13 @@ def assess(
         for series in sorted({row.series for row in current}):
             if not all(series):
                 skipped.append(
-                    f"{domain}: model-dependent metrics not compared; model, scorer "
-                    "or pipeline identity is missing"
+                    f"{domain}: model-dependent metrics not compared; model or scorer "
+                    "identity is missing"
                 )
                 continue
             current_series = [row for row in current if row.series == series]
             earlier_series = [row for row in earlier if row.series == series]
-            label = f"{domain} [{series[0]}, pipeline {series[2]}]"
+            label = f"{domain} [{series[0]}, scorer {series[1]}]"
             current_copy = _distinct(
                 [row for row in current_series if row.extractiveness is not None]
             )
@@ -428,8 +432,8 @@ def report(
     for finding in result.findings:
         lines.append(f"{finding.alert.value} {finding.domain}: {finding.detail}")
         if finding.series is not None:
-            model, scorer, pipeline = finding.series
-            lines.append(f"  model: {model}; scorer: {scorer}; pipeline: {pipeline}")
+            model, scorer = finding.series
+            lines.append(f"  model: {model}; scorer: {scorer}")
     if result.skipped and include_skipped_details:
         lines.extend(("", "Not compared (not evidence of healthy extraction):", *result.skipped))
     return "\n".join(lines), 0 if result.compared else 1

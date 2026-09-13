@@ -480,7 +480,7 @@ and between them they cover both shapes the swap takes:
  block alone would not have caught.
 
 Both digests absent is legal and means an entry nobody has measured yet. Nothing
-runs on one: `idhazh.fingerprint.build_inputs` already refuses to stamp a run
+runs on one: `idhazh.fingerprint.build_inputs` already refuses to record a run
 whose weights have no recorded digest.
 
 **The stamp did not move.** `declared_for` is classified in

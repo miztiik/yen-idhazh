@@ -75,9 +75,11 @@ rebuild call rather than an edit, and it is the one artefact that repairs itself
 correctly for free.
 
 **`state/seen/` and `state/fingerprints.csv` are deliberately absent from that
-table.** They record that a URL was *seen*, not that it was published. Removing
-a day's rows there would let the next run rediscover every story it just
-unpublished, which turns one operator command into a loop.
+table.** `state/seen/` records that a URL was *seen*, not that it was published;
+removing a day's rows there would let the next run rediscover every story it
+just unpublished, which turns one operator command into a loop.
+`state/fingerprints.csv` has had no writer since 2026-09-12 and is removed
+outright rather than unpublished from.
 
 **The reader-facing half is already designed and must not be re-decided.** This
 page's retention rules bind an unpublished day exactly as they bind a pruned
@@ -298,7 +300,7 @@ What each reader needs, and how far back:
 | --- | --- | --- |
 | `payload.ts` -> `model-work.ts` | per-**day** figures only | `console.max_window_days`, 366 |
 | `backend/idhazh/drift.py` | per-item, per-domain | `recent_days` plus `baseline_days`, 35 days on the scheduled path |
-| `backend/utilities/label_queue.py` | per-item, at the live `scorer_version` and `pipeline_fingerprint` | `evaluation.label_min_run_days`, 10 run-days |
+| `backend/utilities/label_queue.py` | per-item, at the live `scorer_version` | `evaluation.label_min_run_days`, 10 run-days |
 | `backend/idhazh/evals/writer.py` | one row per `OBSERVATION_KEY`, to refuse a repeat | for ever |
 
 **Twenty-four percent of every cell byte is derivable from `run_id`.** Four
@@ -313,9 +315,12 @@ varies**:
 | `version` | 6 | 0 of 30 | 46,286 | 1.7 percent |
 
 `scorer_version` alone is a 99-character string repeated 3,544 times to say one
-of five things, and `RunRecord` **already carries** `scorer_version` and
-`pipeline_fingerprints`, so two of the four are duplicated onto a committed
-manifest today. `date` is a strict prefix of `run_id` on 3,544 of 3,544 rows, for
+of five things, and `RunRecord` **already carries** `scorer_version`, so one of
+the four is duplicated onto a committed manifest today. It carried
+`pipeline_fingerprints` as well until 2026-09-12; that list is empty now and the
+column beside it is blank on every row written since, so this table's second row
+measures a cost the ledger stopped paying rather than one it still pays. `date`
+is a strict prefix of `run_id` on 3,544 of 3,544 rows, for
 another 38,984 bytes. Together: **663,406 bytes, 24.3 percent, 111 MB a year to
 84 MB.**
 

@@ -324,41 +324,88 @@ export function modelWork(
 	);
 }
 
+/** The slice of a published day's runs the model-change boundary needs.
+ *
+ * Structural rather than imported, so `RunSummary` from the payload loader
+ * satisfies it and this module goes on importing nothing at runtime - which is
+ * what lets the browser suite load it in plain Node with no alias to resolve.
+ */
+export interface RecordedRunDay {
+	date: string;
+	records: readonly { inputs: unknown }[];
+}
+
+/** The first day a run recorded its inputs by name instead of as a digest.
+ *
+ * Before it, the boundary is read off the score ledger's `pipeline_fingerprint`.
+ * On and after it, off each run's recorded input manifest. A hard split, never
+ * "prefer whichever is present": the two shapes always compare unequal, so an
+ * overlap would invent a boundary that nothing caused.
+ *
+ * Remove the historical branch once the oldest day the widest console window can
+ * show is on or after this date. Until then the nine boundaries the committed
+ * ledger holds are still reachable, and a chart with no rules over a window that
+ * contains them would read as "nothing moved".
+ */
+export const RECORDED_INPUTS_FROM = '2026-09-12';
+
 /** Every day the pipeline that wrote the summaries was not the one before it.
  *
- * The stamp compared is `pipeline_fingerprint`: a digest over the declared
- * inputs that can move an output - the weights, the quantisation, the llama.cpp
- * build, the chat template, the prompt, the output schema, the truncation cap,
- * the decoding settings, and the extractor and sanitizer versions
- * (`backend/idhazh/contracts/fingerprint.py`).
+ * What is compared is each run's recorded input manifest: the weights and their
+ * digest, the llama.cpp build, the chat template, the prompt, the output schema,
+ * the truncation cap, the decode and runtime settings, and the extractor and
+ * sanitizer versions (`backend/idhazh/contracts/fingerprint.py`).
  *
  * `model_id` cannot stand in for it. Measured 2026-08-27 over 2,232 rows the
- * stamp moved four times while every row named one model, so a slug attributes
+ * inputs moved four times while every row named one model, so a slug attributes
  * a changed number to an unchanged pipeline - which is why
- * `docs/concepts/evaluation.md` segments on the stamp too.
+ * `docs/concepts/evaluation.md` segments on the inputs too. Nor can `run_id`:
+ * measured 2026-09-12 over 9,435 published rows across 22 dates, it made 21 of
+ * the 21 day transitions a boundary, because it is an execution identity and
+ * moves every run whether or not anything about the pipeline did.
  *
- * A day is a boundary when it ran a stamp the previous scored day did not run.
- * A day that only stopped using one of yesterday's stamps changed nothing and
- * is not a boundary. A day carrying several stamps is one boundary, because a
- * day is one column and a change inside it cannot be placed any finer.
+ * A day is a boundary when it ran a manifest the previous recorded day did not
+ * run. A day that only stopped using one of yesterday's is not a boundary. A day
+ * carrying several is one boundary, because a day is one column and a change
+ * inside it cannot be placed any finer.
+ *
+ * The cutover day itself is never a boundary: its predecessor's identity comes
+ * from the score ledger and its own from the run record, so the comparison there
+ * is a shape artefact rather than a fact about the pipeline.
  *
  * Derived over the whole ledger and never over a window, so a chart opening on
  * the day after a change still knows the change happened.
  */
-export function pipelineChanges(scores: Record<string, string>[]): string[] {
-	const stamps = new Map<string, Set<string>>();
+export function pipelineChanges(
+	scores: Record<string, string>[],
+	runs: readonly RecordedRunDay[] = []
+): string[] {
+	const identities = new Map<string, Set<string>>();
+	const add = (date: string, identity: string) =>
+		identities.set(date, (identities.get(date) ?? new Set<string>()).add(identity));
 	for (const row of scores) {
 		const date = row.date ?? '';
 		const stamp = row.pipeline_fingerprint ?? '';
-		if (date === '' || stamp === '') continue;
-		stamps.set(date, (stamps.get(date) ?? new Set<string>()).add(stamp));
+		if (date === '' || stamp === '' || date >= RECORDED_INPUTS_FROM) continue;
+		add(date, stamp);
 	}
-	const dates = [...stamps.keys()].sort();
+	for (const day of runs) {
+		if (day.date < RECORDED_INPUTS_FROM) continue;
+		for (const record of day.records) {
+			if (record.inputs !== null && record.inputs !== undefined) {
+				add(day.date, JSON.stringify(record.inputs));
+			}
+		}
+	}
+	const dates = [...identities.keys()].sort();
 	const changes: string[] = [];
 	for (let index = 1; index < dates.length; index += 1) {
-		const before = stamps.get(dates[index - 1]) as Set<string>;
-		const now = stamps.get(dates[index]) as Set<string>;
-		if ([...now].some((stamp) => !before.has(stamp))) changes.push(dates[index]);
+		// The cutover is a change of store, not of pipeline. Skipping it is the
+		// whole of the seam's cost, and it costs at most one true boundary.
+		if (dates[index - 1] < RECORDED_INPUTS_FROM && dates[index] >= RECORDED_INPUTS_FROM) continue;
+		const before = identities.get(dates[index - 1]) as Set<string>;
+		const now = identities.get(dates[index]) as Set<string>;
+		if ([...now].some((identity) => !before.has(identity))) changes.push(dates[index]);
 	}
 	return changes;
 }

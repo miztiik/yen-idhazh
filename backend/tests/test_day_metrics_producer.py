@@ -342,9 +342,9 @@ def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
     assert metrics.items_planned == 8
     assert metrics.items_failed == 1
 
-    # Model and pipeline, off the newest score row (finding 70).
+    # Model, off the newest score row (finding 70).
     assert metrics.model_id == "energy-model"
-    assert metrics.pipeline_fingerprint == "a" * 64
+    assert metrics.pipeline_fingerprint is None, "the stamp was retired and no producer fills it"
 
     # The published day.
     assert metrics.items_published == 4

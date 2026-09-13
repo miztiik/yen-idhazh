@@ -63,7 +63,6 @@ def of(row: EvalRow, *, premise: str, summary: str) -> EvidenceItem:
     return EvidenceItem(
         version=EvidenceItem.schema_version(),
         url_key=row.url_key,
-        pipeline_fingerprint=row.pipeline_fingerprint,
         output_digest=row.output_digest,
         scorer_version=row.scorer_version,
         date=row.date,
