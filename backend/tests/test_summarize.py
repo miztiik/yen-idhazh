@@ -346,6 +346,86 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
     assert "--no-context-shift" in argv
 
 
+def test_a_draft_head_is_absent_until_an_entry_declares_one() -> None:
+    """Null is the default, and the default is one model.
+
+    The bite proof for the other half: a `server_argv` that always spelled the
+    draft flags would start a server looking for weights nobody fetched.
+    """
+    from idhazh.contracts.app_config import ModelRef
+
+    argv = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
+        inference=InferenceConfig(),
+    )
+
+    assert not [flag for flag in argv if flag.startswith("--spec-")]
+
+
+def test_the_draft_flags_are_spelled_the_way_the_pinned_build_spells_them() -> None:
+    """The row's whole trap, in one assertion.
+
+    `--draft-max` and `--draft-min` are the spellings most of the internet
+    still uses and llama.cpp REMOVED them: the pinned build exits telling the
+    operator to use `--spec-draft-n-max` and `--spec-draft-n-min` instead. A
+    spelling copied from an older page is a server that does not start, and it
+    fails at run time on a runner rather than here.
+
+    So this test pins the four flags AND refuses the two retired ones by name,
+    which is what makes it catch a well-meaning rename in either direction.
+    """
+    from idhazh.contracts.app_config import DraftConfig, ModelRef, SpeculationType
+
+    argv = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=ModelRef(
+            id="m",
+            repo="r",
+            file="w.gguf",
+            quantisation="Q4_K_M",
+            draft=DraftConfig(
+                repo="drafts/tiny",
+                revision="0" * 40,
+                file="tiny.gguf",
+                sha256="a" * 64,
+                n_max=5,
+                n_min=2,
+                p_min=0.25,
+            ),
+        ),
+        inference=InferenceConfig(),
+    )
+
+    assert argv[argv.index("--spec-draft-model") + 1] == str(Path("models/tiny.gguf"))
+    assert argv[argv.index("--spec-type") + 1] == SpeculationType.DRAFT_SIMPLE.value
+    assert argv[argv.index("--spec-draft-n-max") + 1] == "5"
+    assert argv[argv.index("--spec-draft-n-min") + 1] == "2"
+    assert argv[argv.index("--spec-draft-p-min") + 1] == "0.25"
+    for retired in ("--draft-max", "--draft-min", "--draft", "--draft-n"):
+        assert retired not in argv, f"{retired} was removed from llama.cpp and will not start"
+
+
+def test_a_draft_minimum_above_its_maximum_is_refused() -> None:
+    """The runtime starts on this pair and drafts nothing, which is the worst
+    shape a misconfiguration can take: no error, no speedup, no explanation."""
+    from pydantic import ValidationError
+
+    from idhazh.contracts.app_config import DraftConfig
+
+    with pytest.raises(ValidationError, match="cannot exist"):
+        DraftConfig(
+            repo="drafts/tiny",
+            revision="0" * 40,
+            file="tiny.gguf",
+            sha256="a" * 64,
+            n_max=2,
+            n_min=8,
+        )
+
+
 def test_server_argv_names_the_port_it_was_given() -> None:
     """One declaration reaches the flag, both client addresses and the probes.
 

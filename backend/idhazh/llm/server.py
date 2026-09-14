@@ -385,6 +385,30 @@ def server_argv(
         argv.append("--metrics")
     if not inference.startup_warmup:
         argv.append("--no-warmup")
+    # The draft head, when the entry declares one. Its path is the target's own
+    # directory, because one fetch step writes both files and a second way of
+    # saying where weights live is a second way to be wrong.
+    #
+    # Every flag here is spelled the way build b10598 spells it, which is not
+    # the way most of the internet spells it: `--draft-max` and `--draft-min`
+    # were REMOVED and the binary now exits telling you to use
+    # `--spec-draft-n-max` and `--spec-draft-n-min`. A spelling taken from an
+    # older page is a server that will not start.
+    if model.draft is not None:
+        argv.extend(
+            (
+                "--spec-draft-model",
+                str(weights.parent / model.draft.file),
+                "--spec-type",
+                model.draft.spec_type.value,
+                "--spec-draft-n-max",
+                str(model.draft.n_max),
+                "--spec-draft-n-min",
+                str(model.draft.n_min),
+                "--spec-draft-p-min",
+                str(model.draft.p_min),
+            )
+        )
     return argv
 
 
