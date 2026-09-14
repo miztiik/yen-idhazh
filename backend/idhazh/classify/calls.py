@@ -1275,8 +1275,8 @@ def call_two_output_tokens(
 
     **What this guarantees, and what it does not.** The structural half is a
     true ceiling. The prose half is a sizing: a reply that spent its whole
-    character rail on 12-character words would cost more tokens than 1.3 a word,
-    and the rail is a character rail. That is deliberate and it is why
+    character rail on 12-character words would cost more tokens than the
+    measured ratio a word, and the rail is a character rail. That is deliberate and it is why
     `recovered_completion` exists - section 11.3's wording is that the budget is
     the brake and the recovery is the seatbelt. A budget large enough to be an
     unbreakable ceiling would leave no window for the article it is summarising.

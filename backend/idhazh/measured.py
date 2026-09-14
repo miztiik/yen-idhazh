@@ -415,10 +415,10 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
     subject=QWEN35_9B_Q4_K_M,
     method=(
         "(7,093 - 997) / 3,846 over the same shard. extract.truncate_to_tokens spends "
-        "the cap at 1.3 tokens a word, so a body tokenizing above that overruns the "
-        "budget its own cap gave it. The spread is the point: the median item runs "
-        "1.306, so a window sized on the median is sized on the article that never "
-        "causes trouble."
+        "the cap at TOKENS_A_WORD_AT_THE_CUT, so a body tokenizing above that ratio "
+        "overruns the budget its own cap gave it. The spread is the point: the median "
+        "item runs 1.306, so a window sized on the median is sized on the article that "
+        "never causes trouble."
     ),
     when_it_fires=(
         "an article tokenized harder than any before it, or the weights moved. Raise "

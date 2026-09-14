@@ -310,16 +310,13 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     rows the prompt sizes at 43,603 and the sequence at 54,887 tokens, which is
     84 percent of a 65,536 window with 10,649 spare.
 
-    **The 10,649 is a margin with a derivation, which is why it is not wider.**
-    It is 25 percent of the two-call sum before rounding, the size of the one
-    tokenizer miss on record - `measured` says 1.585 tokens a word and the
-    densest cap-length build delivered 1.952 - rounded up to a whole multiple of
-    16,384 and of the 512-token batch. A wider window costs almost nothing in
-    memory and costs this assertion its reach: the gate is the product on this
-    path, and it cannot report a sequence that grew until the sequence has
-    outgrown the window. Ruled by Carmack, 2026-09-13, over the 65,536 that
-    branch first carried at a 10,000 cap; the cap doubled on 2026-09-14 and
-    65,536 is what that cap needs rather than slack it was given.
+    **The 10,649 is what the first whole multiple of 16,384 and of the 512-token
+    batch above the sum leaves over, and that is the rule.** A wider window costs
+    almost nothing in memory and costs this assertion its reach: the gate is the
+    product on this path, and it cannot report a sequence that grew until the
+    sequence has outgrown the window. Ruled by Carmack, 2026-09-13, over the
+    65,536 that branch first carried at a 10,000 cap; the cap doubled on
+    2026-09-14 and 65,536 is what that cap needs rather than slack it was given.
 
     **At 32,768 this failed by 6,516 tokens and the failure was not theoretical.**
     Of eight cap-length articles built from committed corpus prose on 2026-09-13,
