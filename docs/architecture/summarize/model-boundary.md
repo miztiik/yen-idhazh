@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -196,7 +196,33 @@ before the first item:
 | 5 | Is the window inside what the model was trained for? | A short native window under a larger configured one |
 
 None has a skip flag. The proof is what pays for declaring the envelope in
-config at all.
+config at all. An unread proof refuses too: a server that will not answer, a
+model list that names no trained length, or a weights file whose header cannot
+be read stops the run exactly as a disagreement does.
+
+`idhazh.llm.server.prove_the_entry` is the whole of it, and `digest.yml` calls
+it in the work job between the health check and the first item. Each arm is a
+function of its own over recorded values, so each is driven from a fixture in
+both directions - once with the agreeing value, once with one value changed -
+and every refusal names what was declared beside what was reported.
+
+**Where each arm reads its fact.** Arms 1, 2, 3 and 5 read the running server:
+`/apply-template` and `/tokenize` for the render, two `/completions` calls for
+the cache and the grammar, `/v1/models` for the trained length. Arm 4 reads the
+weights file itself, because llama-server does not publish an architecture.
+`/props` carries the path, the alias, the file type, the build and the window;
+`/v1/models` adds the vocabulary, the embedding width, the parameter count and
+the trained length. Neither carries `general.architecture`, so the probe reads
+that key off the front of the file the server was pointed at - a few kilobytes,
+not a size that follows the model - beside the `/props` filename assertion
+`digest.yml` already makes. The filename says which file; the header says what
+that file is.
+
+**Arm 3 builds its schema from the one the run really sends.** The reply schema
+is generated from a model, so a committed probe schema would be a second copy
+that drifts. `prove_the_entry` takes the schema as an argument instead - which
+is also what keeps the model layer at the bottom of the dependency graph, since
+the module that builds that schema imports this one.
 
 ## The lifecycle of a model
 
@@ -307,19 +333,18 @@ second one arrives within a release of the first.
 
 Both shims exist and both work, and the schema constrains the decode on both
 transports - measured on build b10444, 2026-09-12. What is wrong is **where the
-model-shaped facts are declared.** The turn envelope sits in one global file
-with no model key; the system placement and the thinking keyword are spelled in
-source; arm 2 of the bench indexes a config key that does not exist, so it
-cannot run at all. The boundary is real, but it is not yet configuration, and a
-model whose turns differ needs a source edit.
+model-shaped facts are declared.** The system placement and the thinking keyword
+are spelled in source; arm 2 of the bench indexes a config key that does not
+exist, so it cannot run at all. The boundary is real, but it is not yet
+configuration all the way down.
 
-Nothing reconciles the envelope against the running server either, which is
-what makes that arrangement quietly dangerous rather than merely inconvenient.
-A wrong marker is accepted by the grammar and yields worse summaries with
-nothing red.
+The turn envelope is no longer part of that list. It sits on the model entry,
+and since 2026-09-14 the five proofs above reconcile it against the running
+server before the first item - so a wrong marker now refuses the shard instead
+of yielding worse summaries with nothing red.
 
-Moving those facts onto the entry, adding the five proofs, and drawing arm 2's
-samples from the holdout is
+Moving the rest of those facts onto the entry and drawing arm 2's samples from
+the holdout is
 [`../../../TODO/20260913-28-model-swap-plan.md`](../../../TODO/20260913-28-model-swap-plan.md).
 Its Status Reckoner is the live view of what has landed. **This page describes
 the boundary rather than tracking the work**, so it changes when the shape

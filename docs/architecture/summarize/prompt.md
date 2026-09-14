@@ -459,6 +459,14 @@ and renders every turn anonymous. The other three may not be empty;
 `continued_prompt` splices call 2 onto `turn_closing`, so an empty seam joins
 two turns into one and the grammar still answers.
 
+**The validators check the shape; the server checks the values.** A marker that
+passes all four and is still wrong for these weights was, until 2026-09-14, a
+claim nobody tested. It is now the first of the five start-up proofs: the run
+sends a fixed two-turn probe to the server's own template endpoint and compares
+token ids, so a rendered prompt with no turn structure refuses the shard before
+the first item instead of quietly producing worse summaries
+([model-boundary.md](model-boundary.md)).
+
 **The empty reasoning block is written deliberately, and writing it is what
 keeps this a transport change.** It is what the chat template put there, so the
 bytes the model sees are the bytes it saw before. Whether omitting it would move
