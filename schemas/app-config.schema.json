@@ -1005,10 +1005,43 @@
     },
     "LoggingConfig": {
       "additionalProperties": false,
+      "description": "Which records the pipeline builds, and how loud the logger that prints them is.\n\nThose are two different questions and this block holds both. **The flags\nchoose which records EXIST; `level` chooses how loud the logger is.** Turning\nthe level down to WARNING does not stop a per-item record being built, and\nturning it up to DEBUG does not create one.\n\nOne switch would not have done. Per-item lines cost a few hundred bytes a\nrun and prompt capture costs a run artifact, so an operator has to be able to\nkeep the cheap instrument and drop the expensive one. That is why there are\nfive flags here rather than a verbosity dial (Fowler, 2026-09-14).\n\nEvery flag defaults ON, because the reason they exist is a 5x model-time\nregression that ran for six days with nothing printing during a 200-minute\nshard. They are defaulted on to be switched off once that is closed, so\n**every one of them except `item_lines` carries its removal condition on the\nline that declares it** (Guardrail #6), and each condition names the reading\nthat retires it rather than a piece of work that lands.",
       "properties": {
+        "capture_prompts": {
+          "default": true,
+          "description": "Whether the rendered prompts are written to a run artifact. Retire it when the prompt is no longer in question - a week of runs in which every item's recorded prompt token count matches what the budget predicts, with nothing truncated. At that point the SHA-256 and the token count each row already carries say what the text said, for a fraction of the bytes.",
+          "title": "Capture Prompts",
+          "type": "boolean"
+        },
+        "capture_replies": {
+          "default": true,
+          "description": "Whether the raw model replies are written to a run artifact. The most expensive thing this block can switch on, because a reply is the longest text in the run. Retire it when no item has been cut short for a week and the decoded token counts agree with what each row records, because the reply text is then answering a question nobody is asking.",
+          "title": "Capture Replies",
+          "type": "boolean"
+        },
+        "item_lines": {
+          "default": true,
+          "description": "Whether an item logs a record when it starts and another when it finishes, success or failure. NO REMOVAL CONDITION, on purpose: this is the permanent instrument and not a debugging aid. A run that cannot say which item it is on, and which ones it got through, is the blind window the rest of this block exists to end. It is a knob at all only so an operator re-running one shard by hand can quieten it for that invocation.",
+          "title": "Item Lines",
+          "type": "boolean"
+        },
         "level": {
           "$ref": "#/$defs/LogLevel",
-          "default": "INFO"
+          "default": "INFO",
+          "description": "How loud the logger is, and nothing else. Unrelated to the flags beside it: they decide which records are built, this decides which of the built records are printed. It predates them and no removal condition applies."
+        },
+        "stage_lines": {
+          "default": true,
+          "description": "Whether fetch, extract, label, summarize and faithfulness each log a record when they end. Retire it when the per-stage split has stopped saying anything the completion record does not: a week of runs in which no stage's share of item time moves by more than the run-to-run spread, and no item time is left unattributed. Until then a shard that dies on a timeout names no stage at all, and the completion record arrives only for an item that finished.",
+          "title": "Stage Lines",
+          "type": "boolean"
+        },
+        "waiting_heartbeat_seconds": {
+          "default": 30,
+          "description": "How often, in seconds, to log elapsed time while a model call is in flight. 0 turns the heartbeat off and IS the retirement, so this knob retires itself rather than being deleted. A NEGATIVE VALUE IS REFUSED: a number that quietly means never when the operator meant often is the worst shape a misconfiguration of this knob can take. Set it to 0 once the slowest single model call in a full run has stayed under a minute for a week, because then a stuck call is visible from its own completion record and elapsed time adds nothing. Today the slowest call returns after 22 minutes having printed nothing at all.",
+          "minimum": 0,
+          "title": "Waiting Heartbeat Seconds",
+          "type": "integer"
         }
       },
       "title": "LoggingConfig",
@@ -1877,6 +1910,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "logging gains five flags beside level: item_lines, stage_lines, waiting_heartbeat_seconds, capture_prompts and capture_replies. Each defaults on, waiting_heartbeat_seconds to 30 seconds and the four booleans to true, and a negative heartbeat is refused. Additive and defaulted, so a config file written before today validates unchanged and a config file with no logging block at all still loads - no read-side migration is owed. level is untouched at INFO and is unrelated: these flags decide which records exist, level decides how loud the logger that prints them is.",
+      "version": "2026-09-14T13:00",
+      "why": "A 5x model-time regression ran for six days and nothing named it. Median model time per item moved 97,879 ms to 475,890 ms between run 34745383977 on 2026-09-13 and run 34852763827 on 2026-09-14, and nothing printed during a 200-minute shard. The new records close that blind window, and they cost bytes, so each one has to be switchable on its own - one verbosity dial cannot keep the per-item lines while dropping prompt capture, which is the expensive one. Every flag except item_lines carries the reading that retires it on the line that declares it (Guardrail #6); item_lines carries none because it is the permanent instrument rather than a debugging aid. This entry adds configuration only - no record is emitted here. Ruled by the owner and Fowler, 2026-09-14 (plan 27, row 4)."
+    },
+    {
       "change": "Added assemble.group_identical_titles, default true. The same-story pass gains a second way into a group: two items whose published headlines say the same thing are one story, beside the cosine it already used. The words must match exactly and the numbers to the coarser of the two precisions written. Additive with a default, so an older config/idhazh.json still validates and no read-side migration is owed. assemble.duplicate_similarity_min is untouched at 0.94.",
       "version": "2026-09-14T12:40",
       "why": "The digest published one story five times in a day and the pass did not group it. The vector is built from `title. summary`, the summary is our own prose about ONE article and is most of the string, so two outlets on one story never converge. Measured 2026-09-14 over the twenty-five committed days: the fifty-three cross-source pairs that share a headline have a median cosine of 0.9177, and the pair a person marked as two stories sits at 0.9317 - the populations overlap, so the threshold was never the defect. The knob exists because the new joiner has no threshold of its own, so without it part of the pass would be invisible to config/ (Guardrail #6). Ruled by Andre, the Editor and Fowler, 2026-09-14; the rounding tolerance on numbers by the owner the same day, measured to admit twelve cross-source pairs over those days and no false merge."
@@ -2594,7 +2632,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-14T12:40",
+      "default": "2026-09-14T13:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2605,5 +2643,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-14T12:40"
+  "version": "2026-09-14T13:00"
 }
