@@ -19,6 +19,7 @@ Then read the one page that owns the thing you are changing.
 | --- | --- |
 | A persisted shape - a payload, a ledger, a config, a schema | `CLAUDE.md` section 11, then the model under `backend/idhazh/contracts/` |
 | A published page | [`../concepts/design-system.md`](../concepts/design-system.md), and the surface's own code |
+| Whether two items are the same story, or why one ran twice | [`../architecture/publishing/layout.md`](../architecture/publishing/layout.md) - the flowchart under "The same story from several sources says so" is the whole rule |
 | A prompt, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |
 | Which model runs, or a figure that belongs to one | [`../reference/models.md`](../reference/models.md) - one row a model, pointing at its dossier |
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |

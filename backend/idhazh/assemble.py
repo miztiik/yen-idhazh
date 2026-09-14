@@ -16,8 +16,10 @@ import binascii
 import hashlib
 import logging
 import math
+import re
 import struct
 import tempfile
+import unicodedata
 from array import array
 from collections.abc import Container, Mapping, Sequence
 from dataclasses import dataclass
@@ -84,6 +86,10 @@ TAXONOMY_VECTORS_RELPATH: Final = "config/taxonomy-vectors.bin"
 #: The threshold a run uses when nobody configured one, read off the contract so
 #: the number exists once. The knob is `assemble.duplicate_similarity_min`.
 DUPLICATE_SIMILARITY_MIN: Final = AssembleConfig().duplicate_similarity_min
+#: Whether the second joiner runs when nobody configured one, read off the
+#: contract so the default exists once. The knob is
+#: `assemble.group_identical_titles`.
+GROUP_IDENTICAL_TITLES: Final = AssembleConfig().group_identical_titles
 _UNTITLED: Final = "Untitled item"
 _ABSTRACT_NOTE: Final = "This is a summary of the paper's abstract. The full paper is a PDF."
 _SHARE_NOTE: Final = "We could only read the first {share} percent of this page."
@@ -581,11 +587,186 @@ def _strength_order(item: DigestItem) -> tuple[float, float, int, str]:
     )
 
 
-def _weakest_link(
+#: Everything that is not a letter, a digit or an underscore, in any script.
+_TITLE_NOISE: Final = re.compile(r"[^\w]+", re.UNICODE)
+#: More than one space, after the reduction above has left some behind.
+_RUN_OF_SPACES: Final = re.compile(r" +")
+#: A written number, with the scale word a desk may attach to it. Digit-group
+#: separators are inside the match so `2,000,035` is one number and not three.
+_WRITTEN_NUMBER: Final = re.compile(
+    r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)\s*"
+    r"(bn|b|k|m|mn|tn|thousand|million|billion|trillion|crore|lakh)?\b",
+    re.IGNORECASE,
+)
+#: What each scale word multiplies its number by.
+_SCALE: Final = {
+    "k": 1_000,
+    "thousand": 1_000,
+    "m": 1_000_000,
+    "mn": 1_000_000,
+    "million": 1_000_000,
+    "b": 1_000_000_000,
+    "bn": 1_000_000_000,
+    "billion": 1_000_000_000,
+    "tn": 1_000_000_000_000,
+    "trillion": 1_000_000_000_000,
+    "lakh": 100_000,
+    "crore": 10_000_000,
+}
+
+
+@dataclass(frozen=True)
+class StoryKey:
+    """A published headline split into the words and the numbers in it.
+
+    The words have to match exactly. The numbers only have to agree to the
+    coarser of the two precisions they were written with, which is what lets
+    `$12.9 billion` and `$12.93 billion` be one story while `25 percent` and
+    `50 percent` are two.
+
+    A number leaves no trace in `shape`; what pairs them up is their position in
+    `numbers`, and a headline carrying a figure the other does not carry is
+    refused on the count before any value is compared.
+    """
+
+    #: The reduced headline with the numbers taken out of it.
+    shape: str
+    #: Each number's value and how many significant digits it was written with.
+    numbers: tuple[tuple[float, int], ...]
+
+
+def _reduce(title: str) -> str:
+    """The reduction itself, so the untitled key below is derived and not typed."""
+    folded = unicodedata.normalize("NFKC", title).casefold()
+    return _RUN_OF_SPACES.sub(" ", _TITLE_NOISE.sub(" ", folded)).strip()
+
+
+#: What the untitled fallback reduces to. Derived rather than written out, so it
+#: cannot drift away from the string `to_digest_item` actually publishes.
+_UNTITLED_KEY: Final = _reduce(_UNTITLED)
+
+
+def _written(digits: str, scale: str | None) -> tuple[float, int]:
+    """One written number as its value and the precision it was written with.
+
+    Precision is the count of significant digits on the page, so `2 million` is
+    one digit of precision and `2,000,035` is seven. A scale word multiplies the
+    value and adds no precision - writing `2 million` does not claim to know the
+    next six digits, and the whole rule below rests on that.
+    """
+    plain = digits.replace(",", "")
+    value = float(plain) * (_SCALE[scale.lower()] if scale else 1)
+    significant = len(plain.replace(".", "").lstrip("0")) or 1
+    return value, significant
+
+
+def _rounds_to(value: float, significant: int) -> float:
+    """`value` written with `significant` digits and no more."""
+    if value == 0:
+        return 0.0
+    exponent = math.floor(math.log10(abs(value)))
+    return round(value, -(exponent - significant + 1))
+
+
+def numbers_agree(
+    left: tuple[tuple[float, int], ...], right: tuple[tuple[float, int], ...]
+) -> bool:
+    """Do two headlines' numbers report the same facts?
+
+    A number is only as precise as it was written, so two of them agree when
+    they agree at the coarser of the two precisions. `2 million` and
+    `2,000,035` are one death toll written twice; `25 percent` and `50 percent`
+    are two different figures, and `2025` and `2026` are two different years,
+    because both of those pairs were written to the same precision and differ
+    inside it.
+    """
+    if len(left) != len(right):
+        return False
+    for (one, one_digits), (other, other_digits) in zip(left, right, strict=True):
+        coarser = min(one_digits, other_digits)
+        if _rounds_to(one, coarser) != _rounds_to(other, coarser):
+            return False
+    return True
+
+
+def story_key(title: str) -> StoryKey | None:
+    """A published headline reduced to what two outlets would share, or nothing.
+
+    Compatibility-normalise, casefold, and turn everything that is not a letter
+    or a digit into a space. That folds the three differences two desks make to
+    one headline - capitalisation, a comma, a typographic quote - and folds
+    nothing else.
+
+    **Numbers come out of the words and are compared separately**, because the
+    two need different rules. The words have to match exactly. A number only has
+    to agree to the coarser of the two precisions it was written with, since a
+    desk that writes `2 million` is not claiming the next six digits and a desk
+    that writes `2,000,035` is. `$12.9 billion` and `$12.93 billion` are one
+    acquisition; `25 percent` and `50 percent` are two different figures, and
+    `Budget 2025` and `Budget 2026` are two different years. A scale word is
+    read into the value rather than left in the words, so `$12.9bn` and
+    `$12.9 billion` are one headline.
+
+    Non-Latin scripts are kept whole. An accent is kept too: stripping combining
+    marks would fold Devanagari matras into each other, and over the twenty-five
+    committed days an accent-blind reduction found the same 57 cross-source
+    pairs this one finds and not one more, so the risk buys nothing.
+
+    Nothing comes back for a headline that reduces to nothing, and nothing for
+    the untitled fallback - two sources can both land on it, and two unrelated
+    stories both called `Untitled item` are not one story.
+    """
+    folded = unicodedata.normalize("NFKC", title).casefold()
+    numbers: list[tuple[float, int]] = []
+
+    def take(found: re.Match[str]) -> str:
+        numbers.append(_written(found.group(1), found.group(2)))
+        return " "
+
+    shape = _reduce(_WRITTEN_NUMBER.sub(take, folded))
+    if not shape or shape == _UNTITLED_KEY:
+        return None
+    return StoryKey(shape=shape, numbers=tuple(numbers))
+
+
+def _pair_fit(
+    left: str,
+    right: str,
+    vectors: dict[str, array[int]],
+    norms: dict[str, float],
+    keys: Mapping[str, StoryKey],
+) -> float:
+    """How strongly two items read as one story, on a 0 to 1 scale.
+
+    One published headline, reduced by `story_key`, is the strongest evidence
+    this pass has and scores 1.0 without the encoder being consulted. Our own
+    summariser wrote both of those headlines, off two different articles, so
+    two that survive the reduction identical are our own desk saying twice what
+    the story is. Everything else is the cosine over the vectors the day
+    already carries.
+
+    An item with no key - untitled, or a headline that reduces to nothing - is
+    never equal to anything, including another item with no key.
+    """
+    key = keys.get(left)
+    other = keys.get(right)
+    if key is not None and other is not None and key.shape == other.shape:
+        if numbers_agree(key.numbers, other.numbers):
+            return 1.0
+    return cosine_int8(
+        vectors[left],
+        vectors[right],
+        left_norm=norms[left],
+        right_norm=norms[right],
+    )
+
+
+def _group_fit(
     cluster: Sequence[str],
     item_id: str,
     vectors: dict[str, array[int]],
     norms: dict[str, float],
+    keys: Mapping[str, StoryKey],
     floor: float,
 ) -> float | None:
     """How well this item fits the whole group, or nothing if it does not.
@@ -593,16 +774,14 @@ def _weakest_link(
     Every pair inside a group clears the threshold, not only each item against
     the one it joined. Single-link grouping chains - A is the same story as B
     and B as C, while A and C are two different stories - and a chained group is
-    exactly the false merge this pass may not make.
+    exactly the false merge this pass may not make. The all-pairs rule is what
+    holds once there are two ways in: a shared headline is transitive on its
+    own and a cosine is not, so their union is not either, and single-link over
+    that union would chain through whichever of the two happened to fire.
     """
     weakest = 1.0
     for member in cluster:
-        score = cosine_int8(
-            vectors[item_id],
-            vectors[member],
-            left_norm=norms[item_id],
-            right_norm=norms[member],
-        )
+        score = _pair_fit(item_id, member, vectors, norms, keys)
         if score < floor:
             return None
         weakest = min(weakest, score)
@@ -614,18 +793,37 @@ def collapse_same_story(
     embeddings: DigestEmbeddings | None,
     *,
     similarity_min: float = DUPLICATE_SIMILARITY_MIN,
+    group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
 ) -> list[DigestItem]:
-    """Group the day on the vectors it already carries, and keep the strongest.
+    """Group the day on what it already carries, and keep the strongest.
 
     Nothing is removed. Every item stays in the published order it was in, with
     its anchor and its archive entry; a grouped item names the one the default
     view draws instead, and every item in a group carries the count of other
     sources so the sentence on it is true whichever one is on screen.
 
+    Two items are one story when their published headlines reduce to the same
+    key, or when the vectors the day carries score above `similarity_min`.
+    Either way **every pair inside a group has to clear the bar**. The headline
+    is the load-bearing one: the vector is built from `title. summary`, the
+    summary is our own prose about ONE article and is most of that string, so
+    two honest tellings of one story are pulled apart by the part that is
+    guaranteed to differ. Measured 2026-09-14, the cosine over fifty-three
+    cross-source pairs that share a headline has a median of 0.9177, which is
+    below a pair a person marked as two different stories - so no threshold
+    separates them and the text is what was wrong.
+
+    Two headlines match on their words exactly and on their numbers to the
+    coarser precision of the two, so a desk rounding a figure does not cost the
+    reader a group. `story_key` owns that rule and states what it refuses.
+
     Runs at build time over the block the payload already holds (Guardrail #1): the
     browser never computes this, and no encoder is loaded to do it. A day with
     no vectors, and an item without one, come back untouched - both fields stay
     null, which reads as unknown rather than as "only one source carried this".
+    **A matching headline does not lift that**: an item with no vector is not
+    grouped, because a published null that becomes a number is a wider claim
+    than this pass is allowed to make.
 
     **A group is always across sources**, so `also_covered_by` is 1 or more on
     every grouped item and 0 on every other item that carries a vector. One
@@ -635,12 +833,20 @@ def collapse_same_story(
     still costing a story. It is also where the encoder is least trustworthy:
     two press releases from one desk share their boilerplate, so the Federal
     Reserve's June minutes and its July minutes score 0.9867 against each other
-    and are two different documents.
+    and are two different documents. The same holds for a headline: one desk
+    running one title on two days is a recurring slot, and the across-sources
+    rule is what keeps this pass away from it.
     """
     if embeddings is None or not embeddings.vectors:
         return list(items)
 
     by_id = {item.item_id: item for item in items}
+    keys: dict[str, StoryKey] = {}
+    if group_identical_titles:
+        for item in items:
+            key = story_key(item.title)
+            if key is not None:
+                keys[item.item_id] = key
     vectors: dict[str, array[int]] = {}
     norms: dict[str, float] = {}
     for item_id, encoded in embeddings.vectors.items():
@@ -667,7 +873,7 @@ def collapse_same_story(
             # forms a group on its own and never joins a group it is alone in.
             if all(by_id[member].source_id == item.source_id for member in cluster):
                 continue
-            fit = _weakest_link(cluster, item.item_id, vectors, norms, similarity_min)
+            fit = _group_fit(cluster, item.item_id, vectors, norms, keys, similarity_min)
             # `>` after the first candidate, so a tie goes to the group that
             # formed first - which is the one built round the stronger story,
             # because the walk is in strength order.
@@ -1288,6 +1494,7 @@ def build_day(
     ui: UiConfig | None = None,
     placement: PlacementConfig | None = None,
     duplicate_similarity_min: float = DUPLICATE_SIMILARITY_MIN,
+    group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
 
@@ -1348,7 +1555,12 @@ def build_day(
     # will see it, and grouping is what decides which item of a group the default
     # view draws. Leading first would choose against a day that no longer exists
     # by the time it renders. See docs/architecture/publishing/layout.md.
-    combined = collapse_same_story(combined, merged, similarity_min=duplicate_similarity_min)
+    combined = collapse_same_story(
+        combined,
+        merged,
+        similarity_min=duplicate_similarity_min,
+        group_identical_titles=group_identical_titles,
+    )
     combined = place(
         combined,
         config=placement or PlacementConfig(),
