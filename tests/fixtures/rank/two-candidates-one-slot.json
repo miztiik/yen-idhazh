@@ -1,0 +1,35 @@
+{
+  "why": "One desk, two stories, one slot, and the story that loses is the one carrying the lens. It is the smallest shape that makes the question worth asking: after the run, the winner is on the page and the loser is gone, so the only way to ever know what a heavier lens weight would have bought is to have written the loser's score down at the time. Both carriers share a source_id so max_per_source of 1 refuses the second, and both were published at the same instant so recency is identical - the tier is the only term separating them, which is what makes the lens arithmetic readable in the numbers. Tiers are the integers SourceTier carries, because the tier IS the ranking weight.",
+  "now": "2026-09-13T12:00:00Z",
+  "vertical": "ai",
+  "max_per_source": 1,
+  "lens": {
+    "id": "chips",
+    "weight": 0.3,
+    "multiplier": 1.25
+  },
+  "candidates": [
+    {
+      "role": "taken",
+      "shows": "The best tier on the desk, carrying no lens at all. Its counterfactual score must equal its committed score exactly, because a run that moves a lens weight must not move a story that never matched one.",
+      "source_id": "wire-desk",
+      "tier": 1,
+      "source_form": "article",
+      "canonical_url": "https://wire.example.org/rates-decision",
+      "title": "A ministry statement",
+      "published_at": "2026-09-13T11:00:00Z",
+      "lens_hit": false
+    },
+    {
+      "role": "refused",
+      "shows": "The story the slot went past. It matches the lens, so it is the one a heavier weight could have lifted - and it is also the one that leaves no trace anywhere else, because a refused candidate reaches no payload and no page.",
+      "source_id": "wire-desk",
+      "tier": 3,
+      "source_form": "article",
+      "canonical_url": "https://wire.example.org/forum-thread-4412",
+      "title": "A community post about chips",
+      "published_at": "2026-09-13T11:00:00Z",
+      "lens_hit": true
+    }
+  ]
+}

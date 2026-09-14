@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-14",
+  "lens_bonus": 0.0,
+  "lens_id": "",
+  "lens_multiplier": 1.25,
+  "run_id": "2026-09-14-1",
+  "score_committed": 1.204,
+  "score_counterfactual": 1.204,
+  "taken": true,
+  "url_key": "lab.example.org/a-story-no-lens-matched",
+  "version": "2026-09-14T11:00",
+  "vertical": "ai"
+}

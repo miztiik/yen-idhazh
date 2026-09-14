@@ -702,7 +702,9 @@ def test_a_story_carried_three_ways_is_one_item() -> None:
 
 
 def test_the_widely_carried_story_leads_the_day() -> None:
-    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW)
+    items = plan_vertical(
+        AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW
+    ).items
     assert items[0].canonical_url == "https://blog.example-lab.org/2026/08/model-release"
     assert items[0].carried_by == 3
 
@@ -748,16 +750,16 @@ def test_a_vertical_takes_the_theme_bonus_from_the_address_that_earned_it() -> N
     """`plan_vertical` reads the mapping the plan stage built off the headlines."""
     candidates = all_candidates()
     chosen = candidates[0].url_key
-    plain, _ = plan_vertical(AI, candidates, config=CollectConfig(), eligible_feeds=3, now=NOW)
-    _, lifted = plan_vertical(
+    plain = plan_vertical(AI, candidates, config=CollectConfig(), eligible_feeds=3, now=NOW).summary
+    lifted = plan_vertical(
         AI,
         candidates,
         config=CollectConfig(),
         eligible_feeds=3,
         now=NOW,
         lens_bonuses={chosen: 0.3},
-    )
-    _, flat = plan_vertical(AI, candidates, config=CollectConfig(), eligible_feeds=3, now=NOW)
+    ).items
+    flat = plan_vertical(AI, candidates, config=CollectConfig(), eligible_feeds=3, now=NOW).items
     scores = {item.url_key: item.rank_score for item in flat}
     for item in lifted:
         expected = scores[item.url_key] + (0.3 if item.url_key == chosen else 0.0)
@@ -768,10 +770,10 @@ def test_a_vertical_takes_the_theme_bonus_from_the_address_that_earned_it() -> N
 def test_an_address_with_no_theme_is_unmoved() -> None:
     """An empty mapping must leave the whole day byte-identical."""
     candidates = all_candidates()
-    _, without = plan_vertical(AI, candidates, config=CollectConfig(), eligible_feeds=3, now=NOW)
-    _, empty = plan_vertical(
+    without = plan_vertical(AI, candidates, config=CollectConfig(), eligible_feeds=3, now=NOW).items
+    empty = plan_vertical(
         AI, candidates, config=CollectConfig(), eligible_feeds=3, now=NOW, lens_bonuses={}
-    )
+    ).items
     assert [item.model_dump() for item in without] == [item.model_dump() for item in empty]
 
 
@@ -824,14 +826,16 @@ def test_a_vertical_takes_everything_its_feeds_offered() -> None:
     add up exactly, or a slot went missing somewhere nothing recorded.
     """
     config = CollectConfig(max_per_source=50)
-    summary, items = plan_vertical(AI, all_candidates(), config=config, eligible_feeds=3, now=NOW)
+    summary, items, _ = plan_vertical(
+        AI, all_candidates(), config=config, eligible_feeds=3, now=NOW
+    )
     assert len(items) == summary.considered - summary.too_old
     assert summary.planned == len(items)
 
 
 def test_no_single_feed_becomes_the_whole_vertical() -> None:
     config = CollectConfig(max_per_source=1)
-    _, items = plan_vertical(AI, all_candidates(), config=config, eligible_feeds=3, now=NOW)
+    items = plan_vertical(AI, all_candidates(), config=config, eligible_feeds=3, now=NOW).items
     per_source = Counter(item.source_id for item in items)
     assert max(per_source.values()) == 1
 
@@ -850,15 +854,14 @@ def crowded_candidates() -> list[Candidate]:
 
 
 def crowded_plan(day_ceiling: DayCeiling | None = None) -> list[PlannedItem]:
-    _, items = plan_vertical(
+    return plan_vertical(
         AI,
         crowded_candidates(),
         config=CollectConfig(),
         eligible_feeds=4,
         now=NOW,
         day_ceiling=day_ceiling,
-    )
-    return items
+    ).items
 
 
 def test_a_feed_that_has_had_its_share_of_the_day_takes_less_of_this_one() -> None:
@@ -900,17 +903,17 @@ def test_a_ceiling_with_nothing_to_put_in_its_place_keeps_the_story() -> None:
     so nothing is held down and there is no story to swap in. The ceiling then
     yields rather than costing the reader an item they cannot see was dropped.
     """
-    plain_summary, plain = plan_vertical(
+    plain_summary, plain, _ = plan_vertical(
         AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW
     )
-    _, capped = plan_vertical(
+    capped = plan_vertical(
         AI,
         all_candidates(),
         config=CollectConfig(),
         eligible_feeds=3,
         now=NOW,
         day_ceiling=DayCeiling(per_source=2, carried={"lab-blog": 2}),
-    )
+    ).items
 
     assert [item.model_dump() for item in capped] == [item.model_dump() for item in plain]
     assert plain_summary.planned == len(capped)
@@ -998,7 +1001,7 @@ def test_the_committed_share_bounds_the_largest_day_this_project_has_published()
 
 
 def test_a_vertical_below_its_feed_floor_plans_nothing() -> None:
-    summary, items = plan_vertical(
+    summary, items, _ = plan_vertical(
         AI, all_candidates(), config=CollectConfig(), eligible_feeds=2, now=NOW
     )
     assert summary.below_feed_floor
@@ -1014,26 +1017,26 @@ def test_a_published_address_is_never_planned_again() -> None:
     a second time. See docs/architecture/publishing/layout.md.
     """
     every = all_candidates()
-    _, planned = plan_vertical(AI, every, config=CollectConfig(), eligible_feeds=3, now=NOW)
+    planned = plan_vertical(AI, every, config=CollectConfig(), eligible_feeds=3, now=NOW).items
     assert planned, "the fixture feeds must offer something to drop"
 
     published = frozenset(item.url_key for item in planned)
-    _, replanned = plan_vertical(
+    replanned = plan_vertical(
         AI,
         every,
         config=CollectConfig(),
         eligible_feeds=3,
         now=NOW,
         already_published=published,
-    )
+    ).items
     assert published.isdisjoint(item.url_key for item in replanned)
 
 
 def test_an_item_id_is_the_address_not_the_rank_position() -> None:
     """Run 2 of a day must recognise the work run 1 did, so the id cannot move."""
     every = all_candidates()
-    _, first = plan_vertical(AI, every, config=CollectConfig(), eligible_feeds=3, now=NOW)
-    _, later = plan_vertical(AI, every[1:], config=CollectConfig(), eligible_feeds=3, now=NOW)
+    first = plan_vertical(AI, every, config=CollectConfig(), eligible_feeds=3, now=NOW).items
+    later = plan_vertical(AI, every[1:], config=CollectConfig(), eligible_feeds=3, now=NOW).items
     by_url = {item.canonical_url: item.item_id for item in later}
     for item in first:
         if item.canonical_url in by_url:
@@ -1094,9 +1097,9 @@ def test_one_article_keeps_one_id_whatever_else_is_planned_beside_it() -> None:
 
     answers = []
     for pool in (alone, crowded):
-        _, planned = plan_vertical(
+        planned = plan_vertical(
             AI, pool, config=CollectConfig(), eligible_feeds=3, now=fixture["now"]
-        )
+        ).items
         found = {item.canonical_url: item.item_id for item in planned}
         assert probe in found, "the probe has to survive ranking in both pools"
         answers.append(found[probe])
@@ -1106,7 +1109,9 @@ def test_one_article_keeps_one_id_whatever_else_is_planned_beside_it() -> None:
 
 
 def test_the_list_runs_from_the_highest_score_down() -> None:
-    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW)
+    items = plan_vertical(
+        AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW
+    ).items
     scores = [item.rank_score for item in items]
     assert scores == sorted(scores, reverse=True)
 
@@ -1114,10 +1119,10 @@ def test_the_list_runs_from_the_highest_score_down() -> None:
 def test_the_same_feeds_produce_the_same_day_twice() -> None:
     """No model, no randomness - a re-run at the same instant cannot reorder the page."""
     config = CollectConfig()
-    first = plan_vertical(AI, all_candidates(), config=config, eligible_feeds=3, now=NOW)[1]
+    first = plan_vertical(AI, all_candidates(), config=config, eligible_feeds=3, now=NOW).items
     second = plan_vertical(
         AI, list(reversed(all_candidates())), config=config, eligible_feeds=3, now=NOW
-    )[1]
+    ).items
     assert [item.item_id for item in first] == [item.item_id for item in second]
     assert [item.canonical_url for item in first] == [item.canonical_url for item in second]
 
@@ -1136,7 +1141,9 @@ def test_no_hash_appears_in_any_planned_item_id() -> None:
     Crockford base32 symbols - a different width, and an alphabet that drops
     `i`, `l`, `o` and `u` so no id can be misread aloud.
     """
-    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW)
+    items = plan_vertical(
+        AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW
+    ).items
     assert items, "the fixture feeds must offer something to address"
     for item in items:
         symbols = item.item_id.rsplit("-", 1)[1]

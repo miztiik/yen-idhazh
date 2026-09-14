@@ -7,7 +7,7 @@ body of its own (CLAUDE.md section 1a, "A router is not a worker").
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date as date_type
 from pathlib import Path
 from typing import Final
@@ -25,6 +25,7 @@ from idhazh import (
 from idhazh.contracts.app_config import (
     CollectConfig,
 )
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
     FetchOutcome,
@@ -229,24 +230,29 @@ def stage_plan(
     )
     # A theme is read from the headline for the same reason, and only the lenses
     # config gives a weight to are asked. One story takes the largest weight it
-    # earned: two themes in one headline is not twice the story.
+    # earned: two themes in one headline is not twice the story. The lens's NAME
+    # is kept beside its weight because the counterfactual ledger records which
+    # lens a row is about, and a row that only carried the number could not be
+    # counted per lens by anything reading it later.
     lens_weights = settings.taxonomy.lens_weights()
     lens_terms = settings.taxonomy.lens_terms()
-    lens_bonuses = {
-        candidate.url_key: bonus
-        for candidate in candidates
-        if (
-            bonus := max(
-                (
-                    lens_weights[name]
-                    for name in tag.tags(
-                        {name: lens_terms[name] for name in lens_weights}, candidate.title
-                    )
-                ),
-                default=0.0,
-            )
-        )
-    }
+    asked = {name: lens_terms[name] for name in lens_weights}
+    lens_hits: dict[str, tuple[str, float]] = {}
+    for candidate in candidates:
+        matched = tag.tags(asked, candidate.title)
+        if not matched:
+            continue
+        # The tie is broken on the name so two lenses of equal weight always
+        # name the same winner. It cannot move a score: the weight is the same
+        # either way, and only the name this row records changes.
+        best_lens = max(matched, key=lambda lens: (lens_weights[lens], lens))
+        if lens_weights[best_lens]:
+            lens_hits[candidate.url_key] = (best_lens, lens_weights[best_lens])
+    lens_bonuses = {key: weight for key, (_, weight) in lens_hits.items()}
+    # The same weights multiplied, which is the only question this run asks and
+    # the only thing it does with the answer is write it down.
+    lens_multiplier = settings.app.lens_weights.counterfactual_multiplier
+    counterfactual_bonuses = {key: weight * lens_multiplier for key, weight in lens_bonuses.items()}
     LOG.info(
         "themes matched candidates=%s of %s lenses=%s",
         len(lens_bonuses),
@@ -273,7 +279,7 @@ def stage_plan(
     for candidate in candidates:
         if candidate.lead is not None and candidate.url_key not in leads:
             leads[candidate.url_key] = candidate.lead
-    verticals, items = _plan_desks(
+    verticals, items, pools = _plan_desks(
         settings,
         candidates,
         now=generated_at,
@@ -283,6 +289,7 @@ def stage_plan(
         watchlist_keys=watchlist_keys,
         front_page_keys=frozenset(front_page),
         lens_bonuses=lens_bonuses,
+        counterfactual_bonuses=counterfactual_bonuses,
         cap=cap,
         retired_keys=gone,
         endpoints=endpoints,
@@ -316,7 +323,7 @@ def stage_plan(
             len(items),
             crowding,
         )
-        verticals, capped = _plan_desks(
+        verticals, capped, pools = _plan_desks(
             settings,
             candidates,
             now=generated_at,
@@ -326,6 +333,7 @@ def stage_plan(
             watchlist_keys=watchlist_keys,
             front_page_keys=frozenset(front_page),
             lens_bonuses=lens_bonuses,
+            counterfactual_bonuses=counterfactual_bonuses,
             cap=cap,
             retired_keys=gone,
             endpoints=endpoints,
@@ -344,6 +352,27 @@ def stage_plan(
             )
         items = capped
 
+    scored = sum(len(pool) for pool in pools.values())
+    LOG.info("desks scored candidates=%s planned=%s", scored, len(items))
+    recorded = ledger.append_counterfactual_scores(
+        state,
+        date,
+        _counterfactual_rows(
+            pools,
+            items,
+            date=date,
+            run_id=run_id,
+            lens_hits=lens_hits,
+            multiplier=lens_multiplier,
+            refused_per_desk=settings.app.lens_weights.counterfactual_refused_per_desk,
+        ),
+    )
+    LOG.info(
+        "counterfactual scores recorded rows=%s of %s scored file=%s",
+        recorded,
+        scored,
+        ledger.counterfactual_scores_relpath(date),
+    )
     counts = Counter(item.vertical for item in items)
     verticals = [
         summary.model_copy(update={"planned": counts.get(summary.id, 0)}) for summary in verticals
@@ -379,9 +408,10 @@ def _plan_desks(
     cap: int | None,
     retired_keys: set[str],
     endpoints: dict[str, source_health.EndpointRecord],
+    counterfactual_bonuses: dict[str, float] | None = None,
     day_ceiling: rank.DayCeiling | None = None,
     reliability: dict[str, float] | None = None,
-) -> tuple[list[VerticalPlan], list[PlannedItem]]:
+) -> tuple[list[VerticalPlan], list[PlannedItem], dict[str, list[rank.Ranked]]]:
     """Rank every desk once and return what they offered, desk by desk.
 
     Each desk is planned on its own: a vertical's candidates never compete with
@@ -394,9 +424,17 @@ def _plan_desks(
     before the next desk is planned. A feed sits on one desk, so in practice
     only that desk ever sees the count move - but a day ceiling that only
     counted one desk would be a per-desk rule wearing a day's name.
+
+    The third thing returned is each desk's whole scored pool, refused
+    candidates included, keyed by desk. It is returned rather than accumulated
+    into something the caller passes in because this runs twice on a day whose
+    source ceiling binds, and only the second pass scored against the ceiling
+    the day actually applied. A returned value is replaced by the rebinding
+    that is already there; an accumulator would hold both passes.
     """
     summaries: list[VerticalPlan] = []
     items: list[PlannedItem] = []
+    pools: dict[str, list[rank.Ranked]] = {}
     for vertical in settings.taxonomy.verticals:
         askable = source_health.eligible(
             settings.sources.feeds,
@@ -404,7 +442,7 @@ def _plan_desks(
             retired_keys=retired_keys,
             records=endpoints,
         )
-        summary, planned = rank.plan_vertical(
+        summary, planned, pool = rank.plan_vertical(
             vertical,
             [c for c in candidates if c.vertical == vertical.id],
             config=settings.app.collect,
@@ -416,10 +454,12 @@ def _plan_desks(
             watchlist_keys=watchlist_keys,
             front_page_keys=front_page_keys,
             lens_bonuses=lens_bonuses,
+            counterfactual_lens_bonuses=counterfactual_bonuses,
             day_ceiling=day_ceiling,
             reliability=reliability,
         )
         summaries.append(summary)
+        pools[vertical.id] = pool
         if cap is not None and len(planned) > cap:
             LOG.info("cap applied vertical=%s planned=%s cap=%s", vertical.id, len(planned), cap)
             planned = planned[:cap]
@@ -427,7 +467,73 @@ def _plan_desks(
             for item in planned:
                 day_ceiling.record(item.source_id)
         items.extend(planned)
-    return summaries, items
+    return summaries, items, pools
+
+
+def _counterfactual_rows(
+    pools: Mapping[str, Sequence[rank.Ranked]],
+    items: Sequence[PlannedItem],
+    *,
+    date: str,
+    run_id: str,
+    lens_hits: Mapping[str, tuple[str, float]],
+    multiplier: float,
+    refused_per_desk: int,
+) -> list[CounterfactualScoreRow]:
+    """The bounded pool of candidates this run writes both scores for.
+
+    Everything the run took, plus the highest-scoring refused candidates on each
+    desk. The pool arrives in the order the take read it, so the refused ones a
+    desk keeps are simply the first it meets - the band around the cut, where a
+    bonus decides. A candidate far below the cut would not cross it under any
+    weight the probe asks about, so its row would be bytes with no question in
+    them.
+
+    The bound is per run rather than per day or per archive, so this costs a
+    five-year-old repository exactly what it costs a fresh clone (CLAUDE.md
+    Guardrail #12). What the ledger holds in total is bounded at the other end,
+    by the retention pass keeping `lens_weights.window_days`.
+
+    `taken` is read against the run's FINAL items rather than against what each
+    desk took, so a story the day-wide duplicate fold or the run's safety
+    ceiling removed after ranking reads as refused. That is what happened to it.
+
+    **It is read per desk AND address, never per address alone.** One address
+    can be carried by feeds on two desks, and then it is scored twice - once on
+    each - while the day plans it once. Matching on the address alone marks both
+    rows taken, and the ledger says the run took more stories than it did:
+    measured on 2026-09-14, 87 rows claimed a day of 80 items.
+    """
+    taken = {(item.vertical, item.url_key) for item in items}
+    rows: list[CounterfactualScoreRow] = []
+    for vertical, pool in pools.items():
+        refused = 0
+        for ranked in pool:
+            if ranked.score_counterfactual is None:
+                continue
+            key = ranked.candidate.url_key
+            was_taken = (vertical, key) in taken
+            if not was_taken:
+                if refused >= refused_per_desk:
+                    continue
+                refused += 1
+            lens_id, _ = lens_hits.get(key, ("", 0.0))
+            rows.append(
+                CounterfactualScoreRow(
+                    version=CounterfactualScoreRow.schema_version(),
+                    date=date,
+                    run_id=run_id,
+                    vertical=vertical,
+                    url_key=key,
+                    taken=was_taken,
+                    lens_id=lens_id,
+                    lens_bonus=ranked.lens_bonus,
+                    lens_multiplier=multiplier,
+                    score_committed=ranked.score,
+                    score_counterfactual=ranked.score_counterfactual,
+                )
+            )
+    return rows
 
 
 def _rest_row(feed: FeedDef, *, at: str, run_id: str, why: str) -> FeedHealthRow:
