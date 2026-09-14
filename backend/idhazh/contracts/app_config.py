@@ -1508,8 +1508,6 @@ class ModelsConfig(Contract):
                 "Fowler, 2026-09-14."
             ),
         ),
-            ),
-        ),
         ChangelogEntry(
             version="2026-09-14T03:00",
             change=(
