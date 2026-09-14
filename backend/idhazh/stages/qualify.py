@@ -19,6 +19,7 @@ from idhazh import (
 from idhazh.contracts.app_config import (
     EvaluationConfig,
     InferenceConfig,
+    TurnsConfig,
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
@@ -240,6 +241,7 @@ def _observe(
     *,
     repeat: int,
     inference: InferenceConfig,
+    turns: TurnsConfig,
     seconds: float,
 ) -> ItemObservation:
     reply = completion or Completion(content="")
@@ -260,7 +262,7 @@ def _observe(
         summary_word_count=len((summary.summary or "").split()),
         prompt_tokens=reply.prompt_tokens,
         completion_tokens=reply.completion_tokens,
-        fits_context_predicted=summarize.fits_context(article, inference),
+        fits_context_predicted=summarize.fits_context(article, inference, turns=turns),
         summarize_seconds=seconds,
     )
 
@@ -338,6 +340,7 @@ def stage_qualify(
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
+        turns=model.turns,
     )
 
     plan = _load_plan(date)
@@ -400,6 +403,7 @@ def stage_qualify(
                     completion,
                     repeat=repeat,
                     inference=inference,
+                    turns=model.turns,
                     seconds=seconds,
                 )
             )

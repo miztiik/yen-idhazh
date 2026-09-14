@@ -164,13 +164,12 @@ def stage_work(
         # longer reaches what the model reads and the entry's turn envelope
         # does. Handing over the rendered pair is what digests the envelope, all
         # four prompt files and the turn order together.
-        prompt=calls.prompt_inputs(
-            settings.app.summarize, turns=model.turns, inference=inference
-        ),
+        prompt=calls.prompt_inputs(settings.app.summarize, turns=model.turns),
         output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
+        turns=model.turns,
     )
     scorer_version = metrics.scorer_version(
         scorer_id=HHEM_SCORER_ID,
@@ -647,6 +646,8 @@ def _two_calls_one_item(
                 prompt_digest=first_digest,
                 run_id=run_id,
                 trace=trace,
+                turns=model.turns,
+                max_think_tokens=inference.max_think_tokens,
             )
             if one is None:
                 return failed(no_reply)
@@ -711,6 +712,8 @@ def _two_calls_one_item(
                 prompt_digest=text_digest(second_rendered),
                 run_id=run_id,
                 trace=trace,
+                turns=model.turns,
+                max_think_tokens=inference.max_think_tokens,
             )
             if two is None:
                 return failed(no_reply, one)
@@ -727,6 +730,7 @@ def _two_calls_one_item(
                         prompt_config=settings.app.summarize,
                         evaluation=settings.app.evaluation,
                         no_reply=no_reply,
+                        thinking=model.turns.thinks,
                     ),
                     one,
                     two,

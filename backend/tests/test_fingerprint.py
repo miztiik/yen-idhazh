@@ -61,6 +61,7 @@ from idhazh.fingerprint import (
     sampling_spelling,
 )
 from idhazh.ledger import load_retirements
+from idhazh.llm.server import turn_markers_digest
 
 pytestmark = pytest.mark.contract
 
@@ -86,7 +87,7 @@ CONFIGURED_MODEL: Final = ModelRef(
 )
 
 
-def stamp_with(model_sha256: str | None) -> PipelineInputs:
+def stamp_with(model_sha256: str | None, *, turns: TurnsConfig | None = None) -> PipelineInputs:
     """`build_inputs` with everything but the observed weights digest held still."""
     return build_inputs(
         model=CONFIGURED_MODEL,
@@ -100,6 +101,7 @@ def stamp_with(model_sha256: str | None) -> PipelineInputs:
         runner_class="ubuntu-latest-4vcpu",
         extractor_version="trafilatura-2.0.0",
         sanitizer_version="idhazh-sanitizer-1",
+        turns=turns,
     )
 
 
@@ -211,15 +213,17 @@ def test_the_undigested_set_names_only_real_knobs() -> None:
     assert frozenset(MODEL_FIELD_SPELLING) <= model_shaped_fields()
 
 
-def test_the_turn_envelope_reaches_the_stamp_through_the_rendered_prompt() -> None:
-    """`turns` is digested, and this is the only route it takes.
+def test_the_turn_envelope_reaches_the_stamp_by_both_routes_it_claims() -> None:
+    """`turns` is digested, and both routes are checked rather than asserted.
 
-    `MODEL_FIELD_SPELLING` claims the envelope arrives as `prompt_sha256`. The
-    claim is worth nothing unless a moved marker moves that digest, so the
-    marker is moved and the two renders compared. Driven from a built entry, so
-    it says nothing about what the committed config happens to hold.
+    `MODEL_FIELD_SPELLING` claims the envelope arrives as `turn_markers_sha256`.
+    The claim is worth nothing unless a moved marker moves that digest, so the
+    marker is moved and the two digests compared - and the rendered prompt is
+    compared beside it, because a marker that renders into a prompt moves both.
+    Driven from a built entry, so it says nothing about what the committed
+    config happens to hold.
     """
-    assert MODEL_FIELD_SPELLING["turns"] == "prompt_sha256"
+    assert MODEL_FIELD_SPELLING["turns"] == "turn_markers_sha256"
     turns = TurnsConfig(
         turn_opening="<|im_start|>$role\n",
         turn_closing="<|im_end|>\n",
@@ -229,6 +233,55 @@ def test_the_turn_envelope_reaches_the_stamp_through_the_rendered_prompt() -> No
     moved = turns.model_copy(update={"turn_closing": "<|end_of_turn|>\n"})
 
     assert calls.prompt_inputs(turns=turns) != calls.prompt_inputs(turns=moved)
+    assert turn_markers_digest(turns) != turn_markers_digest(moved)
+
+
+def test_the_envelope_digest_sees_what_a_rendered_prompt_cannot() -> None:
+    """Decision 8's whole reason, as the two facts that would otherwise vanish.
+
+    A declared closing marker and the reply opening it selects both move an
+    output. The rendered prompt moves with the opening and is blind to the
+    marker itself, so an entry that only changed which string closes its
+    reasoning block would decode differently with nothing in the stamp saying
+    so.
+    """
+    quiet = TurnsConfig(
+        turn_opening="<|im_start|>$role\n",
+        turn_closing="<|im_end|>\n",
+        reply_opening="<|im_start|>assistant\n",
+        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
+    )
+    thinks = quiet.model_copy(update={"thinking_close": "</think>"})
+    closes_otherwise = quiet.model_copy(update={"thinking_close": "<|end_think|>"})
+
+    assert turn_markers_digest(quiet) != turn_markers_digest(thinks)
+    assert turn_markers_digest(thinks) != turn_markers_digest(closes_otherwise)
+    assert calls.prompt_inputs(turns=thinks) == calls.prompt_inputs(turns=closes_otherwise), (
+        "the rendered prompt is blind to which string closes the block, which is "
+        "why the envelope is digested on its own"
+    )
+
+
+def test_a_stamp_built_without_an_envelope_leaves_the_key_absent() -> None:
+    """The read-side rule for the optional digest, proved by not handing one over.
+
+    A run record written before 2026-09-14 has no envelope in it, and the
+    recorded `ModelRef` a manifest embeds carries none either. An absent key
+    means that and only that; substituting a digest would say the envelope was
+    recorded and unchanged, which is the one reading it must never carry.
+    """
+    assert stamp_with("b" * 64).turn_markers_sha256 is None
+
+
+def test_a_stamp_that_was_handed_an_envelope_carries_its_digest() -> None:
+    turns = TurnsConfig(
+        turn_opening="<|im_start|>$role\n",
+        turn_closing="<|im_end|>\n",
+        reply_opening="<|im_start|>assistant\n",
+        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
+    )
+
+    assert stamp_with("b" * 64, turns=turns).turn_markers_sha256 == turn_markers_digest(turns)
 
 
 def test_every_undigested_knob_carries_a_reason() -> None:
@@ -251,8 +304,8 @@ def test_the_folded_knobs_are_digested_through_their_spellings() -> None:
         "temperature",
         "top_p",
         "seed",
-        "max_output_tokens",
-        "thinking",
+        "max_answer_tokens",
+        "max_think_tokens",
         *RULED_LOGIT_MOVERS,
     }
 
@@ -404,7 +457,9 @@ def test_a_moved_decoding_knob_moves_the_sampling_spelling() -> None:
     assert sampling_spelling(InferenceConfig(temperature=0.7)) != sampling_spelling(
         InferenceConfig()
     )
-    assert sampling_spelling(InferenceConfig(thinking=True)) != sampling_spelling(InferenceConfig())
+    assert sampling_spelling(InferenceConfig(max_think_tokens=128)) != sampling_spelling(
+        InferenceConfig()
+    )
 
 
 def test_the_stamp_digests_the_weights_that_loaded_not_the_ones_configured() -> None:
