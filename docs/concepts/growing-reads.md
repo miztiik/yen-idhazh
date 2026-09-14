@@ -685,6 +685,23 @@ file under `tests/fixtures/canaries` and the day is as long as that list. What
 survived is what was always load-bearing - that `validate-days` opens every
 story and names the contract that refused one.
 
+**The same day broke a second spec the same way, and that one lost nothing.**
+`frontend/tests/staged-day.spec.ts` proves the staging projection drops the
+vector block, and it needs one day on the source side of the projection to prove
+the block is still there to drop. It took the newest committed day. An empty day
+carries no vector block because it carries no stories, so the control failed
+over a day that was never its subject - and the message it printed, "carries no
+vector block, the index rebuild has no source left", accused the wrong thing. It
+reads the canary day now. That is the stronger reading rather than the weaker
+one: `backend/utilities/build_canary_day.py` runs the production
+`build_embeddings` over the production `Embedder`, so the block under test is
+one the pipeline wrote this minute, where the committed one was written by
+whatever code shipped the day it landed.
+
+Both moves point at the same rule, worth writing plainly. **A test that needs
+one real example of a shape wants a built one, not the latest one.** "Latest"
+is not a property of the example; it is a property of the calendar.
+
 ## Design rationale
 
 **The declaration is the deliverable, not the saving.** Five of the reads above
