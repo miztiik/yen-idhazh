@@ -291,7 +291,6 @@
   "version": "2026-09-08T16:49",
   "visuals": {
     "asset_base_url": "",
-    "canvas_width": 800,
     "downgrade_floor_percentiles": [],
     "enabled_kinds": [
       "chart"

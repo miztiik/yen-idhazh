@@ -609,6 +609,25 @@ pixels, so a canvas chart resolves tokens in JavaScript at mount and after every
 theme change - which ends the token file being the only place a colour is
 decided.
 
+**The rule is the same on the digest and the width arrives differently, because
+a reader's card is not a number a build can know.** A story's chart is drawn in
+the reader's browser, so its width is measured rather than configured:
+[../../frontend/src/lib/visual/width.ts](../../frontend/src/lib/visual/width.ts)
+reads the figure's content box and
+[../../frontend/src/lib/visual/bar.ts](../../frontend/src/lib/visual/bar.ts)
+places every mark in it, one unit to one pixel. Three things follow, and each one
+is a rule rather than an implementation note. **The measured width is floored to
+whole pixels**, so a drawing can never be wider than the box it was measured in
+and start a resize loop; the cost is that it can sit up to one pixel short, which
+is the tolerance
+[../../frontend/tests/item-visual.spec.ts](../../frontend/tests/item-visual.spec.ts)
+holds it to at three widths. **The height is a count of bars and does not depend
+on the width**, so the figure is its final height from the frame the marks land
+in and a story cannot shift while it is read - which is the promise the `viewBox`
+used to keep. And **the name sits above its bar**: a name column wide enough for
+the 40 characters the compiler allows leaves a phone nothing to draw a bar in, so
+the layout that works at 360px is the layout that ships at 1440px too.
+
 ## A figure on a chart is the article's or it is ours, and it never has to be guessed
 
 Every number a reader reads off an axis is one of two things and no third. It is

@@ -582,6 +582,136 @@ test.describe('THE ORACLE: a drawn string can be measured against the floor', ()
 	});
 });
 
+test.describe('THE ORACLE: the drawing takes the width it is given', () => {
+	/**
+	 * Row #2's oracle. At three widths the drawn plot is as wide as the box the
+	 * card gave it, and it was laid out at that width rather than laid out at a
+	 * fixed one and stretched to fit - both read off the elements the browser
+	 * placed, never back out of the stylesheet that set them.
+	 *
+	 * **The second half is the half that bites, and the first half alone would be
+	 * vacuous.** An svg with `width: 100%` fills its card whatever its `viewBox`
+	 * says, so "the plot is as wide as its card" passed before this row as well
+	 * as after it - the old drawing was 720 units stretched onto a 343 px phone
+	 * and its ELEMENT still measured 343. What changed is the scale between the
+	 * two, so the assertion that can fail is that one drawn unit is one CSS
+	 * pixel. That is still a browser measurement: `drawn` comes from layout and
+	 * the `viewBox` is what the drawing asked for, so the ratio says whether the
+	 * browser had to resize what the drawing placed.
+	 *
+	 * **The width tolerance is one CSS pixel and it is one-sided.** The room is
+	 * floored to whole pixels before the marks are placed (`$lib/visual/width`
+	 * says why: a drawing rounded up is wider than the box it was measured in,
+	 * which resizes the box, which reports a new width). So the honest bound is
+	 * that the plot is never wider than its container and never more than one
+	 * pixel narrower. A tolerance stated as a percentage would pass a drawing 14
+	 * pixels short at 1440 and fail the same drawing 4 pixels short at 360, which
+	 * is the wrong way round: the defect this row removes is a fixed box
+	 * stretched to fit, and a fixed box is off by hundreds of pixels or by none.
+	 *
+	 * **The scale tolerance is half a percent**, which is the fractional pixel
+	 * the flooring leaves: at the narrowest width a card is about 300 px, so one
+	 * floored pixel is a third of a percent.
+	 *
+	 * **Three widths rather than one, because one cannot see a fixed box.** A
+	 * drawing that is always 720 units wide reports one drawn width at every
+	 * viewport, so the last arm reads the placed geometry at the narrowest and
+	 * the widest and says they differ.
+	 */
+
+	/** Every chart on the page: how wide it drew, what it asked for, and what it was given. */
+	function plots(
+		page: Page
+	): Promise<{ drawn: number; units: number; room: number; viewport: number }[]> {
+		return page.evaluate(() =>
+			[...document.querySelectorAll('main article figure')].flatMap((figure) => {
+				const svg = figure.querySelector('svg');
+				if (!svg) return [];
+				const style = getComputedStyle(figure);
+				// The content box, taken off the fractional border-box rather than
+				// off `clientWidth`, which a browser rounds to a whole pixel and
+				// would spend the whole tolerance before the drawing is looked at.
+				const room =
+					figure.getBoundingClientRect().width -
+					parseFloat(style.paddingLeft) -
+					parseFloat(style.paddingRight) -
+					parseFloat(style.borderLeftWidth) -
+					parseFloat(style.borderRightWidth);
+				return [
+					{
+						drawn: svg.getBoundingClientRect().width,
+						units: svg.viewBox.baseVal.width,
+						room,
+						viewport: window.innerWidth
+					}
+				];
+			})
+		);
+	}
+
+	/** The widths a reader actually holds: a small phone, a common phone, a desktop. */
+	const WIDTHS = [360, 390, 1440] as const;
+
+	/** How far from one pixel a unit may resolve, as a share. */
+	const SCALE_TOLERANCE = 0.005;
+
+	/** Every chart's drawn width, as one string, so a redraw can be spotted. */
+	async function placed(page: Page): Promise<string> {
+		return (await plots(page)).map((plot) => plot.drawn).join(',');
+	}
+
+	test('at three widths the plot is as wide as the card lets it be', async ({ page }) => {
+		await drawnDay(page);
+
+		const widest: number[] = [];
+		for (const width of WIDTHS) {
+			// **Waited out rather than asserted here.** The width reaches the drawing
+			// through a resize watcher, so the page needs a frame to redraw, and the
+			// wait is for the redraw to SETTLE rather than for the property below to
+			// hold. A wait that asserts the oracle replaces the oracle's own failure
+			// message with a timeout, which is how a broken drawing gets reported as
+			// a slow one. Primed with the widths from before the resize, so settling
+			// means two reads that agree after the viewport moved.
+			let settled = await placed(page);
+			await page.setViewportSize({ width, height: 900 });
+			await expect
+				.poll(async () => {
+					const now = await placed(page);
+					const same = now === settled;
+					settled = now;
+					return same;
+				})
+				.toBe(true);
+
+			const drawn = await plots(page);
+			expect(drawn.length, `${width}: the page drew no chart to measure`).toBeGreaterThan(0);
+			for (const plot of drawn) {
+				expect(
+					plot.room - plot.drawn,
+					`at ${plot.viewport} CSS px the card gave ${plot.room} and the plot drew ${plot.drawn}, so the drawing is wider than its own container`
+				).toBeGreaterThanOrEqual(0);
+				expect(
+					plot.room - plot.drawn,
+					`at ${plot.viewport} CSS px the card gave ${plot.room} and the plot drew ${plot.drawn}, which is ${plot.room - plot.drawn} short of the one pixel the flooring costs`
+				).toBeLessThanOrEqual(1);
+				expect(plot.units, `at ${plot.viewport} CSS px the plot carries no view box`).toBeGreaterThan(
+					0
+				);
+				expect(
+					Math.abs(plot.drawn / plot.units - 1),
+					`at ${plot.viewport} CSS px the drawing laid itself out ${plot.units} units wide and the browser drew it ${plot.drawn} px wide, a scale of ${(plot.drawn / plot.units).toFixed(3)} - so it is a fixed box stretched to fit rather than a drawing placed in the width it was given`
+				).toBeLessThanOrEqual(SCALE_TOLERANCE);
+			}
+			widest.push(Math.max(...drawn.map((plot) => plot.drawn)));
+		}
+
+		expect(
+			widest[widest.length - 1],
+			`the plot drew ${widest[0]} at 360 and ${widest[widest.length - 1]} at 1440, so it is one box scaled rather than a drawing that takes the width`
+		).toBeGreaterThan(widest[0]);
+	});
+});
+
 test.describe('THE ORACLE: every drawn colour comes from a token', () => {
 	test('a bar takes the page own chart colour, in both themes', async ({ page }) => {
 		await drawnDay(page);
@@ -642,7 +772,7 @@ test.describe('what may not be drawn', () => {
 			refusedVisualData(data),
 			'a clean document was refused, so every case below is vacuous'
 		).toBeNull();
-		expect(drawBars(data).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
+		expect(drawBars(data, 600).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
 	});
 
 	for (const [name, path] of [

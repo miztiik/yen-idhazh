@@ -1756,13 +1756,6 @@
           "title": "Asset Base Url",
           "type": "string"
         },
-        "canvas_width": {
-          "default": 800,
-          "description": "One fixed canvas for every visual. Height follows the 16:10 ratio.",
-          "minimum": 200,
-          "title": "Canvas Width",
-          "type": "integer"
-        },
         "downgrade_floor_percentiles": {
           "description": "The ladder, as one list: how many rungs it has and how high each one is. Entry n is the percentile of depth-0 published mark counts a downgrade at depth n+1 must reach, so the length is the deepest permitted downgrade and the depth after it refuses. Two entries is the design's own ladder - the median at the first step down, the 75th percentile at the second, refuse at the third. An empty list is the ladder switched off, which is one knob doing two jobs on purpose: a separate on-off flag can disagree with the rungs beside it, and zero rungs is already an unambiguous no. It must rise, because a floor that does not is not an escalating one. The floor it reads is a mark count, which the validator already bounds to min_chart_points to max_chart_points, so two adjacent percentiles can land on one integer and the ladder quietly stops escalating - that is visible as two depths recording one floor, and the answer is to move these numbers rather than the mechanism.",
           "items": {
@@ -1848,6 +1841,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "visuals.canvas_width is gone and nothing replaces it, and so is the VisualsConfig.canvas_height property derived from it. This is a contract break and the read-side migration ships with it: a config that still carries the knob is refused by name through refuse_a_removed_knob rather than through 'extra inputs are not permitted'. Refused rather than lifted, because there is no knob left that answers the same question - a width the operator sets and a width the reader's screen has are not the same number, and carrying the old one forward would let somebody keep believing they had set the drawing box.",
+      "version": "2026-09-14T09:30",
+      "why": "Plan 12 row #2. The knob sized one fixed drawing box for every visual, back when the pipeline rendered the picture. The reader's browser draws it now (owner ruling, 2026-09-13) and takes the width the card actually gives it, measured in the browser - so no build-time number can say how wide a drawing is, and one that tried would only ever be a scale factor shrinking the drawn type. The smallest drawn string read 4.8 CSS px at a 390 px viewport against a --text-xs of 12, which is 60 percent under the token it was set from, and that scale is what this removal ends. canvas_height went with it because it was 16:10 of a number that no longer exists and had no caller of its own."
+    },
     {
       "change": "models is gone and models_file replaces it. The block held the whole active model inline; the same shape is now the models-config document under config/models/, and models_file names which of those files is read. This is a contract break and the read-side migration ships with it: a config that still carries models is refused by name through refuse_a_removed_knob rather than through 'extra inputs are not permitted'. Refused rather than lifted, because a lift would read one model out of the old block while models_file named another file, and the run would stand a server up on whichever won. models_file defaults to the committed file, so a fresh clone still runs unconfigured, and its grammar pins it to config/models/ and to .json - the value is an operator's edit that becomes a path this build opens.",
       "version": "2026-09-14",
@@ -2543,7 +2541,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-14",
+      "default": "2026-09-14T09:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2554,5 +2552,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-14"
+  "version": "2026-09-14T09:30"
 }

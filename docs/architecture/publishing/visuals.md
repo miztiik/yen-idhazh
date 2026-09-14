@@ -951,14 +951,34 @@ when a run publishes, and a reading route's document carries the day. The gate m
 prints it rather than guarding it.
 
 **What the reader can read, measured rather than promised, and it is not the floor yet.** The
-view box is a fixed 720 units wide and the figure takes the card's width, so the browser
-scales every user unit. Measured on the canary build at 390 CSS px, 2026-09-13: every drawn
-string resolves at **4.8 CSS px** against a `--text-xs` of 12. That is better than the
-**3.1 CSS px** plan 12 measured for the build-time renderer at the same width, and it is
-still well under the floor. Plan 12 row #2 takes the width the screen actually has, which
-removes the scale; row #4 is the row that holds the result to the floor, and it could not
-start until something measurable was drawing. What this row buys is that the size is a token
-in one place and that the strings can be measured at all.
+drawing is placed at the width the card actually gave it, in CSS pixels, so one drawn unit is
+one pixel on screen and there is no scale factor between what a token says and what a reader
+sees. Measured on the canary day, both arms on one developer machine back to back with
+`BUILD_VERSION` pinned, 2026-09-14, at 360, 390 and 1440 CSS px in both themes. **After, the
+scale is 1.000 at all three widths and every drawn string resolves at 12.0 CSS px**, which is
+`--text-xs` at its own size. Before, the same drawing laid itself out 720 units wide whatever
+the card gave it, so the browser squeezed or stretched it: **0.350 at 360 px, 0.392 at 390 px
+and 1.233 at 1440 px**. A string set at 12 therefore reached the reader at **4.2, 4.7 and
+14.8 CSS px** - 65 percent under the token on a small phone, and 23 percent over it on a
+desktop. The drawn height moved with the width the same way: the taller of the canary's two
+charts stood 59.5 px at 360 and 209.7 px at 1440, and now stands **202 px at all three**, so
+the figure is its final height before a mark lands in it. Plan 12 row #2 removed that scale;
+row #4 is the row that holds the result to a floor a person can read, and it could not start
+until something measurable was drawing. The width comes from
+`frontend/src/lib/visual/width.ts`, which measures the figure's content box and is one watcher
+for every chart on the page rather than one each (Guardrail #12).
+
+**The name sits above its bar rather than beside it, and that is what makes one layout work at
+every width** (row #2, 2026-09-14). A name column has to hold the longest name the compiler
+allows - `MARK_NAME_MAX` is 40 of the article's own characters, about 250 CSS pixels at
+`--text-xs` - and a 360 px phone has roughly 300 pixels of card to spend. Side by side, a
+column that fits the names leaves nothing for the bars and a column that fits the bars cuts
+the names in half; the old drawing hid that by scaling the type down until the names fitted,
+which is the defect above. Above the bar, the name has the whole width at every size, and the
+bar has all of it but the sixteenth reserved for the figure that sits beside it - so the
+comparison the chart exists to make gets every pixel left once the number it compares has
+somewhere to stand. What a reader gives up is the tidy left-hand column of names a desktop had
+room for, and one text line of height per bar.
 
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and
