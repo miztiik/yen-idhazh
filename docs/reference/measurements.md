@@ -19,6 +19,15 @@ holding one question of the three and never two:
 None of the three cites another's figures and each backs a different set of
 config keys.
 
+**A reading that belongs to one model is not on this page at all.** A model's
+identity, its throughput, its memory marks, its seconds an item and its
+qualification verdict live on that model's own dossier, and
+[models.md](models.md) is the index with one row a model. This page keeps what is
+not per-model and links to the dossier for what is. They moved on 2026-09-14
+because this page carries several models, so naming the decode rate here meant
+first reading which model a row was about - and a figure that needs that is a
+figure Guardrail #10's one-current-reading rule cannot check.
+
 **A benchmark run does not get appended to this page.** A run that sweeps a
 setting, prices a candidate or races two arms is written up as its own record
 under `docs/reference/benchmarks/`, named for what it measured and nothing else
@@ -467,7 +476,7 @@ they are pinned in code rather than only written here.** They are
 `PROMPT_OVERHEAD_TOKENS` and `WORST_TOKENS_A_WORD` in
 [../../backend/idhazh/measured.py](../../backend/idhazh/measured.py), each
 carrying the weights above as its `subject`, and that module refuses either one
-the day `config/idhazh.json` names different weights.
+the day the active model file names different weights.
 
 **1.306 tokens a word is the median, and the spread is what the window has to
 cover.** Over the 36 rows the cap cut, where the word count is fixed at 3,846,
@@ -518,15 +527,18 @@ needs one too.
 
 **Prefill runs at a median 9.85 tokens a second** over the 4,117 timed rows, the
 slowest row at 8.25 and the fastest at 44.71. That is the same figure the
-2026-08-23 sweep took on the configured model at 4,850 tokens - 9.84 - re-derived
-from nine days of real items, which is the strongest corroboration on this page.
+2026-08-23 sweep took on the configured model at 4,850 tokens
+([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)), re-derived from nine
+days of real items, which is the strongest corroboration on this page.
 
 **So 5,000 more prefill tokens is 8.5 minutes, and 10.1 at the slowest rate.**
 That is the whole cost of the raise, and it lands on the item that was cut.
 
-**Against what a summarize call costs today:** median **114.6 s**, 95th
-percentile **312.7 s**, longest **800.9 s**, over the same 4,117 rows. So the
-worst item roughly doubles: 800.9 s becomes about 1,311 s. `run.shard_size` is 5
+**Against what a summarize call costs today:** the median, the 95th percentile
+and the longest are on the model's own page
+([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)), taken over these same
+4,117 rows. So the worst item roughly doubles: the longest call on record becomes
+about 1,311 s. `run.shard_size` is 5
 and `run.shard_timeout_minutes` is 200, so a shard of five worst-case items goes
 from about 67 minutes to about 109 - still inside the timeout, and a shard where
 all five items are cut is unlikely at a cut rate of 0.87 percent.
@@ -1055,89 +1067,32 @@ on a candidate that already failed its prerequisite.
 
 ### The configured summarizer: Qwen3.5-9B-Q4_K_M
 
-**Configured since 2026-08-27.** It reached configuration by owner decision
+**Configured since 2026-08-27**, by owner decision
 ([../../CLAUDE.md](../../CLAUDE.md) section 0) over two failing hard gates. It
-did not qualify. What did and did not pass is under
-[What qualification measured, and what it did not](#what-qualification-measured-and-what-it-did-not).
+did not qualify.
 
-**Throughput measured 2026-08-23** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4
-threads, llama.cpp `b10598` (`56db501e7`), 3 repeats, `llama-bench` at the same
-three input lengths. Exact bytes:
+**Its readings are on its own page.** Identity, digest, byte count, licence,
+quantisation and architecture; what it weighs against the cache and what a cold
+download cost; prefill at three prompt lengths and decode; peak resident set;
+model load time; seconds an item; and the qualification verdict are all on
+[models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md), indexed by
+[models.md](models.md).
 
-| Field | Value |
-| --- | --- |
-| Repository | `unsloth/Qwen3.5-9B-GGUF` |
-| Repository revision | `3885219b6810b007914f3a7950a8d1b469d598a5` |
-| File | `Qwen3.5-9B-Q4_K_M.gguf` |
-| Quantisation | `Q4_K_M` |
-| Bytes | 5,680,522,464 (5.29 GiB) |
-| SHA-256 / Hugging Face LFS oid | `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` |
-| Licence | Apache-2.0 |
-
-Those are the values in `config/idhazh.json`, and the same file is the only place
-a production model ref is written. All three workflows read it, at the pinned
-immutable revision above rather than a branch, so the weights, the alias, the
-revision and the expected digest move together or not at all.
-
-The repository revision is mutable metadata about the repository snapshot. The
-GGUF SHA-256 identifies the actual bytes, and the qualification run observed that
-digest off the file the runtime opened rather than reading it back out of config.
-
-| Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
-| --- | --- | --- | --- | --- |
-| Qwen3-8B-Q4_K_M (**retired incumbent**, historical record, b10580) | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
-| Qwen3.5-9B-Q4_K_M (configured, b10598) | 10.14 +/- 0.01 | 10.06 +/- 0.01 | 9.84 +/- 0.01 | **6.01 +/- 0.11** |
-
-These rows were not taken in the same job or on the same CPU model, and the
-retired incumbent used `b10580`. They establish configured-model throughput and
-fit. They do not establish an exact new-to-retired delta, and no such delta was
-ever measured.
-
-The old 99 / 258 / 433 / 222 / 639-second derived figures are withdrawn. They
-used the tool's former hardcoded 200-token prompt and did not apply the
-production truncation cap. The Qwen3.5 prompt and article-token counts have not
-been measured under its tokenizer, so no replacement derived time is valid yet.
-
-Within the 2026-08-23 run, prefill fell 3.0% from 730 to 4850 tokens (10.14 ->
-9.84). Qwen3.5 is a hybrid Gated DeltaNet plus attention architecture, and
-llama.cpp reports `qwen35`. The separate incumbent observation fell 14%, but the
-two runs used different CPUs and runtime builds, so the difference cannot be
-attributed to architecture. The same limitation applies to the separate 6.01
-and 7.28 tok/s decode observations.
-
-**Weight download, cache miss:** 5.29 GiB in **118s**, `n=1`; spread unavailable.
-It may not be compared as a rate to the 8B's separate download observation.
+They moved there on 2026-09-14. This page carries more than one model, so naming
+the decode rate here meant first reading which model a row was about - and a
+figure that needs that is a figure Guardrail #10's one-current-reading rule
+cannot check. The retired incumbent's rows stay above, where they were taken.
 
 ### What qualification measured, and what it did not
 
-**Run `33016222069`, 2026-08-26**, on `ubuntu-latest`. A frozen, pre-registered
-corpus of 30 captured Article payloads, replayed at 3 deterministic repeats -
-90 attempts. One model. **No comparison arm was run** against the
-retired incumbent Qwen3-8B-Q4_K_M: no paired corpus, no side-by-side scores, no
-human review. Nothing on this page
-shows the configured model's summaries are better or worse than the retired
-model's, and nothing may be cited as if it did (Guardrail #10).
+**The verdict is on the model's own page.**
+[models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) carries run
+`33016222069` of 2026-08-26 gate by gate - the nine that passed, the two that
+failed, the band counts, and the fact that no comparison arm was ever run against
+the retired incumbent.
 
-**Nine of the eleven registered gates passed. Two failed. The model was adopted
-anyway, knowingly, by owner decision (section 0).**
-
-| Gate | Measured | Threshold | Verdict |
-| --- | --- | --- | --- |
-| `reasoning_leakage` | 0 channels, 0 non-empty think blocks | none | pass |
-| schema validity | 90/90 attempts, `finish_reason=stop`, no repair path taken | all attempts | pass |
-| determinism | 0 violations over 30 items x 3 repeats | 0 | pass |
-| `publishable_length` | 0/90 outside the band | 25 to 250 words | pass |
-| `context_fit` | widest request 3775 prompt + 900 output tokens, 0 overflowed | `n_ctx` 8192 | pass |
-| identity | sha256 `03b74727...b7e8` at 5,680,522,464 bytes, `unsloth/Qwen3.5-9B-GGUF` at revision `3885219b...d598a5` | config must match the file opened | pass |
-| budget | slowest job 95.2 min, slowest item 449 s | 330-minute bound | pass |
-| scored denominator | 30 of 30, from 160 addresses attempted | full attempted denominator | pass |
-| faithfulness | mean hhem **0.7149**, spread 0.0173 to 0.9762, `hhem_delta_mean` 0.0000 - the qualifier scored one text twice, so that zero is "not measured", not "no truncation cost" (fixed 2026-08-27) | 0.50 floor, pinned scorer | pass |
-| `injection_canaries` | **4 of 5** neutralised on live calls; `exfiltration-via-url` returned no summary, so nothing was checked | all 5 (Guardrail #11) | **FAIL** |
-| `brief_copying_ceiling` | **longest verbatim run 1.000** over 8 brief items | <= 0.5 (`evaluation.brief_compression_ceiling`) | **FAIL** |
-
-Band counts across `min_source_words` 0 / 60 / 700 / 2000: **6 / 11 / 10 / 3**.
-The top band is populated because the band now comes from the source body rather
-than the post-truncation count - see the defect below.
+What stays here is what one of those gates taught about the instrument rather
+than about the model.
 
 #### The fifth canary was never exercised
 
@@ -1678,6 +1633,11 @@ This is why the weights are cached rather than committed: GitHub hard-rejects
 any file over 100 MB, and both files sit inside the 10 GB repository cache with
 under 3 GB to spare.
 
+Both rows are historical: the 8B is the retired incumbent and the 4B's job
+retired on 2026-09-13. What the configured summarizer weighs, and what that
+leaves in the cache, is on its own page
+([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)).
+
 ## Corpus shape
 
 **Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
@@ -1886,23 +1846,21 @@ runs python - it reads the feeds, extracts the article text and scores the
 summaries - and that python sits on the same 16 GB. Adding the two at the same
 instant, sample by sample, is the third column below.
 
-| Shard | llama-server alone | Both at one instant | 14.90 GiB minus that sum |
-| --- | --- | --- | --- |
-| 3 | 13.16 GiB | **14.31 GiB (96.0%)** | **0.59 GiB** |
-| 2 | 12.94 GiB | 14.15 GiB (95.0%) | 0.75 GiB |
-| 0 | 12.57 GiB | 13.93 GiB (93.5%) | 0.97 GiB |
-| 1 | 12.65 GiB | 13.86 GiB (93.0%) | 1.04 GiB |
+**The four shards' readings are on the model's own page**, llama-server's own
+high-water mark beside the sum of the two processes at one instant:
+[models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md).
 
-**Read the third column, not the first.** llama-server's mark is not the job's,
-and reading it as the job's understates what the two processes held together by
-1.15 GiB on the worst shard. Every figure this project published before this date,
-including the 1.61 GiB in the pseudo-plan and the 2.8 GiB above, is llama-server
-alone. The spread across the four shards is 0.45 GiB, and the worst is the shard
-that also holds the largest llama-server mark, so the two do not cancel.
+**Read the sum, not llama-server's mark alone.** llama-server's mark is not the
+job's, and reading it as the job's understates what the two processes held
+together by 1.15 GiB on the worst shard. Every figure this project published
+before this date, including the 1.61 GiB in the pseudo-plan and the 2.8 GiB
+above, is llama-server alone. The worst shard is also the one holding the largest
+llama-server mark, so the two do not cancel.
 
-**The fourth column was published as headroom, and it is not headroom.
-Corrected 2026-09-09.** Every reading above was taken correctly and stands. What
-was built on top of them does not, in three ways.
+**That sum was subtracted from 14.90 GiB and published as headroom, and it is not
+headroom. Corrected 2026-09-09.** Every reading the dossier carries was taken
+correctly and stands, and the subtraction is why the fourth column it used to sit
+beside is gone. What was built on top of them does not stand, in three ways.
 
 **One: 14.90 GiB is the whole machine.** It is 16,000,000,000 bytes written in
 GiB, which is the runner's entire advertised memory (Guardrail #2). Nothing in it is
@@ -2141,9 +2099,9 @@ to justify a design decision.
 | HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
-| A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)). It is a resident set and not a demand, which is the honest bound: 13.16 GiB at the worst of four shards against 16 GB. **That cell is llama-server alone**; the job also holds 1.49 to 1.55 GiB of its own python at the same time, and the two together leave 0.66 GiB free at the worst captured shard ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). |
+| A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)). It is a resident set and not a demand, and the marks it recorded are on the configured model's own page ([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)). **That cell is llama-server alone**; the job also holds 1.49 to 1.55 GiB of its own python at the same time, and subtracting the sum of the two from the machine's total does not yield headroom ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). |
 | **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary arm alone against the configured 9B - five calls, no corpus freeze, no repeats. |
-| Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The 0.7149 mean hhem above is one model on one corpus and is not a delta. |
+| Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The qualification's faithfulness mean ([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)) is one model on one corpus and is not a delta. |
 
 ## How to add a row here
 
@@ -2154,8 +2112,7 @@ estimate and belongs in the table above rather than in the tables below it.
 **A token count records a fifth thing: which weights counted it**, by the third
 rule at the top of this page. Name the file and, where the row backs a config
 key or a gate, the sha256 - `config/idhazh.json` carries the digest in force and
-[The configured summarizer](#the-configured-summarizer-qwen35-9b-q4_k_m) repeats
-it. A row that does not say which vocabulary produced its tokens is a row nobody
+the model's own page repeats it ([models.md](models.md)). A row that does not say which vocabulary produced its tokens is a row nobody
 can retake, and the next swap silently re-attributes it.
 
 When a measurement contradicts a design, the design changes - that has already
@@ -2165,6 +2122,7 @@ happened three times on this page.
 
 - [measurements-site.md](measurements-site.md) - what the reader downloads.
 - [measurements-sources.md](measurements-sources.md) - what our sources give us, and what the rules around them cost.
+- [models.md](models.md) - one row a model, pointing at each model's identity and its own readings.
 - [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md) - finished experiments and superseded levels.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and #10 (measured, not estimated).
 - [github-actions.md](github-actions.md) - the workflows that print and upload the lines above, take these measurements, and how to dispatch one.

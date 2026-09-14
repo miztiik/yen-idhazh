@@ -49,6 +49,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 | **Reference doc** | `docs/reference/*.md` | Someone needing an exact value | Living table | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure |
 | **Agent notes** | `docs/reference/agent-notes.md` (index) + `docs/reference/agent-notes/<tool-family>.md` | Anyone running commands in the repo | Living list | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
 | **Benchmark record** | `docs/reference/benchmarks/<what-was-measured>.md` | Anyone citing or re-running that run | Living, one question one answer - a re-run REPLACES the page and moves **Last Updated**; git history holds what it said | One run: its conditions, method, arms, raw figures, and what it settles and does not | The rule the figures justify; a figure a later run superseded; a date in the filename |
+| **Subject dossier** | `docs/reference/<family>/<slug>.md`, indexed by `docs/reference/<family>.md` | Anyone choosing, adopting or retiring one of a set of interchangeable subjects | Living, one current reading a quantity a subject - a new reading REPLACES the old and moves **Last Updated**; git history holds what it said | One subject: its identity, its one current reading of every quantity with hardware and date, its verdict, its lifecycle status, and a link to every record behind them | A second reading of one quantity; another subject's figures; a run's conditions and method, which is a benchmark record |
 | **Plan-doc** | `TODO/<YYYYMMDD>-<slug>-plan.md` | Next person picking up work | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers | Rationale prose; decisions; rejected alternatives |
 
 ### Routing rules (decide a new statement's home)
@@ -63,6 +64,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 8. A tool quirk, an environment trap, or a command whose result cannot be trusted at face value? -> the **agent-notes reference.** Not a private memory file - see below. It is one page until it stops being readable as one; then the stem path becomes an index and each child is named for the tool family whose output lies, so every inbound link keeps working.
 9. A benchmark run - a sweep, a candidate priced, two arms raced? -> its own **benchmark record**, and a link from the instrument log. Never an append to the log. See below.
 10. What happens to an artefact as it ages - kept, summarised, or removed, and on what age? -> the **concept doc** that owns that lifecycle, carrying a dated inventory of the artefacts and the rule that decides one it does not list. Not the repository-layout doc: that answers where a thing lives, and where it lives does not change when a run appends to it.
+11. A figure that belongs to one interchangeable subject rather than to the system - a component that can be swapped, where the same quantity means something else once it has been? -> that subject's **dossier**, reached through its index. The test is whether naming the figure needs the subject named first; where it does, the shared reference doc keeps only what is not per-subject and links to the dossier for what is.
 
 ### A benchmark run gets its own page, and never the log's name
 
@@ -95,6 +97,33 @@ day" - two questions, and the log is the one every other doc links to.
 row. That is the honest outcome for an exploratory sweep, and it is cheaper than
 the alternative this project has already paid for twice: a number in the log
 that no config key reads, which a later reader treats as load-bearing.
+
+### A dossier is per subject; a record is per run
+
+A quantity that changes meaning when a component is swapped is not a property of
+the system. It is a property of the component. Collecting every such figure on
+one shared page makes a reader establish which subject a row was about before the
+row means anything, and it lets one quantity carry several current answers, one a
+subject - which is what the one-current-reading rule (CLAUDE.md Guardrail #10)
+cannot check.
+
+So the subject gets a page and the pages get an index:
+
+- **The dossier holds the subject.** Its identity, whatever says which one it is,
+  and one current reading of every quantity that is a property of it. A new
+  reading replaces the old in place.
+- **The index holds one row a subject**, with its lifecycle status and a link.
+  The status word lives on the dossier and nowhere else, so adopting or retiring
+  a subject is two edits rather than a search.
+- **The shared reference doc keeps what is not per-subject**, and links to the
+  dossier for what is.
+
+**A dossier is not a benchmark record.** The record is organised by question and
+frozen at one run; the dossier is organised by subject and edited in place. A
+record names the subject it ran against; a dossier links to every record taken
+against it. A figure that could sit on either belongs on the dossier, because the
+dossier answers "what is this subject" and the record answers "what happened that
+day".
 
 ### A dated inventory carries the rule that outlives it
 
