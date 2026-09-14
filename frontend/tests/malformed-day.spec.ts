@@ -35,7 +35,7 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
  * so a whole day here would be testing the fixture. A degraded arm that
  * intercepts nothing is a null result, not a pass.
  *
- * **The day arm one breaks is the canary day, not a committed one** (2026-09-15).
+ * **The day arm one breaks is the canary day, not a committed one** (2026-09-14).
  * It used to take the newest day under `frontend/public/digest`, which is a walk
  * over a collection every run appends to - banned by `CLAUDE.md` section 13 and
  * Guardrail #12 - and it cost more than a rule: on 2026-09-14 the pipeline

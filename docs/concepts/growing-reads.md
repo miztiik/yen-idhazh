@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-14
 
 One question, asked of every read:
 
@@ -660,7 +660,7 @@ And where the question really is about the whole tree, it is asked once and
 asserted on the total, because the producer already validated every payload at
 write time and a frozen day cannot grow a fault later.
 
-### A walk can cost more than time: it can take the shape of the thing it walks (2026-09-15)
+### A walk can cost more than time: it can take the shape of the thing it walks (2026-09-14)
 
 `frontend/tests/malformed-day.spec.ts` did not walk the archive to assert per
 story. It walked it to pick ONE day - the newest - and broke that day three

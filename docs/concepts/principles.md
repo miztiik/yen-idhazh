@@ -1,6 +1,6 @@
 # Principles
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-14
 
 The small set of beliefs that shape every yen-idhazh decision, stated once as vocabulary. These operationalize the engineering contract for a build-time digest pipeline; the authoritative guardrails live in [../../CLAUDE.md](../../CLAUDE.md) section 1. This page explains the *why* a reader needs before those guardrails make sense - it does not restate them.
 
@@ -32,6 +32,8 @@ A summarizer nobody measures produces confident, plausible, wrong text indefinit
 
 One unreachable source, one failed extraction, one visual that would not render - each degrades its own item, records why, and lets the run finish. Work items are independent by construction: one item is one file written temp-then-rename under a predictable path, so a failure never damages a sibling and a re-run costs only what did not finish. The digest ships even at zero successes, because a failure count that nobody sees is a failure nobody fixes.
 
+Shipping it is half the rule. The other half is that a run which degraded to nothing **says so where an operator already looks**, and still does not fail the step that publishes it - the steps that commit the day and its counts run afterwards, so a stage that fails loudly deletes the record of what went wrong. Loud and successful beats quiet, and both beat loud and empty-handed.
+
 ## 8. Config-driven, with sane defaults
 
 Source lists, caps, thresholds, model references and retry budgets live in `config/`, schema-validated, never in code. A fresh clone runs on the defaults. Tuning the system should never require reading it.
@@ -50,9 +52,17 @@ One developer, weekends. Every kept line is rent paid forever. Before asking how
 
 The second clause is not a softening, it is the other failure. **A surface nobody would choose to look at has not been simplified, it has been abandoned.** Deleting is free and building is not, so a project that only rewards the first ratchets one way until what is left is correct and unloved. When the answer is that the thing should exist, it is then owed the craft that makes it worth someone's attention - and "it works" is not that.
 
+## 12. A check asserts what it needs, not what it believes about the thing it checks
+
+A guard that can stop the pipeline is part of the design, and it has a failure direction nobody plans for: refusing something that was working. It arrives the same way every time. The check needs one property, but it gets written as a restatement of how the dependency is *believed* to work inside - and that belief is an implementation detail the dependency never promised. The dependency keeps its promise, moves the detail, and the check refuses a healthy system with a confident message naming the wrong thing.
+
+So a check states the weakest condition that would make the next step wrong, and nothing stronger. "It produced none of this" is a property. "It produced exactly as much as I predicted" is a bet on a version number. The extra strictness catches no additional failure - every fault the check exists for lands on the weak condition too - and it buys the one outcome a guard must never have. **A guard whose refusing case has never been reached by a real dependency is a guard nobody has tested**, so it owes a test driven by values something real returned, not by the values its author expected.
+
+This is the same instinct as principle 3 pointed at code rather than at numbers: assert the measurement, not the theory.
+
 ## Design rationale
 
-These eleven are not new law - they are the concept-tier restatement of the guardrails in the vocabulary a digest pipeline needs, so a contributor learns the *why* from the concept tier and the *guardrail* from the contract. The rejected alternative was to let each concept doc re-derive the ethos in passing; that duplicates the contract and drifts (Guardrail #4, one definition). Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
+These twelve are not new law - they are the concept-tier restatement of the guardrails in the vocabulary a digest pipeline needs, so a contributor learns the *why* from the concept tier and the *guardrail* from the contract. The rejected alternative was to let each concept doc re-derive the ethos in passing; that duplicates the contract and drifts (Guardrail #4, one definition). Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
 
 ## See also
 
@@ -61,4 +71,5 @@ These eleven are not new law - they are the concept-tier restatement of the guar
 - [evaluation.md](evaluation.md) - principle 6 in concrete form.
 - [config.md](config.md) - principle 8 in concrete form.
 - [telemetry.md](telemetry.md) - principle 9 in concrete form.
+- [../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md) - principle 12 in concrete form: what the start-up proof may assert about a runtime.
 - [../../CLAUDE.md](../../CLAUDE.md) - the authoritative contract; section 1 is the guardrails.

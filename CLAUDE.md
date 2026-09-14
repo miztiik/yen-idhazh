@@ -293,6 +293,8 @@ Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an a
 
 **A walk over committed data tends to carry a fuse, and that is the second reason to refuse one.** A test that counts how many committed entries still *lack* a new field is timed to go red on the day the last unmigrated payload ages out of retention - a date on the calendar rather than a change anybody made. A read-side migration is proved by removing the key from a fixture, which cannot age out. [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) records the day one of these fired and took every open pull request red at once.
 
+**A test reads its fixture inside the test, never at module scope.** A fixture opened while the module is loading is opened before any test exists to own the failure, so one unexpected shape raises inside a module constant and takes every test in the file with it - including the ones that had nothing to do with that fixture. The same read inside a test fails one test, with a message naming what it wanted and how to produce it. This costs nothing: a fixture is small by rule, and a helper called from three tests reads it three times. It is the difference between a suite that reports a defect and a suite that reports a stack trace.
+
 Per tier:
 
 - **Unit** - pure functions (sanitization, sharding, scoring maths, serialization round-trip).
