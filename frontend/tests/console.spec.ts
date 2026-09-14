@@ -600,7 +600,7 @@ test('the run that read only the start of an article says so on its own square',
 });
 
 test('a feed that answered with nothing is named, and a polite refusal is not', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	// Answered with zero items. It cost the digest the same articles a refusal would.
 	await expect(page.locator('[data-feed="canary-empty"]')).toHaveCount(1);
@@ -617,7 +617,7 @@ test('a feed that answered with nothing is named, and a polite refusal is not', 
 });
 
 test('a feed that answered with nothing does not report its last result as ok', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	// The ledger's own word for this read is `ok` - the fetch returned 200. Printed
 	// raw it sits on the same row as the failure count and contradicts it, which is
@@ -633,7 +633,7 @@ test('a feed that answered with nothing does not report its last result as ok', 
 });
 
 test('a feed past the quarantine count is marked rested', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const flaky = page.locator('[data-feed="canary-flaky"]');
 	await expect(flaky.locator('[data-rested]')).toHaveCount(1);
@@ -641,7 +641,7 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 
 	// Nearest to a rest first. `canary-flaky` has failed every run it was asked,
 	// `canary-empty` answered once before its two blank runs, and `canary-gone`
-	// has one failure. The full ordering rule is held in console-feeds.spec.ts,
+	// has one failure. The full ordering rule is held in console-voices-feeds.spec.ts,
 	// against the page's own published streaks rather than against this list.
 	const named = await page
 		.locator('[data-feed]')
@@ -717,7 +717,7 @@ function recordByHand(rows: FeedRecord[]) {
 }
 
 test('THE ORACLE: the feed headline carries its own denominator and span', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const byHand = recordByHand(feedLedger(CANARY));
 	// Read against a fact the fixture owns, never against a locator count: a
@@ -749,7 +749,7 @@ test('THE ORACLE: the feed headline carries its own denominator and span', async
 test('THE ORACLE: the disclosed names are exactly the feeds that did not fail', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const byHand = recordByHand(feedLedger(CANARY));
 	const named = await page
@@ -767,7 +767,7 @@ test('THE ORACLE: the disclosed names are exactly the feeds that did not fail', 
 test('THE ORACLE: the failure list is capped and its tail counts the remainder', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const byHand = recordByHand(feedLedger(CANARY));
 	const table = page.locator('[data-feeds="table"]');
@@ -1447,16 +1447,15 @@ test('an empty section costs the page that section, never the page', async ({ pa
 
 	// The canary telemetry records no failed item, so the failed-item list has
 	// nothing to list. It says so and the page carries on: the timing chart, the
-	// run grid, the feed table and the score table all still draw. The rows are
-	// behind a disclosure now, so what has to survive is the control that reaches
-	// them and the sentence it carries - not the table itself.
+	// run grid and the score table all still draw. The rows are behind a
+	// disclosure now, so what has to survive is the control that reaches them
+	// and the sentence it carries - not the table itself.
 	await expect(page.locator('[data-failure-toggle]')).toBeVisible();
 	await expect(page.locator('[data-failure-list="empty"]')).toHaveText(
 		'No failed item is in this window.'
 	);
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
-	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 	// The daily rows are behind a disclosure now, so what has to survive is the
 	// control that reaches them - not the table itself.
 	await expect(page.locator('[data-charts="daily"]')).toBeVisible();
@@ -1466,6 +1465,13 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	// empty states and its own band above them.
 	await page.goto('/console/model/');
 	await expect(page.getByRole('heading', { name: 'What the model did' })).toBeVisible();
+	await expect(page.locator('[data-console-band]')).toBeVisible();
+
+	// And on the route the feed and source panels moved to on 2026-09-14. The
+	// feed table is the surface this test used to check on Pipelines; it is the
+	// same check, on the route that now owns it.
+	await page.goto('/console/voices/');
+	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 	await expect(page.locator('[data-console-band]')).toBeVisible();
 
 	expect(errors).toEqual([]);

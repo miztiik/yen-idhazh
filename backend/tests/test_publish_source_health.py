@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from idhazh import config, ledger, publish_source_health
+from idhazh import config, day_partition, ledger, publish_source_health
 from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import (
@@ -293,6 +293,8 @@ def test_a_retirement_day_and_the_retirement_are_one_fact() -> None:
             opportunities=0,
             publications=0,
             source_failures=0,
+            reliability=1.0,
+            reliability_reads=0,
         )
 
 
@@ -407,6 +409,8 @@ def test_no_yield_numerator_can_exceed_its_opportunity_count() -> None:
             opportunities=2,
             publications=3,
             source_failures=0,
+            reliability=1.0,
+            reliability_reads=0,
         )
 
 
@@ -419,6 +423,9 @@ def test_a_view_names_each_source_once_and_in_order() -> None:
             version=SourceHealthView.schema_version(),
             generated_at=f"{DATE}T06:20:00Z",
             run_id=f"{DATE}-1",
+            headline_sentence="Nothing on this page is outside its bound.",
+            reliability_floor=COLLECT.reliability_floor,
+            reliability_window_days=COLLECT.reliability_window_days,
             min_complete_days=30,
             complete_dates=0,
             yield_readable=False,
@@ -484,6 +491,155 @@ def test_the_active_census_is_exactly_the_addresses_a_run_would_ask() -> None:
     assert names, "the committed source list is empty"
     assert names & {feed.id for feed in settings.sources.retired} == set()
     assert len(names) == len(counted), "one address counted twice inflates a permission state"
+
+
+def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """THE ORACLE: the page's factor equals `ledger.reliability`, over one state tree.
+
+    Both arms read the same written ledger through their own loader, which is
+    the only way this catches the two divergences that were live while the field
+    was being added. The ranker groups what `load_health` returned and never
+    settles the rows; this view settles them everywhere else. And the ranker's
+    window is `collect.reliability_window_days` where the view is otherwise
+    built from the wider `HEALTH_WINDOW_DAYS`. Reducing the wrong row set fails
+    here rather than on the page.
+    """
+    state = tmp_path / "state"
+    settings = config.load()
+    collect = settings.app.collect
+    known = publish_source_health.active_feeds(
+        settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
+    )
+    assert len(known) >= 2, "the committed config needs two addresses for this to bite"
+    good, bad = known[0].id, known[1].id
+    inside = day_partition.days_in_window(DATE, collect.reliability_window_days)
+    for offset, date in enumerate((inside[0], inside[1], inside[-1])):
+        ledger.append_health(
+            state,
+            date,
+            [
+                health(good, date=date, n=offset + 1, outcome=FetchOutcome.OK, items=4),
+                health(bad, date=date, n=offset + 1, outcome=FetchOutcome.OK, items=0),
+            ],
+        )
+    # A read one day past the far edge, which the ranker does not see either.
+    stale = day_partition.days_in_window(DATE, collect.reliability_window_days + 1)[-1]
+    ledger.append_health(
+        state, stale, [health(bad, date=stale, n=9, outcome=FetchOutcome.OK, items=7)]
+    )
+
+    view = publish_source_health.publish(
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        collect=collect,
+        date=DATE,
+        run_id=f"{DATE}-1",
+        generated_at=f"{DATE}T06:20:00Z",
+        state_root=state,
+        path=tmp_path / "public" / publish_source_health.PUBLIC_FILENAME,
+    )
+    ranked = ledger.reliability(
+        state,
+        today=DATE,
+        within_days=collect.reliability_window_days,
+        floor=collect.reliability_floor,
+    )
+    for row in view.sources:
+        assert row.reliability == pytest.approx(ranked.get(row.source_id, 1.0)), row.source_id
+
+    drawn = {row.source_id: row for row in view.sources}
+    assert drawn[good].reliability == pytest.approx(1.0)
+    assert drawn[good].reliability_reads == 3
+    assert drawn[bad].reliability == pytest.approx(collect.reliability_floor)
+    assert drawn[bad].reliability_reads == 3, "the read outside the window was counted"
+
+
+def test_a_rest_and_a_robots_answer_are_not_evidence_the_page_may_draw() -> None:
+    """They preserve the streak, so neither says whether the address works.
+
+    A feed whose whole window is rests scores the 1.0 of no evidence, and the
+    denominator beside it is zero - which is the difference between "never
+    missed" and "never asked" the page draws as a dash.
+    """
+    rested = fold(
+        feeds=[feed("wire")],
+        health_rows=[
+            health("wire", date=DATE, n=1, outcome=FetchOutcome.SKIPPED),
+            health("wire", date=DATE, n=2, outcome=FetchOutcome.SKIPPED),
+        ],
+    )
+    assert only(rested).reliability_reads == 0
+    assert only(rested).reliability == pytest.approx(1.0)
+
+
+def test_a_factor_never_falls_through_the_floor_it_ships_with() -> None:
+    """The bar the page draws marks that floor, so a value under it is undrawable."""
+    view = fold(
+        feeds=[feed("wire")],
+        health_rows=[
+            health("wire", date=DATE, n=n, outcome=FetchOutcome.OK, items=0) for n in (1, 2, 3)
+        ],
+    )
+    assert only(view).reliability == pytest.approx(COLLECT.reliability_floor)
+    assert view.reliability_floor == pytest.approx(COLLECT.reliability_floor)
+    assert view.reliability_window_days == COLLECT.reliability_window_days
+
+
+def test_the_headline_names_the_worst_figure_against_its_own_bound() -> None:
+    """A feed the ranking has already discounted outranks one that merely reads badly."""
+    view = fold(
+        feeds=[feed("wire"), feed("other")],
+        health_rows=[
+            health("wire", date=DATE, n=n, outcome=FetchOutcome.OK, items=0) for n in (1, 2)
+        ],
+    )
+    assert view.headline_sentence == (
+        "1 of 2 feeds are discounted to the 50% floor, which is as far as the ranking takes one."
+    )
+
+
+def test_the_headline_is_present_and_says_something_on_an_empty_window() -> None:
+    """Never null and never empty, whatever the record holds - including nothing.
+
+    The three shapes a run can actually hand this page: no configured address at
+    all, an address with no evidence behind any of its figures, and an address
+    whose every figure is inside its bound. A page whose summary line can vanish
+    teaches an operator to scroll past it, so each one gets a sentence.
+    """
+    empty = fold(feeds=[])
+    assert empty.headline_sentence.strip()
+    assert empty.headline_sentence == (
+        "No source is configured, so there is no figure on this page yet."
+    )
+
+    unmeasured = fold(feeds=[feed("wire")])
+    assert unmeasured.headline_sentence == "2 figures on this page are not computed yet."
+
+    clear = fold(
+        feeds=[feed("wire")],
+        health_rows=[health("wire", date=DATE, n=1, outcome=FetchOutcome.OK, items=4)],
+        items=[item("wire", date="2026-08-19", n=1, index=0, published=True)],
+    )
+    assert clear.headline_sentence == "Nothing on this page is outside its bound."
+
+
+def test_the_headline_and_the_operator_alarm_name_the_same_sources() -> None:
+    """One predicate under both, so the line and the list below it cannot disagree."""
+    feeds, health_rows, items = _yielding("wire", published=2, lost=40)
+    view = fold(feeds=[feeds], health_rows=health_rows, items=items)
+    named = publish_source_health.below_the_yield_bar(
+        view.sources,
+        alarm_point=COLLECT.source_yield_alarm_point,
+        min_decisions=COLLECT.source_yield_alarm_min_decisions,
+    )
+    assert [row.source_id for row in named] == ["wire"]
+    assert view.headline_sentence.startswith("1 of 1 sources decided 30 or more addresses")
+    alarm = publish_source_health.yield_alarm(
+        view,
+        alarm_point=COLLECT.source_yield_alarm_point,
+        min_decisions=COLLECT.source_yield_alarm_min_decisions,
+    )
+    assert alarm is not None and "wire" in alarm
 
 
 def _yielding(

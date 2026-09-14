@@ -28,7 +28,7 @@
 		type Margin
 	} from '$lib/charts/frame';
 	import { capLabel, grouped, rangeMarks } from '$lib/charts/series';
-	import type { CapPoint, SourceCut } from '../../routes/console/+page.server';
+	import type { CapPoint, SourceCut } from '../../routes/console/voices/+page.server';
 
 	let {
 		rows,

@@ -897,12 +897,26 @@ export interface SourceHealthRow {
 	opportunities: number;
 	publications: number;
 	source_failures: number;
+	/** The multiplier the ranker applied to this feed's authority on the run that
+	 * wrote this view. Read, never recomputed: a page that reduced the feed-health
+	 * rows again would be a second verdict on a question the run already answered. */
+	reliability: number;
+	/** Evidence-bearing reads behind that factor. Zero means the 1.0 beside it is
+	 * the default a feed with no evidence scores rather than a perfect record, and
+	 * the page draws those two differently. */
+	reliability_reads: number;
 }
 
 /** The published source-health view, as the console reads it. */
 export interface SourceHealthView {
 	generated_at: string;
 	run_id: string;
+	/** The one line the page opens with. Never absent and never empty. */
+	headline_sentence: string;
+	/** The furthest down the ranker discounts a feed, and the mark on every bar. */
+	reliability_floor: number;
+	/** How far back the factor was reduced, in days. */
+	reliability_window_days: number;
 	min_complete_days: number;
 	complete_dates: number;
 	yield_readable: boolean;
@@ -937,6 +951,35 @@ export function sourceHealthView(path: string = SOURCE_HEALTH_PATH): SourceHealt
 		console.warn(`[source-health] view unreadable, section dropped - ${String(cause)}`);
 		return null;
 	}
+}
+
+/** Does this view carry the ranking factor, or was it written before it existed?
+ *
+ * The read-side migration for `reliability`, `reliability_reads`,
+ * `reliability_floor`, `reliability_window_days` and `headline_sentence`, which
+ * arrived together on 2026-09-14 (`CLAUDE.md` section 11). Every run before that
+ * wrote a view with none of them, and one of those views is committed at
+ * `frontend/public/source-health.json` right now - so a page that read
+ * `row.reliability.toFixed(3)` without asking threw during prerender and took
+ * the whole route out of the build, census and failure list included.
+ *
+ * One question rather than five, because the five arrived in one producer and no
+ * run can write a subset of them. The floor is the one asked about: it is a
+ * number on the view itself, so it is answerable without looking at a row, and
+ * a view with no sources would otherwise pass a per-row check by having nothing
+ * to check.
+ *
+ * The census does not need this. Permission, reading, retirement and the
+ * publishing record are all on the old shape, so an old view still draws that
+ * panel in full - which is why this is a question the reliability panel asks
+ * rather than a refusal `sourceHealthView` makes for everybody.
+ */
+export function reliabilityPublished(view: SourceHealthView | null): boolean {
+	if (view === null) return false;
+	return (
+		typeof view.reliability_floor === 'number' &&
+		typeof view.reliability_window_days === 'number'
+	);
 }
 
 /** One run of one day, as the manifest recorded it. */
