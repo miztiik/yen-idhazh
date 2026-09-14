@@ -33,14 +33,13 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 14 | 14 | 4 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 9 | 6 | 3 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
 | [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 4 | 9 | 3 |
 
-## In flight - 1
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | p25-r13 |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
 ## Ready now - 26
 
