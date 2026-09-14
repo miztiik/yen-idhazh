@@ -197,6 +197,37 @@ def filed(items: list[DigestItem]) -> Counter[str]:
     return Counter(desk_of(item) for item in items)
 
 
+def placed(
+    day: list[DigestItem],
+    *,
+    config: PlacementConfig,
+    bounds: dict[str, DeskBounds] | None = None,
+) -> list[DigestItem]:
+    """`place`, with the four promises its own docstring makes checked every call.
+
+    Call this rather than `place` directly. The promises hold whatever the config
+    says and whatever the day looks like, so a test about the desk ceiling checks
+    them as cheaply as a test about the head - and a test written next year for
+    some other reason inherits every one of them without knowing they exist.
+
+    That is the difference between a rule and a control. All four were written
+    down before 2026-09-13 and the one about a later run was written in three
+    places; what was missing was somewhere they went red.
+    """
+    out = place(day, config=config, bounds=bounds)
+
+    assert len(out) == len(day), "a cap shortened the day, and a reader cannot see what is missing"
+    assert {item.item_id for item in out} == {item.item_id for item in day}, (
+        "the day came back holding stories it was not handed"
+    )
+    runs = [item.introduced_by_run for item in out]
+    assert runs == sorted(runs), "a later run's story moved above one a reader had already read"
+    assert filed(out) == filed(refile(stream_order(day), bounds=bounds or {})), (
+        "the desk rules were applied to one run's block rather than to the day"
+    )
+    return out
+
+
 # --- The oracle -------------------------------------------------------------
 
 
@@ -214,7 +245,7 @@ def test_the_frame_holds_on_a_day_built_to_break_it() -> None:
     assert Counter(desk_of(item) for item in unframed[: config.head_items])["india"] == 18
     assert len({item.source_id for item in unframed[: config.head_no_repeat]}) == 2
 
-    out = place(day, config=config)
+    out = placed(day, config=config)
 
     assert len(out) == len(day)
     assert {item.item_id for item in out} == {item.item_id for item in day}
@@ -233,7 +264,7 @@ def test_the_caps_actually_bind_on_that_day() -> None:
     the cold load, because the stream pages at twelve, and twenty is the head.
     """
     config = frame()
-    head = place(lopsided_day(), config=config)[: config.head_items]
+    head = placed(lopsided_day(), config=config)[: config.head_items]
 
     assert Counter(desk_of(item) for item in head)["india"] == config.max_desk_in_head
     assert len({desk_of(item) for item in head[:12]}) >= 3
@@ -249,7 +280,7 @@ def test_a_thin_desk_can_miss_the_head_and_that_is_the_price_of_5() -> None:
     desk genuinely owned.
     """
     config = frame()
-    head = place(lopsided_day(), config=config)[: config.head_items]
+    head = placed(lopsided_day(), config=config)[: config.head_items]
 
     assert len({desk_of(item) for item in head}) == 4
     assert set(DESKS) - {desk_of(item) for item in head}
@@ -259,7 +290,7 @@ def test_every_displaced_story_is_still_on_the_page_below_the_head() -> None:
     """A displaced story keeps its place in the day. Nothing is left out."""
     day = lopsided_day()
     config = frame()
-    out = place(day, config=config)
+    out = placed(day, config=config)
 
     india = [item.item_id for item in day if item.vertical == "india"]
     in_head = {item.item_id for item in out[: config.head_items]}
@@ -276,14 +307,14 @@ def test_every_displaced_story_is_still_on_the_page_below_the_head() -> None:
 def test_the_first_slot_is_the_scores_own_first_pick() -> None:
     """No cap can bind on an empty head, so the frame never argues about the lead."""
     day = lopsided_day()
-    assert place(day, config=frame())[0].item_id == stream_order(day)[0].item_id
+    assert placed(day, config=frame())[0].item_id == stream_order(day)[0].item_id
 
 
 def test_past_the_head_the_order_is_the_scores_untouched() -> None:
     """The frame is a claim about the first screen and about nothing else."""
     day = lopsided_day()
     config = frame()
-    out = place(day, config=config)
+    out = placed(day, config=config)
 
     tail = [item.item_id for item in out[config.head_items :]]
     head = {item.item_id for item in out[: config.head_items]}
@@ -307,7 +338,7 @@ def test_the_frame_yields_before_the_day_shortens() -> None:
         )
         for index in range(30)
     ]
-    out = place(day, config=frame())
+    out = placed(day, config=frame())
 
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
 
@@ -323,7 +354,7 @@ def test_a_day_shorter_than_the_head_comes_back_whole() -> None:
         )
         for index in range(12)
     ]
-    out = place(day, config=frame())
+    out = placed(day, config=frame())
 
     assert len(out) == 12
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
@@ -333,18 +364,25 @@ def test_a_day_shorter_than_the_head_comes_back_whole() -> None:
 
 
 def day_over_two_runs(first: int = 24, second: int = 12) -> list[DigestItem]:
-    """A day whose second run published every story worth reading.
+    """A day whose second run published every story worth reading, on a crowded desk.
 
     Run 2 outscores every story run 1 published, which is the case one sort over
     the whole day gets wrong and the case the committed archive cannot supply -
-    the archive was written before this file existed. Distinct feeds and desks
-    throughout, so no cap binds and the only thing under test is the order.
+    the archive was written before this file existed.
+
+    Every story reads `ai` while the feeds that carried them span five desks, so
+    the desk floor and the desk ceiling have real work to do here and not only in
+    `heavy_ai_day`. That is deliberate: `place` is the only thing that decides
+    whether those rules see the whole day or one run's block, and a two-run day
+    with nothing for them to do cannot tell the difference. Distinct feeds
+    throughout, so the no-repeat window is never what binds.
     """
     return [
         *(
             story(
                 f"{DESKS[index % len(DESKS)]}-first-{index:02d}",
                 vertical=DESKS[index % len(DESKS)],
+                desk="ai",
                 source_id=f"feed-first-{index}",
                 rank_score=10.0 - index * 0.1,
                 introduced_by_run=1,
@@ -355,6 +393,7 @@ def day_over_two_runs(first: int = 24, second: int = 12) -> list[DigestItem]:
             story(
                 f"{DESKS[index % len(DESKS)]}-second-{index:02d}",
                 vertical=DESKS[index % len(DESKS)],
+                desk="ai",
                 source_id=f"feed-second-{index}",
                 rank_score=100.0 - index * 0.1,
                 introduced_by_run=2,
@@ -374,12 +413,32 @@ def test_a_later_run_appends_however_well_it_scored() -> None:
     (`docs/architecture/contracts/schemas.md`).
     """
     day = day_over_two_runs()
-    out = place(day, config=frame())
+    out = placed(day, config=frame(), bounds=BOUNDS)
 
     introduced = [item.introduced_by_run for item in out]
     assert introduced == sorted(introduced), "a later run's story moved above one already read"
     assert len(out) == len(day)
     assert {item.item_id for item in out} == {item.item_id for item in day}
+
+
+def test_the_desk_rules_see_the_whole_day_and_not_one_runs_block() -> None:
+    """A ceiling is a share of the day, so a day split in two is still one day.
+
+    `refile` over the whole day is the answer, and `place` is the only caller
+    that could get it wrong - it is the file that knows about blocks at all. Run
+    the rules per block and `ai` is measured against 24 stories and then against
+    12 rather than against 36, so the day publishes a filing nobody ruled on.
+
+    `placed` already refuses that on every call. This names the day it happens on
+    and the numbers it lands, so a failure says which rule moved.
+    """
+    day = day_over_two_runs()
+    out = placed(day, config=frame(), bounds=BOUNDS)
+    counted = filed(out)
+
+    assert counted["ai"] <= int(BOUNDS["ai"].ceiling * len(day)), "ai is over the day's ceiling"
+    assert set(counted) == set(DESKS), "the ceiling did not reach every desk it opened"
+    assert counted == filed(refile(stream_order(day), bounds=BOUNDS))
 
 
 def test_the_day_validates_as_a_payload_after_the_frame_has_run() -> None:
@@ -389,7 +448,7 @@ def test_the_day_validates_as_a_payload_after_the_frame_has_run() -> None:
     the placed items fails on any implementation that sorts the whole day.
     """
     day = day_over_two_runs()
-    out = place(day, config=frame())
+    out = placed(day, config=frame(), bounds=BOUNDS)
 
     built = DigestDay(
         version=DigestDay.schema_version(),
@@ -425,7 +484,7 @@ def test_the_head_is_the_pages_head_and_not_each_blocks() -> None:
     """
     day = day_over_two_runs()
     config = frame()
-    out = place(day, config=config)
+    out = placed(day, config=config, bounds=BOUNDS)
 
     assert all(item.introduced_by_run == 1 for item in out[: config.head_items])
 
@@ -443,7 +502,7 @@ def test_a_thin_first_run_leaves_the_rest_of_the_head_to_the_second() -> None:
     """
     day = day_over_two_runs(first=5, second=30)
     config = frame()
-    out = place(day, config=config)
+    out = placed(day, config=config, bounds=BOUNDS)
 
     head = out[: config.head_items]
     assert [item.introduced_by_run for item in head] == [1] * 5 + [2] * 15
@@ -538,7 +597,7 @@ def test_the_frame_counts_the_desk_the_reader_sees() -> None:
         for index in range(8)
     ]
     config = frame(head_items=10, head_no_repeat=0, max_desk_in_head=5)
-    head = place(day, config=config)[: config.head_items]
+    head = placed(day, config=config)[: config.head_items]
 
     assert Counter(desk_of(item) for item in head)["ai"] == 5
 
@@ -549,8 +608,8 @@ def test_the_frame_counts_the_desk_the_reader_sees() -> None:
 def test_changing_the_desk_cap_changes_the_order_with_no_source_edit() -> None:
     """Guardrail #6's substitution test, run on the frame's own knob."""
     day = lopsided_day()
-    tight = [item.item_id for item in place(day, config=frame(max_desk_in_head=5))]
-    loose = [item.item_id for item in place(day, config=frame(max_desk_in_head=8))]
+    tight = [item.item_id for item in placed(day, config=frame(max_desk_in_head=5))]
+    loose = [item.item_id for item in placed(day, config=frame(max_desk_in_head=8))]
 
     assert tight != loose
     assert sorted(tight) == sorted(loose)
@@ -558,8 +617,8 @@ def test_changing_the_desk_cap_changes_the_order_with_no_source_edit() -> None:
 
 def test_changing_the_no_repeat_window_changes_the_order() -> None:
     day = lopsided_day()
-    narrow = [item.item_id for item in place(day, config=frame(head_no_repeat=0))]
-    wide = [item.item_id for item in place(day, config=frame(head_no_repeat=10))]
+    narrow = [item.item_id for item in placed(day, config=frame(head_no_repeat=0))]
+    wide = [item.item_id for item in placed(day, config=frame(head_no_repeat=10))]
 
     assert narrow != wide
     assert sorted(narrow) == sorted(wide)
@@ -568,7 +627,7 @@ def test_changing_the_no_repeat_window_changes_the_order() -> None:
 def test_a_head_of_zero_switches_the_frame_off() -> None:
     """An operator can publish the score's order whole and see what it looks like."""
     day = lopsided_day()
-    out = place(day, config=frame(head_items=0, head_no_repeat=0))
+    out = placed(day, config=frame(head_items=0, head_no_repeat=0))
 
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
 
@@ -590,8 +649,8 @@ def test_the_frame_counts_the_desk_the_rules_left_the_story_on() -> None:
     day = heavy_ai_day()
     config = frame()
 
-    unbounded = place(day, config=config)[: config.head_items]
-    bounded = place(day, config=config, bounds=BOUNDS)[: config.head_items]
+    unbounded = placed(day, config=config)[: config.head_items]
+    bounded = placed(day, config=config, bounds=BOUNDS)[: config.head_items]
 
     assert Counter(desk_of(item) for item in unbounded) == {"ai": 20}
     assert max(Counter(desk_of(item) for item in bounded).values()) <= config.max_desk_in_head
