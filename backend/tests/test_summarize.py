@@ -20,6 +20,7 @@ import threading
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from string import Template
 from typing import Any, Final
 
 import pytest
@@ -78,7 +79,13 @@ from idhazh.llm.server import (
     trained_context,
     turn_markers,
 )
-from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, LINK_PLACEHOLDER
+from idhazh.sanitize import (
+    FENCE_CLOSE,
+    FENCE_OPEN,
+    LINK_PLACEHOLDER,
+    sanitize,
+    why_a_forged_turn_would_survive,
+)
 from idhazh.stages.validate import _summarize_one
 from idhazh.summarize import (
     build_request,
@@ -2580,3 +2587,43 @@ class TestTheServerProvesTheEntry:
 
         with pytest.raises(ValidationError, match="arch"):
             ModelsConfig.model_validate(document)
+
+
+# --- The entry's own markers, against the boundary that has to strip them ----
+
+
+def test_every_marker_the_committed_entry_declares_is_one_the_boundary_strips() -> None:
+    """The entry names the bytes a forged turn would be spelled with.
+
+    An article carrying them reaches the model with a turn boundary in it
+    unless the sanitizer takes them out first (Guardrail #11), so the markers
+    the running model declares are the ones the control has to know. Read off
+    the committed file rather than restated here: an entry edited to a family
+    the pattern does not know fails at the edit.
+    """
+    turns = configured_turns()
+
+    for field, marker in (
+        ("turn_opening", Template(turns.turn_opening).safe_substitute(role="user")),
+        ("turn_closing", turns.turn_closing),
+        ("reply_opening", turns.reply_opening),
+        ("reply_opening_thinking", turns.reply_opening_thinking),
+    ):
+        assert why_a_forged_turn_would_survive(marker) is None, (
+            f"models.summarize.turns.{field} is {marker!r}, and "
+            f"{why_a_forged_turn_would_survive(marker)}"
+        )
+
+
+def test_the_incumbents_own_reply_opening_is_what_needed_the_widening() -> None:
+    """The widening is load-bearing for the model running today, not a precaution.
+
+    The entry opens a reply by closing an empty reasoning block, so `<think>`
+    and `</think>` are markers this very model would honour - and the pattern
+    knew neither until 2026-09-14, because neither is delimited by a pipe.
+    """
+    turns = configured_turns()
+
+    assert "<think>" in turns.reply_opening and "</think>" in turns.reply_opening
+    assert "<think>" not in sanitize(turns.reply_opening)
+    assert "</think>" not in sanitize(turns.reply_opening)
