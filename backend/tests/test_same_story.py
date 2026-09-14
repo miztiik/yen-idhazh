@@ -31,7 +31,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
-from idhazh.assemble import collapse_same_story, cosine_int8
+from idhazh.assemble import collapse_same_story, cosine_int8, story_key
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings, DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, cosine, from_base64, to_base64
@@ -119,11 +119,18 @@ def block(vectors: dict[str, str]) -> DigestEmbeddings:
     )
 
 
-def item(item_id: str, *, source: str, score: float | None = 1.0, run: int = 1) -> DigestItem:
+def item(
+    item_id: str,
+    *,
+    source: str,
+    score: float | None = 1.0,
+    run: int = 1,
+    title: str | None = None,
+) -> DigestItem:
     return DigestItem(
         item_id=item_id,
         vertical=item_id.rsplit("-", 1)[0],
-        title=f"Story {item_id}",
+        title=title if title is not None else f"Story {item_id}",
         source_url=f"https://example.test/{item_id}",
         source_id=source,
         source_name=source.title(),
@@ -249,8 +256,128 @@ def test_the_count_is_of_other_sources_and_not_of_other_items() -> None:
     assert [one.also_covered_by for one in stamped] == [1, 1, 1]
 
 
-# --- what the pass refuses to guess ----------------------------------------
+# --- one headline, two outlets ---------------------------------------------
+#
+# The cosine is taken over `title. summary`, and the summary is our own prose
+# about ONE article and is most of that string, so two honest tellings of one
+# story are pulled apart by the part that is guaranteed to differ. Measured
+# 2026-09-14 over the twenty-five committed days: the fifty-three cross-source
+# pairs that share a headline have a median cosine of 0.9177, and the pair
+# above is two stories at 0.9317. The populations overlap, so the two arms
+# below hold the threshold still and change one thing - the headline.
 
+#: Far enough apart that no threshold this project would ship groups them. The
+#: assertion in each arm proves it rather than trusting this comment.
+_APART: Final = 30.0
+#: Close enough that the cosine alone forms a group, for the chaining guard.
+_TOGETHER: Final = 45.0
+
+
+def test_two_sources_with_one_headline_are_one_story_below_the_threshold() -> None:
+    """The joined arm. Two outlets, one headline, a cosine that never clears."""
+    items = [
+        item("world-01", source="wire", score=1.0, title="Ferry capsizes off Cyprus, killing seven"),
+        item("world-02", source="paper", score=9.0, title="Ferry capsizes off Cyprus killing seven"),
+    ]
+    vectors = {"world-01": unit(0), "world-02": unit(_APART)}
+    assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-02"])) < (
+        committed_threshold()
+    ), "the arm is only a test of the headline if the vectors cannot form this group"
+
+    stamped = collapse_same_story(items, block(vectors), similarity_min=committed_threshold())
+
+    assert groups_of(stamped) == {"world-02": ["world-01"]}, "the higher rank_score is kept"
+    assert [one.also_covered_by for one in stamped] == [1, 1]
+
+
+def test_a_headline_one_word_apart_is_not_a_story_below_the_threshold() -> None:
+    """The control arm. Everything above, with one word of one headline changed.
+
+    Both arms run at the threshold `config/idhazh.json` ships and both pairs
+    carry the same two vectors, so this is the arm that goes red if somebody
+    answers the defect by lowering `duplicate_similarity_min` instead: a floor
+    low enough to group the arm above groups this one too.
+    """
+    items = [
+        item("world-01", source="wire", score=1.0, title="Ferry capsizes off Cyprus, killing seven"),
+        item("world-02", source="paper", score=9.0, title="Ferry capsizes off Crete killing seven"),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"world-01": unit(0), "world-02": unit(_APART)}),
+        similarity_min=committed_threshold(),
+    )
+
+    assert groups_of(stamped) == {}
+    assert [one.also_covered_by for one in stamped] == [0, 0]
+    assert [one.same_story_as for one in stamped] == [None, None]
+
+
+def test_a_headline_does_not_chain_a_group_through_its_middle() -> None:
+    """Andre's warning, 2026-09-14, as an assertion.
+
+    A shared headline is transitive on its own and a cosine is not, so their
+    union is not either. A and B share a headline, B and C clear the cosine, and
+    A and C clear neither. Single-link over the union puts all three together
+    and loses A or C; every pair inside a group has to clear one of the two.
+    """
+    items = [
+        item("world-01", source="wire", score=9.0, title="Ferry capsizes off Cyprus"),
+        item("world-02", source="paper", score=5.0, title="Ferry capsizes off Cyprus."),
+        item("world-03", source="agency", score=1.0, title="Rescuers search the Cyprus strait"),
+    ]
+    vectors = {"world-01": unit(0), "world-02": unit(_APART), "world-03": unit(_TOGETHER)}
+    assert cosine(from_base64(vectors["world-02"]), from_base64(vectors["world-03"])) > 0.94
+    assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-03"])) < 0.94
+
+    stamped = collapse_same_story(items, block(vectors), similarity_min=0.94)
+
+    assert groups_of(stamped) == {"world-01": ["world-02"]}
+    assert [one.also_covered_by for one in stamped] == [1, 1, 0]
+
+
+def test_one_outlet_running_one_headline_twice_is_still_not_a_group() -> None:
+    """The across-sources rule holds over the new way in as well.
+
+    One desk running one title on two days is a recurring slot, not a story
+    covered twice. Over the twenty-five committed days, twelve of the 9,333
+    (source, headline) pairs repeat across days, and two of them are an
+    extraction failure the summariser titled.
+    """
+    items = [
+        item("world-01", source="wire", score=1.0, title="Markets wrap"),
+        item("world-02", source="wire", score=9.0, title="Markets wrap"),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"world-01": unit(0), "world-02": unit(_APART)}),
+        similarity_min=0.94,
+    )
+
+    assert groups_of(stamped) == {}
+    assert [one.also_covered_by for one in stamped] == [0, 0]
+
+
+def test_turning_the_joiner_off_restores_the_vector_only_rule() -> None:
+    """Guardrail #6's substitution test: change the config, change the behaviour."""
+    items = [
+        item("world-01", source="wire", score=1.0, title="Ferry capsizes off Cyprus"),
+        item("world-02", source="paper", score=9.0, title="Ferry capsizes off Cyprus"),
+    ]
+    vectors = block({"world-01": unit(0), "world-02": unit(_APART)})
+
+    assert groups_of(collapse_same_story(items, vectors, similarity_min=0.94)) != {}
+    assert (
+        groups_of(
+            collapse_same_story(
+                items, vectors, similarity_min=0.94, group_identical_titles=False
+            )
+        )
+        == {}
+    )
+
+
+# --- what the pass refuses to guess ----------------------------------------
 
 def test_a_day_with_no_vectors_says_it_does_not_know() -> None:
     """Null, never 0. A day whose encoder never ran carried no claim either way."""
@@ -283,6 +410,92 @@ def test_a_vector_of_the_wrong_width_is_not_grouped() -> None:
     stamped = collapse_same_story(items, block(vectors), similarity_min=0.9)
 
     assert [one.also_covered_by for one in stamped] == [0, None]
+
+
+def test_an_item_without_a_vector_is_not_grouped_by_its_headline_either() -> None:
+    """A published null that became a number would be a wider claim than this pass makes.
+
+    `also_covered_by` says null when the day could not tell. A matching headline
+    does not lift that, because the field's own description promises the null
+    means the item carries no vector, and an item nobody encoded is one the pass
+    cannot check the rest of the group against.
+    """
+    items = [
+        item("world-01", source="wire", score=9.0, title="Ferry capsizes off Cyprus"),
+        item("world-02", source="paper", score=1.0, title="Ferry capsizes off Cyprus"),
+    ]
+    stamped = collapse_same_story(items, block({"world-01": unit(0)}), similarity_min=0.94)
+
+    assert [one.also_covered_by for one in stamped] == [0, None]
+    assert [one.same_story_as for one in stamped] == [None, None]
+
+
+def test_two_items_nobody_could_title_are_not_one_story() -> None:
+    """`Untitled item` is the fallback two sources can both land on.
+
+    It is a headline that names no event, so two of them are evidence of two
+    extraction failures and never of one story.
+    """
+    items = [
+        item("world-01", source="wire", score=9.0, title="Untitled item"),
+        item("world-02", source="paper", score=1.0, title="Untitled item"),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"world-01": unit(0), "world-02": unit(_APART)}),
+        similarity_min=0.94,
+    )
+
+    assert groups_of(stamped) == {}
+    assert [one.also_covered_by for one in stamped] == [0, 0]
+
+
+# --- the headline, reduced -------------------------------------------------
+
+
+def test_the_reduction_folds_case_and_punctuation() -> None:
+    """The three differences two desks make to one headline, and nothing else."""
+    one = "Nvidia Agrees to Acquire Hugging Face for $12.93 Billion"
+    for other in (
+        "nvidia agrees to acquire hugging face for $12.93 billion",
+        "NVIDIA agrees to acquire Hugging Face for $12.93 billion",
+        "Nvidia agrees to acquire Hugging Face for $12.93 billion.",
+        "Nvidia agrees to acquire Hugging Face for \u201c$12.93 billion\u201d",
+    ):
+        assert story_key(one) == story_key(other), other
+
+
+def test_the_reduction_keeps_every_digit() -> None:
+    """A price, a toll or a percentage is often the whole story.
+
+    This pass publishes `Also covered by N other sources today.`, which is a
+    claim that those sources corroborate each other. A rule that read past a
+    number would make that claim on exactly the pairs where two desks printed
+    different figures. What it costs is stated rather than hidden: on
+    2026-09-03 one acquisition ran under three prices and stays three groups.
+    """
+    assert story_key("Tariff raised to 25 percent") != story_key("Tariff raised to 50 percent")
+    assert story_key("Hugging Face for $12.9 billion") != story_key(
+        "Hugging Face for $12.93 billion"
+    )
+    assert story_key("Budget 2025 lands") != story_key("Budget 2026 lands")
+
+
+def test_the_reduction_keeps_a_script_it_cannot_fold() -> None:
+    """Latin is not the rule. Two headlines that share no letter are not one key."""
+    assert story_key("\u0938\u092e\u093e\u091a\u093e\u0930 \u090f\u0915") is not None
+    assert story_key("\u0938\u092e\u093e\u091a\u093e\u0930 \u090f\u0915") != story_key(
+        "\u0938\u092e\u093e\u091a\u093e\u0930 \u0926\u094b"
+    )
+
+
+def test_a_headline_that_reduces_to_nothing_is_not_a_key() -> None:
+    """Two headlines of pure punctuation are two failures, not one story."""
+    assert story_key("") is None
+    assert story_key("   ") is None
+    assert story_key("--- ... ---") is None
+    assert story_key("Untitled item") is None
+    assert story_key("untitled  ITEM.") is None
 
 
 # --- the oracle: a hand-labelled day ---------------------------------------

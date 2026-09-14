@@ -11,6 +11,12 @@
           "minimum": 0.0,
           "title": "Duplicate Similarity Min",
           "type": "number"
+        },
+        "group_identical_titles": {
+          "default": true,
+          "description": "Whether two of a day's items are one story when their published headlines reduce to the same key - compatibility-normalised, casefolded, and with everything that is not a letter or a digit turned into a space. Digits survive, so two spellings of one price stay two groups. This is a second way into a group beside duplicate_similarity_min, never a replacement: every pair inside a group still has to clear one of the two, and an item with no vector is still never grouped. It exists because the cosine is taken over `title. summary`, and the summary is our own prose about ONE article and is most of that string, so two honest tellings of one story are pulled apart by the part that is guaranteed to differ. Measured 2026-09-14 on a developer machine / Python 3.14.2 over the twenty-five committed days and 9,353 items: fifty-three cross-source pairs share a headline, their cosine has a median of 0.9177 against a floor of 0.94, and the highest-scoring pair a person marked as TWO stories sits at 0.9317 - above that median, so no threshold separates the two populations and lowering duplicate_similarity_min cannot fix this. Turning this off restores the vector-only rule, which is the revert path an operator has if a shared headline ever turns out to be two stories. Ruled by Andre and the Editor, 2026-09-14; the reasoning is in docs/architecture/publishing/layout.md.",
+          "title": "Group Identical Titles",
+          "type": "boolean"
         }
       },
       "title": "AssembleConfig",
@@ -1849,6 +1855,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added assemble.group_identical_titles, default true. The same-story pass gains a second way into a group: two items whose published headlines reduce to the same key are one story, beside the cosine it already used. Additive with a default, so an older config/idhazh.json still validates and no read-side migration is owed. assemble.duplicate_similarity_min is untouched at 0.94.",
+      "version": "2026-09-14T12:40",
+      "why": "The digest published one story five times in a day and the pass did not group it. The vector is built from `title. summary`, the summary is our own prose about ONE article and is most of the string, so two outlets on one story never converge. Measured 2026-09-14 over the twenty-five committed days: the fifty-three cross-source pairs that share a headline have a median cosine of 0.9177, and the pair a person marked as two stories sits at 0.9317 - the populations overlap, so the threshold was never the defect. The knob exists because the new joiner has no threshold of its own, so without it part of the pass would be invisible to config/ (Guardrail #6). Ruled by Andre, the Editor and Fowler, 2026-09-14."
+    },
+    {
       "change": "models is gone and models_file replaces it. The block held the whole active model inline; the same shape is now the models-config document under config/models/, and models_file names which of those files is read. This is a contract break and the read-side migration ships with it: a config that still carries models is refused by name through refuse_a_removed_knob rather than through 'extra inputs are not permitted'. Refused rather than lifted, because a lift would read one model out of the old block while models_file named another file, and the run would stand a server up on whichever won. models_file defaults to the committed file, so a fresh clone still runs unconfigured, and its grammar pins it to config/models/ and to .json - the value is an operator's edit that becomes a path this build opens.",
       "version": "2026-09-14",
       "why": "Plan 28 row #6. Swapping the summarizer had to cost no source edit and did not: it cost eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's measured numbers out of git rather than read them off disk. One file per model makes the swap and the revert the same one-line edit, and puts the numbers measured for a set of weights in the file that names them. Ruled by Fowler, 2026-09-14."
@@ -2543,7 +2554,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-14",
+      "default": "2026-09-14T12:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2554,5 +2565,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-14"
+  "version": "2026-09-14T12:40"
 }

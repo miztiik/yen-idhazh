@@ -16,6 +16,9 @@ on 2026-09-12, by two rows that found them and declined to widen into them. Both
 closed on 2026-09-13. Defect 20 got its ruling and the ruling moved the fix: the
 fingerprint was right and the producer was wrong. Defect 21 came from plan 24,
 which ruled it a row on 2026-09-12 and never cut one; it closed on 2026-09-13.
+Defect 22 was reported from the published days on 2026-09-14 and closed the same
+day; like defect 20, the symptom pointed at a number and the fault was upstream
+of it.
 
 Closed rows are removed after checking their current production code, regression
 tests and canonical docs. Git history holds their execution record; the living
@@ -34,6 +37,41 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 19 | A summarize call that failed on its reply reports no cost at all | 2 | CLOSED 2026-09-13 (PR #657) |
 | 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | CLOSED 2026-09-13 (PR #660) |
 | 21 | A test walked every published telemetry shard, and it was the only thing reading them back | 2 | CLOSED 2026-09-13 |
+| 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
+
+## 22 - The same story publishes several times in one day (CLOSED 2026-09-14)
+
+On 2026-08-25 Dolly Parton's death ran five times from five feeds. On 2026-09-03
+one acquisition ran five times under two spellings of its price. Across the 25
+committed days, 42 groups of items from **different** sources published under one
+headline and the pass grouped 15 of them.
+
+**The threshold was not the fault.** `collapse_same_story` scores vectors built
+by `embed.text_for` over `f"{title}. {summary}"`, and the summary is our own
+model's prose about one article - roughly nineteen words in twenty of the
+encoded text. Two outlets writing the same story give our summariser two
+different articles, so the comparison is dominated by the one part guaranteed to
+differ. The 53 cross-source pairs whose headlines match score a median of
+**0.9177** against a floor of **0.94**, and the pair a person has already marked
+as two stories sits at **0.9317** - above that median. No floor separates the two
+populations, so lowering one would have traded this defect for a worse one.
+
+**What shipped is a second joiner, not a new number.** Two items are also the
+same story when their reduced headlines are identical - threshold-free, still
+vector-gated, still across sources, still all-pairs. `assemble.duplicate_similarity_min`
+is untouched at 0.94. Replayed through the shipped pass over every committed day:
+**27 of the 42 were apart before, 2 after**. Digits survive the reduction, which
+leaves the `$12.9` / `$12.93` / `$13` spellings of that acquisition as separate
+groups; Andre ruled the stop there on 2026-09-14 and the reasoning, the two
+headline classes that would break the rule, and the guard measurements that say
+neither fires today are in
+[../docs/architecture/publishing/layout.md](../docs/architecture/publishing/layout.md).
+
+**What is still unmeasured is recall** - every number above starts from pairs
+found *by* matching headlines, so none of them says anything about same-story
+pairs whose headlines differ. Andre named the measurement that would settle it
+and it is not code: a blind hand-label of same-day cross-source pairs drawn
+without consulting titles.
 
 ## 21 - A test walked every published telemetry shard (CLOSED 2026-09-13)
 
