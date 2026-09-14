@@ -28,45 +28,54 @@
 import { scaleBand } from 'd3-scale';
 import type { VisualData, VisualMark } from '$lib/payload/types';
 
-/** The drawing's own coordinate space.
+/** How tall one bar's row is: the name on the line above, the bar under it.
  *
- * The chart is laid out at this width and scaled to the reader's screen by the
- * `viewBox`, so the page reserves the right box from markup and nothing shifts
- * while a story is read. Row #2 takes the width the screen actually has; until
- * then this is one number in one place rather than a canvas the backend baked.
+ * Vertical measurements stay in pixels because the drawing's height is a count
+ * of bars and never a share of the width - which is what lets the figure be its
+ * final height from the frame the marks land in, so a story cannot shift while
+ * it is read. The `viewBox` used to make that promise by holding an aspect
+ * ratio; a height that does not depend on the width keeps it without one.
  */
-export const VIEW_WIDTH = 720;
+const ROW_HEIGHT = 44;
+/** The share of a row that is space rather than mark. */
+const ROW_PADDING = 0.16;
+/** The share of a row's own band the bar takes, leaving the rest for its name. */
+const BAR_SHARE = 0.42;
+/** Room under the bars for the axis line and the unit it counts. */
+const AXIS_BAND = 26;
 
-/** How much of the width the names take before a bar starts. */
-const NAME_GUTTER = 168;
-/** Room under the bars for the axis line and its ticks. */
-const AXIS_BAND = 34;
-/** Room to the right of the longest bar, so its figure has somewhere to sit. */
-const FIGURE_GUTTER = 72;
+/** The share of the width kept for the figure that sits beside the longest bar.
+ *
+ * A share rather than a pixel count, because it is room inside a box whose
+ * width is the reader's screen: a fixed gutter is a third of a 360 px phone and
+ * a rounding error on a desktop. The figure is drawn just past its own bar, so
+ * a short bar leaves the slack unused - this only bounds the longest one.
+ */
+const FIGURE_SHARE = 0.16;
+/** The gap between a bar's end and its figure. */
+const FIGURE_GAP = 8;
 
-/** How tall one band is, before padding. */
-const BAND_HEIGHT = 34;
-/** The share of a band that is space rather than bar. */
-const BAND_PADDING = 0.28;
-
-/** One bar, placed. Every number here is a coordinate in the view box above. */
+/** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
 	/** The element's own characters, cut and sanitized by the compiler. */
 	name: string;
 	/** The figure as the article states it, which is what a reader reads. */
 	stated: string;
+	/** Where the name sits, on the line above the bar and with the width to itself. */
+	label: number;
 	y: number;
 	height: number;
 	/** Bar length. Zero-length where the figure is zero, and never negative. */
 	width: number;
+	/** Where the stated figure sits, just past the end of its own bar. */
+	figure: number;
 }
 
 /** A whole chart, placed. */
 export interface Drawing {
+	/** The room the caller measured, which every mark below is placed inside. */
 	width: number;
 	height: number;
-	/** Where the bars start, which is also where the axis line starts. */
-	left: number;
 	/** The baseline the bars sit on. */
 	baseline: number;
 	/** What the measured axis counts, or null where the article named no unit. */
@@ -95,10 +104,24 @@ function figureOf(mark: VisualMark): number {
  * compiler can publish one, and plan 12 has no row that says what it should
  * look like, so nothing is drawn until one does.
  *
+ * **`room` is the width the caller measured, in CSS pixels, and every number
+ * this returns is placed inside it.** There is no canvas: the name sits on its
+ * own line with the whole width to itself, and the bar runs under it with all
+ * of that width but the sixteenth kept for the figure beside it - so the
+ * comparison the chart exists to make gets every pixel left once the number it
+ * compares has somewhere to stand. A name column beside the bars is what a
+ * fixed canvas could afford and a phone cannot
+ * - the compiler allows 40 of the article's own characters, about 250 CSS
+ * pixels at `--text-xs`, and a 360 px phone has roughly 300 pixels of card to
+ * spend. Side by side, a column that fits the names leaves nothing to draw a
+ * bar in, and the old drawing hid that by scaling the type down until the names
+ * fitted. What a reader gives up is the tidy left-hand column a desktop had
+ * room for, and one text line of height per bar.
+ *
  * Throws where the data does not fit - see the module note: `refusedVisualData`
  * is the check, and this is the code that trusts it.
  */
-export function drawBars(data: VisualData): Drawing {
+export function drawBars(data: VisualData, room: number): Drawing {
 	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
 	const mark = (id: string): VisualMark => {
 		const found = held.get(id);
@@ -113,32 +136,41 @@ export function drawBars(data: VisualData): Drawing {
 
 	const band = scaleBand<string>()
 		.domain(names.map((_, index) => String(index)))
-		.range([0, names.length * BAND_HEIGHT])
-		.paddingInner(BAND_PADDING)
-		.paddingOuter(BAND_PADDING / 2)
+		.range([0, names.length * ROW_HEIGHT])
+		.paddingInner(ROW_PADDING)
+		.paddingOuter(ROW_PADDING / 2)
 		.round(true);
 
 	const values = figures.map(figureOf);
 	const longest = Math.max(...values.map((value) => (Number.isFinite(value) ? value : 0)), 0);
-	const span = VIEW_WIDTH - NAME_GUTTER - FIGURE_GUTTER;
+	const width = Math.max(0, Math.floor(room));
+	// What a bar may run to, so the figure beside the longest one has somewhere
+	// to sit inside the width rather than past its right edge.
+	const span = Math.max(0, width - Math.round(width * FIGURE_SHARE));
 
 	const bars: Bar[] = names.map((named, index) => {
 		const value = values[index];
 		const share = longest > 0 && Number.isFinite(value) && value > 0 ? value / longest : 0;
+		const top = band(String(index)) ?? 0;
+		const height = Math.round(band.bandwidth() * BAR_SHARE);
+		const drawn = Math.round(share * span);
 		return {
 			name: named.text ?? '',
 			stated: figures[index].value ?? '',
-			y: band(String(index)) ?? 0,
-			height: band.bandwidth(),
-			width: Math.round(share * span)
+			// The name has the line above the bar to itself, centred in the room the
+			// bar leaves, so a long name never meets the figure beside the bar.
+			label: top + (band.bandwidth() - height) / 2,
+			y: top + band.bandwidth() - height,
+			height,
+			width: drawn,
+			figure: drawn + FIGURE_GAP
 		};
 	});
 
 	return {
-		width: VIEW_WIDTH,
-		height: names.length * BAND_HEIGHT + AXIS_BAND,
-		left: NAME_GUTTER,
-		baseline: names.length * BAND_HEIGHT,
+		width,
+		height: names.length * ROW_HEIGHT + AXIS_BAND,
+		baseline: names.length * ROW_HEIGHT,
 		unit: figures[0]?.unit ?? null,
 		bars
 	};
