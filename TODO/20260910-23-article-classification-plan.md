@@ -262,7 +262,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | 9 | Confidence is a masked probability over the label's whole span | 8, 14, P5 | K | PENDING | - | - | - |
 | 15 | The console tab, at `/console/judgement/` | 14, plan 25 row #12 | K | PENDING | - | - | - |
 | 10 | Five stances, each with its own decline, behind a gate written in code | 8, 14 | L | PENDING | - | - | - |
-| 21 | The unpublished pool is scored with the bonus and without it | plan 24 row #1 | L | IN-FLIGHT #711 | p23-r21 | #711 | worker |
+| 21 | The unpublished pool is scored with the bonus and without it | plan 24 row #1 | L | DONE #711 | p23-r21 | #711 | worker |
 | 11 | Sentiment about one named subject | 8, 14, P3 | M | PENDING | - | - | - |
 | 18 | The closing measurement: is a read desk better than a declared one | P3, 14, 6 | M | PENDING | - | - | - |
 | 16 | A vertical is proposed into a channel and promoted by a person | 14, 6, 8, plan 24 row #1 | N | PENDING | - | - | - |
