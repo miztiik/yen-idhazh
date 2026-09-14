@@ -612,15 +612,17 @@ watched the bytes arrive - so it is the case that most needs the check.
 | Workflow and job | Weights | Digest read from |
 | --- | --- | --- |
 | `digest.yml` / `work` | the summarizer | `models.summarize.sha256` |
-| `measure.yml` / `runtime` | the summarizer | `models.summarize.sha256` |
+| `measure.yml` / `runtime` | the bench candidate | the `models` job's `candidate_sha256` |
 | `measure.yml` / `batched` | the summarizer | `models.summarize.sha256` |
 | `validate.yml` / `qualify` | the candidate | the `plan` job's `candidate_sha256` |
 
-The three config digests are the same field, `ModelRef.sha256` in
-`config/idhazh.json`. `validate.yml` is the one exception, and deliberately: an
-operator can point it at a model config does not name, so its `plan` job decides
-the digest once - from the dispatch input, or from config when there is none -
-and republishes it as a job output the whole run reads.
+The two config digests are the same field, `ModelRef.sha256` in the file
+`config/idhazh.json`'s `models_file` points at. The other two are the exception,
+and deliberately: an operator can point the bench and the validation arm at a
+model config does not name, so each resolves the digest once - from the dispatch
+input, or from config when there is none - and republishes it as a job output
+the whole run reads. The bench's raw arm checks the same digest a step earlier,
+inside `measure_llm.py`, against the Hub's own record for that commit.
 
 The workflow contract test that holds this open is closed-world. It finds the
 downloads by reading every workflow file rather than by consulting a list, and
@@ -640,7 +642,10 @@ it, so a swap is one line for a workflow as well.
 
 Each one reads config in a `models` step and publishes job outputs. `digest.yml`
 does it inside `plan`, which `work` already needs; `measure.yml` has
-a small `models` job of its own that every target depends on; `validate.yml`
+a small `models` job of its own that every target depends on, and that job also
+decides the bench candidate - the dispatch input where one was given, the
+configured model otherwise - so both bench arms read one answer rather than
+repeating the fallback; `validate.yml`
 resolves the candidate once inside `plan`. **The `needs` context resolves before
 a job's first step while `steps` does not**, which is the whole reason the refs
 travel as job outputs: it is what lets a cache key and a job-scoped `env` name
@@ -680,9 +685,11 @@ ref is substituted straight into a shell command downstream, and that step is th
 only point between config and those commands where a value carrying a space, a
 quote or a newline can be stopped.
 
-`measure.yml` and `validate.yml` keep their own model variables on purpose.
-Neither keys a cache on a production model ref, and measuring or validating a
-candidate means naming a model that is deliberately not in config yet.
+`measure.yml` and `validate.yml` keep their own candidate variables on purpose:
+benching or validating a model means naming one that is deliberately not in
+config yet. Each keys its own weights entry on the candidate digest rather than
+on the production ref, so the two never share an entry with the daily run and a
+dispatch that names nothing simply keys on the configured model's digest.
 
 ## One function builds the server command, and one variable says the port
 

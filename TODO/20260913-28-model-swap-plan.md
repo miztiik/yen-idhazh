@@ -39,7 +39,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 
 | # | Correction | What it replaced |
 | --- | --- | --- |
-| 1 | Cache pressure is not a constraint on holding several candidates. `digest.yml` keys on one model per entry, `validate.yml` keys on the candidate digest, `measure.yml` caches no weights. GitHub's 10 GB total evicts least-recently-used rather than failing. A miss costs one download: 5.29 GiB in 118 s, measured 2026-08-23 on `ubuntu-latest`, `n=1`, spread unavailable. | An earlier draft said two candidates could not both be cached. Withdrawn. |
+| 1 | Cache pressure is not a constraint on holding several candidates. `digest.yml` keys on one model per entry, `validate.yml` keys on the candidate digest, and since row #8 `measure.yml` keys its bench entry on the candidate digest too. GitHub's 10 GB total evicts least-recently-used rather than failing. A miss costs one download: 5.29 GiB in 118 s, measured 2026-08-23 on `ubuntu-latest`, `n=1`, spread unavailable. | An earlier draft said two candidates could not both be cached. Withdrawn. |
 | 2 | Memory headroom is open, not spent. `peak_rss_bytes` runs 10.06 to 13.82 GiB over 193 rows of `state/runtime-counters.csv`, median 12.40, counted 2026-09-08 from runs on `ubuntu-latest`; the ledger carries no column naming the weights. Weights are mapped, so those pages are file-backed and evictable; **at most 9.02 GiB of the 14.31 GiB worst sum can be anonymous memory - an upper bound derived by subtraction, not a reading.** `cgroup_peak_bytes` is empty on all 225 rows, and nothing has ever run out. | An earlier draft refused a quantisation on an estimated peak built by adding a weights delta to one reading - the arithmetic `docs/reference/measurements.md` retracted on 2026-09-09. Withdrawn. No row refuses anything on memory; row #8 takes the reading instead. |
 
 ## Section 1 - Status Reckoner
@@ -56,7 +56,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 11 | Where the system text goes, and which keyword the runtime is told | 5, 6 | D | PENDING | - | - | - |
 | 12 | The sanitizer learns the control tokens of the model it guards | 11 | E | PENDING | - | - | - |
 | 13 | Retake the two budgets that were sized on a retired vocabulary | 3, 7 | E | PENDING | - | - | - |
-| 8 | Both bench arms in one workflow, emitting a page ready to paste | 1, 6, 7 | F | PENDING | - | - | - |
+| 8 | Both bench arms in one workflow, emitting a page ready to paste | 1, 6, 7 | F | DONE | p28-r8 | - | Carmack |
 | 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | PENDING | - | - | - |
 | 10 | Two spans on one call, so the model can think | 5, 6, 11 | H | PENDING | - | - | - |
 
@@ -454,6 +454,9 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 8 | The resident-set arm records rather than gates, and names the measurement that would settle headroom: the split between anonymous and file-backed pages, taken by the same sampler on the runner. Memory refuses nothing in this plan. | Carmack, 2026-09-13 |
 | 9 | **The bench reports a cold arm as well as a warm one.** The first day after a swap is all-cold on every shard at once - the cache key carries the filename and revision - so a warm-box reading is not the first real day. One cold model-load and one cold weights-fetch figure, labelled as such. | Carmack, 2026-09-13 |
 | 10 | The artifact is the page body, not JSON to reformat: numbers filled, hardware, build and spread inline, `Last Updated` set. Transcription is a copy. | Fowler, 2026-09-13 |
+| 11 | **Decision 5's premise was wrong and the work is an addition, not a move.** No retention assertion for `measure.yml` existed to move: the only one in `backend/tests/` is `retention-days > 0` on `digest.yml`'s review tree. The raw arm declared no retention at all, so it was on the platform default. Both arms now declare ninety and a new test pins the number. | Carmack, 2026-09-14 |
+| 12 | **The two arms keep the job names `llm` and `runtime`.** They are the raw arm and the server arm, and renaming them would have rewritten six closed-world entries in `backend/tests/test_workflows.py` plus four pages, one of them an archive record of what the `runtime` job measured in August. The target is what changed: `llm` and `runtime` are gone as dispatch values and `bench` runs both jobs, so the harness lost a path rather than gaining one. | Carmack, 2026-09-14 |
+| 13 | **The 95th-percentile row is not on the emitted page.** Five articles cannot carry one, and printing a quantile over five samples is inventing precision (Guardrail #10). The page says so and names what would give the number: the published ledger over a real day. | Carmack, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
