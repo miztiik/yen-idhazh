@@ -186,7 +186,7 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 11 | The console strip takes five tabs | - | G | DONE #616 | p25-r11 | #616 | worker |
 | 14 | A target distribution, and the day's distance from it | 7 | G | PENDING | - | - | - |
 | 12 | `Judgement` - what the model made of each article | 11, plan 23 row #14 | H | PENDING | - | - | - |
-| 13 | `Voices` - who supplied the day, and what it is worth | 11 | I | IN-FLIGHT | p25-r13 | #685 | worker |
+| 13 | `Voices` - who supplied the day, and what it is worth | 11 | I | DONE #685 | p25-r13 | #685 | worker |
 
 **What a parallel group means, stated so a worker can check it.** **Within one group, no two rows may write the same file.** A glob counts as every file it covers, so `backend/tests/**` and `schemas/**` collide with any named file underneath them - and a row that edits any model under `backend/idhazh/contracts/` counts as writing every schema its edit regenerates, because the drift gate fails on a byte. **So there are no globs in this plan.** Every row's `Files touched` list names files. **A row that widens its file list during execution re-checks its own group before it opens a pull request**, and section 0.1 expects that widening to happen.
 
