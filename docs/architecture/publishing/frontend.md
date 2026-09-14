@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-14
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
