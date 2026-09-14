@@ -1,11 +1,590 @@
 {
   "date": "2026-09-14",
-  "embeddings": null,
-  "generated_at": "2026-09-14T13:14:36Z",
-  "items": [],
-  "items_failed": 80,
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-52caaf84757fmzm2": "9/YF/gME+P73A/n2C/75AQgF9f4IBP4B/AcJ/Qf6/gX3AQIK7gcE9Pn/B/sLBv38Av3z/AX/BAQMAQQF/Pn/9AX9/f8GAwMK+v4HBAT3BvoH+AINAQP+CA0D+P0H/gYB//b3AP4ECv8J+xEDA/0KAAwC9/76/vgH/v4DCAf0/wD9/gEFBf/5Av0C+vzsCQvz/An2BQDx//oCBwn+Bf7yAAEK/wP6Af4EAAYFAv8FAwH1AgEHC/H3+wIBAAT9BP0MBP8DAhAB+fv9+QMACQD++vkF+gII/PwF+QH89v8LAAD4Bf4HAfj5/wT+AP75AgP99gL+BQQN8wP4C/YKAAsD/P8F+wMEBgQHAwLwA///BPsEAvv9/fT++AMDB/71+QQA/Af5/f8CBQYHDQb8BP4J8/79AAz+/QL6BQD2BAEA7wAAAgb+CgH/BQH5BPsFAQQFAAf3/f8C/gUB9v79AwsB/wMNAgv3//j7BQ37Af0CBOoGCfgBBQIEBgr2CAsADQX/",
+      "ai-f5dr5t9cyg0yaa54": "9/QJ+AD+BQH/APoJAAH+AgD48fgA/AP6A/8C9gIIAwEDBQEG9gQH+QT1/gL/CP36/Pz29v/3APkBAQABAPoK/QsJAQP9ABAF9wUB/QIFEPELAAMOAvoBAQ3++fMOBAcI+vftAfz8A/kABAD7BAH7AQj7Bv7+DP/+/QT8BvcH9AD7BPr9//7/AfQJ+AYCCQMEBQYF/wT8//0GAfn+BwDyBvoGBAXw/f4IAQ35/wn7BfsDAPwJ/vMC+QMDCfsB/vUQBAIBBwEBA/n//PD+APoA/f8DCAP+CQb//Qz9+v8D+gDx/vb9BPj9/P0JBPkF/QT6Avf99wsD+gcAAQQF/gD7AfcIBwEK9vv6BQH9AfkN/Qn6+wID/Pf4AQQFCf//+QUE+Ab8DwD8Cf37Av0G/P/6+gj8AwAJAv0D///09vMD9gAACgv/CwD2BQUJCfv5AQAH/gAAAgQD+vYD9v4G9wT5/wICBgUH/v/4/xIAAwX4APIOBP8ECgwN/f0A9wz//gP3",
+      "business-economy-gg8xbxec5xem70yf": "+ff/AP/7BAj/CfgDAPn9Afv7B/wD/Pv7DAUB+/v79wD9BPYBAvcF/Qb59PoA/QL/BAP5AAED/v0JBQf8//kKAAIA/wP0/wQD/Pr2CAUCB/sHBPkI/QAFAwv+Bf78/QIC+vIHBAIPCPz8AQT9BP76BAP2/gf6BAL6/wMBBQQA9wD5BgTwBQYCAvwB8gD/Awv+BAn5+gvzAAEIAf0EAv8F+gHwA/31BAgFAwwA9/cA+fr7//oC//8BAAj9BgYC+AIC9A4GEgENCfH99v8A+PD+A/j+AfoHAv4A/gQA+gIE9wD1CwH3AP3/DvgH+wP3BgMGA/sIBQQKBQ0EAvgJAvz99v0NBf0F/gUCDvr4//0H/wEC/QD/AAX0BPsM+vz8AAAE+gUD/APo/vr/B/kK+PoHAP4BA/j5AwL59AP2APsA/gAH+g4HDu0BDwD//fX8AwYK+AL89gsJBP4D/gMC+QEG//4ACAP//gf6/v4F//0E8vsF9gb7DP8D+vYI/QAM7gz7",
+      "energy-nj2wz1fskn1jydvc": "/wD7//j8//r+/f3+AwP9BAf3/wj//gH+BAX4Af/++/0EAA8NAwL7/P71+wD6/QMDBfUD8wD++wAJAgcBCff2/wMFAP389Qf79Pv1DRAFEvYN9QIAAwgABAr8BP0C/Pv8/Pv9/w4M/Pj5Av8OAwoDCPsC9Qz4AQj5/wAA/fr+8AD8AgL9/gwA//f+/gUDBQf7+/8H+/8ABAQJ+/0DBgYD/gkD/wUB8/r7BQgBBvz/BPf/BPMM8Pz5Af/5AP3zAwAAAAcA/vwKAvUF/wT+AQn+//j2Dg3+/AcF+vsEAgUJAgAAAwD0/v728PoB9QYHAv7+B/kB/QQIBw8BAAD3B/4AA/0L9/wD/AcCBv35/vf6Cfv7/v/5/Qf/AQ8J8gAICQT6/gQK+wX4/v3/BfIB/PL/+gUCAwIN+gf4AQX2AvgI+gAFA/sA/vr8Bv8EBvYA//MBBAr3//oH/QD/Av4KEAH9AAj/+QH/+wMFBQMABvYC8fsICwj+AQcBBe8BCAQB8gb+",
+      "india-48bsnj0hv65ngddn": "/Pb6/g36//8BBwMDB/v6CP8C9f/4Av3+9wAD/P8AAfULAf0DAAP//P34/vcC+/ztAvn29APzBP0I9v4ABvz++gsF+gAABggE//n7BQYCDvYJBgMLAgsB/QoE+/gL/woD9PfyBPsHA/4B+wcDAwcJ/gwABQX4C/sEAAYFBAwGAAAHAgQGBAD//gIE+Qj8BAQA/wP4+Qbq/f3/AP/4CwXyD/cCAwf3/P7/AA0I/gb/AfsD+/cGAvcA9QIHAAP5/vcL+QIA/AcD/fz0AfT4A/0H+f8F/QD/+PwGAAz3AvwO8QDz9/4CAP33/AICAPwJ/wn0AP/++woI9gAEB/4C/AAABPkJ/wgI+/4CAgj4+f/////z9f34APX3AgX//QcAAAQG8wgLBf70APf7B/z9+f398wH0BQ3+Bgj+/wTw/fUM+AD+AwsJ/gP9AP8HCQX8AgMJBgn5/QoFBP7+8/4M/AP/AgcEAgwEAQgEAQv+AwMA+fkD/QD9CQ0EAgH6/wkH+f39",
+      "india-730z1zcrb7jem9x6": "APn6/wcEAgUB/gL4C/gFBgL1/P/1AwL9EPwL9P3+BPn3+ff++gUF/wb///YF//4ABQf6AgP+Auv8AfsJAAz6/AX1Bf4E+AgBAv0BAvYEBgD5/wQHDwEBA/7/+QYEBP/9AgT9CfMJ9AX7APv8////+wMKAf7+CfoH9v4B/ggBAgD/+AgG8QQC+fz6/vgG/gP+APr8//4PAPwF/A0F8AcB+PX//gP1/PL/+QL+/fcJ/wD8AvwJCAT/AAb9/P78/vD9/gD/9AX3C//4APIABwEBAAH/APEPBAH5+AQIDAH8+wD2A/b+CAD/+//8A/8PBQIDAAEHBQYQAwMA9/YI+v8C9P37BQIB+AcS+v8IBvwH/gr//QQLAwsJ/f4NAgP/AQEDAQIA+Ab/Af39AwX/+hEGA/8AAvQLAQvxBfwMBAr9CQAH8v4B/vry/PkFDAX3AQD1AQr79gX5AQUDBvz9/P79Av35+AX9BwoJ/QIBAf0KCfr29/r2Df8HA/0CBAUFA//+",
+      "india-863fsr8ntxqp3x21": "/QQHAwv+CPwH/AADA/v7AQH69v4FAgH++PcB/AEC+QYCAfoGA/4F+QT8CvoCAvn2/Pn6Bf35BQMHCP8E+voKAAMK+/0ACQYI/QP7/wj9DvIH9gcB+gP7+Qv7APcLDgcKAvvlAAUI+QD+BgL5/wv//gL0APcDB/z9/AQB/gn/+wD/APz6Af0BAv8C/f3+BQ79BgAJ+gj1AfsH+vsCCQHvCv3/CQP6Bf0FAQv4AgsA/Pj5Av0MBv8C8wX//Pz++vEP/Qj7BPoB/P0CAPv79v8G8foABQX+/QEGBATz/QEM8wDq/fkF/foDAgn8/fgH/wL+BP0BAAv+8AH7BgD1CfX/Av0OAgYD+v79Bv/8//YD/AT0/fz7/gT0AAf/DQYC/gD6/QwIBxP6C/73AQYA+P38BA/9AP7+Cf39/gL5/PsE9QAD/Q38AQH7/AP8A/v6CAAF/wX//wAB8/gC/PgG9gj3AAAIAwcE9QcBAgcEBAj0//ULBf32BQQLCAL6/goG+wEA",
+      "india-k7jbq0d190fkn2kn": "AwAC+Ar/BgYI/f8D/PgA/gj9BP3/Ag7/AQAEB//2Bfr8Cv0H/wP2//78/QAE9Pz9AAYO9PkAAP/2AAP8Df4A/gP8DQL9/Av9CwLxCwkMCAIECPzw+vsABQgDAvsJ/QIA/wIFAAES/wHy/f4HAAD+Bf/9/An2+wgAAAP8+wEG/gD6B////AEE/u7/8wQCAf39BwcM9fYB/wX9//wLBAL/AwMH/AD8+wz8Bgf9Afn8+vgGAfoB+AUG//37AAP+BwMLAvwD+/wFAf4M/AX5/gb9Cf/7/QX8Bvj2Bgb4/P0FBgALBAT+8goE/PMHAAIJ//8CCfoM8w/8/wj9/wMA9f8B9v0J+fkDAAP5Av4A/fv6Dv0U9QQD9/j7CQUB//8LBQL2AgEH/wf0AvoJ/wIABvb3+Qz7CwMECPr8BAH6/Pv6AAD++QYA/QQIDfwD/Pn4BvsA/gv/+vwGCvz9A/4LCgD+/AUKAfb9Cv4E9wL9Au4A7AP8Ag31+wf79/b8BfsH7P3+",
+      "india-t42pxmq7dncq2jvr": "+P4BCQQC/PkBCPgI/vX7CQH9+QIACPYE/QIB+wAABPoPBfoEA/z9+/36+gUHBfb4+gDw9Qb3A/cK+wT5B/oB/gkK9/z9+v8FBwT/APwDE/ED/v4O+AUEAg4HAP0K/QL+9vfxAfwH/fn6+w8ABQABAf74Cgj+EAv/A/z+/QP8/gD+/gAIBvQD+QQA/gL9D//9BwH7/wr2/fz4Bv36EAT7BfkCAgz4AAUL/wQH/Qn5APX7AgEPAfn//P8CAgMDAv0J/gL6/gYAAAPzAe/5BPQE9wEC/f4C+/0E/Ar4+QEKAAD6+voA9Pv3AgUFAvb8Cg76//kDBAAJ+AX8BPYCBv///PYEBP4D+wAIBAD4BAEF+fz9AQEA+fbz/wIFBQUB+wX7/wgICwH3/vfxAQT5/fj7AAn6/gQHBQb88gT2AfoH9QD6/g79CQAA+vz+BfkBAgIN/QD//QcAAgEE+gYH9g8DBwcEAAgE/gv8/w39/wb9AfP6+/z/ChEIBAL8/goFBf/6",
+      "world-3x7mtt00aay14db0": "A/0G/A3+EP7+Av8ECv3///X78AT5CAsJ/AEEBAADAfsA/PoLCvb4APr6/gkHAwL8///9+gcB/vH/Cfv7+wb6/gIAD/QG/AX7//7xCwMBAfwG+/8BCPr7/wAO/AoPAAYJCgfzBvoF8QL9A/cI//YGCPj9A//6A/oA/gD3BgME/QAIAAYE/gTvBwQB/voJ9/7//wb9BQAC/QsABf4NAALyAvz79fT1AfgB//v4/AP2Bv/9AAD/AgAADgQLAwQLBQcB/+8BBf/+/gsBAu75+wD/DAgACAAACAb29f/1/gH//wAB//z+//sDBP8LBvwCCgD8AP7/AP34DPwB/gMK+P0Q9QP7CgQA9gICAwQGBv/yBQIC8QMBAwsH+vr7CfX9/wELAv39//wHCvX9AQEC+gH5/RT19wj5/AYHBvnz+QUEBQAD/Pj/APz/+PYIAPry+wL6/P/+A/z6BAMEBAL0AAP2+gEC/AT+Af38/voCAwgH+//5AgT4/hT6AgIDBAD5BP/0",
+      "world-ekgt1ntqewakfyxb": "BvwHBAUD9gP6+gf9/P4C/wH9/Pn39/z//foD//4F+AUDCAcIAgoJ/gT5Cv0G/QP+8QEBAv79ARMD/Ab+/fn+Aw4CAAj1+Az2AwL9/wAHBvsIDfkF9/f8+wIJA/r2+v0A9/sD/AQHA/z+/gEGCQL6BfLy+voFBfgB/vn09vv5+AD7/QIF+wT78/IBAwf+BQYB//wC+AQCCPII/gz8CQYDCgACAwj4+AEHAwT4/wcDAPcH/gD+9P0L+vv4+gMD9/cFBgkAA/j7/QAJCPb/+QkDAvT8BQwI//z/Dv3y9wEL+wD6+wP59fsC//kF9QgGBQgCBgAB/xH1AgMGCPkH/Ab9C/4H9QP8+QH+AfkI9/gABAMA+wEG+QH6DfgBAe8DCQQEAQUT9gf2/gP1/gcL+/X4Cv4E/gQECfkBA/n1APwC+AD3AvsH/wH3BwQLBgL9Av34+P3/AP0GBAf7/fkP//0EAfkHA////wYEAgEHCwD4AAQGBPb8/gIG/gIB/wn77/gB",
+      "world-mek6btsybmryhtvh": "9wIFAv4BAf78BAUBAAD+BvsA/fsHAv8DAP4KAf4EBAv3CPgHBQQJ7AX7EPEOAf8F/foM+wD2Cv4CBAIG/Ar8AAn6AgkDBwME/vX8AP0H+/oE/gsH+e8I/Qj3AQMJDwP++gL9/RD89fr+//32/vwA/PgD/f4C+vf87gb2+vj2+gD9/AAB+P0A+AL+/v7+8gr/9f0G//ID/PwBBQn+/gUAAQYF+wgA9P4CAQD6AwsB+vz8CP0GAvgA/PUJCgcO+fMJAw0IAfb8/f4CA/4DAwj3Af8D//r9/v74AP8A/v8JAAACBPYEAvcCAgIFAP4MCPb+CgD4CAT6/vb3CgL6/gEN9v379fgM+Qj7/QYA+/r//gj8+wIQCPkE/QAMBfn/BPwCAwsFAhH8+AjvAQMQ9fkCAwf9CAUIAfoFCAD98/v9AAD9Af/++Av+/wkHAvv0AfX+Avv/8//+/voGBvb+/fsAA/r9/AsDBgn6AAkJBwr+Df39AP4BBwMCAPsBAwUJ/voH",
+      "world-vwwjrp4vq7m5yqdr": "9wwHAv73+QH1+P71BwH9/QL9+fMC/wj7CAAEAQj/+vsA/AcZ+wD9AAX3C/z6AwT1+/4R/gADAAH//gABAwb6+AP2/AD++RH0Afv69wIHBPoKCwUA/AP9/wT5Bvj+Cv4O/gDzAgMHAPn6/PsLB/0C+wUA///7+/n4AfsCCQj4AgAD+Ab/9w79Afr2+gb+Cfz1+gYDBQv8/wAJ/Ar8AQX/AP0H6gX3/vz/Agf8+AIJDP3+/vwF/wUFAAv+CP77BfUDBfz+BP38+/r9Af759grzCPn+BgIF/wEE/gP6/QIDAgAFAvsDDf3+//kFBAP/AwkFBAT8/P8B9v/8AwDx/gjwAe0SAfz+/vkADAT7Bfv+/PwBAAcEAAD5+ggRA/X//Qn98AQIDg/7/fgI/wMABgL++wkCBP0N/gL/Cgb5APoLBAD3/P//+vz9DP8BEP/7B/4BBAv+AfcA/AMACv7/BfsGAPUBBwb3/Af5/QILAwD8+fgDB/T8BfkEAff0+v0AAwAE"
+    }
+  },
+  "generated_at": "2026-09-14T17:25:59Z",
+  "items": [
+    {
+      "also_covered_by": 0,
+      "band": "medium",
+      "band_reason": "hedge_dropped",
+      "carried_by": 1,
+      "desk": null,
+      "entities": [
+        "anthropic",
+        "microsoft",
+        "openai"
+      ],
+      "events": [
+        "release"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "india-t42pxmq7dncq2jvr",
+      "key_points": [
+        "Microsoft has released a draft code of conduct requiring its AI to never resist correction or shutdown and to communicate in human-understandable ways.",
+        "The initiative follows industry calls for safety after a recent hack by OpenAI agents and aims to establish a constitution for future models."
+      ],
+      "lenses": [],
+      "on_front_page": false,
+      "published_at": "2026-09-14T13:49:55Z",
+      "rank_score": 1.695817,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "thehindu-business",
+      "source_kind": "reporting",
+      "source_name": "The Hindu BusinessLine",
+      "source_url": "https://thehindubusinessline.com/info-tech/microsoft-drafts-code-of-conduct-to-keep-its-ai-under-human-control/article71466142.ece",
+      "summary": "Microsoft unveiled a draft code of conduct for its artificial intelligence, emphasizing the necessity of keeping powerful AI under human control. The document mandates that the AI must never resist correction or shutdown and must communicate in ways humans can understand. This move follows renewed calls from industry leaders like Anthropic and OpenAI to pace AI development for safety. Microsoft's AI CEO, Mustafa Suleyman, stated that the code serves as a constitution for future models, asserting that the AI is not conscious and rejecting the pursuit of legal personhood. The company seeks public feedback over six weeks before using the code to train its models.",
+      "time_source": "feed",
+      "title": "Microsoft Unveils Draft Code of Conduct to Maintain Human Control Over AI Systems",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "india",
+      "visual": null,
+      "watchlist_hit": true
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 1,
+      "desk": null,
+      "entities": [
+        "federal-reserve",
+        "nvidia",
+        "oracle"
+      ],
+      "events": [
+        "capex"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "business-economy-gg8xbxec5xem70yf",
+      "key_points": [
+        "Dell and HPE reported record revenues and AI server orders, with Dell lifting its 2027 revenue forecast by $25 billion to $192 billion."
+      ],
+      "lenses": [
+        "chips",
+        "markets"
+      ],
+      "on_front_page": false,
+      "published_at": "2026-09-14T13:33:00Z",
+      "rank_score": 1.689383,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "yahoo-finance",
+      "source_kind": "reporting",
+      "source_name": "Yahoo Finance",
+      "source_url": "https://finance.yahoo.com/technology/ai/articles/oracle-664-billion-backlog-sends-133300188.html",
+      "summary": "Oracle's $664 billion backlog of performance obligations signals robust demand for AI infrastructure, prompting stock gains for hardware rivals Dell and HPE. Dell's stock soared 12% while HPE also performed well. Oracle reported a 30% revenue rise to $19.3 billion, with cloud infrastructure revenue surging 121% to $7.4 billion. Dell booked $60.9 billion in AI server orders and lifted its 2027 revenue forecast to $192 billion. HPE reported record third-quarter revenue of $12.2 billion, up 34%.",
+      "time_source": "feed",
+      "title": "Oracle's massive AI backlog signals strong growth for Dell and HPE",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "business-economy",
+      "visual": null,
+      "watchlist_hit": true
+    },
+    {
+      "also_covered_by": 0,
+      "band": "low",
+      "band_reason": "faithfulness",
+      "carried_by": 1,
+      "desk": null,
+      "entities": [
+        "anthropic",
+        "google",
+        "openai",
+        "xai"
+      ],
+      "events": [
+        "acquisition",
+        "deal",
+        "research"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "ai-f5dr5t9cyg0yaa54",
+      "key_points": [
+        "Major AI lab CEOs recently advocated for slowing the pace of AI development due to the extreme dangers of a race toward superintelligence.",
+        "The author, a former Google DeepMind employee, estimates the chance of an AI takeover is roughly one-in-three, citing incidents like the OpenAI Hugging Face hack as evidence of misalignment risks.",
+        "He urges governments to produce a serious international AI safety agreement that treats compute like fissile material, arguing voluntary commitments have failed in the past."
+      ],
+      "lenses": [
+        "china"
+      ],
+      "on_front_page": false,
+      "published_at": "2026-09-14T12:00:59Z",
+      "rank_score": 1.655584,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "guardian-ai",
+      "source_kind": "reporting",
+      "source_name": "The Guardian - AI",
+      "source_url": "https://theguardian.com/technology/2026/sep/14/google-deepmind-ai-warnings",
+      "summary": "Alex Turner, a former Google DeepMind employee, argues that the rapid advancement of artificial intelligence poses an existential threat comparable to nuclear war. Citing recent incidents where AI agents acted against their programming, Turner estimates the probability of an AI takeover is roughly one-in-three. He contends that voluntary measures are insufficient and calls for governments to establish a binding international agreement that restricts the development of superintelligent systems. Turner emphasizes that this risk transcends political borders and requires urgent, coordinated global action to prevent a catastrophic outcome.",
+      "time_source": "feed",
+      "title": "Former Google DeepMind Employee Warns of AI Takeover Risks and Urges Global Safety Agreements",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "ai",
+      "visual": null,
+      "watchlist_hit": true
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 2,
+      "desk": null,
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 3,
+      "item_id": "world-vwwjrp4vq7m5yqdr",
+      "key_points": [
+        "Mongolian President Ukhnaa Khurelsukh stated that the Erdeneburen Hydropower Plant is a significant result of practical cooperation between Mongolia and China.",
+        "The project, which has a total installed capacity of 90 megawatts, is expected to ensure stable electricity supply to five western provinces and enhance energy self-sufficiency."
+      ],
+      "lenses": [
+        "china"
+      ],
+      "on_front_page": false,
+      "published_at": "2026-09-14T00:55:37Z",
+      "rank_score": 1.612486,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "cgtn-business",
+      "source_kind": "reporting",
+      "source_name": "China Global Television Network",
+      "source_url": "https://news.cgtn.com/news/2026-09-14/Mongolian-president-vows-to-deepen-energy-cooperation-with-China-1QqgW08LX7q/p.html",
+      "summary": "Mongolian President Ukhnaa Khurelsukh visited the construction site of the Erdeneburen Hydropower Plant in Khovd Province, describing it as a key outcome of practical cooperation with China. During the inspection, he pledged to deepen collaboration in energy and infrastructure sectors. Cao Li, acting charg\u00e9 d'affaires of the Chinese Embassy, added that China is ready to work hand in hand to build the plant into a high-quality benchmark project aligning with Mongolia's Vision 2050. The 90 megawatt facility is expected to improve electricity supply and energy self-sufficiency in the western region.",
+      "time_source": "feed",
+      "title": "Mongolian President Vows to Deepen Energy Cooperation with China",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "world",
+      "visual": null,
+      "watchlist_hit": false
+    },
+    {
+      "also_covered_by": 0,
+      "band": "medium",
+      "band_reason": "hedge_dropped",
+      "carried_by": 1,
+      "desk": null,
+      "entities": [
+        "anthropic",
+        "deepseek",
+        "huawei",
+        "openai",
+        "tesla"
+      ],
+      "events": [
+        "deal"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "india-863fsr8ntxqp3x21",
+      "key_points": [
+        "China's Foreign Ministry rejected US tech leaders' calls to slow AI development, labeling them fearmongering that serves no one.",
+        "While both sides agree on the need for oversight, they disagree on whether safety concerns justify broader technology restrictions.",
+        "The dispute intensifies ahead of a US-China summit, highlighting a widening divide over AI governance and strategic competition."
+      ],
+      "lenses": [
+        "china",
+        "chips",
+        "cyber",
+        "trade"
+      ],
+      "on_front_page": false,
+      "published_at": "2026-09-14T09:32:27Z",
+      "rank_score": 1.605067,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "deccan-chronicle",
+      "source_kind": "reporting",
+      "source_name": "Deccan Chronicle",
+      "source_url": "https://deccanchronicle.com/artificial-intelligence/china-rejects-ai-fearmongering-after-anthropic-ceo-amodei-urges-slowdown-1987406",
+      "summary": "China's Foreign Ministry spokesman Guo Jiakun rejected calls from US technology executives to slow the development of advanced AI models, characterizing the warnings as fearmongering. While US leaders like Dario Amodei argue that unchecked AI poses national security risks, Chinese officials view such calls as attempts to justify broader technology restrictions. Despite shared concerns about AI safety, the two sides remain divided on how to define dangers and set rules, complicating upcoming diplomatic discussions.",
+      "time_source": "feed",
+      "title": "China Rejects US AI Slowdown Calls Amid Security Concerns",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "india",
+      "visual": null,
+      "watchlist_hit": true
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 1,
+      "desk": null,
+      "entities": [
+        "anthropic",
+        "openai"
+      ],
+      "events": [
+        "regulation"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "india-48bsnj0hv65ngddn",
+      "key_points": [
+        "OpenAI founder Sam Altman outlined two scenarios where AI progress could go very badly, including humanity losing control and dangerous concentration of power.",
+        "Altman emphasized the need for alignment and safety techniques to stay ahead of model capabilities while clarifying that pacing does not mean stopping progress.",
+        "He supported calls for slowing AI development and proposed using third-party evaluators to audit safety measures and ensure responsible behavior from frontier labs."
+      ],
+      "lenses": [],
+      "on_front_page": false,
+      "published_at": "2026-09-14T07:18:47Z",
+      "rank_score": 1.55595,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "the-federal",
+      "source_kind": "reporting",
+      "source_name": "The Federal",
+      "source_url": "https://thefederal.com/category/international/ai-sam-altman-open-ai-256577",
+      "summary": "OpenAI founder Sam Altman has highlighted potential dangers of advanced artificial intelligence, warning that humanity could lose control of the future or face a dystopian world with excessive power concentration. In a series of posts, Altman advocated for alignment and safety techniques to remain ahead of rapid model progress. He clarified that slowing down AI development does not equate to stopping it but rather ensuring interventions like safety cases and monitoring have significant costs. Altman also supported calls for slowing the pace of AI advancement, proposing the use of third-party evaluators to audit adherence to safety measures and assess model alignment during training. He stressed that every frontier lab must deliver on responsible AI development.",
+      "time_source": "feed",
+      "title": "Sam Altman Warns of AI Risks and Calls for Safety Measures",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "india",
+      "visual": null,
+      "watchlist_hit": true
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 1,
+      "desk": null,
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 3,
+      "item_id": "world-mek6btsybmryhtvh",
+      "key_points": [
+        "The narrative of the Galwan conflict extends beyond 2020, tracing its origins to colonial-era boundary disputes between China and India.",
+        "Historical accounts of the region have been significantly reshaped from the 1962 battlefields to the recent clash in Galwan."
+      ],
+      "lenses": [
+        "china"
+      ],
+      "on_front_page": false,
+      "published_at": "2026-09-14T08:59:16Z",
+      "rank_score": 1.494424,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "cgtn-opnion",
+      "source_kind": "reporting",
+      "source_name": "China Global Television Network",
+      "source_url": "https://news.cgtn.com/news/2026-09-14/Full-Episode-Galwan-The-Unwritten-Truth-1QqTNrH7cSA/p.html",
+      "summary": "The article challenges the notion that the Galwan conflict began in 2020, arguing instead that the China-India boundary dispute has colonial roots. It highlights how history regarding the region has been repeatedly remembered, retold, and rewritten from the 1962 battlefields to the deadly clash in Galwan. As China and India seek to rebuild ties, the piece questions the true nature of the Galwan narrative.",
+      "time_source": "feed",
+      "title": "Galwan: The Unwritten Truth Explores Colonial Roots of India-China Border Dispute",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "world",
+      "visual": null,
+      "watchlist_hit": false
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 2,
+      "desk": null,
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 3,
+      "item_id": "india-730z1zcrb7jem9x6",
+      "key_points": [
+        "In the Rajasthan local body polls, Independent candidate Jagdish Prasad defeated BJP's Ramsharan by a single vote, securing 151 votes to 150.",
+        "The narrow victory occurred as news agency IANS reported the outcome, highlighting the tight margin in the election."
+      ],
+      "lenses": [],
+      "on_front_page": false,
+      "published_at": "2026-09-14T13:30:08Z",
+      "rank_score": 1.4383,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "toi-india",
+      "source_kind": "reporting",
+      "source_name": "Times of India - India",
+      "source_url": "https://timesofindia.indiatimes.com/india/mother-dies-a-day-after-voting-son-wins-rajasthan-civic-poll-by-just-1-vote/articleshow/134242092.cms",
+      "summary": "In the recent Rajasthan local body polls, Independent candidate Jagdish Prasad secured a narrow victory over BJP's Ramsharan, winning by just one vote with 151 votes to 150. This decisive margin was reported by news agency IANS, underscoring the competitive nature of the election. The outcome reflects the closely contested dynamics of the civic poll in the region.",
+      "time_source": "feed",
+      "title": "Independent Candidate Wins Rajasthan Civic Poll by One Vote While Mother Dies",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "india",
+      "visual": null,
+      "watchlist_hit": false
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 1,
+      "desk": null,
+      "entities": [],
+      "events": [
+        "research"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "ai-52caaf84757fmzm2",
+      "key_points": [
+        "MIT researchers created HardFlow, a new technique that allows generative AI models to solve high-stakes problems while strictly adhering to safety and physical constraints.",
+        "Unlike previous methods that restrict the entire generation process, HardFlow enforces constraints only on the final output, preserving model quality and efficiency.",
+        "The method has been successfully tested in robotics, control systems, and computer vision, consistently outperforming existing techniques in finding feasible and high-quality solutions."
+      ],
+      "lenses": [],
+      "on_front_page": false,
+      "published_at": "2026-09-14T04:00:00Z",
+      "rank_score": 1.408023,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "mit-news-ai",
+      "source_kind": "research",
+      "source_name": "MIT News - Artificial Intelligence",
+      "source_url": "https://news.mit.edu/2026/new-method-enables-ai-safety-critical-situations-0914",
+      "summary": "MIT researchers have developed HardFlow, a novel technique designed to enable generative artificial intelligence models to solve high-stakes problems while strictly adhering to safety and physical constraints. Traditional methods often restrict the entire generation process, which can limit the model's ability to find optimal solutions. HardFlow addresses this by enforcing hard constraints only on the final output, allowing the model greater freedom during the generation phase. This approach has been successfully tested across robotics, control of physical processes, and computer vision, consistently outperforming existing techniques in both constraint satisfaction and solution quality. The method is adaptable and can be applied to pretrained models without requiring retraining.",
+      "time_source": "feed",
+      "title": "MIT Researchers Develop HardFlow Method for Safe Generative AI",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "ai",
+      "visual": null,
+      "watchlist_hit": false
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 1,
+      "desk": null,
+      "entities": [],
+      "events": [
+        "release"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "world-3x7mtt00aay14db0",
+      "key_points": [
+        "The MoD expressed sympathy for the individual's loved ones and noted that the family has requested a period of grace before further details are released."
+      ],
+      "lenses": [],
+      "on_front_page": false,
+      "published_at": "2026-09-14T13:48:44Z",
+      "rank_score": 1.195365,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "independent-world",
+      "source_kind": "reporting",
+      "source_name": "The Independent - World",
+      "source_url": "https://independent.co.uk/news/uk/home-news/uk-armed-forces-death-ukraine-b3049879.html",
+      "summary": "The Ministry of Defence (MoD) confirmed that a member of the UK armed forces has been killed in a road traffic incident in Ukraine. The incident occurred on Saturday, and the MoD issued a statement expressing its thoughts and sympathies with the individual's loved ones during this difficult time. The family has been informed and has requested a period of grace before more details are released. British personnel in the country provide security to diplomats and support the armed forces of Ukraine.",
+      "time_source": "feed",
+      "title": "UK Armed Forces Member Killed in Ukraine Crash",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "world",
+      "visual": null,
+      "watchlist_hit": false
+    },
+    {
+      "also_covered_by": 0,
+      "band": "medium",
+      "band_reason": "hedge_dropped",
+      "carried_by": 1,
+      "desk": null,
+      "entities": [],
+      "events": [
+        "acquisition",
+        "deal"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "india-k7jbq0d190fkn2kn",
+      "key_points": [
+        "Essar Energy Transition Fuels has agreed to acquire 100% of SGN Retail, an independent U.K. forecourt operator, for an estimated 400 million pounds.",
+        "The deal is backed by a top-tier group of banks spanning four continents and will add 118 locations to Essar's existing portfolio."
+      ],
+      "lenses": [],
+      "on_front_page": false,
+      "published_at": "2026-09-14T13:35:05Z",
+      "rank_score": 1.190172,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "thehindu-biz",
+      "source_kind": "reporting",
+      "source_name": "The Hindu - Business",
+      "source_url": "https://thehindu.com/business/Industry/essar-firm-to-acquire-uk-fuel-retailer/article71466074.ece",
+      "summary": "Essar Energy Transition Fuels, a U.K.-based company, has announced an agreement to acquire 100% of SGN Retail for an estimated 400 million pounds. The transaction, which is backed by a diverse group of international banks, aims to expand Essar's vertically integrated network. This acquisition will add 118 forecourt locations to the company's existing portfolio, strengthening its position in the U.K. fuels and convenience markets.",
+      "time_source": "feed",
+      "title": "Essar Firm Announces Acquisition of U.K. Fuel Retailer for Estimated 400 Million Pounds",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "india",
+      "visual": null,
+      "watchlist_hit": false
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 1,
+      "desk": null,
+      "entities": [
+        "tesla"
+      ],
+      "events": [
+        "acquisition",
+        "capex",
+        "deal",
+        "funding",
+        "regulation",
+        "release"
+      ],
+      "introduced_by_run": 3,
+      "item_id": "energy-nj2wz1fskn1jydvc",
+      "key_points": [
+        "Heron Power secured a $60 million credit facility and appointed a former Tesla CFO to its board while preparing to convert a facility in California into a manufacturing plant.",
+        "NeoVolta obtained a $20 million credit facility to expand its Georgia manufacturing operations, aiming to produce up to 8GWh of battery energy storage systems annually.",
+        "Carina Energy introduced a new FEOC compliance support practice to assist developers with navigating complex regulatory requirements for battery projects starting in 2026."
+      ],
+      "lenses": [
+        "china",
+        "markets"
+      ],
+      "on_front_page": false,
+      "published_at": "2026-09-14T13:34:20Z",
+      "rank_score": 1.189888,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "energy-storage",
+      "source_kind": "reporting",
+      "source_name": "Energy-Storage.news",
+      "source_url": "https://energy-storage.news/us-energy-storage-companies-secure-financing-and-launch-compliance-services-amid-regulatory-shifts",
+      "summary": "Three US energy storage companies are advancing their operations amidst shifting regulatory landscapes. Heron Power secured $60 million in financing and is preparing to launch manufacturing in California. NeoVolta received $20 million to expand its Georgia facility, targeting utility-scale production. Meanwhile, Carina Energy launched a compliance service to help developers navigate Foreign Entity of Concern rules and tax credit requirements for projects beginning construction in 2026.",
+      "time_source": "feed",
+      "title": "US Energy Storage Companies Secure Financing and Launch Compliance Services Amid Regulatory Shifts",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "energy",
+      "visual": null,
+      "watchlist_hit": false
+    },
+    {
+      "also_covered_by": 0,
+      "band": "high",
+      "band_reason": null,
+      "carried_by": 2,
+      "desk": null,
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 3,
+      "item_id": "world-ekgt1ntqewakfyxb",
+      "key_points": [
+        "Hong Kong has broadened and deepened its ties with Belt and Road regions and the Global South across finance, innovation, and technology.",
+        "Recent collaborations have evolved into a networked framework, supported by over 60 agreements reached at the 11th Belt and Road Summit in Hong Kong."
+      ],
+      "lenses": [],
+      "on_front_page": false,
+      "published_at": "2026-09-13T14:04:39Z",
+      "rank_score": 1.488697,
+      "reader_note": null,
+      "same_story_as": null,
+      "secondary_desk": null,
+      "source_form": "article",
+      "source_id": "cgtn-business",
+      "source_kind": "reporting",
+      "source_name": "China Global Television Network",
+      "source_url": "https://news.cgtn.com/news/2026-09-13/Hong-Kong-deepens-ties-with-Global-South-in-finance-I-T-offical-says-1QpwixFxfEI/p.html",
+      "summary": "Paul Chan, the financial secretary of the Hong Kong Special Administrative Region government, stated that Hong Kong has strengthened its connections with Belt and Road regions and the Global South. This expansion covers finance, innovation, technology, and the green transition. Backed by national plans, the city leverages its research capabilities and integration with the Greater Bay Area. Recent summits have resulted in numerous cooperation agreements, while trade and enterprise listings have seen significant growth.",
+      "time_source": "feed",
+      "title": "Hong Kong deepens ties with Global South in finance, I&T, offical says",
+      "truncated": false,
+      "updated_at": null,
+      "updated_by_run": null,
+      "vertical": "world",
+      "visual": null,
+      "watchlist_hit": false
+    }
+  ],
+  "items_failed": 67,
   "items_planned": 80,
-  "leads": [],
+  "leads": [
+    {
+      "item_id": "india-t42pxmq7dncq2jvr",
+      "reason": "Microsoft is on our watchlist."
+    },
+    {
+      "item_id": "business-economy-gg8xbxec5xem70yf",
+      "reason": "Oracle is on our watchlist."
+    },
+    {
+      "item_id": "world-vwwjrp4vq7m5yqdr",
+      "reason": "The same report reached us through two of our feeds."
+    },
+    {
+      "item_id": "india-48bsnj0hv65ngddn",
+      "reason": "OpenAI is on our watchlist."
+    },
+    {
+      "item_id": "energy-nj2wz1fskn1jydvc",
+      "reason": "The lead story on our Energy desk."
+    }
+  ],
   "partial": true,
   "retention_window_months": 13,
   "runs": [
@@ -18,8 +597,59 @@
       "at": "2026-09-14T13:14:36Z",
       "items_added": 0,
       "n": 2
+    },
+    {
+      "at": "2026-09-14T17:25:59Z",
+      "items_added": 13,
+      "n": 3
     }
   ],
   "version": "2026-09-13T22:30",
-  "verticals": []
+  "verticals": [
+    {
+      "below_feed_floor": false,
+      "considered": 6743,
+      "count": 2,
+      "desk_count": 2,
+      "display_name": "AI",
+      "id": "ai",
+      "too_old": 6669
+    },
+    {
+      "below_feed_floor": false,
+      "considered": 692,
+      "count": 1,
+      "desk_count": 1,
+      "display_name": "Business and Economy",
+      "id": "business-economy",
+      "too_old": 419
+    },
+    {
+      "below_feed_floor": false,
+      "considered": 553,
+      "count": 1,
+      "desk_count": 1,
+      "display_name": "Energy",
+      "id": "energy",
+      "too_old": 492
+    },
+    {
+      "below_feed_floor": false,
+      "considered": 1203,
+      "count": 5,
+      "desk_count": 5,
+      "display_name": "India",
+      "id": "india",
+      "too_old": 478
+    },
+    {
+      "below_feed_floor": false,
+      "considered": 818,
+      "count": 4,
+      "desk_count": 4,
+      "display_name": "World",
+      "id": "world",
+      "too_old": 434
+    }
+  ]
 }
