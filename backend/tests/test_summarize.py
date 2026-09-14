@@ -34,6 +34,7 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh import config, extract
+from idhazh.classify import calls
 from idhazh.classify.calls import call_two_schema
 from idhazh.contracts.app_config import (
     EvaluationConfig,
@@ -43,6 +44,8 @@ from idhazh.contracts.app_config import (
     OverLengthAction,
     SummarizeConfig,
     SummaryBand,
+    SystemPlacement,
+    TurnsConfig,
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
@@ -73,6 +76,7 @@ from idhazh.llm.server import (
     the_weights_are_the_declared_ones,
     the_window_is_inside_the_trained_window,
     trained_context,
+    turn_markers,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, LINK_PLACEHOLDER
 from idhazh.stages.validate import _summarize_one
@@ -101,6 +105,28 @@ GENERATED_AT = "2026-08-21T06:12:53Z"
 
 def article(name: str = "ok") -> Article:
     return Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / f"{name}.json"))
+
+
+def configured_turns() -> TurnsConfig:
+    """The turn envelope the committed entry declares, read the way a stage reads it."""
+    return config.load(CONFIG_DIR).models.summarize.turns
+
+
+def built_turns(**overrides: Any) -> TurnsConfig:
+    """A turn envelope built for one question, never the committed one.
+
+    A test about a placement the incumbent does not use has to build the entry
+    that uses it - the committed file is one model's answer, and asserting
+    against it would say what is configured today rather than what the code does
+    (`CLAUDE.md` section 13).
+    """
+    declared: dict[str, Any] = {
+        "turn_opening": "<|im_start|>$role\n",
+        "turn_closing": "<|im_end|>\n",
+        "reply_opening": "<|im_start|>assistant\n",
+        "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
+    }
+    return TurnsConfig.model_validate(declared | overrides)
 
 
 def completion(name: str) -> Completion:
@@ -150,7 +176,9 @@ def summarised(name: str, source: str = "ok") -> Summary:
 
 def test_the_system_prompt_never_carries_the_article() -> None:
     """Decision 1: article text goes in the user turn, or the fence means nothing."""
-    payload = build_request(article(), model_id="m", inference=InferenceConfig())
+    payload = build_request(
+        article(), model_id="m", inference=InferenceConfig(), thinking_kwarg="enable_thinking"
+    )
     system = payload["messages"][0]
     assert system["role"] == "system"
     assert (article().text or "")[:80] not in system["content"]
@@ -186,7 +214,12 @@ def test_the_prompt_tells_the_model_the_block_is_data() -> None:
 def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
     inference = InferenceConfig()
     payload = request_payload(
-        model_id="m", system="s", user="u", output_schema={}, inference=inference
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema={},
+        inference=inference,
+        thinking_kwarg="enable_thinking",
     )
     assert payload["temperature"] == 0.0
     assert payload["top_p"] == 1.0
@@ -196,10 +229,48 @@ def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
 
 
 def test_thinking_is_off_in_the_request() -> None:
+    """Off, and asked for under the keyword the entry names rather than a literal here."""
     payload = request_payload(
-        model_id="m", system="s", user="u", output_schema={}, inference=InferenceConfig()
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema={},
+        inference=InferenceConfig(),
+        thinking_kwarg=configured_turns().thinking_kwarg,
     )
-    assert payload["chat_template_kwargs"]["enable_thinking"] is False
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
+    """Decision 3, first half: null means no template keywords at all.
+
+    Not a keyword with a null value, and not a keyword named `null` - the key is
+    absent from the body. A template that reads no variables would answer a name
+    it does not know by ignoring it, so sending one would look like a request and
+    be a no-op nothing could see.
+    """
+    payload = request_payload(
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema={},
+        inference=InferenceConfig(),
+        thinking_kwarg=None,
+    )
+    assert "chat_template_kwargs" not in payload
+
+
+def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
+    """Built, not the committed entry: the name is a model fact and a swap moves it."""
+    payload = request_payload(
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema={},
+        inference=InferenceConfig(),
+        thinking_kwarg="reasoning",
+    )
+    assert payload["chat_template_kwargs"] == {"reasoning": False}
 
 
 def test_the_output_shape_is_enforced_by_the_decoder() -> None:
@@ -210,6 +281,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
         user="u",
         output_schema=output_schema(),
         inference=InferenceConfig(),
+        thinking_kwarg="enable_thinking",
     )
     assert payload["response_format"]["type"] == "json_schema"
     assert payload["response_format"]["json_schema"]["strict"] is True
@@ -339,6 +411,102 @@ class TestTheRenderedCompletionEnvelope:
     def test_an_envelope_that_is_neither_shape_is_refused(self) -> None:
         with pytest.raises(ValueError, match="neither a choice nor a completion"):
             parse_completion('{"timings": {}}')
+
+
+class TestWhereTheSystemTextGoes:
+    """Two placements, one set of words, and what each of them moves.
+
+    The envelope is per model and the content is global
+    (`docs/architecture/summarize/model-boundary.md`). These tests hold both
+    halves of that sentence: the placement is read off the entry and never off a
+    model id, and the same bytes arrive either way.
+    """
+
+    def test_the_committed_entry_renders_what_it_rendered_before_the_field_existed(
+        self,
+    ) -> None:
+        """Arm 1, at the unit tier: `own_turn` IS the concatenation it replaced.
+
+        The fixture tier of the same arm is `test_classify.TestThePromptBytes`,
+        which compares two whole rendered prompts against committed files. This
+        one states the expression, so a refactor of the branch fails here with a
+        diff a person can read rather than with two long strings.
+        """
+        turns = configured_turns()
+        markers = turn_markers(turns)
+
+        assert turns.system_role is SystemPlacement.OWN_TURN
+        assert render_prompt(system="S", user="U", thinking=False, turns=turns) == (
+            markers.turn("system", "S")
+            + markers.turn("user", "U")
+            + markers.opening(thinking=False)
+        )
+
+    def test_the_fold_puts_the_same_bytes_in_the_first_user_turn(self) -> None:
+        """A placement change, never a content change.
+
+        Built rather than committed: the incumbent has a system role, so the arm
+        this row exists for has no entry in `config/` and would otherwise be
+        untested until the day a model needed it.
+        """
+        folded = built_turns(system_role="fold_into_first_user", system_joiner="\n\n")
+        markers = turn_markers(folded)
+
+        rendered = render_prompt(system="S", user="U", thinking=False, turns=folded)
+
+        assert rendered == markers.turn("user", "S\n\nU") + markers.opening(thinking=False)
+        assert "system" not in rendered, "no system role header is written at all"
+        assert "S" in rendered and "U" in rendered, "the same bytes, one turn earlier"
+
+    def test_the_fold_moves_the_digest_runs_stamp_and_not_the_qualification_runs(self) -> None:
+        """Arm 2. Which stamp can see a topology change, and which cannot.
+
+        The row expected neither to see it - a placement moves the same bytes to
+        a different address, so the argument ran that `prompt_sha256` could not
+        move. Row #2 closed that before this row arrived: since the prompt bytes
+        became ours, `classify.calls.prompt_inputs` renders both turns through
+        the envelope, so the digest run's stamp moves with the render and a fold
+        is as loud as a reworded instruction.
+
+        The qualification run's stamp still cannot see it.
+        `stages.qualify` hands `build_inputs` the content-only digest from
+        `summarize.prompt_inputs`, which takes no envelope and carries no turn
+        marker, so no field on `turns` can move it. **That is why the envelope is
+        declared on the entry and proved against the server at start-up rather
+        than inferred from a stamp**: the eleven gates compare two models through
+        a digest that is blind to how their turns were written, and arm 1 of
+        `prove_the_entry` is what catches a placement declared wrong.
+        """
+        own = configured_turns()
+        folded = TurnsConfig.model_validate(
+            own.model_dump(mode="json")
+            | {"system_role": "fold_into_first_user", "system_joiner": "\n\n"}
+        )
+
+        assert render_prompt(system="S", user="U", thinking=False, turns=own) != render_prompt(
+            system="S", user="U", thinking=False, turns=folded
+        )
+        assert calls.prompt_inputs(turns=own) != calls.prompt_inputs(turns=folded), (
+            "the digest run's prompt_sha256 renders through the envelope"
+        )
+        assert own.turn_opening not in prompt_inputs(), (
+            "the qualification run's stamp carries no turn marker, so no envelope "
+            "field can move it"
+        )
+
+    def test_a_placement_nobody_declared_is_refused_rather_than_guessed(self) -> None:
+        """Two topologies, and the field is closed over exactly those two.
+
+        A free-form string here would be a template language in config, and the
+        third value somebody wrote would render a prompt with no turn structure
+        that the grammar still accepts.
+        """
+        assert {placement.value for placement in SystemPlacement} == {
+            "own_turn",
+            "fold_into_first_user",
+        }
+        with pytest.raises(ValidationError, match="own_turn"):
+            built_turns(system_role="behind_a_prefix")
 
 
 def test_exactly_one_function_spells_a_llama_server_flag() -> None:
@@ -664,7 +832,9 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
 
 def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
     source = article().model_copy(update={"brief": True, "word_count": 190})
-    payload = build_request(source, model_id="m", inference=InferenceConfig())
+    payload = build_request(
+        source, model_id="m", inference=InferenceConfig(), thinking_kwarg="enable_thinking"
+    )
     system = payload["messages"][0]["content"]
 
     assert "30 to 45 words" in system
@@ -687,9 +857,9 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
             "truncated_at_tokens": 2500,
         }
     )
-    system = build_request(source, model_id="m", inference=InferenceConfig())["messages"][0][
-        "content"
-    ]
+    system = build_request(
+        source, model_id="m", inference=InferenceConfig(), thinking_kwarg="enable_thinking"
+    )["messages"][0]["content"]
     assert f"{top.target_words_min} to {top.target_words_max} words" in system
 
 
@@ -697,9 +867,9 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     """The read-side migration, at the one place a band is chosen."""
     ask = SummarizeConfig()
     older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
-    system = build_request(older, model_id="m", inference=InferenceConfig())["messages"][0][
-        "content"
-    ]
+    system = build_request(
+        older, model_id="m", inference=InferenceConfig(), thinking_kwarg="enable_thinking"
+    )["messages"][0]["content"]
     band = ask.band_for(1900)
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
 

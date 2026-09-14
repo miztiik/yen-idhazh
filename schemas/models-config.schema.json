@@ -321,9 +321,18 @@
       "title": "ModelEntry",
       "type": "object"
     },
+    "SystemPlacement": {
+      "description": "Where this model's template takes the system text. Two, and no third.\n\nA turn topology, so it is an enum rather than a free-form string: what\n\"folded into the first user turn\" MEANS is a code path, and expressing it as\ndata would need a template language in config - a second renderer nobody\ntests (docs/architecture/summarize/model-boundary.md).",
+      "enum": [
+        "own_turn",
+        "fold_into_first_user"
+      ],
+      "title": "SystemPlacement",
+      "type": "string"
+    },
     "TurnsConfig": {
       "additionalProperties": false,
-      "description": "How one turn is written for the weights this entry names.\n\nIt is the envelope, never the content. These four strings decide where a\nturn opens and closes and how a reply begins; what the turns SAY is\n`backend/idhazh/prompts/*.txt` and is the same set for every model\n(docs/architecture/summarize/model-boundary.md).\n\nThey sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,\nwhich put a fact about somebody else's weights in a package this project\nwrites and held it apart from the entry that names those weights. A swap\nthen moved the entry and left the markers, and nothing raised: a wrong\nmarker renders a prompt with no turn structure that the decoder's grammar\nstill accepts - worse summaries and no error anywhere.\n\n**The trailing newlines are load-bearing and invisible.** They survive here\nbecause JSON spells them `\\n` rather than leaving them at the end of a line\nfor an editor or a line-ending pass to rewrite.",
+      "description": "How one turn is written for the weights this entry names.\n\nIt is the envelope, never the content. These strings decide where a turn\nopens and closes, where the system text goes and how a reply begins; what\nthe turns SAY is `backend/idhazh/prompts/*.txt` and is the same set for\nevery model (docs/architecture/summarize/model-boundary.md).\n\nThey sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,\nwhich put a fact about somebody else's weights in a package this project\nwrites and held it apart from the entry that names those weights. A swap\nthen moved the entry and left the markers, and nothing raised: a wrong\nmarker renders a prompt with no turn structure that the decoder's grammar\nstill accepts - worse summaries and no error anywhere.\n\n**The trailing newlines are load-bearing and invisible.** They survive here\nbecause JSON spells them `\\n` rather than leaving them at the end of a line\nfor an editor or a line-ending pass to rewrite.",
       "properties": {
         "declared_for": {
           "anyOf": [
@@ -350,6 +359,39 @@
           "minLength": 1,
           "title": "Reply Opening Thinking",
           "type": "string"
+        },
+        "system_joiner": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What sits between the system text and the article when the two share a turn. Required under fold_into_first_user and refused under own_turn: a field that is read on one arm and ignored on the other is a field somebody will set and trust. It may not be empty, because folding with no separator runs the last instruction into the opening fence of the untrusted block on one line, and the grammar still accepts the reply.",
+          "title": "System Joiner"
+        },
+        "system_role": {
+          "$ref": "#/$defs/SystemPlacement",
+          "default": "own_turn",
+          "description": "Where this model's template takes the system text - its own turn, or folded into the first user turn. It is read by idhazh.llm.server.render_prompt, which never reads a model id: without this field a model with no system role could not be configured at all, only coded for. It has a default where the markers beside it have none, because the default is the topology of every template that HAS a system role rather than the incumbent's own string, and because arm 1 of idhazh.llm.server.prove_the_entry refuses a run whose render disagrees with the server's own render of the same turns - so a placement declared wrong is caught before the first item rather than inherited in silence."
+        },
+        "thinking_kwarg": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "enable_thinking",
+          "description": "The template variable that turns this model's reasoning on and off, sent as the one key of chat_template_kwargs. It is a name belonging to somebody else's Jinja template, so it is a model fact and not a project constant - it was spelled in this project's source and sent to every model until 2026-09-14. Null means this template reads no keywords at all, and then the request carries no chat_template_kwargs and inference.thinking must be false; ModelEntry refuses the pair.",
+          "title": "Thinking Kwarg"
         },
         "turn_closing": {
           "description": "Closes a turn. The second call's prompt is the first one's spliced on this marker, so an empty seam would join two turns into one and break the prefix the two-call design rests on.",
@@ -379,6 +421,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "models.<role>.turns gains system_role, system_joiner and thinking_kwarg. system_role is a closed choice of own_turn and fold_into_first_user; system_joiner is required under the fold and refused under own_turn; thinking_kwarg names the template variable chat_template_kwargs carries and defaults to the incumbent's enable_thinking, with null meaning the request sends no template keywords at all and inference.thinking must then be false. All three sit on TurnsConfig, which ModelEntry carries and ModelRef does not, so a run.json written before today still reads.",
+      "version": "2026-09-14T03:00",
+      "why": "Plan 28 row #11. Where the system text goes and which keyword turns reasoning off are facts about somebody else's chat template, and both were spelled in this project's source and sent to every model - so a model with no system role could not be configured at all, only coded for. The prompt TEXT does not follow them onto the entry and cannot: prose_changed_alone reports nothing whenever model_sha256 moved, so per-model wording would hide every prompt edit that rode in on a swap. Ruled by Andre, 2026-09-14."
+    },
+    {
       "change": "models.<role>.arch, required: the architecture name inside the GGUF. It sits on ModelEntry, not on ModelRef, so a run.json written before today still reads - run_manifest.ModelUse embeds ModelRef, and a required field there would stop this build reading yesterday's run (CLAUDE.md section 11).",
       "version": "2026-09-14T02:00",
       "why": "Plan 28 row #5. Row #2 moved the turn envelope onto the entry, so the entry now claims how a turn opens and closes and nothing checked the claim against the running server. The start-up probe checks all five claims before the first item, and this is the field the fourth of them compares: the weights on disk declare an architecture, and an entry that names a different one is serving a repackaged file under a familiar name. Ruled by Carmack, 2026-09-14."
@@ -395,7 +442,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-14T02:00",
+      "default": "2026-09-14T03:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -406,5 +453,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-14T02:00"
+  "version": "2026-09-14T03:00"
 }
