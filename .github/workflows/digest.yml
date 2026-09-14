@@ -161,8 +161,11 @@ jobs:
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import pathlib
 
-          models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
+          config = json.load(open("config/idhazh.json", encoding="utf-8"))
+          models_file = pathlib.Path("config") / config["models_file"]
+          models = json.load(open(models_file, encoding="utf-8"))
           for role in ("summarize",):
               for field in ("repo", "revision", "file"):
                   value = models[role].get(field) or ""
@@ -484,7 +487,7 @@ jobs:
       - name: Verify the weights
         run: |
           set -euo pipefail
-          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["sha256"] or "")')
+          EXPECTED=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
           if [ -z "$EXPECTED" ]; then
             echo "config records no sha256 for models.summarize" >&2
             exit 1
@@ -515,7 +518,7 @@ jobs:
           # Healthy says a server answers. It does not say which weights it
           # answers for, and every summary and eval row is filed under the
           # config alias whether or not the server agrees.
-          MODEL_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["id"])')
+          MODEL_ALIAS=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
