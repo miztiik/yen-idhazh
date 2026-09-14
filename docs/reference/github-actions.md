@@ -112,6 +112,7 @@ cancelled queued runs on this repository (2026-08-24 and 2026-08-25 carry six
 how many runs happen, and this page is where that is written down.
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart LR
  PR["ordinary pull request"] --> CI["CI<br/>ci.yml"]
  PUSH["merge or push to main"] --> CI
@@ -122,6 +123,16 @@ flowchart LR
  FILTER -->|"no"| NO_PAGES
  REFRESH_DONE["Content refresh completed"] --> PAGES
  PAGES --> STATIC["static GitHub Pages bundle"]
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+ classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+ classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+
+ class PR,PUSH,CI,REFRESH_DONE,STATIC stage;
+ class VERDICT,FILTER decision;
+ class PAGES yes;
+ class NO_PAGES no;
 ```
 
 ## Content refresh
@@ -212,14 +223,44 @@ does not exit non-zero: failing there would skip the steps that commit the day,
 which is the invisibility `if: always()` exists to prevent.
 
 ```mermaid
-flowchart LR
- SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+ SCHEDULE["schedule<br/>five times a day"] --> PLAN
  MANUAL["manual dispatch"] --> PLAN
- PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
-  WORK --> ASSEMBLE["assemble"]
- ASSEMBLE --> COMMIT["commit digest and state"]
- COMMIT --> COMPLETE["Content refresh completed"]
- COMPLETE --> PAGES["Pages publication"]
+
+ subgraph ING["Sources - what is a candidate"]
+  PLAN["plan<br/>read the feeds, score, rank"]
+  PLAN --> SEEN[("first sighting<br/>and feed health")]
+ end
+
+ subgraph EXT["Extraction - the trust boundary"]
+  PLAN --> FETCH["work shards<br/>fetch, extract, sanitize"]
+ end
+
+ subgraph MOD["Summarize - what the model is asked"]
+  FETCH --> CALLS["two calls an item<br/>summary, then the visual plan"]
+  CALLS --> ROWS[("item health, eval rows,<br/>runtime counters")]
+ end
+
+ subgraph PUB["Publishing - what a reader gets"]
+  CALLS --> ASSEMBLE["assemble"]
+  ASSEMBLE --> DAY[("the committed day<br/>plus state")]
+  DAY --> PAGES["Pages publication"]
+ end
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
+ classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
+ classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
+ classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+
+ class SCHEDULE,MANUAL,PLAN,FETCH,CALLS,ASSEMBLE,PAGES stage;
+ class SEEN,ROWS,DAY store;
+ class ING sysIngest;
+ class EXT sysExtract;
+ class MOD sysModel;
+ class PUB sysPublish;
 ```
 
 The plan job also commits first-sighting and feed-health state before it starts
@@ -434,13 +475,71 @@ too, and the reason it is never scheduled is in
 [Vector backfill](#vector-backfill).
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart LR
  PERSON["manual dispatch"] --> VALIDATE["Model validation"]
  PERSON --> MEASURE["Measurements"]
  PERSON --> DRIFT["Drift review"]
  PERSON --> BACKFILL["Vector backfill"]
  WEEKLY["Sunday 08:00 UTC"] --> DRIFT
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ class PERSON,WEEKLY,VALIDATE,MEASURE,DRIFT,BACKFILL stage;
 ```
+
+### Testing a candidate model, end to end
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+ subgraph NAME["What a person types"]
+  FORM["one form field<br/>candidate_models_file"] --> FILE[("config/models/NAME.json<br/>repo, commit, filename, digest,<br/>byte count, alias, quantisation")]
+ end
+
+ subgraph BENCH["Measure - measure.yml, target llm"]
+  FILE --> RAW["raw throughput<br/>llama-bench"]
+  RAW --> SERVER["real server<br/>five fixed articles"]
+  SERVER --> DOSSIER["dossier body,<br/>ready to paste"]
+ end
+
+ subgraph QUAL["Qualify - validate.yml"]
+  FILE --> SCRATCH["scratch config<br/>the committed tree,<br/>models_file moved"]
+  SCRATCH --> FETCH["fetch the weights"]
+  FETCH --> IDENT{"digest and declared<br/>size both match?"}
+  IDENT -->|"no"| STOP["stop before the server starts"]
+  IDENT -->|"yes"| PROVE{"server proves<br/>five claims?"}
+  PROVE -->|"no"| STOP
+  PROVE -->|"yes"| REPLAY["freeze a corpus,<br/>replay it three times"]
+  REPLAY --> GATES{"every gate green?"}
+ end
+
+ GATES -->|"no"| REJECT["not adopted"]
+ GATES -->|"yes"| ADOPT["adopt: move models_file<br/>in config/idhazh.json"]
+ ADOPT --> DAILY["the daily run uses it"]
+ DAILY --> REVERT["revert: move that line back"]
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+ classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+ classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+ classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
+ classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+ classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+
+ class FORM,RAW,SERVER,DOSSIER,SCRATCH,FETCH,REPLAY,DAILY stage;
+ class IDENT,PROVE,GATES decision;
+ class FILE store;
+ class ADOPT yes;
+ class STOP,REJECT no;
+ class REVERT warn;
+ class NAME sysOps;
+ class BENCH,QUAL sysEval;
+```
+
+**One form field, because the file already holds the answer.** Both dispatches take `candidate_models_file` and nothing else about the candidate. Every fact a run needs - the repository, the 40-character commit, the GGUF filename, its SHA-256, its byte count, the alias the server answers to, the quantisation - is written in `config/models/<name>.json`, and a form that asked for them again was a second copy that could disagree with the first. It could bench one set of bytes and adopt another with every gate green. Leave the field empty and the run re-measures whatever `config/idhazh.json` currently points at, which is how the bench is checked against the page it reproduces.
+
+**The scratch config differs from the committed tree in one line.** Both workflows copy `config/`, move `models_file`, and change nothing else - so every control the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
 
 Each Measurements dispatch selects exactly one target:
 
@@ -456,13 +555,10 @@ The form keeps all target-specific inputs visible. A job reads only the inputs
 for its selected target. The default target is `llm`; the default runtime
 candidate is `baseline`.
 
-`Model validation` predates the qualification harness. It names an incumbent of
-its own rather than reading `config/idhazh.json`, downloads and caches two models
-together, and refetches each planned URL for each model. It is an exploratory
-dispatch, not a controlled adoption gate, and the 2026-08-26 qualification did
-not use it.
-[Evaluate and Adopt a New Summarizer Model](../how-to/evaluate-new-summarizer-model.md)
-owns the repair and acceptance requirements.
+`Model validation` reads `config/idhazh.json`, follows its pointer to the model
+file, and takes every candidate fact from there. It names no model of its own.
+[Swap the Summarizer Model](../how-to/evaluate-new-summarizer-model.md) owns the
+procedure and the acceptance requirements.
 
 ### The cache across the model swap, measured 2026-08-27
 
@@ -784,18 +880,20 @@ The named inputs:
 - **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
  `measure.target`, `measure.runtime_candidate`.
 - **Read by name** - `measure.models`, `measure.runtime_threads`,
- `measure.runtime_threads_batch`, and the six `validate.candidate_*` fields,
- which the `candidate` step asserts are one bare word each before it
- republishes them.
+ `measure.runtime_threads_batch`, and `candidate_models_file` on both
+ `measure.yml` and `validate.yml`. That one becomes a file path, so the step
+ resolves it and proves it sits inside `config/` rather than matching its
+ spelling, then asserts every field it republishes is one bare word.
 - **Matched** - `digest.date`, `drift.recent_days`, `drift.baseline_days`,
  `measure.corpus_links`, `measure.threads`, `validate.shards`,
  `validate.repeats`, `validate.corpus_per_shard`,
- `validate.job_budget_minutes`, `validate.candidate_bytes`.
+ `validate.job_budget_minutes`.
 
-`validate.yml` shapes its five numbers in one step of the `plan` job, which is
+`validate.yml` shapes its four numbers in one step of the `plan` job, which is
 the job every other job needs, so "before its first use" is anywhere after that
-step - the qualify matrix, the job bound, the byte check and the gate all read
-them later.
+step - the qualify matrix, the job bound and the gate all read them later. The
+byte check reads the size the candidate's own entry declares, not a number the
+form carried.
 
 `drift.yml` was the other one worth fixing. Its two window sizes were pasted
 into a Python program inside the step, so a value that is not a number was a
