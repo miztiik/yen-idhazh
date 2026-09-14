@@ -41,6 +41,7 @@ def _plan_payload(name: str = "bar-chart") -> dict[str, Any]:
     )
     return payload
 
+
 def test_a_plan_of_references_and_closed_names_loads() -> None:
     """The happy path, without which the four refusals below prove nothing."""
     plan = VisualPlan.model_validate(_plan_payload())
@@ -50,6 +51,7 @@ def test_a_plan_of_references_and_closed_names_loads() -> None:
     drawn |= {i for ids in plan.encodings.filled().values() for i in ids}
     assert drawn <= set(plan.element_ids), "everything drawn is an element the plan declared"
 
+
 def test_a_plan_carrying_geometry_does_not_load() -> None:
     """Prohibition 1. A pixel binds the plan to one renderer, so there is nowhere
     to put one: geometry is a number, and the schema admits exactly one number."""
@@ -57,6 +59,7 @@ def test_a_plan_carrying_geometry_does_not_load() -> None:
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
             VisualPlan.model_validate(_plan_payload() | {pixel: 800})
     assert numeric_leaves() == NUMERIC_FIELDS == {"confidence"}
+
 
 def test_a_plan_carrying_a_literal_number_does_not_load() -> None:
     """Prohibition 2. A bar height is reached by citing an element, so the worst
@@ -73,6 +76,7 @@ def test_a_plan_carrying_a_literal_number_does_not_load() -> None:
     with pytest.raises(ValidationError, match="less than or equal to 1"):
         VisualPlan.model_validate(_plan_payload() | {"confidence": 4200.0})
 
+
 def test_a_plan_carrying_authored_text_does_not_load() -> None:
     """Prohibition 3, the half the shape can carry. Code cuts every character a
     reader sees off a chart, so what names a mark is an element reference and a
@@ -85,6 +89,7 @@ def test_a_plan_carrying_authored_text_does_not_load() -> None:
     encodings = payload["encodings"] | {"category": ["Denmark", "Germany"]}
     with pytest.raises(ValidationError, match="encodings"):
         VisualPlan.model_validate(payload | {"encodings": encodings})
+
 
 def test_a_plan_that_omits_a_role_does_not_load() -> None:
     """Every role name is a key and the decoder may not skip one.
@@ -102,6 +107,7 @@ def test_a_plan_that_omits_a_role_does_not_load() -> None:
             VisualPlan.model_validate(payload | {"encodings": short})
     with pytest.raises(ValidationError, match="encodings"):
         VisualPlan.model_validate({k: v for k, v in payload.items() if k != "encodings"})
+
 
 def test_a_role_the_type_cannot_use_is_present_and_empty() -> None:
     """The other half: an inapplicable role loads as `[]` rather than failing.
@@ -122,6 +128,7 @@ def test_a_role_the_type_cannot_use_is_present_and_empty() -> None:
         "a bar with bins in it is a plan the validator refuses and the shape spells"
     )
 
+
 def test_the_role_vocabulary_and_the_channels_are_one_list_in_one_order() -> None:
     """Two spellings of one list, and the decoder is held to the second.
 
@@ -135,6 +142,7 @@ def test_the_role_vocabulary_and_the_channels_are_one_list_in_one_order() -> Non
     # document where the declared order - and so the decode order - survives.
     assert channels["required"] == [role.value for role in EncodingRole]
     assert channels["additionalProperties"] is False, "a role the vocabulary lacks is not a role"
+
 
 def test_naming_a_mark_has_one_home_and_it_is_not_a_role() -> None:
     """There is no `label` role, and section 12.8 X2 lists one - so this is the
@@ -151,6 +159,7 @@ def test_naming_a_mark_has_one_home_and_it_is_not_a_role() -> None:
     assert "label" not in {role.value for role in EncodingRole}
     assert "labels" in VisualPlan.model_fields
     assert MAX_LABELS == 10, "eight marks and two axes, which is what naming a mark is for"
+
 
 def test_required_but_empty_roles_cost_what_the_module_says_they_cost() -> None:
     """Every role being a key is paid for on every reply, so the price is checked.
@@ -173,6 +182,7 @@ def test_required_but_empty_roles_cost_what_the_module_says_they_cost() -> None:
         cost[stem] = whole - without
     assert cost == {"bar-chart": 87, "declined": 114}
 
+
 def test_a_plan_carrying_alt_text_does_not_load() -> None:
     """Prohibition 4. The compiler assembles alt text out of the element values
     it already holds; the model writing it would be one prose channel restating
@@ -183,6 +193,7 @@ def test_a_plan_carrying_alt_text_does_not_load() -> None:
     assert FORBIDDEN_FIELDS.isdisjoint(VisualPlan.model_fields), (
         "the field is named rather than merely absent, so a later widening does not start"
     )
+
 
 def test_every_decoded_array_and_string_in_the_plan_is_bounded() -> None:
     """A bound with no total is half a decision, so this is what makes the
@@ -197,12 +208,14 @@ def test_every_decoded_array_and_string_in_the_plan_is_bounded() -> None:
             _plan_payload() | {"element_ids": [f"quantity-{n}-{n + 4}" for n in range(99)]}
         )
 
+
 def test_confidence_decodes_after_the_type() -> None:
     """Field order is decode order. Second in the list a confidence conditions
     every field after it, and the model reads its own hedge back as evidence."""
     order = list(VisualPlan.model_fields)
     assert order.index("confidence") > order.index("type")
     assert order.index("purpose") < order.index("type"), "the form is chosen for a reason"
+
 
 def test_a_plan_that_declines_draws_nothing() -> None:
     """`none` is the common and correct answer, and it is a decision rather than
@@ -216,6 +229,7 @@ def test_a_plan_that_declines_draws_nothing() -> None:
     with pytest.raises(ValidationError, match="proposes a visual states its title"):
         VisualPlan.model_validate(_plan_payload() | {"title": None})
 
+
 def test_a_plan_may_not_draw_an_element_it_never_declared() -> None:
     """The cheap half of "every element exists", asked of the payload alone: a
     role citing an id the plan did not list is the plan disagreeing with itself.
@@ -223,6 +237,7 @@ def test_a_plan_may_not_draw_an_element_it_never_declared() -> None:
     payload = _plan_payload()
     with pytest.raises(ValidationError, match="did not declare"):
         VisualPlan.model_validate(payload | {"labels": ["quantity-9001-9008"]})
+
 
 def test_the_worst_case_reply_length_is_arithmetic_and_the_fixtures_are_a_fraction_of_it() -> None:
     """Row 14's bounds buy one number, and this is the number.

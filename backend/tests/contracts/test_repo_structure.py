@@ -51,6 +51,7 @@ def test_contracts_import_no_other_subpackage() -> None:
                 if name.startswith("idhazh.") and not name.startswith("idhazh.contracts"):
                     pytest.fail(f"{module.name} imports {name}")
 
+
 @pytest.mark.parametrize(
     "path",
     sorted(SCHEMAS_DIR.glob("*.json")) + sorted(CONFIG_DIR.glob("*.json")) + fixture_paths(),
@@ -60,6 +61,7 @@ def test_repo_text_is_ascii_and_lf(path: Path) -> None:
     raw = path.read_bytes()
     raw.decode("ascii")
     assert b"\r\n" not in raw
+
 
 def test_no_hash_appears_in_any_published_path() -> None:
     """Decision 2: an item is addressed <vertical>-<id>, never by a digest."""
@@ -71,6 +73,7 @@ def test_no_hash_appears_in_any_published_path() -> None:
     decision = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
     assert decision.data_path is not None
     assert not HEX_DIGEST.search(decision.data_path)
+
 
 def test_an_item_id_reads_in_both_shapes_and_the_pattern_never_contracts() -> None:
     """The read-side migration this widening owes, proved on payloads rather than asserted.
@@ -98,11 +101,13 @@ def test_an_item_id_reads_in_both_shapes_and_the_pattern_never_contracts() -> No
         with pytest.raises(ValidationError):
             DigestItem.model_validate({**payload, "item_id": f"energy-{excluded}fyypy5sgvnwcxd3"})
 
+
 def test_the_eval_ledger_columns_are_defined_once() -> None:
     columns = EvalRow.csv_columns()
     assert len(set(columns)) == len(columns)
     for required in ("date", "source_url", "title", "url_key", "band", "version"):
         assert required in columns, "a ledger row must still mean something after a prune"
+
 
 def test_the_recorded_premise_digest_names_the_article_fixture() -> None:
     """The populated shape, checked against text this repository holds.
@@ -117,6 +122,7 @@ def test_the_recorded_premise_digest_names_the_article_fixture() -> None:
 
     assert scored.source_digest == text_digest(source.text or "")
     assert scored.source_digest != scored.output_digest
+
 
 def test_the_item_health_ledger_columns_are_defined_once() -> None:
     assert ItemHealthRow.csv_columns() == (
@@ -164,6 +170,7 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "call_2_cached_tokens",
     )
 
+
 def test_the_feed_health_ledger_columns_are_defined_once() -> None:
     """The five columns of 2026-09-02 are appended, so the old header is still a prefix.
 
@@ -189,6 +196,7 @@ def test_the_feed_health_ledger_columns_are_defined_once() -> None:
         "target_attempted",
     )
 
+
 def test_a_retirement_names_distinct_runs_and_only_one_cause() -> None:
     """Five failures inside one run is one run's evidence, not five runs' worth.
 
@@ -206,6 +214,7 @@ def test_a_retirement_names_distinct_runs_and_only_one_cause() -> None:
     with pytest.raises(ValidationError, match="distinct runs"):
         FeedRetirementRow.model_validate(repeated)
 
+
 def test_a_retirement_row_survives_the_ledger_round_trip() -> None:
     """The evidence list is one cell, so the header cannot grow with the evidence."""
     row = FeedRetirementRow.from_json(
@@ -216,6 +225,7 @@ def test_a_retirement_row_survives_the_ledger_round_trip() -> None:
     assert cells["evidence_run_ids"].count(" ") == len(row.evidence_run_ids) - 1
     assert "," not in cells["evidence_run_ids"], "a comma would need quoting in a union merge"
     assert FeedRetirementRow.from_csv_row(cells) == row
+
 
 def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None:
     """The canary's own copy of the header, held against the contract.

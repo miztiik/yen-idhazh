@@ -57,6 +57,7 @@ def _two_calls() -> tuple[CallCost, CallCost]:
         ),
     )
 
+
 def _summary_of_two_calls() -> Summary:
     first, second = _two_calls()
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
@@ -65,6 +66,7 @@ def _summary_of_two_calls() -> Summary:
     for field in ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens"):
         payload[field] = getattr(first, field) + getattr(second, field)
     return Summary.model_validate(payload)
+
 
 def test_one_item_carries_two_cache_figures_and_they_disagree() -> None:
     """The Oracle. One folded cell cannot say what two calls did.
@@ -91,6 +93,7 @@ def test_one_item_carries_two_cache_figures_and_they_disagree() -> None:
     assert per_call == [0, 62]
     assert folded not in per_call, "the folded share is not either call's answer"
 
+
 def test_a_payload_written_before_the_split_still_validates() -> None:
     """The read-side proof, taken by removing the keys rather than by waiting.
 
@@ -113,6 +116,7 @@ def test_a_payload_written_before_the_split_still_validates() -> None:
     narrower = ItemHealthRow.from_csv_row(cells)
     assert narrower.model_calls is None and narrower.call_1_kind is None
     assert narrower.cached_tokens == ItemHealthRow.model_validate(row).cached_tokens
+
 
 def test_a_row_that_records_one_call_may_not_keep_the_other_call_s_total() -> None:
     """The rule that lets every pooled reader stay folded and stay correct.
@@ -145,6 +149,7 @@ def test_a_row_that_records_one_call_may_not_keep_the_other_call_s_total() -> No
         )
     with pytest.raises(ValidationError, match="must equal the number of recorded calls"):
         ItemHealthRow.model_validate({**row.model_dump(), **whole, **totals, "model_calls": 1})
+
 
 def test_the_published_projection_leaves_a_second_call_that_can_be_subtracted() -> None:
     """The browser derives the second call, so the cells have to leave it derivable.
@@ -181,6 +186,7 @@ def test_the_published_projection_leaves_a_second_call_that_can_be_subtracted() 
     with pytest.raises(ValidationError, match="whole or not at all"):
         PublicTelemetryRow.model_validate({**row.model_dump(), **published, "call_1_kind": None})
 
+
 def test_the_canary_writes_every_column_the_counters_ledger_defines() -> None:
     """The same guard, over the second header the canary restates.
 
@@ -196,6 +202,7 @@ def test_the_canary_writes_every_column_the_counters_ledger_defines() -> None:
     declared = re.search(r"const COUNTER_COLUMNS = \[(.*?)\];", source, re.DOTALL)
     assert declared is not None, "build-canary.mjs no longer declares a COUNTER_COLUMNS array"
     assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == RuntimeCountersRow.csv_columns()
+
 
 def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path: Path) -> None:
     """Every column filled by at least one canary feed, not merely present in the header.

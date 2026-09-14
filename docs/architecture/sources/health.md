@@ -230,7 +230,7 @@ the floor is for. Five feeds' newest committed row is a robots refusal today -
 `anthropic-engineering`, `anthropic-research`, `axios-business`, `cbc-world` and
 `cnbc-top` - and two of the five sit on `ai`, so even if every one of them
 records a typed refusal on the next run, no desk moves under its floor.
-`backend/tests/test_contracts.py::test_every_vertical_clears_its_own_feed_floor`
+`backend/tests/contracts/test_run_plan.py::test_every_vertical_clears_its_own_feed_floor`
 is the gate, and it reads the committed ledger rather than a fixture.
 
 The plan payload carries both numbers per desk, and the run manifest carries

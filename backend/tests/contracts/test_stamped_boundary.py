@@ -37,11 +37,13 @@ def _staged(tmp_path: Path, payload: dict[str, Any], name: str = "x.visual.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
+
 def _a_decision() -> dict[str, Any]:
     payload: dict[str, Any] = json.loads(
         read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json")
     )
     return payload
+
 
 def test_a_payload_written_before_a_field_was_renamed_is_named_not_called_invalid(
     tmp_path: Path,
@@ -67,6 +69,7 @@ def test_a_payload_written_before_a_field_was_renamed_is_named_not_called_invali
     assert "re-run the stage that wrote it" in message, "the remedy is missing"
     assert isinstance(raised.value.__cause__, ValidationError), "the parser's own error is lost"
 
+
 def test_a_payload_stamped_with_this_build_is_still_an_ordinary_validation_error(
     tmp_path: Path,
 ) -> None:
@@ -83,6 +86,7 @@ def test_a_payload_stamped_with_this_build_is_still_an_ordinary_validation_error
     with pytest.raises(ValidationError):
         VisualDecision.read(_staged(tmp_path, payload))
 
+
 def test_an_older_payload_this_build_can_still_read_just_reads(tmp_path: Path) -> None:
     """Most older payloads are readable, and refusing them would be the worse bug.
 
@@ -94,6 +98,7 @@ def test_an_older_payload_this_build_can_still_read_just_reads(tmp_path: Path) -
     payload["version"] = "2026-01-01"
 
     assert VisualDecision.read(_staged(tmp_path, payload)).version == "2026-01-01"
+
 
 def test_the_payload_a_stale_error_names_leaves_the_process_posix_and_relative(
     tmp_path: Path,
@@ -110,6 +115,7 @@ def test_the_payload_a_stale_error_names_leaves_the_process_posix_and_relative(
     assert named == "world-01.visual.json"
     assert "\\" not in named and ":" not in named and not named.startswith("/")
 
+
 def test_every_contract_can_be_read_through_the_stamped_boundary() -> None:
     """The boundary is on the base class, so no contract can be left out of it.
 
@@ -119,6 +125,7 @@ def test_every_contract_can_be_read_through_the_stamped_boundary() -> None:
     boundary = inspect.getattr_static(Contract, "read")
     for model in CONTRACTS:
         assert inspect.getattr_static(model, "read") is boundary, model.__name__
+
 
 def test_every_console_read_resolves_to_exactly_one_committed_schema() -> None:
     """The inventory's whole job: no dataset without a shape, no shape twice.
@@ -137,6 +144,7 @@ def test_every_console_read_resolves_to_exactly_one_committed_schema() -> None:
     assert len(stems) == 9, "twelve console reads answer off nine shapes"
     assert set(stems) == {entry.contract.__schema_stem__ for entry in CONSOLE_PAYLOADS}
 
+
 def test_a_console_payload_says_where_it_is_written_and_why_it_crosses() -> None:
     """An inventory row with no destination is a note, not an instruction.
 
@@ -150,6 +158,7 @@ def test_a_console_payload_says_where_it_is_written_and_why_it_crosses() -> None
         assert "\\" not in entry.published_to and ":" not in entry.published_to
         assert entry.why.endswith("."), entry.reader
         assert entry.reader.strip() == entry.reader and entry.reader
+
 
 @pytest.mark.parametrize(
     ("projection", "source", "expected"),
@@ -176,6 +185,7 @@ def test_a_forbidden_cell_is_on_the_ledger_and_off_the_projection(
     assert expected <= set(source.model_fields), "the list has drifted off its ledger"
     assert not (expected & set(projection.model_fields))
 
+
 def test_a_published_shape_with_no_refusals_says_so_in_its_own_words() -> None:
     """An empty list is a real answer and it needs a reason on the page.
 
@@ -194,6 +204,7 @@ def test_a_published_shape_with_no_refusals_says_so_in_its_own_words() -> None:
             phrase in prose
             for phrase in ("never the response body", "no cell", "nothing", "our own")
         ), f"{entry.contract.__name__} forbids nothing and does not say why"
+
 
 def test_the_band_refuses_a_link_that_could_leave_the_site() -> None:
     """The one cell on the band a browser follows.
@@ -214,6 +225,7 @@ def test_the_band_refuses_a_link_that_could_leave_the_site() -> None:
                 carries="Feed failures are on Pipelines.",
             )
 
+
 def test_the_band_refuses_a_worst_route_the_strip_does_not_carry() -> None:
     """The strip is the console's only navigation, so a band pointing off it is
     a link that goes nowhere."""
@@ -222,6 +234,7 @@ def test_the_band_refuses_a_worst_route_the_strip_does_not_carry() -> None:
     payload = band.model_dump(mode="json")
     with pytest.raises(ValidationError, match="not on the strip"):
         ConsoleBand.model_validate(payload | {"routes": []})
+
 
 def test_the_band_refuses_months_that_run_backwards() -> None:
     """The console pans by index, so a repeat or an inversion reads as a jump
@@ -232,6 +245,7 @@ def test_the_band_refuses_months_that_run_backwards() -> None:
         with pytest.raises(ValidationError, match="oldest first"):
             ConsoleBand.model_validate(payload | {"months": months})
 
+
 def test_a_day_cannot_draw_more_charts_than_it_published() -> None:
     """The charts are a subset of the items, counted from the same payload, so a
     row claiming more is a producer that counted two different trees."""
@@ -239,6 +253,7 @@ def test_a_day_cannot_draw_more_charts_than_it_published() -> None:
     payload = day.model_dump(mode="json")
     with pytest.raises(ValidationError, match="claims"):
         PublicRunDay.model_validate(payload | {"published_items": 3, "published_charts": 7})
+
 
 def test_every_published_month_payload_has_a_non_null_retention_knob() -> None:
     """A payload a run appends to with no age is a directory that grows for ever.

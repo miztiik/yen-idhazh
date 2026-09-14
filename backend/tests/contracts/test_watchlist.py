@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 
 pytestmark = pytest.mark.contract
@@ -18,6 +19,13 @@ def watchlist_payload() -> dict[str, Any]:
         read_text(CONTRACT_FIXTURES_DIR / "watchlist" / "seeded.json")
     )
     return payload
+
+
+def test_the_watchlist_stays_inside_its_configured_cap() -> None:
+    config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    watchlist = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
+    assert len(watchlist.entities) <= config.collect.watchlist_max_entities
+
 
 def test_a_subject_needs_neither_a_filer_id_nor_a_feed() -> None:
     """The whole point of the widening.
@@ -32,12 +40,14 @@ def test_a_subject_needs_neither_a_filer_id_nor_a_feed() -> None:
     assert subject.feeds == []
     assert subject.aliases, "a subject with no alias is never matched (EntityDef.aliases)"
 
+
 def test_a_subject_may_not_carry_a_filer_id() -> None:
     """Only an organisation files with the SEC, so the pairing is a data error."""
     payload = watchlist_payload()
     payload["entities"][0]["kind"] = EntityKind.SUBJECT.value
     with pytest.raises(ValueError, match="cik belongs to an organisation"):
         Watchlist.model_validate(payload)
+
 
 def test_a_watchlist_written_before_the_kind_field_reads_as_organisations() -> None:
     """Section 11's release blocker, tested against the key rather than the stamp.
@@ -52,6 +62,7 @@ def test_a_watchlist_written_before_the_kind_field_reads_as_organisations() -> N
     older = Watchlist.model_validate(payload)
     assert {entity.kind for entity in older.entities} == {EntityKind.ORGANISATION}
 
+
 def test_every_committed_registry_entry_is_still_an_organisation() -> None:
     """The row's oracle, and the reason the gap measurement is worth taking.
 
@@ -61,6 +72,7 @@ def test_every_committed_registry_entry_is_still_an_organisation() -> None:
     """
     watchlist = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
     assert [entity.id for entity in watchlist.entities if entity.kind is EntityKind.SUBJECT] == []
+
 
 def test_the_committed_watchlist_survives_a_read_and_a_rewrite() -> None:
     """A hand-edited config re-serializes to the bytes on disk.

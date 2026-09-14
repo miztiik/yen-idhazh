@@ -40,6 +40,7 @@ def test_workflow_names_and_trigger_classes_are_pinned() -> None:
         assert workflow.get("name") == display_name
         assert set(_triggers(workflow)) == trigger_classes
 
+
 def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
     """Five one-slot lines, not one five-hour line, and the difference is load-bearing.
 
@@ -58,6 +59,7 @@ def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
         assert "," not in fields[1], (
             "one hour per line, so github.event.schedule names a single slot"
         )
+
 
 def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
     """The alarm is a report, not a gate. It cannot fix the platform.
@@ -82,11 +84,13 @@ def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
     assert "::warning title=Late run::" in body, "it annotates the run summary"
     assert "10#" in body, "every clock field is forced to base ten, or 08 is octal"
 
+
 def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
     workflows = _load_workflows()
 
     for filename in ("backfill.yml", "digest.yml", "measure.yml", "validate.yml"):
         assert {"pull_request", "push"}.isdisjoint(_triggers(workflows[filename]))
+
 
 def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
     """A dispatch form is free text unless somebody constrained it, and a wrong
@@ -137,6 +141,7 @@ def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
             f"{where} must be matched against {shape} before anything acts on it"
         )
 
+
 @requires_bash
 def test_a_scheduled_run_still_decides_its_own_date(tmp_path: Path) -> None:
     """The pattern runs after the default, so the automatic path is the one it
@@ -152,6 +157,7 @@ def test_a_scheduled_run_still_decides_its_own_date(tmp_path: Path) -> None:
     assert outputs["day_dir"] == f"frontend/public/digest/{outputs['date'].replace('-', '/')}"
     assert outputs["faithfulness"] == "true"
 
+
 @requires_bash
 def test_a_dispatched_date_becomes_the_day_it_names(tmp_path: Path) -> None:
     completed, outputs = _run_the_decide_step("2026-08-25", tmp_path)
@@ -159,6 +165,7 @@ def test_a_dispatched_date_becomes_the_day_it_names(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stderr
     assert outputs["date"] == "2026-08-25"
     assert outputs["day_dir"] == "frontend/public/digest/2026/08/25"
+
 
 @requires_bash
 @pytest.mark.parametrize("dispatched", UNPUBLISHABLE_DATES)

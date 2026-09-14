@@ -32,6 +32,7 @@ def test_an_unscored_story_sorts_last_and_never_as_zero() -> None:
         "world-unscored-10",
     ]
 
+
 def test_ties_break_on_the_time_then_the_address() -> None:
     """Two runs over one day must not disagree about the order.
 
@@ -71,6 +72,7 @@ def test_ties_break_on_the_time_then_the_address() -> None:
         "ai-late-12",
         "ai-early-10",
     ]
+
 
 def test_the_frame_counts_the_desk_the_reader_sees() -> None:
     """`desk` is null until something reads the article and a page falls back.

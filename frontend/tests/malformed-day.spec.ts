@@ -40,7 +40,7 @@ const REPO = path.resolve(process.cwd(), '..');
 const scratch = path.join(process.cwd(), 'test-results', 'malformed-day');
 
 /** The newest committed day, as text, with the drawings that belong to it.
- * The tree is never empty - `backend/tests/test_contracts.py` asserts that on
+ * The tree is never empty - `backend/tests/contracts/` asserts that on
  * its own. */
 function newestCommittedDay(): { date: string; text: string; drawings: string[] } {
 	const root = path.join(process.cwd(), 'public', 'digest');

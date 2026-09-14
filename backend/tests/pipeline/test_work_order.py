@@ -41,11 +41,13 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
 
     assert [candidate.item.item_id for candidate in ordered] == ["ai-02", "ai-04", "ai-03", "ai-01"]
 
+
 def test_a_fresh_clone_loads_its_committed_config() -> None:
     settings = config.load(CONFIG_DIR)
     assert settings.app.run.safety_ceiling_per_run >= 1
     assert settings.sources.feeds
     assert settings.taxonomy.verticals
+
 
 def test_the_config_that_was_read_travels_with_the_run() -> None:
     """A knob edited between two runs changes every output and is otherwise invisible."""
@@ -62,6 +64,7 @@ def test_the_config_that_was_read_travels_with_the_run() -> None:
     }
     digests = settings.digests
     assert all(len(digest.sha256) == 64 for digest in digests)
+
 
 def test_a_missing_config_file_fails_at_startup(tmp_path: Path) -> None:
     with pytest.raises(OSError):

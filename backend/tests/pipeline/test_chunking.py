@@ -13,11 +13,13 @@ pytestmark = pytest.mark.slow
 def test_a_short_premise_is_one_chunk() -> None:
     assert chunks("a b c", size=10, overlap=2) == ["a b c"]
 
+
 def test_a_long_premise_is_windowed_with_overlap() -> None:
     text = " ".join(str(n) for n in range(1000))
     windows = chunks(text, size=300, overlap=50)
     assert len(windows) > 1
     assert windows[0].split()[-1] in windows[1].split()[:60], "windows overlap"
+
 
 def test_every_window_is_the_full_window_and_the_last_one_ends_on_the_last_word() -> None:
     """The aggregation is a max, so a short window is a rival with less to work with.
@@ -42,6 +44,7 @@ def test_every_window_is_the_full_window_and_the_last_one_ends_on_the_last_word(
             f"{windows[-1][-1]} rather than {words[-1]}"
         )
 
+
 def test_anchoring_the_last_window_drops_a_window_on_a_long_article() -> None:
     """Correctness is the reason; the saved scorer pass arrived with the bigger cap.
 
@@ -62,6 +65,7 @@ def test_anchoring_the_last_window_drops_a_window_on_a_long_article() -> None:
     assert len(at_cap) == 3, "the old cap cost the same three passes it always did"
     assert len(doubled) == 5, "six before anchoring, five after"
 
+
 def test_the_best_chunk_wins_not_the_average() -> None:
     """A mean would drive the score down as the article lengthens and invert the flag."""
     scores = iter([0.1, 0.95, 0.2, 0.15])
@@ -76,12 +80,14 @@ def test_the_best_chunk_wins_not_the_average() -> None:
         Recorded(), text, "claim", evaluation=EvaluationConfig()
     ) == pytest.approx(0.95)
 
+
 def test_an_empty_premise_scores_zero_rather_than_raising() -> None:
     class Never:
         def score(self, premise: str, hypothesis: str) -> float:  # pragma: no cover
             raise AssertionError("must not be called")
 
     assert score_over_chunks(Never(), "", "claim", evaluation=EvaluationConfig()) == 0.0
+
 
 class _Counting:
     """A scorer that answers deterministically and says how often it was asked."""
@@ -93,6 +99,7 @@ class _Counting:
         del hypothesis
         self.premises.append(premise)
         return 0.5 + 0.1 * len(self.premises)
+
 
 def test_an_untruncated_article_is_scored_once_and_not_twice() -> None:
     """The scorer is deterministic, so a second pass over one string cannot differ.
@@ -115,6 +122,7 @@ def test_an_untruncated_article_is_scored_once_and_not_twice() -> None:
 
     assert scorer.premises == [whole], "one identical string, one pass"
     assert seen == full
+
 
 def test_a_truncated_article_is_scored_against_both_texts() -> None:
     """The short-circuit must not swallow the case the column exists for."""

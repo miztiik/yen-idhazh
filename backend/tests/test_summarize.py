@@ -529,7 +529,7 @@ def test_exactly_one_function_spells_a_llama_server_flag() -> None:
     this search without anybody remembering to add it, and the file set is
     compared by equality rather than by membership. The workflow half of the
     same Oracle is
-    `test_workflows.test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
+    `workflows/test_model_server_jobs.py::test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
     """
     every_flag = llama_server_flags()
     assert "--ctx-size" in every_flag and "--no-context-shift" in every_flag

@@ -71,6 +71,7 @@ def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> N
     # kept them would cost more every year while the rows it reads are deleted.
     assert not expired[0].parent.exists()
 
+
 def test_the_fold_loses_no_total(tmp_path: Path) -> None:
     """The grain changes; the answer does not. A fold that loses a total is a failed fold."""
     state = a_state_tree(tmp_path)
@@ -90,6 +91,7 @@ def test_the_fold_loses_no_total(tmp_path: Path) -> None:
         assert totals_from_aggregate(folded) == totals_from_shard(texts), (
             f"{month} lost a total in the fold"
         )
+
 
 def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(
     tmp_path: Path,
@@ -113,6 +115,7 @@ def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(
     assert slowest is not None
     assert folded[0].sum_ms == 2 * slowest, "both copies of one item, added"
 
+
 def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Path) -> None:
     """An instrument that did not run writes an empty cell. Empty is not zero."""
     day = "2024-01-04"
@@ -134,6 +137,7 @@ def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Pa
     )
     assert folded[0].csv_row()["p50_ms"] == ""
 
+
 def test_a_percentile_is_a_number_some_item_really_took(tmp_path: Path) -> None:
     """Nearest rank, never interpolation. An invented millisecond count cannot be checked."""
     assert percentile([5], 0.5) == 5
@@ -143,6 +147,7 @@ def test_a_percentile_is_a_number_some_item_really_took(tmp_path: Path) -> None:
     assert percentile(list(range(1, 11)), 0.9) == 9
     with pytest.raises(ValueError):
         percentile([], 0.5)
+
 
 def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
     state = a_state_tree(tmp_path)
@@ -162,6 +167,7 @@ def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
     assert result.rows_folded > 0
     assert after == before
     assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists()
+
 
 def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
     tmp_path: Path,
@@ -187,6 +193,7 @@ def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
         == written
     )
 
+
 def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(
     tmp_path: Path,
 ) -> None:
@@ -209,6 +216,7 @@ def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(
     left = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
     assert left == [stem for stem in before if stem >= boundary]
 
+
 def test_the_window_is_counted_in_months_and_not_in_thirty_day_steps() -> None:
     """A month file is kept or dropped whole, so the arithmetic is in months."""
     assert oldest_month_kept(date(2026, 8, 30), 13) == "2025-08"
@@ -219,9 +227,11 @@ def test_the_window_is_counted_in_months_and_not_in_thirty_day_steps() -> None:
     with pytest.raises(ValueError):
         oldest_month_kept(date(2026, 8, 30), 0)
 
+
 #: The rest of what turns up beside a shard: the wrong width, no date at all,
 #: and a file whose real suffix is not the one being read.
 OTHER_STRAYS: Final = ("notes", "2025-1", "README", "2025-01.csv")
+
 
 def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: Path) -> None:
     """The row's oracle, on a tree built to hold exactly the two cases.
@@ -265,6 +275,7 @@ def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: P
     folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, expired_day[:7]))
     assert totals_from_aggregate(folded) == totals_from_shard([expired_text])
 
+
 def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
     """One rule for the two directories still filing by month. They used to carry three.
 
@@ -299,6 +310,7 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
 
     assert found == {name: ["2025-01", "2025-12"] for name in readers}
 
+
 def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
     """A directory this deletes from names what it recognises, never the rest."""
     directory = tmp_path / "state" / ledger.TELEMETRY_AGGREGATE_DIRNAME
@@ -308,11 +320,13 @@ def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -
 
     assert [path.name for path in month_shards(directory)] == ["2025-01.csv"]
 
+
 def test_an_empty_state_tree_folds_nothing_and_says_so(tmp_path: Path) -> None:
     """A fresh clone has no history, and no history is not an error."""
     result = prune_telemetry(tmp_path / "state", ObservabilityConfig(), TODAY)
     assert result.changed is False
     assert result.rows_folded == 0
+
 
 def a_published_tree(tmp_path: Path) -> tuple[Path, Path]:
     """A state tree and the browser's copy of every month in it.
@@ -324,6 +338,7 @@ def a_published_tree(tmp_path: Path) -> tuple[Path, Path]:
     public = tmp_path / "frontend" / "public" / "telemetry"
     publish_telemetry.publish(state_root=state, public_root=public)
     return state, public
+
 
 def test_the_browser_copy_goes_with_the_month_it_copies(tmp_path: Path) -> None:
     """One boundary, two trees. A copy nobody can check is worse than no copy.
@@ -345,6 +360,7 @@ def test_the_browser_copy_goes_with_the_month_it_copies(tmp_path: Path) -> None:
     ]
     for stem in result.public_deleted:
         assert not publish_telemetry.shard_path(public, stem).exists()
+
 
 def test_a_copy_whose_source_is_already_gone_is_still_taken(tmp_path: Path) -> None:
     """The case the fold loop cannot see, because there is nothing left to fold.
@@ -370,6 +386,7 @@ def test_a_copy_whose_source_is_already_gone_is_still_taken(tmp_path: Path) -> N
     assert not orphan.exists()
     assert live.exists()
 
+
 def test_a_dry_run_names_the_copy_it_would_take_and_leaves_it(tmp_path: Path) -> None:
     """The list a dry run prints is the list a live run removes, file for file.
 
@@ -393,6 +410,7 @@ def test_a_dry_run_names_the_copy_it_would_take_and_leaves_it(tmp_path: Path) ->
         if copy.exists():
             assert copy.read_bytes() == content, f"{name} was rewritten rather than left alone"
 
+
 def test_a_state_tree_with_no_site_beside_it_deletes_no_copy(tmp_path: Path) -> None:
     """`public_root` is None by default on purpose.
 
@@ -407,6 +425,7 @@ def test_a_state_tree_with_no_site_beside_it_deletes_no_copy(tmp_path: Path) -> 
 
     assert result.public_deleted == ()
     assert {path.name: path.read_bytes() for path in month_shards(public)} == held
+
 
 def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

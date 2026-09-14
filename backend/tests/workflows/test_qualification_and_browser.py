@@ -38,6 +38,7 @@ def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:
     assert "inputs.candidate_bytes" in script, "the declared byte count is checked too"
     assert step.get("if") is None, "a restored cache entry is checked as well"
 
+
 def test_the_qualification_uploads_no_article_body() -> None:
     """This repository is public. A frozen corpus is hashes and measurements;
     the article text stays on the runner that captured it and dies with it."""
@@ -46,6 +47,7 @@ def test_the_qualification_uploads_no_article_body() -> None:
     path = _mapping(upload.get("with"), "qualify upload 'with'").get("path")
     assert path == "backend/var/qualification/shard-*.json"
     assert "items" not in str(path)
+
 
 def test_the_whole_day_check_gets_its_own_build_and_never_the_canary() -> None:
     """`frontend/build` is one directory, and two builds write it.
@@ -70,6 +72,7 @@ def test_the_whole_day_check_gets_its_own_build_and_never_the_canary() -> None:
     assert builds and checks, "the job builds the real site and then looks at it"
     assert max(builds) < min(checks), "the build has to land before the spec opens the tree"
 
+
 def test_the_whole_day_check_is_bought_by_the_same_change_the_browser_half_is() -> None:
     """One allow-list, because it is one question about the published page.
 
@@ -81,6 +84,7 @@ def test_the_whole_day_check_is_bought_by_the_same_change_the_browser_half_is() 
 
     assert _job(workflow, "whole-day")["if"] == _job(workflow, "browser")["if"]
     assert _job(workflow, "whole-day")["needs"] == "scope"
+
 
 def _browser_install_jobs(
     workflows: Mapping[str, dict[str, object]],
@@ -101,6 +105,7 @@ def _browser_install_jobs(
             ):
                 found[(filename, job_name)] = steps
     return found
+
 
 def test_every_job_that_installs_a_browser_restores_it_from_one_shared_key() -> None:
     """The browser bytes are restored, and the two jobs share one entry.
@@ -159,6 +164,7 @@ def test_every_job_that_installs_a_browser_restores_it_from_one_shared_key() -> 
         f"{source_file}/{source_job} outputs",
     )
     assert outputs.get(source_output) == f"${{{{ steps.{source_step}.outputs.{source_output} }}}}"
+
 
 def test_the_browser_cache_key_names_a_version_the_lockfile_really_holds() -> None:
     """The reader is run against the committed lockfile, not just read.

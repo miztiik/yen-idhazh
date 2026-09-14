@@ -30,6 +30,7 @@ def sources_payload() -> dict[str, Any]:
     )
     return payload
 
+
 def test_a_retired_feed_cannot_sit_in_the_live_list() -> None:
     """The split is only real if the shape refuses the old arrangement.
 
@@ -41,6 +42,7 @@ def test_a_retired_feed_cannot_sit_in_the_live_list() -> None:
     payload["feeds"].append(payload["retired"].pop())
     with pytest.raises(ValueError, match="belongs in `retired`"):
         Sources.model_validate(payload)
+
 
 def test_a_live_feed_cannot_hide_on_the_tombstone_shelf() -> None:
     """The other direction, which is the quieter bug.
@@ -55,6 +57,7 @@ def test_a_live_feed_cannot_hide_on_the_tombstone_shelf() -> None:
     with pytest.raises(ValueError, match="without a retired status"):
         Sources.model_validate(payload)
 
+
 def test_yesterdays_sources_file_fails_loudly_and_names_the_key() -> None:
     """The migration ruling, pinned.
 
@@ -67,6 +70,7 @@ def test_yesterdays_sources_file_fails_loudly_and_names_the_key() -> None:
     legacy["feeds"].extend(legacy.pop("retired"))
     with pytest.raises(ValueError, match="`retired`"):
         Sources.model_validate(legacy)
+
 
 def test_an_id_is_unique_across_all_three_lists() -> None:
     """A duplicate id is what makes a published `source_id` ambiguous.
@@ -84,6 +88,7 @@ def test_an_id_is_unique_across_all_three_lists() -> None:
     with pytest.raises(ValueError, match="distinct"):
         Sources.model_validate(payload)
 
+
 def test_an_address_is_not_read_twice_under_two_ids() -> None:
     """Retiring a feed and re-adding it under a new id is a real editing move.
 
@@ -94,6 +99,7 @@ def test_an_address_is_not_read_twice_under_two_ids() -> None:
     payload["retired"][0]["url"] = payload["feeds"][0]["url"]
     with pytest.raises(ValueError, match="urls must be distinct"):
         Sources.model_validate(payload)
+
 
 def test_a_tombstone_still_answers_for_the_items_it_published() -> None:
     """`known_feeds` is the union both label maps read (`assemble.py`).
@@ -106,6 +112,7 @@ def test_a_tombstone_still_answers_for_the_items_it_published() -> None:
     known = {feed.id for feed in sources.known_feeds()}
     assert known == {feed.id for feed in sources.feeds} | {feed.id for feed in sources.retired}
     assert "example-defunct-daily" in known
+
 
 def test_the_lens_vocabulary_may_lose_an_entry_but_never_hold_one_twice() -> None:
     """What survived the retype, and what deliberately did not.
@@ -124,6 +131,7 @@ def test_the_lens_vocabulary_may_lose_an_entry_but_never_hold_one_twice() -> Non
     payload["lenses"].append(payload["lenses"][0])
     with pytest.raises(ValueError, match="lens ids must be distinct"):
         Taxonomy.model_validate(payload)
+
 
 def test_every_desk_ships_with_a_floor_and_a_ceiling() -> None:
     """A fresh clone runs on these, so they are the numbers a reader gets.
@@ -153,6 +161,7 @@ def test_every_desk_ships_with_a_floor_and_a_ceiling() -> None:
         "five ceilings that sum below one cannot all hold on any day"
     )
 
+
 def test_a_taxonomy_with_no_floor_and_no_ceiling_still_validates() -> None:
     """The schema gates shape and never contents, so neither key is required.
 
@@ -173,6 +182,7 @@ def test_a_taxonomy_with_no_floor_and_no_ceiling_still_validates() -> None:
             assert (desk.floor, desk.ceiling) == (0, 1.0), (
                 f"{stem}.json carries no bounds, so {desk.id} must read as having no rule"
             )
+
 
 def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:
     """The read-side half of the retype, on a record a run really wrote.
@@ -198,6 +208,7 @@ def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:
     assert "ai-roi" in retired, "the fixture stopped being the case this test is about"
     assert "ai-roi" not in taxonomy.lens_terms(), "a tombstone must stop matching"
 
+
 def test_an_id_the_committed_vocabulary_no_longer_names_still_reads() -> None:
     """The migration, stated as the thing it has to survive.
 
@@ -218,6 +229,7 @@ def test_an_id_the_committed_vocabulary_no_longer_names_still_reads() -> None:
 
     with pytest.raises(ValidationError):
         DigestItem.model_validate({**payload, "lenses": ["Supply Chain"]})
+
 
 def test_a_retired_event_reaches_no_prompt_and_stops_matching() -> None:
     """`status` is a control on an event too, and the block's bytes are the proof.
@@ -253,6 +265,7 @@ def test_a_retired_event_reaches_no_prompt_and_stops_matching() -> None:
     assert "ipo" not in offered.event_terms(), "a tombstone must stop matching"
     assert "funding" in offered.event_terms()
 
+
 def test_a_published_item_carrying_a_retired_event_still_reads() -> None:
     """The read-side half, and why retiring an event may not take a day's word away.
 
@@ -278,6 +291,7 @@ def test_a_published_item_carrying_a_retired_event_still_reads() -> None:
     assert item.events == [tombstone.id, "deal"]
     assert tombstone.display_name == "Stock market listing"
 
+
 def test_runs_are_append_only() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
     payload["runs"][1]["n"] = 3
@@ -285,11 +299,13 @@ def test_runs_are_append_only() -> None:
     with pytest.raises(ValueError, match="without gaps"):
         RunManifest.model_validate(payload)
 
+
 def test_run_counts_reconcile() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
     payload["runs"][0]["items_failed"] = 0
     with pytest.raises(ValueError, match="must equal planned"):
         RunManifest.model_validate(payload)
+
 
 def test_a_manifest_written_before_charts_were_counted_still_reads() -> None:
     """Section 11's release blocker for `charts_drafted`, tested against the key."""
@@ -297,6 +313,7 @@ def test_a_manifest_written_before_charts_were_counted_still_reads() -> None:
     for run in payload["runs"]:
         del run["charts_drafted"]
     assert [run.charts_drafted for run in RunManifest.model_validate(payload).runs] == [0, 0]
+
 
 def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> None:
     """A chart on the page was necessarily the chart the model asked for.
@@ -312,6 +329,7 @@ def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> 
     absent = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json"))
     del absent["drafted_chart"]
     assert VisualDecision.model_validate(absent).drafted_chart is False
+
 
 def test_a_visual_published_before_the_data_file_reads_as_carrying_none() -> None:
     """The read-side migration, proved by removing the key rather than by waiting.
@@ -336,6 +354,7 @@ def test_a_visual_published_before_the_data_file_reads_as_carrying_none() -> Non
 
     assert [item.visual.data_path for item in day.items if item.visual] == [None] * carried
 
+
 def test_a_rendered_decision_must_record_where_its_marks_landed() -> None:
     """The other half of the rule, one stage earlier.
 
@@ -349,6 +368,7 @@ def test_a_rendered_decision_must_record_where_its_marks_landed() -> None:
 
     with pytest.raises(ValueError, match="where its marks landed"):
         VisualDecision.model_validate(payload)
+
 
 def test_only_a_rendered_visual_carries_data() -> None:
     """A path to a file the renderer never wrote is a 404 the payload asked for."""
@@ -368,6 +388,7 @@ def _visual_data() -> dict[str, Any]:
     payload: dict[str, Any] = json.loads(read_text(VISUAL_DATA_FIXTURE))
     return payload
 
+
 def test_a_visual_data_document_states_the_renderer_it_was_compiled_for() -> None:
     """One home for the version, and this is it.
 
@@ -380,6 +401,7 @@ def test_a_visual_data_document_states_the_renderer_it_was_compiled_for() -> Non
 
     assert data.renderer_version == RENDERER_VERSION
     assert "renderer_version" not in data.marks[0].model_dump()
+
 
 def _derived(payload: dict[str, Any], value: str, unit: str | None) -> dict[str, Any]:
     """A chain of the shape `DerivedValue` declares, over elements the article has.
@@ -402,6 +424,7 @@ def _derived(payload: dict[str, Any], value: str, unit: str | None) -> dict[str,
         "bin_upper": None,
     }
 
+
 def test_a_mark_came_from_the_article_or_from_a_chain_and_never_from_neither() -> None:
     """A drawn number with no provenance is the thing this subsystem exists to refuse."""
     payload = _visual_data()
@@ -410,12 +433,14 @@ def test_a_mark_came_from_the_article_or_from_a_chain_and_never_from_neither() -
     with pytest.raises(ValueError, match="never both, and never neither"):
         VisualData.model_validate(payload)
 
+
 def test_a_mark_may_not_claim_two_provenances_at_once() -> None:
     payload = _visual_data()
     payload["marks"][0]["derived"] = _derived(payload, "1200", "mw")
 
     with pytest.raises(ValueError, match="never both, and never neither"):
         VisualData.model_validate(payload)
+
 
 def test_a_mark_that_says_nothing_and_measures_nothing_is_refused() -> None:
     """It would draw a bar with no name and no length. Nothing to look at."""
@@ -425,12 +450,14 @@ def test_a_mark_that_says_nothing_and_measures_nothing_is_refused() -> None:
     with pytest.raises(ValueError, match="names something or measures something"):
         VisualData.model_validate(payload)
 
+
 def test_a_unit_with_no_figure_beside_it_is_refused() -> None:
     payload = _visual_data()
     payload["marks"][0]["unit"] = "mw"
 
     with pytest.raises(ValueError, match="unit"):
         VisualData.model_validate(payload)
+
 
 def test_a_channel_that_names_a_mark_the_document_lacks_is_refused() -> None:
     """The browser would draw a bar short, and be right to."""
@@ -440,6 +467,7 @@ def test_a_channel_that_names_a_mark_the_document_lacks_is_refused() -> None:
     with pytest.raises(ValueError, match="does not carry"):
         VisualData.model_validate(payload)
 
+
 def test_a_mark_nothing_draws_is_refused_rather_than_shipped() -> None:
     """Bytes on the wire that reach no pixel. Either the plan or the channel is wrong."""
     payload = _visual_data()
@@ -447,6 +475,7 @@ def test_a_mark_nothing_draws_is_refused_rather_than_shipped() -> None:
 
     with pytest.raises(ValueError, match="no channel draws"):
         VisualData.model_validate(payload)
+
 
 def test_one_mark_may_not_be_drawn_in_two_channels() -> None:
     """A name that is also a length draws a bar whose label is its own size."""
@@ -456,6 +485,7 @@ def test_one_mark_may_not_be_drawn_in_two_channels() -> None:
     with pytest.raises(ValueError, match="two channels"):
         VisualData.model_validate(payload)
 
+
 def test_two_marks_may_not_share_an_id() -> None:
     """The channels address marks by id, so a repeat makes a channel ambiguous."""
     payload = _visual_data()
@@ -463,6 +493,7 @@ def test_two_marks_may_not_share_an_id() -> None:
 
     with pytest.raises(ValueError, match="share one id"):
         VisualData.model_validate(payload)
+
 
 def test_a_derived_mark_is_drawn_at_the_figure_its_chain_computed() -> None:
     """Otherwise the bar and the provenance under it are two different numbers."""
@@ -477,6 +508,7 @@ def test_a_derived_mark_is_drawn_at_the_figure_its_chain_computed() -> None:
     with pytest.raises(ValueError, match="chain computed"):
         VisualData.model_validate(payload)
 
+
 def test_a_later_run_appends_and_never_reorders() -> None:
     """Row 13's monotonicity rule, made mechanical."""
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
@@ -484,16 +516,19 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     with pytest.raises(ValueError, match="never reorders"):
         DigestDay.model_validate(payload)
 
+
 def test_a_partial_day_says_so() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json", partial=False)
     with pytest.raises(ValueError, match="partial"):
         DigestDay.model_validate(payload)
+
 
 def test_vertical_counts_agree_with_the_items() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     payload["verticals"][0]["count"] = 5
     with pytest.raises(ValueError, match="count disagrees"):
         DigestDay.model_validate(payload)
+
 
 def test_a_revision_names_the_run_that_wrote_it() -> None:
     """Either both revision fields are set or neither is. One of the two alone is a wrong join."""
@@ -509,6 +544,7 @@ def test_a_revision_names_the_run_that_wrote_it() -> None:
     with pytest.raises(ValueError, match="both updated_at and updated_by_run"):
         DigestDay.model_validate(payload)
 
+
 def test_a_revision_cannot_precede_the_run_that_introduced_the_item() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     payload["items"][2]["updated_at"] = "2026-08-21T18:00:00Z"
@@ -516,12 +552,14 @@ def test_a_revision_cannot_precede_the_run_that_introduced_the_item() -> None:
     with pytest.raises(ValueError, match="cannot precede"):
         DigestDay.model_validate(payload)
 
+
 def test_an_item_cannot_name_a_revising_run_the_day_never_recorded() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     payload["items"][0]["updated_at"] = "2026-08-21T18:00:00Z"
     payload["items"][0]["updated_by_run"] = 3
     with pytest.raises(ValueError, match="revised by a run that is not recorded"):
         DigestDay.model_validate(payload)
+
 
 def test_a_day_written_before_the_revision_field_still_loads() -> None:
     """Additive and null-defaulted, so no committed payload had to be rewritten."""

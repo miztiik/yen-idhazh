@@ -69,6 +69,7 @@ def test_every_committing_job_configures_the_same_identity() -> None:
         assert address is not None, f"{name} commits, so it must set user.email"
         assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
 
+
 @requires_bash
 @requires_space_free_paths
 @pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
@@ -95,6 +96,7 @@ def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) ->
     assert _git(origin, env, "log", "-1", "--format=%an <%ae>").strip() == COMMIT_IDENTITY
     assert _git(runner, env, "status", "--porcelain").strip() == ""
 
+
 @requires_bash
 def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) -> None:
     staged_paths, settings = _commit_call("plan")
@@ -109,6 +111,7 @@ def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) 
     assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
     assert _git(origin, env, "rev-parse", "main").strip() == before
     assert _git(runner, env, "rev-parse", "HEAD").strip() == before
+
 
 @requires_bash
 def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
@@ -137,6 +140,7 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     assert (runner / "leftover.log").is_file()
     assert _git(runner, env, "status", "--porcelain", "--untracked-files=no").strip() == ""
 
+
 @requires_bash
 def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     """What the rebuild step reads. A clean push left the tree it was handed.
@@ -158,6 +162,7 @@ def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     assert "push rejected" not in result.stdout
     assert _step_outputs(written) == {"rebased": "false"}
 
+
 @requires_bash
 def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
     """Nothing was pushed, so there is no new tree for a later step to read."""
@@ -172,6 +177,7 @@ def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
     assert _step_outputs(written) == {"rebased": "false"}
+
 
 @requires_bash
 def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
@@ -195,6 +201,7 @@ def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
     assert "push rejected, rebasing (attempt 1)" in result.stdout
     assert _step_outputs(written) == {"rebased": "true"}
 
+
 @requires_bash
 def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path) -> None:
     """The guard on the write, and it is what lets one copy of the script serve both.
@@ -215,6 +222,7 @@ def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path
     assert result.returncode == 0, result.stderr
     assert "GITHUB_OUTPUT" not in result.stderr, "an unset variable must not end the script"
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
+
 
 def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
     """Three exits return zero and a fixture reaches two of them.
@@ -248,6 +256,7 @@ def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
         assert any("report_rebased" in line for line in before), (
             f"line {index + 1} leaves without saying whether the checkout was rewritten"
         )
+
 
 @requires_bash
 def test_a_racing_append_to_the_same_ledger_unions_instead_of_conflicting(
@@ -283,6 +292,7 @@ def test_a_racing_append_to_the_same_ledger_unions_instead_of_conflicting(
     assert sorted(landed[1:]) == ["ours", "row-0", "theirs"]
     assert not _mid_rebase(runner)
 
+
 @requires_bash
 def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path) -> None:
     """The guard, proved by running it: no command in the loop can exit early.
@@ -311,6 +321,7 @@ def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path)
     assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == "retire the ledger"
     assert not _mid_rebase(runner)
+
 
 @requires_bash
 @requires_space_free_paths
@@ -389,6 +400,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     assert (runner / SUBSTITUTED_DAY_DIR / "assets" / "chart-1.svg").is_file()
     assert not _mid_rebase(runner)
 
+
 @requires_bash
 @requires_space_free_paths
 def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -> None:
@@ -462,6 +474,7 @@ def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -
         f'{{"item_id": "{fresh}"}}\n'
     )
     assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
+
 
 @requires_bash
 @requires_space_free_paths

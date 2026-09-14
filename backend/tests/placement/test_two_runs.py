@@ -57,6 +57,7 @@ def day_over_two_runs(first: int = 24, second: int = 12) -> list[DigestItem]:
         ),
     ]
 
+
 def test_a_later_run_appends_however_well_it_scored() -> None:
     """The rule `DigestDay` refuses a payload for breaking, held here first.
 
@@ -73,6 +74,7 @@ def test_a_later_run_appends_however_well_it_scored() -> None:
     assert introduced == sorted(introduced), "a later run's story moved above one already read"
     assert len(out) == len(day)
     assert {item.item_id for item in out} == {item.item_id for item in day}
+
 
 def test_the_desk_rules_see_the_whole_day_and_not_one_runs_block() -> None:
     """A ceiling is a share of the day, so a day split in two is still one day.
@@ -92,6 +94,7 @@ def test_the_desk_rules_see_the_whole_day_and_not_one_runs_block() -> None:
     assert counted["ai"] <= int(BOUNDS["ai"].ceiling * len(day)), "ai is over the day's ceiling"
     assert set(counted) == set(DESKS), "the ceiling did not reach every desk it opened"
     assert counted == filed(refile(stream_order(day), bounds=BOUNDS))
+
 
 def test_the_day_validates_as_a_payload_after_the_frame_has_run() -> None:
     """The contract itself is the oracle, because the contract is what broke.
@@ -126,6 +129,7 @@ def test_the_day_validates_as_a_payload_after_the_frame_has_run() -> None:
 
     assert [item.item_id for item in built.items] == [item.item_id for item in out]
 
+
 def test_the_head_is_the_pages_head_and_not_each_blocks() -> None:
     """One framed head a day, at the top, filled by whoever got there first.
 
@@ -142,6 +146,7 @@ def test_the_head_is_the_pages_head_and_not_each_blocks() -> None:
     second = [item for item in out if item.introduced_by_run == 2]
     expected = stream_order([item for item in day if item.introduced_by_run == 2])
     assert [item.item_id for item in second] == [item.item_id for item in expected]
+
 
 def test_a_thin_first_run_leaves_the_rest_of_the_head_to_the_second() -> None:
     """The head is a count of the day's slots, so a short first block does not waste them.

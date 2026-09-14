@@ -812,7 +812,7 @@ spread, and a Linux runner installs a different wheel.
 **`shellcheck` cannot read a `run:` body**, because a `run:` body is a string
 inside YAML, not a file. The tool that can read one is `actionlint`, a Go binary
 this repository does not fetch. The inline shell is held by the contract tests
-in `backend/tests/test_workflows.py` instead, which execute the real steps
+in `backend/tests/workflows/` instead, which execute the real steps
 rather than grep them.
 
 ## Repository settings these workflows depend on

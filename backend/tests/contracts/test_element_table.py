@@ -37,6 +37,7 @@ def _element_payload(path: Path, index: int = 0) -> dict[str, Any]:
     element: dict[str, Any] = payload["elements"][index]
     return element
 
+
 def test_an_element_carrying_only_its_tier_one_fields_validates() -> None:
     """The first half of the oracle. Nine keys, no judgement, and it loads."""
     element = {
@@ -46,6 +47,7 @@ def test_an_element_carrying_only_its_tier_one_fields_validates() -> None:
     }
     assert set(element) == set(TIER_ONE_FIELDS)
     assert Element.model_validate(element).extractor is Extractor.REGEX
+
 
 @pytest.mark.parametrize("missing", TIER_ONE_FIELDS)
 def test_a_tier_two_field_with_no_tier_one_anchor_is_refused(missing: str) -> None:
@@ -58,17 +60,20 @@ def test_a_tier_two_field_with_no_tier_one_anchor_is_refused(missing: str) -> No
     with pytest.raises(ValidationError, match=missing):
         Element.model_validate(element)
 
+
 def test_the_generated_schema_requires_tier_one_and_nothing_else() -> None:
     """The split is machine-checked rather than promised in a docstring."""
     required = ElementTable.json_schema()["$defs"]["Element"]["required"]
     assert sorted(required) == sorted(TIER_ONE_FIELDS)
     assert not set(required) & set(TIER_TWO_FIELDS)
 
+
 def test_every_element_field_belongs_to_exactly_one_tier() -> None:
     """A field added without a tier is a field with no trust story. The module
     refuses to import in that state; this is the readable half of that guard."""
     assert tuple(Element.model_fields) == TIER_ONE_FIELDS + TIER_TWO_FIELDS
     assert not set(TIER_ONE_FIELDS) & set(TIER_TWO_FIELDS)
+
 
 def test_the_contract_covers_six_kinds_though_two_have_producers() -> None:
     assert {kind.value for kind in ElementKind} == {
@@ -79,6 +84,7 @@ def test_the_contract_covers_six_kinds_though_two_have_producers() -> None:
         "quote",
         "claim",
     }
+
 
 def test_span_excerpt_is_the_verbatim_slice_and_a_cleaned_string_is_refused() -> None:
     """`visual_planner.NumericFact.raw` is `currency + sign + digits`, whitespace
@@ -92,11 +98,13 @@ def test_span_excerpt_is_the_verbatim_slice_and_a_cleaned_string_is_refused() ->
     with pytest.raises(ValidationError, match="verbatim slice"):
         Element.model_validate(raw_shaped)
 
+
 def test_element_id_is_rebuilt_not_trusted() -> None:
     element = _element_payload(Path("regex-only.json"))
     relabelled = dict(element, element_id=f"quantity-0-{element['span_end']}")
     with pytest.raises(ValidationError, match="element_id"):
         Element.model_validate(relabelled)
+
 
 def test_only_a_measured_kind_reads_as_a_value() -> None:
     """A quote has no number, and a shape that let one be written is the shape
@@ -114,6 +122,7 @@ def test_only_a_measured_kind_reads_as_a_value() -> None:
     with pytest.raises(ValidationError, match="value"):
         Element.model_validate(quote)
 
+
 def test_a_date_may_not_carry_a_resolved_relative_reference() -> None:
     """"Three years ago" resolves against a publication date the article never
     wrote. The grammar refuses it at the shape, so no producer can write one by
@@ -122,6 +131,7 @@ def test_a_date_may_not_carry_a_resolved_relative_reference() -> None:
     assert date_element["kind"] == "date"
     with pytest.raises(ValidationError, match="value"):
         Element.model_validate(dict(date_element, value="three years ago"))
+
 
 def test_a_judged_field_names_who_judged_it() -> None:
     """Tier 2 is a claim somebody made. A claim with no author cannot be measured
@@ -135,6 +145,7 @@ def test_a_judged_field_names_who_judged_it() -> None:
     with pytest.raises(ValidationError, match="label_source"):
         Element.model_validate(unjudged | {"label_source": "qwen35-9b"})
 
+
 def test_a_span_past_the_end_of_the_text_is_refused() -> None:
     """The table carries the length of the string its spans index, so the shape
     can refuse an offset that points nowhere without holding the text."""
@@ -145,6 +156,7 @@ def test_a_span_past_the_end_of_the_text_is_refused() -> None:
     with pytest.raises(ValidationError, match="ends past"):
         ElementTable.model_validate(payload)
 
+
 def test_one_kind_and_one_span_is_one_fact() -> None:
     payload: dict[str, Any] = json.loads(
         read_text(CONTRACT_FIXTURES_DIR / "element-table" / "regex-only.json")
@@ -153,6 +165,7 @@ def test_one_kind_and_one_span_is_one_fact() -> None:
     with pytest.raises(ValidationError, match="one address"):
         ElementTable.model_validate(payload)
 
+
 def test_the_table_reads_in_the_order_the_article_was_written() -> None:
     payload: dict[str, Any] = json.loads(
         read_text(CONTRACT_FIXTURES_DIR / "element-table" / "regex-only.json")
@@ -160,6 +173,7 @@ def test_the_table_reads_in_the_order_the_article_was_written() -> None:
     payload["elements"] = list(reversed(payload["elements"]))
     with pytest.raises(ValidationError, match="span_start"):
         ElementTable.model_validate(payload)
+
 
 def test_the_element_table_holds_one_hash_for_the_whole_article() -> None:
     """Decision 6, made mechanical: the hash is a field of the table and no
@@ -181,6 +195,7 @@ def _element_table_payload() -> dict[str, Any]:
     )
     return payload
 
+
 def _text_the_table_indexes(payload: dict[str, Any]) -> str:
     """A string of the length the table names, with every excerpt at its own offset."""
     characters = ["."] * payload["source_text_length"]
@@ -188,10 +203,12 @@ def _text_the_table_indexes(payload: dict[str, Any]) -> str:
         characters[element["span_start"] : element["span_end"]] = element["span_excerpt"]
     return "".join(characters)
 
+
 def test_a_committed_table_re_slices_against_the_text_its_spans_describe() -> None:
     """The invariant at rest. Without this the two tests below prove nothing."""
     payload = _element_table_payload()
     assert ElementTable.model_validate(payload).span_drift(_text_the_table_indexes(payload)) is None
+
 
 def test_a_same_width_excerpt_passes_the_shape_and_fails_the_re_slice() -> None:
     """What row 4 adds over row 1, in one comparison.
@@ -211,6 +228,7 @@ def test_a_same_width_excerpt_passes_the_shape_and_fails_the_re_slice() -> None:
     assert drift is not None
     assert drift.startswith(misread.elements[0].element_id)
 
+
 def test_a_text_that_moved_by_one_character_names_the_first_span_that_moved() -> None:
     """The reason is a log line, so it carries no fetched bytes (Guardrail #11) - the
     element's own address and the two lengths, which say what moved and by how
@@ -225,6 +243,7 @@ def test_a_text_that_moved_by_one_character_names_the_first_span_that_moved() ->
     assert f"{table.source_text_length} characters" in drift
     assert str(len(moved)) in drift
     assert table.elements[0].span_excerpt not in drift
+
 
 def test_the_re_slice_added_no_field_to_the_persisted_shape() -> None:
     """The text a span indexes is not in the payload and is not going into it -

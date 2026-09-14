@@ -43,16 +43,19 @@ pytestmark = pytest.mark.slow
 def test_an_absent_site_measures_as_nothing(tmp_path: Path) -> None:
     assert measure(tmp_path / "missing").bytes_used == 0
 
+
 def test_the_site_is_measured_every_run(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp", "b-0000000002.webp"]})
     size = measure(root)
     assert size.files == 3
     assert size.bytes_used > 2000
 
+
 def test_the_alarm_fires_below_the_platform_ceiling(tmp_path: Path) -> None:
     """There has to be room to act between the alarm and the wall."""
     config = RetentionConfig()
     assert config.site_budget_mb < PAGES_HARD_CAP_MB
+
 
 def test_the_alarm_buys_the_days_it_was_derived_to_buy() -> None:
     """Below the ceiling is not the property that matters. Days of warning is.
@@ -68,6 +71,7 @@ def test_the_alarm_buys_the_days_it_was_derived_to_buy() -> None:
         f"docs/reference/measurements.md before changing it here"
     )
 
+
 def test_the_shipped_alarm_point_is_the_derived_one() -> None:
     """The derivation, not the round number. 800 MB buys 14 days at the measured rate.
 
@@ -79,9 +83,11 @@ def test_the_shipped_alarm_point_is_the_derived_one() -> None:
     assert RetentionConfig().site_budget_mb == 800
     assert days_of_warning(800, FASTEST_MEASURED_KB_PER_DAY) == 14
 
+
 def test_a_ceiling_hugging_alarm_would_fail_this_check() -> None:
     """The case a bare `< PAGES_HARD_CAP_MB` assertion lets through."""
     assert days_of_warning(PAGES_HARD_CAP_MB - 1, FASTEST_MEASURED_KB_PER_DAY) == 0
+
 
 def test_the_alarm_only_reports(tmp_path: Path) -> None:
     """It is an alarm, not a gate: it says yes and deletes nothing."""
@@ -91,9 +97,11 @@ def test_the_alarm_only_reports(tmp_path: Path) -> None:
     assert over_budget(before, RetentionConfig(site_budget_mb=1)) is True
     assert measure(root) == before
 
+
 def test_a_small_site_is_not_over_budget(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
     assert not over_budget(measure(root), RetentionConfig())
+
 
 def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
     """The words the run logs: None below the budget, a headroom line above it."""
@@ -106,9 +114,11 @@ def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
     assert "alarm point" in line
     assert "Pages cap" in line
 
+
 def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a-0000000001.webp"]})
     assert headroom_mb(measure(root)) == pytest.approx(PAGES_HARD_CAP_MB, abs=1)
+
 
 #: The item ceiling in force. Read from the config rather than copied beside it:
 #: a copy said 160 while the knob said 80, and its own record said it would notice.
@@ -124,6 +134,7 @@ def sized_tree(root: Path, weights: dict[str, int]) -> Path:
         target.write_bytes(b"x" * count)
     return root
 
+
 def staged_days(root: Path, days: dict[str, int]) -> Path:
     """Day payloads where the built tree keeps them, carrying a stated item count."""
     for day, count in days.items():
@@ -134,6 +145,7 @@ def staged_days(root: Path, days: dict[str, int]) -> Path:
             encoding="utf-8",
         )
     return root
+
 
 def test_the_split_sums_to_the_total_and_names_what_grew(tmp_path: Path) -> None:
     """One sum cannot say whether the visuals grew or the telemetry did.
@@ -163,11 +175,13 @@ def test_the_split_sums_to_the_total_and_names_what_grew(tmp_path: Path) -> None
     assert size.files == 5
     assert heaviest_directories(size, limit=2) == [("_app", 40_000), ("digest", 12_000)]
 
+
 def test_published_items_are_counted_from_the_tree_that_was_measured(tmp_path: Path) -> None:
     """Bytes and items have to come from one corpus, or the rate divides two."""
     root = staged_days(tmp_path / "build", {"2026-08-21": 3, "2026-08-22": 5})
     assert count_published_items(root) == 8
     assert count_published_items(tmp_path / "never-built") == 0
+
 
 def reads_during(work: Callable[[], object]) -> int:
     """How many files an operation asks for a size.
@@ -190,6 +204,7 @@ def reads_during(work: Callable[[], object]) -> int:
         work()
     return seen
 
+
 def test_a_retracted_deletion_equals_an_independent_walk(tmp_path: Path) -> None:
     """The oracle. A total carried forward has to agree with one taken fresh.
 
@@ -207,6 +222,7 @@ def test_a_retracted_deletion_equals_an_independent_walk(tmp_path: Path) -> None
         path.unlink()
 
     assert before.minus(root, sizes) == measure(root)
+
 
 def test_maintaining_the_total_does_not_read_more_as_the_tree_grows(tmp_path: Path) -> None:
     """Guardrail #12, counted. The walk grows with the archive and the retraction does not."""
@@ -231,6 +247,7 @@ def test_maintaining_the_total_does_not_read_more_as_the_tree_grows(tmp_path: Pa
         reads_during(lambda: carried_large.minus(large, {large / "2026/08/01/p-0000000000.webp": 1000})) == 0
     )
 
+
 def test_the_runway_is_headroom_over_the_marginal_rate(tmp_path: Path) -> None:
     """The row's whole point. A megabyte figure is a level, and no level has a date in it.
 
@@ -254,6 +271,7 @@ def test_the_runway_is_headroom_over_the_marginal_rate(tmp_path: Path) -> None:
     assert days_to_alarm(size, config, ITEMS_PER_DAY) == pytest.approx(to_alarm)
     assert to_alarm < to_cap, "the alarm has to arrive before the wall or it buys nothing"
 
+
 def test_a_runway_from_nothing_raises_rather_than_reading_as_forever(tmp_path: Path) -> None:
     """Zero published items divides into infinite runway, which reads as safety.
 
@@ -274,6 +292,7 @@ def test_a_runway_from_nothing_raises_rather_than_reading_as_forever(tmp_path: P
     with pytest.raises(ValueError):
         days_to_cap(real, 0)
 
+
 def test_the_step_reports_the_rate_and_the_runway(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -290,6 +309,7 @@ def test_the_step_reports_the_rate_and_the_runway(
     assert "published days to the 800 MB alarm point" in printed
     assert "MB Pages cap" in printed
 
+
 def test_a_tree_with_no_day_payloads_says_unknown_rather_than_a_comfortable_number(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -299,6 +319,7 @@ def test_a_tree_with_no_day_payloads_says_unknown_rather_than_a_comfortable_numb
         assert stage_site_weight(tree, RetentionConfig(), items_per_day=ITEMS_PER_DAY) == 0
     assert "site-weight runway: unknown" in caplog.text
 
+
 def built_site(root: Path, megabytes: int) -> Path:
     """A stand-in for `frontend/build`: prerendered pages of a stated weight."""
     page = root / "2026-08-24"
@@ -306,9 +327,11 @@ def built_site(root: Path, megabytes: int) -> Path:
     (page / "index.html").write_bytes(b"x" * megabytes * BYTES_PER_MB)
     return root
 
+
 def test_a_site_inside_budget_passes_quietly(tmp_path: Path) -> None:
     tree = built_site(tmp_path / "build", 3)
     assert stage_site_weight(tree, RetentionConfig()) == 0
+
 
 def test_the_alarm_fires_when_the_built_site_crosses_the_alarm_point(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -328,6 +351,7 @@ def test_the_alarm_fires_when_the_built_site_crosses_the_alarm_point(
     assert "2 MB alarm point" in printed
     assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in printed
 
+
 def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -338,7 +362,7 @@ def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(
     through config, because that is now the only way to move it - the step reads
     `retention.pages_hard_cap_mb` and takes no override.
 
-    This is also the permitted arm of the bound. `test_contracts.py` holds the
+    This is also the permitted arm of the bound. `contracts/test_app_config.py` holds
     refusal, and neither arm alone is a bound: one shows the number can be lowered
     and the other shows it cannot be raised.
     """
@@ -346,6 +370,7 @@ def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(
     with caplog.at_level(logging.ERROR, logger="idhazh"):
         assert stage_site_weight(tree, RetentionConfig(pages_hard_cap_mb=2)) == 1
     assert "2 MB Pages cap" in caplog.text, "the failure names the cap that stopped it"
+
 
 def test_lowering_the_cap_moves_the_gate_and_the_headroom_it_prints(tmp_path: Path) -> None:
     """The same tree, two caps, two answers - and the alarm point unmoved.
@@ -371,6 +396,7 @@ def test_lowering_the_cap_moves_the_gate_and_the_headroom_it_prints(tmp_path: Pa
     assert "500 MB Pages cap" in lowered
     assert shipped != lowered, "the headroom the alarm prints is headroom to the cap in force"
 
+
 def test_the_cap_line_says_what_it_costs_and_what_to_do() -> None:
     """The two words a person needs are the size and the ceiling it passed."""
     inside = SiteSize(700 * BYTES_PER_MB, 4)
@@ -385,6 +411,7 @@ def test_the_cap_line_says_what_it_costs_and_what_to_do() -> None:
     assert "1100 MB" in line
     assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in line
 
+
 def test_a_site_measured_as_nothing_fails_rather_than_passes(tmp_path: Path) -> None:
     """Zero bytes clears every ceiling, which reads exactly like a healthy site.
 
@@ -396,6 +423,7 @@ def test_a_site_measured_as_nothing_fails_rather_than_passes(tmp_path: Path) -> 
     empty.mkdir()
     assert stage_site_weight(empty, RetentionConfig()) == 1
 
+
 def test_the_gate_has_no_default_tree() -> None:
     """A default is how this came to measure the committed payloads.
 
@@ -405,6 +433,7 @@ def test_the_gate_has_no_default_tree() -> None:
     with pytest.raises(SystemExit) as exit_code:
         main(["site-weight"])
     assert exit_code.value.code == 2
+
 
 def test_the_committed_payload_tree_is_not_the_site(tmp_path: Path) -> None:
     """The two trees the defect confused, measured against each other.

@@ -77,6 +77,7 @@ def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:
     ).replace(_expression("env.LLAMA_CPP_BUILD"), PINNED_LLAMA_BUILD)
     assert "${{" not in composed, "every half of the key must resolve"
 
+
 def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> None:
     """Row #13a. Minutes rather than the bench's hours, and nothing it writes is committed.
 
@@ -119,6 +120,7 @@ def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> N
                 f"{BUDGETS_JOB}/{step.get('name')} writes into {destination}"
             )
 
+
 def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
     """Both arms, ninety days each.
 
@@ -135,6 +137,7 @@ def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
         upload = _artifact_upload(workflow, job_name, artifact)
         with_block = _mapping(upload.get("with"), f"{job_name} upload")
         assert int(str(with_block["retention-days"])) == BENCH_RETENTION_DAYS, job_name
+
 
 def test_the_bench_measures_a_candidate_without_touching_the_committed_config() -> None:
     """A scratch copy differs in the active model file and in nothing else.
@@ -179,6 +182,7 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
             assert not re.search(r">\s*config/", body), f"{where} writes the committed config"
             assert "docs/reference/models" not in body, f"{where} writes a committed page"
 
+
 def test_the_server_arm_reads_the_raw_arm_and_emits_a_page_to_paste() -> None:
     """The Oracle for this arm. Two artifacts of numbers are a transcription job.
 
@@ -210,6 +214,7 @@ def test_the_server_arm_reads_the_raw_arm_and_emits_a_page_to_paste() -> None:
     assert "--dossier backend/var/" in script
     assert names.index("Measure runtime candidate") < names.index(BENCH_EMIT_STEP)
     assert names.index(BENCH_EMIT_STEP) < names.index("Upload runtime sweep")
+
 
 def test_the_raw_arm_refuses_weights_the_dispatch_did_not_declare() -> None:
     """The raw arm downloads inside Python, so its byte check is a flag not a step.

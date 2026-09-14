@@ -28,6 +28,7 @@ def test_changing_the_desk_cap_changes_the_order_with_no_source_edit() -> None:
     assert tight != loose
     assert sorted(tight) == sorted(loose)
 
+
 def test_changing_the_no_repeat_window_changes_the_order() -> None:
     day = lopsided_day()
     narrow = [item.item_id for item in placed(day, config=frame(head_no_repeat=0))]
@@ -36,6 +37,7 @@ def test_changing_the_no_repeat_window_changes_the_order() -> None:
     assert narrow != wide
     assert sorted(narrow) == sorted(wide)
 
+
 def test_a_head_of_zero_switches_the_frame_off() -> None:
     """An operator can publish the score's order whole and see what it looks like."""
     day = lopsided_day()
@@ -43,10 +45,12 @@ def test_a_head_of_zero_switches_the_frame_off() -> None:
 
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
 
+
 def test_a_no_repeat_window_wider_than_the_head_is_refused() -> None:
     """A rule that governs slots the frame does not reach reads as live and is not."""
     with pytest.raises(ValueError, match="cannot be wider than head_items"):
         PlacementConfig(head_items=10, head_no_repeat=11)
+
 
 def test_the_frame_counts_the_desk_the_rules_left_the_story_on() -> None:
     """`place` re-files before it frames, and the order between them matters.
@@ -65,6 +69,7 @@ def test_the_frame_counts_the_desk_the_rules_left_the_story_on() -> None:
     assert Counter(desk_of(item) for item in unbounded) == {"ai": 20}
     assert max(Counter(desk_of(item) for item in bounded).values()) <= config.max_desk_in_head
     assert len({desk_of(item) for item in bounded}) == 5
+
 
 def test_the_committed_defaults_are_the_ones_that_were_ruled_on() -> None:
     """A fresh clone runs on these, so they are the numbers that ship."""

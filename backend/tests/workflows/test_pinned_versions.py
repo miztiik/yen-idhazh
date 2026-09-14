@@ -43,6 +43,7 @@ def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
         assert env.get("LLAMA_CPP_ASSET") == PINNED_LLAMA_ASSET, filename
         assert env.get("LLAMA_CPP_SHA256") == PINNED_LLAMA_SHA256, filename
 
+
 def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:
     workflows = _load_workflows()
 
@@ -57,10 +58,12 @@ def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:
             assert RELEASE_LOOKUP_FORM in script, f"{where} must fail on an HTTP error"
             assert WEIGHTS_FETCH_FORM in script, f"{where} must fail on an HTTP error"
 
+
 def test_no_workflow_takes_whichever_llama_cpp_release_is_newest() -> None:
     """The list endpoint hands back a different binary on every cache eviction."""
     for path in sorted((*WORKFLOWS_DIR.glob("*.yml"), *WORKFLOWS_DIR.glob("*.yaml"))):
         assert "releases?per_page" not in read_text(path), path.name
+
 
 def test_every_action_is_pinned_to_an_approved_major() -> None:
     """GitHub retired Node 20 on the runners.
@@ -81,6 +84,7 @@ def test_every_action_is_pinned_to_an_approved_major() -> None:
             assert action in APPROVED_ACTION_MAJORS, f"{where} uses unapproved {action}"
             expected = APPROVED_ACTION_MAJORS[action]
             assert version == expected, f"{where} must use {action}@{expected}, not {uses}"
+
 
 def test_every_setup_python_pin_is_inside_the_declared_interpreter_range() -> None:
     """`requires-python` is the only thing that refuses an interpreter early.

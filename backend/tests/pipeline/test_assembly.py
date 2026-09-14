@@ -40,6 +40,7 @@ def test_the_counterweights_alone_never_claim_the_top_band() -> None:
         is ConfidenceBand.MEDIUM
     )
 
+
 def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
     assert (
         band(
@@ -51,6 +52,7 @@ def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
         )
         is ConfidenceBand.LOW
     )
+
 
 def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_medium() -> None:
     assert (
@@ -64,6 +66,7 @@ def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_medium() -> None:
         is ConfidenceBand.MEDIUM
     )
 
+
 def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """The first real runner attempt died here: a transformers upgrade broke the
     checkpoint's own modelling code and all four workers exited before
@@ -75,6 +78,7 @@ def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> N
 
     monkeypatch.setattr("idhazh.evals.hhem.HhemScorer.load", explode)
     assert cli._scorer(enabled=True) is None
+
 
 def test_a_dead_model_server_marks_every_item_without_parsing(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -103,6 +107,7 @@ def test_a_dead_model_server_marks_every_item_without_parsing(
     details = [summary.failure_detail or "" for summary in summaries]
     assert all("JSONDecodeError" not in detail for detail in details)
     assert all("shape" not in detail for detail in details)
+
 
 def test_a_hung_model_request_costs_one_item_not_the_shard(
     tmp_path: Path, monkeypatch: MonkeyPatch

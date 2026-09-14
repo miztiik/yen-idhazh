@@ -34,11 +34,14 @@ FULL_TEXT = (
 def article() -> Article:
     return Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
 
+
 def summary() -> Summary:
     return Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
 
+
 def plan() -> RunPlan:
     return RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
+
 
 def row(**overrides: object) -> EvalRow:
     item = plan().items[0]
@@ -58,12 +61,14 @@ def row(**overrides: object) -> EvalRow:
     )
     return built.model_copy(update=overrides) if overrides else built
 
+
 def closed_loopback_endpoint() -> str:
     """Return a loopback port that refused a real socket before the test used it."""
     with socket.socket() as server:
         server.bind(("127.0.0.1", 0))
         port = int(server.getsockname()[1])
     return f"http://127.0.0.1:{port}/v1/chat/completions"
+
 
 class HangingLoopbackEndpoint:
     """A real local socket that accepts requests and never writes a response."""
@@ -113,6 +118,7 @@ class HangingLoopbackEndpoint:
         finally:
             connection.close()
 
+
 def captured_article_fetch(_url: str) -> FetchResult:
     page = read_text(FIXTURES_DIR / "pages" / "article.html")
     extra = (
@@ -124,6 +130,7 @@ def captured_article_fetch(_url: str) -> FetchResult:
     )
     body = page.replace("</article>", f"{extra}</article>").encode("utf-8")
     return FetchResult(FetchOutcome.OK, status=200, body=body)
+
 
 def drawable_article_fetch(_url: str) -> FetchResult:
     """A captured page a bar chart can actually be drawn from.
@@ -138,6 +145,7 @@ def drawable_article_fetch(_url: str) -> FetchResult:
     """
     page = read_text(FIXTURES_DIR / "pages" / "wind.html")
     return FetchResult(FetchOutcome.OK, status=200, body=page.encode("utf-8"))
+
 
 def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
     """A different story for every run, and a later run's story outscores the rest.
@@ -172,6 +180,7 @@ def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
         }
     )
 
+
 def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Point every output root and every committed ledger at the test's own tree.
 
@@ -184,6 +193,7 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
+
 
 def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
     """One whole run over captured pages, with no model and no network (Guardrail #7).
@@ -201,6 +211,7 @@ def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
     )
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
+
 def score_one_item(items_dir: Path, run_plan: RunPlan) -> None:
     """Stand in for the scorer, which needs weights this suite does not download."""
     item = run_plan.items[0]
@@ -208,6 +219,7 @@ def score_one_item(items_dir: Path, run_plan: RunPlan) -> None:
     (items_dir / f"{item.item_id}.summary.json").write_text(scored.to_json(), encoding="utf-8")
     evaluated = row(url_key=item.url_key)
     (items_dir / f"{item.item_id}.eval.json").write_text(evaluated.to_json(), encoding="utf-8")
+
 
 def _work_stage(
     tmp_path: Path,
@@ -235,6 +247,7 @@ def _work_stage(
             model_endpoint=server.endpoint,
         )
     return run_plan, tmp_path / "run" / run_plan.date / "items", server
+
 
 def worked(
     tmp_path: Path,

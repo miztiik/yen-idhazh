@@ -27,6 +27,7 @@ CONFIG_FILES: dict[str, type[Contract]] = {
     "watchlist.json": Watchlist,
 }
 
+
 #: A digest, at the two widths this project ever writes one: a sha256 is 64 hex
 #: characters and a truncated one is 32. The guard used to read `[0-9a-f]{16,}`,
 #: which an item id can satisfy by accident - sixteen Crockford base32 symbols
@@ -35,12 +36,14 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 #: bisect. Matching the width says what the rule always meant.
 HEX_DIGEST = re.compile(r"(?<![0-9a-z])(?:[0-9a-f]{64}|[0-9a-f]{32})(?![0-9a-z])")
 
+
 #: Four real `GET /metrics` bodies, one per work shard of run `2026-08-26-5`,
 #: pulled from that run's `runtime-log-*` artifacts before they expired. Real
 #: captures rather than hand-written text (Guardrail #7): the upstream README at tag
 #: b10598 lists neither `prompt_tokens_cached_total` nor the wording that says
 #: what `prompt_tokens_total` counts, so only the binary's own output settles it.
 METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
+
 
 #: The memory sampler's own files and the head of llama-server's own log, one
 #: pair per work shard of run `2026-08-29-3`, pulled from that run's
@@ -52,6 +55,7 @@ RSS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.rss-
 
 SERVER_LOG_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt"))
 
+
 #: One real `/proc/stat` pair, twenty seconds apart, captured on a GitHub-hosted
 #: `ubuntu-latest` runner on 2026-08-30. The gap is what makes it an oracle: the
 #: tick delta has to reproduce twenty seconds of four processors at 100 Hz, and
@@ -59,6 +63,7 @@ SERVER_LOG_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard
 PROC_STAT_AT_START = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-start.txt"
 
 PROC_STAT_AT_END = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-end.txt"
+
 
 #: What the probe slept for, what the runner reported to `nproc`, and the
 #: kernel's tick rate. Guardrail #2 fixes the second at 4.
@@ -68,13 +73,16 @@ PROBE_PROCESSORS = 4
 
 USER_HZ = 100
 
+
 #: The two pages that spell the item-health failure vocabulary out by hand.
 DOC_ITEM_HEALTH = REPO_ROOT / "docs" / "architecture" / "sources" / "item-health.md"
 
 DOC_ONE_URL = REPO_ROOT / "docs" / "how-to" / "troubleshoot-one-url.md"
 
+
 def backticked(text: str) -> set[str]:
     return set(re.findall(r"`([a-z_]+)`", text))
+
 
 def paragraph_after(text: str, lead: str) -> str:
     _, found, rest = text.partition(lead)
@@ -99,18 +107,23 @@ def committed_models_raw() -> dict[str, Any]:
     payload: dict[str, Any] = json.loads(read_text(CONFIG_DIR / app.models_file))
     return payload
 
+
 def committed_models() -> ModelsConfig:
     """The same file, validated - what `config.load` puts on `Settings.models`."""
     return ModelsConfig.model_validate(committed_models_raw())
 
+
 def fixture_paths() -> list[Path]:
     return sorted(CONTRACT_FIXTURES_DIR.glob("*/*.json"))
+
 
 def fixture_id(path: Path) -> str:
     return f"{path.parent.name}/{path.stem}"
 
+
 def load(path: Path) -> Contract:
     return BY_STEM[path.parent.name].from_json(read_text(path))
+
 
 def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
     """A whole `config/` in a temp directory, with the active model file replaced.
@@ -129,6 +142,7 @@ def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
         (target / pointer).write_text(canonical_json(models), encoding="utf-8", newline="\n")
     return pointer
 
+
 def entry_with(**turns: Any) -> dict[str, Any]:
     """The committed entry with its turn envelope edited, as raw JSON.
 
@@ -139,6 +153,7 @@ def entry_with(**turns: Any) -> dict[str, Any]:
     payload = committed_models_raw()
     payload["summarize"]["turns"] |= turns
     return payload
+
 
 def swapped_summarizer() -> dict[str, Any]:
     """The committed model file with `summarize` pointed at other weights.
@@ -160,22 +175,27 @@ def swapped_summarizer() -> dict[str, Any]:
     }
     return raw
 
+
 def desk(**overrides: Any) -> dict[str, Any]:
     """One vertical of a plan, spelled the way an earlier build wrote it."""
     return {"id": "ai", "considered": 40, "planned": 5, "live_feeds": 3, **overrides}
 
+
 def taxonomy_fixture(stem: str) -> Taxonomy:
     """One of the two fixture vocabularies the definition oracle is driven from."""
     return Taxonomy.from_json(read_text(FIXTURES_DIR / "taxonomy" / f"{stem}.json"))
+
 
 def mutate(path: Path, **changes: Any) -> dict[str, Any]:
     payload: dict[str, Any] = json.loads(read_text(path))
     payload.update(changes)
     return payload
 
+
 #: The five the planning step computes and the day payload started carrying on
 #: 2026-08-31. Every day published before that omits all five.
 RANKING_SIGNAL = ("carried_by", "watchlist_hit", "on_front_page", "rank_score", "time_source")
+
 
 def a_day_missing(names: tuple[str, ...], where: str = "items") -> tuple[str, int]:
     """The committed-day fixture with `names` removed from every `where` entry.

@@ -62,6 +62,7 @@ def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
         "a day that fails its contract is a day no reader can read; the step still fails"
     )
 
+
 def test_the_daily_publish_validates_the_day_it_wrote_and_not_every_other_one() -> None:
     """A published day is frozen, so re-opening all of them buys nothing.
 
@@ -85,6 +86,7 @@ def test_the_daily_publish_validates_the_day_it_wrote_and_not_every_other_one() 
     assert "needs.plan.outputs.date" in named, (
         f"the day is {named!r}, which is not the day this run was planned for"
     )
+
 
 def test_the_whole_tree_is_re_read_only_when_the_shape_it_is_read_through_moves() -> None:
     """The other half: `ci.yml` pays the full price on the change that earns it.
@@ -113,6 +115,7 @@ def test_the_whole_tree_is_re_read_only_when_the_shape_it_is_read_through_moves(
         "the full pass over the archive runs on every change, whatever moved"
     )
 
+
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
 def test_the_day_is_validated_before_it_is_published(
     filename: str, job_name: str, commit_step: str
@@ -132,6 +135,7 @@ def test_the_day_is_validated_before_it_is_published(
     assert validated < names.index(commit_step), (
         "a day the contract refuses must never reach a reader"
     )
+
 
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
 def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
@@ -177,6 +181,7 @@ def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
     assert built < commit, "a route that cannot render must never reach a reader"
     assert commit < gate, "a page over its ceiling loses the ceiling, not the day"
     assert "continue-on-error" not in steps[gate], "the gate publishes the day; it still fails"
+
 
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
 def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
@@ -243,6 +248,7 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
             "condition has to name it"
         )
 
+
 #: Every job that builds the site, and so every job that can grow it past the cap.
 SITE_WEIGHT_JOBS: Final = (
     ("ci.yml", "site"),
@@ -251,6 +257,7 @@ SITE_WEIGHT_JOBS: Final = (
 )
 
 SITE_WEIGHT_CALL: Final = ("python", "-m", "idhazh", "site-weight")
+
 
 def _published_tree() -> str:
     """The directory the Pages deploy uploads, read off the deploy itself."""
@@ -264,6 +271,7 @@ def _published_tree() -> str:
     assert isinstance(path, str), "the deploy must upload one named directory"
     return path.rstrip("/")
 
+
 def _site_weight_step(workflow: dict[str, object], job_name: str) -> tuple[int, list[str]]:
     """Where the site-weight call sits in a job, and the argv it runs."""
     for index, step in enumerate(_steps(workflow, job_name)):
@@ -272,6 +280,7 @@ def _site_weight_step(workflow: dict[str, object], job_name: str) -> tuple[int, 
             directory = str(step.get("working-directory", "")).strip("/")
             return index, [directory, *argv]
     raise AssertionError(f"{job_name} builds the site and never measures it")
+
 
 @pytest.mark.parametrize(("filename", "job_name"), SITE_WEIGHT_JOBS)
 def test_the_site_gate_measures_the_tree_the_deploy_uploads(filename: str, job_name: str) -> None:
@@ -308,6 +317,7 @@ def test_the_site_gate_measures_the_tree_the_deploy_uploads(filename: str, job_n
         if "npm run build" in str(step.get("run", ""))
     )
     assert built < index, "the tree does not exist until the site is built"
+
 
 def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None:
     workflows = _load_workflows()
@@ -353,6 +363,7 @@ def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None
         "what deploys is the commit that was verified, not the tip minutes later"
     )
 
+
 def test_the_plan_queue_has_exactly_one_writer() -> None:
     """One job regenerates the page, and a pull request may not carry it.
 
@@ -388,6 +399,7 @@ def test_the_plan_queue_has_exactly_one_writer() -> None:
     )
     assert _mapping(checkout.get("with"), "gates checkout 'with'").get("fetch-depth") == "2"
 
+
 def test_the_status_page_job_writes_only_after_a_merge() -> None:
     workflow = _load_workflows()["ci.yml"]
     job = _job(workflow, STATUS_PAGE_JOB)
@@ -416,6 +428,7 @@ def test_the_status_page_job_writes_only_after_a_merge() -> None:
     assert f"git diff --quiet -- {STATUS_PAGE}" in script
     assert f"git add {STATUS_PAGE}" in script
     assert "git push origin HEAD:main" in script
+
 
 @requires_bash
 def test_the_plan_queue_guard_reads_a_real_merge_commit(tmp_path: Path) -> None:

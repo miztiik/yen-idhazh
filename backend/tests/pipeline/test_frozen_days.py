@@ -43,6 +43,7 @@ pytestmark = pytest.mark.slow
 
 A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
 
+
 def a_published_day(public_root: Path, *, pretty: bool = False) -> Path:
     """One published day on disk, in the layout `published_days` globs for.
 
@@ -64,6 +65,7 @@ def a_published_day(public_root: Path, *, pretty: bool = False) -> Path:
     text = json.dumps(payload, indent=2) if pretty else json.dumps(payload)
     (where / "digest.json").write_text(text, encoding="utf-8")
     return where / "digest.json"
+
 
 def days_opened(root: Path, work: Callable[[], int]) -> tuple[int, set[str]]:
     """What `work` returned, and which files under `root` it opened.
@@ -101,6 +103,7 @@ def days_opened(root: Path, work: Callable[[], int]) -> tuple[int, set[str]]:
         patch.setattr(Path, "read_bytes", spy_read)
         return work(), seen
 
+
 def test_a_day_with_no_receipt_is_validated_and_earns_one(tmp_path: Path) -> None:
     """Arm one, and what every tree looks like the first time this runs.
 
@@ -125,6 +128,7 @@ def test_a_day_with_no_receipt_is_validated_and_earns_one(tmp_path: Path) -> Non
     assert receipt.payload_bytes == day.stat().st_size
     assert receipt.payload_digest == hashlib.sha256(day.read_bytes()).hexdigest()
 
+
 def test_an_unchanged_day_under_an_unchanged_validator_is_not_opened(tmp_path: Path) -> None:
     """Arm two, and the whole saving, counted rather than timed.
 
@@ -144,6 +148,7 @@ def test_an_unchanged_day_under_an_unchanged_validator_is_not_opened(tmp_path: P
     assert (first_code, second_code) == (0, 0)
     assert "2026/08/21/digest.json" in first
     assert second == set(), f"a frozen day was opened again: {sorted(second)}"
+
 
 def test_a_day_whose_payload_moved_is_opened_again(tmp_path: Path) -> None:
     """The receipt is a claim about a payload, never a claim about a date.
@@ -176,6 +181,7 @@ def test_a_day_whose_payload_moved_is_opened_again(tmp_path: Path) -> None:
     assert len(held["2026-08-21"]) == 2, "the superseded row should still be on file"
     assert _proved(held["2026-08-21"], rewritten.stat().st_size)
 
+
 def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -202,6 +208,7 @@ def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
     assert "frontend/public/telemetry/2026-08.csv" in caplog.text, "name the file"
     assert "header is" in caplog.text, "and say what the contract wanted instead"
 
+
 def test_a_named_day_is_opened_even_when_it_carries_a_receipt(tmp_path: Path) -> None:
     """Naming a day is how a run says it just wrote that day.
 
@@ -221,6 +228,7 @@ def test_a_named_day_is_opened_even_when_it_carries_a_receipt(tmp_path: Path) ->
 
     assert code == 0
     assert "2026/08/21/digest.json" in opened
+
 
 def test_the_validator_identity_moves_when_a_rule_moves() -> None:
     """Arm three, first half: what the receipt is keyed on cannot go stale by hand.
@@ -246,6 +254,7 @@ def test_the_validator_identity_moves_when_a_rule_moves() -> None:
         patch.setattr(validate_days, "_picture_faults", reworded)
         assert _validator_identity() != before
 
+
 def test_the_validator_identity_moves_when_a_contract_moves() -> None:
     """Arm three, second half: a shape change invalidates every receipt too.
 
@@ -263,6 +272,7 @@ def test_the_validator_identity_moves_when_a_contract_moves() -> None:
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(DigestView, "__changelog__", moved)
         assert _validator_identity() != before
+
 
 def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
     """Arm three, and the reason an uninvalidatable receipt is worse than none.
@@ -294,6 +304,7 @@ def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
     assert (first, second) == (0, 0)
     assert "2026/08/21/digest.json" in reopened, "a moved rule left the archive unread"
     assert again == set(), "the sweep after a rule change has to happen once"
+
 
 def test_two_receipts_that_disagree_about_one_day_leave_it_unproved(tmp_path: Path) -> None:
     """`merge=union` concatenates, so two runs really can leave two rows.

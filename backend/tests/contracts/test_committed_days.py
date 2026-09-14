@@ -25,9 +25,11 @@ pytestmark = pytest.mark.contract
 
 DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
 
+
 def committed_days() -> list[Path]:
     """Published days a test may read. The newest date is still being written to."""
     return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))[:-1]
+
 
 def test_the_published_tree_holds_days_to_migrate() -> None:
     """The denominator for the one check below that still opens a real day.
@@ -39,6 +41,7 @@ def test_the_published_tree_holds_days_to_migrate() -> None:
     being written, so a tree holding only that one date reads as empty here.
     """
     assert committed_days(), "frontend/public/digest holds no finished day"
+
 
 def a_day_that_validates() -> dict[str, Any]:
     """A finished committed day, taken off the real tree rather than written here.
@@ -52,6 +55,7 @@ def a_day_that_validates() -> dict[str, Any]:
     day: dict[str, Any] = json.loads(read_text(committed_days()[-1]))
     return day
 
+
 def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = "2026-08-30") -> Path:
     """One committed day on disk, in the layout `published_days` globs for."""
     year, month, dom = date.split("-")
@@ -59,6 +63,7 @@ def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = "2026-08-30"
     where.mkdir(parents=True)
     (where / "digest.json").write_text(json.dumps(day), encoding="utf-8")
     return tmp_path / "digest"
+
 
 def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -80,6 +85,7 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     assert "2026-08-30" in caplog.text, "the failing day has to be named"
     assert "digest-view.schema.json" in caplog.text, "which contract refused it"
 
+
 def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Path) -> None:
     """Degrade, do not fail: one unreadable file must not stop the other days."""
     root = a_tree_holding(tmp_path, a_day_that_validates(), date="2026-08-29")
@@ -89,11 +95,13 @@ def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Pat
 
     assert stage_validate_days(root) == 1
 
+
 def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -> None:
     """A run over nothing prints the same line as a run over every day."""
     empty = tmp_path / "digest"
     empty.mkdir()
     assert stage_validate_days(empty) == 1
+
 
 def test_the_gate_defaults_to_the_one_committed_tree(tmp_path: Path) -> None:
     """Unlike `--site-tree`, which has no default because there are two trees.
@@ -111,6 +119,7 @@ def test_the_gate_defaults_to_the_one_committed_tree(tmp_path: Path) -> None:
     day = "-".join(newest.parts[-4:-1])
 
     assert main(["validate-days", "--day", day, "--state-root", str(tmp_path)]) == 0
+
 
 def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -154,6 +163,7 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(store)]) == 0
     assert (store / "day-validations.csv").is_file(), "the receipt belongs beside the tree it is about"
 
+
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
     """The read-side migration (`CLAUDE.md` section 11).
 
@@ -171,6 +181,7 @@ def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
     for item in day.items:
         for name in RANKING_SIGNAL:
             assert getattr(item, name) is None, f"{item.item_id}: {name} invented"
+
 
 def test_every_committed_day_revalidates_with_no_shortfall_counts() -> None:
     """The read-side migration for the desk shortfall (`CLAUDE.md` section 11).
@@ -190,6 +201,7 @@ def test_every_committed_day_revalidates_with_no_shortfall_counts() -> None:
         for name in DESK_SHORTFALL:
             assert getattr(desk, name) is None, f"{desk.id}: {name} invented"
 
+
 def test_a_desk_carries_every_shortfall_count_or_none_of_them() -> None:
     """Three fields written by one step, so a desk holding two is a writer bug.
 
@@ -203,6 +215,7 @@ def test_a_desk_carries_every_shortfall_count_or_none_of_them() -> None:
         id="ai", display_name="AI", count=3, considered=40, too_old=31, below_feed_floor=False
     )
     assert whole.considered == 40
+
 
 def test_a_desk_cannot_drop_more_stories_than_it_considered() -> None:
     """The same bound `VerticalPlan` carries, kept on the field a reader sees.

@@ -43,6 +43,7 @@ def cross_filed_day() -> list[DigestItem]:
     ]
     return day
 
+
 #: A day of twenty where `ai` may hold half and the other two are unbounded, so
 #: the only rule that fires is the one this section is about.
 CROSS_FILED_BOUNDS = {
@@ -50,6 +51,7 @@ CROSS_FILED_BOUNDS = {
     "energy": DeskBounds(floor=0, ceiling=1.0),
     "world": DeskBounds(floor=0, ceiling=1.0),
 }
+
 
 def published_day(items: list[DigestItem]) -> DigestDay:
     """The day payload `assemble.build_day` writes, built here from the items.
@@ -83,6 +85,7 @@ def published_day(items: list[DigestItem]) -> DigestDay:
         ],
         items=items,
     )
+
 
 def test_a_story_is_in_the_stream_once_and_on_at_most_two_desks() -> None:
     """Row #8's oracle, on a built day where three stories cross-file.
@@ -121,6 +124,7 @@ def test_a_story_is_in_the_stream_once_and_on_at_most_two_desks() -> None:
     assert sum(ref.count for ref in published.verticals) == 20
     assert sum(ref.desk_count or 0 for ref in published.verticals) == 20
 
+
 def test_the_second_desk_is_the_readings_own_and_the_feeds_word_is_the_fallback() -> None:
     """Two stories a crowded `ai` desk must give up, and they go to two places.
 
@@ -147,6 +151,7 @@ def test_the_second_desk_is_the_readings_own_and_the_feeds_word_is_the_fallback(
     assert landed["world-silent-00"] == "world"
     assert len(out) == 10
 
+
 def test_the_overflow_keeps_its_claim_on_the_desk_it_left() -> None:
     """The move swaps the two desks; it does not overwrite the first.
 
@@ -161,6 +166,7 @@ def test_the_overflow_keeps_its_claim_on_the_desk_it_left() -> None:
 
     assert [(item.desk, item.secondary_desk) for item in moved] == [("energy", "ai")] * 3
     assert all(item.vertical == "ai" for item in moved), "the address never moves"
+
 
 def test_a_story_that_has_already_moved_cannot_move_twice() -> None:
     """The swap leaves a story naming two desks, and both are now taken.
@@ -177,6 +183,7 @@ def test_a_story_that_has_already_moved_cannot_move_twice() -> None:
     assert [(item.item_id, item.desk, item.secondary_desk) for item in twice] == [
         (item.item_id, item.desk, item.secondary_desk) for item in once
     ]
+
 
 def test_a_second_desk_this_run_will_not_render_is_never_a_destination() -> None:
     """`closed` bounds the second desk exactly as it bounds the feed's word.
@@ -200,6 +207,7 @@ def test_a_second_desk_this_run_will_not_render_is_never_a_destination() -> None
 
     assert filed(out) == {"ai": 5}, "a closed desk received a story"
     assert all(item.secondary_desk in (None, "energy") for item in out)
+
 
 def test_a_second_desk_is_dropped_rather_than_published_when_it_cannot_hold() -> None:
     """What `assemble.to_digest_item` may write into the payload, and what it may not.

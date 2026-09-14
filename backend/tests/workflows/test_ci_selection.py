@@ -51,6 +51,7 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     )
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
+
 #: What the shipped script has to answer through a real git history.
 #:
 #: The truth table itself is in `frontend/scripts/tests/test-scope.test.mjs`,
@@ -87,6 +88,7 @@ def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
     assert versions["scope"] is not None
     assert versions["gates"] == versions["scope"]
 
+
 def _browser_scope(
     tmp_path: Path, changed: Sequence[str], event: str = "pull_request"
 ) -> dict[str, str]:
@@ -120,6 +122,7 @@ def _browser_scope(
         line.split("=", 1) for line in completed.stdout.strip().splitlines() if "=" in line
     )
 
+
 @requires_bash
 @pytest.mark.parametrize(
     ("changed", "browser", "code", "console", "validate_all"), BROWSER_SCOPE_CASES
@@ -145,6 +148,7 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
         "validate_all": str(validate_all).lower(),
     }
 
+
 @requires_bash
 def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
     tmp_path: Path,
@@ -154,6 +158,7 @@ def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
     """
     mixed = ["docs/reference/measurements.md", "frontend/src/routes/+page.svelte"]
     assert _browser_scope(tmp_path, mixed)["browser"] == "true"
+
 
 @requires_bash
 def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> None:
@@ -171,6 +176,7 @@ def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> N
         "validate_all": "true",
     }
 
+
 @requires_bash
 def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
     """The one question a push does read the paths for.
@@ -186,6 +192,7 @@ def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
         "console": "false",
         "validate_all": "false",
     }
+
 
 def test_a_trunk_push_is_never_cancelled_by_the_next_one() -> None:
     """The rule that makes the `scope` job safe on a push.

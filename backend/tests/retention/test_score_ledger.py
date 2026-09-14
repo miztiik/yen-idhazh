@@ -71,6 +71,7 @@ def score_row(*, day: str, run: int, number: int) -> EvalRow:
         }
     )
 
+
 def score_history(state_dir: Path, months: list[str]) -> None:
     """Two real score days a month, written through the real appender."""
     for index, month in enumerate(months):
@@ -81,14 +82,17 @@ def score_history(state_dir: Path, months: list[str]) -> None:
                 [score_row(day=day, run=1, number=index * 100 + offset) for offset in range(6)],
             )
 
+
 def a_score_tree(tmp_path: Path) -> Path:
     state = tmp_path / "state"
     score_history(state, months_back(TODAY, HISTORY_MONTHS))
     return state
 
+
 def score_months(state: Path) -> list[str]:
     """The months the score ledger's day files fall in, oldest first."""
     return sorted(day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME))
+
 
 def score_bytes(state: Path) -> dict[str, bytes]:
     """Every score day file's bytes, keyed by its `<YYYY>/<MM>/<DD>.csv` path."""
@@ -96,6 +100,7 @@ def score_bytes(state: Path) -> dict[str, bytes]:
         day.relative_to(state).as_posix(): day.read_bytes()
         for day in score_writer.ledger_days(state)
     }
+
 
 def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: Path) -> None:
     """The whole point: the day files go, and everything they could still answer stays."""
@@ -134,6 +139,7 @@ def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: 
         score_archive.read(score_archive.archive_path(state, month)).source_rows for month in doomed
     )
 
+
 def test_a_score_month_inside_the_window_is_untouched(tmp_path: Path) -> None:
     state = tmp_path / "state"
     score_history(state, months_back(TODAY, 3))
@@ -146,6 +152,7 @@ def test_a_score_month_inside_the_window_is_untouched(tmp_path: Path) -> None:
     assert result.days_removed == ()
     assert score_bytes(state) == held
     assert score_archive.archived_months(state) == []
+
 
 def test_a_score_dry_run_writes_nothing_and_still_counts_both_sides(tmp_path: Path) -> None:
     """The dry run's own deliverable is the byte ratio, so it has to compute it.
@@ -167,6 +174,7 @@ def test_a_score_dry_run_writes_nothing_and_still_counts_both_sides(tmp_path: Pa
     assert score_bytes(state) == held
     assert score_archive.archived_months(state) == []
     assert not (state / score_archive.ARCHIVE_DIRNAME).exists()
+
 
 def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path: Path) -> None:
     """The measurement the policy rests on, pinned as a direction rather than a figure.
@@ -197,6 +205,7 @@ def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path
         f"{archive_bytes} bytes of archive against {source_bytes} of rows is not a saving"
     )
 
+
 def test_a_second_score_run_over_a_settled_tree_moves_no_byte(tmp_path: Path) -> None:
     state = a_score_tree(tmp_path)
     config = ObservabilityConfig()
@@ -215,6 +224,7 @@ def test_a_second_score_run_over_a_settled_tree_moves_no_byte(tmp_path: Path) ->
         for path in sorted(state.rglob("*"))
         if path.is_file()
     } == settled
+
 
 def test_a_score_file_the_reader_cannot_place_stops_the_prune(tmp_path: Path) -> None:
     """A stray is refused now, where the month reader used to walk past it.
@@ -243,6 +253,7 @@ def test_a_score_file_the_reader_cannot_place_stops_the_prune(tmp_path: Path) ->
         for path in sorted(state.rglob("*"))
         if path.is_file()
     } == before, "the refused pass deleted something anyway"
+
 
 def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived(
     tmp_path: Path,
@@ -280,6 +291,7 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
         "a store the reader cannot walk produced a summary anyway"
     )
 
+
 def test_an_archive_that_does_not_reconcile_leaves_its_days(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -310,6 +322,7 @@ def test_an_archive_that_does_not_reconcile_leaves_its_days(
         "a day file was unlinked against a summary that disagreed"
     )
 
+
 def test_the_archive_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
     tmp_path: Path,
 ) -> None:
@@ -321,6 +334,7 @@ def test_the_archive_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
 
     assert result.hard_deleted == ()
     assert score_archive.archived_months(state)
+
 
 def test_a_hard_delete_takes_the_archive_only_after_the_month_has_been_archived(
     tmp_path: Path,
@@ -345,6 +359,7 @@ def test_a_hard_delete_takes_the_archive_only_after_the_month_has_been_archived(
     assert score_archive.archived_months(state) == [
         month for month in before if month not in result.hard_deleted
     ]
+
 
 def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repeat(
     tmp_path: Path,
@@ -412,6 +427,7 @@ def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repea
         "the replay recreated a day file the archive replaced"
     )
 
+
 def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -453,6 +469,7 @@ def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
     assert named == doomed
     assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
     assert score_writer.ledger_days(state), "a dry run deleted the ledger"
+
 
 def test_the_stage_says_so_when_every_score_month_is_at_full_grain(
     tmp_path: Path, caplog: pytest.LogCaptureFixture

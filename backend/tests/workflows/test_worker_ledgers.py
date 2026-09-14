@@ -87,6 +87,7 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
     ]
     assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
 
+
 def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     """Which loss is cheaper, said in the workflow rather than left to an exit code.
 
@@ -130,6 +131,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         ("assemble", COMMIT_STEPS["fold"]),
     }
 
+
 def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     """Eight shards append to one branch, so both ledgers need the union driver.
 
@@ -157,6 +159,7 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     ).stdout.splitlines()
 
     assert answered == [f"{path}: merge: union" for path in written.values()]
+
 
 def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     """The index is what the writer reads instead of the rows, so it has to be committed.
@@ -186,6 +189,7 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     ).stdout.split()
     assert tracked, f"{score_writer.INDEX_RELDIR} must be in a fresh checkout"
 
+
 def test_the_retirement_ledger_needs_no_gitattributes_edit() -> None:
     """`state/**/*.csv` already answers union, so the new ledger inherits the driver.
 
@@ -206,6 +210,7 @@ def test_the_retirement_ledger_needs_no_gitattributes_edit() -> None:
     ).stdout.splitlines()
 
     assert answered == [f"{relative}: merge: union"]
+
 
 @requires_bash
 @requires_space_free_paths
@@ -240,6 +245,7 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     assert sorted(landed[1:]) == ["row-0", *(f"shard-{shard}" for shard in shards)]
     assert not any(_mid_rebase(runner) for runner in runners)
 
+
 def _keyed_origin(tmp_path: Path, env: dict[str, str], relative: str) -> tuple[Path, Path]:
     """An origin holding one keyed ledger, and a clone taken before anything raced it.
 
@@ -260,6 +266,7 @@ def _keyed_origin(tmp_path: Path, env: dict[str, str], relative: str) -> tuple[P
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
+
 
 @requires_bash
 @requires_space_free_paths
@@ -307,6 +314,7 @@ def test_a_second_attempt_at_one_shard_leaves_the_row_the_first_one_pushed(
 
     assert attempt(tmp_path / "settled", drop=True) == ["key,cells", "k1,attempt-one"]
 
+
 def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
     """Why assemble cannot append a row a shard already pushed.
 
@@ -321,6 +329,7 @@ def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
 
     assert set(COMMIT_STAGED_PATHS["work"]) <= set(refreshed)
+
 
 def test_assemble_hands_back_the_published_ledger_it_appends_to() -> None:
     """The refresh set covers the day file this stage writes, and asks it where.

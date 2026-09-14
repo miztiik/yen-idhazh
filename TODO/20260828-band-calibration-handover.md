@@ -164,7 +164,7 @@ built is the conservative combination, and it is what a reader would ask for.
 - **Every new row is labellable.** `source_digest` has been written on every row
   since 2026-08-27, so the pool improves on its own with each published day.
 - **Adding a field to any contract model breaks
-  `test_contracts.py::test_fixture_round_trips_byte_identically`**, because
+  `backend/tests/contracts/test_schema_drift.py::test_fixture_round_trips_byte_identically`**, because
   `to_json` dumps every field and the committed fixture does not carry the new
   key. Add it to the fixture in canonical sorted-key order in the same commit.
   Ruff, mypy and the targeted module all pass without it; only the full suite

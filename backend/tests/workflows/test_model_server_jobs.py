@@ -128,6 +128,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
             spelled = re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", commands)
             assert not spelled, f"{where} spells {flag} instead of importing it"
 
+
 @requires_bash
 @pytest.mark.parametrize(
     ("argv", "message"),
@@ -161,14 +162,17 @@ def test_the_start_script_refuses_a_call_it_cannot_serve(
     assert completed.returncode == 2, completed.stdout
     assert message in completed.stderr
 
+
 def _digest_step(job_name: str, name: str) -> str:
     """One step body of a daily-run job, without the shell comments."""
     workflow = _load_workflows()["digest.yml"]
     return _uncommented(_script(_step(workflow, job_name, "name", name), name))
 
+
 def _work_step(name: str) -> str:
     """One step body of the daily work job, without the shell comments."""
     return _digest_step("work", name)
+
 
 def _sample_header() -> list[str]:
     """The columns the memory sampler writes, in the order it writes them."""
@@ -176,6 +180,7 @@ def _sample_header() -> list[str]:
     header = re.search(rf"printf '([^']*)' > {re.escape(RSS_SAMPLE_FILE)}", script)
     assert header, f"{SAMPLE_SCRIPT.name} must printf a header row into {RSS_SAMPLE_FILE}"
     return header.group(1).removesuffix("\\n").split("\\t")
+
 
 def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> None:
     """Two copies of a sampler is one copy nobody looked at this week.
@@ -205,6 +210,7 @@ def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> No
             f"the {job_name} job must sample the server its own start step wrote"
         )
         assert "nohup" in script, f"the {job_name} sampler must outlive its own step"
+
 
 def test_the_memory_sampler_and_both_its_readers_agree_on_the_columns() -> None:
     """One writer, two readers, and only one of them reads by name.
@@ -236,6 +242,7 @@ def test_the_memory_sampler_and_both_its_readers_agree_on_the_columns() -> None:
             f"and the sampler now writes {header[field - 1]} there"
         )
 
+
 def test_the_kernel_peak_is_written_before_the_row_that_reads_it() -> None:
     """A file written after the row is a file the row never saw.
 
@@ -265,6 +272,7 @@ def test_the_kernel_peak_is_written_before_the_row_that_reads_it() -> None:
     operator = _work_step(MEMORY_SUMMARY_STEP)
     assert f"cat {MEMORY_PEAK_FILE}" in operator, "the print must read the file the row read"
     assert CGROUP_PEAK_PATH not in operator, "the print must not take a second kernel reading"
+
 
 def test_the_sampler_names_every_python_process_it_counts() -> None:
     """A count of three cannot say which three, and here two of them are not ours.
@@ -311,6 +319,7 @@ def test_the_sampler_names_every_python_process_it_counts() -> None:
     uploaded = str(_mapping(upload.get("with"), "runtime log upload").get("path"))
     assert PYTHON_PROCS_FILE in uploaded, "a roll-call nobody can download answers nothing"
 
+
 def _log_summary_pattern(job_name: str, step_name: str, log_file: str) -> re.Pattern[str]:
     """The `grep -E` the cache summary step runs, as this test can run it too.
 
@@ -322,6 +331,7 @@ def _log_summary_pattern(job_name: str, step_name: str, log_file: str) -> re.Pat
     )
     assert found, f"{step_name} must grep {log_file} for the lines the runtime prints"
     return re.compile(found.group(1))
+
 
 def test_the_cache_log_summary_matches_the_lines_the_runtime_actually_prints() -> None:
     """The pattern that found one line in forty, and the captures that say so.
@@ -363,6 +373,7 @@ def test_the_cache_log_summary_matches_the_lines_the_runtime_actually_prints() -
                 f"of {capture.name}, which is not a summary of the log"
             )
 
+
 def test_the_prefix_reuse_fields_match_a_real_line_too() -> None:
     """The other half of the same step, and this half was never broken.
 
@@ -382,6 +393,7 @@ def test_the_prefix_reuse_fields_match_a_real_line_too() -> None:
             pattern = re.compile(f"{field} {found.group(1)}")
             seen = sum(len(pattern.findall(read_text(path))) for path in RUNTIME_LOG_CAPTURES)
             assert seen, f"{step_name} finds no {field} in any committed capture"
+
 
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
@@ -450,6 +462,7 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
         WORKFLOWS_DIR / "measure.yml"
     ), f"the measurement harness must read {LLAMA_PORT_ENV} rather than hold a port"
 
+
 def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> None:
     """One name, given once on a command line, read by five later steps.
 
@@ -489,6 +502,7 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
         )
         assert log_file in _digest_step(job_name, summary_step), f"{summary_step} must read {log_file}"
 
+
 def test_the_counters_step_and_the_row_agree_on_what_it_reads() -> None:
     """Three readings, two of them taken in different steps an hour apart.
 
@@ -518,6 +532,7 @@ def test_the_counters_step_and_the_row_agree_on_what_it_reads() -> None:
     assert runtime_counters._CPU_FIELDS[0] == "user", (
         "the row parses the aggregate cpu line, which is what both steps read"
     )
+
 
 def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
     """The Oracle for row #P4. A row with no job name proves nothing.
@@ -584,6 +599,7 @@ def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
         runtime_counters.WORK_JOB
     )
 
+
 @pytest.mark.parametrize("job_name", sorted(COUNTERS_JOBS))
 def test_every_counters_step_says_which_job_it_is(job_name: str) -> None:
     """A default is not a statement, and every caller has to make one.
@@ -605,6 +621,7 @@ def test_every_counters_step_says_which_job_it_is(job_name: str) -> None:
     for other, value in COUNTERS_JOBS.items():
         if other != job_name:
             assert f"{COUNTERS_JOB_FLAG} {value}" not in script
+
 
 def _uncommented(text: str) -> str:
     """The lines a runner acts on, without the ones explaining why.

@@ -40,6 +40,7 @@ _LEDGERS_A_ROLLUP_MUST_NOT_RESTATE: dict[str, type[Contract]] = {
     "state/visuals": VisualDecision,
 }
 
+
 def _column_names(contract: type[Contract]) -> frozenset[str]:
     """Every column or field name a ledger spells.
 
@@ -52,8 +53,10 @@ def _column_names(contract: type[Contract]) -> frozenset[str]:
         return frozenset(columns())
     return frozenset(contract.model_fields)
 
+
 def _rollup_value_columns() -> frozenset[str]:
     return frozenset(SpanRollupRow.csv_columns()) - _ROLLUP_KEY_AND_STAMP
+
 
 def test_the_rollup_holds_only_what_no_ledger_holds() -> None:
     value_columns = _rollup_value_columns()
@@ -61,6 +64,7 @@ def test_the_rollup_holds_only_what_no_ledger_holds() -> None:
     for where, row_model in _LEDGERS_A_ROLLUP_MUST_NOT_RESTATE.items():
         collision = value_columns & _column_names(row_model)
         assert not collision, f"span-rollup restates {sorted(collision)}, already held by {where}"
+
 
 def test_the_disjointness_check_catches_a_collision_outside_item_health() -> None:
     """A real collision must turn the Oracle above red, and not only against

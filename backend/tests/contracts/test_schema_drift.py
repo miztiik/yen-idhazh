@@ -35,9 +35,11 @@ def test_fixture_round_trips_byte_identically(path: Path) -> None:
     twice = BY_STEM[path.parent.name].from_json(once).to_json()
     assert twice == once
 
+
 def test_every_contract_has_at_least_one_fixture() -> None:
     covered = {path.parent.name for path in fixture_paths()}
     assert covered == set(BY_STEM), "a contract without a fixture has never been proven to load"
+
 
 def test_committed_schemas_match_the_models(tmp_path: Path) -> None:
     export(tmp_path)
@@ -47,9 +49,11 @@ def test_committed_schemas_match_the_models(tmp_path: Path) -> None:
             f"{name} is stale - edit the Pydantic model and regenerate, never the schema"
         )
 
+
 def test_schemas_directory_holds_exactly_the_generated_files() -> None:
     on_disk = {path.name for path in SCHEMAS_DIR.glob("*.json")}
     assert on_disk == expected_filenames()
+
 
 @pytest.mark.parametrize("contract", CONTRACTS, ids=lambda c: c.__schema_stem__)
 def test_schema_is_self_describing(contract: type[Contract]) -> None:
@@ -62,9 +66,11 @@ def test_schema_is_self_describing(contract: type[Contract]) -> None:
     for entry in schema["changelog"]:
         assert entry["change"] and entry["why"]
 
+
 @pytest.mark.parametrize("contract", CONTRACTS, ids=lambda c: c.__schema_stem__)
 def test_version_defaults_to_the_newest_changelog_entry(contract: type[Contract]) -> None:
     assert contract.schema_version() == contract.__changelog__[0].version
+
 
 def test_an_older_payload_still_validates() -> None:
     """A payload yesterday's run wrote must load today, or it is a release blocker."""
@@ -73,8 +79,10 @@ def test_an_older_payload_still_validates() -> None:
     payload["version"] = "2026-01-01"
     assert load_summary(payload).version == "2026-01-01"
 
+
 def load_summary(payload: dict[str, Any]) -> Contract:
     return BY_STEM["summary"].model_validate(payload)
+
 
 def test_a_payload_written_before_a_field_existed_still_reads() -> None:
     """Section 11's release blocker, tested against the key rather than the stamp.
@@ -88,10 +96,12 @@ def test_a_payload_written_before_a_field_existed_still_reads() -> None:
     del payload["title"]
     assert load_summary(payload).title is None  # type: ignore[attr-defined]
 
+
 def test_version_is_stamped_when_a_writer_omits_it() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
     del payload["version"]
     assert load_summary(payload).version == BY_STEM["summary"].schema_version()
+
 
 def test_a_manifest_written_before_the_verbosity_knob_still_reads() -> None:
     """Section 11's release blocker, for the other document the knob reached.

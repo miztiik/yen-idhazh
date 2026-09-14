@@ -128,6 +128,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
         for path in sorted(tmp_path.rglob("*.csv"))
     } == everything, "a second run over a settled tree must move no byte"
 
+
 def test_the_stage_names_every_file_a_live_run_would_remove(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -189,6 +190,7 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     assert publish_telemetry.shard_path(public, expired).exists()
     assert ledger.health_path(state, f"{expired}-11").exists()
 
+
 def test_the_stage_says_so_when_there_is_nothing_to_remove(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -214,6 +216,7 @@ def test_the_stage_says_so_when_there_is_nothing_to_remove(
 
     assert "prune-state removes no file today" in caplog.text
 
+
 def test_the_stage_reports_what_it_folded(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """What a person reads off the run: which months went, and how many rows they held."""
     state = a_state_tree(tmp_path)
@@ -232,6 +235,7 @@ def test_the_stage_reports_what_it_folded(tmp_path: Path, caplog: pytest.LogCapt
     assert "telemetry fold:" in caplog.text
     assert "2025-06" in caplog.text, "the oldest month past the window has to be named"
     assert "2025-07" not in caplog.text, "the oldest month kept must not be folded"
+
 
 def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
     tmp_path: Path, caplog: pytest.LogCaptureFixture

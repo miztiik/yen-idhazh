@@ -91,6 +91,7 @@ def _day_metrics_sample() -> DayMetrics:
         ],
     )
 
+
 def test_day_metrics_round_trips_and_a_built_record_reads_back_identically() -> None:
     """A record the producer will write validates, and an additive count and a
     non-additive statistic both read back unchanged (Andre's split)."""
@@ -108,6 +109,7 @@ def test_day_metrics_round_trips_and_a_built_record_reads_back_identically() -> 
     # Decision 4: the revision stamp survives, so a later run can spot a stale record.
     assert reloaded.revision == 5
 
+
 def test_day_metrics_keeps_an_empty_aggregate_apart_from_a_zero_one() -> None:
     """A timed-nothing stage and an empty instrument keep their absent figures;
     empty is not zero (the all-or-nothing validators), so a reducer never reads a
@@ -117,6 +119,7 @@ def test_day_metrics_keeps_an_empty_aggregate_apart_from_a_zero_one() -> None:
     assert plan.timed == 0 and plan.sum_ms is None and plan.p50_ms is None
     empty = next(item for item in reloaded.instruments if item.column == "new_fact_rate")
     assert empty.stat.count == 0 and empty.stat.total == 0.0 and empty.stat.p50 is None
+
 
 def test_day_metrics_bands_and_reasons_mirror_the_eval_vocabulary() -> None:
     """The day's partitions only hold if its buckets are the eval bands and

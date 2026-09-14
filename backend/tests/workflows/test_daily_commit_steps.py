@@ -80,6 +80,7 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         # attempt to trip over.
         assert "git rebase --abort" in script, f"{where} must leave no rebase in progress"
 
+
 def test_every_command_in_the_retry_loop_is_guarded() -> None:
     """`set -e` plus one unguarded command is the whole defect.
 
@@ -116,6 +117,7 @@ def test_every_command_in_the_retry_loop_is_guarded() -> None:
             unguarded.append(stripped)
     assert unguarded == [], f"unguarded inside the retry loop: {unguarded}"
 
+
 def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     """Two copies of a retry loop is one copy nobody can execute in a test."""
     assert COMMIT_SCRIPT.is_file()
@@ -136,6 +138,7 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
     # And the fold says a third thing, in the same job as the day's own commit.
     assert _commit_call("fold")[1]["COMMIT_MESSAGE"] != assemble["COMMIT_MESSAGE"]
+
 
 def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
     """The bound, mirrored where a workflow that drops it reds (Guardrail #12).
@@ -162,6 +165,7 @@ def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
         assert settle[len(SETTLE_COMMAND) :] == [SETTLE_COVER_FLAG, SUBSTITUTED_DATE], (
             f"{label} must name the run it settles, or the pass reads the whole archive"
         )
+
 
 def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -> None:
     """The producer named in the loop is the producer the job already ran.
@@ -207,6 +211,7 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     # rendered asset either, so it has nothing to drop.
     assert "REGENERATE_COMMAND" not in _commit_call("plan")[1]
     assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
+
 
 def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> None:
     """A text merge of two appends is a merge nobody asked for.

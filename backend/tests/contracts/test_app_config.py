@@ -2,26 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
-from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import config
 from idhazh.classify import dag
 from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
-from idhazh.contracts import canonical_json
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
-    SUPERSEDED_APP_NAMES,
-    SUPERSEDED_COLLECT_NAMES,
-    SUPERSEDED_MODELS_NAMES,
-    SUPERSEDED_RETENTION_NAMES,
     AppConfig,
     CollectConfig,
     ConsoleConfig,
@@ -30,15 +22,12 @@ from idhazh.contracts.app_config import (
     ModelsConfig,
     ObservabilityConfig,
     RetentionConfig,
-    SystemPlacement,
     UiConfig,
     VisualSide,
     months_a_window_can_touch,
 )
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
-from idhazh.contracts.export import CONTRACTS
-from idhazh.contracts.run_manifest import RunManifest
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields
 from idhazh.measured import CALL_ONE_BODY_TOKENS_A_WORD as _CALL_ONE_A_WORD
@@ -48,15 +37,7 @@ from idhazh.measured import CALL_TWO_SEAM_TOKENS as _CALL_TWO_SEAM
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 
-from ._fixtures import (
-    APP_CONFIG_EVERY_KNOB_DIFFERS,
-    CONFIG_FILES,
-    committed_models,
-    committed_models_raw,
-    copy_config,
-    entry_with,
-    swapped_summarizer,
-)
+from ._fixtures import APP_CONFIG_EVERY_KNOB_DIFFERS, CONFIG_FILES, committed_models
 
 pytestmark = pytest.mark.contract
 
@@ -64,6 +45,7 @@ pytestmark = pytest.mark.contract
 @pytest.mark.parametrize("name", sorted(CONFIG_FILES), ids=lambda n: n)
 def test_config_file_validates(name: str) -> None:
     CONFIG_FILES[name].from_json(read_text(CONFIG_DIR / name))
+
 
 def test_a_fresh_clone_runs_on_the_defaults() -> None:
     """Every knob has a default now, so an empty config is usable.
@@ -87,6 +69,7 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
         "an unconfigured clone enforces the platform's own ceiling"
     )
 
+
 def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:
     """The direction the bound exists for. A cap config can raise is not a cap.
 
@@ -107,6 +90,7 @@ def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:
     assert "pages_hard_cap_mb" in str(from_file.value)
     assert "1024" in str(from_file.value)
 
+
 def test_the_config_takes_a_pages_cap_below_the_platforms_own() -> None:
     """The other arm, and the reason the field is here at all.
 
@@ -124,6 +108,7 @@ def test_the_config_takes_a_pages_cap_below_the_platforms_own() -> None:
     tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS))
     assert tuned.retention.pages_hard_cap_mb == 900
 
+
 def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
     """One reports and one stops, so one number cannot do both jobs.
 
@@ -139,6 +124,7 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
 
     tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)).retention
     assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
+
 
 def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     """A run that did not count is a run that cannot say how close it came.
@@ -165,6 +151,7 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     assert fresh.summarize.inference.metrics is True, "a fresh clone must count"
     assert committed.summarize.inference.metrics is True, "the committed config must count"
 
+
 def test_the_wider_window_is_the_summarizers_alone() -> None:
     """Row 3 raised one role, because one role is what was measured.
 
@@ -185,12 +172,14 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
         "the default is the conservative window for weights nobody has measured"
     )
 
+
 #: What the summarize prompt costs before a word of the article reaches it, and
 #: the hardest any published item has tokenized. Both records, their method and
 #: what to do when either moves are in `idhazh.measured`.
 PROMPT_OVERHEAD_TOKENS: Final = int(_PROMPT_OVERHEAD.value)
 
 WORST_TOKENS_A_WORD: Final = _WORST_TOKENS.value
+
 
 #: The same four things for the two-call path, whose prompt this repository
 #: renders itself. Same module, same reason.
@@ -201,6 +190,7 @@ CALL_ONE_BODY_TOKENS_A_WORD: Final = _CALL_ONE_A_WORD.value
 CALL_ONE_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
 
 CALL_TWO_SEAM_TOKENS: Final = int(_CALL_TWO_SEAM.value)
+
 
 def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     """The longest prompt the cap allows, and that prompt plus a full answer.
@@ -215,6 +205,7 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
     worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
     return worst_prompt, worst_prompt + inference.max_output_tokens
+
 
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     """The cap and the window are one decision, and this is where they meet.
@@ -244,6 +235,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
         "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
     )
 
+
 def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     """Call 1's prompt at the cap, and the whole sequence behind it.
 
@@ -269,6 +261,7 @@ def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
         dag.sequence_tokens(cap, menu_rows=rows, prompt_config=committed.summarize),
     )
 
+
 def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
     """A third call is a design change, and this is what makes it stop being quiet.
 
@@ -293,6 +286,7 @@ def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
     assert {node.name.value for node in dag.NODES} <= {kind.value for kind in CallKind}, (
         "a node the ledger has no CallKind for records its cost as nothing"
     )
+
 
 def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     """The window has to hold both calls, and nothing sized both until today.
@@ -345,6 +339,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
         "gigabyte and docs/reference/measurements.md says what the runner had free."
     )
 
+
 def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
     """The same sum again, against the window a training session opens.
 
@@ -372,6 +367,7 @@ def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
         "finetune.sequence_length beside the cap, or lower the cap."
     )
 
+
 def test_a_wider_window_moves_the_stamp_and_the_verbosity_does_not() -> None:
     """The two halves of row 3's digest decision, in one place.
 
@@ -384,6 +380,7 @@ def test_a_wider_window_moves_the_stamp_and_the_verbosity_does_not() -> None:
     assert "n_ctx" in digested_inference_fields()
     assert "log_verbosity" in NOT_DIGESTED
     assert NOT_DIGESTED["log_verbosity"].moves_logits is False
+
 
 def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
     """A prerendered chart has no element to measure, so the size is given to it.
@@ -419,9 +416,11 @@ def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
             f"console draws at {shipped}"
         )
 
+
 def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
     with pytest.raises(ValueError):
         AppConfig.model_validate({"console": {"chart_width": 0}})
+
 
 def test_the_window_the_console_opens_on_is_one_the_control_can_name() -> None:
     """A default outside the preset list opens the page on a window nothing selects.
@@ -435,6 +434,7 @@ def test_the_window_the_console_opens_on_is_one_the_control_can_name() -> None:
 
     tuned = ConsoleConfig(default_window_days=21, window_presets=[7, 21, 60])
     assert tuned.default_window_days in tuned.window_presets
+
 
 def test_a_preset_list_that_is_out_of_order_or_out_of_bounds_is_refused() -> None:
     """The presets are the only way the page sets its span.
@@ -457,6 +457,7 @@ def test_a_preset_list_that_is_out_of_order_or_out_of_bounds_is_refused() -> Non
     with pytest.raises(ValidationError, match="min_window_days and max_window_days"):
         ConsoleConfig(window_presets=[30, 400], default_window_days=30)
 
+
 def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> None:
     """The same two-copies problem the chart size has, one field along.
 
@@ -478,6 +479,7 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
     mirrored = re.search(r"window_presets:\s*\[([\d,\s]+)\]", reader)
     assert mirrored is not None, "the frontend console defaults dropped window_presets"
     assert [int(part) for part in mirrored.group(1).split(",")] == offered.window_presets
+
 
 def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_names() -> None:
     """The six spans row 1 of the constant-cost-reads plan settled, read off disk.
@@ -521,6 +523,7 @@ def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_na
     assert drawn.digest.offline_bytes_kept == 20_000_000
     assert drawn.digest.archive_window_days in drawn.console.window_presets
 
+
 def test_the_offline_cache_takes_a_byte_ceiling_that_can_still_hold_one_day() -> None:
     """A day count cannot bound bytes, and a byte bound must fit a day.
 
@@ -542,6 +545,7 @@ def test_the_offline_cache_takes_a_byte_ceiling_that_can_still_hold_one_day() ->
         "the ceiling is under the largest day payload measured, so the cache would "
         "evict every large day the moment it arrived"
     )
+
 
 def test_the_archive_window_names_a_span_the_console_presets_already_offer() -> None:
     """One list of spans in the contract, not two.
@@ -579,6 +583,7 @@ def test_the_archive_window_names_a_span_the_console_presets_already_offer() -> 
     named = {**narrowed, "ui": {**narrowed["ui"], "archive_window_days": 60}}
     assert AppConfig.model_validate(named).ui.archive_window_days == 60
 
+
 def test_the_readout_cap_is_a_knob_the_frontend_agrees_with() -> None:
     """The same two-copies problem again, in the chart block.
 
@@ -590,6 +595,7 @@ def test_the_readout_cap_is_a_knob_the_frontend_agrees_with() -> None:
     mirrored = re.search(r"readout_max_share:\s*([\d.]+)", reader)
     assert mirrored is not None, "the frontend chart defaults dropped readout_max_share"
     assert float(mirrored.group(1)) == ChartConfig().readout_max_share
+
 
 def test_the_seed_the_shell_carries_is_a_knob_the_frontend_agrees_with() -> None:
     """The same two-copies problem, on the one digest knob a browser never sees.
@@ -606,6 +612,7 @@ def test_the_seed_the_shell_carries_is_a_knob_the_frontend_agrees_with() -> None
     assert mirrored is not None, "the frontend dropped its shell_seed_items fallback"
     assert int(mirrored.group(1)) == UiConfig().shell_seed_items
 
+
 def test_the_leading_block_is_a_knob_the_frontend_agrees_with() -> None:
     """The third digest knob a browser never sees, and the newest of the three.
 
@@ -620,6 +627,7 @@ def test_the_leading_block_is_a_knob_the_frontend_agrees_with() -> None:
     assert mirrored is not None, "the frontend dropped its leading_stories fallback"
     assert int(mirrored.group(1)) == UiConfig().leading_stories
 
+
 def test_the_days_the_archive_lists_are_a_knob_the_frontend_agrees_with() -> None:
     """The same two-copies problem, on another digest knob a browser never sees.
 
@@ -633,6 +641,7 @@ def test_the_days_the_archive_lists_are_a_knob_the_frontend_agrees_with() -> Non
     mirrored = re.search(r"const ARCHIVE_RECENT_DAYS = (\d+);", reader)
     assert mirrored is not None, "the frontend dropped its archive_recent_days fallback"
     assert int(mirrored.group(1)) == UiConfig().archive_recent_days
+
 
 def test_the_side_a_figure_sits_on_is_a_knob_the_frontend_agrees_with() -> None:
     """The knob nothing reads yet, pinned to the position the page renders.
@@ -665,6 +674,7 @@ def test_the_side_a_figure_sits_on_is_a_knob_the_frontend_agrees_with() -> None:
         "the card draws its figure before the summary, so `trailing` is the wrong default"
     )
 
+
 def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
     """The two-copies problem on the one digest knob only a browser reads.
 
@@ -678,6 +688,7 @@ def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
     mirrored = re.search(r"payload_slow_ms:\s*(\d+),", reader)
     assert mirrored is not None, "the frontend dropped its payload_slow_ms default"
     assert int(mirrored.group(1)) == UiConfig().payload_slow_ms
+
 
 def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> None:
     """The seed is what a document holds once the rest of the day arrives by fetch.
@@ -693,6 +704,7 @@ def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> 
     assert ui.shell_seed_items >= ui.leading_stories, (
         f"a {ui.shell_seed_items}-story seed cannot hold {ui.leading_stories} leads"
     )
+
 
 def test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
     """Decision 3's ceiling, derived rather than spelled.
@@ -716,12 +728,14 @@ def test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story() 
     )
     assert UiConfig().lead_shared_subject_weight < CollectConfig().carriage_step
 
+
 def test_a_leading_block_that_could_never_draw_is_refused() -> None:
     """A floor above the ceiling fails silently: the block never appears."""
     with pytest.raises(ValidationError, match="leading_min"):
         UiConfig(leading_stories=3, leading_min=4)
     with pytest.raises(ValidationError, match="leading_per_desk"):
         UiConfig(leading_stories=3, leading_per_desk=4)
+
 
 def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
     """The one edit that would silence a gate instead of tightening it.
@@ -737,11 +751,13 @@ def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
             EvaluationConfig(verbatim_reject_ceiling=silenced)
     assert EvaluationConfig(verbatim_reject_ceiling=gate + 0.01).verbatim_reject_ceiling > gate
 
+
 def test_the_committed_reject_ceiling_leaves_the_brief_gate_a_live_band() -> None:
     """0.75 against a 0.5 gate, so (0.5, 0.75] is a band the gate can still fail in."""
     evaluation = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).evaluation
     assert evaluation.verbatim_reject_ceiling == 0.75
     assert evaluation.brief_compression_ceiling == 0.5
+
 
 def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None:
     """Every instrument is on unconfigured, and the committed file did not turn one off.
@@ -764,6 +780,7 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     assert fresh.observability.telemetry_publish
     assert fresh.observability.runtime_counters_scrape
     assert fresh.observability.tracing_enabled
+
 
 def test_the_item_health_census_is_not_switchable() -> None:
     """The denominator under every rate this project publishes has no off switch.
@@ -793,12 +810,14 @@ def test_the_item_health_census_is_not_switchable() -> None:
     }
     assert "census" in (ObservabilityConfig.__doc__ or "")
 
+
 def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() -> None:
     """Two ways to say off is how two ways of saying it end up disagreeing."""
     for refused in (0.0, -0.1, 1.1):
         with pytest.raises(ValidationError):
             ObservabilityConfig(sample_rate=refused)
     assert ObservabilityConfig(sample_rate=1.0).sample_rate == 1.0
+
 
 def test_the_trace_window_is_a_positive_span_of_days() -> None:
     """The raw-trace window is counted in days, not months.
@@ -816,6 +835,7 @@ def test_the_trace_window_is_a_positive_span_of_days() -> None:
         ObservabilityConfig(trace_window_days=0)
     assert ObservabilityConfig(trace_window_days=1).trace_window_days == 1
 
+
 def test_a_month_may_not_be_deleted_before_it_has_been_downsampled() -> None:
     """A summary has to outlive the full-grain window it replaces, both times."""
     fresh = ObservabilityConfig()
@@ -828,6 +848,7 @@ def test_a_month_may_not_be_deleted_before_it_has_been_downsampled() -> None:
             with pytest.raises(ValidationError, match=summary):
                 ObservabilityConfig(**{summary: early})
         assert ObservabilityConfig(**{summary: keep + 1}) is not None
+
 
 def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
     """The check the old `keep_months` never made, and the reason 13 was wrong.
@@ -876,6 +897,7 @@ def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
         with pytest.raises(ValidationError, match=name):
             AppConfig.model_validate({"observability": short})
 
+
 def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> None:
     """Either way round leaves a month nothing can answer for."""
     for skew in (-1, 1):
@@ -889,470 +911,3 @@ def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> N
         ).public_telemetry_keep_months
         == 20
     )
-
-def test_a_config_still_carrying_a_removed_knob_is_refused_by_name() -> None:
-    """Decision 2: a removed knob fails loudly and names what to use instead.
-
-    Every model here forbids unknown keys, so all three names already failed -
-    with "extra inputs are not permitted", which does not tell an operator where
-    their number went. Ignoring the key would be worse still: an edit that takes
-    no effect is a value somebody believes.
-
-    The old value is not carried forward either. `keep_months` was set against a
-    check that compared `months * 30` against the console window instead of the
-    shards that window selects, so honouring it would honour the defect.
-    """
-    for block, removed, successor in (
-        ("observability", "keep_months", "item_health_full_grain_months"),
-        ("observability", "hard_delete_after_months", "item_health_aggregate_keep_months"),
-        ("collect", "quarantine_after_failures", "availability_strikes_before_rest"),
-    ):
-        model = ObservabilityConfig if block == "observability" else CollectConfig
-        with pytest.raises(ValidationError, match=successor) as raised:
-            model.model_validate({removed: 13})
-        assert f"{block}.{removed}" in str(raised.value)
-
-def test_the_removed_names_are_the_three_this_row_retired() -> None:
-    """The map is what the refusal message reads, so it is the map that is asserted."""
-    assert dict(SUPERSEDED_COLLECT_NAMES) == {
-        "quarantine_after_failures": "availability_strikes_before_rest"
-    }
-    assert dict(SUPERSEDED_RETENTION_NAMES) == {
-        "keep_months": "item_health_full_grain_months",
-        "hard_delete_after_months": "item_health_aggregate_keep_months",
-    }
-
-def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> None:
-    """The refusal fires on the removed name and on nothing else."""
-    assert ObservabilityConfig.model_validate({"sample_rate": 0.5}).sample_rate == 0.5
-    assert CollectConfig.model_validate({"max_per_source": 3}).max_per_source == 3
-
-#: Every place `pipeline_fingerprint` may still be named in source a person
-#: wrote, and why. The removal cannot be gated on "the name appears nowhere":
-#: the read-side migration has to name the key it pops, and one shape still
-#: declares the field because the console still reads its column. So the gate is
-#: that every mention is one of these, with its reason beside it.
-FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
-    "backend/idhazh/contracts/day_metrics.py": (
-        "the popper: 23 committed state/day-metrics/ records and both published "
-        "month mirrors carry the key, and extra=forbid refuses it"
-    ),
-    "backend/idhazh/contracts/run_manifest.py": (
-        "the popper, spelled plural: all 23 committed run.json files carry "
-        "pipeline_fingerprints and a published day is never rewritten"
-    ),
-    "backend/idhazh/contracts/eval_row.py": (
-        "the one field that survives the drop, because the console reads its "
-        "state/scores/ column for every day before RECORDED_INPUTS_FROM - the "
-        "condition that removes it is on the line that declares it"
-    ),
-    "backend/idhazh/contracts/app_config.py": "a changelog entry, which is history",
-    "backend/idhazh/contracts/score_archive.py": "a changelog entry and a docstring, both history",
-    "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",
-    "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
-    "backend/idhazh/contracts/public_eval.py": "a changelog entry, which is history",
-    "backend/idhazh/contracts/qualification.py": "a changelog entry, which is history",
-    "backend/idhazh/contracts/summary.py": "a changelog entry, which is history",
-    "frontend/src/lib/server/model-work.ts": (
-        "the dated historical branch, which reads the months committed before "
-        "2026-09-12 and retires on the condition written beside RECORDED_INPUTS_FROM"
-    ),
-    "frontend/src/lib/console/eval-instruments.ts": (
-        "the ledger column's own note, which says why no panel draws it"
-    ),
-}
-
-#: The two shapes that carry a read-side migration for the retired key, the key
-#: each one pops, and the misspelling that must still be refused. `RunRecord`
-#: spells it plural, so one shared key constant in `base.py` would have covered
-#: neither model honestly. Each misspelling is the key with one letter gone,
-#: which is the shape a hand-written payload actually takes.
-FINGERPRINT_POPPERS: Final[dict[str, tuple[str, str]]] = {
-    "DayMetrics": ("pipeline_fingerprint", "pipeline_fingerprnt"),
-    "RunManifest": ("pipeline_fingerprints", "pipeline_fingerprnts"),
-}
-
-#: One payload per popped shape, copied out of the committed archive so the
-#: oracle reads a fixed file rather than whatever a run last wrote. They sit
-#: outside `tests/fixtures/contracts/` on purpose: every file under that tree is
-#: asserted to round-trip byte-identically through its own shape, and a payload
-#: of the PREVIOUS shape cannot, which is the whole point of it.
-FINGERPRINT_FIXTURES: Final[dict[str, Path]] = {
-    "DayMetrics": FIXTURES_DIR / "retired-fingerprint" / "day-metrics.json",
-    "RunManifest": FIXTURES_DIR / "retired-fingerprint" / "run-manifest.json",
-}
-
-def misspell(node: Any, key: str, wrong: str) -> Any:
-    """The same payload with one key renamed, wherever in the tree it sits."""
-    if isinstance(node, dict):
-        return {(wrong if name == key else name): misspell(v, key, wrong) for name, v in node.items()}
-    if isinstance(node, list):
-        return [misspell(value, key, wrong) for value in node]
-    return node
-
-def test_nothing_reads_the_pipeline_fingerprint_except_the_places_named_here() -> None:
-    """The stamp stopped gating, and the field is gone from nine of the ten shapes.
-
-    A fixed-size read of code a person wrote, never of data a run appended
-    (`CLAUDE.md` section 13). It grows with the codebase and not with the
-    archive, so a day that publishes changes nothing here.
-
-    The gate is not "the name appears nowhere", because two shapes have to name
-    the key to pop it and one still declares the field. Both are named above,
-    which is what makes this a rule rather than a habit.
-    """
-    roots = (
-        (REPO_ROOT / "backend" / "idhazh", ("*.py",)),
-        (REPO_ROOT / "frontend" / "src", ("*.ts", "*.svelte", "*.js")),
-    )
-    found: set[str] = set()
-    for root, patterns in roots:
-        for pattern in patterns:
-            for path in root.rglob(pattern):
-                if "pipeline_fingerprint" in path.read_text(encoding="utf-8"):
-                    found.add(path.relative_to(REPO_ROOT).as_posix())
-
-    assert found == set(FINGERPRINT_SURVIVORS), (
-        "a module names pipeline_fingerprint that is not on the survivor list. "
-        "Either it is a reader and has to stop reading, or it is a survivor and "
-        "has to say why it survives."
-    )
-
-@pytest.mark.parametrize(("name", "key"), [(n, k) for n, (k, _) in FINGERPRINT_POPPERS.items()])
-def test_a_payload_carrying_the_retired_key_parses_and_comes_back_without_it(
-    name: str, key: str
-) -> None:
-    """The read-side migration `CLAUDE.md` section 11 owes for a breaking removal.
-
-    Driven from a payload a real run wrote - `state/day-metrics/2026/09/11.json`
-    and `frontend/public/digest/2026/09/11/run.json`, copied into
-    `tests/fixtures/` so the oracle cannot change when the archive does.
-    """
-    contract = {model.__name__: model for model in CONTRACTS}[name]
-    payload = json.loads(read_text(FINGERPRINT_FIXTURES[name]))
-    assert key in canonical_json(payload), f"the fixture no longer carries {key}"
-
-    parsed = contract.model_validate(payload)
-
-    assert key not in canonical_json(parsed.model_dump(mode="json"))
-    assert key not in contract.model_fields
-
-@pytest.mark.parametrize(
-    ("name", "key", "wrong"), [(n, k, w) for n, (k, w) in FINGERPRINT_POPPERS.items()]
-)
-def test_the_same_payload_with_the_key_misspelt_is_still_refused(
-    name: str, key: str, wrong: str
-) -> None:
-    """The arm that matters, and the reason the popper names its key.
-
-    A migration written as "drop whatever the model does not declare" passes the
-    test above perfectly and turns `extra="forbid"` into `extra="ignore"` for the
-    shape it sits on - so a misspelt key in a hand-written payload would parse
-    and the value it was meant to carry would simply be absent.
-
-    The misspelling is made here rather than committed as a second fixture,
-    because renaming one key of the payload above is what proves the two differ
-    in the spelling and in nothing else.
-    """
-    contract = {model.__name__: model for model in CONTRACTS}[name]
-    payload = misspell(json.loads(read_text(FINGERPRINT_FIXTURES[name])), key, wrong)
-
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        contract.model_validate(payload)
-
-def test_no_other_contract_learned_to_accept_the_retired_key() -> None:
-    """The popper is opted into by two shapes and inherited by none.
-
-    Written on `Model` or `Contract` instead, a popper reading a shared key list
-    passes both arms above and silently opens every contract in the repository
-    to a key only two of them ever held. Nothing else can fail that, which is why
-    this arm is not optional.
-
-    Driven from the committed contract fixtures, which are a fixed set of files a
-    person wrote (`CLAUDE.md` section 13). `EvalRow` is skipped because it still
-    declares the field.
-    """
-    checked = 0
-    for model in CONTRACTS:
-        key = "pipeline_fingerprint"
-        if model.__name__ in FINGERPRINT_POPPERS or key in model.model_fields:
-            continue
-        directory = CONTRACT_FIXTURES_DIR / model.__schema_stem__
-        for path in sorted(directory.glob("*.json")):
-            payload = json.loads(read_text(path))
-            if not isinstance(payload, dict):
-                continue
-            with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-                model.model_validate({**payload, key: "a" * 64})
-            checked += 1
-            break
-
-    assert checked >= 30, f"only {checked} contracts were offered the retired key"
-
-def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path: Path) -> None:
-    """The Oracle for row #6: the pointer is the whole swap, both ways.
-
-    Before 2026-09-14 a swap was eleven lines edited in place in the file every
-    other knob lives in, and a revert had to rebuild the previous model's
-    measured numbers out of git history. Both models sit on disk now, so this
-    moves one string and reads the resolved entry back - then moves it back and
-    reads the incumbent.
-
-    The candidate is BUILT rather than copied from a committed second model,
-    because there is only one committed model and a test that waited for a
-    second one would prove nothing until the day it was needed.
-    """
-    incumbent = copy_config(tmp_path)
-    candidate = "models/other-model-q4km.json"
-    other = committed_models_raw()
-    other["summarize"] |= {
-        "id": "some-other-model-q4-k-m",
-        "repo": "someone/Other-GGUF",
-        "file": "Other-Q4_K_M.gguf",
-        "revision": "f" * 40,
-        "sha256": "1" * 64,
-        "hf_base_repo": None,
-    }
-    other["summarize"]["inference"]["declared_for"] = "1" * 64
-    other["summarize"]["turns"]["declared_for"] = "1" * 64
-    (tmp_path / "config" / candidate).write_text(
-        canonical_json(other), encoding="utf-8", newline="\n"
-    )
-    before = read_text(tmp_path / "config" / "idhazh.json")
-
-    point_at(tmp_path, candidate)
-    swapped = config.load(tmp_path / "config")
-    assert swapped.models.summarize.id == "some-other-model-q4-k-m"
-    assert swapped.models.summarize.sha256 == "1" * 64
-    assert changed_lines(before, read_text(tmp_path / "config" / "idhazh.json")) == 1
-
-    point_at(tmp_path, incumbent)
-    assert config.load(tmp_path / "config").models == committed_models()
-    assert read_text(tmp_path / "config" / "idhazh.json") == before, (
-        "the revert is the same one line, so the file comes back byte-identical"
-    )
-
-def point_at(root: Path, models_file: str) -> None:
-    raw = json.loads(read_text(root / "config" / "idhazh.json"))
-    raw["models_file"] = models_file
-    (root / "config" / "idhazh.json").write_text(
-        canonical_json(raw), encoding="utf-8", newline="\n"
-    )
-
-def test_folding_the_system_text_without_a_joiner_is_refused() -> None:
-    """Decision 2, first half. The separator is what keeps the two blocks apart.
-
-    Absent, the last instruction and the opening fence of the untrusted block
-    render on one line. The prompt is still well formed, the grammar still
-    accepts the reply, and the only symptom is a worse summary.
-    """
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(entry_with(system_role="fold_into_first_user"))
-
-    assert "system_joiner is required under system_role='fold_into_first_user'" in str(
-        raised.value
-    )
-
-def test_a_joiner_declared_beside_a_system_turn_is_refused() -> None:
-    """Decision 2, second half. A dead field is a field somebody will trust.
-
-    `own_turn` gives the system text a turn of its own, so nothing joins it to
-    anything. A joiner set here is a value an operator chose, a reviewer read,
-    and no render ever applied.
-    """
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(entry_with(system_role="own_turn", system_joiner="\n\n"))
-
-    assert "where the system text has a turn of its own" in str(raised.value)
-
-def test_a_fold_that_declares_a_joiner_loads() -> None:
-    """The bite proof for both halves: the pair the refusals permit is legal."""
-    folded = ModelsConfig.model_validate(
-        entry_with(system_role="fold_into_first_user", system_joiner="\n\n")
-    )
-
-    assert folded.summarize.turns.system_joiner == "\n\n"
-
-def test_a_template_that_reads_no_keyword_may_not_be_asked_to_think() -> None:
-    """Decision 3, second half, and the two halves sit in different blocks.
-
-    A null keyword means the request carries no `chat_template_kwargs` at all,
-    so `inference.thinking` true asks for reasoning through a channel nothing
-    sends. Neither block can see the other, so the entry is where the pair is
-    checked.
-    """
-    payload = entry_with(thinking_kwarg=None)
-    payload["summarize"]["inference"]["thinking"] = True
-
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(payload)
-
-    assert "sends no chat_template_kwargs at all" in str(raised.value)
-
-def test_a_template_that_reads_no_keyword_loads_with_reasoning_off() -> None:
-    """The bite proof. Null is a legal declaration, not a broken entry."""
-    silent = ModelsConfig.model_validate(entry_with(thinking_kwarg=None))
-
-    assert silent.summarize.turns.thinking_kwarg is None
-    assert silent.summarize.inference.thinking is False
-
-def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> None:
-    """The name is a model fact, so the file that names the weights names it too.
-
-    It was spelled in `backend/idhazh/llm/server.py` and sent to every model
-    until 2026-09-14. The default is the incumbent's, which is why this asserts
-    the file carries it rather than asserting the default resolves.
-    """
-    raw = committed_models_raw()
-
-    assert raw["summarize"]["turns"]["thinking_kwarg"] == "enable_thinking"
-    assert committed_models().summarize.turns.system_role is SystemPlacement.OWN_TURN
-
-def changed_lines(before: str, after: str) -> int:
-    old = before.splitlines()
-    new = after.splitlines()
-    assert len(old) == len(new), "a swap that adds or removes a line is not a one-line swap"
-    return sum(1 for a, b in zip(old, new, strict=True) if a != b)
-
-def test_a_config_that_still_carries_the_old_models_block_is_refused_by_name() -> None:
-    """The read-side migration `CLAUDE.md` section 11 owes for the removal.
-
-    Refused rather than lifted onto the new file. A lift would read one model
-    out of the old block while `models_file` named another file, and the run
-    would stand a server up on whichever won - which is the failure this row
-    exists to end, one level up.
-    """
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    raw["models"] = {"summarize": committed_models_raw()["summarize"]}
-
-    with pytest.raises(ValidationError) as raised:
-        AppConfig.model_validate(raw)
-
-    assert "config.models is now config.models_file" in str(raised.value)
-    assert SUPERSEDED_APP_NAMES["models"] == "models_file"
-
-def test_the_pointer_may_not_leave_the_models_directory() -> None:
-    """An operator's edit becomes a path this build opens, so the grammar bounds it.
-
-    Held by the schema rather than checked in the loader, which is what makes it
-    a refusal at load rather than a read four hundred seconds into a run.
-    """
-    for escape in (
-        "../secrets.json",
-        "models/../../secrets.json",
-        "/etc/passwd",
-        "models\\qwen.json",
-        "models/qwen.txt",
-        "idhazh.json",
-    ):
-        with pytest.raises(ValidationError, match="should match pattern"):
-            AppConfig.model_validate({"models_file": escape})
-
-def test_the_model_file_is_digested_with_the_rest_of_the_config() -> None:
-    """A run that did not record it could not say which model's numbers it read.
-
-    `models_file` names the file, so the digest of `config/idhazh.json` moves
-    when the POINTER moves and says nothing about what the file it points at
-    says. Both have to travel or a re-tuned model file is invisible to the
-    record.
-    """
-    settings = config.load(CONFIG_DIR)
-    recorded = {digest.path: digest.sha256 for digest in settings.digests}
-
-    assert f"config/{settings.app.models_file}" in recorded
-    text = read_text(CONFIG_DIR / settings.app.models_file)
-    assert recorded[f"config/{settings.app.models_file}"] == sha256_of(text)
-
-def sha256_of(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-def test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it() -> None:
-    """The Oracle: new weights under an untouched settings block are refused.
-
-    Every number in an `inference` block is a measurement about one model on one
-    runner. Until this gate, `models.summarize` could name a different
-    repository, file, revision and digest with the block left exactly where it
-    was and `AppConfig.model_validate` raised nothing - so the run stood a server
-    up on numbers derived for weights it never opened and published a whole
-    plausible day.
-    """
-    committed = committed_models()
-    assert committed.summarize.inference.declared_for == committed.summarize.sha256
-
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(swapped_summarizer())
-    message = str(raised.value)
-    assert "models.summarize.inference" in message, "the message names the block"
-    assert "1" * 64 in message, "and the weights the entry now names"
-
-def test_a_refused_model_file_is_named_by_the_loader(tmp_path: Path) -> None:
-    """Every model has a file of its own, so a refusal has to say which one.
-
-    The validator cannot: it is handed a payload, not a path. So the loader adds
-    the address, and this is the arm that proves it rather than trusting it - an
-    operator with two model files on disk and a refusal naming neither has to
-    guess which one they broke.
-    """
-    written = copy_config(tmp_path, models=swapped_summarizer())
-
-    with pytest.raises(ValueError) as raised:
-        config.load(tmp_path / "config")
-
-    message = str(raised.value)
-    assert f"config/{written}" in message, "the refusal names the file that is wrong"
-    assert "models.summarize.inference" in message, "and the block inside it"
-
-def test_an_entry_that_declares_no_settings_of_its_own_is_refused_by_name() -> None:
-    """A new entry written with no block of its own does not fall back to one."""
-    raw = swapped_summarizer()
-    del raw["summarize"]["inference"]
-    with pytest.raises(ValidationError, match=re.escape("models.summarize.inference")):
-        ModelsConfig.model_validate(raw)
-
-def test_the_one_shared_settings_block_is_refused_by_name() -> None:
-    """`models.inference` was one block applied to two models. It is gone.
-
-    Refused rather than lifted onto both entries. A lift is the silent
-    inheritance this row exists to end: it would hand a swapped entry the
-    numbers the previous weights were measured on and raise nothing.
-
-    It is the one entry in this map with a replacement to name. The other two
-    are roles that were retired outright, so they carry an empty string and the
-    refusal says so rather than inventing a successor.
-    """
-    raw = committed_models_raw()
-    raw["inference"] = {"n_ctx": 8192}
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(raw)
-    assert "models.inference is now models.<role>.inference" in str(raised.value)
-    assert SUPERSEDED_MODELS_NAMES["inference"] == "<role>.inference"
-    assert not SUPERSEDED_MODELS_NAMES["visual_planner"]
-    assert not SUPERSEDED_MODELS_NAMES["route"]
-
-def test_every_committed_model_entry_declares_the_weights_its_settings_are_for() -> None:
-    """The committed file states the pairing rather than implying it."""
-    raw = committed_models_raw()
-    assert "inference" not in raw
-    for role in ModelsConfig.roles():
-        entry = raw[role]
-        assert entry["inference"]["declared_for"] == entry["sha256"], role
-
-def test_a_run_manifest_written_before_the_settings_moved_still_reads() -> None:
-    """The read side: a `model_ref` with no settings block opens on the defaults.
-
-    Nineteen manifests sit under `frontend/public/digest/` with the shape
-    `model_ref` had yesterday, and `frontend/src/lib/server/payload.ts` opens
-    them at every build. A block that could not default would make each of them
-    a payload today's build cannot read (`CLAUDE.md` section 11). Proved by
-    removing the key rather than by reading a committed day, so it cannot age
-    out of retention.
-    """
-    current = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
-    for run in current["runs"]:
-        for use in run["models"]:
-            del use["model_ref"]["inference"]
-
-    older = RunManifest.model_validate(current)
-    entry = older.runs[0].models[0].model_ref
-    assert entry.inference.declared_for is None
-    assert entry.inference.n_ctx == 8192, "the contract default, not a guess"

@@ -274,6 +274,7 @@ BROWSER_VERSION_SOURCE: Final = ("ci.yml", "scope", "browsers", "playwright")
 
 MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "budgets"})
 
+
 #: The bench is one target and two jobs: raw prefill and decode first, then a
 #: real server doing real work. The raw arm saves the weights cache entry and
 #: the server arm restores it, so a key that differs by one character is a
@@ -293,12 +294,14 @@ BENCH_ARTIFACTS: Final = {
     BENCH_SERVER_JOB: "bench-server-${{ inputs.runtime_candidate }}",
 }
 
+
 #: Ninety days, and the number is here rather than only in the file so moving it
 #: is a decision somebody writes down. The sweep used to keep seven, which is
 #: shorter than the gap between benching a model and adopting it - and an
 #: expired artifact is a five-hour job run a second time for numbers that were
 #: already measured.
 BENCH_RETENTION_DAYS: Final = 90
+
 
 #: What the bench builds instead of editing the committed config, and the step
 #: that builds it.
@@ -307,6 +310,7 @@ BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
 BENCH_CONFIG_STEP: Final = "Build the candidate config"
 
 BENCH_EMIT_STEP: Final = "Emit the dossier body"
+
 
 #: Row #13a's arm. Its own target because retaking three token counts is minutes
 #: and the bench is hours, and nobody should have to spend the second to get the
@@ -437,12 +441,14 @@ PYTHON_PROCS_FIELDS: Final = {
     7: "args",
 }
 
+
 #: The one reading that has to be taken at both ends of the job. `/proc/stat`
 #: counts since boot, so a single read is mostly the minutes the runner spent
 #: booting. `/proc/stat` rather than a cgroup file because two cgroup files this
 #: repository has read - `memory.peak` and `cpu.max` - are absent on a
 #: GitHub-hosted runner, and `/proc/stat` is on every Linux there is.
 CPU_STAT_READING: Final = "awk '/^cpu / { print }' /proc/stat"
+
 
 #: The step that takes the first of the two readings. The second is taken in
 #: `COUNTERS_STEP`, which is also where both are handed to the row.
@@ -670,6 +676,7 @@ TOLERATED: Final = "true"
 
 COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
 
+
 #: Every file that configures git before a job commits. A runner carries no
 #: identity of its own, so each of these has to set one, and two copies of a
 #: name drift in silence unless something reads both.
@@ -752,6 +759,7 @@ RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_I
 
 _PARSED_WORKFLOWS: dict[str, dict[str, object]] | None = None
 
+
 def _parsed_workflows() -> dict[str, dict[str, object]]:
     """Every workflow in the repository, read and parsed once for the whole session.
 
@@ -775,6 +783,7 @@ def _parsed_workflows() -> dict[str, dict[str, object]]:
     _PARSED_WORKFLOWS = workflows
     return workflows
 
+
 def _load_workflows() -> dict[str, dict[str, object]]:
     """This caller's own copy of the parsed workflows.
 
@@ -785,23 +794,28 @@ def _load_workflows() -> dict[str, dict[str, object]]:
     """
     return copy.deepcopy(_parsed_workflows())
 
+
 def _triggers(workflow: dict[str, object]) -> dict[str, object]:
     triggers = workflow.get("on")
     assert isinstance(triggers, dict), "workflow 'on' must contain a YAML mapping"
     return cast(dict[str, object], triggers)
 
+
 def _mapping(value: object, description: str) -> dict[str, object]:
     assert isinstance(value, dict), f"{description} must contain a YAML mapping"
     return cast(dict[str, object], value)
+
 
 def _string_list(value: object, description: str) -> list[str]:
     assert isinstance(value, list), f"{description} must contain a YAML list"
     assert all(isinstance(item, str) for item in value), f"{description} must contain strings"
     return cast(list[str], value)
 
+
 def _dispatch_inputs(workflow: dict[str, object]) -> dict[str, object]:
     dispatch = _mapping(_triggers(workflow).get("workflow_dispatch"), "workflow_dispatch")
     return _mapping(dispatch.get("inputs"), "workflow_dispatch inputs")
+
 
 def _declared_dispatch_inputs(workflow: dict[str, object]) -> dict[str, object]:
     """The dispatch inputs a workflow declares, and `{}` when it declares none.
@@ -819,6 +833,7 @@ def _declared_dispatch_inputs(workflow: dict[str, object]) -> dict[str, object]:
         return {}
     return _mapping(inputs, "workflow_dispatch inputs")
 
+
 def _run_bodies(workflow: dict[str, object]) -> list[str]:
     return [
         script
@@ -829,13 +844,16 @@ def _run_bodies(workflow: dict[str, object]) -> list[str]:
 
 CONFIG_FILE_NAME: Final = "idhazh.json"
 
+
 #: The key in `config/idhazh.json` that names the active model's own file. A
 #: program that indexes it is no longer reading the pointer file from that
 #: point on, so this is what tells the two documents apart.
 MODELS_POINTER_KEY: Final = "models_file"
 
+
 #: What this file calls the document the pointer names, in a key-path result.
 MODELS_DOCUMENT: Final = "models"
+
 
 def _inline_programs(script: str) -> list[str]:
     """Every Python program a shell step carries, heredoc or `-c` one-liner.
@@ -849,6 +867,7 @@ def _inline_programs(script: str) -> list[str]:
     programs.extend(re.findall(r"python3?\s+-c\s+'([^']*)'", script))
     return programs
 
+
 def _reads_the_config_file(node: ast.AST, aliases: frozenset[str]) -> bool:
     return any(
         (
@@ -860,6 +879,7 @@ def _reads_the_config_file(node: ast.AST, aliases: frozenset[str]) -> bool:
         for inner in ast.walk(node)
     )
 
+
 def _parses_json(node: ast.AST) -> bool:
     return any(
         isinstance(inner, ast.Attribute)
@@ -868,6 +888,7 @@ def _parses_json(node: ast.AST) -> bool:
         and inner.value.id == "json"
         for inner in ast.walk(node)
     )
+
 
 def _reads_the_environment(node: ast.AST) -> bool:
     """`os.environ[...]` or `os.environ.get(...)` anywhere in an expression."""
@@ -879,11 +900,13 @@ def _reads_the_environment(node: ast.AST) -> bool:
         for inner in ast.walk(node)
     )
 
+
 def _names(node: ast.AST, name: str) -> bool:
     """Whether an expression reads a given name anywhere inside itself."""
     return any(
         isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node)
     )
+
 
 def _own_nodes(scope: ast.AST) -> list[ast.AST]:
     """Every node a scope owns, without descending into a nested function.
@@ -903,6 +926,7 @@ def _own_nodes(scope: ast.AST) -> list[ast.AST]:
         stack.extend(ast.iter_child_nodes(node))
     return owned
 
+
 def _committed_models() -> dict[str, Any]:
     """The active model's file, found the way the workflows find it.
 
@@ -913,6 +937,7 @@ def _committed_models() -> dict[str, Any]:
     pointer = json.loads(read_text(CONFIG_DIR / CONFIG_FILE_NAME))[MODELS_POINTER_KEY]
     payload: dict[str, Any] = json.loads(read_text(CONFIG_DIR / pointer))
     return payload
+
 
 def _follows_the_pointer(node: ast.AST, tainted: frozenset[str]) -> bool:
     """Does this expression reach the model file rather than the pointer file?
@@ -935,6 +960,7 @@ def _follows_the_pointer(node: ast.AST, tainted: frozenset[str]) -> bool:
         or (isinstance(inner, ast.Name) and inner.id in tainted)
         for inner in ast.walk(node)
     )
+
 
 def _config_mapping_names(nodes: list[ast.AST]) -> tuple[frozenset[str], frozenset[str]]:
     """The names one scope binds to each of the two committed config documents.
@@ -972,6 +998,7 @@ def _config_mapping_names(nodes: list[ast.AST]) -> tuple[frozenset[str], frozens
                 aliases.add(target.id)
         if before == (frozenset(aliases), frozenset(mappings), frozenset(models)):
             return frozenset(mappings), frozenset(models)
+
 
 def _config_key_paths(program: str) -> list[tuple[str, tuple[str, ...]]]:
     """Every literal key path an inline program indexes, and which document on.
@@ -1016,12 +1043,15 @@ def _config_key_paths(program: str) -> list[tuple[str, tuple[str, ...]]]:
                 found.append((CONFIG_FILE_NAME, tuple(reversed(keys))))
     return found
 
+
 def _names_the_input(text: str, name: str) -> bool:
     return re.search(rf"inputs\.{re.escape(name)}\b", text) is not None
+
 
 def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
     jobs = _mapping(workflow.get("jobs"), "jobs")
     return _mapping(jobs.get(name), f"job {name}")
+
 
 def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]]:
     raw_steps = _job(workflow, job_name).get("steps")
@@ -1029,12 +1059,14 @@ def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]
     assert all(isinstance(step, dict) for step in raw_steps), f"job {job_name} steps must be mappings"
     return cast(list[dict[str, object]], raw_steps)
 
+
 def _step(
     workflow: dict[str, object], job_name: str, key: str, value: str
 ) -> dict[str, object]:
     matches = [step for step in _steps(workflow, job_name) if step.get(key) == value]
     assert len(matches) == 1, f"job {job_name} must have one step with {key}={value}"
     return matches[0]
+
 
 def _strings(node: object) -> Iterator[str]:
     """Every string anywhere in a YAML subtree, so an expression cannot hide in a nest."""
@@ -1047,6 +1079,7 @@ def _strings(node: object) -> Iterator[str]:
         for item in cast(list[object], node):
             yield from _strings(item)
 
+
 def _needs(workflow: dict[str, object], job_name: str) -> list[str]:
     """What a job waits on, whether it was written as one name or a list."""
     declared = _job(workflow, job_name).get("needs")
@@ -1055,6 +1088,7 @@ def _needs(workflow: dict[str, object], job_name: str) -> list[str]:
     if isinstance(declared, str):
         return [declared]
     return _string_list(declared, f"job {job_name} needs")
+
 
 def _artifact_upload(
     workflow: dict[str, object], job_name: str, artifact: str
@@ -1067,6 +1101,7 @@ def _artifact_upload(
     ]
     assert len(matches) == 1, f"job {job_name} must upload one artifact named {artifact}"
     return matches[0]
+
 
 def _values_keyed(node: object, names: frozenset[str]) -> list[tuple[str, str]]:
     """Every value under one of `names`, at any depth of a job body.
@@ -1085,6 +1120,7 @@ def _values_keyed(node: object, names: frozenset[str]) -> list[tuple[str, str]]:
             found.extend(_values_keyed(item, names))
     return found
 
+
 def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
     references: list[tuple[str, str]] = []
     for job_name in _mapping(workflow.get("jobs"), "jobs"):
@@ -1095,6 +1131,7 @@ def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
             assert isinstance(uses, str), f"job {job_name} 'uses' must be a string"
             references.append((job_name, uses))
     return references
+
 
 def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> list[int] | None:
     """Read the fan-out step's shell and answer what matrix it writes.
@@ -1149,6 +1186,7 @@ def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> 
         return None
     return list(range(int(shards)))
 
+
 def _normalize_condition(value: object, description: str) -> str:
     assert isinstance(value, str), f"{description} must be a string"
     condition = value.strip()
@@ -1156,6 +1194,7 @@ def _normalize_condition(value: object, description: str) -> str:
     if wrapper is not None:
         condition = wrapper.group(1)
     return " ".join(condition.split())
+
 
 def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object, str]]:
     return [
@@ -1165,6 +1204,7 @@ def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object,
         if isinstance(script := step.get("run"), str)
         and "ggml-org/llama.cpp/releases" in script
     ]
+
 
 def _weights_fetch_steps(
     workflows: Mapping[str, dict[str, object]],
@@ -1189,6 +1229,7 @@ def _weights_fetch_steps(
                 found[where] = (name, script)
     return found
 
+
 def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
     keys: list[tuple[str, str]] = []
     for job_name in _mapping(workflow.get("jobs"), "jobs"):
@@ -1206,8 +1247,10 @@ def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
             keys.append((job_name, key))
     return keys
 
+
 #: A `python-version` that names a matrix key rather than a version.
 _MATRIX_PIN: Final = re.compile(r"^\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}$")
+
 
 def _setup_python_versions(workflow: dict[str, object]) -> list[tuple[str, str]]:
     """Every interpreter a workflow sets up, with a matrix expanded to its values.
@@ -1230,6 +1273,7 @@ def _setup_python_versions(workflow: dict[str, object]) -> list[tuple[str, str]]
                 versions.append((job_name, pinned))
     return versions
 
+
 def _matrix_values(workflow: dict[str, object], job_name: str, version: str) -> list[str]:
     """One pin, or every value the matrix key it names carries."""
     named = _MATRIX_PIN.fullmatch(version)
@@ -1243,16 +1287,20 @@ def _matrix_values(workflow: dict[str, object], job_name: str, version: str) -> 
     assert values, f"job {job_name} names matrix.{key}, which is empty"
     return [str(value) for value in values]
 
+
 def _script(step: dict[str, object], description: str) -> str:
     script = step.get("run")
     assert isinstance(script, str), f"{description} must run a shell script"
     return script
 
+
 def _expression(body: str) -> str:
     return "${{ " + body + " }}"
 
+
 def _plan_output(name: str) -> str:
     return _expression(f"needs.plan.outputs.{name}")
+
 
 def _every_env(workflow: dict[str, object]) -> list[tuple[str, dict[str, object]]]:
     """Every `env` mapping in a workflow, at all three scopes it can appear at.
@@ -1273,6 +1321,7 @@ def _every_env(workflow: dict[str, object]) -> list[tuple[str, dict[str, object]
             where = f"job {job_name} step {label}"
             scopes.append((where, _mapping(step_env, f"{where} env")))
     return scopes
+
 
 def _run_the_inline_program(script: str, config_root: Path) -> dict[str, str]:
     """Run the program a plan-job step carries, and read what it would write.
@@ -1299,6 +1348,7 @@ def _run_the_inline_program(script: str, config_root: Path) -> dict[str, str]:
         if line
     )
 
+
 def _decide_script(step: dict[str, object]) -> str:
     """digest.yml's `decide` step, with its one remaining expression resolved.
 
@@ -1312,6 +1362,7 @@ def _decide_script(step: dict[str, object]) -> str:
     )
     assert "${{" not in script, "the decide step reads the dispatch date by name, not by paste"
     return script
+
 
 def _run_the_decide_step(
     dispatch_date: str, tmp_path: Path
@@ -1348,6 +1399,7 @@ def _run_the_decide_step(
     )
     return completed, outputs
 
+
 def _grep_pattern(script: str, description: str) -> re.Pattern[str]:
     """The extended regular expression the log summary greps its log with.
 
@@ -1358,6 +1410,7 @@ def _grep_pattern(script: str, description: str) -> re.Pattern[str]:
     patterns = re.findall(r"grep -E '([^']+)'", script)
     assert len(patterns) == 1, f"{description} must grep its log with one -E pattern"
     return re.compile(patterns[0], flags=re.MULTILINE)
+
 
 def _substitute(text: str) -> str:
     """Stand in for what Actions would expand, so a test can run the real call site.
@@ -1373,6 +1426,7 @@ def _substitute(text: str) -> str:
 
     return re.sub(r"\$\{\{(.*?)\}\}", resolve, text, flags=re.DOTALL)
 
+
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
     """The paths and the strings one daily commit step hands the shared script."""
     workflow = _load_workflows()["digest.yml"]
@@ -1385,6 +1439,7 @@ def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
     declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")
     settings = {name: _substitute(str(value)) for name, value in declared.items()}
     return command[2:], settings
+
 
 def _bash() -> str | None:
     """A bash that can run the commit script, or None on a host without one."""
@@ -1438,6 +1493,7 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
         "GIT_TERMINAL_PROMPT": "0",
     }
 
+
 def _step_outputs(written: Path) -> dict[str, str]:
     """What Actions reads back from one step's `$GITHUB_OUTPUT` file."""
     return dict(
@@ -1446,11 +1502,13 @@ def _step_outputs(written: Path) -> dict[str, str]:
         if line
     )
 
+
 def _reading_its_output(tmp_path: Path, settings: dict[str, str]) -> tuple[dict[str, str], Path]:
     """The step's own settings, plus the output file a workflow step would give it."""
     written = tmp_path / "github-output"
     written.write_text("", encoding="ascii")
     return {**settings, "GITHUB_OUTPUT": written.as_posix()}, written
+
 
 def _git(repo: Path, env: dict[str, str], *args: str) -> str:
     completed = subprocess.run(
@@ -1470,6 +1528,7 @@ def _git(repo: Path, env: dict[str, str], *args: str) -> str:
     )
     return completed.stdout
 
+
 def _transient(_directory: str, names: list[str]) -> set[str]:
     """Lock files git's own background maintenance leaves in a template.
 
@@ -1481,9 +1540,11 @@ def _transient(_directory: str, names: list[str]) -> set[str]:
     """
     return {name for name in names if name.endswith('.lock')}
 
+
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="ascii", newline="\n")
+
 
 def _seed_ledger(staged: str) -> str:
     """Where a scripted origin puts the ledger for one staged path.
@@ -1495,10 +1556,12 @@ def _seed_ledger(staged: str) -> str:
     """
     return staged if staged.endswith((".csv", ".json")) else f"{staged}/ledger.csv"
 
+
 #: Where a built origin lives, keyed by what it holds. A template is built once
 #: and copied per test, so the git processes behind the first commit are paid by
 #: the session rather than by every test that starts from the same one.
 _ORIGIN_TEMPLATES: Final[dict[tuple[str, ...], Path]] = {}
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _discard_origin_templates() -> Iterator[None]:
@@ -1507,6 +1570,7 @@ def _discard_origin_templates() -> Iterator[None]:
     for root in _ORIGIN_TEMPLATES.values():
         shutil.rmtree(root, ignore_errors=True)
     _ORIGIN_TEMPLATES.clear()
+
 
 def _template(key: tuple[str, ...]) -> tuple[Path, bool]:
     """The directory this template lives in, and whether it still has to be filled.
@@ -1520,6 +1584,7 @@ def _template(key: tuple[str, ...]) -> tuple[Path, bool]:
     root = Path(tempfile.mkdtemp(prefix="yen-idhazh-origin-"))
     _ORIGIN_TEMPLATES[key] = root
     return root, True
+
 
 def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     """Build the bare origin every commit test starts from, in one template directory."""
@@ -1540,6 +1605,7 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     _git(seed, env, "commit", "-m", "seed")
     _git(seed, env, "push", "-u", "origin", "main")
 
+
 def _scripted_origin(
     tmp_path: Path, env: dict[str, str], staged_paths: Sequence[str]
 ) -> tuple[Path, Path]:
@@ -1559,13 +1625,16 @@ def _scripted_origin(
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
 
+
 def _rebuild_command(date: str) -> str:
     """The producer the harness puts through the loop, as the loop word-splits it."""
     return f"{Path(sys.executable).as_posix()} {REBUILD_STAND_IN.as_posix()} --date {date}"
 
+
 def _drop_command(date: str) -> str:
     """The shipped raced-asset drop, as the loop word-splits it."""
     return f"{Path(sys.executable).as_posix()} {DROP_ENTRY_POINT.as_posix()} --date {date}"
+
 
 def _settle_command(relative: str, key: str) -> str:
     """The post-merge pass the harness puts through the loop, as it word-splits it."""
@@ -1573,6 +1642,7 @@ def _settle_command(relative: str, key: str) -> str:
         f"{Path(sys.executable).as_posix()} {SETTLE_STAND_IN.as_posix()} "
         f"--path {relative} --key {key}"
     )
+
 
 def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> dict[str, str]:
     """The step's own settings, with the one command that would reach this repository.
@@ -1584,6 +1654,7 @@ def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> 
     if "DROP_REPEATED_ROWS_COMMAND" not in settings:
         return settings
     return {**settings, "DROP_REPEATED_ROWS_COMMAND": _settle_command(relative, key)}
+
 
 def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
     """One published visual, exactly as the work job's artifact leaves it.
@@ -1607,6 +1678,7 @@ def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None =
     )
     _write(repo / RUN_ARTIFACTS / date / "items" / f"{item_id}{PAYLOAD_SUFFIX}", decision.to_json())
 
+
 def _rebuild(repo: Path, env: dict[str, str], date: str, items: Sequence[str]) -> None:
     """One assemble run: write this run's artifacts, then publish them."""
     _write(
@@ -1621,6 +1693,7 @@ def _rebuild(repo: Path, env: dict[str, str], date: str, items: Sequence[str]) -
         text=True,
         check=True,
     )
+
 
 def _seed_digest_origin(root: Path, date: str) -> None:
     """Build the origin carrying one published day, in one template directory."""
@@ -1645,6 +1718,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     _git(seed, env, "commit", "-m", f"digest: {date}")
     _git(seed, env, "push", "-u", "origin", "main")
 
+
 def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path, Path]:
     """An origin carrying a published day, plus the clone the assemble job runs in.
 
@@ -1660,6 +1734,7 @@ def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
+
 
 def _race_the_day(
     tmp_path: Path,
@@ -1682,16 +1757,20 @@ def _race_the_day(
     _git(other, env, "commit", "-m", pull_request)
     _git(other, env, "push", "origin", "main")
 
+
 def _rows(text: str) -> list[dict[str, str]]:
     return list(csv.DictReader(io.StringIO(text)))
 
+
 def _tracked(repo: Path, env: dict[str, str], relative: str) -> bool:
     return relative in _git(repo, env, "ls-tree", "-r", "--name-only", "main").splitlines()
+
 
 def _mid_rebase(runner: Path) -> bool:
     return (runner / ".git" / "rebase-merge").is_dir() or (
         runner / ".git" / "rebase-apply"
     ).is_dir()
+
 
 def _race(tmp_path: Path, env: dict[str, str], relative: str, text: str) -> None:
     """Somebody else pushes to origin while the job is still working."""
@@ -1702,6 +1781,7 @@ def _race(tmp_path: Path, env: dict[str, str], relative: str, text: str) -> None
     _git(other, env, "add", relative)
     _git(other, env, "commit", "-m", "racing change")
     _git(other, env, "push", "origin", "main")
+
 
 def _run_commit_script(
     runner: Path,
@@ -1728,6 +1808,7 @@ def _run_commit_script(
         text=True,
     )
 
+
 #: Every job that builds the site and then commits what it built, named with the
 #: step that publishes. Both jobs write a day payload that can be invalid, so
 #: both carry the same two-severity order.
@@ -1739,6 +1820,7 @@ PUBLISHING_SITE_JOBS: Final = (
 #: The step that opens every story in every committed day. Prerendering used to
 #: do it for free.
 VALIDATE_DAYS_CALL: Final = ("python", "-m", "idhazh", "validate-days")
+
 
 #: Every job the command has to run in, and what each one buys. The publishing
 #: jobs stop a broken day being pushed; `ci.yml` stops one being merged. The
@@ -1754,6 +1836,7 @@ VALIDATE_DAYS_JOBS: Final = (
 #: this file's.
 START_SERVER_SCRIPT: Final = SCRIPTS_DIR / "start-llama-server.sh"
 
+
 def _starter_shell(step: Mapping[str, object]) -> str:
     """Everything a starter step executes, following one level of delegation.
 
@@ -1768,6 +1851,7 @@ def _starter_shell(step: Mapping[str, object]) -> str:
     if START_SERVER_SCRIPT.name not in body:
         return body
     return body + "\n" + read_text(START_SERVER_SCRIPT)
+
 
 def _server_starters(
     workflows: Mapping[str, dict[str, object]],

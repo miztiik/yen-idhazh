@@ -40,6 +40,7 @@ def test_the_frame_holds_on_a_day_built_to_break_it() -> None:
     opening = out[: config.head_no_repeat]
     assert len({item.source_id for item in opening}) == len(opening)
 
+
 def test_the_caps_actually_bind_on_that_day() -> None:
     """The fixture exercises both rules rather than passing by being easy.
 
@@ -53,6 +54,7 @@ def test_the_caps_actually_bind_on_that_day() -> None:
     assert Counter(desk_of(item) for item in head)["india"] == config.max_desk_in_head
     assert len({desk_of(item) for item in head[:12]}) >= 3
     assert len({desk_of(item) for item in head}) >= 4
+
 
 def test_a_thin_desk_can_miss_the_head_and_that_is_the_price_of_5() -> None:
     """The cost named when the cap was ruled at 5 rather than 4, written down.
@@ -68,6 +70,7 @@ def test_a_thin_desk_can_miss_the_head_and_that_is_the_price_of_5() -> None:
     assert len({desk_of(item) for item in head}) == 4
     assert set(DESKS) - {desk_of(item) for item in head}
 
+
 def test_every_displaced_story_is_still_on_the_page_below_the_head() -> None:
     """A displaced story keeps its place in the day. Nothing is left out."""
     day = lopsided_day()
@@ -82,10 +85,12 @@ def test_every_displaced_story_is_still_on_the_page_below_the_head() -> None:
     assert len(in_head & set(india)) == config.max_desk_in_head
     assert set(india) - in_head <= below
 
+
 def test_the_first_slot_is_the_scores_own_first_pick() -> None:
     """No cap can bind on an empty head, so the frame never argues about the lead."""
     day = lopsided_day()
     assert placed(day, config=frame())[0].item_id == stream_order(day)[0].item_id
+
 
 def test_past_the_head_the_order_is_the_scores_untouched() -> None:
     """The frame is a claim about the first screen and about nothing else."""
@@ -97,6 +102,7 @@ def test_past_the_head_the_order_is_the_scores_untouched() -> None:
     head = {item.item_id for item in out[: config.head_items]}
     expected = [item.item_id for item in stream_order(day) if item.item_id not in head]
     assert tail == expected
+
 
 def test_the_frame_yields_before_the_day_shortens() -> None:
     """A day the caps cannot spread publishes whole, in the score's own order.
@@ -117,6 +123,7 @@ def test_the_frame_yields_before_the_day_shortens() -> None:
     out = placed(day, config=frame())
 
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
+
 
 def test_a_day_shorter_than_the_head_comes_back_whole() -> None:
     """Twelve stories from one feed on one desk. Every cap is unsatisfiable."""

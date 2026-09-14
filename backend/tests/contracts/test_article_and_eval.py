@@ -34,25 +34,30 @@ def test_url_key_is_rebuilt_not_trusted() -> None:
     payload["url_key"] = derive_url_key(payload["canonical_url"])
     assert Article.model_validate(payload).url_key == derive_url_key(payload["canonical_url"])
 
+
 def test_an_ok_article_must_carry_text() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "article" / "ok.json", text=None)
     with pytest.raises(ValueError, match="title and text"):
         Article.model_validate(payload)
+
 
 def test_a_failed_article_must_record_why() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "article" / "fetch-failed.json", failure_detail=None)
     with pytest.raises(ValueError, match="must record why"):
         Article.model_validate(payload)
 
+
 def test_truncation_is_flagged_and_located_together() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "article" / "truncated.json", truncated_at_tokens=None)
     with pytest.raises(ValueError, match="truncated"):
         Article.model_validate(payload)
 
+
 def test_an_item_decided_to_nothing_carries_no_spec() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json", spec="anything")
     with pytest.raises(ValueError, match="no spec"):
         VisualDecision.model_validate(payload)
+
 
 def test_a_day_still_carrying_the_retired_drawing_path_reads() -> None:
     """The read-side migration `path` owes, proved by putting the key back.
@@ -80,6 +85,7 @@ def test_a_day_still_carrying_the_retired_drawing_path_reads() -> None:
     ] * carried
     assert "path" not in day.items[0].visual.model_dump() if day.items[0].visual else True
 
+
 def test_a_visual_carrying_a_data_path_must_have_rendered() -> None:
     """One-way, and this is the direction that can hold.
 
@@ -96,10 +102,12 @@ def test_a_visual_carrying_a_data_path_must_have_rendered() -> None:
     with pytest.raises(ValueError, match="data path"):
         DigestDay.model_validate(payload)
 
+
 def test_hhem_delta_is_rebuilt_not_trusted() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json", hhem_delta=0.9)
     with pytest.raises(ValueError, match="hhem_delta"):
         EvalRow.model_validate(payload)
+
 
 #: The four columns the owner refused to delete on 2026-08-30, and the two things
 #: each description has to carry. Every one of them is a cell a reader cannot
@@ -134,6 +142,7 @@ def test_a_kept_column_says_what_it_holds_and_who_reads_it(
         f"{model.__name__}.{field} does not say who reads it"
     )
 
+
 def test_every_kept_column_reaches_its_generated_schema() -> None:
     """A description a reader never sees is a comment. These are read by people."""
     for model, field, units, readers in KEPT_COLUMNS:
@@ -141,6 +150,7 @@ def test_every_kept_column_reaches_its_generated_schema() -> None:
         described = schema["properties"][field]["description"]
         assert any(unit in described for unit in units)
         assert any(reader in described for reader in readers)
+
 
 def test_the_model_cannot_have_read_more_words_than_the_article_holds() -> None:
     """The impossible direction, refused.
@@ -156,6 +166,7 @@ def test_the_model_cannot_have_read_more_words_than_the_article_holds() -> None:
     with pytest.raises(ValueError, match="not more"):
         EvalRow.model_validate(payload)
 
+
 def test_an_article_shorter_than_the_cap_reads_the_same_length_twice() -> None:
     """Equal is the normal case, not an error: nothing was cut."""
     payload = mutate(
@@ -163,6 +174,7 @@ def test_an_article_shorter_than_the_cap_reads_the_same_length_twice() -> None:
         source_word_count=1875,
     )
     assert EvalRow.model_validate(payload).source_word_count == 1875
+
 
 def test_an_eval_row_may_not_know_how_long_its_article_was() -> None:
     """Null and not zero (section 11).
@@ -179,6 +191,7 @@ def test_an_eval_row_may_not_know_how_long_its_article_was() -> None:
     assert row.source_word_count is None
     assert row.source_seen_word_count == 1875, "the seen count is still a measurement"
 
+
 def test_an_ok_item_health_row_carries_only_recorded_extract_signals() -> None:
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json",
@@ -194,6 +207,7 @@ def test_an_ok_item_health_row_carries_only_recorded_extract_signals() -> None:
     )
     assert ItemHealthRow.model_validate(signalled).code is FailureCode.NOT_PROSE
 
+
 def test_item_health_failure_code_must_belong_to_stage() -> None:
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json",
@@ -202,10 +216,12 @@ def test_item_health_failure_code_must_belong_to_stage() -> None:
     with pytest.raises(ValueError, match="does not belong"):
         ItemHealthRow.model_validate(payload)
 
+
 def test_item_health_http_status_belongs_only_to_fetch() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json", http_status=200)
     with pytest.raises(ValueError, match="http_status"):
         ItemHealthRow.model_validate(payload)
+
 
 def test_unknown_item_health_failure_carries_the_only_detail() -> None:
     payload = mutate(
@@ -221,6 +237,7 @@ def test_unknown_item_health_failure_carries_the_only_detail() -> None:
     )
     with pytest.raises(ValueError, match="detail belongs only"):
         ItemHealthRow.model_validate(payload)
+
 
 def test_a_retired_entry_must_carry_its_date() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "taxonomy" / "with-tombstones.json"))

@@ -26,6 +26,7 @@ pytestmark = pytest.mark.contract
 #: stop the two halves of one payload drifting across two languages.
 PROJECT_TS = REPO_ROOT / "frontend" / "src" / "lib" / "payload" / "project.ts"
 
+
 def projector_array(name: str) -> list[str]:
     match = re.search(
         rf"export const {name}: readonly string\[\] = \[(.*?)\];", read_text(PROJECT_TS), re.DOTALL
@@ -33,10 +34,12 @@ def projector_array(name: str) -> list[str]:
     assert match, f"{name} is no longer a string array in project.ts"
     return re.findall(r"'([a-z_]+)'", match.group(1))
 
+
 def projector_version() -> str:
     match = re.search(r"export const VIEW_VERSION = '([^']+)';", read_text(PROJECT_TS))
     assert match, "VIEW_VERSION is no longer a string literal in project.ts"
     return match.group(1)
+
 
 def without_description(shape: dict[str, Any]) -> dict[str, Any]:
     """The same field, minus the prose.
@@ -45,6 +48,7 @@ def without_description(shape: dict[str, Any]) -> dict[str, Any]:
     item says what the run recorded. Different sentences, same field.
     """
     return {key: value for key, value in shape.items() if key != "description"}
+
 
 def test_the_projector_writes_exactly_the_shape_the_contract_names() -> None:
     """Guardrail #3, across a language boundary.
@@ -58,11 +62,13 @@ def test_the_projector_writes_exactly_the_shape_the_contract_names() -> None:
     assert set(projector_array("VISUAL_FIELDS")) == set(DigestViewVisual.model_fields)
     assert set(projector_array("DAY_FIELDS")) | {"version"} == set(DigestView.model_fields)
 
+
 def test_the_block_this_projection_exists_to_drop_can_never_be_served() -> None:
     forbidden = set(projector_array("FORBIDDEN_FIELDS"))
     assert "embeddings" in forbidden, "the vector block is why this projection exists"
     kept = set(DigestViewItem.model_fields) | set(DigestView.model_fields)
     assert forbidden.isdisjoint(kept), f"served and forbidden at once: {sorted(forbidden & kept)}"
+
 
 def test_a_served_day_written_before_the_day_facts_still_reads() -> None:
     """The widening of 2026-09-09 is additive, and this is what says so.
@@ -92,6 +98,7 @@ def test_a_served_day_written_before_the_day_facts_still_reads() -> None:
     for name in sorted(unknown):
         assert getattr(read, name) is None, f"{name} must read as unknown on an older payload"
 
+
 def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
     """A field means one thing, whichever file it is in.
 
@@ -113,6 +120,7 @@ def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
     # build time for the console's chart count and no browser needs it.
     assert set(DigestViewVisual.model_fields) < set(DigestVisual.model_fields)
 
+
 def test_every_committed_day_serves_a_view_that_validates() -> None:
     """The same migration on the projection a reader's browser fetches.
 
@@ -129,6 +137,7 @@ def test_every_committed_day_serves_a_view_that_validates() -> None:
         for name in RANKING_SIGNAL:
             assert getattr(item, name) is None, f"{item.item_id}: {name} invented"
 
+
 def test_a_served_day_refuses_a_field_it_does_not_know() -> None:
     """The build is strict where the shell is tolerant, and that pairing is the design.
 
@@ -142,6 +151,7 @@ def test_a_served_day_refuses_a_field_it_does_not_know() -> None:
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         DigestView.model_validate(payload)
 
+
 def test_a_served_day_keeps_the_order_a_reader_already_read() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-view" / "one-day.json"))
     payload["items"].insert(0, payload["items"].pop())
@@ -149,12 +159,14 @@ def test_a_served_day_keeps_the_order_a_reader_already_read() -> None:
     with pytest.raises(ValueError, match="never reorders"):
         DigestView.model_validate(payload)
 
+
 def test_a_served_item_that_names_a_clock_must_carry_a_time() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-view" / "one-day.json"))
     payload["items"][0]["published_at"] = None
     payload["items"][0]["time_source"] = "feed"
     with pytest.raises(ValueError, match="names a clock exactly when"):
         DigestView.model_validate(payload)
+
 
 def test_a_served_day_written_before_the_version_existed_still_reads() -> None:
     """Section 11's release blocker, at the boundary that cannot be upgraded.

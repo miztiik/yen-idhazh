@@ -33,6 +33,7 @@ def _desk_differs_payload() -> dict[str, Any]:
     assert isinstance(payload, dict)
     return payload
 
+
 def test_an_item_whose_desk_differs_from_its_vertical_still_carries_its_address() -> None:
     """The whole row in one assertion, on the fixture the row is driven from.
 
@@ -45,6 +46,7 @@ def test_an_item_whose_desk_differs_from_its_vertical_still_carries_its_address(
     assert item.vertical == "energy"
     assert item.desk == "ai"
     assert item.item_id.startswith("energy-"), "the published address is the feed's word"
+
 
 def test_repointing_the_vertical_to_the_desk_is_rejected_at_read_time() -> None:
     """Rejected alternative 1, run rather than described.
@@ -63,6 +65,7 @@ def test_repointing_the_vertical_to_the_desk_is_rejected_at_read_time() -> None:
     with pytest.raises(ValueError, match="item_id must be addressed"):
         Article.model_validate({**article, "vertical": "energy"})
 
+
 def test_an_item_published_before_the_desk_existed_reads_as_its_vertical() -> None:
     """The read-side migration, proved by removing the key rather than by waiting.
 
@@ -74,6 +77,7 @@ def test_an_item_published_before_the_desk_existed_reads_as_its_vertical() -> No
     del payload["desk"]
     item = DigestItem.model_validate(payload)
     assert item.desk is None, "absent is unknown, never a desk of its own"
+
 
 def test_a_day_must_list_the_desk_it_published_a_story_under() -> None:
     """A rendered story under a name the payload does not carry is an unnamed page.
@@ -88,6 +92,7 @@ def test_a_day_must_list_the_desk_it_published_a_story_under() -> None:
     day["items"][0]["desk"] = unlisted
     with pytest.raises(ValueError, match="names an unlisted desk"):
         DigestDay.model_validate(day)
+
 
 def test_the_two_counts_answer_two_questions() -> None:
     """`count` is the feed's word and `desk_count` is what the page draws.
@@ -116,6 +121,7 @@ def test_the_two_counts_answer_two_questions() -> None:
     assert by_id[home["id"]].desk_count == home["count"] - 1, "the page no longer draws it here"
     assert by_id[other["id"]].desk_count == other["count"] + 1
 
+
 def test_a_second_desk_that_repeats_the_first_is_refused() -> None:
     """A story names at most two desks, which is the oracle of plan 25 row #8.
 
@@ -137,6 +143,7 @@ def test_a_second_desk_that_repeats_the_first_is_refused() -> None:
     with pytest.raises(ValueError, match="secondary_desk repeats"):
         DigestItem.model_validate({**unfiled, "secondary_desk": "energy"})
 
+
 def test_an_item_published_before_the_second_desk_existed_reads_as_unknown() -> None:
     """The read-side migration, proved by removing the key rather than by waiting.
 
@@ -147,6 +154,7 @@ def test_an_item_published_before_the_second_desk_existed_reads_as_unknown() -> 
     payload.pop("secondary_desk", None)
     item = DigestItem.model_validate(payload)
     assert item.secondary_desk is None
+
 
 def test_a_day_must_list_the_second_desk_a_story_names() -> None:
     """A claim on a topic the day never listed is a claim nothing can honour.
@@ -162,6 +170,7 @@ def test_a_day_must_list_the_second_desk_a_story_names() -> None:
     with pytest.raises(ValueError, match="names an unlisted second desk"):
         DigestDay.model_validate(day)
 
+
 def test_a_day_written_before_desk_count_existed_still_reads() -> None:
     """Additive, so the 22 frozen days validate with the key absent everywhere."""
     day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
@@ -172,6 +181,7 @@ def test_a_day_written_before_desk_count_existed_still_reads() -> None:
     settled = DigestDay.model_validate(day)
     assert all(ref.desk_count is None for ref in settled.verticals)
     assert all(item.desk is None for item in settled.items)
+
 
 def test_the_served_day_carries_the_desk_a_page_groups_by() -> None:
     """The browser is what groups stories, so the projection may not drop the desk.
@@ -187,6 +197,7 @@ def test_the_served_day_carries_the_desk_a_page_groups_by() -> None:
     assert view.items[0].desk == other["id"]
     assert view.items[0].vertical == moved["vertical"]
 
+
 def test_the_thin_desk_floor_is_a_knob_the_frontend_agrees_with() -> None:
     """The two-copies problem again, on the knob that decides whether a desk speaks.
 
@@ -200,12 +211,14 @@ def test_the_thin_desk_floor_is_a_knob_the_frontend_agrees_with() -> None:
     assert mirrored is not None, "the frontend dropped its desk_thin_max default"
     assert int(mirrored.group(1)) == UiConfig().desk_thin_max
 
+
 def test_a_published_item_that_names_a_clock_must_carry_a_time() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
     payload["items"][0]["published_at"] = None
     payload["items"][0]["time_source"] = "feed"
     with pytest.raises(ValueError, match="names a clock exactly when"):
         DigestDay.model_validate(payload)
+
 
 def test_a_published_item_with_no_time_may_only_say_unknown() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
@@ -217,12 +230,14 @@ def test_a_published_item_with_no_time_may_only_say_unknown() -> None:
     assert day.items[0].time_source is TimeSource.UNKNOWN
     assert day.items[0].published_at is None
 
+
 def test_a_planned_item_that_names_a_clock_must_carry_a_time() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
     payload["items"][0]["published_at"] = None
     payload["items"][0]["time_source"] = "first_seen"
     with pytest.raises(ValueError, match="names a clock exactly when"):
         RunPlan.model_validate(payload)
+
 
 def test_the_ranking_signal_survives_a_round_trip_with_values_in_it() -> None:
     """The fixture carries nulls, so the populated shape needs its own oracle."""
@@ -239,6 +254,7 @@ def test_the_ranking_signal_survives_a_round_trip_with_values_in_it() -> None:
     assert twice.items[0].rank_score == 3.4
     assert twice.items[0].time_source is TimeSource.FEED
 
+
 def test_a_story_no_feed_carried_cannot_be_published() -> None:
     """`carried_by` counts the feeds that carried one address, so its floor is 1.
 
@@ -249,6 +265,7 @@ def test_a_story_no_feed_carried_cannot_be_published() -> None:
     payload["items"][0]["carried_by"] = 0
     with pytest.raises(ValueError, match="greater than or equal to 1"):
         DigestDay.model_validate(payload)
+
 
 def test_canonical_json_is_sorted_and_newline_terminated() -> None:
     text = canonical_json({"b": 1, "a": 2})

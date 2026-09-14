@@ -67,6 +67,7 @@ def test_every_weights_fetch_fails_loudly() -> None:
         assert "curl -sSL" not in script, f"{where} must fail on an HTTP error"
         assert "resolve/main" not in script, f"{where} must name an immutable revision"
 
+
 def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
     """The Oracle. Wrong bytes fail on one step, not hours later as wrong output.
 
@@ -97,6 +98,7 @@ def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
         assert digest_source in script, f"{where} must read one recorded digest"
         assert "sha256sum --check" in script, where
 
+
 def test_the_health_check_names_the_weights_that_answered() -> None:
     """Healthy says a server replied. It does not say which weights replied."""
     health = _step(_load_workflows()["digest.yml"], "work", "name", "Check model health")
@@ -107,6 +109,7 @@ def test_the_health_check_names_the_weights_that_answered() -> None:
     assert "/v1/models" in script, "assert the served alias"
     assert "/props" in script, "assert the loaded path"
     assert _plan_output("summarize_file") in script
+
 
 def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
     """The Oracle. One place writes a production model ref, and it is config.
@@ -124,6 +127,7 @@ def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
     for scope, env in _every_env(workflow):
         named = MODEL_ENV_NAMES & set(env)
         assert not named, f"{scope} names a model through env: {sorted(named)}"
+
 
 def test_no_workflow_that_loads_weights_writes_a_model_ref_or_a_moving_one() -> None:
     """The Oracle, widened to every workflow that downloads weights.
@@ -167,6 +171,7 @@ def test_no_workflow_that_loads_weights_writes_a_model_ref_or_a_moving_one() -> 
                     f"{filename}: {scope} writes {name} as a literal"
                 )
 
+
 def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Path) -> None:
     """`needs` resolves before a job's first step. `steps` does not.
 
@@ -204,6 +209,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
         _run_the_inline_program(script, tmp_path)
+
 
 def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> None:
     """A key that moved is a `KeyError` on the runner, and nothing earlier looks.
@@ -243,6 +249,7 @@ def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> Non
     # names a path in EACH document so neither half can go quiet on its own.
     assert ("measure.yml", MODELS_DOCUMENT, ("summarize", "inference")) in seen
     assert ("digest.yml", CONFIG_FILE_NAME, (MODELS_POINTER_KEY,)) in seen
+
 
 def test_no_inline_program_rebinds_a_name_it_read_from_the_environment() -> None:
     """A dispatch input read into a name and then written over is silently ignored.
@@ -285,6 +292,7 @@ def test_no_inline_program_rebinds_a_name_it_read_from_the_environment() -> None
                             )
 
     assert not shadowed, "\n".join(shadowed)
+
 
 def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     """Every part of what the entry holds, and all of them from one source.

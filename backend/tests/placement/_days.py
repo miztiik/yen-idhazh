@@ -12,6 +12,7 @@ from idhazh.placement import DeskBounds, place, refile, stream_order
 #: The five desks the taxonomy declares today.
 DESKS = ("india", "world", "ai", "energy", "business-economy")
 
+
 #: The floor and the ceiling the Editor ruled on 2026-09-13, as
 #: `config/taxonomy.json` carries them. Repeated here rather than read off the
 #: file, so a test that fails says which of the two moved.
@@ -22,6 +23,7 @@ BOUNDS = {
     "world": DeskBounds(floor=6, ceiling=0.4),
     "india": DeskBounds(floor=6, ceiling=0.4),
 }
+
 
 def story(
     item_id: str,
@@ -52,8 +54,10 @@ def story(
         rank_score=rank_score,
     )
 
+
 def desk_of(item: DigestItem) -> str:
     return item.desk or item.vertical
+
 
 def lopsided_day() -> list[DigestItem]:
     """A day built to break the frame, which no committed day has ever been.
@@ -100,8 +104,10 @@ def lopsided_day() -> list[DigestItem]:
             score -= 1.0
     return items
 
+
 def frame(**knobs: int) -> PlacementConfig:
     return PlacementConfig(**knobs)
+
 
 def heavy_ai_day() -> list[DigestItem]:
     """Forty stories, every one of which reads AI, carried by five desks' feeds.
@@ -121,6 +127,7 @@ def heavy_ai_day() -> list[DigestItem]:
         )
         for index in range(40)
     ]
+
 
 def gated_day() -> list[DigestItem]:
     """A day where two thin desks can only be filled from something refused.
@@ -163,8 +170,10 @@ def gated_day() -> list[DigestItem]:
     ]
     return day
 
+
 def filed(items: list[DigestItem]) -> Counter[str]:
     return Counter(desk_of(item) for item in items)
+
 
 def placed(
     day: list[DigestItem],

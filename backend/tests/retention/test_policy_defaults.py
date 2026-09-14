@@ -28,11 +28,13 @@ def test_retention_is_off_by_default() -> None:
     assert config.dry_run is True
     assert cutoff(date(2026, 8, 21), config.image_months) is None
 
+
 def test_a_disabled_policy_deletes_nothing(tmp_path: Path) -> None:
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     result = prune(root, RetentionConfig(), date(2026, 8, 21))
     assert result.deleted == 0
     assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
+
 
 #: A day inside the committed window and a day outside it, either side of the
 #: cutoff the committed `retention.image_months` draws. Built here rather than
@@ -44,9 +46,11 @@ def test_a_disabled_policy_deletes_nothing(tmp_path: Path) -> None:
 #: run that lists nothing proves nothing.
 WINDOW_TODAY: Final = date(2026, 9, 13)
 
+
 def committed_retention() -> RetentionConfig:
     """The `retention` block out of `config/idhazh.json` - one file, never a tree."""
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).retention
+
 
 def test_the_committed_window_selects_only_rendered_visuals_past_its_cutoff(
     tmp_path: Path,
@@ -89,6 +93,7 @@ def test_the_committed_window_selects_only_rendered_visuals_past_its_cutoff(
         assert re.match(ITEM_ID_PATTERN, path.stem), f"{path.name} is not named for an item"
         assert date(int(year), int(month), int(day)) < limit, f"{path} is inside the window"
 
+
 def test_the_committed_window_still_deletes_nothing(tmp_path: Path) -> None:
     """The other half of the row: the window has a value and the fuse is still in.
 
@@ -108,6 +113,7 @@ def test_the_committed_window_still_deletes_nothing(tmp_path: Path) -> None:
     assert result.deleted == 0
     assert result.dry_run
     assert len(list(root.rglob("*.svg"))) == 1
+
 
 def test_one_run_can_clear_a_backlog_the_committed_window_would_open(tmp_path: Path) -> None:
     """The fuse is not the bound in steady state, and this says by how much.

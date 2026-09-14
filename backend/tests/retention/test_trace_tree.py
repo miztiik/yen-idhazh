@@ -27,6 +27,7 @@ pytestmark = pytest.mark.slow
 #: recent run rather than one the seen tests already use.
 TRACE_TODAY: Final = date(2026, 8, 20)
 
+
 def _write_trace(state: Path, run_id: str, shard: int = 0, *, spans: int = 45) -> Path:
     """One shard's committed trace at the real path, with real span records in it.
 
@@ -49,6 +50,7 @@ def _write_trace(state: Path, run_id: str, shard: int = 0, *, spans: int = 45) -
     line = json.dumps(record, sort_keys=True, separators=(",", ":"))
     path.write_text("\n".join([line] * spans) + "\n", encoding="utf-8")
     return path
+
 
 def test_a_trace_past_the_window_is_gone_and_a_recent_one_stays(tmp_path: Path) -> None:
     """The oracle: the oldest trace is deleted, the newest is kept, on the real path.
@@ -73,6 +75,7 @@ def test_a_trace_past_the_window_is_gone_and_a_recent_one_stays(tmp_path: Path) 
     assert result.kept == 2
     assert telemetry.committed_trace_relpath("2026-07-30-1", 0) in result.deleted
     assert telemetry.committed_trace_relpath("2026-08-20-1", 0) not in result.deleted
+
 
 def test_the_window_bounds_the_tree_by_construction(tmp_path: Path) -> None:
     """The bound is a number, not an intent: surviving bytes <= window x per-run.
@@ -99,6 +102,7 @@ def test_the_window_bounds_the_tree_by_construction(tmp_path: Path) -> None:
     assert surviving <= window * per_run
     assert result.kept == window
 
+
 def test_an_empty_trace_tree_is_a_no_op(tmp_path: Path) -> None:
     """state/traces/ does not exist until tracing is switched on (a later plan), so
     the prune walks nothing and changes nothing on every run until then."""
@@ -108,6 +112,7 @@ def test_an_empty_trace_tree_is_a_no_op(tmp_path: Path) -> None:
     )
     assert result == TracePruneResult(deleted=(), bytes_freed=0, kept=0, dry_run=False)
     assert not result.changed
+
 
 def test_a_dry_run_names_the_trace_and_leaves_it(tmp_path: Path) -> None:
     """The dry run's list is what a person reads before the deletion is switched on,
@@ -126,6 +131,7 @@ def test_a_dry_run_names_the_trace_and_leaves_it(tmp_path: Path) -> None:
     assert result.dry_run
     assert stale.exists()
 
+
 def test_a_trace_newer_than_the_date_it_was_handed_is_never_deleted(tmp_path: Path) -> None:
     """A back-dated run keeps the traces since. `prune-state --date <last winter>`
     computes a window around then; every run since is newer and stays."""
@@ -139,6 +145,7 @@ def test_a_trace_newer_than_the_date_it_was_handed_is_never_deleted(tmp_path: Pa
     assert live.exists(), "a trace ahead of the handed date was deleted"
     assert not stale.exists()
     assert telemetry.committed_trace_relpath("2026-01-01-1", 0) in result.deleted
+
 
 def test_the_stage_reports_the_trace_window_it_measured(
     tmp_path: Path, caplog: pytest.LogCaptureFixture

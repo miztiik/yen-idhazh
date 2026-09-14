@@ -102,6 +102,7 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     assert [item.item_id for item in replayed.items] == [item.item_id for item in published.items]
     assert {item.introduced_by_run for item in replayed.items} == {1}
 
+
 def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> None:
     """One article and one OK summary per planned item, sharing one body."""
     items_dir.mkdir(parents=True, exist_ok=True)
@@ -126,6 +127,7 @@ def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> N
         (items_dir / f"{item.item_id}.summary.json").write_text(
             base_summary.to_json(), encoding="utf-8"
         )
+
 
 def test_a_retired_feed_still_labels_the_items_it_published() -> None:
     """Splitting the feed lists must not cost an older item its name or its kind.
@@ -160,6 +162,7 @@ def test_a_retired_feed_still_labels_the_items_it_published() -> None:
     assert assemble.source_names(sources)["defunct-daily"] == "Defunct Daily"
     assert assemble.source_kinds(sources)["defunct-daily"] is SourceKind.ANNOUNCEMENT
 
+
 def test_abstract_items_publish_a_sentence_not_a_badge() -> None:
     item = assemble.to_digest_item(
         article=article().model_copy(update={"source_form": SourceForm.ABSTRACT}),
@@ -176,6 +179,7 @@ def test_abstract_items_publish_a_sentence_not_a_badge() -> None:
         == "This is a summary of the paper's abstract. The full paper is a PDF."
     )
 
+
 def test_truncated_items_publish_the_partial_read_sentence() -> None:
     item = assemble.to_digest_item(
         article=article().model_copy(update={"truncated": True, "truncated_at_tokens": 2500}),
@@ -187,6 +191,7 @@ def test_truncated_items_publish_the_partial_read_sentence() -> None:
     )
 
     assert item.reader_note == "We could only read the first part of this page."
+
 
 def test_the_published_item_carries_the_plan_rows_own_ranking_signal() -> None:
     """Nothing is recomputed at assemble: the four numbers are the plan's own.
@@ -213,6 +218,7 @@ def test_the_published_item_carries_the_plan_rows_own_ranking_signal() -> None:
     assert item.on_front_page, "the fixture's first item did get an aggregator vote"
     assert item.time_source is TimeSource.FEED
 
+
 def test_an_item_built_without_a_plan_row_publishes_no_signal_at_all() -> None:
     """Absent is unknown. A default here would be a claim nobody measured."""
     item = assemble.to_digest_item(
@@ -230,6 +236,7 @@ def test_an_item_built_without_a_plan_row_publishes_no_signal_at_all() -> None:
     assert item.rank_score is None, "0.0 would put the story bottom of its desk"
     assert item.time_source is None
 
+
 def cut_article(*, read: int, total: int | None, abstract: bool = False) -> Article:
     """One article cut at `read` words out of `total` before the cap."""
     return article().model_copy(
@@ -241,6 +248,7 @@ def cut_article(*, read: int, total: int | None, abstract: bool = False) -> Arti
             "source_form": SourceForm.ABSTRACT if abstract else SourceForm.ARTICLE,
         }
     )
+
 
 def test_the_cut_sentence_names_how_much_of_the_page_we_read() -> None:
     """One word cannot cover both ends of the real range, so the note carries a number.
@@ -256,6 +264,7 @@ def test_the_cut_sentence_names_how_much_of_the_page_we_read() -> None:
     assert barely == "We could only read the first 99 percent of this page."
     assert mostly == "We could only read the first 23 percent of this page."
     assert barely != mostly
+
 
 def test_an_abstract_that_was_also_cut_carries_both_facts() -> None:
     """Returning on the first branch is the exact shape of a silent cut.
@@ -273,6 +282,7 @@ def test_an_abstract_that_was_also_cut_carries_both_facts() -> None:
         "We could only read the first 25 percent of this page."
     )
 
+
 def test_a_cut_page_of_unknown_length_states_no_scale() -> None:
     """A payload written before `source_word_count` existed cannot name a share.
 
@@ -285,6 +295,7 @@ def test_a_cut_page_of_unknown_length_states_no_scale() -> None:
         == "We could only read the first part of this page."
     )
 
+
 def test_the_note_never_claims_we_read_the_first_100_percent() -> None:
     """A scale that rounds to all of it says the opposite of what happened."""
     assert (
@@ -296,8 +307,10 @@ def test_the_note_never_claims_we_read_the_first_100_percent() -> None:
         == "We could only read the first part of this page."
     )
 
+
 def test_an_uncut_article_of_full_length_says_nothing() -> None:
     assert assemble.reader_note(article()) is None
+
 
 def test_a_day_publishes_even_when_items_failed() -> None:
     """A run that publishes nothing on a bad day is a run whose bad days are invisible."""
@@ -314,6 +327,7 @@ def test_a_day_publishes_even_when_items_failed() -> None:
     assert day.items_failed > 0
     assert len(day.items) == 1
 
+
 def test_item_payloads_include_an_article_without_a_summary(tmp_path: Path) -> None:
     items_dir = tmp_path / "items"
     items_dir.mkdir()
@@ -326,6 +340,7 @@ def test_item_payloads_include_an_article_without_a_summary(tmp_path: Path) -> N
     ]
     assert payloads[0].article == article()
     assert payloads[0].summary is None
+
 
 def test_an_item_written_before_a_contract_moved_says_so_at_the_stage_that_reads_it(
     tmp_path: Path,
@@ -349,6 +364,7 @@ def test_an_item_written_before_a_contract_moved_says_so_at_the_stage_that_reads
 
     assert "2026-01-01" in str(raised.value)
     assert Article.schema_version() in str(raised.value)
+
 
 def test_assemble_writes_one_item_health_row_per_planned_item(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -400,6 +416,7 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     assert manifest.runs[-1].items_planned == ok + failed
     assert manifest.runs[-1].items_failed == failed
 
+
 def health_rows(state_dir: Path, date: str) -> list[ItemHealthRow]:
     """Every item-health row the committed shard holds, in file order."""
     path = ledger.item_health_path(state_dir, date)
@@ -407,6 +424,7 @@ def health_rows(state_dir: Path, date: str) -> list[ItemHealthRow]:
         return []
     with path.open(encoding="utf-8", newline="") as handle:
         return [ItemHealthRow.from_csv_row(record) for record in csv.DictReader(handle)]
+
 
 def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -439,6 +457,7 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     assert ledger.read_header(ledger.item_health_path(state, run_plan.date)) == (
         ItemHealthRow.csv_columns()
     )
+
 
 def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -474,6 +493,7 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
     # two derivations ever part, every row lands twice.
     assert {row.run_id for row in rows} == {run_plan.run_id}
 
+
 def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -500,6 +520,7 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
 
     assert replayed == 0
     assert committed.read_bytes() == after_one_run
+
 
 def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -566,6 +587,7 @@ def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
     assert planned(33270983446) == f"{date}-33270983446"
     assert planned(33270983446) != planned(33274853468)
 
+
 def test_a_shard_records_its_own_items_and_nobody_else_s(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -590,6 +612,7 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == mine
     assert len(mine) < len(run_plan.items)
 
+
 def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -613,6 +636,7 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == settled
     assert telemetry.is_final(article(), None) is False
     assert telemetry.is_final(None, None) is False
+
 
 def test_a_shard_commits_what_its_model_server_counted(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -639,6 +663,7 @@ def test_a_shard_commits_what_its_model_server_counted(
         RuntimeCountersRow.csv_columns()
     )
 
+
 def test_a_shard_whose_server_died_still_files_a_row(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -656,6 +681,7 @@ def test_a_shard_whose_server_died_still_files_a_row(
     assert row.prompt_tokens_total is None
     assert row.run_id == run_plan.run_id
     assert ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id) == [row]
+
 
 def test_the_two_ledgers_agree_about_which_shards_ran(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -697,6 +723,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
         assert {row.item_id for row in rows if row.shard == shard} == mine
         assert mine, "a shard with no items would make the set comparison pass on nothing"
 
+
 def test_the_census_assemble_adds_names_no_machine(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -734,6 +761,7 @@ def test_the_census_assemble_adds_names_no_machine(
     } - worked
     assert any(row.shard is None for row in rows), "the run left nothing for assemble to census"
 
+
 def test_a_later_run_appends_and_never_reorders() -> None:
     """Run 2 offers a better story and the one already published, and both rules hold.
 
@@ -768,6 +796,7 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     )
     assert second.runs[-1].items_added == 1, "an item already published is not published twice"
 
+
 def test_a_desk_publishes_why_it_ran_what_it_ran() -> None:
     """The plan counted what the feeds offered and the day used to throw it away.
 
@@ -790,6 +819,7 @@ def test_a_desk_publishes_why_it_ran_what_it_ran() -> None:
     assert desk.too_old == 0
     assert desk.below_feed_floor is False
 
+
 def test_a_desk_no_run_ever_planned_invents_no_shortfall() -> None:
     """Absent reads as unknown, never as zero.
 
@@ -811,6 +841,7 @@ def test_a_desk_no_run_ever_planned_invents_no_shortfall() -> None:
     assert desk.considered is None
     assert desk.too_old is None
     assert desk.below_feed_floor is None
+
 
 def test_a_desk_keeps_the_strongest_shortfall_any_run_recorded() -> None:
     """The strongest and not the sum, and this is the case that says why.
@@ -860,6 +891,7 @@ def test_a_desk_keeps_the_strongest_shortfall_any_run_recorded() -> None:
     assert desk.too_old == 31, "a run that found more of the day stale must raise the count"
     assert desk.too_old <= desk.considered, "the sentence would name more dropped than offered"
 
+
 def test_a_second_runs_better_story_is_published_below_what_the_day_already_had() -> None:
     """The crash of 2026-09-13, held at the stage that caused it.
 
@@ -902,6 +934,7 @@ def test_a_second_runs_better_story_is_published_below_what_the_day_already_had(
     assert introduced == [1, 2], "a story a reader read at breakfast moved under them"
     assert [item.item_id for item in evening.items] == [published.item_id, fresh.item_id]
 
+
 def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
     """A desk with items and no entry in today's plan is not a desk with no answer.
 
@@ -932,6 +965,7 @@ def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
     desk = next(ref for ref in second.verticals if ref.id == "ai")
     assert desk.considered == 5
     assert desk.below_feed_floor is False
+
 
 def test_a_run_that_comes_back_as_itself_still_produces_a_day() -> None:
     """`stage_assemble` writes the day, then builds the manifest, then writes it.
@@ -969,6 +1003,7 @@ def test_a_run_that_comes_back_as_itself_still_produces_a_day() -> None:
         "the reference counts what run 1 introduced, not what this attempt added"
     )
 
+
 def test_a_carried_item_is_not_recorded_as_published_twice() -> None:
     """The join in `_published_rows` is the only thing keeping `published.csv` clean.
 
@@ -1005,6 +1040,7 @@ def test_a_carried_item_is_not_recorded_as_published_twice() -> None:
     assert [item.item_id for item in day_two.items] == [first.item_id, second.item_id]
     assert [row.url_key for row in _published_rows(day_one, first_plan)] == [first.url_key]
     assert [row.url_key for row in _published_rows(day_two, later_plan)] == [second.url_key]
+
 
 def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
     """The gate that makes `updated_at` and `updated_by_run` reserved rather than live.
@@ -1045,6 +1081,7 @@ def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
     assert kept.updated_at is None
     assert kept.updated_by_run is None
 
+
 def test_the_run_that_wrote_an_item_resolves_to_a_recorded_run() -> None:
     """The join to the manifest that names the model lands on a run the day recorded."""
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
@@ -1061,15 +1098,18 @@ def test_the_run_that_wrote_an_item_resolves_to_a_recorded_run() -> None:
 
     assert assemble.run_that_wrote(revised) == 2, "a revision is joined to the run that revised it"
 
+
 def test_the_published_path_carries_no_digest() -> None:
     target = assemble.day_dir(Path("frontend/public/digest"), "2026-08-21")
     assert target.as_posix().endswith("digest/2026/08/21")
+
 
 def test_a_write_is_atomic(tmp_path: Path) -> None:
     """A file either exists complete or does not exist. There is no half-written item."""
     target = tmp_path / "deep" / "digest.json"
     assemble.write_atomic(target, '{"a": 1}\n')
     assert target.read_bytes() == b'{"a": 1}\n'
+
 
 def test_the_manifest_records_what_ran_against_what() -> None:
     settings = config.load(CONFIG_DIR)
@@ -1100,6 +1140,7 @@ def test_the_manifest_records_what_ran_against_what() -> None:
     assert manifest.runs[-1].run_id == "2026-08-21-1"
     assert manifest.runs[-1].config_digests
     assert manifest.runs[-1].inputs is None, "no work shard recorded any, so none is recorded"
+
 
 def test_the_run_records_the_scoring_shape_that_decided_its_order() -> None:
     """`RANK_VERSION` was read by nothing, so no run had ever recorded it.
@@ -1157,6 +1198,7 @@ def test_the_run_records_the_scoring_shape_that_decided_its_order() -> None:
     )
     assert silent.runs[-1].rank_version is None
 
+
 def test_a_run_records_how_many_feeds_a_desk_could_ask_and_against_what_floor() -> None:
     """`below_feed_floor` alone says a desk went dark and neither number that decided it.
 
@@ -1200,6 +1242,7 @@ def test_a_run_records_how_many_feeds_a_desk_could_ask_and_against_what_floor() 
     assert counts["ai"].feed_floor == 35
     assert counts["energy"].feed_floor is None
 
+
 def manifest_day(settings: config.Settings) -> DigestDay:
     return assemble.build_day(
         plan=plan(),
@@ -1210,6 +1253,7 @@ def manifest_day(settings: config.Settings) -> DigestDay:
         generated_at="2026-08-21T07:00:00Z",
         retention_window_months=-1,
     )
+
 
 def test_the_manifest_cannot_record_one_run_twice() -> None:
     """One execution is one record, however many times it reaches this stage.
@@ -1279,6 +1323,7 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
                 second.runs[1].model_copy(update={"run_id": second.runs[0].run_id}),
             ],
         )
+
 
 def test_the_manifest_records_what_the_planner_cost() -> None:
     """The visuals job runs against a 60-minute bound and nothing recorded its cost.
@@ -1355,6 +1400,7 @@ def test_the_manifest_records_what_the_planner_cost() -> None:
 
     # A payload written before the gate existed was always asked.
     assert timed.runs[-1].items_prefiltered == 0
+
 
 def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> None:
     settings = config.load(CONFIG_DIR)
@@ -1442,6 +1488,7 @@ def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> No
     assert migrated is not None
     assert migrated.version == RunManifest.schema_version()
     assert migrated.runs[-1].verticals[0].published == 1
+
 
 def test_the_committed_day_fixture_still_loads() -> None:
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))

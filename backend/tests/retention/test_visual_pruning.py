@@ -39,6 +39,7 @@ def test_only_visuals_are_candidates(tmp_path: Path) -> None:
     found = visuals_older_than(root, date(2026, 8, 21))
     assert [path.name for path in found] == ["old-0000000003.webp"]
 
+
 def test_the_day_s_own_payloads_are_never_candidates(tmp_path: Path) -> None:
     """`digest.json` is the record that a day happened and is never deleted.
 
@@ -55,6 +56,7 @@ def test_the_day_s_own_payloads_are_never_candidates(tmp_path: Path) -> None:
 
     assert [path.name for path in found] == ["old-0000000003.json"]
 
+
 def test_an_enabled_policy_keeps_both_of_the_day_s_own_payloads(tmp_path: Path) -> None:
     """The prune runs for real, and the two files it may never touch are still there."""
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.json"]})
@@ -67,9 +69,11 @@ def test_an_enabled_policy_keeps_both_of_the_day_s_own_payloads(tmp_path: Path) 
     assert (root / "2020" / "01" / "01" / "digest.json").exists()
     assert (root / "2020" / "01" / "01" / "run.json").exists()
 
+
 def test_a_recent_day_is_never_a_candidate(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["new-0000000004.webp"]})
     assert visuals_older_than(root, date(2026, 1, 1)) == []
+
 
 def test_a_dry_run_reports_without_deleting(tmp_path: Path) -> None:
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
@@ -79,6 +83,7 @@ def test_a_dry_run_reports_without_deleting(tmp_path: Path) -> None:
     assert result.deleted == 0
     assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
 
+
 def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Path) -> None:
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     config = RetentionConfig(image_months=6, dry_run=False)
@@ -86,6 +91,7 @@ def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Pa
     assert result.deleted == 1
     assert not (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
     assert (root / "2020" / "01" / "01" / "digest.json").exists(), "the day survives its picture"
+
 
 def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     """An off-by-one in a date parse must not eat the archive."""
@@ -96,31 +102,38 @@ def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     assert result.fuse_tripped
     assert result.considered == 10
 
+
 #: The first published day of the trees the four tests below run against. They
 #: are built here rather than read off `frontend/public/digest/`, so what these
 #: tests cost never moves with what the pipeline has published (Guardrail #12,
 #: section 13).
 SCAN_START: Final = date(2019, 1, 1)
 
+
 #: Days in the big arm. 400 puts fourteen calendar months on the tree and leaves
 #: the cutoff a long way inside it, so a walk that stopped early shows up as a
 #: missing month rather than as a rounding difference.
 SCAN_DAYS: Final = 400
 
+
 #: Days in the small arm. Both arms hold the same expired days; every day they
 #: do not share is inside the window, which is the side the archive grows on.
 SCAN_SMALL_DAYS: Final = 260
 
+
 #: How far into both trees the cutoff falls, in days from `SCAN_START`.
 SCAN_EXPIRED_DAYS: Final = 250
 
+
 #: The cutoff itself, and the expired days it names: 2019-01-01 to 2019-09-07.
 SCAN_LIMIT: Final = SCAN_START + timedelta(days=SCAN_EXPIRED_DAYS)
+
 
 def day_folder(root: Path, day: date) -> Path:
     """Where a published day sits, spelled out apart from the code under test."""
     year, month, number = day.isoformat().split("-")
     return root / year / month / number
+
 
 def dated_tree(root: Path, *, days: int, pictures: int) -> Path:
     """`days` consecutive published days from `SCAN_START`, `pictures` on each."""
@@ -131,6 +144,7 @@ def dated_tree(root: Path, *, days: int, pictures: int) -> Path:
             for n in range(days)
         },
     )
+
 
 def by_sorting_the_whole_tree(root: Path, limit: date) -> list[Path]:
     """The reference answer: sort every path under the root, then filter.
@@ -153,6 +167,7 @@ def by_sorting_the_whole_tree(root: Path, limit: date) -> list[Path]:
         if published < limit:
             found.append(path)
     return found
+
 
 def directories_opened_during(work: Callable[[], object]) -> list[Path]:
     """Every directory an operation opens, in the order it opened them.
@@ -181,6 +196,7 @@ def directories_opened_during(work: Callable[[], object]) -> list[Path]:
         work()
     return opened
 
+
 def opened_by_depth(root: Path, work: Callable[[], object]) -> dict[int, set[str]]:
     """What a scan opened, by how deep under its own root it was.
 
@@ -194,6 +210,7 @@ def opened_by_depth(root: Path, work: Callable[[], object]) -> dict[int, set[str
         relative = path.relative_to(root)
         by_depth.setdefault(len(relative.parts), set()).add(relative.as_posix())
     return by_depth
+
 
 def test_the_scan_finds_exactly_what_sorting_the_whole_tree_found(tmp_path: Path) -> None:
     """The oracle. A cheaper walk that finds a different set is a different policy.
@@ -210,6 +227,7 @@ def test_the_scan_finds_exactly_what_sorting_the_whole_tree_found(tmp_path: Path
     assert found == by_sorting_the_whole_tree(root, SCAN_LIMIT)
     assert len(found) == 500, "250 expired days, two pictures on each"
     assert oldest_visual(root) == SCAN_START
+
 
 def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
     tmp_path: Path,
@@ -237,6 +255,7 @@ def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
         "2019-09-08. October onwards is refused by its name"
     )
 
+
 def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> None:
     """Two trees, the same backlog, and the same reads.
 
@@ -258,6 +277,7 @@ def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> No
     assert len(visuals_older_than(large, SCAN_LIMIT)) == 8 * SCAN_EXPIRED_DAYS
     assert len(visuals_older_than(small, SCAN_LIMIT)) == SCAN_EXPIRED_DAYS
 
+
 def test_the_oldest_picture_is_found_without_opening_the_rest_of_the_archive(
     tmp_path: Path,
 ) -> None:
@@ -276,6 +296,7 @@ def test_the_oldest_picture_is_found_without_opening_the_rest_of_the_archive(
     assert oldest_visual(root) == SCAN_START
     assert opened == {0: {"."}, 1: {"2019"}, 2: {"2019/01"}, 3: {"2019/01/01"}}
 
+
 def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Path) -> None:
     """Under a year directory the layout is ours, so an unreadable name is a bug.
 
@@ -288,6 +309,7 @@ def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Pa
 
     with pytest.raises(ValueError, match=r"2020/notes\.txt is not a month"):
         visuals_older_than(root, date(2026, 8, 21))
+
 
 def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> None:
     """The row's whole point. `deleted` is capped, so `deleted` cannot answer this.
@@ -315,6 +337,7 @@ def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> Non
     assert finished.skipped_by_fuse == 0, "a second pass clears what the first could not"
     assert not finished.fuse_tripped
 
+
 def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -> None:
     """ "Held back by the fuse" and "not deleted because we were pretending" differ.
 
@@ -338,6 +361,7 @@ def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -
     assert result.deleted + result.skipped_by_fuse < result.considered
     assert len(list(root.rglob("*.webp"))) == 300
 
+
 def test_the_flag_can_only_make_a_run_report_and_never_delete(tmp_path: Path) -> None:
     """The step's flag is added to `retention.dry_run`, never subtracted from it.
 
@@ -353,6 +377,7 @@ def test_the_flag_can_only_make_a_run_report_and_never_delete(tmp_path: Path) ->
     shipped = RetentionConfig(image_months=6, dry_run=True)
     assert prune(root, shipped, date(2026, 8, 21), dry_run=False).deleted == 0
     assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
+
 
 def test_the_bytes_are_the_files_that_actually_left_the_tree(
     tmp_path: Path,
@@ -374,6 +399,7 @@ def test_the_bytes_are_the_files_that_actually_left_the_tree(
     assert result.bytes_reclaimed == 2000, "the two 1,000-byte pictures and nothing else"
     assert result.bytes_before - result.bytes_after == result.bytes_reclaimed
     assert result.bytes_after == measure(root).bytes_used
+
 
 def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -399,6 +425,7 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
     assert result.deleted == 2
     assert walked == 1, "the tree is read once and the after-total retracts what left it"
     assert result.bytes_after == unpatched(root).bytes_used
+
 
 def test_the_after_total_counts_only_the_files_that_actually_left(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -426,6 +453,7 @@ def test_the_after_total_counts_only_the_files_that_actually_left(
     assert result.bytes_reclaimed == 1000, "one picture left the tree, not the two it tried"
     assert result.bytes_after == measure(root).bytes_used
 
+
 def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path: Path) -> None:
     """Read against the cutoff, and a tree with no picture at all says so.
 
@@ -444,6 +472,7 @@ def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path:
     text_only = site(tmp_path / "text", {"2026-08-20": []})
     assert prune(text_only, config, date(2026, 8, 21)).oldest_kept is None
 
+
 def test_a_switched_off_policy_still_reports_the_tree_it_looked_at(tmp_path: Path) -> None:
     """What ships today. A report of "nothing to do" is not a row worth skipping.
 
@@ -460,6 +489,7 @@ def test_a_switched_off_policy_still_reports_the_tree_it_looked_at(tmp_path: Pat
     assert result.skipped_by_fuse == 0
     assert result.oldest_kept == date(2020, 1, 1), "the backlog is still reported"
     assert result.bytes_before == result.bytes_after == measure(root).bytes_used
+
 
 def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
     """Every cell an operator needs to read one run without opening config.
@@ -487,6 +517,7 @@ def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
     assert row.bytes_reclaimed == 200_000
     assert row.payload_bytes_before - row.payload_bytes_after == row.bytes_reclaimed
     assert VisualPruneRow.from_csv_row(row.csv_row()) == row
+
 
 def test_the_row_refuses_arithmetic_that_does_not_add_up() -> None:
     """The cells are cross-checked, so a hand-written row cannot claim two things.
@@ -523,6 +554,7 @@ def test_the_row_refuses_arithmetic_that_does_not_add_up() -> None:
         VisualPruneRow(**{**honest, "dry_run": True})
     with pytest.raises(ValueError, match="no cutoff"):
         VisualPruneRow(**{**honest, "policy_months": -1})
+
 
 def test_the_step_commits_one_row_a_run_and_names_what_it_left(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -570,6 +602,7 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
         "a second attempt at one execution is one cleanup written twice"
     )
 
+
 def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path) -> None:
     """The pairing that stops a test run cleaning the committed archive.
 
@@ -590,6 +623,7 @@ def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path
         == 0
     )
     assert not ledger.visual_prunes_path(state, "2026-08-21").exists()
+
 
 def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
     """The root is the boundary of the day tree, so the root is where it stops.

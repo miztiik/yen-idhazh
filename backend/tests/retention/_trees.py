@@ -28,13 +28,16 @@ from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS
 #: it. The prune may never delete a shard a read that wide names.
 CONSOLE_MAX_WINDOW_DAYS: Final = ConsoleConfig().max_window_days
 
+
 #: The run every row these tests write is filed under. One value, so a test that
 #: writes twice is writing a repeat rather than a second run.
 RUN_ID: Final = "2026-08-30-33270983446"
 
+
 #: The same, for the cleanup tests below, which run against the day the rest of
 #: that section already uses.
 PRUNE_RUN_ID: Final = "2026-08-21-33270983446"
+
 
 def site(root: Path, days: dict[str, list[str]]) -> Path:
     for day, files in days.items():
@@ -46,15 +49,18 @@ def site(root: Path, days: dict[str, list[str]]) -> Path:
             (folder / name).write_bytes(b"x" * 1000)
     return root
 
+
 #: Both records, and what to do when either bites, are in `idhazh.measured` -
 #: the one place a measured number and its provenance live together.
 FASTEST_MEASURED_KB_PER_DAY = int(SITE_GROWTH_KB_A_DAY.value)
 
 WARNING_DAYS_REQUIRED = int(WARNING_DAYS.value)
 
+
 def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
     """Whole days from the alarm to the wall. A partial day is not a day."""
     return (PAGES_HARD_CAP_MB - budget_mb) * 1024 // kb_per_day
+
 
 #: The day the fold is run against in every test below, and the twenty months of
 #: history it is run over. Twenty rather than fourteen so both sides of the
@@ -64,6 +70,7 @@ def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
 TODAY: Final = date(2026, 8, 30)
 
 HISTORY_MONTHS: Final = 20
+
 
 #: How far down the pipeline each terminal stage got, so a row carries the clocks
 #: an item that really stopped there would have carried and no others.
@@ -77,6 +84,7 @@ STAGES_REACHED: Final = {
 
 CLOCK_MS: Final = {"fetch_ms": 900, "extract_ms": 1_400, "summarize_ms": 62_000}
 
+
 #: A failure code each stage really produces. `plan` is a refusal and `publish`
 #: is the census's one unambiguous success, so the two ends differ.
 STAGE_FAILURE: Final = {
@@ -87,12 +95,14 @@ STAGE_FAILURE: Final = {
     ItemStage.PUBLISH: None,
 }
 
+
 #: The same stages in funnel order. `TERMINAL_STAGES` is a set, and a row's item
 #: number is derived from a stage's position, so the census fixture needs the
 #: order the enum declares. Deriving it from the enum rather than restating it
 #: means a stage added to the terminal set lands here and fails on the two maps
 #: above, which is the question a new terminal stage owes an answer to.
 TERMINAL_ORDER: Final = tuple(stage for stage in ItemStage if stage in TERMINAL_STAGES)
+
 
 def months_back(today: date, count: int) -> list[str]:
     """`YYYY-MM` stems, oldest first, ending on the month `today` sits in."""
@@ -101,6 +111,7 @@ def months_back(today: date, count: int) -> list[str]:
         f"{(total - offset) // 12:04d}-{(total - offset) % 12 + 1:02d}"
         for offset in reversed(range(count))
     ]
+
 
 def health_row(*, day: str, run: int, number: int, stage: ItemStage) -> ItemHealthRow:
     """One census row, shaped the way the contract's own validators demand."""
@@ -129,6 +140,7 @@ def health_row(*, day: str, run: int, number: int, stage: ItemStage) -> ItemHeal
         summarize_ms=clock("summarize_ms"),
     )
 
+
 def item_health_history(state_dir: Path, months: list[str]) -> None:
     """A real item-health shard per month, written through the real appender."""
     for index, month in enumerate(months):
@@ -144,6 +156,7 @@ def item_health_history(state_dir: Path, months: list[str]) -> None:
                 health_row(day=day, run=2, number=index * 100 + 50, stage=ItemStage.PUBLISH)
             )
             ledger.append_item_health(state_dir, day, rows)
+
 
 def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, int, int]]:
     """Rows, failures and total milliseconds per (date, stage), read off the CSVs.
@@ -163,9 +176,11 @@ def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, 
             totals[key] = (rows + 1, failures + (row["outcome"] != "ok"), elapsed + spent)
     return totals
 
+
 def item_health_days(state_dir: Path) -> list[Path]:
     """Every item-health day file, oldest first, through the pipeline's own walk."""
     return list(day_partition.day_files(state_dir / ledger.ITEM_HEALTH_DIRNAME))
+
 
 def item_health_months(state_dir: Path) -> list[str]:
     """Which months the item-health day tree still holds, oldest first.
@@ -175,15 +190,18 @@ def item_health_months(state_dir: Path) -> list[str]:
     """
     return sorted(day_partition.days_by_month(state_dir / ledger.ITEM_HEALTH_DIRNAME))
 
+
 def totals_from_aggregate(
     rows: list[TelemetryAggregateRow],
 ) -> dict[tuple[str, str], tuple[int, int, int]]:
     return {(row.date, row.stage.value): (row.items, row.failed, row.sum_ms or 0) for row in rows}
 
+
 def a_state_tree(tmp_path: Path) -> Path:
     state = tmp_path / "state"
     item_health_history(state, months_back(TODAY, HISTORY_MONTHS))
     return state
+
 
 #: Names of the right width and shape that are not a month. Every one was
 #: accepted by at least one month reader and refused by another before
@@ -219,6 +237,7 @@ def feed_health_history(state_dir: Path, months: list[str], *, day_of_month: int
                 )
             ],
         )
+
 
 def feed_health_months(state_dir: Path) -> list[str]:
     """Which months the feed-health day tree still holds, oldest first.

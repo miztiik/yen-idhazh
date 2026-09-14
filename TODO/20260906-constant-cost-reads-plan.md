@@ -90,7 +90,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
   - `schemas/app-config.schema.json`
   - `schemas/appearance-config.schema.json`
   - `frontend/src/lib/server/config.ts`
-  - `backend/tests/test_contracts.py`
+  - `backend/tests/contracts/`
 - **Acceptance gates:** local - the shared test selector, plus the contract drift gate so schemas and frontend types regenerate byte-identical. CI - full suite.
 - **Oracle:** a contract test asserting, against the real committed config, that `1 in console.window_presets`, `console.min_window_days == 1`, `console.max_window_days == 366`, `read_mark_days == 14`, `archive_recent_days == 14`, and that both new knobs exist with their documented bounds. Corrected from "the drift gate" before dispatch: that gate passes on the base tree, so it could not tell this row's result from its starting position.
 - **Decisions:**
@@ -436,7 +436,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
 - **Files touched:**
   - `backend/idhazh/contracts/` a new model
   - `schemas/` its generated schema
-  - `backend/tests/test_contracts.py`
+  - `backend/tests/contracts/`
 - **Acceptance gates:** local - the contract drift gate and the shared test selector. CI - full suite.
 - **Oracle:** the drift gate, plus a round-trip test proving a written record validates and reads back identically.
 - **Decisions:**

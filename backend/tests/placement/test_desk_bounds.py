@@ -37,6 +37,7 @@ def test_a_day_where_every_story_reads_ai_still_publishes_five_desks() -> None:
         assert count >= BOUNDS[desk].floor, f"{desk} is under its floor"
     assert counted == {"ai": 14, "energy": 7, "business-economy": 7, "world": 6, "india": 6}
 
+
 def test_the_floor_never_admits_a_story_a_gate_refused() -> None:
     """The second half, and the half that matters.
 
@@ -73,6 +74,7 @@ def test_the_floor_never_admits_a_story_a_gate_refused() -> None:
         "the ceiling gives up a desk's lowest-scoring stories, not its best"
     )
 
+
 def test_a_ceiling_with_nowhere_to_send_the_overflow_does_not_shorten_the_day() -> None:
     """A story with no second desk stays where it is, however crowded the desk.
 
@@ -92,6 +94,7 @@ def test_a_ceiling_with_nowhere_to_send_the_overflow_does_not_shorten_the_day() 
     assert filed(out) == {"india": 30}
     assert [item.item_id for item in out] == [item.item_id for item in stream_order(day)]
 
+
 def test_no_committed_day_moves_because_no_story_has_a_second_desk() -> None:
     """Nothing read an article yet, so `desk` is null and the rules are inert.
 
@@ -108,6 +111,7 @@ def test_no_committed_day_moves_because_no_story_has_a_second_desk() -> None:
 
     assert all(item.desk is None for item in out)
     assert filed(out) == filed(day)
+
 
 def test_a_desk_never_dips_under_its_own_floor_to_lift_another_one() -> None:
     """Robbing one desk to open another is two thin desks, not one full one.
@@ -131,6 +135,7 @@ def test_a_desk_never_dips_under_its_own_floor_to_lift_another_one() -> None:
 
     assert len(out) == 8
     assert filed(out) == {"ai": 8}
+
 
 def test_a_thin_day_is_spread_rather_than_drained() -> None:
     """The floor and the ceiling cannot contradict each other on a small day.

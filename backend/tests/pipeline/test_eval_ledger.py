@@ -32,6 +32,7 @@ def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
     assert len(lines) == 3
     assert tuple(lines[0]) == writer.columns()
 
+
 def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
     """A run either side of midnight writes both, and neither is wrong.
 
@@ -50,6 +51,7 @@ def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
     ]
     assert [record["date"] for record in writer.records(state)] == [august.date, september.date]
 
+
 def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) -> None:
     """The doc's promise: an item whose inputs did not change writes no row at all.
 
@@ -63,6 +65,7 @@ def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) 
     assert writer.append(state, [again]) == 0
     with writer.ledger_days(state)[0].open(encoding="utf-8") as handle:
         assert len(list(csv.reader(handle))) == 2
+
 
 def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -> None:
     """Dedupe spans the partitions, or filing by day would quietly reopen the door.
@@ -80,10 +83,12 @@ def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -
     assert writer.append(state, [later]) == 0
     assert [day_partition.date_of(day) for day in writer.ledger_days(state)] == [held.date]
 
+
 def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:
     """The guard reads the batch as well as the file, or a fresh ledger dodges it."""
     ledger = tmp_path / "state"
     assert writer.append(ledger, [row(), row(item_id="ai-09")]) == 1
+
 
 def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path) -> None:
     """The dedupe spans the archives too, or deleting a shard reopens the door.
@@ -110,11 +115,13 @@ def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path)
     assert writer.append(state, [row(date="2026-09-14", run_id="2026-09-14-1")]) == 0
     assert not writer.ledger_days(state), "the archived measurement was written again"
 
+
 def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:
     """Identical inputs and different words is the defect the ledger exists to catch."""
     ledger = tmp_path / "state"
     writer.append(ledger, [row()])
     assert writer.append(ledger, [row(output_digest="c" * 64)]) == 1
+
 
 def test_a_changed_scorer_is_a_new_measurement(tmp_path: Path) -> None:
     """Same words read by a different instrument is a reading worth keeping."""
@@ -122,13 +129,16 @@ def test_a_changed_scorer_is_a_new_measurement(tmp_path: Path) -> None:
     writer.append(ledger, [row()])
     assert writer.append(ledger, [row(scorer_version="hhem-2.2-open@cccccccc")]) == 1
 
+
 def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
     ledger = tmp_path / "state"
     assert writer.append(ledger, []) == 0
     assert not ledger.exists()
 
+
 def test_the_ledger_columns_match_the_contract() -> None:
     assert writer.columns() == EvalRow.csv_columns()
+
 
 def _newest_committed_day() -> Path | None:
     """The newest committed score day file, found by three bounded listings.
@@ -148,6 +158,7 @@ def _newest_committed_day() -> Path | None:
     days = sorted(at.glob("*.csv"))
     return days[-1] if days else None
 
+
 def test_the_committed_ledger_carries_todays_columns() -> None:
     """The header is written once, and the file is appended to forever.
 
@@ -164,6 +175,7 @@ def test_the_committed_ledger_carries_todays_columns() -> None:
     if newest is None:
         pytest.skip("no ledger committed yet")
     assert writer.read_header(newest) == writer.columns(), newest.name
+
 
 def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
     """The migration, run against the real file rather than a copy of its shape.
@@ -190,6 +202,7 @@ def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
     assert writer.read_header(copied) == writer.columns()
     assert copied.read_text(encoding="utf-8").count("\n") == before + 1
 
+
 def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path) -> None:
     """An empty cell, never a digest computed today.
 
@@ -209,6 +222,7 @@ def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path)
     migrated = EvalRow.model_validate(old)
 
     assert migrated.source_digest is None
+
 
 def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
     """Silent corruption is the alternative, and it is unrecoverable once shipped."""

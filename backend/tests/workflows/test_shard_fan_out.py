@@ -45,6 +45,7 @@ def test_content_refresh_has_eight_total_work_shards_at_most() -> None:
     assert len(options) == len(CONTENT_REFRESH_SHARDS)
     assert frozenset(options) == CONTENT_REFRESH_SHARDS
 
+
 def test_the_work_job_reads_its_bound_and_its_width_from_the_plan() -> None:
     """A bound written twice is a bound that can disagree with itself.
 
@@ -67,6 +68,7 @@ def test_the_work_job_reads_its_bound_and_its_width_from_the_plan() -> None:
 
     for key, value in _values_keyed(work, WORK_BOUND_KEYS):
         assert not value.isdigit(), f"the work job writes {key} as the literal {value}"
+
 
 def test_the_work_bound_is_whatever_the_config_says_it_is(tmp_path: Path) -> None:
     """Change the number in `config/idhazh.json` and the rendered bound changes.
@@ -109,6 +111,7 @@ def test_the_work_bound_is_whatever_the_config_says_it_is(tmp_path: Path) -> Non
         with pytest.raises(AssertionError, match="shard_timeout_minutes"):
             _run_the_inline_program(script, config_saying(unusable))
 
+
 def test_content_refresh_derives_the_shard_count_after_the_plan() -> None:
     """The matrix was written before the plan existed, so `run.shard_size` could not reach it.
 
@@ -128,6 +131,7 @@ def test_content_refresh_derives_the_shard_count_after_the_plan() -> None:
     decide_script = _step(workflow, "plan", "id", "decide").get("run")
     assert isinstance(decide_script, str)
     assert "SHARDS" not in decide_script, "the fan-out no longer rides on the date step"
+
 
 def test_content_refresh_caps_total_jobs_by_behavior() -> None:
     workflow = _load_workflows()["digest.yml"]
@@ -150,6 +154,7 @@ def test_content_refresh_caps_total_jobs_by_behavior() -> None:
     # Both edges of the ceiling, plus the shapes that are not an integer.
     for invalid_shards in ("0", "9", "10", "-1", "1.5", "text", "04", " 4"):
         assert _evaluate_shard_matrix(script, invalid_shards, 4) is None
+
 
 def test_every_output_a_job_reads_is_one_its_producer_declares() -> None:
     """A renamed job leaves `needs.<old>.outputs.<x>` resolving to the empty string.
@@ -181,6 +186,7 @@ def test_every_output_a_job_reads_is_one_its_producer_declares() -> None:
                     f"{where} reads needs.{producer}.outputs.{output}, "
                     f"which {producer} does not declare"
                 )
+
 
 def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> None:
     """An artifact name is a string agreed between two jobs and checked by nobody.
@@ -227,6 +233,7 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
                 assert uploads[name] in reachable, (
                     f"{where} downloads {name} from {uploads[name]}, which it does not wait on"
                 )
+
 
 def test_a_work_shard_hands_over_the_pictures_it_drew_itself() -> None:
     """The work shards are the only job that draws, and their checkouts go away.

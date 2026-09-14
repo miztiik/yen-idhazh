@@ -164,7 +164,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | Group | Rows | What the first row writes | What the second row writes | Where they come closest |
 | --- | --- | --- | --- | --- |
 | A | 1, 2 | `docs/reference/benchmarks/prerender-on-and-off.md`, `docs/reference/measurements-site.md` | `frontend/prerender-guard.js` (deleted), `frontend/svelte.config.js`, `frontend/tests/prerender-guard.spec.ts` (deleted), `frontend/scripts/test-groups.ts`, `docs/architecture/publishing/frontend.md` | Both write under `docs/`. Row #1 writes two files under `docs/reference/`, row #2 writes one under `docs/architecture/publishing/`. **No shared page, and no shared directory** |
-| B | 3, 4 | `README.md`, `docs/architecture/overview.md`, `docs/how-to/run-the-gates.md`, `backend/tests/test_workflows.py` | `docs/architecture/publishing/frontend.md` | Nothing. Row #3 is the three surfaces outside the living doc plus one test docstring; row #4 is the living doc and only it |
+| B | 3, 4 | `README.md`, `docs/architecture/overview.md`, `docs/how-to/run-the-gates.md`, `backend/tests/workflows/` | `docs/architecture/publishing/frontend.md` | Nothing. Row #3 is the three surfaces outside the living doc plus one test docstring; row #4 is the living doc and only it |
 
 **One file is written by two rows, and they are in different groups for exactly that reason.** `docs/architecture/publishing/frontend.md` is opened by row #2, which must delete the paragraph describing the file it deletes in the same commit, and by row #4, which writes the ruling and corrects a stale table row. Group A completes before group B dispatches, so they never hold it at once. **Merging them was rejected**: row #4 waits on row #1's measurement and the guard deletion must not.
 
@@ -311,7 +311,7 @@ Correct four sentences on four files. Each is false against the tree, and each i
 | `README.md:54` | A diagram node reading `Prerendered pages` over `digest, archive, scores` | The digest's reading pages are not prerendered. This is the first diagram a stranger sees |
 | `docs/architecture/overview.md:36` | `prerender at build time` feeding `static pages` over `digest, archive, scores` | The same claim one tier down |
 | `docs/how-to/run-the-gates.md:362` | "every route is prerendered, so a route that cannot render fails the build rather than the page" | False for the two dated routes, whose failure to render would not fail the build. The very next sentence already qualifies the claim for stories and not for routes |
-| `backend/tests/test_workflows.py:1845` | "`npm run build` prerenders every route, so a route that cannot render fails here instead of in a reader's browser" | The same sentence in a docstring, defending a real ordering requirement with a false reason |
+| `backend/tests/workflows/:1845` | "`npm run build` prerenders every route, so a route that cannot render fails here instead of in a reader's browser" | The same sentence in a docstring, defending a real ordering requirement with a false reason |
 
 **`docs/how-to/run-the-gates.md:831` is examined and left alone**, and the reason is the rule in section 0.1. It reads "Its own docstring said so: every route is prerendered, so first-load JavaScript is hydration cost" - reported speech inside a rejected-alternatives block explaining why a gate was deleted. It quotes a false claim rather than making one. A worker who disagrees after reading the surrounding paragraph may correct the tense and say so in the pull request.
 
@@ -322,18 +322,18 @@ Correct four sentences on four files. Each is false against the tree, and each i
 - `README.md` - the one diagram node.
 - `docs/architecture/overview.md` - the one diagram node.
 - `docs/how-to/run-the-gates.md` - the one sentence at line 362. The paragraph's remaining sentences about `validate-days` are correct and stay.
-- `backend/tests/test_workflows.py` - the one docstring sentence. **The assertions do not change**, and the ordering requirement the docstring defends - build before commit, weight gate after - is correct and is re-justified rather than removed.
+- `backend/tests/workflows/` - the one docstring sentence. **The assertions do not change**, and the ordering requirement the docstring defends - build before commit, weight gate after - is correct and is re-justified rather than removed.
 
 ### Acceptance gates
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
-.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_workflows.py
+.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/workflows/
 .\.venv\Scripts\python.exe backend\utilities\doc_load.py
 ```
 
-`GATE-PY` and `GATE-DOCS`, plus: **`git diff --stat backend/tests/test_workflows.py` shows a docstring change and no assertion change**, and the test still passes for the reason it was written - two severities, one of which may cost a reader the day.
+`GATE-PY` and `GATE-DOCS`, plus: **`git diff --stat backend/tests/workflows/` shows a docstring change and no assertion change**, and the test still passes for the reason it was written - two severities, one of which may cost a reader the day.
 
 ### Oracle
 

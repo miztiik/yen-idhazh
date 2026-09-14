@@ -46,6 +46,7 @@ def _seen_day(state: Path, day: str, rows: int = 1) -> Path:
     )
     return ledger.seen_path(state, day)
 
+
 def test_a_seen_day_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> None:
     """The keep-set is the reader's own, so this is a property rather than a list.
 
@@ -64,6 +65,7 @@ def test_a_seen_day_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> 
     assert result.deleted == ()
     assert sorted(result.kept) == sorted(ledger.seen_relpath(day) for day in inside)
     assert all(ledger.seen_path(state, day).exists() for day in inside)
+
 
 def test_what_the_pruner_keeps_covers_what_the_reader_opens_at_a_past_anchor(
     tmp_path: Path,
@@ -115,6 +117,7 @@ def test_what_the_pruner_keeps_covers_what_the_reader_opens_at_a_past_anchor(
     assert after == before
     assert before, "an empty answer would pass the line above on any tree"
 
+
 def test_a_seen_day_outside_the_window_goes_and_says_what_it_weighed(
     tmp_path: Path,
 ) -> None:
@@ -146,6 +149,7 @@ def test_a_seen_day_outside_the_window_goes_and_says_what_it_weighed(
     # unchanged, which is the whole safety claim stated as data.
     assert after == before
 
+
 def test_a_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
     state = tmp_path / "state"
     stale = _seen_day(state, "2024-01-15")
@@ -157,6 +161,7 @@ def test_a_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
     assert result.deleted == ("state/seen/2024/01/15.csv",)
     assert result.dry_run
     assert stale.exists()
+
 
 def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
     """One day of the counterfactual ledger, written by the real appender."""
@@ -181,6 +186,7 @@ def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
         ],
     )
     return ledger.counterfactual_scores_path(state, day)
+
 
 def test_a_counterfactual_day_outside_the_window_goes_and_says_what_it_weighed(
     tmp_path: Path,
@@ -208,6 +214,7 @@ def test_a_counterfactual_day_outside_the_window_goes_and_says_what_it_weighed(
     assert kept.exists()
     assert not (state / ledger.COUNTERFACTUAL_SCORES_DIRNAME / "2024").exists()
 
+
 def test_a_counterfactual_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
     state = tmp_path / "state"
     stale = _counterfactual_day(state, "2024-01-15")
@@ -219,6 +226,7 @@ def test_a_counterfactual_dry_run_names_the_day_file_and_leaves_it(tmp_path: Pat
     assert result.deleted == ("state/counterfactual-scores/2024/01/15.csv",)
     assert result.dry_run
     assert stale.exists()
+
 
 def test_a_counterfactual_day_the_window_still_names_is_never_deleted(tmp_path: Path) -> None:
     """The boundary is the window's OLDEST day, not the window's edges.
@@ -237,6 +245,7 @@ def test_a_counterfactual_day_the_window_still_names_is_never_deleted(tmp_path: 
 
     assert result.deleted == ()
     assert day.exists()
+
 
 def test_the_stage_deletes_the_counterfactual_days_nobody_reads(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -266,6 +275,7 @@ def test_the_stage_deletes_the_counterfactual_days_nobody_reads(
     assert not stale.exists()
     assert "removed state/counterfactual-scores/2024/01/15.csv" in caplog.text
 
+
 def test_the_stage_says_so_when_every_seen_day_is_inside_the_window(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -292,6 +302,7 @@ def test_the_stage_says_so_when_every_seen_day_is_inside_the_window(
 
     assert "seen prune: every day file is inside the" in caplog.text
     assert str(CollectConfig().seen_window_days) in caplog.text
+
 
 def test_the_stage_names_every_seen_day_it_removed_and_counts_what_it_kept(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -326,6 +337,7 @@ def test_the_stage_names_every_seen_day_it_removed_and_counts_what_it_kept(
     assert f"kept 1 back to {ledger.seen_relpath(TODAY.isoformat())}" in caplog.text
     assert "would remove state/seen/2024/01/15.csv" in caplog.text
 
+
 def test_what_is_kept_is_exactly_what_the_planner_reads() -> None:
     """The margin, in days, over every anchor date a year can offer.
 
@@ -347,6 +359,7 @@ def test_what_is_kept_is_exactly_what_the_planner_reads() -> None:
             f"on {anchor} the prune keeps back to {oldest_kept}, which is "
             f"{retained_days} days - the planner reads {window}"
         )
+
 
 def test_a_day_newer_than_the_date_it_was_handed_is_never_deleted(
     tmp_path: Path,

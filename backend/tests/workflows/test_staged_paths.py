@@ -68,6 +68,7 @@ def test_the_harvest_runs_where_the_article_text_still_is() -> None:
         < names.index(COMMIT_STEPS["assemble"])
     )
 
+
 def test_the_review_tree_is_an_artifact_and_no_commit_step_can_reach_it() -> None:
     """The row's oracle, asked of the workflow: a review surface never becomes a published one.
 
@@ -101,6 +102,7 @@ def test_the_review_tree_is_an_artifact_and_no_commit_step_can_reach_it() -> Non
     for value in staged:
         assert "review" not in value, f"a commit step stages the review tree: {value}"
 
+
 def test_the_telemetry_fold_runs_only_once_the_day_is_committed() -> None:
     """A fold that ran first could delete a month from a tree nothing pushed.
 
@@ -126,6 +128,7 @@ def test_the_telemetry_fold_runs_only_once_the_day_is_committed() -> None:
             f"{step_name} must never be what costs a reader the day"
         )
 
+
 def test_the_fold_ships_in_dry_run_because_the_history_it_deletes_from_is_rewritten() -> None:
     """Nothing this step deletes can be recovered once the scheduled prune passes.
 
@@ -142,6 +145,7 @@ def test_the_fold_ships_in_dry_run_because_the_history_it_deletes_from_is_rewrit
     fold = _step(_load_workflows()["digest.yml"], "assemble", "name", FOLD_STEP)
 
     assert FOLD_DRY_RUN_FLAG in _script(fold, "assemble fold step")
+
 
 def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
     """A deletion reaches a commit only for a path `git add` is handed.
@@ -161,6 +165,7 @@ def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
     assert "frontend/public/telemetry" in staged
     for relative in staged:
         assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
+
 
 def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> None:
     """`state/telemetry-aggregate/` and `state/score-archive/` are written, never seeded.
@@ -189,6 +194,7 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
             f"state/{late} is now committed, so this test is asserting the wrong thing"
         )
 
+
 def test_the_cleanup_is_filed_under_the_run_that_published_the_day() -> None:
     """The step passes the same `github.run_id` the plan job filed its ledgers under.
 
@@ -200,6 +206,7 @@ def test_the_cleanup_is_filed_under_the_run_that_published_the_day() -> None:
     fold = _step(_load_workflows()["digest.yml"], "assemble", "name", FOLD_STEP)
 
     assert "--execution \"${{ github.run_id }}\"" in _script(fold, "assemble fold step")
+
 
 def test_the_corpus_is_committed_but_never_rebuilt() -> None:
     """The window records what a run saw. It is not derived from origin's tip.
@@ -214,6 +221,7 @@ def test_the_corpus_is_committed_but_never_rebuilt() -> None:
     assert "corpus" in staged
     assert "corpus" not in settings["REFRESH_PATHS"].split()
     assert "corpus" not in settings["REGENERATE_COMMAND"].split()
+
 
 def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
     """`git add "$@"` runs under `set -euo pipefail`.
@@ -252,6 +260,7 @@ def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
     )
     assert tracked.returncode == 0, tracked.stderr.strip()
 
+
 def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     """The same rule, for the ledger the plan job gained on 2026-09-02.
 
@@ -284,6 +293,7 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     )
     assert tracked.returncode == 0, tracked.stderr.strip()
 
+
 def test_the_corpus_is_not_union_merged() -> None:
     """A rolling window is not an append-only ledger.
 
@@ -300,6 +310,7 @@ def test_the_corpus_is_not_union_merged() -> None:
     ).stdout.splitlines()
 
     assert answered == [f"{path}: merge: unspecified" for path in CORPUS_SEED]
+
 
 def test_only_the_scheduled_prune_may_force_push() -> None:
     """The single exception in `CLAUDE.md` section 8, held closed-world.
@@ -320,6 +331,7 @@ def test_only_the_scheduled_prune_may_force_push() -> None:
         )
 
     assert forcing == {("prune.yml", "Push the rewritten history")}
+
 
 def test_the_prune_reads_both_its_numbers_from_config() -> None:
     """The cadence is a config value, so it cannot be a cron line.
@@ -350,6 +362,7 @@ def test_the_prune_reads_both_its_numbers_from_config() -> None:
     assert "*/" not in cron, (
         "a step-value cron is not an every-N-days cadence: */30 fires on the 1st and 31st"
     )
+
 
 def test_the_prune_only_clones_the_whole_history_when_it_is_due() -> None:
     """29 wakes out of 30 read one committed file and stop.
@@ -382,6 +395,7 @@ def test_the_prune_only_clones_the_whole_history_when_it_is_due() -> None:
             break
     else:
         pytest.fail("the prune must have a push step")
+
 
 def test_the_plan_job_publishes_the_day_directory_it_decided() -> None:
     """The refresh set has to name two files inside the day, so the run says where it is."""

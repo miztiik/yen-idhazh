@@ -25,6 +25,7 @@ def test_changing_a_ceiling_changes_the_filing_with_no_source_edit() -> None:
     assert tighter["ai"] == 8
     assert sum(ruled.values()) == sum(tighter.values()) == 40
 
+
 def test_changing_a_floor_changes_the_filing_with_no_source_edit() -> None:
     day = gated_day()
     ruled = filed(refile(stream_order(day), bounds=BOUNDS, closed=frozenset({"world"})))
@@ -40,6 +41,7 @@ def test_changing_a_floor_changes_the_filing_with_no_source_edit() -> None:
     assert raised["energy"] == 6, "the ceiling still admits six, and a lower floor asks for fewer"
     assert sum(ruled.values()) == sum(raised.values()) == 24
 
+
 def test_a_desk_with_no_rule_may_hold_the_whole_day() -> None:
     """An absent rule is no rule, so the defaults are the two identity values."""
     default = VerticalDef(id="ai", display_name="AI", definition="A desk.", min_feeds=21)
@@ -50,6 +52,7 @@ def test_a_desk_with_no_rule_may_hold_the_whole_day() -> None:
     out = refile(stream_order(day), bounds={})
 
     assert filed(out) == {"ai": 40}
+
 
 def test_the_bounds_come_off_the_taxonomy_including_a_retired_desk() -> None:
     """A day published last month can still hold a desk this file has retired.

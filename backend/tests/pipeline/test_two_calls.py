@@ -41,6 +41,7 @@ CALL_ONE_REPLY: Final = FIXTURES_DIR / "completions" / "call-one" / "labelled.js
 
 CALL_TWO_REPLY: Final = FIXTURES_DIR / "completions" / "call-two" / "summary-and-plan.json"
 
+
 #: The recorded pair for the one article in the fixture set a bar can be drawn
 #: from. Kept apart from the pair above because that pair's whole job is the
 #: transport - two calls, two costs, one payload - and this pair's whole job is
@@ -48,6 +49,7 @@ CALL_TWO_REPLY: Final = FIXTURES_DIR / "completions" / "call-two" / "summary-and
 DRAWS_CALL_ONE: Final = FIXTURES_DIR / "completions" / "call-one" / "wind-labelled.json"
 
 DRAWS_CALL_TWO: Final = FIXTURES_DIR / "completions" / "call-two" / "wind-summary-and-plan.json"
+
 
 def worked_requests(
     tmp_path: Path,
@@ -64,11 +66,13 @@ def worked_requests(
     _run_plan, _items, server = _work_stage(tmp_path, monkeypatch, replies=replies)
     return server.sent
 
+
 def without_clocks(summary: Summary) -> dict[str, Any]:
     payload: dict[str, Any] = json.loads(summary.to_json())
     for field in CLOCKS:
         payload.pop(field, None)
     return payload
+
 
 def recorded_inputs(items: Path) -> PipelineInputs:
     """What the shard recorded about its own run, named by itself.
@@ -80,6 +84,7 @@ def recorded_inputs(items: Path) -> PipelineInputs:
     recorded = _recorded_inputs(items)
     assert recorded is not None, "the shard summarized something and recorded no inputs"
     return recorded
+
 
 class TestTheWorkStageDispatchesBothCalls:
     def test_two_requests_an_item_and_the_cost_is_split_between_them(
@@ -317,12 +322,14 @@ class TestTheWorkStageDispatchesBothCalls:
             assert summary.input_tokens == spent["prompt_tokens"]
             assert summary.output_tokens == spent["completion_tokens"]
 
+
 def _both_replies() -> tuple[bytes, ...]:
     """One recorded pair, replayed in a cycle so every item gets both calls."""
     return (
         CALL_ONE_REPLY.read_bytes(),
         CALL_TWO_REPLY.read_bytes(),
     )
+
 
 class TestTheSequenceIsWalkedItemMajor:
     """The order the calls go out in, asserted on the wire rather than read in the code.

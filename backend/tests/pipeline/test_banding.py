@@ -44,6 +44,7 @@ def test_the_bands_come_from_config() -> None:
         is ConfidenceBand.LOW
     )
 
+
 def test_an_invented_number_outvotes_a_perfect_faithfulness_score() -> None:
     """Nothing else in the row can see that defect, so nothing else may outvote it."""
     assert (
@@ -56,6 +57,7 @@ def test_an_invented_number_outvotes_a_perfect_faithfulness_score() -> None:
         )
         is ConfidenceBand.LOW
     )
+
 
 def test_a_band_below_the_top_says_what_is_missing() -> None:
     """A grade tells a reader an item is worse. A reason tells them what to check.
@@ -96,6 +98,7 @@ def test_a_band_below_the_top_says_what_is_missing() -> None:
         ConfidenceBand.MEDIUM,
         BandReason.LEAD_MISSING,
     )
+
 
 def test_the_band_and_its_reason_are_decided_once() -> None:
     """Two code paths would eventually print a reason that is not why."""

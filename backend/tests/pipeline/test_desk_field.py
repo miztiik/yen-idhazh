@@ -37,6 +37,7 @@ def relabelled_article() -> Article:
         update={"item_id": "energy-01", "vertical": "energy", "desk": "ai"}
     )
 
+
 def test_a_published_item_carries_the_desk_and_keeps_the_feeds_address() -> None:
     """The oracle, at the stage that writes the item.
 
@@ -57,6 +58,7 @@ def test_a_published_item_carries_the_desk_and_keeps_the_feeds_address() -> None
     assert item.desk == "ai"
     assert item.item_id.startswith("energy-")
 
+
 def test_an_unlabelled_article_publishes_with_no_desk_at_all() -> None:
     """Nothing fills `desk` yet, and the published item may not invent one.
 
@@ -73,6 +75,7 @@ def test_an_unlabelled_article_publishes_with_no_desk_at_all() -> None:
     )
 
     assert item.desk is None
+
 
 def test_a_story_relabelled_onto_a_desk_that_will_not_render_stays_put() -> None:
     """Decision 8, at the stage that decides it.
@@ -92,6 +95,7 @@ def test_a_story_relabelled_onto_a_desk_that_will_not_render_stays_put() -> None
     )
 
     assert item.desk == "energy", "the feed floor is about supply, and supply is per feed"
+
 
 def test_a_day_lists_both_words_and_counts_each_under_its_own() -> None:
     """`count` is the feed's word; `desk_count` is what the page draws.
@@ -128,6 +132,7 @@ def test_a_day_lists_both_words_and_counts_each_under_its_own() -> None:
     assert refs["ai"].count == 0, "no ai feed carried this story"
     assert refs["ai"].desk_count == 1, "the reader finds it under ai"
     assert refs["ai"].display_name, "a desk a reader can reach needs a name to reach it by"
+
 
 def test_a_day_nothing_relabelled_publishes_the_same_two_numbers() -> None:
     """The ordinary day, which is every day published so far.

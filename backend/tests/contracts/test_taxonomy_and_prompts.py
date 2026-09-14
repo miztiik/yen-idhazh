@@ -58,6 +58,7 @@ def json_leaves(payload: object, path: str = "") -> dict[str, object]:
         }
     return {path: payload}
 
+
 def test_editing_one_definition_moves_the_prompt_and_nothing_else() -> None:
     """Change a sentence in the vocabulary file and the model is asked a different question.
 
@@ -84,6 +85,7 @@ def test_editing_one_definition_moves_the_prompt_and_nothing_else() -> None:
     assert a.definition_block() != b.definition_block()
     assert a.definition_block().count("\n") == b.definition_block().count("\n")
 
+
 def test_a_draft_or_retired_entry_reaches_no_prompt() -> None:
     """`status` is a control, not a convention, and the block's bytes are the proof.
 
@@ -103,6 +105,7 @@ def test_a_draft_or_retired_entry_reaches_no_prompt() -> None:
     assert Taxonomy.model_validate(payload).definition_block() == offered.definition_block()
     assert "proposed-desk" not in offered.definition_block()
     assert "ai-roi" not in offered.definition_block()
+
 
 def test_every_offered_entry_of_the_committed_vocabulary_carries_its_sentence() -> None:
     """The rule the contract enforces, held against the file a run really reads.
@@ -134,6 +137,7 @@ def test_every_offered_entry_of_the_committed_vocabulary_carries_its_sentence() 
         assert definition, f"{entry_id} is offered to the model with no definition"
         assert definition in block
 
+
 def test_the_frontend_names_every_committed_lens_including_a_tombstone() -> None:
     """The page's own copy of the lens display names, held against the config.
 
@@ -158,6 +162,7 @@ def test_the_frontend_names_every_committed_lens_including_a_tombstone() -> None
     committed = {lens.id: lens.display_name for lens in taxonomy.lenses}
     assert named == committed, "the page and config/taxonomy.json disagree about the lens names"
 
+
 def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None:
     """The browser's copy of the projection header, held against the writer.
 
@@ -180,6 +185,7 @@ def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None
         f"the console reads {list(names)}, the writer writes "
         f"{list(PUBLIC_COLUMNS[: len(names)])} in those positions"
     )
+
 
 def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
     """The console's fallback length ladder, held against the file it stands in for.
@@ -217,6 +223,7 @@ def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
         f"the console falls back to {fallback}, the committed ladder is {expected}"
     )
 
+
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
     assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 16
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
@@ -224,6 +231,7 @@ def test_recorded_item_health_codes_never_count_against_a_source() -> None:
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
+
 
 @pytest.mark.parametrize(
     "code", [FailureCode.COPIED_SOURCE, FailureCode.LEAKED_ADDRESS], ids=lambda c: c.value
@@ -237,6 +245,7 @@ def test_a_refused_reply_is_the_models_fault_and_never_the_feeds(code: FailureCo
     """
     assert FAILURE_CODE_STAGES[code] == frozenset({ItemStage.SUMMARIZE})
     assert code in SOURCE_NEUTRAL_FAILURE_CODES
+
 
 @pytest.mark.parametrize(
     "code", [FailureCode.COPIED_SOURCE, FailureCode.LEAKED_ADDRESS], ids=lambda c: c.value
@@ -261,10 +270,12 @@ def test_a_refused_reply_survives_the_ledger_round_trip(code: FailureCode) -> No
     assert restored.counts_against_source is False
     assert restored == row
 
+
 def test_a_prompt_that_did_not_fit_is_our_budget_and_not_the_sources_fault() -> None:
     """The article was long. The context window and the truncation cap are ours."""
     assert FailureCode.CONTEXT_EXCEEDED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FAILURE_CODE_STAGES[FailureCode.CONTEXT_EXCEEDED] == frozenset({ItemStage.SUMMARIZE})
+
 
 def test_an_item_health_row_written_before_the_context_code_still_reads() -> None:
     """Section 11's release blocker for an additive enum member.
@@ -284,6 +295,7 @@ def test_an_item_health_row_written_before_the_context_code_still_reads() -> Non
     assert row.counts_against_source is False
     assert ItemHealthRow.from_csv_row(row.csv_row()) == row
 
+
 def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None:
     row = ItemHealthRow.from_json(
         read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json")
@@ -292,6 +304,7 @@ def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None
     assert cells["code"] == ""
     assert cells["http_status"] == ""
     assert ItemHealthRow.from_csv_row(cells) == row
+
 
 def test_no_failure_code_admits_a_stage_an_item_cannot_stop_at() -> None:
     """A code's stage set is the gate a new stage name has to get past.
@@ -305,6 +318,7 @@ def test_no_failure_code_admits_a_stage_an_item_cannot_stop_at() -> None:
     """
     for code, stages in FAILURE_CODE_STAGES.items():
         assert stages <= TERMINAL_STAGES, f"{code.value} admits a stage no item stops at"
+
 
 @pytest.mark.parametrize("stage", sorted(set(ItemStage) - TERMINAL_STAGES))
 def test_the_census_refuses_a_stage_an_item_cannot_stop_at(stage: ItemStage) -> None:
@@ -325,6 +339,7 @@ def test_the_census_refuses_a_stage_an_item_cannot_stop_at(stage: ItemStage) -> 
 
     with pytest.raises(ValidationError, match="where an item stopped"):
         ItemHealthRow.model_validate(payload)
+
 
 def test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum() -> None:
     """Two pages enumerate the summarize codes by hand, and neither is generated.
@@ -348,6 +363,7 @@ def test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum() -> 
     assert set(listed) == summarize_only
     assert len(listed) == len(summarize_only), "the one-URL page lists a code twice"
 
+
 def test_the_item_health_page_splits_the_codes_the_way_the_contract_does() -> None:
     """The source-neutral split is a promise about which feed gets quarantined."""
     text = read_text(DOC_ITEM_HEALTH)
@@ -357,6 +373,7 @@ def test_the_item_health_page_splits_the_codes_the_way_the_contract_does() -> No
     assert backticked(paragraph_after(text, "can count against the source:")) == {
         code.value for code in FailureCode
     } - neutral
+
 
 def test_the_runtime_counters_columns_are_defined_once() -> None:
     assert RuntimeCountersRow.csv_columns() == (
@@ -384,6 +401,7 @@ def test_the_runtime_counters_columns_are_defined_once() -> None:
         "cgroup_peak_bytes",
         "job",
     )
+
 
 @pytest.mark.parametrize("path", METRICS_CAPTURES, ids=lambda p: p.stem)
 def test_the_server_agrees_with_itself_about_what_a_prompt_token_is(path: Path) -> None:
@@ -418,6 +436,7 @@ def test_the_server_agrees_with_itself_about_what_a_prompt_token_is(path: Path) 
     assert row.prompt_tokens_cached_total is not None
     assert row.prompt_tokens_cached_total > 0, "a capture with no cache hits proves nothing here"
 
+
 def test_a_series_this_build_does_not_publish_is_null_and_never_zero() -> None:
     """A rename has to look like a missing column, not like a server that read nothing."""
     row = RuntimeCountersRow.from_metrics_text(
@@ -434,6 +453,7 @@ def test_a_series_this_build_does_not_publish_is_null_and_never_zero() -> None:
     assert all(cells[field] == "" for field in SERIES.values())
     assert RuntimeCountersRow.from_csv_row(cells) == row
 
+
 def test_a_count_that_stops_being_whole_raises_instead_of_truncating() -> None:
     """A silently truncated counter is a wrong number that nothing can spot later."""
     with pytest.raises(ValueError, match="prompt_tokens_total"):
@@ -446,6 +466,7 @@ def test_a_count_that_stops_being_whole_raises_instead_of_truncating() -> None:
             scraped_at="2026-08-26T21:32:30Z",
         )
 
+
 def test_a_shard_index_must_sit_inside_the_run_it_names() -> None:
     with pytest.raises(ValueError, match="below the shard count"):
         RuntimeCountersRow.model_validate(
@@ -457,6 +478,7 @@ def test_a_shard_index_must_sit_inside_the_run_it_names() -> None:
                 "scraped_at": "2026-08-26T21:32:30Z",
             }
         )
+
 
 def test_the_shard_clock_is_measured_against_the_scrape_that_carries_it() -> None:
     """The rollback trigger reads this cell, so it may not be a second opinion.
@@ -481,6 +503,7 @@ def test_the_shard_clock_is_measured_against_the_scrape_that_carries_it() -> Non
     assert row.job_seconds == 5550
     assert row.cpu_model == "AMD EPYC 7763 64-Core Processor"
     assert RuntimeCountersRow.from_csv_row(row.csv_row()) == row
+
 
 def test_a_shard_with_no_stamp_and_no_host_reports_absence_not_zero() -> None:
     """A job whose stamp went missing and a job that took no time are not one fact.
@@ -507,11 +530,13 @@ def test_a_shard_with_no_stamp_and_no_host_reports_absence_not_zero() -> None:
     assert cells["cpu_model"] == ""
     assert RuntimeCountersRow.from_csv_row(cells) == row
 
+
 def _aggregate_cpu_line(text: str) -> list[int]:
     """The ten counters on the one `cpu ` line of a /proc/stat capture."""
     aggregate = [line for line in text.splitlines() if line.split()[:1] == ["cpu"]]
     assert len(aggregate) == 1, "a /proc/stat capture has exactly one aggregate cpu line"
     return [int(cell) for cell in aggregate[0].split()[1:]]
+
 
 def test_every_runtime_capture_an_oracle_reads_is_committed() -> None:
     """A parametrized oracle over an empty glob is green and proves nothing.
@@ -525,6 +550,7 @@ def test_every_runtime_capture_an_oracle_reads_is_committed() -> None:
     assert len(SERVER_LOG_CAPTURES) == 4
     for path in (PROC_STAT_AT_START, PROC_STAT_AT_END):
         assert path.is_file(), path.name
+
 
 def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
     """The Oracle for `cpu_busy_pct`: the capture proves its own window.
@@ -562,6 +588,7 @@ def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
     assert row.cpu_busy_pct == pytest.approx(100 * (available - idle) / available, abs=0.005)
     assert RuntimeCountersRow.from_csv_row(row.csv_row()) == row
 
+
 @pytest.mark.parametrize("path", RSS_CAPTURES, ids=lambda p: p.name)
 def test_the_memory_high_point_is_the_highest_the_sampler_saw(path: Path) -> None:
     """The Oracle for `peak_rss_bytes`: the column is found by name, in bytes.
@@ -590,6 +617,7 @@ def test_the_memory_high_point_is_the_highest_the_sampler_saw(path: Path) -> Non
     # The unit is what a wrong answer gets wrong. A 9B at `n_ctx` 8192 holds
     # gigabytes, so kilobytes read as bytes would land a thousandfold low.
     assert row.peak_rss_bytes > 8 * 1024**3
+
 
 @pytest.mark.parametrize("path", SERVER_LOG_CAPTURES, ids=lambda p: p.name)
 def test_the_model_load_time_is_the_gap_between_the_servers_own_two_lines(path: Path) -> None:
@@ -627,6 +655,7 @@ def test_the_model_load_time_is_the_gap_between_the_servers_own_two_lines(path: 
     # a gap between two stamps can make and still look plausible.
     assert 1000 < row.model_load_ms < 60_000
 
+
 @pytest.mark.parametrize("path", SERVER_LOG_CAPTURES, ids=lambda p: p.name)
 def test_the_window_that_produced_the_memory_figure_is_read_off_the_servers_own_line(
     path: Path,
@@ -661,6 +690,7 @@ def test_the_window_that_produced_the_memory_figure_is_read_off_the_servers_own_
     # on a different window is not comparable with them.
     assert expected == 8192
 
+
 @pytest.mark.parametrize("path", RSS_CAPTURES, ids=lambda p: p.name)
 def test_the_python_high_water_mark_is_absent_from_a_capture_taken_before_it_existed(
     path: Path,
@@ -688,6 +718,7 @@ def test_the_python_high_water_mark_is_absent_from_a_capture_taken_before_it_exi
     # Its sibling in the same file still reads, so this is one missing column and
     # not an unreadable capture.
     assert row.peak_rss_bytes is not None
+
 
 def test_the_python_high_water_mark_is_the_highest_the_sampler_saw() -> None:
     """The Oracle for `python_peak_rss_bytes`, over the shape the sampler writes from today.
@@ -725,6 +756,7 @@ def test_the_python_high_water_mark_is_the_highest_the_sampler_saw() -> None:
     # be swapped and the one that arrived last is still the one read.
     assert row.peak_rss_bytes == 9_500_000 * 1024
 
+
 def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_writes_instead() -> (
     None
 ):
@@ -755,6 +787,7 @@ def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_wri
     assert read("cgroup_memory_peak_bytes=15032385536\n").cgroup_peak_bytes == 15032385536
     assert read("cgroup_memory_peak_bytes=unavailable\n").cgroup_peak_bytes is None
     assert read("").cgroup_peak_bytes is None
+
 
 def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_names() -> None:
     """The Oracle for the widening: every old row re-reads, and the bytes account for themselves.
@@ -815,6 +848,7 @@ def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_name
         assert widened.cgroup_peak_bytes is None
         assert widened.job == WORK_JOB
 
+
 def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() -> None:
     """A machine nobody read and a machine that did nothing are not one fact.
 
@@ -854,6 +888,7 @@ def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() ->
     assert cells["python_peak_rss_bytes"] == ""
     assert cells["cgroup_peak_bytes"] == ""
     assert RuntimeCountersRow.from_csv_row(cells) == row
+
 
 def test_a_host_name_that_could_split_a_row_is_refused() -> None:
     """`state/runtime-counters.csv` merges with the union driver, which is line-based.

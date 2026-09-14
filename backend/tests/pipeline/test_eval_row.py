@@ -34,10 +34,12 @@ def test_a_row_carries_everything_needed_to_read_it_years_later() -> None:
     assert built.date == "2026-08-21"
     assert built.scorer_version
 
+
 def test_the_truncation_gap_is_computed_not_asserted() -> None:
     built = row()
     assert built.hhem_delta == pytest.approx(0.02)
     assert not built.truncation_flagged
+
 
 def test_a_wide_gap_does_not_flag_an_article_nobody_cut() -> None:
     """The test that would have caught the rule this column used to carry.
@@ -64,6 +66,7 @@ def test_a_wide_gap_does_not_flag_an_article_nobody_cut() -> None:
     assert not article().truncated
     assert built.hhem_delta == pytest.approx(0.33)
     assert not built.truncation_flagged
+
 
 def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
     """The two densities are the only columns that measure the input.
@@ -94,6 +97,7 @@ def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
     assert built.evidential_density > 0.0
     assert built.speculative_density == 0.0, "measured, and measured as none"
 
+
 def test_the_row_digests_the_text_the_scorer_was_given() -> None:
     """`output_digest` names the words that came out; this names the words that went in.
 
@@ -105,6 +109,7 @@ def test_the_row_digests_the_text_the_scorer_was_given() -> None:
 
     assert built.source_digest == text_digest(FULL_TEXT)
     assert built.source_digest != built.output_digest, "the premise is not the summary"
+
 
 def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -> None:
     """Built by the real extractor, so the pair is a genuine cut and not two counters.
@@ -149,6 +154,7 @@ def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -
         "the column must come off the article, not off whatever full_text was passed"
     )
 
+
 def test_two_premises_digest_apart_and_the_same_premise_digests_the_same() -> None:
     """A digest that did not separate, or did not repeat, would check nothing.
 
@@ -177,6 +183,7 @@ def test_two_premises_digest_apart_and_the_same_premise_digests_the_same() -> No
 
     assert scored(FULL_TEXT).source_digest == scored(FULL_TEXT).source_digest
     assert scored(FULL_TEXT).source_digest != scored(shorter).source_digest
+
 
 def test_the_work_stage_digests_the_same_text_it_scores() -> None:
     """The whole value of the column is that these two are one variable.
@@ -212,6 +219,7 @@ def test_the_work_stage_digests_the_same_text_it_scores() -> None:
         raise AssertionError(f"stage_work no longer calls {call_name}({keyword}=...)")
 
     assert argument("dual_score", "seen_text") == argument("to_eval_row", "premise")
+
 
 def test_the_work_stage_scores_against_a_different_text_than_it_showed_the_model() -> None:
     """`hhem_full` only means anything when it reads something `hhem` did not.

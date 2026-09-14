@@ -67,6 +67,7 @@ def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
         "the stamp was retired, and the run record stopped carrying the list on 2026-09-13"
     )
 
+
 def test_an_assemble_that_saw_no_work_shard_records_no_inputs(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -80,6 +81,7 @@ def test_an_assemble_that_saw_no_work_shard_records_no_inputs(
     items_dir.mkdir(parents=True)
 
     assert _recorded_inputs(items_dir) is None
+
 
 def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -96,6 +98,7 @@ def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
     assert recorded.runtime_build != "llama-server-local"
     assert recorded.runner_class != "local"
     assert recorded.chat_template_sha256 != text_digest(settings.models.summarize.id)
+
 
 def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
     tmp_path: Path, monkeypatch: MonkeyPatch
@@ -118,6 +121,7 @@ def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
     assert prose_changed_alone(recorded, recorded) == ()
     reworded = recorded.model_copy(update={"prompt_sha256": "b" * 64})
     assert prose_changed_alone(recorded, reworded) == ("prompt_sha256",)
+
 
 def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
     tmp_path: Path, monkeypatch: MonkeyPatch

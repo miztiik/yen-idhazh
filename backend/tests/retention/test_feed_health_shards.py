@@ -26,6 +26,7 @@ def feed_health_days(state_dir: Path) -> list[Path]:
     """Every feed-health day file, oldest first, through the pipeline's own walk."""
     return list(day_partition.day_files(state_dir / ledger.HEALTH_DIRNAME))
 
+
 def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it(
     tmp_path: Path,
 ) -> None:
@@ -64,6 +65,7 @@ def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it
     # the item-health prune gives: `day_files` walks every directory it finds.
     assert not expired_path.parent.exists()
 
+
 def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
     tmp_path: Path,
 ) -> None:
@@ -90,6 +92,7 @@ def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
         "feed health is deleted rather than folded; an aggregate here has no reader"
     )
 
+
 def test_the_retirement_ledger_is_never_a_candidate(tmp_path: Path) -> None:
     """It carries no time window, so no age can expire it.
 
@@ -107,6 +110,7 @@ def test_the_retirement_ledger_is_never_a_candidate(tmp_path: Path) -> None:
 
     assert result.deleted, "the fixture has to reach past the window or this proves nothing"
     assert retirements.read_text(encoding="utf-8") == "header\n"
+
 
 def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path) -> None:
     """Inside a day tree nothing is skipped, so a stray refuses the read.
@@ -127,6 +131,7 @@ def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path
 
     assert ledger.health_path(state, "2024-01-11").exists(), "a refused read deleted a day"
 
+
 def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> None:
     state = tmp_path / "state"
     feed_health_history(state, ["2024-01", TODAY.strftime("%Y-%m")])
@@ -140,6 +145,7 @@ def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> No
     assert result.days_removed == ("state/feed-health/2024/01/11.csv",)
     assert result.dry_run
     assert ledger.health_path(state, "2024-01-11").exists()
+
 
 def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: Path) -> None:
     """`--date` takes whatever it is given, so the boundary has to be a floor.
@@ -161,6 +167,7 @@ def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: P
         "the live shard was deleted by a run given an older date"
     )
     assert not ledger.health_path(state, "2024-01-11").exists()
+
 
 def test_an_empty_state_tree_deletes_no_feed_health_and_says_so(tmp_path: Path) -> None:
     result = prune_feed_health(tmp_path / "state", ObservabilityConfig(), TODAY)
