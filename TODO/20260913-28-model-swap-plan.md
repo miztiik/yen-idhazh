@@ -61,7 +61,6 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 <<<<<<< HEAD
 | 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | DONE | p28-r9 | #723 | worker |
 =======
-| 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | PENDING | - | - | - |
 >>>>>>> 67d52d9a (Row #10 is DONE, in PR #726)
 | 10 | Two spans on one call, so the model can think | 5, 6, 11 | H | DONE | p28-r10 | #726 | Andre |
 
