@@ -26,7 +26,7 @@ Knobs, by the surface they tune:
 - **Drift** - the window and per-domain sample floors and the length/copying
  alert thresholds. The workflow owns the schedule and its date-window inputs
  ([evaluation.md](evaluation.md#comparable-domain-samples)).
-- **Logging** - the level, and nothing else ([telemetry.md](telemetry.md)).
+- **Logging** - the level, plus one flag per kind of record the pipeline builds about itself ([telemetry.md](telemetry.md)). The two are unrelated: the flags decide which records exist, the level decides how loud the logger that prints them is.
 - **Observability** - which instruments run, how often the scorer runs, and how long a ledger stays at full grain ([telemetry.md](telemetry.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
  zoom factor, minimum denominator for rate bars, and chart height.

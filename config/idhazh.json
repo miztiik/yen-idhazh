@@ -154,7 +154,12 @@
     "window_days": 30
   },
   "logging": {
-    "level": "INFO"
+    "capture_prompts": true,
+    "capture_replies": true,
+    "item_lines": true,
+    "level": "INFO",
+    "stage_lines": true,
+    "waiting_heartbeat_seconds": 30
   },
   "models_file": "models/qwen3.5-9b-q4km.json",
   "observability": {
