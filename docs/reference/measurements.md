@@ -374,37 +374,31 @@ needs it, and that objection is now the only one.
 
 **The projection above was exact at 32,768 and stays linear to 65,536.** Three
 arms, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
-own flags, read off the load log at `log_verbosity` 4. The fourth row is the
-configured window and is interpolated between them.
+own flags, read off the load log at `log_verbosity` 4.
 
 | `n_ctx` | KV buffer | Recurrent state | Compute buffer | Model buffers | Total |
 | --- | --- | --- | --- | --- | --- |
 | 16,384 | 512.00 MiB | 50.25 MiB | 112.02 MiB | 8,024.61 MiB | 8,698.88 MiB = 8.49 GiB |
 | 32,768 | 1,024.00 MiB | 50.25 MiB | 128.02 MiB | 8,024.61 MiB | 9,226.88 MiB = 9.01 GiB |
-| 49,152 | 1,536.00 MiB | 50.25 MiB | 144.02 MiB | 8,024.61 MiB | 9,754.88 MiB = 9.53 GiB |
 | 65,536 | 2,048.00 MiB | 50.25 MiB | 160.02 MiB | 8,024.61 MiB | 10,282.88 MiB = 10.04 GiB |
 
-**The 49,152 row is interpolated and the other three are measured.** KV is exact
-arithmetic at 32 KiB a token, and the compute buffer grows 16.00 MiB per 16,384
-tokens across the measured arms, so 144.02 MiB is the step between 128.02 and
-160.02. Nothing else in the row moves with the window.
+**KV is exact arithmetic at 32 KiB a token**, and the compute buffer grows 16.00
+MiB per 16,384 tokens across the arms. Nothing else in the row moves with the
+window.
 
-So **49,152 costs 1,056 MiB more than 16,384**, and 65,536 would cost 1,584,
-against the 6.84 GiB low-water mark above and a 1.0 GiB bar.
-`config/idhazh.json` took **49,152** on 2026-09-13 and this is the reading that
-says it fits.
+So **65,536 costs 1,584 MiB more than 16,384**, against the 6.84 GiB low-water
+mark above and a 1.0 GiB bar. `config/idhazh.json` carries **65,536** and this is
+the reading that says it fits.
 
-**The margin is 25 percent and that number has a derivation, which is the point
-of it.** The two-call sequence sizes at 39,284 tokens, so 49,152 leaves 9,868
-spare. The 25 percent is the size of the one tokenizer miss on record -
-`idhazh.measured.WORST_TOKENS_A_WORD` says 1.585 tokens a word and the densest
-cap-length build delivered 1.952, 23 percent over - rounded up to the next whole
-multiple of 16,384 and of the 512-token batch. **Memory did not choose it**:
-every candidate from 32,768 to 65,536 clears the 1.0 GiB bar by more than four
-times, so 528 MiB either way is noise. What a wider window costs is the
-assertion's reach - at 65,536 the sequence could grow 67 percent before the gate
-said so, and at 49,152 it can grow 25. Ruled by Carmack, 2026-09-13.
-**Re-derive it when `extract.truncation_cap_tokens` is fixed or
+**What the window holds is the two-call pair, and that is what sized it.** The
+pair sizes at 54,887 tokens at the committed truncation cap, so 65,536 - the
+first whole multiple of both 16,384 and the 512-token batch that holds it -
+leaves 10,649 spare. **Memory did not choose it**: every candidate from 32,768
+to 65,536 clears the 1.0 GiB bar by more than four times, so half a gigabyte
+either way is noise. What a wider window costs is the assertion's reach - the
+gate cannot report a sequence that grew until the sequence has outgrown the
+window. Ruled by Carmack, 2026-09-13.
+**Re-derive it when `extract.truncation_cap_tokens` or
 `elements.max_per_article` moves.**
 
 **Only 8 of the model's 32 layers hold a KV cache.** The other 24 are recurrent
@@ -497,46 +491,32 @@ the day the active model file names different weights.
 cover.** Over the 36 rows the cap cut, where the word count is fixed at 3,846,
 `input_tokens` ran 5,582 to 7,093. Take off the 997-token constant and the
 article itself measured **4,585 to 6,096 tokens - 1.192 to 1.585 tokens a
-word**. `extract.truncate_to_tokens` spends the cap as `int(cap / 1.3)` words,
-so an article that tokenizes harder than 1.3 overruns the budget its own cap
-gave it. **The worst one overran by 21.9 percent**: 3,846 words at 1.585 is
-6,096 tokens against a cap that asked for 5,000, and `(6096 - 5000) / 5000` is
-0.219. The ratio is a property of the prose, not of the cap, so the same article
-at the 10,000-token cap gives 7,692 x 1.585 = 12,192 tokens, over by the same
-21.9 percent - which is where the 14,089 in the table below comes from.
+word**. `extract.truncate_to_tokens` spends the cap as
+`int(cap / TOKENS_PER_WORD)` words, at a rate taken from the configured weights
+and currently 1.3628, so an article that tokenizes harder than that rate
+overruns the budget its own cap gave it. **The worst one overruns by 16.3
+percent**: the committed cap of 20,000 cuts at 14,675 words, which at 1.585
+tokens a word is 23,259 tokens. The ratio is a property of the prose and not of
+the cap, which is why what is recorded is the ratio and what follows it is the
+overrun at whatever cap is committed.
 
-**This paragraph said 16.8 percent until 2026-09-09, and that figure was
-irreproducible from the numbers beside it.** It came from subtracting a
-1,255-token constant instead of the 997 this same section derives, which lowers
-the worst ratio to 1.518 and the overrun to 16.8 percent - while the worst-case
-table two paragraphs down used 1.585 and 14,089. One section, two constants, two
-worst-case ratios. 997 is the one the evidence supports: this section's own
-least-squares intercept, corroborated by 3-word items measuring 980 to 985
-tokens. So 21.9 percent stands and 14,089 was right all along. Re-derived from
-the same 36 rows on 2026-09-09.
+**Worst case at the committed cap of 20,000, against the committed window of
+65,536:**
 
-**Worst case at the committed cap of 10,000, against the committed window of
-16,384:**
-
-| | tokens | share of 16,384 |
+| | tokens | share of 65,536 |
 | --- | --- | --- |
-| Typical article (1.306 a word) | 997 + 10,046 + 900 = **11,943** | 73 percent |
-| Worst article this shard produced (1.585 a word) | 997 + 12,192 + 900 = **14,089** | 86 percent |
+| Typical article (1.306 a word) | 997 + 19,165 + 900 = **21,062** | 32 percent |
+| Worst article this shard produced (1.585 a word) | 997 + 23,259 + 900 = **25,156** | 38 percent |
 
-The margin falls from 1.9x to **1.16x**. At the 8,192 window committed the day
-before, 14,089 tokens is 172 percent of the window: this cap raise was not
-possible until that window raise landed, and the two are one decision.
+**The cap and the window are one decision**, and the worked example is the pair
+that could not have shipped apart: at the 8,192 window in force on 2026-09-08 a
+10,000-token cap sizes at 172 percent of the window.
 `test_the_longest_article_the_cap_allows_still_fits_the_window` in
 [../../backend/tests/contracts/](../../backend/tests/contracts/)
 reads both sides from `config/` and fails on any later pair that does not fit.
-
-**A two-call design has almost nothing left.** The pseudo-plan's second call
-adds about 1,200 tokens of first answer, about 300 of second instruction and
-about 1,200 of second answer. On the typical article that is 13,580 tokens, 83
-percent, a margin of 1.21x. On the worst article this shard produced it is
-**15,889 tokens, 97 percent of the window, a margin of 1.03x**. Write that down:
-the next cap raise needs a window raise beside it, and a second call at this cap
-needs one too.
+**It sizes the single call, which is the path being retired** - the two-call
+pair sizes at 54,887 of the same window
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
 
 ### What the wall clock pays
 

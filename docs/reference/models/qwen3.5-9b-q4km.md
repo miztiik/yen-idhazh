@@ -69,6 +69,54 @@ What the cache actually held on the day this model replaced the last one, entry
 by entry, is a dated record of that transition rather than a property of these
 weights: [The cache transition](../measurements.md#the-cache-transition-measured-2026-08-27).
 
+## What the tokenizer costs
+
+Three counts of **our own text** in this model's vocabulary. Each sizes a budget
+the pipeline spends before it reads a single article word, so each one moves when
+the weights move.
+
+**Taken 2026-09-14** against these weights, by
+`python backend/utilities/measure_budgets.py read`, which asks the running
+`llama-server` to tokenize the exact text the pipeline sends.
+
+| Quantity | Reading | Taken over | What it measures |
+| --- | --- | --- | --- |
+| `DEFINITION_SENTENCE_TOKENS` | 658 tokens | 20 definition sentences, 2,929 characters | Every taxonomy definition sentence together - the fixed part of a labelling prompt |
+| `EMPTY_ROLE_TOKENS` | 30 tokens | 9 encoding roles | The nine empty encoding roles on a visual plan that declines |
+| `TOKENS_A_WORD_AT_THE_CUT` | 1.3628 tokens a word | 200 articles, 153,613 words | Spends a token cap as a word count at the cut |
+
+**Spread is 0 on all three, and is printed rather than left out.** A tokenizer
+over fixed text returns the identical count every time, so there is nothing to
+repeat - but a reading with no spread field would read as one that forgot to take
+it (Guardrail #10).
+
+### Each reading is a point in time, and the weights are only half of why
+
+**These three are the only figures on this page that may be compared with the
+retired model's.** A tokenizer count is exact and deterministic, so the same text
+on two vocabularies is a real comparison - unlike the throughput rows below,
+where the job, the CPU and the llama.cpp build all moved and no delta was ever
+measured.
+
+On that comparison, **this vocabulary spends 18 percent fewer tokens on our
+taxonomy than the retired Qwen3-8B did**: 805 tokens on 2026-09-11, 658 on
+2026-09-14, over a definition block that did not change by one byte between those
+dates - 20 entries, 2,929 characters both times. That is 3.64 characters a token
+then and 4.45 now.
+
+**The check that establishes it is the `Taken over` column, and that is what the
+column is for.** The count is of our text in this vocabulary, so it moves when
+our text moves, with no model change at all. A total quoted without its probe
+size cannot tell a cheaper tokenizer from a shorter taxonomy, and the two call
+for opposite responses. So a retake is dated on this page, the size sits beside
+the value, and neither is quoted alone.
+
+The values themselves live in [`backend/idhazh/measured.py`](../../../backend/idhazh/measured.py)
+with the probe text each was taken over and the two counts each was derived from.
+`measure_budgets.py check` exits non-zero when any of the three names weights this
+repository no longer runs, and `measure_budgets.py read` prints this section ready
+to replace.
+
 ## Prefill and decode
 
 **Measured 2026-08-23** on a GitHub-hosted `ubuntu-latest`, AMD EPYC 9V74

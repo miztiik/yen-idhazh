@@ -24,6 +24,7 @@ from conftest import FIXTURES_DIR
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.extract import TOKENS_PER_WORD
 from utilities.measure_ledgers import (
     UPPER_PERCENTILE,
     Residual,
@@ -39,8 +40,9 @@ from utilities.measure_ledgers import (
 )
 
 LEDGERS: Final = FIXTURES_DIR / "state" / "measure-ledgers"
-#: The fixture is written against this cap, so its ceiling is 3846 words and the
-#: run that proves itself by a cut has a row sitting exactly there.
+#: The cap the fixture rows were written under. It is the fixture's own, not
+#: today's config: a run is admitted on the cut its rows recorded, so this number
+#: only sizes the ceiling the report prints.
 CAP_TOKENS: Final = 5000
 
 
@@ -163,25 +165,41 @@ def test_a_row_missing_a_clock_is_skipped_rather_than_read_as_zero() -> None:
 def test_the_cap_population_is_admitted_only_by_a_row_cut_on_the_ceiling() -> None:
     """One physical proof, and a run that cannot show it stays out.
 
-    The eval stamp was the second proof until 2026-09-12. It went with the field,
-    and `2026-01-01-2` is what that costs: it ran at the cap and can no longer
-    say so, because no article it fetched was wide enough to be cut. Admitting it
-    on anything less would put rows of an unknown cap into the regression.
+    The proof is the cap the row names in `truncation_cap_tokens`, written at the
+    moment of the cut. It is not an equality against a ceiling re-derived from
+    today's ratio: the ratio is a reading, and when it was retaken on 2026-09-14
+    the implied ceiling moved 1,000 words to 953 and every historical row stopped
+    matching at once.
+
+    The fixture carries all three cases. `2026-01-01-3` names the configured cap
+    and is admitted. `2026-01-01-1` was cut under a **different** cap and stays
+    out, which is the case the recorded number exists to separate - the two word
+    counts alone say it was cut and cannot say by what. `2026-01-01-2` recorded no
+    cap and stays out too: it ran before the column and cannot say what it ran at.
+
+    The eval stamp was the second proof until 2026-09-12. It went with the field.
     """
     by_run = {
         entry.run_id: entry
         for entry in admissions(LEDGERS, read_items(LEDGERS), cap_tokens=CAP_TOKENS)
     }
 
-    assert ceiling_words(CAP_TOKENS) == 3846
-    assert by_run["2026-01-01-3"].cut_at_ceiling
-    assert "cut exactly on the ceiling" in by_run["2026-01-01-3"].proof
-    assert not by_run["2026-01-01-2"].cut_at_ceiling
-    assert not by_run["2026-01-01-2"].admitted
+    assert by_run["2026-01-01-3"].cut_by_the_cap
+    assert "naming the configured cap" in by_run["2026-01-01-3"].proof
+    assert not by_run["2026-01-01-1"].cut_by_the_cap, "cut at 2000, not at the configured cap"
+    assert not by_run["2026-01-01-2"].admitted, "recorded no cap at all"
     assert "none" in by_run["2026-01-01-1"].proof
-    assert not by_run["2026-01-01-1"].admitted
     assert "2026-01-01-4" not in by_run
     assert sorted(run for run, entry in by_run.items() if entry.admitted) == ["2026-01-01-3"]
+
+
+def test_the_ceiling_a_cap_implies_follows_the_measured_ratio() -> None:
+    """The report still prints a ceiling, so it still has to be the config's.
+
+    Derived from both inputs rather than pinned, so it follows a retake of the
+    ratio and a change to the cap without an edit here (Guardrail #6).
+    """
+    assert ceiling_words(CAP_TOKENS) == int(CAP_TOKENS / TOKENS_PER_WORD)
 
 
 def test_the_regression_agrees_with_the_stdlib_least_squares() -> None:

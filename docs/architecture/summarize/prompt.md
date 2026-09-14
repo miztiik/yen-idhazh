@@ -614,35 +614,34 @@ content refresh. Re-read the figure then, and again when plan 11 is distilled pe
 
 ### What the two calls cost at the truncation cap, and the window that holds them
 
-`extract.truncation_cap_tokens` is 10,000 tokens, which
-`extract.truncate_to_tokens` spends as 7,692 words. **The committed corpus
-cannot supply an article that long** - its longest body is 3,846 words, which is
-`int(5000 / 1.3)` under the cap in force until 2026-09-09 - so every reading
-below comes from eight articles built out of corpus prose and cut by
-`truncate_to_tokens` itself: longest-first, densest-first, its reverse, and five
-seeded shuffles. `CLAUDE.md` section 13 is the rule - where the awkward shape is
-the point, the shape is built, because a built one carries the case the archive
-has never produced.
+`extract.truncation_cap_tokens` is 20,000 tokens, which
+`extract.truncate_to_tokens` spends as 14,675 words. **The committed corpus
+cannot supply an article that long** - its longest body is 3,846 words, cut by
+an older cap - so every reading below comes from articles built out of corpus
+prose and cut by `truncate_to_tokens` itself. `CLAUDE.md` section 13 is the rule
+- where the awkward shape is the point, the shape is built, because a built one
+carries the case the archive has never produced.
 
-Measured 2026-09-13 on `Qwen3.5-9B-Q4_K_M.gguf` through `llama-server`'s own
-`/tokenize`, on a laptop (i7-1265U, 32 GiB, four other agents live). A tokenizer
-reading is not a timing, so the hardware bounds nothing: the same weights return
-the same token counts on a runner.
+The tokenizer readings behind the table are taken on the configured weights
+through `llama-server`'s own `/tokenize`. A tokenizer reading is not a timing, so
+the hardware bounds nothing: the same weights return the same token counts on a
+runner. The session that took them is
+[`../../reference/benchmarks/two-call-window-sizing.md`](../../reference/benchmarks/two-call-window-sizing.md).
 
 | Term | Tokens | Where it comes from |
 | --- | --- | --- |
 | call 1's scaffold, before a word or a menu row | 2,167 | `idhazh.measured.CALL_ONE_SCAFFOLD_TOKENS`; the system turn alone is 2,055 |
-| plus the article and the address in front of every sentence | 17,141 | 2.2285 a word over 7,692 words, worst of the eight |
+| plus the article and the address in front of every sentence | 32,703 | 2.2285 a word over 14,675 words, worst of the eight builds |
 | plus a candidate menu at `elements.max_per_article` | 8,733 | 34.115 tokens a row over 256 rows, worst of the eight |
-| **call 1's prompt** | **28,041** | |
-| plus call 1's own output budget | 34,532 | `call_one_output_tokens()` is 6,491 |
-| plus the seam call 2 adds in front of its reply | 34,590 | `idhazh.measured.CALL_TWO_SEAM_TOKENS` |
-| plus the reply call 2's grammar may write | **39,284** | `call_two_output_tokens()` is 4,694 |
-| `models.summarize.inference.n_ctx` | 49,152 | the active model file |
-| **spare** | **9,868** | 80 percent of the window used |
+| **call 1's prompt** | **43,603** | |
+| plus call 1's own output budget | 50,094 | `call_one_output_tokens()` is 6,491 |
+| plus the seam call 2 adds in front of its reply | 50,152 | `idhazh.measured.CALL_TWO_SEAM_TOKENS` |
+| plus the reply call 2's grammar may write | **54,887** | `call_two_output_tokens()` is 4,735 |
+| `models.summarize.inference.n_ctx` | 65,536 | the active model file |
+| **spare** | **10,649** | 84 percent of the window used |
 
 **Call 1's reply is paid twice** - once as its own decode, once again inside
-call 2's prompt - which is why the pair is 2.8 times the single call's 14,088.
+call 2's prompt - which is why the pair is 2.2 times the single call's 25,156.
 `test_the_two_calls_fit_the_window_at_the_cap` is the assertion, and it reads
 the cap, the element cap and the window from `config/` on both sides so it
 follows the next move of any of the three.
@@ -660,60 +659,44 @@ quantity disagree the first time a term moves.
 element count rather than the 256-row cap - and an article over the window lands
 as `FailureCode.CONTEXT_EXCEEDED` having cost nothing. `summarize.fits_context`
 is the other check and it is not this one: it sums the single call the
-qualification harness sends, which is 14,088 at the same cap, and using it here
+qualification harness sends, which is 25,156 at the same cap, and using it here
 would admit articles the sequence cannot hold. Over the trailing 30 days ending
-2026-09-13 this check would have refused none of 8,938 items at 49,152, and 94
-of them at the 16,384 the window carried until that day.
+2026-09-13 this check would have refused none of 8,938 items.
 
-**The window went to 49,152 rather than to the 32,768 an owner authorised.** The
-authorisation on 2026-09-12 was given against a table that sized the pair at
-26,189 with 6,579 spare - one build, longest-first, and the mildest of the
-eight. Re-measured, three of the eight exceed 32,768 on their own and the worst
-reaches 37,495. These are orderings of ordinary corpus prose rather than
-adversarial constructions: two of the five seeded shuffles are among the three.
-
-| Build, all 7,692 words of corpus prose | Menu rows | Call 1's prompt | The pair |
-| --- | --- | --- | --- |
-| densest first | 256 | 26,252 | **37,495** |
-| shuffled, seed 2 | 254 | 23,954 | **35,197** |
-| shuffled, seed 4 | 237 | 21,924 | **33,167** |
-| shuffled, seed 5 | 178 | 19,778 | 31,021 |
-| shuffled, seed 1 | 157 | 19,589 | 30,832 |
-| shuffled, seed 3 | 136 | 18,455 | 29,698 |
-| longest first | 35 | 15,007 | 26,250 |
-| densest first, reversed | 0 | 13,422 | 24,665 |
+**Which build you measure decides the answer, so the window is sized against the
+worst of each term rather than the worst single build.** Eight cap-length
+articles built from the same corpus prose - longest-first, densest-first, its
+reverse and five seeded shuffles - spread the pair over a range wide enough that
+any one of them would have sized a different window, and two of the three
+heaviest are seeded shuffles rather than adversarial constructions. The readings
+are in
+[`../../reference/benchmarks/two-call-window-sizing.md`](../../reference/benchmarks/two-call-window-sizing.md).
 
 **A cap-length article saturates the candidate menu, and that is the corpus's
 own reading rather than a construction.** Over the 1,444 committed corpus rows
-the 95th-percentile element density is 0.0659 a word, which is 507 elements at
-7,692 words against an `elements.max_per_article` of 256; the median is 0.0167,
-which is 128. One real row already reaches 256. So a menu at its cap costs
-8,733 tokens - 22 percent of the sequence - on better than one cap-length
+the 95th-percentile element density is 0.0659 a word, which is 967 elements at
+14,675 words against an `elements.max_per_article` of 256; the median is 0.0167,
+which is 245. One real row already reaches 256. So a menu at its cap costs
+8,733 tokens - 16 percent of the sequence - on better than one cap-length
 article in twenty.
 
-**What the window costs is memory, and memory is not what chose 49,152.**
+**What the window costs is memory, and memory is not what chose it.**
 [`../../reference/measurements.md`](../../reference/measurements.md) carries the
-three arms; the short version is that KV runs 32 KiB a token over 8 attention
-layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever
-the window is - so 49,152 is 1,536.00 MiB of KV against 512.00 at 16,384, and
-1,056 MiB more all told. The runner's measured low-water free is 6.84 GiB
-against a 1.0 GiB bar. The weights train to 262,144, so nothing is scaled. Every
-candidate from 32,768 to 65,536 clears that bar by more than four times, so 528
-MiB either way is noise.
+arms; the short version is that KV runs 32 KiB a token over 8 attention layers
+of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the
+window is - so 65,536 is 2,048.00 MiB of KV against 512.00 at 16,384, and 1,584
+MiB more all told. The runner's measured low-water free is 6.84 GiB against a
+1.0 GiB bar. The weights train to 262,144, so nothing is scaled. Every candidate
+from 32,768 to 65,536 clears that bar by more than four times, so half a
+gigabyte either way is noise.
 
-**What chose 49,152 is the margin, and the margin has a derivation.** 39,284
-plus 25 percent is 49,105, and 49,152 is the next step that is a whole multiple
-of both 16,384 and the 512-token batch. The 25 percent is the size of the one
-tokenizer miss on record: `idhazh.measured.WORST_TOKENS_A_WORD` says 1.585
-tokens a word and the densest cap-length build delivered 1.952, 23 percent over.
-**65,536 fits too, costs 528 MiB more, and is what this row first shipped.** It
-was refused because it leaves 67 percent of the window spare, and the gate is
-the product on this path rather than the window: the assertion's job is to fail
-a merge when the sequence outgrows the window, and at 65,536 the sequence can
-grow by two thirds before anybody hears about it. At 49,152 it can grow a
-quarter - one more tokenizer surprise the size of the one already on record.
-Ruled by Carmack, 2026-09-13. **Re-derive it when the truncation cap is fixed or
-`elements.max_per_article` moves.**
+**What chose 65,536 is the sized pair.** It is the first whole multiple of both
+16,384 and the 512-token batch that holds 54,887, and it leaves 10,649 spare.
+Wider costs almost nothing in memory and costs the assertion its reach: the gate
+is the product on this path, and it cannot report a sequence that grew until the
+sequence has outgrown the window. **Re-derive it when the truncation cap or
+`elements.max_per_article` moves** - the cap doubled on 2026-09-14 and spent
+most of the margin the same window used to carry.
 
 **When the sizing is wrong anyway, the failure now has a name.** With
 `--no-context-shift` a decode that runs into the wall stops there rather than
@@ -728,15 +711,15 @@ the wall. A run of `window_exhausted` says the window is too narrow for the cap;
 a run of `output_budget_cut` says the reply shape is too wide for its budget.
 
 **Open, and owned by nobody: the truncation cap does not hold.**
-`truncate_to_tokens` cuts at `words x 1.3`, and the densest build's body
-measured **15,014 real tokens under a 10,000-token cap** - 1.952 tokens a word.
-So the cap over-runs by 50 percent on number-dense prose, which is the same
-defect `WORST_TOKENS_A_WORD` records at 1.585 and one more article has now
-beaten. It is written here so the distill picks it up.
+`truncate_to_tokens` cuts at `words x 1.3628`, and the densest cap-length build
+tokenized at **1.952 tokens a word** - so the cap over-runs by 43 percent on
+number-dense prose. That is the same defect `WORST_TOKENS_A_WORD` records at
+1.585 and one more article has now beaten. It is written here so the distill
+picks it up.
 
 **Open, and owned by nobody: a cap-length prompt may not be affordable at all.**
 The one 8,741-token prompt the pipeline has actually sent cost 927 s of prefill
-on the runner. A 28,041-token call 1 prompt is 3.2 times that, and the wiring
+on the runner. A 43,603-token call 1 prompt is 5 times that, and the wiring
 row is where that stops being arithmetic and starts being a shard's wall clock
 (Guardrail #2).
 
@@ -807,24 +790,24 @@ them:
 
 | Part | Bound | Converted at |
 | --- | --- | --- |
-| `title`, `key_points`, `summary` | word counts from `config/`, spent as characters at 12 a word | 1.3 tokens a word, which is what `extract.approx_tokens` already spends the truncation cap at |
+| `title`, `key_points`, `summary` | word counts from `config/`, spent as characters at 12 a word | 1.3628 tokens a word (`measured.TOKENS_A_WORD_AT_THE_CUT`), which is what `extract.approx_tokens` already spends the truncation cap at |
 | everything else - keys, punctuation, element addresses, closed vocabularies | characters, from the generated schema | one token a character, because a token spans at least one |
 
-Against the committed bounds on 2026-09-10 the widest reply is 11,692
-characters: 7,848 of prose, which is 850 tokens, and 3,844 of structure, of
-which the visual plan alone is 3,767. **The budget is 4,694 tokens and it is
+Against the committed bounds the widest reply is 11,692
+characters: 7,848 of prose, which is 891 tokens, and 3,844 of structure, of
+which the visual plan alone is 3,767. **The budget is 4,735 tokens and it is
 mostly the picture.**
 
 **What that guarantees, and what it does not.** The structural half is a true
 ceiling. The prose half is a sizing: a reply that spent its whole character rail
-on twelve-character words would cost more tokens than 1.3 a word. That is
-deliberate, and it is why the recovery above exists - the budget is the brake
-and the recovery is the seatbelt. A budget large enough to be an unbreakable
-ceiling would leave no window for the article it is summarising.
+on twelve-character words would cost more tokens than the measured rate a word.
+That is deliberate, and it is why the recovery above exists - the budget is the
+brake and the recovery is the seatbelt. A budget large enough to be an
+unbreakable ceiling would leave no window for the article it is summarising.
 
 **A budget is also a clock, and this one is close to a bound.** At the 6.01
 tokens a second the configured summarizer decodes at on `ubuntu-latest`
-(2026-08-23), 4,694 tokens is 13.0 minutes, against a
+(2026-08-23), 4,735 tokens is 13.1 minutes, against a
 `models.summarize.inference.request_timeout_minutes` of 22.1 and a
 `run.shard_timeout_minutes` of 200. So a single reply that ran to the
 brake would not trip the request timeout, and fifteen of them would spend the
@@ -886,9 +869,9 @@ only the conversion, and it differs because the shapes do.
 **Rejected: call 2's rule applied unchanged to call 1.** It gives 12,953 tokens
 and leaves 117 tokens of margin across the two-call sequence at 32,768. The row
 that owns the window called 75 tokens "luck rather than a margin", and 117 is
-the same thing. Refused by Carmack, 2026-09-13. **Re-measured the same day, the
-premise was worse than that: the pair sizes at 39,284 tokens, so at 32,768 there
-was no margin at all and the window went to 49,152.**
+the same thing. Refused by Carmack, 2026-09-13. **The premise is worse than
+that: the pair sizes at 54,887 tokens, so 32,768 holds no margin at all and the
+window is 65,536.**
 
 **Rejected: clamping the budget against `n_ctx`.** A `min()` silently shrinks
 the budget, which reproduces the exact failure being fixed - a quiet cut with

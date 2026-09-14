@@ -284,8 +284,8 @@ for the article and every figure above is wrong. `state/item-health/` carries
 so the reading is one comparison over that ledger, and
 [the sequence the window holds](#the-sequence-is-declared-once-and-the-window-was-checked-against-it)
 below says what came back. The second is call 2's decode: its output budget is
-4,694 tokens and the one reply ever measured was 327, and a reply at half the
-budget is 143 minutes of call 2 alone on a 20-item shard. The third is the worst
+4,735 tokens and the one reply ever measured was 327, and a reply at half the
+budget is 144 minutes of call 2 alone on a 20-item shard. The third is the worst
 `work` shard against the 180-minute bar in `state/runtime-counters.csv`.
 
 ## The sequence is declared once, and the window was checked against it
@@ -321,10 +321,9 @@ the first price answered.
 **How many items the window refuses, and it is none.** Over the trailing 30 days
 ending 2026-09-13, 8,938 items carry a recorded prompt: the median is 1,672
 tokens, the 95th percentile 3,378 and the worst 8,741. Behind the prompt the
-sequence spends a fixed 11,243 tokens - 6,491 for call 1's reply, 58 for the seam
-and 4,694 for call 2's. At the committed `n_ctx` of 49,152 **no item of the 8,938
-would have been refused**. At the 16,384 the window carried until 2026-09-13 it
-would have been **94, which is 1.1 percent**. That is the number that decides
+sequence spends a fixed 11,284 tokens - 6,491 for call 1's reply, 58 for the seam
+and 4,735 for call 2's. At the committed `n_ctx` of 65,536 **no item of the 8,938
+would have been refused**. That is the number that decides
 whether a later row proposes a raise, and it says the raise has already been
 made and bought the whole tail. Read once from `ledger.load_item_health` with a
 30-day cover, 2026-09-13.

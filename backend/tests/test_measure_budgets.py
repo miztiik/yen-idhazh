@@ -381,18 +381,27 @@ def test_the_paste_block_names_the_record_and_stamps_the_configured_weights(
 
 
 def test_the_check_names_every_stale_site_and_both_digests() -> None:
-    """What it prints on the committed tree today: three stale, none current."""
+    """What it prints when a reading is stale, built rather than found.
+
+    All three were stale until row #13b retook them on 2026-09-14, so the check
+    now says nothing on the committed tree and this test drives it off a digest
+    no entry names instead. Asserting the committed state would have made this
+    test a clock: green only while somebody had not done the work.
+    """
     configured = config.load(CONFIG_DIR).models.summarize.sha256
     assert configured is not None
-    stale = readings_awaiting_a_retake(configured_sha256=configured)
-    assert len(stale) == len(SIZED_BY_A_READING_HERE) == 3, (
-        "all three were sized on the retired 8B and none has been retaken. When row #13b "
-        "retakes one, this count drops - change it here and say which"
+    assert readings_awaiting_a_retake(configured_sha256=configured) == (), (
+        "row #13b retook all three; a stale one here means a reading moved without "
+        "its subject"
     )
 
-    said = render_check(stale, configured)
+    swapped = "0" * 64
+    stale = readings_awaiting_a_retake(configured_sha256=swapped)
+    assert len(stale) == len(SIZED_BY_A_READING_HERE) == 3
 
-    assert configured in said, "the check does not say which weights are configured"
+    said = render_check(stale, swapped)
+
+    assert swapped in said, "the check does not say which weights are configured"
     for site in stale:
         assert site.module in said
         assert site.constant in said
@@ -401,11 +410,7 @@ def test_the_check_names_every_stale_site_and_both_digests() -> None:
 
 
 def test_the_check_says_so_when_nothing_is_stale() -> None:
-    """The other half, driven off the digest each reading already names.
-
-    Built rather than taken off the committed records, so it stays true on the
-    day row #13b retakes them (`CLAUDE.md` section 13).
-    """
+    """The other half, and on the committed tree this is the arm that fires."""
     subject = SIZED_BY_A_READING_HERE[0].reading.subject
 
     assert readings_awaiting_a_retake(configured_sha256=subject) == ()
@@ -417,12 +422,18 @@ def test_check_exits_non_zero_while_a_reading_is_stale(capsys: pytest.CaptureFix
     """An operator surface rather than a test, so the loudest thing it can do is exit 1.
 
     It is not a pytest case and no workflow runs it, so a red exit code costs no
-    CI run and reaches the one person who asked (`CLAUDE.md` section 13).
+    CI run and reaches the one person who asked (`CLAUDE.md` section 13). Driven
+    against a config naming weights no reading was taken on, because on the
+    committed tree since row #13b nothing is stale and the interesting arm is
+    the one that fires.
     """
-    code = main(["check", "--config", str(CONFIG_DIR)])
+    assert main(["check", "--config", str(CONFIG_DIR)]) == 0
+    assert "names the configured weights" in capsys.readouterr().out
 
-    assert code == 1
-    assert "no longer runs" in capsys.readouterr().out
+    swapped = SIZED_BY_A_READING_HERE[0].reading.subject.replace("0", "1", 1)
+    assert "no longer runs" in render_check(
+        readings_awaiting_a_retake(configured_sha256=swapped), swapped
+    )
 
 
 def test_read_refuses_rather_than_guessing_when_no_server_answers(
@@ -492,10 +503,15 @@ def test_the_plan_reply_ceiling_did_not_move() -> None:
     assert WORST_CASE_REPLY_CHARACTERS == 3767
 
 
-def test_the_ratio_did_not_move() -> None:
+def test_the_ratio_is_the_retaken_one() -> None:
+    """1.3 was a judgement nobody counted; 1.3628 came off the model's tokenizer.
+
+    Pinned rather than derived, because the point of the pin is that the value
+    moves only when somebody retakes the reading and says so.
+    """
     from idhazh.extract import TOKENS_PER_WORD
 
-    assert TOKENS_PER_WORD == 1.3
+    assert TOKENS_PER_WORD == 1.3628
 
 
 def test_this_surface_writes_nothing_a_commit_would_carry() -> None:

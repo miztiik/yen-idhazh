@@ -168,6 +168,7 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "call_2_input_tokens",
         "call_2_output_tokens",
         "call_2_cached_tokens",
+        "truncation_cap_tokens",
     )
 
 

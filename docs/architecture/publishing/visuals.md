@@ -539,14 +539,14 @@ expensive.
 | What the gate changes about call 2 | Before | Gated |
 | --- | --- | --- |
 | The decoder shape | `{summary, visual}` | the summary draft alone |
-| The output budget | 4,694 tokens | 905 tokens |
+| The output budget | 4,735 tokens | 946 tokens |
 | The trailing user turn | 2,555 characters | 961 characters |
 | The system turn, the article, call 1's reply | unchanged | unchanged |
 
 Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
 being the other minus the plan's - two ways of computing one quantity disagree the first time a
 bound moves, and the one that is wrong is the one nobody reads. The saving is 3,789 tokens off the
-ceiling, which is 81 percent of it.
+ceiling, which is 80 percent of it.
 
 **A ceiling is not a measurement of seconds, so here is one.** The "21 measured seconds" this page
 used to quote was a saving for skipping a whole call, which cannot happen, and that figure is

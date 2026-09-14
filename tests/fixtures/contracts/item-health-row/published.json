@@ -38,6 +38,7 @@
   "stage": "publish",
   "summarize_ms": null,
   "summary_words": 92,
+  "truncation_cap_tokens": null,
   "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
   "version": "2026-08-23T18:15",
   "vertical": "ai"

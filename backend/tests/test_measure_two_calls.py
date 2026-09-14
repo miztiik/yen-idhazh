@@ -26,6 +26,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR
 from idhazh import config, summarize
 from idhazh.contracts.app_config import ModelsConfig
 from idhazh.contracts.article import Article
+from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import Completion
 from idhazh.sanitize import untrusted_block
 from utilities.measure_two_calls import (
@@ -269,13 +270,21 @@ def a_sample(key: str, words: int) -> Sample:
 def test_the_cap_arm_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
     """The corpus cannot supply an article at the cap, so one is built.
 
-    Driven from two built samples rather than from `corpus/corpus.jsonl`, which
-    a run appends to (Guardrail #12). What is under test is the joining and the
-    cut, and a fixed pair shows both: neither row alone reaches the cap.
+    The cap is read from `config/` and the word count derived from the measured
+    ratio, so both follow a change to either and neither is a literal somebody
+    has to remember to update (Guardrail #6). Built rather than read from
+    `corpus/corpus.jsonl`, which a run appends to (Guardrail #12): what is under
+    test is the joining and the cut, and a pair that each hold just under half
+    the cap shows both.
     """
-    cap = 1300
-    allowed = cap // 13 * 10
-    built = sample_at_the_cap([a_sample("first", 600), a_sample("second", 600)], cap_tokens=cap)
+    cap = config.load(CONFIG_DIR).app.extract.truncation_cap_tokens
+    allowed = int(cap / TOKENS_PER_WORD)
+    each = allowed // 2 + 1
+
+    built = sample_at_the_cap(
+        [a_sample("first", each), a_sample("second", each)], cap_tokens=cap
+    )
+
     assert built.article.word_count == allowed
     assert built.article.truncated
     assert built.article.truncated_at_tokens == cap
@@ -284,9 +293,13 @@ def test_the_cap_arm_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
 
 def test_the_cap_arm_stops_joining_once_it_has_enough() -> None:
     """A row past the cap is not read, so the arm names only what it used."""
+    cap = config.load(CONFIG_DIR).app.extract.truncation_cap_tokens
+    past_the_cap = int(cap / TOKENS_PER_WORD) + 1
+
     built = sample_at_the_cap(
-        [a_sample("first", 5000), a_sample("second", 5000)], cap_tokens=1300
+        [a_sample("first", past_the_cap), a_sample("second", past_the_cap)], cap_tokens=cap
     )
+
     assert built.url_key == "built from first"
 
 

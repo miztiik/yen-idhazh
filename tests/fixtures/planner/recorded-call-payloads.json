@@ -297,7 +297,7 @@
     "temperature": 0.2,
     "top_p": 0.85,
     "seed": 7,
-    "n_predict": 4694,
+    "n_predict": 4735,
     "stream": false,
     "cache_prompt": true,
     "json_schema": {
