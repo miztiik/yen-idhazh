@@ -744,13 +744,26 @@ def the_prefix_cache_is_live(*, first: Completion, second: Completion) -> None:
     """Arm 2. The second call read the first call's prompt out of the slot.
 
     The second probe's prompt IS the first one plus the reply plus one turn, so
-    every token the first call prefilled is a prefix of it. A reused count below
-    that is the prefix being re-read: a llama.cpp build that flipped the
-    prompt-cache default, a seam that re-splits, a leading-token mismatch, or a
-    slot lost to parallelism. Each doubles prefill on every item, and none of
-    them writes a line anywhere.
+    every token the first call prefilled is a prefix of it. Reusing none of them
+    is the prefix being re-read: a llama.cpp build that flipped the prompt-cache
+    default, a seam that re-splits, a leading-token mismatch, or a slot lost to
+    parallelism. Each doubles prefill on every item, and none of them writes a
+    line anywhere. All four land on the same reading, which is why zero is the
+    line: a slot that is not holding the prefix reuses nothing, not a little
+    less than everything.
+
+    **The reuse count is bounded by a checkpoint position, not by the previous
+    prompt's length**, so asking for all of it refuses a healthy server. The
+    slot restores from a context checkpoint written mid-prompt and resumes from
+    there; where that checkpoint sits is the runtime's business and it moves
+    with the build. Measured 2026-09-14 on GitHub `ubuntu-latest`, llama.cpp
+    `b10598`, Qwen3.5-9B-Q4_K_M, run 34820209002: the first probe prefilled 31
+    tokens, the slot checkpointed at position 26, and the second probe reused 27
+    of its 60 and evaluated 33. Prefill was cut, not doubled - and the version
+    of this arm that wanted 31 refused all four shards on the first real run it
+    ever saw, so the day planned 80 items and published none.
     """
-    if first.prompt_tokens > 0 and second.cached_tokens >= first.prompt_tokens:
+    if first.prompt_tokens > 0 and second.cached_tokens > 0:
         return
     raise ProbeRefusedError(
         "the prompt cache is not holding the prefix: the first probe prefilled "

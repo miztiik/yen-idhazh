@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -232,7 +232,7 @@ before the first item:
 | Arm | Question | Refuses |
 | --- | --- | --- |
 | 1 | Does our render match the server's own render of the same turns? | Compared as token ids, not bytes, so a leading sequence token is not counted twice |
-| 2 | Did the prefix cache actually hold between two calls? | A silent doubling of prefill cost per item |
+| 2 | Did the slot reuse any of the previous call's prefix? | A silent doubling of prefill cost per item |
 | 3 | Does the schema still constrain the decode? | A grammar converter that quietly dropped a feature |
 | 4 | Are the loaded weights the declared weights? | A repackaged model under a familiar name |
 | 5 | Is the window inside what the model was trained for? | A short native window under a larger configured one |
@@ -265,6 +265,35 @@ is generated from a model, so a committed probe schema would be a second copy
 that drifts. `prove_the_entry` takes the schema as an argument instead - which
 is also what keeps the model layer at the bottom of the dependency graph, since
 the module that builds that schema imports this one.
+
+**Arm 2 asks whether the slot reused anything, not whether it reused all of
+it.** The first version wanted the second call's reused count to reach the first
+call's prompt length, on the reasoning that the first prompt is a byte prefix of
+the second one. The premise is true and the conclusion does not follow: the slot
+does not resume at the end of the previous prompt, it restores a context
+checkpoint written part way through it and resumes from there. Where the
+checkpoint sits is the runtime's business and it moves with the build, so there
+is no count to demand and no threshold that would not be an invented number
+(Guardrail #10). Zero is the whole of the line, and it is enough - the four
+failures the arm exists to catch (a flipped prompt-cache default, a seam that
+re-splits, a leading-token mismatch, a slot lost to parallelism) all reuse
+nothing rather than a little less than everything.
+
+Measured 2026-09-14, GitHub `ubuntu-latest`, llama.cpp `b10598`,
+Qwen3.5-9B-Q4_K_M, run 34820209002: first probe 31 tokens prefilled, slot
+checkpointed at position 26, second probe 27 of 60 reused and 33 evaluated.
+Prefill was cut, not doubled. The version that wanted 31 refused all four work
+shards on the first real run it ever saw, and 2026-09-14 planned 80 stories and
+published none.
+
+### Design rationale - a start-up proof runs against the runtime, not against a model of it
+
+Arm 2 passed every test and every rehearsal and was wrong in production, because
+its rule was derived from what the prompt bytes must be rather than from what
+the server does with them. The general shape: a proof over a runtime's internal
+bookkeeping states the property the bookkeeping is *for* - here, that the prefix
+was not re-read - and never a number the runtime is free to choose. Anything
+finer is a second implementation of the runtime, kept in a docstring, drifting.
 
 ## The lifecycle of a model
 
