@@ -773,6 +773,24 @@ def _parses_json(node: ast.AST) -> bool:
     )
 
 
+def _reads_the_environment(node: ast.AST) -> bool:
+    """`os.environ[...]` or `os.environ.get(...)` anywhere in an expression."""
+    return any(
+        isinstance(inner, ast.Attribute)
+        and inner.attr == "environ"
+        and isinstance(inner.value, ast.Name)
+        and inner.value.id == "os"
+        for inner in ast.walk(node)
+    )
+
+
+def _names(node: ast.AST, name: str) -> bool:
+    """Whether an expression reads a given name anywhere inside itself."""
+    return any(
+        isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node)
+    )
+
+
 def _own_nodes(scope: ast.AST) -> list[ast.AST]:
     """Every node a scope owns, without descending into a nested function.
 
@@ -4252,6 +4270,49 @@ def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> Non
     assert ("digest.yml", CONFIG_FILE_NAME, (MODELS_POINTER_KEY,)) in seen
 
 
+def test_no_inline_program_rebinds_a_name_it_read_from_the_environment() -> None:
+    """A dispatch input read into a name and then written over is silently ignored.
+
+    `measure.yml` did exactly this: `CANDIDATE` was the runtime sweep's choice
+    from `RUNTIME_CANDIDATE`, and four lines later the same name was rebound to
+    the candidate config directory. Every later reader got the path, so a
+    dispatch of the incumbent died on `unknown runtime candidate:
+    backend/var/candidate-config` after paying for the weights download.
+
+    **A rebind that consults the value it replaces is a fallback, not a
+    collision** - `value = value or configured.get(field)` is how the same file
+    lets config stand in for an absent input, and that is correct. What is
+    banned is a second assignment that ignores what the first one read.
+    """
+    shadowed: list[str] = []
+    for filename, workflow in sorted(_load_workflows().items()):
+        for script in _run_bodies(workflow):
+            for program in _inline_programs(script):
+                tree = ast.parse(program)
+                for scope in [tree, *(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))]:
+                    from_environment: dict[str, int] = {}
+                    assignments = sorted(
+                        (n for n in _own_nodes(scope) if isinstance(n, ast.Assign)),
+                        key=lambda n: n.lineno,
+                    )
+                    for node in assignments:
+                        if len(node.targets) != 1:
+                            continue
+                        target = node.targets[0]
+                        if not isinstance(target, ast.Name):
+                            continue
+                        if _reads_the_environment(node.value):
+                            from_environment[target.id] = node.lineno
+                        elif target.id in from_environment and not _names(node.value, target.id):
+                            shadowed.append(
+                                f"{filename}: {target.id} is read from the environment at "
+                                f"line {from_environment[target.id]} of its inline program and "
+                                f"written over at line {node.lineno} without reading it"
+                            )
+
+    assert not shadowed, "\n".join(shadowed)
+
+
 def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     """Every part of what the entry holds, and all of them from one source.
 
@@ -4411,9 +4472,17 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
         _step(workflow, BENCH_SERVER_JOB, "name", "Measure runtime candidate"),
         f"measure.yml/{BENCH_SERVER_JOB}/Measure runtime candidate",
     )
-    assert f'CANDIDATE = Path("{BENCH_CANDIDATE_CONFIG}")' in sweep
-    assert "shutil.copytree(CANDIDATE, dst)" in sweep, (
+    # The property, not the spelling. This assertion used to pin the name
+    # `CANDIDATE` for the path, which was also the name the sweep read
+    # `RUNTIME_CANDIDATE` into - so the test held the collision in place.
+    copied = re.search(r"shutil\.copytree\((\w+), dst\)", sweep)
+    assert copied, (
         "the sweep copies the candidate tree; copying `config` would measure the incumbent"
+    )
+    held = copied.group(1)
+    assert f'{held} = Path("{BENCH_CANDIDATE_CONFIG}")' in sweep
+    assert f'{held} = os.environ' not in sweep, (
+        f"{held} holds the candidate config path and a dispatch input at once"
     )
 
     for job_name in (BENCH_RAW_JOB, BENCH_SERVER_JOB):
