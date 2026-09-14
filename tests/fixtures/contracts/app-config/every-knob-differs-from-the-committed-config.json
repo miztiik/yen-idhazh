@@ -1,6 +1,7 @@
 {
   "assemble": {
-    "duplicate_similarity_min": 0.94
+    "duplicate_similarity_min": 0.94,
+    "group_identical_titles": false
   },
   "assist": {
     "eval_corpus_through": "2026-08-26",
