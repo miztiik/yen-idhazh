@@ -23,6 +23,83 @@
       "title": "ConfigDigest",
       "type": "object"
     },
+    "DraftConfig": {
+      "additionalProperties": false,
+      "description": "A second, much smaller set of weights that guesses ahead of the first.\n\n**Speculative decoding is output-identical by construction.** The target\nmodel verifies every drafted token and rejects any it would not have\nproduced, so the text is the text the target would have written alone. That\nis why this block is priced on cost and on how hard it is to revert rather\nthan waiting on a quality measurement: there is no quality to measure\n(Guardrail #10, and plan 28's row 2a).\n\nWhat it can do is waste time. A draft the target keeps rejecting costs a\nforward pass per rejected token and returns nothing, so the acceptance rate\nis the number that says whether it paid. `llama-server` publishes it:\n`llamacpp:spec_decode_num_accepted_tokens_total` over\n`llamacpp:spec_decode_num_draft_tokens_total`, both already in the\n`/metrics` body a shard reads at job end.",
+      "properties": {
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Byte Count"
+        },
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "n_max": {
+          "default": 3,
+          "description": "How many tokens are drafted before the target verifies. The runtime's own default. Higher drafts further ahead and wastes more when the draft is wrong, so it is a bet on how predictable the text is.",
+          "maximum": 64,
+          "minimum": 1,
+          "title": "N Max",
+          "type": "integer"
+        },
+        "n_min": {
+          "default": 0,
+          "maximum": 64,
+          "minimum": 0,
+          "title": "N Min",
+          "type": "integer"
+        },
+        "p_min": {
+          "default": 0.0,
+          "description": "Below this probability the draft stops guessing and lets the target decode. 0.0 is the runtime default and means never stop early.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "P Min",
+          "type": "number"
+        },
+        "repo": {
+          "description": "Hugging Face repository the draft GGUF is in.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The hub commit. Required here and optional on ModelRef: a block somebody added by hand is a block that can pin properly from the start.",
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Refused before the server starts, like the target's.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "spec_type": {
+          "$ref": "#/$defs/SpeculationType",
+          "default": "draft-simple"
+        }
+      },
+      "required": [
+        "repo",
+        "revision",
+        "file",
+        "sha256"
+      ],
+      "title": "DraftConfig",
+      "type": "object"
+    },
     "InferenceConfig": {
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
@@ -268,6 +345,18 @@
           "default": null,
           "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
           "title": "Byte Count"
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DraftConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A second, smaller set of weights that drafts tokens this entry's model then verifies. Null is the default and means one model and no speculation. It sits beside `inference` rather than inside it because it names weights of its own - a repository, a commit, a filename and a digest - and a block that fetches a file is not a decoding knob. On `ModelRef` rather than `ModelEntry` so a run record says whether the day was drafted; a run that cannot answer that cannot explain its own throughput."
         },
         "file": {
           "minLength": 1,
@@ -749,6 +838,15 @@
       "title": "RunStatus",
       "type": "string"
     },
+    "SpeculationType": {
+      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the two this project can actually stand up. `llama-server` accepts a\nlonger list - eagle3, mtp, dflash, dspark and five ngram variants - and each\nof those either needs a purpose-built draft head we do not have or a lookup\ncache nothing here writes. A closed choice is what stops an operator naming\none of them and getting a server that starts and drafts nothing.",
+      "enum": [
+        "draft-simple",
+        "ngram-simple"
+      ],
+      "title": "SpeculationType",
+      "type": "string"
+    },
     "VerticalCount": {
       "additionalProperties": false,
       "properties": {
@@ -817,6 +915,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "The embedded ModelRef gained an optional draft block. It defaults to null and nothing here requires it, so every committed run.json still reads and no migration is needed.",
+      "version": "2026-09-14T07:00",
+      "why": "Plan 28 row 2a. A run that was decoded with a draft head and a run that was not took different times to write the same words, and a manifest that could not say which one it was could not explain its own throughput. It is on ModelRef rather than ModelEntry for exactly that reason - the recorded shape is the one a later reader has."
+    },
     {
       "change": "The embedded ModelRef gained an optional byte_count. It defaults to null and nothing here requires it, so every committed run.json still reads and no migration is needed.",
       "version": "2026-09-14T06:00",
@@ -934,7 +1037,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-14T06:00",
+      "default": "2026-09-14T07:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -946,5 +1049,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-14T06:00"
+  "version": "2026-09-14T07:00"
 }

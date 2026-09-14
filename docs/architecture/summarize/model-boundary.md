@@ -325,6 +325,43 @@ dead.
 Reverting costs one line because adopting never modified the previous model's
 file. Its weights cache key is its own digest, so that cache is still valid.
 
+## A second, smaller model that guesses ahead
+
+`models.summarize.draft` is null and nearly always stays null. Not null names a
+second GGUF - a repository, a commit, a filename and a digest of its own - that
+drafts a few tokens at a time which the real model then verifies.
+
+**The text does not change, and that is a property of the mechanism rather than
+a hope.** The target model checks every drafted token and rejects any it would
+not itself have produced, so a drafted run and an undrafted run write the same
+words. This is why the block is priced on what it costs and how hard it is to
+undo, rather than waiting on a quality measurement: there is no quality to
+measure ([`CLAUDE.md`](../../../CLAUDE.md) Guardrail #10).
+
+**What it can do is waste time.** A draft the target keeps rejecting costs a
+forward pass per rejected token and buys nothing. The acceptance rate is the
+number that says whether it paid, and `llama-server` publishes it -
+`llamacpp:spec_decode_num_accepted_tokens_total` over
+`llamacpp:spec_decode_num_draft_tokens_total`, both already in the `/metrics`
+body each shard reads at job end. Both read zero when no draft head is
+configured, so the columns are legible on every day either way.
+
+**Three things it costs.** A second download and its checksum, both in the same
+steps as the target's so the two cannot drift apart. Memory for a second set of
+weights, which comes out of the headroom
+[`measurements.md`](../../reference/measurements.md) records rather than out of
+the KV budget. And the draft's own digest in the run record, so a day that was
+drafted can be told from a day that was not - a run that cannot answer that
+cannot explain its own throughput.
+
+**The flag spellings are the trap, and they are not the ones on most pages.**
+`--draft-max` and `--draft-min` were removed from llama.cpp; the pinned build
+exits telling the operator to use `--spec-draft-n-max` and `--spec-draft-n-min`.
+`idhazh.llm.server.server_argv` is the one place in this repository a
+llama-server flag may be spelled, and a test pins all four current spellings and
+refuses the two retired ones by name - so a rename in either direction fails
+here rather than on a runner.
+
 ## The two measurement arms
 
 Both are manual dispatch. Neither gates a merge: the fastest and slowest shard

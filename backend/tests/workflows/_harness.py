@@ -229,6 +229,17 @@ MODEL_REF_OUTPUTS: Final = (
     "summarize_file",
 )
 
+#: The draft head's refs, published beside the target's and empty where the
+#: entry declares none. Held apart from MODEL_REF_OUTPUTS because they are
+#: optional: a test that required them would fail on every day this repository
+#: has published.
+DRAFT_REF_OUTPUTS: Final = (
+    "draft_repo",
+    "draft_revision",
+    "draft_file",
+    "draft_sha256",
+)
+
 MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
 
 # What the daily run used to call them at workflow scope. Named here so the

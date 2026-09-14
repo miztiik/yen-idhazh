@@ -71,6 +71,79 @@ class LogLevel(StrEnum):
     ERROR = "ERROR"
 
 
+class SpeculationType(StrEnum):
+    """Which kind of speculation the runtime is told to use.
+
+    Only the two this project can actually stand up. `llama-server` accepts a
+    longer list - eagle3, mtp, dflash, dspark and five ngram variants - and each
+    of those either needs a purpose-built draft head we do not have or a lookup
+    cache nothing here writes. A closed choice is what stops an operator naming
+    one of them and getting a server that starts and drafts nothing.
+    """
+
+    DRAFT_SIMPLE = "draft-simple"
+    NGRAM_SIMPLE = "ngram-simple"
+
+
+class DraftConfig(Model):
+    """A second, much smaller set of weights that guesses ahead of the first.
+
+    **Speculative decoding is output-identical by construction.** The target
+    model verifies every drafted token and rejects any it would not have
+    produced, so the text is the text the target would have written alone. That
+    is why this block is priced on cost and on how hard it is to revert rather
+    than waiting on a quality measurement: there is no quality to measure
+    (Guardrail #10, and plan 28's row 2a).
+
+    What it can do is waste time. A draft the target keeps rejecting costs a
+    forward pass per rejected token and returns nothing, so the acceptance rate
+    is the number that says whether it paid. `llama-server` publishes it:
+    `llamacpp:spec_decode_num_accepted_tokens_total` over
+    `llamacpp:spec_decode_num_draft_tokens_total`, both already in the
+    `/metrics` body a shard reads at job end.
+    """
+
+    repo: str = Field(min_length=1, description="Hugging Face repository the draft GGUF is in.")
+    revision: CommitSha = Field(
+        description="The hub commit. Required here and optional on ModelRef: a block "
+        "somebody added by hand is a block that can pin properly from the start."
+    )
+    file: str = Field(min_length=1)
+    sha256: Sha256 = Field(description="Refused before the server starts, like the target's.")
+    byte_count: int | None = Field(default=None, ge=1)
+    spec_type: SpeculationType = Field(default=SpeculationType.DRAFT_SIMPLE)
+    n_max: int = Field(
+        default=3,
+        ge=1,
+        le=64,
+        description=(
+            "How many tokens are drafted before the target verifies. The runtime's own "
+            "default. Higher drafts further ahead and wastes more when the draft is "
+            "wrong, so it is a bet on how predictable the text is."
+        ),
+    )
+    n_min: int = Field(default=0, ge=0, le=64)
+    p_min: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Below this probability the draft stops guessing and lets the target "
+            "decode. 0.0 is the runtime default and means never stop early."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _a_minimum_above_the_maximum_drafts_nothing(self) -> Self:
+        if self.n_min > self.n_max:
+            raise ValueError(
+                f"draft.n_min is {self.n_min} and draft.n_max is {self.n_max}. A minimum "
+                "above the maximum asks the runtime for a draft length that cannot "
+                "exist, and it starts anyway and drafts nothing"
+            )
+        return self
+
+
 class InferenceConfig(Model):
     """Decoding is pinned here so a change of output is a reviewable diff."""
 
@@ -432,6 +505,19 @@ class ModelRef(Model):
             "raising. `ModelsConfig` refuses a block whose declared_for is not this "
             "entry's sha256, so a default block under measured weights is refused "
             "rather than inherited."
+        ),
+    )
+    draft: DraftConfig | None = Field(
+        default=None,
+        description=(
+            "A second, smaller set of weights that drafts tokens this entry's model "
+            "then verifies. Null is the default and means one model and no "
+            "speculation. It sits beside `inference` rather than inside it because it "
+            "names weights of its own - a repository, a commit, a filename and a "
+            "digest - and a block that fetches a file is not a decoding knob. On "
+            "`ModelRef` rather than `ModelEntry` so a run record says whether the day "
+            "was drafted; a run that cannot answer that cannot explain its own "
+            "throughput."
         ),
     )
 
@@ -1207,6 +1293,29 @@ class ModelsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T07:00",
+            change=(
+                "models.<role>.draft, optional: a second, smaller set of weights that "
+                "drafts tokens this entry's model then verifies. It carries its own "
+                "repo, revision, file, sha256 and byte_count, a closed spec_type of "
+                "draft-simple or ngram-simple, and the three drafting knobs n_max, "
+                "n_min and p_min. Null is the default and means one model and no "
+                "speculation, so every models file written before today still loads "
+                "and every committed run.json still reads."
+            ),
+            why=(
+                "Plan 28 row 2a, returned to scope 2026-09-14. It is the one feature a "
+                "candidate brings that this plan's pointer-swap could not switch on, so "
+                "leaving it out contradicted the plan's own intent. It is priced on "
+                "cost and revert rather than on a quality measurement because "
+                "speculative decoding is output-identical by construction - the target "
+                "verifies every drafted token - so there is no quality to measure "
+                "(Guardrail #10, amended 2026-09-14). The block sits beside inference "
+                "rather than inside it because it names weights to fetch, and a block "
+                "that fetches a file is not a decoding knob."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T06:00",
             change=(
