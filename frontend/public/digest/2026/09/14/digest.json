@@ -20,7 +20,7 @@
       "world-vwwjrp4vq7m5yqdr": "9wwHAv73+QH1+P71BwH9/QL9+fMC/wj7CAAEAQj/+vsA/AcZ+wD9AAX3C/z6AwT1+/4R/gADAAH//gABAwb6+AP2/AD++RH0Afv69wIHBPoKCwUA/AP9/wT5Bvj+Cv4O/gDzAgMHAPn6/PsLB/0C+wUA///7+/n4AfsCCQj4AgAD+Ab/9w79Afr2+gb+Cfz1+gYDBQv8/wAJ/Ar8AQX/AP0H6gX3/vz/Agf8+AIJDP3+/vwF/wUFAAv+CP77BfUDBfz+BP38+/r9Af759grzCPn+BgIF/wEE/gP6/QIDAgAFAvsDDf3+//kFBAP/AwkFBAT8/P8B9v/8AwDx/gjwAe0SAfz+/vkADAT7Bfv+/PwBAAcEAAD5+ggRA/X//Qn98AQIDg/7/fgI/wMABgL++wkCBP0N/gL/Cgb5APoLBAD3/P//+vz9DP8BEP/7B/4BBAv+AfcA/AMACv7/BfsGAPUBBwb3/Af5/QILAwD8+fgDB/T8BfkEAff0+v0AAwAE"
     }
   },
-  "generated_at": "2026-09-14T17:25:59Z",
+  "generated_at": "2026-09-14T20:56:44Z",
   "items": [
     {
       "also_covered_by": 0,
@@ -561,8 +561,8 @@
       "watchlist_hit": false
     }
   ],
-  "items_failed": 67,
-  "items_planned": 80,
+  "items_failed": 80,
+  "items_planned": 93,
   "leads": [
     {
       "item_id": "india-t42pxmq7dncq2jvr",
@@ -602,13 +602,18 @@
       "at": "2026-09-14T17:25:59Z",
       "items_added": 13,
       "n": 3
+    },
+    {
+      "at": "2026-09-14T20:56:44Z",
+      "items_added": 0,
+      "n": 4
     }
   ],
   "version": "2026-09-13T22:30",
   "verticals": [
     {
       "below_feed_floor": false,
-      "considered": 6743,
+      "considered": 6760,
       "count": 2,
       "desk_count": 2,
       "display_name": "AI",
@@ -622,11 +627,11 @@
       "desk_count": 1,
       "display_name": "Business and Economy",
       "id": "business-economy",
-      "too_old": 419
+      "too_old": 466
     },
     {
       "below_feed_floor": false,
-      "considered": 553,
+      "considered": 560,
       "count": 1,
       "desk_count": 1,
       "display_name": "Energy",
@@ -640,11 +645,11 @@
       "desk_count": 5,
       "display_name": "India",
       "id": "india",
-      "too_old": 478
+      "too_old": 513
     },
     {
       "below_feed_floor": false,
-      "considered": 818,
+      "considered": 854,
       "count": 4,
       "desk_count": 4,
       "display_name": "World",
