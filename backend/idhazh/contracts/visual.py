@@ -74,13 +74,18 @@ else, so the event text is the mark rather than a name for one.
 
 **What required-but-empty costs, measured rather than assumed.** An empty role
 is `"<name>":[]` and a comma, so the nine role names cost 114 characters on a
-plan that fills none and the seven a `bar` leaves empty cost 87. Tokenized with
-the Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`,
-2026-09-09) that is **28 tokens** on the declining plan and **23** on the
-four-bar one, about 3.1 tokens an empty role. At the 6.01 tok/s the configured
-summarizer decodes at (`ubuntu-latest`, 2026-08-23) that is 4.7 s and 3.8 s a
-plan. The plan is decoded by call 2, behind the summary, so this sits inside
+plan that fills none and the seven a `bar` leaves empty cost 87. That is **28
+tokens** on the declining plan and **23** on the four-bar one, about 3.1 tokens
+an empty role. At the 6.01 tok/s the configured summarizer decodes at
+(`ubuntu-latest`, 2026-08-23) that is 4.7 s and 3.8 s a plan. The plan is
+decoded by call 2, behind the summary, so this sits inside
 `run.shard_timeout_minutes` (200) along with everything else an item costs.
+
+The reading is `idhazh.measured.EMPTY_ROLE_TOKENS` and it names weights this
+repository retired. It is cited rather than imported: this package is the bottom
+of the dependency graph and imports no other subpackage (`CLAUDE.md` section 4).
+It does not set `WORST_CASE_REPLY_CHARACTERS`, which is the arithmetic below over
+this module's own bounds - it is what says that arithmetic is worth paying for.
 
 ## The worst-case decoded reply, in characters
 
