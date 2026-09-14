@@ -34,7 +34,6 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 13 | 1 | 1 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 
 ## In flight - 0
@@ -42,7 +41,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 32
+## Ready now - 31
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -70,7 +69,6 @@ section 3 is where it is answered.
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3, plan 23 row #21 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
-| #10 | 28 | H | Two spans on one call, so the model can think | 5, 6, 11 |
 | #1 | 27 | A | The two calls get names that say what they do | - |
 | #2 | 27 | B | `state/item-health/` becomes the per-item spine | 1 |
 | #3 | 27 | B | The selection score carries its own terms | - |
@@ -136,9 +134,9 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 
-## Finished - 18 plans with no live row
+## Finished - 19 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-reference-dataset-2-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-28-model-swap-plan.md, 20260913-reference-dataset-2-plan.md
 
 ## See also
 
