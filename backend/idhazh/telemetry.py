@@ -20,7 +20,13 @@ from typing import Any, Final, Protocol
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    CALL_SLOTS,
+    FailureCode,
+    ItemHealthRow,
+    ItemOutcome,
+    ItemStage,
+)
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -831,10 +837,10 @@ def _flatten_calls(calls: tuple[CallCost | None, CallCost | None]) -> dict[str, 
     """
     cells: dict[str, Any] = {"model_calls": None}
     recorded = 0
-    for slot, call in enumerate(calls, start=1):
-        cells[f"call_{slot}_kind"] = None if call is None else call.kind
+    for slot, call in zip(CALL_SLOTS, calls, strict=True):
+        cells[f"{slot}_kind"] = None if call is None else call.kind
         for field in COST_FIELDS:
-            cells[f"call_{slot}_{field}"] = None if call is None else getattr(call, field)
+            cells[f"{slot}_{field}"] = None if call is None else getattr(call, field)
         recorded += call is not None
     if recorded:
         cells["model_calls"] = recorded

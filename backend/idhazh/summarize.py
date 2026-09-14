@@ -337,7 +337,7 @@ def fits_context(
     One system turn, one article, one reply - which is what the qualification
     harness sends a candidate model, and it is the only caller. The digest's own
     path is two calls and `classify.dag.fits_the_window` sizes that one: 2.8
-    times this sum at the same cap, because call 1's reply is paid twice and the
+    times this sum at the same cap, because the label call's reply is paid twice and the
     candidate menu is paid once, and neither term exists here at all. Sizing the
     two-call path with this function would admit articles it cannot hold.
 

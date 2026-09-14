@@ -1737,7 +1737,7 @@ two-call summariser change, whose second model call an item costs about 87
 minutes at 20 items. Sized from the worst case, never the median, because a
 worker killed at the bound uploads nothing:
 
-| At 20 items | Base work | Call 2 needs | At 150 | At 200 |
+| At 20 items | Base work | The summarize-and-plan call needs | At 150 | At 200 |
 | --- | --- | --- | --- | --- |
 | Median | ~39 min | 87 min | fits, 24 min spare | fits, 74 min spare |
 | p90 | ~51 min | 87 min | fits, 12 min spare | fits, 62 min spare |
