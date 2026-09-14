@@ -81,6 +81,6 @@ definitions.
 - [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) - the configured summarizer.
 - [measurements.md](measurements.md) - the instrument log: everything measured that is not a property of one model.
 - [documentation-structure.md](documentation-structure.md) - where each kind of page lives, and what a dossier may not hold.
-- [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the procedure that produces a verdict for a new row.
+- [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - measure a candidate, adopt it in one line, and put the old one back in the same line.
 - [../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md) - what a swap invalidates, and what has to be retaken.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and Guardrail #10 (one current reading a quantity).
