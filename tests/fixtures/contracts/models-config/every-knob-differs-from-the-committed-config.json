@@ -1,6 +1,7 @@
 {
   "summarize": {
     "arch": "llama",
+    "byte_count": null,
     "file": "Qwen3-8B-Q4_K_M.gguf",
     "hf_base_repo": null,
     "id": "qwen3-8b-q4-k-m",
