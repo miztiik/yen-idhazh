@@ -174,14 +174,72 @@ rule a person keeps rather than one the type keeps for them - and
 [Every id is an open slug](#every-id-is-an-open-slug-and-the-vocabulary-is-this-file)
 says what the page does on the day somebody breaks it.
 
+## Science and Climate, and the eight lines that decide them
+
+Two desks and one lens arrived on 2026-09-14, all three as **drafts**: committed,
+defined, offered to nobody. They exist because twenty people labelling 641
+articles independently reported the same holes - a science desk (13 of the 20), a
+climate desk and lens (11), and four more nobody has built yet. Roughly one
+article in five had been filed on a desk that named nothing about it, mostly
+absorbed by `business-economy` as a shrug.
+
+**They are drafts because no feed declares either word.** `min_feeds` is 21 and
+the supply is zero, so an active desk would publish nothing while claiming a
+page - which is the failure `test_every_vertical_clears_its_own_feed_floor` was
+written to catch. The `climate` lens carries no keywords for the mirror reason:
+keywords would start tagging published items before anybody chose to. Promotion
+is a person adding feeds, or keywords, and flipping one word.
+
+**The eight tie-breaks below are the interesting part, and every one of them came
+from a labeller who hit it and could not resolve it from the definitions alone.**
+A definition is capped at 240 characters and has to be short enough to score a
+model against; these are the sentences that did not fit.
+
+1. **A single disaster is `world`, not `climate`.** A flood, a storm, a wildfire
+   or a heatwave reported as an event - casualties, rescue, damage - is `world`.
+   It is `climate` when the piece is about the climate behind it.
+2. **`science` is the study; `climate` is the warming.** For an earth or life
+   science piece: if the method or the finding is the news, `science`. If warming
+   or habitat loss is the cause the piece is about, `climate`.
+3. **Research in any field is `science`** - economics, mathematics, archaeology,
+   psychology, as much as physics or biology. **And the news has to be the
+   finding**: a study used as evidence in a country story leaves the story where
+   it was. That second half is rule 2 generalised, and it is what stops `science`
+   swallowing most foreign reporting.
+4. **A paper about a computational or statistical model is `ai`, whatever it is a
+   model of** - a weather model, a glucose model, an earth-observation model. A
+   physical model is not one; a Hamiltonian is physics.
+5. **A quantum result or experiment is `science`; a quantum product, acquisition
+   or funding round is `business-economy`.** Finding or deal.
+6. **Chemical pollution, waste, plastics and land-use disputes are not
+   `climate`.** The desk covers greenhouse gases, warming and the living world.
+   There is no environment desk, and three separate labellers asked for one.
+7. **Air pollution is not greenhouse gas.** A particulate or smog story is a
+   health or policy story unless carbon is the subject.
+8. **How power is made, priced or financed stays `energy`**, even framed as
+   decarbonisation. A net-zero target is `climate`; a gigawatt of solar is
+   `energy`. Equally both, keep `energy` and add the `climate` lens.
+
+**A lens never repeats its own desk.** `climate` on the `climate` desk is a chip
+that says what the page already says, and by the fourth item it is wallpaper. The
+lens marks a warming thread running through a story that is mainly about
+something else, which is what makes it worth a chip at all. Three of six
+labellers asked; this is the answer, and the lens definition now carries it.
+
+**What is still missing, named rather than left to be rediscovered.** No desk
+covers health or medicine outside research, crime and courts, culture or sport,
+consumer technology, or the environment when it is not warming. Each was asked
+for by more than one reader. Adding a desk is a config edit; deciding a desk is
+not, and nobody has.
+
 ## What changing the vocabulary costs
 
 | Change | Cost |
 | --- | --- |
 | A definition sentence | A config edit. Nothing else, and the next run uses it |
 | A display name | A config edit. The id is what payloads carry, so nothing is orphaned |
-| A vertical | A config edit: the id is an open slug |
-| A lens id or an event id | A config edit: since 2026-09-12 these are open slugs too |
+| A vertical | A config edit, **and an icon**. Every vertical needs `frontend/src/lib/icons/svg/topic-<id>.svg`, because a topic pill builds its icon id from the config - `frontend/tests/icons.spec.ts` resolves the set against this file and fails naming any id nothing draws. Adding `science` and `climate` on 2026-09-14 turned that test red, which is the test working |
+| A lens id or an event id | A config edit: since 2026-09-12 these are open slugs too. A lens needs its display name in `frontend/src/lib/payload/lenses.ts`, which a contract test checks in both directions |
 | Retiring any of them | `status` and `retired_on` in config. The id stays, and so does its name |
 | Deleting one outright | A config edit, and every published day that carries the id starts showing the id itself in place of the name. Retire instead |
 

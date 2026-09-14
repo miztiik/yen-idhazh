@@ -2975,6 +2975,8 @@ def test_every_vertical_clears_its_own_feed_floor() -> None:
         feed.vertical for feed in sources.feeds if feed.status is LifecycleStatus.ACTIVE
     )
     for vertical in taxonomy.verticals:
+        if vertical.status is not LifecycleStatus.ACTIVE:
+            continue
         askable = source_health.eligible(
             sources.feeds, vertical.id, retired_keys=retired, records=records
         )
@@ -4917,6 +4919,8 @@ def test_every_desk_ships_with_a_floor_and_a_ceiling() -> None:
         "business-economy": (6, 0.25),
         "world": (6, 0.4),
         "india": (6, 0.4),
+        "science": (6, 0.25),
+        "climate": (6, 0.25),
     }
     assert sum(ceiling for _, ceiling in bounds.values()) > 1.0, (
         "five ceilings that sum below one cannot all hold on any day"
