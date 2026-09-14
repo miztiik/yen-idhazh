@@ -1,7 +1,7 @@
 """Collect whatever finished, publish it, and append the ledger.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
