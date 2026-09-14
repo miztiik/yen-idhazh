@@ -32,7 +32,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 14 | 14 | 4 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 15 | 13 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
 | [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 4 | 9 | 3 |
 
@@ -41,7 +41,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 26
+## Ready now - 25
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -66,7 +66,6 @@ section 3 is where it is answered.
 | #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 |
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
-| #P3 | 23 | D | A person labels the dev split and the test split | P2 |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b, 2 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #8a | 25 | J | The second desk reaches the reader | 8 |
@@ -122,8 +121,8 @@ section 3 is where it is answered.
 | #9 | 23 | K | Confidence is a masked probability over the label's whole span | 8 is PENDING; 14 is PENDING; P5 is PENDING |
 | #15 | 23 | K | The console tab, at `/console/judgement/` | 14 is PENDING; plan 25 row #12 is PENDING |
 | #10 | 23 | L | Five stances, each with its own decline, behind a gate written in code | 8 is PENDING; 14 is PENDING |
-| #11 | 23 | M | Sentiment about one named subject | 8 is PENDING; 14 is PENDING; P3 is PENDING |
-| #18 | 23 | M | The closing measurement: is a read desk better than a declared one | P3 is PENDING; 14 is PENDING |
+| #11 | 23 | M | Sentiment about one named subject | 8 is PENDING; 14 is PENDING |
+| #18 | 23 | M | The closing measurement: is a read desk better than a declared one | 14 is PENDING |
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
