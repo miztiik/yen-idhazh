@@ -1105,9 +1105,24 @@
         "started_at": "2026-09-14T14:00:49Z",
         "status": "partial",
         "succeeded": 13
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 80,
+        "n": 4,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-14-34886978811",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-14T20:52:30Z",
+        "status": "partial",
+        "succeeded": 0
       }
     ],
-    "site_bytes": 24790443,
+    "site_bytes": 24795977,
     "site_files": 50,
     "version": "2026-09-09"
   }

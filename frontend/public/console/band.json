@@ -1,27 +1,27 @@
 {
-  "generated_at": "2026-09-14T17:25:59Z",
+  "generated_at": "2026-09-14T20:56:44Z",
   "months": [
     "2026-08",
     "2026-09"
   ],
   "routes": [
     {
-      "carries": "The model spent 12 h 39 m of this.",
+      "carries": "The model spent 24 h 22 m of this.",
       "description": "Did the runs work, and what each stage cost.",
       "href": "/console/",
       "id": "pipelines",
       "label": "Pipelines",
       "severity": 3,
-      "worst": "3 runs failed"
+      "worst": "4 runs failed"
     },
     {
-      "carries": "This day ran as one run, so there is nothing to compare it against.",
+      "carries": "This day ran in 2 runs, 1.41x apart on read speed.",
       "description": "What the model wrote, how long it took, and what it got wrong.",
       "href": "/console/model/",
       "id": "model",
       "label": "Summaries",
       "severity": 3,
-      "worst": "194 items failed"
+      "worst": "296 items failed"
     },
     {
       "carries": "13 articles on this day.",
@@ -30,7 +30,7 @@
       "id": "machine",
       "label": "Hardware",
       "severity": 1,
-      "worst": "shards read 4.10x apart"
+      "worst": "shards read 1.02x apart"
     },
     {
       "carries": "1 summary was marked \"not sure\" on this day.",
@@ -42,7 +42,7 @@
       "worst": null
     },
     {
-      "carries": "25 feeds rested over these 102 runs.",
+      "carries": "24 feeds rested over these 104 runs.",
       "description": "Who supplied the day, and how far each feed is discounted.",
       "href": "/console/voices/",
       "id": "voices",
@@ -52,10 +52,10 @@
     }
   ],
   "size": {
-    "articles_to_cap": 310923,
-    "bytes": 24790443,
-    "cap_fraction": 0.023087899200618267,
-    "left_mb": 1000.3579912185669,
+    "articles_to_cap": 310921,
+    "bytes": 24795977,
+    "cap_fraction": 0.02309305313974619,
+    "left_mb": 1000.3527135848999,
     "measured_days": 24,
     "sentence": "23.6 MB of the 1 GB limit - room for about 311,000 more articles."
   },
@@ -75,15 +75,19 @@
       {
         "health": "red",
         "label": "Run 3 failed"
+      },
+      {
+        "health": "red",
+        "label": "Run 4 failed"
       }
     ],
-    "sentence": "2026-09-14 ran 3 runs and published 13 of 240 planned items. 227 items failed."
+    "sentence": "2026-09-14 ran 4 runs and published 13 of 320 planned items. 307 items failed."
   },
   "version": "2026-09-12",
   "worst": {
     "href": "/console/",
     "id": "pipelines",
     "label": "Pipelines",
-    "sentence": "3 runs failed, so the items they planned are not in the day."
+    "sentence": "4 runs failed, so the items they planned are not in the day."
   }
 }
