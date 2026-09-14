@@ -114,6 +114,11 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
     exists because those two can disagree - a mirror can serve a same-named file
     with different bytes - so the digest here is taken from the file the runtime
     will open (Guardrail #10).
+
+    Every expectation comes from the entry, so a dispatch that named them
+    separately could not drift from the file it was qualifying. A `byte_count`
+    the entry does not declare falls back to the observed size, which makes that
+    one comparison inert rather than false - the digest is the check either way.
     """
     model = settings.models.summarize
     weights = args.weights or (config.REPO_ROOT / "backend" / "models" / model.file)
@@ -124,12 +129,12 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
     return CandidateIdentity(
         model_id=model.id,
         repo=model.repo,
-        revision=args.candidate_revision or "revision-not-recorded",
+        revision=model.revision or "revision-not-recorded",
         file=model.file,
         quantisation=model.quantisation,
         sha256_expected=model.sha256,
         sha256_observed=file_digest(weights),
-        bytes_expected=args.candidate_bytes or weights.stat().st_size,
+        bytes_expected=model.byte_count or weights.stat().st_size,
         bytes_observed=weights.stat().st_size,
         runtime_build=runtime_build(),
     )
@@ -269,17 +274,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=int,
         default=10,
         help="How many frozen articles one qualification shard replays.",
-    )
-    parser.add_argument(
-        "--candidate-revision",
-        default="",
-        help="The immutable repository revision the candidate weights were taken from.",
-    )
-    parser.add_argument(
-        "--candidate-bytes",
-        type=int,
-        default=0,
-        help="The byte count the adoption target declares for the candidate GGUF.",
     )
     parser.add_argument(
         "--weights",

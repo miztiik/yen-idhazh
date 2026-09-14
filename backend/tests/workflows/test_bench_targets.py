@@ -144,9 +144,14 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
 
     Every control the numbers are read under - prompt, schema, sampler, context,
     threads, truncation cap - is the committed one by construction, because the
-    copy is the committed tree with one entry rewritten. The pointer is left
-    alone and the file it names is rewritten, so a candidate is benched through
-    the same one line a swap would later move.
+    copy is the committed tree with the pointer moved and nothing else touched.
+    That is the exact line a swap moves, so the bench runs the swap rather than
+    an imitation of it.
+
+    The entry's own fields are the assertion. This step used to write `sha256`,
+    `repo`, `revision`, `file`, `id` and `quantisation` onto the copied entry
+    and overwrite both `declared_for` digests, which asserted that numbers
+    measured for one model held for another.
     """
     workflow = _load_workflows()["measure.yml"]
     script = _script(
@@ -155,6 +160,10 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
     )
     assert f"cp -a config {BENCH_CANDIDATE_CONFIG}" in script
     assert MODELS_POINTER_KEY in script, "through the pointer, never by filename"
+    for field in ("sha256", "declared_for", "quantisation", "revision"):
+        assert field not in script, (
+            f"the scratch config writes {field} onto the entry instead of moving the pointer"
+        )
 
     sweep = _script(
         _step(workflow, BENCH_SERVER_JOB, "name", "Measure runtime candidate"),

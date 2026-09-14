@@ -238,6 +238,20 @@
           "title": "Arch",
           "type": "string"
         },
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
+          "title": "Byte Count"
+        },
         "file": {
           "minLength": 1,
           "title": "File",
@@ -421,6 +435,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "models.<role>.byte_count, optional: how many bytes the weights are. It sits on ModelRef beside sha256, defaults to null, and no reader requires it - so a models file written before today still loads and a run.json written before today still reads.",
+      "version": "2026-09-14T06:00",
+      "why": "Plan 28 row #9 decision 3. The qualification dispatch took the byte count as a form field, which made it the one fact about a candidate that lived outside the file naming that candidate - and its default of 0 meant the identity gate compared the observed size to itself and called that a check (Guardrail #10). Declared here, the gate compares two independent facts, and the dispatch has nothing left to ask for but the filename. Ruled by Carmack, 2026-09-13."
+    },
+    {
       "change": "models.<role>.turns gains system_role, system_joiner and thinking_kwarg. system_role is a closed choice of own_turn and fold_into_first_user; system_joiner is required under the fold and refused under own_turn; thinking_kwarg names the template variable chat_template_kwargs carries and defaults to the incumbent's enable_thinking, with null meaning the request sends no template keywords at all and inference.thinking must then be false. All three sit on TurnsConfig, which ModelEntry carries and ModelRef does not, so a run.json written before today still reads.",
       "version": "2026-09-14T03:00",
       "why": "Plan 28 row #11. Where the system text goes and which keyword turns reasoning off are facts about somebody else's chat template, and both were spelled in this project's source and sent to every model - so a model with no system role could not be configured at all, only coded for. The prompt TEXT does not follow them onto the entry and cannot: prose_changed_alone reports nothing whenever model_sha256 moved, so per-model wording would hide every prompt edit that rode in on a swap. Ruled by Andre, 2026-09-14."
@@ -442,7 +461,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-14T03:00",
+      "default": "2026-09-14T06:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -453,5 +472,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-14T03:00"
+  "version": "2026-09-14T06:00"
 }

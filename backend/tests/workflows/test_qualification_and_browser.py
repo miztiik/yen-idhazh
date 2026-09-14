@@ -35,7 +35,7 @@ def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:
     step = _step(workflow, "qualify", "name", "Verify the candidate bytes")
     script = _script(step, "validate.yml/qualify/Verify the candidate bytes")
     assert "sha256sum --check" in script
-    assert "inputs.candidate_bytes" in script, "the declared byte count is checked too"
+    assert "candidate_byte_count" in script, "the entry's declared size is checked too"
     assert step.get("if") is None, "a restored cache entry is checked as well"
 
 

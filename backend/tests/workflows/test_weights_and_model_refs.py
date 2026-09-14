@@ -27,6 +27,7 @@ from ._harness import (
     WORKFLOWS_DIR,
     _committed_models,
     _config_key_paths,
+    _declared_dispatch_inputs,
     _every_env,
     _expression,
     _inline_programs,
@@ -209,6 +210,59 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
         _run_the_inline_program(script, tmp_path)
+
+
+def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: Path) -> None:
+    """One argument, so the two copies of a candidate's facts cannot disagree.
+
+    A form that asked for the repository, the commit, the filename, the digest,
+    the byte count, the alias and the quantisation was asking an operator to
+    retype seven facts already written in the candidate's own file. Two copies
+    can differ, and the failure is silent: the bench measures one set of bytes
+    and the adoption points at another, with every gate green.
+
+    The path becomes a file the step opens, so containment is proved rather than
+    spelled - `..` in a form field is the whole reason this is a resolve check
+    and not a name check.
+    """
+    committed = _committed_models()
+    for filename, step_id in (("validate.yml", "candidate"), ("measure.yml", "models")):
+        workflow = _load_workflows()[filename]
+        declared = sorted(
+            name for name in _declared_dispatch_inputs(workflow) if name.startswith("candidate")
+        )
+        assert declared == ["candidate_models_file"], (
+            f"{filename} asks for more than the one file that already holds the answer"
+        )
+
+        script = _script(_step(workflow, "plan" if step_id == "candidate" else step_id, "id", step_id), filename)
+        published = _run_the_inline_program(script, REPO_ROOT)
+        for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
+            key = field if filename == "validate.yml" else f"candidate_{field}"
+            assert published[key] == committed["summarize"][field], (
+                f"{filename} publishes a {field} the committed entry does not carry"
+            )
+
+        # A named file is read instead, and a traversal out of `config/` stops
+        # here - nothing downstream opens the path again to check it.
+        (tmp_path / "config" / "models").mkdir(parents=True, exist_ok=True)
+        other = json.loads(json.dumps(committed))
+        other["summarize"]["id"] = "some-other-model"
+        (tmp_path / "config" / "models" / "other.json").write_text(
+            json.dumps(other), encoding="utf-8"
+        )
+        (tmp_path / "config" / CONFIG_FILE_NAME).write_text(
+            json.dumps({MODELS_POINTER_KEY: "models/other.json"}), encoding="utf-8"
+        )
+        named = _run_the_inline_program(
+            script, tmp_path, {"CANDIDATE_MODELS_FILE": "models/other.json"}
+        )
+        assert named["id" if filename == "validate.yml" else "candidate_id"] == "some-other-model"
+
+        with pytest.raises(AssertionError, match="under config/"):
+            _run_the_inline_program(
+                script, tmp_path, {"CANDIDATE_MODELS_FILE": "../../etc/passwd.json"}
+            )
 
 
 def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> None:

@@ -18,27 +18,14 @@ on:
           - corpus
           - batched
           - budgets
-      # One candidate, typed once, and every arm below reads the answer the
-      # `models` job published rather than repeating the fallback. Leave them
-      # empty and the bench measures the model config already names, which is
-      # how the arm is checked against the page it is supposed to reproduce.
-      candidate_repo:
-        description: 'Hugging Face repository. Empty benches the configured model.'
-        default: ''
-      candidate_revision:
-        description: 'The 40-character commit those weights were uploaded in'
-        default: ''
-      candidate_file:
-        description: 'Weights filename inside that repository'
-        default: ''
-      candidate_sha256:
-        description: 'The digest those bytes must have, or the bench refuses them'
-        default: ''
-      candidate_id:
-        description: 'The alias the server answers to'
-        default: ''
-      candidate_quantisation:
-        description: 'The quantisation those bytes carry, for example Q4_K_M'
+      # ONE argument names the candidate, and it is the same line a swap moves:
+      # the models file. Every fact about a candidate is already written there,
+      # and a form that asked for them again could bench one set of bytes while
+      # the adoption pointed at another. Leave it empty and the bench measures
+      # the model config already names, which is how the arm is checked against
+      # the page it is supposed to reproduce.
+      candidate_models_file:
+        description: 'Models file under config/, for example models/qwen3.5-9b-q4km.json. Empty benches the configured model.'
         default: ''
       threads:
         description: 'Comma-separated llama-bench thread counts, for example 4,8'
@@ -114,22 +101,19 @@ jobs:
       candidate_id: ${{ steps.models.outputs.candidate_id }}
       candidate_quantisation: ${{ steps.models.outputs.candidate_quantisation }}
       candidate_ref: ${{ steps.models.outputs.candidate_ref }}
+      candidate_models_file: ${{ steps.models.outputs.candidate_models_file }}
     steps:
       - uses: actions/checkout@v6
 
       # Each value is asserted to be one bare word at the one point that writes
       # them, so an expression that substitutes one into a shell command below
-      # cannot carry a space, a quote or a newline into it. The inputs arrive
+      # cannot carry a space, a quote or a newline into it. The input arrives
       # through `env` for the same reason: a value pasted into this program
-      # would be text before it was a value.
+      # would be text before it was a value. It becomes a FILE PATH, so it is
+      # resolved and proved to sit inside `config/` before anything opens it.
       - id: models
         env:
-          CANDIDATE_REPO: ${{ inputs.candidate_repo }}
-          CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
-          CANDIDATE_FILE: ${{ inputs.candidate_file }}
-          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
-          CANDIDATE_ID: ${{ inputs.candidate_id }}
-          CANDIDATE_QUANTISATION: ${{ inputs.candidate_quantisation }}
+          CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
@@ -137,6 +121,7 @@ jobs:
           import os
           import pathlib
 
+          root = pathlib.Path("config").resolve()
           config = json.load(open("config/idhazh.json", encoding="utf-8"))
           models_file = pathlib.Path("config") / config["models_file"]
           models = json.load(open(models_file, encoding="utf-8"))
@@ -146,13 +131,21 @@ jobs:
                   if value.split() != [value]:
                       raise SystemExit(f"models.{role}.{field} is empty or not one word")
                   print(f"{role}_{field}={value}")
-          configured = models["summarize"]
+
+          named = os.environ.get("CANDIDATE_MODELS_FILE", "").strip()
+          candidate_file = named or config["models_file"]
+          if candidate_file.split() != [candidate_file]:
+              raise SystemExit("candidate_models_file is not one bare word")
+          path = (root / candidate_file).resolve()
+          if not path.is_relative_to(root) or path.suffix != ".json" or not path.is_file():
+              raise SystemExit(f"candidate_models_file is not a models file under config/: {candidate_file}")
+          print(f"candidate_models_file={candidate_file}")
+          entry = json.load(open(path, encoding="utf-8"))["summarize"]
           candidate = {}
           for field in ("repo", "revision", "file", "sha256", "id", "quantisation"):
-              value = os.environ.get(f"CANDIDATE_{field.upper()}", "").strip()
-              value = value or configured.get(field) or ""
+              value = entry.get(field) or ""
               if value.split() != [value]:
-                  raise SystemExit(f"candidate {field} is empty or not one word")
+                  raise SystemExit(f"{candidate_file} summarize.{field} is empty or not one word")
               candidate[field] = value
               print(f"candidate_{field}={value}")
           print(
@@ -505,12 +498,20 @@ jobs:
           } | tee backend/var/runtime-sweep/cache-state.txt
 
       # The committed config still names the incumbent, and a bench does not
-      # edit it. The scratch copy differs in the ACTIVE MODEL FILE and nothing
-      # else, so every control the run holds fixed - prompt, schema, sampler,
-      # context, threads, truncation cap - is the committed one by construction.
-      # The pointer is left alone and the file it names is rewritten, so a
-      # candidate is benched through the same one line a swap would later move.
+      # edit it. The scratch copy differs in ONE LINE - `models_file` - and
+      # nothing else, so every control the run holds fixed (prompt, schema,
+      # sampler, context, threads, truncation cap) is the committed one by
+      # construction, and a candidate is benched through the exact line a swap
+      # would later move.
+      #
+      # Nothing is transplanted onto the entry. This step used to overwrite the
+      # incumbent's `inference` and `turns` digests with the candidate's, which
+      # asserted that numbers measured for one model held for another - and the
+      # bench then reported a throughput taken on a window nobody had sized for
+      # these weights. The candidate's own file carries its own blocks.
       - name: Build the candidate config
+        env:
+          CANDIDATE_MODELS_FILE: ${{ needs.models.outputs.candidate_models_file }}
         run: |
           set -euo pipefail
           mkdir -p backend/var
@@ -518,27 +519,10 @@ jobs:
           cp -a config backend/var/candidate-config
           python - <<'PY'
           import json, os, pathlib
-          root = pathlib.Path("backend/var/candidate-config")
-          pointer = json.loads((root / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
-          path = root / pointer
-          models = json.loads(path.read_text(encoding="utf-8"))
-          entry = dict(models["summarize"])
-          inference = dict(entry["inference"])
-          inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          turns = dict(entry["turns"])
-          turns["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          entry.update({
-              "file": os.environ["CANDIDATE_FILE"],
-              "id": os.environ["CANDIDATE_ID"],
-              "inference": inference,
-              "quantisation": os.environ["CANDIDATE_QUANTISATION"],
-              "repo": os.environ["CANDIDATE_REPO"],
-              "revision": os.environ["CANDIDATE_REVISION"],
-              "sha256": os.environ["CANDIDATE_SHA256"],
-              "turns": turns,
-          })
-          models["summarize"] = entry
-          path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          path = pathlib.Path("backend/var/candidate-config/idhazh.json")
+          settings = json.loads(path.read_text(encoding="utf-8"))
+          settings["models_file"] = os.environ["CANDIDATE_MODELS_FILE"]
+          path.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
 
       - name: Build fixed five-article corpus

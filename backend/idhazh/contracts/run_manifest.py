@@ -288,6 +288,20 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T06:00",
+            change=(
+                "The embedded ModelRef gained an optional byte_count. It defaults to "
+                "null and nothing here requires it, so every committed run.json still "
+                "reads and no migration is needed."
+            ),
+            why=(
+                "Plan 28 row #9 decision 3 moved the candidate byte count off the "
+                "qualification form and onto the model entry. ModelUse embeds ModelRef, "
+                "so the field arrives here as well - recorded rather than read, which is "
+                "what this manifest does with every other fact about the weights."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T23:30",
             change=(
                 "items_prefiltered keeps its shape and gains a sentence: no run writes "

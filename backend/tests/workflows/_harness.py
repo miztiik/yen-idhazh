@@ -72,12 +72,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
-    ("measure.yml", "candidate_file"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_id"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_quantisation"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_repo"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_revision"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_sha256"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
@@ -86,13 +81,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("prune.yml", "force"): DISPATCH_BOOLEAN,
-    ("validate.yml", "candidate_bytes"): "^[0-9]{1,15}$",
-    ("validate.yml", "candidate_file"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_id"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_quantisation"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_repo"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_revision"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_sha256"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "job_budget_minutes"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "repeats"): "^[1-9][0-9]{0,3}$",
@@ -1323,12 +1312,17 @@ def _every_env(workflow: dict[str, object]) -> list[tuple[str, dict[str, object]
     return scopes
 
 
-def _run_the_inline_program(script: str, config_root: Path) -> dict[str, str]:
+def _run_the_inline_program(
+    script: str, config_root: Path, env: dict[str, str] | None = None
+) -> dict[str, str]:
     """Run the program a plan-job step carries, and read what it would write.
 
     The step redirects its stdout into `$GITHUB_OUTPUT`, so its stdout IS the
     job output. Running the shipped bytes against a real config directory is
     what makes this a test of the step rather than of a copy of it.
+
+    `env` is what the step's own `env:` block would deliver. Absent, the program
+    runs with none of them set, which is the dispatch that filled nothing in.
     """
     match = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
     assert match is not None, "the step must carry an inline program"
@@ -1336,6 +1330,7 @@ def _run_the_inline_program(script: str, config_root: Path) -> dict[str, str]:
     result = subprocess.run(
         [sys.executable, "-c", match.group(1)],
         cwd=config_root,
+        env={**os.environ, **(env or {})},
         capture_output=True,
         text=True,
         check=False,

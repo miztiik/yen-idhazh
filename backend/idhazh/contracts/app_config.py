@@ -398,6 +398,19 @@ class ModelRef(Model):
         default=None,
         description="Recorded once measured. A weight that changes silently changes every output.",
     )
+    byte_count: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many bytes those weights are, as the hub reports them. Optional: an "
+            "entry nobody has fetched yet declares none, and the run then records the "
+            "size it opened on both sides rather than comparing a number to itself. It "
+            "sits beside sha256 because it is the same kind of fact and has the same "
+            "source, and because a qualification that had to be told it on the command "
+            "line was a fact about these weights living somewhere other than the file "
+            "that names them."
+        ),
+    )
     hf_base_repo: str | None = Field(
         default=None,
         min_length=1,
@@ -1194,6 +1207,24 @@ class ModelsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T06:00",
+            change=(
+                "models.<role>.byte_count, optional: how many bytes the weights are. It "
+                "sits on ModelRef beside sha256, defaults to null, and no reader "
+                "requires it - so a models file written before today still loads and a "
+                "run.json written before today still reads."
+            ),
+            why=(
+                "Plan 28 row #9 decision 3. The qualification dispatch took the byte "
+                "count as a form field, which made it the one fact about a candidate "
+                "that lived outside the file naming that candidate - and its default of "
+                "0 meant the identity gate compared the observed size to itself and "
+                "called that a check (Guardrail #10). Declared here, the gate compares "
+                "two independent facts, and the dispatch has nothing left to ask for "
+                "but the filename. Ruled by Carmack, 2026-09-13."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T03:00",
             change=(
