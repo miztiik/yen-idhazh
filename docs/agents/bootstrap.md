@@ -22,6 +22,7 @@ Then read the one page that owns the thing you are changing.
 | Whether two items are the same story, or why one ran twice | [`../architecture/publishing/layout.md`](../architecture/publishing/layout.md) - the flowchart under "The same story from several sources says so" is the whole rule |
 | A prompt, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |
 | Which model runs, or a figure that belongs to one | [`../reference/models.md`](../reference/models.md) - one row a model, pointing at its dossier |
+| Swapping the summarizer, or putting the old one back | [`../how-to/evaluate-new-summarizer-model.md`](../how-to/evaluate-new-summarizer-model.md) - the swap is one line in `config/idhazh.json` and the revert is the same line back |
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
 | Anything whose cost grows as the repository grows | [`../concepts/growing-reads.md`](../concepts/growing-reads.md) |
 | Anything you cannot place | [`../reference/documentation-structure.md`](../reference/documentation-structure.md) says who owns what |

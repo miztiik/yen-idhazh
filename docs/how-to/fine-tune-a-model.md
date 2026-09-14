@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -450,6 +450,23 @@ reads the safetensors repository while the pipeline reads the GGUF one. Held in
 two blocks a model swap moves one string and leaves the other, and a LoRA adapter
 loads onto a mismatched base without raising - so the damage would arrive later
 as a quality drop nobody could attribute.
+
+**A base swap retires every adapter trained on the old base, and it also makes
+the corpus mixed-teacher.** Both are recorded rather than prevented: the
+notebook stops when the resolved base is not the one production serves, and the
+census in `corpus/corpus.meta.json` counts the rows by the teacher that wrote
+them.
+
+```bash
+python -c "import json;print(json.load(open('corpus/corpus.meta.json'))['models'])"
+```
+
+Read it before training, not after. It already reads two ways - 1,015 rows from
+the retired `qwen3-8b-q4-k-m` and 429 from `qwen3-5-9b-q4-k-m` of 1,444 - so a
+model trained on it today learns mostly from a teacher that no longer serves.
+That is a fact to weigh, not a refusal: the rows are still summaries the project
+published. What moves the mix is time, because the roll evicts by date
+([evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md)).
 
 **The committed `hf_base_repo` values are unverified.** `Qwen/Qwen3.5-9B` is the
 expected upstream for an `unsloth/*-GGUF` repository; nobody has confirmed it
