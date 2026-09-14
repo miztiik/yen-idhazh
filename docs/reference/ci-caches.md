@@ -1,6 +1,6 @@
 # CI Caches
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-14
 
 Every cache this repository keeps, what it holds, who reads it, and the bar a
 new one has to clear. Read this before adding one: the ceiling is shared, it is
@@ -45,6 +45,7 @@ pipeline far more than it ever saved CI.**
 | Summariser weights and runtime | `llm-<file>-<revision>-<llama.cpp build>-v4` | `digest.yml` `work` | every `work` shard of every run | 5.23 GB |
 | Visual planner weights and runtime | same scheme | `digest.yml` `visuals` | `visuals`, every run | 2.27 GB |
 | Candidate weights and runtime | `qualify-<candidate sha256>-<llama.cpp build>` | `validate.yml` `qualify` | the other shards of the same run | transient |
+| Bench weights and runtime | `bench-<candidate sha256>-<llama.cpp build>` | `measure.yml` `llm` | the `runtime` job of the same dispatch | transient |
 | pip download cache, 3.12 | `setup-python` default, hashed from `pyproject.toml` | any 3.12 job | `gates`, `site`, `browser`, `robots`, every `digest.yml` job, `measure.yml` `corpus` and `runtime`, `drift.yml`, `prune.yml`, `validate.yml`, `backfill.yml` | 173 MB |
 | pip download cache, 3.14 | same scheme, 3.14 | `robots` | `robots` | 152 MB |
 | npm download cache | `setup-node` default, hashed from `frontend/package-lock.json` | any job running `npm ci` | `site`, `browser`, `whole-day`, `pages.yml`, `digest.yml` `assemble`, `backfill.yml` | 164 MB |
@@ -75,10 +76,15 @@ does, naming the same interpreter and the same `pyproject.toml` the daily jobs
 name, so it hits on run one and fills nothing.
 
 **Runs rarely but fans out inside one run: cache it anyway.** `validate.yml`
-`qualify` is the case. It is dispatched a handful of times a month, so it never
-hits from a previous run - but its matrix means the first shard downloads the
-candidate weights and every other shard of that same run restores them. The
-reader is the sibling job, not the next week.
+`qualify` is one case and `measure.yml`'s bench is the other. Both are
+dispatched a handful of times a month, so neither ever hits from a previous run
+- but `qualify`'s matrix means the first shard downloads the candidate weights
+and every other shard of that same run restores them, and the bench's raw arm
+downloads the candidate so its server arm can restore it a step later. The
+reader is the sibling job, not the next week. Both entries age out unread within
+the week and give their bytes back, which is why two 5 GB entries on top of the
+daily ones do not have to fit under the 10 GB ceiling at once: GitHub evicts the
+least recently used rather than failing the save.
 
 ## What is deliberately not cached
 
