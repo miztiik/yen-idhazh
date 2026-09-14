@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
@@ -424,6 +424,8 @@ a verdict the page never measured.
 
 `Sources cut short most often` is one row per source, ten of them, and it is the
 only place on the site that names a source next to a number about that source.
+It has been on `/console/voices/` since 2026-09-14, with the census, the ranking
+weight and the failure list.
 It exists for one decision: **whether raising the truncation cap would actually
 reach a source's articles.** It is a horizontal range plot on a log word-length
 axis - a track from the source's shortest article to its longest, a dot at the
@@ -674,6 +676,32 @@ number with nothing on screen looking wrong. The rejected alternative was having
 the markup call the chart builder and throw the option away; it makes a component
 that draws no chart import a chart builder, which the next reader has to work
 out.
+
+**A panel belongs to the question it answers, not to the route it was written
+on.** Four panels left `/console/` for `/console/voices/` on 2026-09-14 - the
+census, the ranking weight, the failure list and what the truncation cap cost
+each source - and Pipelines kept none of them. Two of the four draw a chart, so
+the route they left behind lost two charts and the route they arrived on gained
+its first. The rule the move was decided on is the one this page already applies
+to a figure: it goes where a reader would look for it. An operator asking which
+feed is broken should not have to know that half the answer is filed under "did
+the runs work". Leaving copies on both routes was refused for the reason a
+second derivation is always refused here - two surfaces answering one question
+disagree the moment one of them is edited, and nothing on either page says which
+to believe. Placement plan row #13, decision 2; authority Editor.
+
+**A window control governs the surfaces that declare they follow it, and every
+surface that does not says so in type.** Voices had no control until the panels
+arrived and its own panel had argued against one: the ranking weight was reduced
+over `collect.reliability_window_days` when the run happened, so a control that
+redrew it would print a number no run applied. Two of the four arriving panels
+declare a day count, so the control came with them. What resolves the collision
+is the pattern already on Pipelines rather than a new one - three paragraphs on
+Voices carry `data-window-exempt` and each says in the reader's words which span
+it is over. Unwinding the two panels' windowing was the alternative; it was
+refused because the window is what makes "which source is the cap costing us
+most, lately" answerable, and removing a question to protect a sentence is the
+wrong trade.
 
 ## See also
 

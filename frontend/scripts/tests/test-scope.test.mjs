@@ -124,7 +124,7 @@ const PULL_REQUEST_SCOPE = [
 	['frontend/src/lib/console/window.ts', true, true],
 	['frontend/src/lib/components/ConsoleNav.svelte', true, true],
 	['frontend/src/lib/server/console-shell.ts', true, true],
-	['frontend/tests/console-feeds.spec.ts', true, true],
+  ['frontend/tests/console-voices-feeds.spec.ts', true, true],
 	// The harness itself, which has to prove itself on every group it selects.
 	['frontend/package.json', true, true],
 	['frontend/package-lock.json', true, true],
