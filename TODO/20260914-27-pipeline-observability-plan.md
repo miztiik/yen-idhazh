@@ -41,7 +41,7 @@
 | 8 | What the model saw, kept for 90 days | 4 | C | PR-3 | PENDING | - | - | - |
 | 9 | A cut reply keeps its summary | 1 | D | PR-4 | PENDING | - | - | - |
 | 10 | A killed shard keeps the work it finished | - | D | PR-4 | PENDING | - | - | - |
-| 11 | Two articles, three arms, one runner | 4 | E | PR-5 | PENDING | - | - | - |
+| 11 | Two articles, three arms, one runner | 4 | E | PR-5 | OPEN | p27-tests | #740 | - |
 
 ### Pull request groups
 

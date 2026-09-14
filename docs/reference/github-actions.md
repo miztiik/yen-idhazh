@@ -16,6 +16,7 @@ times are UTC.
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
+| `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | yes |
 
 An ordinary pull request starts CI only. A merge or direct push to `main` starts
 CI, and **publication follows CI's verdict rather than the push**: a push reaches
@@ -623,11 +624,69 @@ there because the build stopped answering for it**: a reading document has
 carried a seed rather than its whole day since 2026-09-01, so a build never
 opens the stories past it.
 
+## Pipeline tests
+
+A production run takes about 200 minutes and has been cancelling shards, so a
+change to the pipeline was tested the next day, against a day of eighty articles
+whose spread hid whatever the change did. `idhazh-pipeline-tests.yaml` closes
+that loop inside `pipeline-tests.budget_minutes`, which is 45. It runs the real
+path - the real fetcher, the real extractor, the real two calls, the real model
+server - over two articles, three times over, and reports what each pass cost.
+It publishes nothing: no step writes `frontend/public/`, no step commits, and
+what the passes produced leaves as a 90-day artifact.
+
+**The two articles are drawn, not fixed.** `config/pipeline-tests.json` holds at
+least twenty candidate addresses, each one an article this pipeline has really
+fetched and summarized, and each naming the feed in `config/sources.json` that
+carried it. The dispatch draws two, seeded from the run id GitHub allocated, and
+prints the seed beside the pair. A fixed pair would pass for as long as those
+two pages stayed up and say nothing about anything else the extractor meets; a
+draw with no seed printed could not be replayed.
+
+**The draw happens once, before any arm starts.** One step draws, one step turns
+the pair into a run plan, and all three arms run that one plan - so the three
+record the same two item ids and the numbers between them can be subtracted. The
+final step compares what each arm recorded against what the plan asked for and
+fails the job when they disagree, because an address that 404s would otherwise
+leave one arm with one item and three rows of plausible numbers.
+
+**Three arms, in sequence, on one runner, and never a matrix.** Prefill spans
+4.2x between GitHub-hosted runners ([measurements.md](measurements.md)), which
+is larger than anything an arm here is looking for, so three jobs would report
+the three hosts they drew. Sequential on one box cancels the host.
+
+| Arm | What it changes | What the difference prices |
+| --- | --- | --- |
+| `baseline` | nothing - the production path exactly | the number the other two are read against |
+| `no-visual-decision` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
+| `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
+
+Each arm is a step rather than an iteration of a loop, so the run page shows
+each arm's own wall clock. Every arm setting is in config (Guardrail #6): the
+addresses, the draw size, the job bound, the slot counts and the windows. One
+step writes a config root per arm from the committed `config/`, differing only
+in what that arm changes, and the committed config is never edited - an arm that
+edited it would leave the next arm reading whatever the last one wrote.
+
+**The parallel arm doubles `n_ctx` because llama-server divides the window it is
+given between its slots.** Two slots on the committed 65,536 is a 32,768-token
+slot, and the worst article the truncation cap admits needs 54,887 - so leaving
+the window alone would make that arm a test of a smaller window wearing a
+concurrency arm's name. The slot count is fixed when the process starts, which
+is why that arm costs a restart and a second model load.
+
+Two things one dispatch cannot settle. **Whether two articles are representative
+of the eighty a production day carries - they are not**, and the draw is what
+stops them being representative of nothing instead. And the faithfulness scorer,
+which every arm skips: it is a second model download, it is identical across the
+arms so it cancels from every comparison here, and it is not what the two-call
+path is being measured for.
+
 ## Display names and files
 
 A workflow display name is the label shown in the Actions UI. Its filename is
 the stable automation interface for repository paths, API calls, and CLI
-dispatch. Keep the seven filenames stable when a UI label changes.
+dispatch. Keep the eight filenames stable when a UI label changes.
 
 GitHub's `workflow_run.workflows` selector is the exception: it matches a
 display name. `pages.yml` therefore names `Content refresh` in that selector.
