@@ -22,6 +22,17 @@ which desk a story is filed under and nothing else: no story is admitted, none
 is dropped, and the day comes back exactly as long as it went in. A story they
 move keeps a claim on the desk it left, so a story names at most two desks and
 the payload never loses what the story is about.
+
+**A later run appends, and this order runs inside what a run added.** The day
+publishes five times and a reader can read it after any of them, so an order
+computed over the whole day would move a story somebody has already read - the
+one thing `layout.md` names as the most disorienting thing this system could do,
+and the rule `DigestDay` refuses a payload for breaking. So the sort, the desk
+rules and the frame all run, and they run over one run's block at a time: the
+day stays the blocks in the order the runs published them, and inside a block it
+is the order this file computes. The day's best story reaching the top of the
+page is `assemble.leading_stories`' job, and it is chosen across the whole day -
+a second order over the same list, which costs a reader's memory nothing.
 """
 
 from __future__ import annotations
@@ -282,12 +293,17 @@ def place(
 ) -> list[DigestItem]:
     """The day in one order, with the desk rules applied and the frame on its head.
 
-    Three things hold whatever the config says, and each one is a test:
+    Four things hold whatever the config says, and each one is a test:
 
     - **Every story comes back, exactly once.** `len(out) == len(in)`.
-    - **The first slot is the score's own first pick.** No cap can bind on an
-      empty head, so the frame can never argue with the ranker about the day's
-      lead story.
+    - **A later run appends.** `introduced_by_run` never decreases down the
+      list, because the order is computed inside each run's block and the blocks
+      keep the order the runs published them in. That is the rule `DigestDay`
+      refuses a payload for breaking, and it is why this is not one sort over
+      the whole day.
+    - **The first slot is the score's own first pick** among the stories the
+      first run published. No cap can bind on an empty head, so the frame can
+      never argue with the ranker about which story opens the day.
     - **Past `head_items` the order is the score's, untouched.** The frame is a
       claim about what a reader meets before deciding whether to scroll, and it
       has nothing to say about the four hundredth story.
@@ -296,34 +312,50 @@ def place(
     than the head - the best story a cap held down takes the slot back. The frame
     yields before the day does.
 
-    `refile` runs before the frame rather than after it, because the frame caps
-    how much of the head one desk may hold and the desk rules are what decide
-    which desk a story is on. A frame that ran first would cap a filing that was
-    about to change.
+    **The head is the day's first `head_items` slots, not each block's.** A run
+    that lands on a day already holding twenty stories gets no head at all and
+    is published in plain score order, and a first run that published five
+    leaves fifteen slots for the second. Counting per block would put a second
+    framed head four hundred stories down the page, where nobody meets it.
+
+    `refile` runs before the frame rather than after it, and over the whole day
+    rather than per block, because the frame caps how much of the head one desk
+    may hold and the desk rules are what decide which desk a story is on. A
+    frame that ran first would cap a filing that was about to change, and a
+    ceiling counted per block would be a share of the block rather than of the
+    day. `refile` only ever relabels, so running it whole-day moves nothing.
     """
     stream = refile(stream_order(items), bounds=bounds or {}, closed=closed)
-    head: list[DigestItem] = []
-
-    held: list[DigestItem] = []
+    placed: list[DigestItem] = []
     desks: Counter[str] = Counter()
     feeds: set[str] = set()
 
-    for item in stream:
-        if len(head) >= config.head_items:
-            break
-        if desks[_desk_of(item)] >= config.max_desk_in_head:
-            held.append(item)
-            continue
-        if len(head) < config.head_no_repeat and item.source_id in feeds:
-            held.append(item)
-            continue
-        head.append(item)
-        desks[_desk_of(item)] += 1
-        if len(head) <= config.head_no_repeat:
-            feeds.add(item.source_id)
+    for run in sorted({item.introduced_by_run for item in stream}):
+        block = [item for item in stream if item.introduced_by_run == run]
+        head: list[DigestItem] = []
+        held: list[DigestItem] = []
 
-    while len(head) < config.head_items and held:
-        head.append(held.pop(0))
+        for item in block:
+            # `placed` is every slot the day has already filled, so the head is
+            # the head of the page rather than of this block.
+            if len(placed) + len(head) >= config.head_items:
+                break
+            if desks[_desk_of(item)] >= config.max_desk_in_head:
+                held.append(item)
+                continue
+            if len(placed) + len(head) < config.head_no_repeat and item.source_id in feeds:
+                held.append(item)
+                continue
+            head.append(item)
+            desks[_desk_of(item)] += 1
+            if len(placed) + len(head) <= config.head_no_repeat:
+                feeds.add(item.source_id)
 
-    taken = {item.item_id for item in head}
-    return [*head, *(item for item in stream if item.item_id not in taken)]
+        while len(placed) + len(head) < config.head_items and held:
+            head.append(held.pop(0))
+
+        taken = {item.item_id for item in head}
+        placed.extend(head)
+        placed.extend(item for item in block if item.item_id not in taken)
+
+    return placed

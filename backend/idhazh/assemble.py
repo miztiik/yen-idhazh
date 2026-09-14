@@ -1314,11 +1314,18 @@ def build_day(
     story an earlier one already did and can add a story the first run could
     not weigh. Neither moves anything.
 
-    `placement.place` then puts the whole day in one order. It runs last of the
+    `placement.place` then orders what each run added. It runs last of the
     three, over the day the other two finished, because the frame it applies is
     a claim about what a reader meets first and the duplicate pass decides which
     item of a group a reader meets at all. It is a re-order and never a filter:
     the day it returns holds exactly the items it was handed.
+
+    **It orders inside a run's block and never across two.** The blocks stay in
+    the order the runs published them, so `introduced_by_run` never decreases
+    down the list - which is what `DigestDay` refuses a payload for, and what
+    stops a story moving under a reader who already read it. The day's best
+    story reaching the top of the page is `leading_stories`' job, over the whole
+    day, and a second order over the same list costs a reader's memory nothing.
 
     It is also where the desk floor and the desk ceiling run. Both re-file a
     story onto its second-best desk and neither admits or drops one, so that

@@ -79,7 +79,7 @@ order of what passed.
 
 | Stage | Where it runs | When | What it decides |
 | --- | --- | --- | --- |
-| 1 | `backend/idhazh/rank.py`, `score` | in `plan`, **before the article is fetched or read** | `rank_score`, which is the order of the whole day |
+| 1 | `backend/idhazh/rank.py`, `score` | in `plan`, **before the article is fetched or read** | `rank_score`, which is the order inside what a run added |
 | 2 | `backend/idhazh/assemble.py`, `leading_stories` | in `assemble`, after the read, over the finished day | the leading block only. **It never re-orders the stream** |
 | 3 | nowhere | - | proposed, and nothing builds it (below) |
 
@@ -145,7 +145,7 @@ flowchart LR
   watch["watchlist subject"] --> s1
   lens["lens weight"] --> s1
   age["how old the story is"] --> s1
-  s1["stage 1: rank.score<br/>before the article is read"] --> order["one order over the whole day"]
+  s1["stage 1: rank.score<br/>before the article is read"] --> order["one order inside what a run added"]
   s1 --> s2["stage 2: leading_stories<br/>after the read"]
   subject["a subject several sources named"] --> s2
   order --> frame["the frame: desk cap, no feed twice"]
@@ -217,9 +217,9 @@ named the same company or person in their headlines - still behind the scoop.
 That changes which stories open the page, and changes the order of the stream
 not at all.
 
-## One order over the whole day
+## One order inside what a run added
 
-Every story the day carries is in one list, best first: `rank_score` descending,
+Every story a run added is in one list, best first: `rank_score` descending,
 then the story's own time, then its address. Ties break on the address so two
 runs over one day cannot disagree, and sorts are stable so the three compose.
 
@@ -228,6 +228,33 @@ every day published before the field landed, and reading null as zero would put
 those stories at the bottom of a day where every score is positive and at the top
 of one where they are not - a claim the payload never made
 ([layout.md](../architecture/publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is)).
+
+**The list is the run's block, not the day, and the blocks stay in the order the
+runs published them.** A day is published five times. Run 4 can score higher than
+anything run 1 found, so one sort over the combined day moves a story a reader
+read at breakfast down the page at lunchtime - the one thing the reading page was
+built never to do
+([layout.md](../architecture/publishing/layout.md#rejected-alternatives)). `DigestDay`
+refuses such a payload outright: `introduced_by_run` may never decrease down
+`items`. So the sort, the desk caps and the head frame all run over one block at
+a time.
+
+**The day's best story still reaches the top of the page.** That is the leading
+block's job, chosen across the whole day by `assemble.leading_stories` and drawn
+above the stream. It is a second, separate order over the same list, and a reader
+loses nothing by the stream below it being append-only.
+
+### Design rationale
+
+**2026-09-13.** `placement.place` shipped taking the order over the whole
+combined day. It passed every test and every gate, because the frame's tests are
+built on single-run days and the committed archive had never been re-placed. The
+first production run that added stories to a day already published crashed on the
+`DigestDay` validator, and the pipeline published nothing for the rest of that
+day. Measured over the 24 committed days: 20 of the 22 that ran more than once
+would have been refused, several breaking at the second item. The fix changes the
+code rather than the contract (`CLAUDE.md` section 0d) - the contract is the
+reader-facing rule and it was right.
 
 ## The frame, and the three things it may never do
 
