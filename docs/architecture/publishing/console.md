@@ -1120,7 +1120,7 @@ the item.** An item read by two calls always reuses something, because the secon
 call replays the first call's prompt and is answered for it - so "read whole with
 nothing held over" taken off the item total would count nothing for ever, a live
 figure becoming a constant with no code change. Where the projection publishes a
-split, the four read `call_1_*`; where it does not, they read the totals as they
+split, the four read `label_*`; where it does not, they read the totals as they
 always did, and `perCall` says how many rows of the window were which. Every rate
 on this section still pools the totals, which is correct: a sum over both calls is
 what the item cost
