@@ -1,5 +1,5 @@
 {
-  "addresses_considered": 9733,
+  "addresses_considered": 9829,
   "bands": {
     "high": 46,
     "low": 6,
@@ -8,81 +8,81 @@
   "date": "2026-09-13",
   "determinism_violations": 0,
   "extraction": {
-    "chartable": 30,
+    "chartable": 123,
     "chartable_charted": 4,
     "chartable_published": 29,
-    "elements_found": 925,
-    "items": 76,
-    "narrative": 6,
-    "span_integrity_pass": 76,
-    "unclassified": 40
+    "elements_found": 3369,
+    "items": 296,
+    "narrative": 28,
+    "span_integrity_pass": 296,
+    "unclassified": 145
   },
   "extraction_suspect": 0,
   "instruments": [
     {
       "column": "compression",
       "stat": {
-        "count": 75,
-        "maximum": 1.0833333333333333,
-        "minimum": 0.05419029615626969,
-        "p25": 0.11709844559585492,
-        "p50": 0.15063520871143377,
-        "p75": 0.2360248447204969,
-        "total": 16.49489631818952
+        "count": 255,
+        "maximum": 1.2777777777777777,
+        "minimum": 0.008968609865470852,
+        "p25": 0.11945392491467577,
+        "p50": 0.15796703296703296,
+        "p75": 0.29107981220657275,
+        "total": 65.87731707018803
       }
     },
     {
       "column": "coverage",
       "stat": {
-        "count": 75,
+        "count": 255,
         "maximum": 1.0,
         "minimum": 0.0,
-        "p25": 0.45454545454545453,
-        "p50": 0.625,
-        "p75": 0.8571428571428571,
-        "total": 46.36583728374346
+        "p25": 0.46153846153846156,
+        "p50": 0.6363636363636364,
+        "p75": 0.8333333333333334,
+        "total": 161.04311544036943
       }
     },
     {
       "column": "evidential_density",
       "stat": {
-        "count": 75,
-        "maximum": 0.020833333333333332,
+        "count": 255,
+        "maximum": 0.043243243243243246,
         "minimum": 0.0,
         "p25": 0.0,
         "p50": 0.0,
-        "p75": 0.0018281535648994515,
-        "total": 0.10984518175529867
+        "p75": 0.0020242914979757085,
+        "total": 0.45227851476783504
       }
     },
     {
       "column": "extractiveness",
       "stat": {
-        "count": 75,
+        "count": 255,
         "maximum": 0.8673469387755102,
         "minimum": 0.0,
-        "p25": 0.08571428571428572,
-        "p50": 0.16666666666666666,
-        "p75": 0.2894736842105263,
-        "total": 15.956070538288028
+        "p25": 0.06896551724137931,
+        "p50": 0.1566265060240964,
+        "p75": 0.25862068965517243,
+        "total": 48.3146356270296
       }
     },
     {
       "column": "hhem",
       "stat": {
-        "count": 75,
-        "maximum": 0.9859806299209595,
+        "count": 255,
+        "maximum": 0.9872413873672485,
         "minimum": 0.011482670903205872,
-        "p25": 0.8886482119560242,
-        "p50": 0.9372992515563965,
-        "p75": 0.9628543853759766,
-        "total": 64.62675243616104
+        "p25": 0.889083743095398,
+        "p50": 0.9405126571655273,
+        "p75": 0.9641989469528198,
+        "total": 219.89869097340852
       }
     },
     {
       "column": "hhem_delta",
       "stat": {
-        "count": 75,
+        "count": 255,
         "maximum": 0.0,
         "minimum": 0.0,
         "p25": 0.0,
@@ -94,114 +94,114 @@
     {
       "column": "hhem_full",
       "stat": {
-        "count": 75,
-        "maximum": 0.9859806299209595,
+        "count": 255,
+        "maximum": 0.9872413873672485,
         "minimum": 0.011482670903205872,
-        "p25": 0.8886482119560242,
-        "p50": 0.9372992515563965,
-        "p75": 0.9628543853759766,
-        "total": 64.62675243616104
+        "p25": 0.889083743095398,
+        "p50": 0.9405126571655273,
+        "p75": 0.9641989469528198,
+        "total": 219.89869097340852
       }
     },
     {
       "column": "new_fact_rate",
       "stat": {
-        "count": 75,
+        "count": 255,
         "maximum": 1.0,
         "minimum": 0.0,
-        "p25": 0.0,
+        "p25": 1.0,
         "p50": 1.0,
         "p75": 1.0,
-        "total": 54.0
+        "total": 206.5
       }
     },
     {
       "column": "score_ms",
       "stat": {
-        "count": 75,
-        "maximum": 10806.0,
-        "minimum": 113.0,
-        "p25": 575.0,
-        "p50": 1098.0,
-        "p75": 2345.0,
-        "total": 144999.0
+        "count": 255,
+        "maximum": 55995.0,
+        "minimum": 91.0,
+        "p25": 558.0,
+        "p50": 1201.0,
+        "p75": 2051.0,
+        "total": 560726.0
       }
     },
     {
       "column": "self_repetition",
       "stat": {
-        "count": 75,
-        "maximum": 0.01680672268907568,
+        "count": 255,
+        "maximum": 0.017241379310344862,
         "minimum": 0.0,
         "p25": 0.0,
         "p50": 0.0,
         "p75": 0.0,
-        "total": 0.04407944996180291
+        "total": 0.07910066848055841
       }
     },
     {
       "column": "source_seen_word_count",
       "stat": {
-        "count": 75,
-        "maximum": 2025.0,
+        "count": 255,
+        "maximum": 5190.0,
         "minimum": 35.0,
-        "p25": 328.0,
-        "p50": 534.0,
-        "p75": 792.0,
-        "total": 44742.0
+        "p25": 278.0,
+        "p50": 510.0,
+        "p75": 760.0,
+        "total": 151586.0
       }
     },
     {
       "column": "source_word_count",
       "stat": {
-        "count": 75,
-        "maximum": 2025.0,
+        "count": 255,
+        "maximum": 5190.0,
         "minimum": 35.0,
-        "p25": 328.0,
-        "p50": 534.0,
-        "p75": 792.0,
-        "total": 44742.0
+        "p25": 278.0,
+        "p50": 510.0,
+        "p75": 760.0,
+        "total": 151586.0
       }
     },
     {
       "column": "speculative_density",
       "stat": {
-        "count": 75,
-        "maximum": 0.027777777777777776,
+        "count": 255,
+        "maximum": 0.06,
         "minimum": 0.0,
-        "p25": 0.0010845986984815619,
-        "p50": 0.003816793893129771,
-        "p75": 0.007936507936507936,
-        "total": 0.4356034789590763
+        "p25": 0.0,
+        "p50": 0.0038560411311053984,
+        "p75": 0.009283819628647215,
+        "total": 1.51785977359224
       }
     },
     {
       "column": "summary_word_count",
       "stat": {
-        "count": 75,
-        "maximum": 132.0,
-        "minimum": 33.0,
-        "p25": 65.0,
-        "p50": 79.0,
-        "p75": 106.0,
-        "total": 6296.0
+        "count": 255,
+        "maximum": 145.0,
+        "minimum": 27.0,
+        "p25": 66.0,
+        "p50": 81.0,
+        "p75": 98.0,
+        "total": 21060.0
       }
     },
     {
       "column": "verbatim_run",
       "stat": {
-        "count": 75,
+        "count": 255,
         "maximum": 0.45544554455445546,
-        "minimum": 0.03488372093023256,
-        "p25": 0.06315789473684211,
-        "p50": 0.1095890410958904,
-        "p75": 0.16923076923076924,
-        "total": 9.839477351489503
+        "minimum": 0.0,
+        "p25": 0.06741573033707865,
+        "p50": 0.09836065573770492,
+        "p75": 0.14754098360655737,
+        "total": 30.30487096374735
       }
     }
   ],
-  "items_failed": 5,
-  "items_planned": 80,
+  "items_failed": 85,
+  "items_planned": 160,
   "items_published": 75,
   "items_truncated": 0,
   "label_similarity": {
@@ -218,7 +218,6 @@
     "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
   },
   "model_id": "qwen3-5-9b-q4-k-m",
-  "pipeline_fingerprint": null,
   "reasons": {
     "faithfulness": 10,
     "hedge_dropped": 11,
@@ -227,8 +226,8 @@
     "unattributed": 0,
     "unsupported_number": 1
   },
-  "revision": 1,
-  "runs": 1,
+  "revision": 2,
+  "runs": 2,
   "sources": [
     {
       "doubted": 0,
@@ -498,39 +497,39 @@
   "sources_present": 44,
   "stage_timing": [
     {
-      "max_ms": 5124,
-      "p50_ms": 736,
-      "p90_ms": 1917,
+      "max_ms": 5847,
+      "p50_ms": 636,
+      "p90_ms": 1750,
       "stage": "fetch",
-      "sum_ms": 74098,
-      "timed": 76
+      "sum_ms": 261075,
+      "timed": 296
     },
     {
       "max_ms": 928,
-      "p50_ms": 48,
-      "p90_ms": 94,
+      "p50_ms": 51,
+      "p90_ms": 96,
       "stage": "extract",
-      "sum_ms": 5139,
-      "timed": 76
+      "sum_ms": 19083,
+      "timed": 296
     },
     {
-      "max_ms": 876284,
-      "p50_ms": 96694,
-      "p90_ms": 211400,
+      "max_ms": 2155856,
+      "p50_ms": 206378,
+      "p90_ms": 1212067,
       "stage": "summarize",
-      "sum_ms": 9475330,
-      "timed": 76
+      "sum_ms": 118986296,
+      "timed": 296
     }
   ],
   "summaries_scored": 75,
   "throughput": {
-    "cached_tokens": 59065,
-    "decode_ms": 3857529,
-    "input_tokens": 141791,
-    "items": 76,
-    "output_tokens": 17599,
-    "prefill_ms": 5610810
+    "cached_tokens": 877340,
+    "decode_ms": 72736495,
+    "input_tokens": 1316135,
+    "items": 296,
+    "output_tokens": 347014,
+    "prefill_ms": 32947388
   },
-  "version": "2026-09-13",
+  "version": "2026-09-14T01:30",
   "visuals_rendered": 4
 }
