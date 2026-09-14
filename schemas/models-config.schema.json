@@ -1,5 +1,82 @@
 {
   "$defs": {
+    "DraftConfig": {
+      "additionalProperties": false,
+      "description": "A second, much smaller set of weights that guesses ahead of the first.\n\n**Speculative decoding is output-identical by construction.** The target\nmodel verifies every drafted token and rejects any it would not have\nproduced, so the text is the text the target would have written alone. That\nis why this block is priced on cost and on how hard it is to revert rather\nthan waiting on a quality measurement: there is no quality to measure\n(Guardrail #10, and plan 28's row 2a).\n\nWhat it can do is waste time. A draft the target keeps rejecting costs a\nforward pass per rejected token and returns nothing, so the acceptance rate\nis the number that says whether it paid. `llama-server` publishes it:\n`llamacpp:spec_decode_num_accepted_tokens_total` over\n`llamacpp:spec_decode_num_draft_tokens_total`, both already in the\n`/metrics` body a shard reads at job end.",
+      "properties": {
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Byte Count"
+        },
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "n_max": {
+          "default": 3,
+          "description": "How many tokens are drafted before the target verifies. The runtime's own default. Higher drafts further ahead and wastes more when the draft is wrong, so it is a bet on how predictable the text is.",
+          "maximum": 64,
+          "minimum": 1,
+          "title": "N Max",
+          "type": "integer"
+        },
+        "n_min": {
+          "default": 0,
+          "maximum": 64,
+          "minimum": 0,
+          "title": "N Min",
+          "type": "integer"
+        },
+        "p_min": {
+          "default": 0.0,
+          "description": "Below this probability the draft stops guessing and lets the target decode. 0.0 is the runtime default and means never stop early.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "P Min",
+          "type": "number"
+        },
+        "repo": {
+          "description": "Hugging Face repository the draft GGUF is in.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The hub commit. Required here and optional on ModelRef: a block somebody added by hand is a block that can pin properly from the start.",
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Refused before the server starts, like the target's.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "spec_type": {
+          "$ref": "#/$defs/SpeculationType",
+          "default": "draft-simple"
+        }
+      },
+      "required": [
+        "repo",
+        "revision",
+        "file",
+        "sha256"
+      ],
+      "title": "DraftConfig",
+      "type": "object"
+    },
     "InferenceConfig": {
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
@@ -252,6 +329,18 @@
           "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
           "title": "Byte Count"
         },
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DraftConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A second, smaller set of weights that drafts tokens this entry's model then verifies. Null is the default and means one model and no speculation. It sits beside `inference` rather than inside it because it names weights of its own - a repository, a commit, a filename and a digest - and a block that fetches a file is not a decoding knob. On `ModelRef` rather than `ModelEntry` so a run record says whether the day was drafted; a run that cannot answer that cannot explain its own throughput."
+        },
         "file": {
           "minLength": 1,
           "title": "File",
@@ -334,6 +423,15 @@
       ],
       "title": "ModelEntry",
       "type": "object"
+    },
+    "SpeculationType": {
+      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the two this project can actually stand up. `llama-server` accepts a\nlonger list - eagle3, mtp, dflash, dspark and five ngram variants - and each\nof those either needs a purpose-built draft head we do not have or a lookup\ncache nothing here writes. A closed choice is what stops an operator naming\none of them and getting a server that starts and drafts nothing.",
+      "enum": [
+        "draft-simple",
+        "ngram-simple"
+      ],
+      "title": "SpeculationType",
+      "type": "string"
     },
     "SystemPlacement": {
       "description": "Where this model's template takes the system text. Two, and no third.\n\nA turn topology, so it is an enum rather than a free-form string: what\n\"folded into the first user turn\" MEANS is a code path, and expressing it as\ndata would need a template language in config - a second renderer nobody\ntests (docs/architecture/summarize/model-boundary.md).",
@@ -435,6 +533,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "models.<role>.draft, optional: a second, smaller set of weights that drafts tokens this entry's model then verifies. It carries its own repo, revision, file, sha256 and byte_count, a closed spec_type of draft-simple or ngram-simple, and the three drafting knobs n_max, n_min and p_min. Null is the default and means one model and no speculation, so every models file written before today still loads and every committed run.json still reads.",
+      "version": "2026-09-14T07:00",
+      "why": "Plan 28 row 2a, returned to scope 2026-09-14. It is the one feature a candidate brings that this plan's pointer-swap could not switch on, so leaving it out contradicted the plan's own intent. It is priced on cost and revert rather than on a quality measurement because speculative decoding is output-identical by construction - the target verifies every drafted token - so there is no quality to measure (Guardrail #10, amended 2026-09-14). The block sits beside inference rather than inside it because it names weights to fetch, and a block that fetches a file is not a decoding knob."
+    },
+    {
       "change": "models.<role>.byte_count, optional: how many bytes the weights are. It sits on ModelRef beside sha256, defaults to null, and no reader requires it - so a models file written before today still loads and a run.json written before today still reads.",
       "version": "2026-09-14T06:00",
       "why": "Plan 28 row #9 decision 3. The qualification dispatch took the byte count as a form field, which made it the one fact about a candidate that lived outside the file naming that candidate - and its default of 0 meant the identity gate compared the observed size to itself and called that a check (Guardrail #10). Declared here, the gate compares two independent facts, and the dispatch has nothing left to ask for but the filename. Ruled by Carmack, 2026-09-13."
@@ -461,7 +564,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-14T06:00",
+      "default": "2026-09-14T07:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -472,5 +575,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-14T06:00"
+  "version": "2026-09-14T07:00"
 }
