@@ -225,7 +225,7 @@ element table, which the plan deliberately does not carry. That is row 3's
 ## 2. Row #1 - What a plan is, and the four things it may not carry
 
 - **Scope:** The `VisualPlan` contract: `decision`, `purpose`, `type`, `encodings`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`.
-- **Files touched:** `backend/idhazh/contracts/visual.py` (new), `schemas/visual-plan.schema.json` (generated), `tests/fixtures/contracts/visual-plan/*.json`, `backend/tests/test_contracts.py`, `docs/architecture/publishing/**`
+- **Files touched:** `backend/idhazh/contracts/visual.py` (new), `schemas/visual-plan.schema.json` (generated), `tests/fixtures/contracts/visual-plan/*.json`, `backend/tests/contracts/`, `docs/architecture/publishing/**`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** A plan carrying a geometry value, a literal number, authored text or `alt_text` **fails validation**, and a plan carrying only references and closed names passes. All four prohibitions asserted separately, because a single combined test passes when three of the four are unenforced.
 
@@ -251,7 +251,7 @@ element table, which the plan deliberately does not carry. That is row 3's
 ## 3. Row #2 - Every role is a key, and an unused one is empty
 
 - **Scope:** `encodings` as one flat map in which every role name is a key, every key is required by the schema, and an inapplicable role is an **empty array**.
-- **Files touched:** `backend/idhazh/contracts/visual.py`, `schemas/visual-plan.schema.json`, `tests/fixtures/contracts/visual-plan/*.json`, `backend/tests/test_contracts.py`, `docs/architecture/publishing/**`
+- **Files touched:** `backend/idhazh/contracts/visual.py`, `schemas/visual-plan.schema.json`, `tests/fixtures/contracts/visual-plan/*.json`, `backend/tests/contracts/`, `docs/architecture/publishing/**`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** A reply omitting any role key fails the decoder; a reply supplying an inapplicable role as `[]` passes the contract and is then judged by the per-type check in row 3. Both halves asserted.
 

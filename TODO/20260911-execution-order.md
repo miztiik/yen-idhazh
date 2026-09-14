@@ -54,7 +54,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 **What this wave costs, named rather than hidden.** It contains **no reader-visible change**. Plan 25 row #5 is the one ready row a reader could see (section 5) and it cannot be in this wave: it and plan 24 row #1 both write `docs/architecture/publishing/layout.md`. **Running row #5 instead of plan 24 row #1 buys a visible change and delays the second-heaviest pole in the project by one wave.** The recommendation is to take the pole and run row #5 in the second wave, because nothing plan 24 row #1 blocks is reachable before the third wave and a day spent on it there is a day the schedule does not get back.
 
-**Plan 23 row #1a is deliberately not in it, and it is the reason the wave is seven and not more.** It writes 26 files, and it is the refusing row for nine of the twelve rows that cannot join: `CLAUDE.md`, `backend/idhazh/cli.py`, `backend/tests/test_contracts.py`, `backend/idhazh/assemble.py`, `backend/idhazh/contracts/app_config.py` and `docs/architecture/contracts/schemas.md` each put it against a different sibling. **It is the widest ready row and it pairs with almost nothing, so it wants a wave of its own** - and the second wave is where it fits, beside plan 25 row #5.
+**Plan 23 row #1a is deliberately not in it, and it is the reason the wave is seven and not more.** It writes 26 files, and it is the refusing row for nine of the twelve rows that cannot join: `CLAUDE.md`, `backend/idhazh/cli.py`, `backend/tests/contracts/`, `backend/idhazh/assemble.py`, `backend/idhazh/contracts/app_config.py` and `docs/architecture/contracts/schemas.md` each put it against a different sibling. **It is the widest ready row and it pairs with almost nothing, so it wants a wave of its own** - and the second wave is where it fits, beside plan 25 row #5.
 
 ---
 
@@ -114,16 +114,16 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 | Written by | Plans | File | What it means for a wave |
 | --- | --- | --- | --- |
-| 19 rows | 11, 23, 25 | `backend/tests/test_contracts.py` | Every row that adds a contract field |
+| 19 rows | 11, 23, 25 | `backend/tests/contracts/` | Every row that adds a contract field |
 | 18 rows | 11, 23, 24, 25 | `backend/idhazh/cli.py` | **This stopped being true on 2026-09-13.** It was the single busiest module in the project, holding the body of all eighteen stages. The bodies now sit one to a module under `backend/idhazh/stages/`, so a row collides only with a row writing the same stage. Re-read each row's file list against the new paths before assuming a collision; `cli.py` itself is now the parser and the verb table, which few rows touch |
 | 15 rows | 11, 23, 25 | `backend/idhazh/contracts/app_config.py` | Every row that adds a knob, and it regenerates a schema |
 | 15 rows | 11, 23, 25 | `config/idhazh.json` | The same rows |
 | 14 rows | 11, 23, 25 | `schemas/app-config.schema.json` | The drift gate fails on one byte, so this is a hard collision and never a soft one |
 | 13 rows | 23, 24, 25 | `backend/tests/test_marks.py` | Every row that adds a backend test module |
 | 12 rows | 23, 24, 25 | `docs/concepts/growing-reads.md` | Every row that reads a collection a run appends to |
-| 8 rows | 23, 24, 25 | `backend/tests/test_pipeline.py` | - |
+| 8 rows | 23, 24, 25 | `backend/tests/pipeline/` | - |
 | 7 rows | 11, 23 | `backend/idhazh/visual_planner.py` and `backend/tests/test_visual_planner.py` | **Resolved inside plan 23 on 2026-09-12 by its row #7a, which landed as #629**, and still not resolved between the two plans |
-| 7 rows | 23, 24 | `backend/idhazh/retention.py` and `backend/tests/test_retention.py` | The collision plan 23 section 0.1 already names |
+| 7 rows | 23, 24 | `backend/idhazh/retention.py` and `backend/tests/retention/` | The collision plan 23 section 0.1 already names |
 | 7 rows | 23, 24 | `docs/architecture/contracts/schemas.md` | - |
 | 7 rows | 23, 24, 25 | `docs/architecture/publishing/layout.md` | - |
 | 7 rows | 23, 25 | `backend/idhazh/rank.py` and `config/taxonomy.json` | - |
@@ -156,7 +156,7 @@ These are the ones a person composing a wave by reading two plan titles would ge
 | Pair | Shared file | Why it is not obvious |
 | --- | --- | --- |
 | 23 #P1 x 26 #1 | `CLAUDE.md` | A classification rule restatement and a prerender measurement. Nothing connects them but the contract file |
-| 23 #P4 x 26 #3 | `backend/tests/test_workflows.py` | A runner measurement and a prose correction |
+| 23 #P4 x 26 #3 | `backend/tests/workflows/` | A runner measurement and a prose correction |
 | 11 #4 x 25 #1 | `docs/architecture/publishing/visuals.md` | A downgrade ladder and three docstrings |
 | 23 #1a x 25 #11 | `backend/tests/test_console_payloads_producer.py` | A fingerprint removal and a console strip |
 | 23 #5 x 25 #1 | `docs/architecture/publishing/visuals.md` | An item-id widening and three docstrings |

@@ -38,7 +38,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 2. Row #1 - A rollup that holds only what no ledger holds
 
 - **Scope:** `SpanRollupRow` and the fold that writes one row per `(date, run_id, shard, span_name)` into `state/span-rollup/<YYYY-MM>.csv`.
-- **Files touched:** `backend/idhazh/contracts/span_rollup.py` (new), `schemas/span-rollup-row.schema.json` (generated), `backend/idhazh/telemetry.py`, `backend/idhazh/ledger.py`, `state/span-rollup/` (header committed), `.github/scripts/commit-and-push.sh`, `backend/tests/test_telemetry.py`, `backend/tests/test_contracts.py`, `docs/concepts/telemetry.md`
+- **Files touched:** `backend/idhazh/contracts/span_rollup.py` (new), `schemas/span-rollup-row.schema.json` (generated), `backend/idhazh/telemetry.py`, `backend/idhazh/ledger.py`, `state/span-rollup/` (header committed), `.github/scripts/commit-and-push.sh`, `backend/tests/test_telemetry.py`, `backend/tests/contracts/`, `docs/concepts/telemetry.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; `shellcheck`; the full suite.
 - **Oracle:** A contract test asserts the rollup's column set is **disjoint, outside the key, from the column set of every committed ledger** - `state/item-health/`, `state/scores/`, `state/runtime-counters.csv` and `state/visuals/` when it exists. Testing against item-health alone is not enough: a collision was already found in a different store by exactly that gap.
 

@@ -64,7 +64,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 3. Row #2 - A short article stops being asked for five key points
 
 - **Scope:** `key_points_max` moves from `SummarizeConfig` onto `SummaryBand`, so the shortest band asks for fewer.
-- **Files touched:** `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/idhazh/summarize.py`, `frontend/src/lib/server/config.ts`, `backend/tests/test_contracts.py`, `backend/tests/test_corpus.py`, `backend/tests/test_qualify.py`, `docs/architecture/summarize/prompt.md`, `docs/concepts/config.md`
+- **Files touched:** `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/idhazh/summarize.py`, `frontend/src/lib/server/config.ts`, `backend/tests/contracts/`, `backend/tests/test_corpus.py`, `backend/tests/test_qualify.py`, `docs/architecture/summarize/prompt.md`, `docs/concepts/config.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `bundle-gate`.
 - **Oracle:** For every band, the requested key-point count is less than or equal to the count of distinct facts the band's own word budget can carry - asserted per band, so a future band cannot be added at five by accident.
 
