@@ -255,6 +255,20 @@
       "additionalProperties": false,
       "description": "Which weights, from where. Per-item payloads carry only the `id`.\n\n**This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.\n`ModelEntry` below is the shape a person declares in `config/`. The turn\nenvelope belongs to the second and not to this one: no `model_ref` a run has\never written carries markers, and a field required here would stop today's\nbuild reading yesterday's run (`CLAUDE.md` section 11).",
       "properties": {
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
+          "title": "Byte Count"
+        },
         "file": {
           "minLength": 1,
           "title": "File",
@@ -804,6 +818,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded ModelRef gained an optional byte_count. It defaults to null and nothing here requires it, so every committed run.json still reads and no migration is needed.",
+      "version": "2026-09-14T06:00",
+      "why": "Plan 28 row #9 decision 3 moved the candidate byte count off the qualification form and onto the model entry. ModelUse embeds ModelRef, so the field arrives here as well - recorded rather than read, which is what this manifest does with every other fact about the weights."
+    },
+    {
       "change": "items_prefiltered keeps its shape and gains a sentence: no run writes a non-zero value any more. No field moved, so this is not breaking and no payload needs migrating.",
       "version": "2026-09-13T23:30",
       "why": "Plan 11 row #6 retired the visual planner stage, which was the only producer of a decision made without asking a model. Call 2 writes the summary and the plan in one reply, so every item's model is asked. The column stays because the committed archive carries non-zero values, and a reader of one of those days needs the field to mean what it meant then - but a field that can only read zero from here on has to say so where somebody about to quote it will look."
@@ -915,7 +934,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-13T23:30",
+      "default": "2026-09-14T06:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -927,5 +946,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-13T23:30"
+  "version": "2026-09-14T06:00"
 }

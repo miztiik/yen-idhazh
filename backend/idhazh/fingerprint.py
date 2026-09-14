@@ -202,6 +202,13 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             "model_sha256 already carries, so it cannot move on its own - and it exists "
             "to be compared against those bytes at start-up, not to describe the run.",
         ),
+        "byte_count": Undigested(
+            False,
+            "How large the weights are. Two files of one size can hold different "
+            "tensors and two digests cannot, so the size says nothing the digest does "
+            "not say better. It exists to cross-check the entry against the file the "
+            "run opened, not to describe the run.",
+        ),
         "declared_for": Undigested(
             False,
             "Names the weights the block is set for. The manifest already carries those "

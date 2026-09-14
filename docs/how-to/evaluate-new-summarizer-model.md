@@ -53,6 +53,7 @@ a fact about them.
 | `repo`, `revision` | the repository and the 40-character commit. A branch name is not a pin, because `main` moves |
 | `file`, `quantisation` | two files from one model are two candidates |
 | `sha256` | the runtime opens bytes, not a model-card name |
+| `byte_count` | the size the hub reports, cross-checked against the file the run opened |
 | `hf_base_repo` | the base an adapter is trained against, which the fine-tuning notebook checks |
 | `arch` | the architecture name inside the GGUF |
 | `inference` | every runtime knob, including the window and the sampler |
@@ -93,36 +94,36 @@ default silently.
 
 ### 1.3 Bench it - how fast
 
-One dispatch, two arms, one candidate typed once:
+One dispatch, two arms, and one field naming the candidate:
 
 ```bash
 gh workflow run measure.yml \
  -f target=bench \
- -f candidate_repo='<publisher>/<name>' \
- -f candidate_revision='<40-character commit>' \
- -f candidate_file='<weights filename>' \
- -f candidate_sha256='<digest those bytes must have>' \
- -f candidate_id='<alias the server answers to>' \
- -f candidate_quantisation='Q4_K_M' \
+ -f candidate_models_file='models/<name>.json' \
  -f threads='4'
 ```
 
-Leave every `candidate_*` box empty and the bench measures the model config
-already names. That is the calibration dispatch: the page it emits has to
+**The file is the only thing the form asks for.** Write the candidate's
+`config/models/<name>.json` first and commit it - the repository, the
+40-character commit, the weights filename, the SHA-256, the byte count, the
+alias and the quantisation all live there, and the dispatch reads them out. A
+form that asked for them again was a second copy of the same seven facts, and
+two copies can disagree: the bench measures one set of bytes, the adoption
+points at another, and every gate is green.
+
+Leave the box empty and the bench measures the model `config/idhazh.json`
+already points at. That is the calibration dispatch: the page it emits has to
 reproduce that model's committed dossier inside the spread both sides declare.
 
-The digest is not optional. Without it the harness benches whatever the
-repository holds today and says nothing about it, and a number filed under a
+The digest in that file is not optional. Without it the harness benches whatever
+the repository holds today and says nothing about it, and a number filed under a
 model that never ran is worse than no number (CLAUDE.md Guardrail #10).
 
-**Those six boxes repeat fields the candidate's model file already holds - seven
-in the qualification dispatch, which also takes the byte count - and that is a
-step this page should not need.** Both dispatches were written before a model
-was one file. The change that removes the step is one input naming the file, the
-same string the swap itself writes, and it is not built. Until it is, copy the
-values out of the file you wrote in 1.1 rather than typing them from a model
-card, so the bench and the adoption cannot disagree about which bytes are the
-candidate.
+**One box, because the file you wrote in 1.1 already holds the answer.** Both
+dispatches used to repeat six or seven fields the model file carries - and two
+copies of the same facts can disagree, which means benching one set of bytes and
+adopting another with every gate green. They now take the models file and read
+the rest out of it, which is the same string the swap itself writes.
 
 **Arm one, artifact `bench-raw`** - raw prefill and decode with nothing else in
 the process:
@@ -187,12 +188,7 @@ window sum in the project is spent at that last one.
 
 ```bash
 gh workflow run measure.yml -f target=budgets \
- -f candidate_repo='<publisher>/<name>' \
- -f candidate_revision='<40-character commit>' \
- -f candidate_file='<weights filename>' \
- -f candidate_sha256='<digest those bytes must have>' \
- -f candidate_id='<alias the server answers to>' \
- -f candidate_quantisation='Q4_K_M'
+ -f candidate_models_file='models/<name>.json'
 ```
 
 The run summary carries a paste block: the three values, their subject and their
@@ -216,13 +212,7 @@ digest. After a swap it is red until the paste lands; that is the point of it.
 
 ```bash
 gh workflow run validate.yml \
- -f candidate_repo='<publisher>/<name>' \
- -f candidate_revision='<40-character commit>' \
- -f candidate_file='<weights filename>' \
- -f candidate_sha256='<digest those bytes must have>' \
- -f candidate_bytes='<byte count the target declares>' \
- -f candidate_id='<alias the summaries will carry>' \
- -f candidate_quantisation='Q4_K_M' \
+ -f candidate_models_file='models/<name>.json' \
  -f shards='3' \
  -f corpus_per_shard='10' \
  -f repeats='3' \
@@ -230,7 +220,9 @@ gh workflow run validate.yml \
 ```
 
 The arm builds a candidate config under gitignored
-`backend/var/candidate-config`, checks the SHA-256 and the byte count **before
+`backend/var/candidate-config` - the committed tree with `models_file` moved and
+nothing else touched, so it runs the exact line an adoption later moves - checks
+the SHA-256 and the entry's declared byte count **before
 the server starts**, freezes each shard's slice and hashes the model-visible
 bytes before the first inference call, replays those bytes, interleaves the
 repeats so none lands on a warm prompt cache, runs every injection canary on
