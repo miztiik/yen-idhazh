@@ -1,5 +1,6 @@
 {
   "summarize": {
+    "arch": "llama",
     "file": "Qwen3-8B-Q4_K_M.gguf",
     "hf_base_repo": null,
     "id": "qwen3-8b-q4-k-m",
@@ -39,5 +40,5 @@
       "turn_opening": "<|start_header_id|>${role}<|end_header_id|>\n\n"
     }
   },
-  "version": "2026-09-14"
+  "version": "2026-09-14T02:00"
 }
