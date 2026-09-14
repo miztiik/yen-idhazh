@@ -2463,6 +2463,22 @@ class TestTheServerProvesTheEntry:
             second=Completion(content="", prompt_tokens=52, cached_tokens=44),
         )
 
+    def test_a_reuse_short_of_the_first_prompt_still_lets_the_run_start(self) -> None:
+        """The numbers a real server produced, which the first version refused.
+
+        llama.cpp restores a slot from a context checkpoint written mid-prompt,
+        so the count it reuses is bounded by where that checkpoint sits and not
+        by the previous prompt's length. Measured 2026-09-14, GitHub
+        `ubuntu-latest`, llama.cpp `b10598`, Qwen3.5-9B-Q4_K_M, run 34820209002:
+        31 prefilled, checkpoint at position 26, 27 of the second prompt's 60
+        reused, 33 evaluated. Prefill fell; the arm that wanted 31 refused all
+        four shards and the day published nothing.
+        """
+        the_prefix_cache_is_live(
+            first=Completion(content="", prompt_tokens=31),
+            second=Completion(content="", prompt_tokens=60, cached_tokens=27),
+        )
+
     def test_a_second_call_that_re_read_the_prefix_refuses_the_run(self) -> None:
         with pytest.raises(ProbeRefusedError) as refusal:
             the_prefix_cache_is_live(

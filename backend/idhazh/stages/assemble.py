@@ -102,6 +102,38 @@ def _report_prose_change(
     LOG.warning("%s", message)
 
 
+def _report_nothing_published(day: DigestDay, plan: RunPlan) -> None:
+    """A run that had stories to write and wrote none says so on the summary.
+
+    This stage runs on a bad day on purpose - `digest.yml` gives it
+    `if: always()`, because a run that publishes nothing on a bad day is a run
+    whose bad days are invisible. The cost of that is a stage that can decide
+    nothing and still exit 0, and on 2026-09-14 it did: 80 stories planned, 80
+    recorded `not_attempted`, an empty day committed, exit 0, and the only
+    sentence naming the cause was in a work-job log that expires. The published
+    record keeps the symptom for ever and kept the cause for ninety days.
+
+    So it speaks, and it does not exit non-zero. Failing here would skip the
+    steps that commit the day, which is the invisibility the `if: always()` was
+    put there to prevent - the day has to land AND the run summary has to carry
+    a red line saying the day is empty and where the reason is. Raising instead
+    would trade one silence for another.
+
+    A day that planned nothing is not this: the pipeline found no new article,
+    which is a quiet day and not a fault.
+    """
+    if day.items or not day.items_planned:
+        return
+    message = (
+        f"{plan.date} planned {day.items_planned} stories and published none of them "
+        f"({day.items_failed} recorded as failed). The day is still committed, so the "
+        f"reader sees an empty day and the console sees the counts. The reason is in "
+        f"the work jobs of this run, not in anything this run published"
+    )
+    print(f"::error title=The run published nothing::{message}")
+    LOG.error("%s", message)
+
+
 def stage_assemble(
     plan: RunPlan, *, settings: config.Settings, commit_sha: str, runner: str = "local"
 ) -> DigestDay:
@@ -377,6 +409,7 @@ def stage_assemble(
         # counts all along and nobody read them, which is why this speaks.
         print(f"::warning title=Sources answering but not reading::{yield_alarm}")
         LOG.warning("%s", yield_alarm)
+    _report_nothing_published(day, plan)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
         "search_index=%s/%s day_metrics=%s",

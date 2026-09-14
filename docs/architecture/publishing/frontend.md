@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-15
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -73,6 +73,24 @@ the server sends the drawing and the numbers, never a drawing instruction.
 | Unpublished | No day published at all - a fresh clone | The build succeeds. `/` says "No digest has been published yet" and `/archive/` says "Nothing has been published yet". There is no dated page to link to, so neither offers one |
 | Invalid | Payload breaks its contract | `idhazh validate-days` fails, in CI and before the publish |
 | Degraded | Low band, source-limit sentence, no visual | The common case, rendered inline. Not an error |
+
+**Empty is a real state and two different days land in it.** A day that planned
+nothing found no new article, so `partial` is false and the console paints it
+amber. A day where every story failed publishes empty and says `partial`,
+because a run that publishes nothing on a bad day is a run whose bad days are
+invisible - 2026-09-14 is that day, 80 planned and 80 failed, and refusing it
+would delete the only record that the day went wrong. So Empty is not a fault
+and `validate-days` does not refuse it.
+
+**The third empty day is refused, and it is the one that cannot be told apart
+from the first.** `idhazh.stages.validate_days._census_faults` stops a day that
+planned stories, failed none and published none. `ItemOutcome` has two members,
+so every story the pipeline touched is `ok` or `failed`; a day holding neither
+has lost its whole plan with nothing recording where it went, and the reader is
+shown "Nothing was published" for a day where a great deal was attempted. The
+producer refuses it at the moment it is written, which is the only moment a day
+is still wrong - a published day is frozen, and re-reading all of them costs
+more every day the pipeline runs (Guardrail #12).
 
 **Missing and Unreachable are two sentences and they never merge.** Telling a reader a day was never published when their train went into a tunnel is a lie they can check. What separates them is now the host's own answer: a 404 or a 410 for `digest/<Y>/<M>/<D>/digest.json` is the host saying it has no such day, and every other failure is the connection. [NotHere.svelte](../../../frontend/src/lib/components/NotHere.svelte) is the one copy of the Missing screen - the framework's error page renders it for a status it was handed, and a dated page renders it when the host says it has no such day, because a reader cannot tell those two apart and must not be told different things by them.
 

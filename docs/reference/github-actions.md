@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -198,6 +198,18 @@ configured filename. A shard that fails either one stops before it summarizes
 anything.
 
 Assemble runs even after a worker failure, then commits the digest and state.
+
+**A run that publishes nothing annotates the run summary.** `if: always()` buys
+the record of a bad day, and its cost is a stage that can decide nothing and
+still exit 0. On 2026-09-14 it did: every work shard refused at start-up, 80
+stories were planned, 80 were recorded `not_attempted`, an empty day was
+committed, and the only sentence naming the cause sat in a work-job log that
+expires - so the published archive kept the symptom for ever and the cause for
+ninety days. `stage_assemble` now prints
+`::error title=The run published nothing::` when a day planned stories and
+published none, naming the counts and sending the reader to the work jobs. It
+does not exit non-zero: failing there would skip the steps that commit the day,
+which is the invisibility `if: always()` exists to prevent.
 
 ```mermaid
 flowchart LR

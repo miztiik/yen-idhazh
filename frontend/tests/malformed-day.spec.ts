@@ -25,77 +25,128 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
  * test proving either alone would leave the other free to rot.
  *
  * Arm one runs the real command as a process and reads its exit code, over a
- * REAL committed day broken three ways. A day composed by hand drifts from the
- * one the pipeline writes, and a guard that only ever refuses proves nothing -
- * so the same command over the unbroken day has to come back clean.
+ * real pipeline-written day broken three ways. A day composed by hand drifts
+ * from the one the pipeline writes, and a guard that only ever refuses proves
+ * nothing - so the same command over the unbroken day has to come back clean.
  *
  * Arm two serves broken bytes to the shipped loader in a real browser, over a
  * real network interception, and prints what it intercepted. Its payloads are
  * small on purpose: the loader reads four names off a story and nothing else,
- * so a whole committed day here would be testing the fixture. A degraded arm
- * that intercepts nothing is a null result, not a pass.
+ * so a whole day here would be testing the fixture. A degraded arm that
+ * intercepts nothing is a null result, not a pass.
+ *
+ * **The day arm one breaks is the canary day, not a committed one** (2026-09-15).
+ * It used to take the newest day under `frontend/public/digest`, which is a walk
+ * over a collection every run appends to - banned by `CLAUDE.md` section 13 and
+ * Guardrail #12 - and it cost more than a rule: on 2026-09-14 the pipeline
+ * published an empty day, `items[items.length - 1]!` was `undefined`, and the
+ * `TypeError` fired while the module was loading and took all of arm one and all
+ * of arm two down with it. The canary day is written by the same contract models
+ * and the same producer, so the "a hand-composed day drifts" intent holds, and it
+ * is fixed in size.
+ *
+ * **What moved with it.** The third shape used to sit at the end of a day far
+ * longer than `ui.shell_seed_items`, so it also demonstrated that no document
+ * carried that story. The canary day is shorter than the seed, so that
+ * demonstration is gone and nothing on the canary tree can replace it - there is
+ * one hostile article per file under `tests/fixtures/canaries` and the day is as
+ * long as that list. What arm one still proves, and what was always the
+ * load-bearing half, is that `validate-days` projects EVERY story through the
+ * served contract and names that contract when one fails.
  */
 
 const REPO = path.resolve(process.cwd(), '..');
+const CANARY = path.join(REPO, 'backend', 'var', 'canary', 'digest');
 const scratch = path.join(process.cwd(), 'test-results', 'malformed-day');
 
-/** The newest committed day, as text, with the drawings that belong to it.
- * The tree is never empty - `backend/tests/test_contracts.py` asserts that on
- * its own. */
-function newestCommittedDay(): { date: string; text: string; drawings: string[] } {
-	const root = path.join(process.cwd(), 'public', 'digest');
+type Day = { date: string; text: string; assets: string[] };
+
+/** The canary day that carries stories, as text, with the files filed under them.
+ *
+ * The tree is fixed: `backend/utilities/build_canary_day.py` writes one day of
+ * stories and nineteen quiet ones, so reading it is a bounded read and not a
+ * growing one. The day is found rather than named because the builder owns the
+ * date, and a second copy of it here would be a constant that drifts
+ * (Guardrail #6). Exactly one day may carry stories - if that stops being true
+ * the builder changed shape, and this says so instead of picking one.
+ */
+function canaryDay(): Day {
+	if (!existsSync(CANARY)) {
+		throw new Error(
+			`no canary tree at ${CANARY}. Run \`python backend/utilities/build_canary_day.py\`, ` +
+				'which `npm run build:canary` does for the browser suite'
+		);
+	}
 	const dirs = (at: string): string[] =>
 		readdirSync(at, { withFileTypes: true })
 			.filter((entry) => entry.isDirectory())
 			.map((entry) => entry.name)
 			.sort();
-	const found: string[] = [];
-	for (const year of dirs(root)) {
-		for (const month of dirs(path.join(root, year))) {
-			for (const day of dirs(path.join(root, year, month))) {
-				const file = path.join(root, year, month, day, 'digest.json');
-				if (existsSync(file)) found.push(file);
+	const carrying: Day[] = [];
+	for (const year of dirs(CANARY)) {
+		for (const month of dirs(path.join(CANARY, year))) {
+			for (const day of dirs(path.join(CANARY, year, month))) {
+				const where = path.join(CANARY, year, month, day);
+				const file = path.join(where, 'digest.json');
+				if (!existsSync(file)) continue;
+				const text = readFileSync(file, 'utf8');
+				const items = (JSON.parse(text) as { items?: unknown[] }).items ?? [];
+				if (items.length === 0) continue;
+				carrying.push({
+					date: `${year}-${month}-${day}`,
+					text,
+					// Everything the day directory holds for its stories. `run.json`
+					// and `digest.json` belong to the day rather than to any story,
+					// which is the same line `render.write.assets_in_day` draws.
+					assets: readdirSync(where)
+						.filter((name) => name !== 'digest.json' && name !== 'run.json')
+						.map((name) => path.join(where, name))
+				});
 			}
 		}
 	}
-	expect(found.length, 'no committed day to break, so arm one proves nothing').toBeGreaterThan(0);
-	const file = found[found.length - 1]!;
-	const parts = file.split(path.sep);
-	const where = path.dirname(file);
-	return {
-		date: parts.slice(-4, -1).join('-'),
-		text: readFileSync(file, 'utf8'),
-		drawings: readdirSync(where)
-			.filter((name) => name.endsWith('.svg'))
-			.map((name) => path.join(where, name))
-	};
+	if (carrying.length !== 1) {
+		throw new Error(
+			`the canary tree holds ${carrying.length} days with stories, not 1, so arm one ` +
+				'cannot say which day it broke'
+		);
+	}
+	return carrying[0]!;
 }
-
-const COMMITTED = newestCommittedDay();
 
 /** The same day, with one thing wrong with it. */
-function broken(how: (day: Record<string, unknown>) => void): string {
-	const day = JSON.parse(COMMITTED.text) as Record<string, unknown>;
-	how(day);
-	return JSON.stringify(day);
+function broken(day: Day, how: (payload: Record<string, unknown>) => void): string {
+	const payload = JSON.parse(day.text) as Record<string, unknown>;
+	how(payload);
+	return JSON.stringify(payload);
 }
 
-/** Three ways a committed day is broken.
+/** A day that was never JSON. Shared by both arms, so it is not built from one. */
+const NOT_JSON = '{ this was never JSON';
+
+/** Three ways a published day is broken.
  *
- * The third is the one prerendering used to catch and no longer can: the story
- * is at the END of a day far longer than `ui.shell_seed_items`, so no document
- * carries it and no build ever opens it.
+ * The third is the one prerendering used to catch and no longer can: a story
+ * the day holds that the served contract refuses. The build opens the stories
+ * in the document's seed and no more, so past that seed this command is the
+ * only thing that opens them at all.
  */
-const BROKEN: Record<string, string> = {
-	notJson: '{ this was never JSON',
-	noItemList: broken((day) => {
-		day.items = null;
-	}),
-	oneStoryPastTheSeed: broken((day) => {
-		const items = day.items as Record<string, unknown>[];
-		items[items.length - 1]!.key_points = [];
-	})
-};
+function brokenShapes(day: Day): Record<string, string> {
+	const stories = (JSON.parse(day.text) as { items: unknown[] }).items;
+	if (stories.length < 2) {
+		throw new Error(`the canary day holds ${stories.length} stories, so breaking one proves little`);
+	}
+	return {
+		notJson: NOT_JSON,
+		noItemList: broken(day, (payload) => {
+			payload.items = null;
+		}),
+		oneStoryTheViewRefuses: broken(day, (payload) => {
+			const items = payload.items as Record<string, unknown>[];
+			items[items.length - 1]!.key_points = [];
+		})
+	};
+}
 
 /** Which python runs the command.
  *
@@ -117,23 +168,23 @@ function python(): string {
 	return 'python';
 }
 
-/** One committed day on disk, in the layout the command globs for.
+/** One day on disk, in the layout the command globs for.
  *
  * The day's pictures come with it. `validate-days` holds a payload against the
  * directory it sits in - two stories on one chart, a chart the payload names
  * and cannot find, a file no story claims - so a tree carrying the JSON and
- * none of the drawings is not a healthy day with parts missing, it is a broken
- * one, and the command is right to say so.
+ * none of the visual data is not a healthy day with parts missing, it is a
+ * broken one, and the command is right to say so.
  */
-function treeHolding(name: string, payload: string): string {
+function treeHolding(day: Day, name: string, payload: string): string {
 	const root = path.join(scratch, name, 'digest');
 	rmSync(path.join(scratch, name), { recursive: true, force: true });
-	const [year, month, day] = COMMITTED.date.split('-');
-	const where = path.join(root, year!, month!, day!);
+	const [year, month, date] = day.date.split('-');
+	const where = path.join(root, year!, month!, date!);
 	mkdirSync(where, { recursive: true });
 	writeFileSync(path.join(where, 'digest.json'), payload, 'utf8');
-	for (const drawing of COMMITTED.drawings) {
-		copyFileSync(drawing, path.join(where, path.basename(drawing)));
+	for (const asset of day.assets) {
+		copyFileSync(asset, path.join(where, path.basename(asset)));
 	}
 	return root;
 }
@@ -187,9 +238,9 @@ const PATTERN = `**${WANTED}`;
 
 /** What a browser is handed, for each way the day is broken. */
 const SERVED: Record<string, string> = {
-	notJson: BROKEN.notJson!,
+	notJson: NOT_JSON,
 	noItemList: JSON.stringify({ version: '2026-09-01T09:00', items: null }),
-	oneStoryPastTheSeed: JSON.stringify({
+	oneStoryTheViewRefuses: JSON.stringify({
 		version: '2026-09-01T09:00',
 		items: [story(1), { ...story(2), key_points: undefined }, story(3)]
 	})
@@ -199,14 +250,21 @@ test('a malformed day is refused before it merges, and survived if it arrives', 
 	page
 }) => {
 	// --- Arm one: the guard refuses it, and names the day and the contract.
+	//
+	// The fixture is read here rather than at module load. A fixture this arm
+	// cannot use has to fail this test with a sentence naming the builder, not
+	// throw while the file is loading and take arm two down with it - which is
+	// exactly what the committed-archive version did on 2026-09-14.
+	const day = canaryDay();
+	const shapes = brokenShapes(day);
 	const refused: Record<string, { code: number; said: string }> = {};
-	for (const [shape, payload] of Object.entries(BROKEN)) {
-		refused[shape] = validateDays(treeHolding(shape, payload));
+	for (const [shape, payload] of Object.entries(shapes)) {
+		refused[shape] = validateDays(treeHolding(day, shape, payload));
 	}
-	const healthy = validateDays(treeHolding('healthy', COMMITTED.text));
+	const healthy = validateDays(treeHolding(day, 'healthy', day.text));
 
 	console.log(
-		`[malformed-day] validate-days over ${COMMITTED.date}: ` +
+		`[malformed-day] validate-days over canary ${day.date}: ` +
 			Object.entries(refused)
 				.map(([shape, result]) => `${shape} exit ${result.code}`)
 				.join(', ') +
@@ -219,10 +277,10 @@ test('a malformed day is refused before it merges, and survived if it arrives', 
 	).toBe(0);
 	for (const [shape, result] of Object.entries(refused)) {
 		expect(result.code, `a ${shape} day was accepted`).toBe(1);
-		expect(result.said, `the ${shape} failure never named the day`).toContain(COMMITTED.date);
+		expect(result.said, `the ${shape} failure never named the day`).toContain(day.date);
 	}
 	expect(
-		refused.oneStoryPastTheSeed!.said,
+		refused.oneStoryTheViewRefuses!.said,
 		'the failure did not name the contract that refused it'
 	).toContain('digest-view.schema.json');
 
@@ -261,7 +319,7 @@ test('a malformed day is refused before it merges, and survived if it arrives', 
 			return { states, items: day === null ? null : day.items.length };
 		}, SERVED_DATE);
 
-		if (shape === 'oneStoryPastTheSeed') {
+		if (shape === 'oneStoryTheViewRefuses') {
 			// A day is not thrown away over one story it cannot draw (`CLAUDE.md`
 			// section 1a). The two it can draw are kept and the third is dropped.
 			expect(met.states, 'a day with one bad story was thrown away whole').toEqual([
