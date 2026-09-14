@@ -282,10 +282,8 @@ class ModelsConfig(Contract):
 
         The swap this refuses is five strings edited in place: repo, file,
         revision, digest and id, with the blocks underneath them untouched. That
-        used to raise nothing, and the run then stood a server up on numbers
-        derived for weights it never opened. It is not hypothetical - the
-        summarizer moved from the 8B to the 9B on 2026-08-27 and the settings
-        block did not move with it.
+        raises nothing on its own, and the run then stands a server up on numbers
+        derived for weights it never opened.
 
         **Two blocks, one rule, one loop.** `inference` and `turns` are both
         measurements about one model, so the check is the same for both and only

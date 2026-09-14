@@ -41,10 +41,10 @@ class TurnsConfig(Model):
     the turns SAY is `backend/idhazh/prompts/*.txt` and is the same set for
     every model (docs/architecture/summarize/model-boundary.md).
 
-    They sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,
-    which put a fact about somebody else's weights in a package this project
-    writes and held it apart from the entry that names those weights. A swap
-    then moved the entry and left the markers, and nothing raised: a wrong
+    They belong beside the entry that names the weights, not in this project's
+    prompt directory: a marker is a fact about somebody else's weights, and
+    holding it apart from the entry lets a model swap move one and leave the
+    other. Nothing raises when that happens - a wrong
     marker renders a prompt with no turn structure that the decoder's grammar
     still accepts - worse summaries and no error anywhere.
 
@@ -115,8 +115,7 @@ class TurnsConfig(Model):
             "The template variable that turns this model's reasoning on and off, sent "
             "as the one key of chat_template_kwargs. It is a name belonging to "
             "somebody else's Jinja template, so it is a model fact and not a project "
-            "constant - it was spelled in this project's source and sent to every "
-            "model until 2026-09-14. Null means this template reads no keywords at "
+            "constant. Null means this template reads no keywords at "
             "all, and then the request carries no chat_template_kwargs and "
             "inference.thinking must be false; ModelEntry refuses the pair."
         ),

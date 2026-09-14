@@ -922,7 +922,7 @@
     },
     "LengthPolicy": {
       "additionalProperties": false,
-      "description": "What the pipeline accepts, once the prompt has asked.\n\nThe ask lives on the band; this is the tolerance around it. Both are here\nrather than in `evaluation` because a length miss is not a quality finding -\nit is the model rounding a request - and the two were one pair of global\nintegers until 2026-09-09, which could not see which band an item was in.\n\nEvery number is a starting point rather than a measurement (Guardrail #10). Our\nown length figures describe a pipeline mid-repair - the prompt is being\ntuned and a fine-tune is in flight - so none of them was used to pick one.",
+      "description": "What the pipeline accepts, once the prompt has asked.\n\nThe ask lives on the band; this is the tolerance around it. Both are here\nrather than in `evaluation` because a length miss is not a quality finding -\nit is the model rounding a request - and a tolerance that cannot see which\nband an item is in cannot be right for more than one of them.\n\nEvery number is a starting point rather than a measurement (Guardrail #10). Our\nown length figures describe a pipeline mid-repair - the prompt is being\ntuned and a fine-tune is in flight - so none of them was used to pick one.",
       "properties": {
         "absolute_floor_words": {
           "default": 25,
@@ -1063,7 +1063,7 @@
             }
           ],
           "default": null,
-          "description": "Months after which the folded item-health month is removed outright. Null means never, and never is the default: the aggregate costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable, which Guardrail #10 then forbids citing at all. Set, it must sit ABOVE item_health_full_grain_months, or a month would be deleted before it was ever folded.",
+          "description": "Months after which the folded item-health month is removed outright. Null means never, and never is the default: the fold is a small fraction of the shard it summarises, and deleting it would make a year-over-year comparison unanswerable, which Guardrail #10 then forbids citing at all. Set, it must sit ABOVE item_health_full_grain_months, or a month would be deleted before it was ever folded.",
           "title": "Item Health Aggregate Keep Months"
         },
         "item_health_full_grain_months": {
@@ -1110,7 +1110,7 @@
         },
         "public_span_rollup_keep_months": {
           "default": 14,
-          "description": "How long frontend/public/span-rollup/ keeps a published shard. Fourteen on the same argument, and the record starts on 2026-09-06, so for its first year this knob deletes nothing at all.",
+          "description": "How long frontend/public/span-rollup/ keeps a published shard. Fourteen on the same argument as the item-health copy above.",
           "minimum": 1,
           "title": "Public Span Rollup Keep Months",
           "type": "integer"
@@ -1165,14 +1165,14 @@
         },
         "trace_window_days": {
           "default": 7,
-          "description": "How many days of raw span traces state/traces/ keeps. A trace is the evidence an operator opens to see one recent run step by step; the committed record is the span rollup, so a trace has a short life and a file past this window is deleted whole rather than folded - a fold would invent a total nobody reads. Seven days covers a week of runs. Measured at about 0.6 MB a run at the run.safety_ceiling_per_run item ceiling over the five scheduled runs a day (2026-09-06), so the window bounds state/traces/ at about 21 MB whatever the project's age - constant (Guardrail #12), and a fraction of the 1 GB Pages reference it is not even part of. It does nothing until observability.tracing_enabled is true: before that no trace is written and the prune walks an empty tree.",
+          "description": "How many days of raw span traces state/traces/ keeps. A trace is the evidence an operator opens to see one recent run step by step; the committed record is the span rollup, so a trace has a short life and a file past this window is deleted whole rather than folded - a fold would invent a total nobody reads. Seven days covers a week of runs, and the window is what keeps state/traces/ a constant size whatever the project's age rather than one that grows with it (Guardrail #12). It does nothing until observability.tracing_enabled is true: before that no trace is written and the prune walks an empty tree.",
           "minimum": 1,
           "title": "Trace Window Days",
           "type": "integer"
         },
         "tracing_enabled": {
           "default": true,
-          "description": "Whether a work shard builds a span tree. On by default (2026-09-06): a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
+          "description": "Whether a work shard builds a span tree. On by default: a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
           "title": "Tracing Enabled",
           "type": "boolean"
         },
@@ -1212,13 +1212,13 @@
     },
     "PageWeightConfig": {
       "additionalProperties": false,
-      "description": "A gzip-size guardrail per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Guardrail #6).\n\n**A number may live here only if it does not have to move when a run\npublishes.** That is the test, and on 2026-09-10 four of the six keys failed\nit and were deleted: `/archive/` and the three `/console/` routes. Their\nweight rises when the pipeline appends a day, so the number had to rise too,\nand the only way past a firing was to type a bigger one - `/archive/` was\nraised twice in one day on 2026-08-26 and then removed. The same instrument\nfailed the other way at the same time: `/console/` stood at 7.2 times the\npage it bounded for four days and nothing went red, because a number too\nloose is as green as a number too tight. A check that cannot tell correct\nfrom far-too-loose is not an instrument, and no value of the constant fixes\nthat. Owner ruling, 2026-09-10.\n\n**What replaced them asserts the property instead of a proxy for it.** The\none regression this surface has ever had is a layout inlining a day payload -\n313,300 gzipped bytes on 2026-08-26 - and that is a yes-or-no fact about a\ndocument rather than a size with a middle value to threshold.\n`frontend/tests/payload-weight.spec.ts` looks for a day-payload marker in\nevery document that does not render a day. It has no number in it, so it\nreturns the same verdict whatever the archive holds.\n\n**`/404` and `/evals/` stay, and they pass the test rather than being spared\nit.** They move only when a person edits source. A number that changes at\nreview speed is a design statement; a number that changes at publish speed is\nthe defect above.\n\nA page that renders a day never took a number at all, for the neighbouring\nreason: the only way under one is to publish fewer items, which caps the news\nrather than catching a regression. `/` and `/<date>/` are counted, reported\nand never failed.\n\n**Every number here is gzip -5, because that is what the reader pays.**\nMeasured 2026-09-10 against the live Pages origin: it served `/console/` in\n46,917 bytes where a local gzip -5 makes 46,787 and a gzip -9 makes 45,077,\nand `/archive/` in 5,760 where -5 makes 5,755. So -5 lands within 0.3 pct of\nthe wire on a document and -9 understates it by 3.9 pct. On a large CSV -5 is\n2.2 pct low rather than high (168,438 served against 164,742), which is the\none place these numbers flatter the payload rather than the page.\n\n**A document is capped and a payload is capped, and they are different\njobs.** A document number catches a page that took on bytes it does not\nrender. A payload number catches a file a browser fetches growing past what\nsomebody priced, which no document number can see because the bytes are not\nin the document at all - that is exactly what moving the console's telemetry\nout of its HTML did. The payload numbers all survive the test above, and not\nby luck: each is derived from a bounded knob rather than chosen, so publishing\nmore cannot move one. `console/band.json` is bounded by\n`observability.public_*_keep_months`, and `telemetry/` by the longest month\nat the heaviest day ever run.",
+      "description": "A gzip-size guardrail per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Guardrail #6).\n\n**A number may live here only if it does not have to move when a run\npublishes.** A weight that rises when the pipeline appends a day cannot be\nbounded by a constant: the only way past a firing is to type a bigger one,\nand a number too loose reads as green exactly like a number that is right.\nA route whose weight moves at publish speed takes no number here, and the\nproperty it stood in for is asserted directly instead -\n`frontend/tests/payload-weight.spec.ts` looks for a day-payload marker in\nevery document that does not render a day, so it returns the same verdict\nwhatever the archive holds.\n\nA route that takes a number moves only when a person edits source. A number\nthat changes at review speed is a design statement; a number that changes at\npublish speed is the defect above. A page that renders a day is never named,\nfor the neighbouring reason: the only way under such a number is to publish\nfewer items, which caps the news rather than catching a regression. Those\npages are counted, reported and never failed.\n\n**Every number here is gzip -5, because that is what the reader pays.** The\nreading behind that choice is in\n`docs/reference/measurements-site.md`.\n\n**A document is capped and a payload is capped, and they are different\njobs.** A document number catches a page that took on bytes it does not\nrender. A payload number catches a file a browser fetches growing past what\nsomebody priced, which no document number can see because the bytes are not\nin the document at all. Every payload number survives the test above by\nconstruction rather than by luck: each is derived from a bounded knob, so\npublishing more cannot move one. `console/band.json` is bounded by\n`observability.public_*_keep_months`, and `telemetry/` by the longest month\nat the heaviest day a run can produce.",
       "properties": {
         "ceilings_bytes": {
           "additionalProperties": {
             "type": "integer"
           },
-          "description": "Route class -> the largest gzip -5 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Guardrail #6). A route the object does not name is measured and reported by the gate but not failed. **A route may be named here only if its weight does not move when a run publishes** - /archive/ and the three /console/ routes were deleted on 2026-09-10 for failing that test, and the property they stood in for is asserted directly by frontend/tests/payload-weight.spec.ts (owner, 2026-09-10). A page that renders a day is never named, because the only way under such a number is to publish less.",
+          "description": "Route class -> the largest gzip -5 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Guardrail #6). A route the object does not name is measured and reported by the gate but not failed. **A route may be named here only if its weight does not move when a run publishes** - a weight that rises as the pipeline appends a day cannot be bounded by a constant, and the property is asserted directly by frontend/tests/payload-weight.spec.ts instead. A page that renders a day is never named, because the only way under such a number is to publish less.",
           "title": "Ceilings Bytes",
           "type": "object"
         },
@@ -1233,7 +1233,7 @@
           "additionalProperties": {
             "type": "integer"
           },
-          "description": "Build-relative POSIX path -> the largest gzip -5 size a file a reader's browser fetches may reach. A key naming a file bounds that file; a key ending in / bounds every file under that directory, each on its own, so a month series takes one number rather than one a month. Empty by default for the same reason as ceilings_bytes: config/idhazh.json is the single source and the gate reads the file. A key that matches no file in the build fails the gate - a guardrail over nothing still reads as a bound somebody checked. Each number is a guardrail on the same rule the routes follow: at least twice the heaviest the file can realistically reach, so only a change of a different order fires it (owner, 2026-09-10).",
+          "description": "Build-relative POSIX path -> the largest gzip -5 size a file a reader's browser fetches may reach. A key naming a file bounds that file; a key ending in / bounds every file under that directory, each on its own, so a month series takes one number rather than one a month. Empty by default for the same reason as ceilings_bytes: config/idhazh.json is the single source and the gate reads the file. A key that matches no file in the build fails the gate - a guardrail over nothing still reads as a bound somebody checked. Each number is a guardrail on the same rule the routes follow: at least twice the heaviest the file can realistically reach, so only a change of a different order fires it.",
           "title": "Payload Ceilings Bytes",
           "type": "object"
         }
@@ -1400,7 +1400,7 @@
     },
     "SummarizeConfig": {
       "additionalProperties": false,
-      "description": "What the prompt asks the model for, and what the pipeline accepts back.\n\nA prompt is a request and a gate is a rule. Asking for a tighter range than\nwe accept is what stops a two-word miss from losing a story, so the ask\n(`bands`) and the tolerance around it (`length_policy`) both live here,\nwhere an operator editing one can see the other.\n\nUntil 2026-09-09 the tolerance was two integers in `evaluation` that applied\nto all five rungs at once and could not see which band an item was in, and a\nreply outside them deleted the item from that day's digest with no second\nlook. Both defects are gone: the allowance is derived from the band, and no\nlength outcome except `length_policy.absolute_floor_words` drops an item.\n\nEvery band and title number here is substituted into the prompt text at\nrender time, so the prompt cannot drift from the bounds the pipeline enforces\n(Guardrail #6). `key_point_restatement_ceiling` is the one value that is not asked\nfor: it is a post-parse check `to_summary` runs on what the model returned,\nand it lives here because the count it protects - the band's key_points_min -\ndoes too.",
+      "description": "What the prompt asks the model for, and what the pipeline accepts back.\n\nA prompt is a request and a gate is a rule. Asking for a tighter range than\nwe accept is what stops a two-word miss from losing a story, so the ask\n(`bands`) and the tolerance around it (`length_policy`) both live here,\nwhere an operator editing one can see the other.\n\nThe allowance is derived from the band rather than applied flat to all five\nrungs, so it can see which band an item is in. No length outcome except\n`length_policy.absolute_floor_words` drops an item: a reply outside the\ntolerance is still a story, and deleting it would cost the day a story to\npunish the model for rounding.\n\nEvery band and title number here is substituted into the prompt text at\nrender time, so the prompt cannot drift from the bounds the pipeline enforces\n(Guardrail #6). `key_point_restatement_ceiling` is the one value that is not asked\nfor: it is a post-parse check `to_summary` runs on what the model returned,\nand it lives here because the count it protects - the band's key_points_min -\ndoes too.",
       "properties": {
         "bands": {
           "description": "One length ask per article size, ordered by min_source_words. A release note and a long read asked for the same range gives a padded summary of the first and a thin one of the second.",
@@ -1413,7 +1413,7 @@
         },
         "key_point_restatement_ceiling": {
           "default": 0.5,
-          "description": "Above this share of a key point's four-word phrases already appearing in the summary, `to_summary` drops the key point as a restatement and keeps the item with the rest. A distinctness floor, not a word ban: only the overlap ratio counts, never a single shared word, so a key point may reuse the summary's words and still add a fact. A starting point, not a calibrated threshold (Guardrail #10): measured 2026-09-07 on the one well-formed reply fixture, its three distinct key points score 0.00, 0.11 and 0.14 while a verbatim slice of the summary scores 1.00, so 0.5 sits in the wide gap between a new fact and a copy. The drop never removes the last key point - the payload requires one - so a reply whose every key point restates still publishes with the least-restating up to the band's key_points_min.",
+          "description": "Above this share of a key point's four-word phrases already appearing in the summary, `to_summary` drops the key point as a restatement and keeps the item with the rest. A distinctness floor, not a word ban: only the overlap ratio counts, never a single shared word, so a key point may reuse the summary's words and still add a fact. A starting point, not a calibrated threshold (Guardrail #10): it sits in the wide gap between a key point that adds a fact and one that is a verbatim slice of the summary. The drop never removes the last key point - the payload requires one - so a reply whose every key point restates still publishes with the least-restating up to the band's key_points_min.",
           "exclusiveMinimum": 0.0,
           "maximum": 1.0,
           "title": "Key Point Restatement Ceiling",
@@ -1421,7 +1421,7 @@
         },
         "key_point_words_max": {
           "default": 80,
-          "description": "Longest key point the decoder will emit, spent as a character rail at 12 characters a word the same way the title and the summary are. There was no rail here at all until the two-call planner needed one: with an unbounded string in the reply shape, the worst-case reply length is not arithmetic, and a budget derived from bounds that do not exist is a guess with a table next to it. Deliberately above anything observed rather than tight to it - a maxLength is a hard grammar stop that truncates mid-word, so a rail set at the observed maximum turns a slightly long key point into a parse failure for the whole item. Measured 2026-09-10 over the 32,353 key points in the committed digest days: the longest is 66 words and 418 characters and the mean is 16.7 words, so this sits at 1.2 times the longest one the pipeline has ever published and its character rail at 2.3 times.",
+          "description": "Longest key point the decoder will emit, spent as a character rail at 12 characters a word the same way the title and the summary are. There was no rail here at all until the two-call planner needed one: with an unbounded string in the reply shape, the worst-case reply length is not arithmetic, and a budget derived from bounds that do not exist is a guess with a table next to it. Deliberately above anything observed rather than tight to it - a maxLength is a hard grammar stop that truncates mid-word, so a rail set at the observed maximum turns a slightly long key point into a parse failure for the whole item. It sits well above the longest key point the pipeline has published, so only a reply of a different order reaches it.",
           "minimum": 1,
           "title": "Key Point Words Max",
           "type": "integer"
@@ -1876,6 +1876,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Prose only. No field was added, removed or retyped, and no default moved, so every config/idhazh.json that validated before this still validates and no read-side migration is owed. What changed is the `description` text on several blocks, which pydantic lifts from the class docstring and the Field description into the generated schema: page_weight, observability, summarize, turns and models drop the dated incidents, the inline readings and the decision provenance they were carrying. The rule each one states is unchanged.",
+      "version": "2026-09-14T22:30",
+      "why": "Guardrail #10 says a rule carries its reason, never its evidence - the reason is a clause that stays true, the evidence is a reading and lives in the instrument log. These descriptions are published in schemas/app-config.schema.json, so a measurement inlined here is a second copy of one docs/reference/ already holds (Guardrail #4), and it is the copy nobody re-takes when the subject changes. An operator reading a knob wants the rule, not the post-mortem of the run that produced it."
+    },
     {
       "change": "Added assemble.group_identical_titles, default true. The same-story pass gains a second way into a group: two items whose published headlines say the same thing are one story, beside the cosine it already used. The words must match exactly and the numbers to the coarser of the two precisions written. Additive with a default, so an older config/idhazh.json still validates and no read-side migration is owed. assemble.duplicate_similarity_min is untouched at 0.94.",
       "version": "2026-09-14T12:40",
@@ -2589,7 +2594,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-14T12:40",
+      "default": "2026-09-14T22:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2600,5 +2605,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-14T12:40"
+  "version": "2026-09-14T22:30"
 }
