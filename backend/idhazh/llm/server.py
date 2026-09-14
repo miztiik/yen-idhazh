@@ -26,17 +26,17 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from string import Template
-from typing import Any, Final
+from typing import IO, Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
-from idhazh.contracts.app_config import InferenceConfig, ModelRef, TurnsConfig
+from idhazh.contracts.app_config import InferenceConfig, ModelEntry, ModelRef, TurnsConfig
 
 # One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
 # read it here: the argv the server binds with, and the address the stage posts
@@ -64,6 +64,15 @@ DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"
 # turn constrained decoding off for every item at once.
 _COMPLETION_PATH: Final = "/completions"
 DEFAULT_COMPLETION_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_COMPLETION_PATH}"
+
+# The four read-only routes the start-up probe asks, beside the one it posts
+# completions to. Paths rather than addresses, because every one of them is
+# derived from whichever endpoint the caller was given - one server answers all
+# five or the probe is reconciling two different processes.
+_PROPS_PATH: Final = "/props"
+_APPLY_TEMPLATE_PATH: Final = "/apply-template"
+_TOKENIZE_PATH: Final = "/tokenize"
+_MODELS_PATH: Final = "/v1/models"
 
 #: The reply stopped because it ran out of budget. llama-server's own word for
 #: it on the rendered-completion route, where the chat route says `length`.
@@ -533,24 +542,39 @@ def post(
         return parse_completion(response.read().decode("utf-8"))
 
 
-def props_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
-    """The `/props` address on the server a chat-completions endpoint names.
+def _sibling(endpoint: str, path: str) -> str:
+    """Another route on the same server an endpoint names.
 
     Derived rather than configured, so a caller that points the run at another
     port cannot ask one server for a template and another for an answer.
     """
     parts = urlsplit(endpoint)
-    return urlunsplit((parts.scheme, parts.netloc, "/props", "", ""))
+    return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
+
+
+def props_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+    """The `/props` address on the server a chat-completions endpoint names."""
+    return _sibling(endpoint, _PROPS_PATH)
 
 
 def completion_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
-    """The rendered-completion address on the server an endpoint names.
+    """The rendered-completion address on the server an endpoint names."""
+    return _sibling(endpoint, _COMPLETION_PATH)
 
-    Derived from a sibling address for the same reason `props_url` is: a run
-    pointed at another port asks one server for everything.
-    """
-    parts = urlsplit(endpoint)
-    return urlunsplit((parts.scheme, parts.netloc, _COMPLETION_PATH, "", ""))
+
+def apply_template_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+    """Where the server renders a conversation with the model's own chat template."""
+    return _sibling(endpoint, _APPLY_TEMPLATE_PATH)
+
+
+def tokenize_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+    """Where the server turns a string into the token ids it would really read."""
+    return _sibling(endpoint, _TOKENIZE_PATH)
+
+
+def models_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+    """Where the server describes the model it loaded, including its trained window."""
+    return _sibling(endpoint, _MODELS_PATH)
 
 
 def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]:
@@ -572,3 +596,426 @@ def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]
     except (OSError, ValueError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+# --- The five things the server proves before the first item ----------------
+#
+# The entry CLAIMS how a turn opens and closes, which architecture the weights
+# are, and how big a window they were trained for. Until this block existed
+# nothing checked any of it against the running server: a wrong marker renders a
+# prompt with no turn structure that the grammar still accepts, so the only
+# symptom was worse summaries and nothing went red.
+#
+# **None of the five has a skip flag, and an unread proof refuses.** The proof is
+# what paid for declaring the envelope in config at all; a skip returns the tree
+# to worse-summaries-and-no-error with extra ceremony. A refusal costs one step
+# where the failure it prevents costs a day of summaries filed under a model
+# nobody reconciled.
+#
+# Cost, on a stock ubuntu-latest (Guardrail #2): one template render, two
+# tokenisations, two completions of at most PROBE_OUTPUT_TOKENS tokens each, one
+# model list, and a few kilobytes read off the front of the weights file. It runs
+# once per server rather than once per run, because a shard starts its own.
+
+
+#: The two turns the probe renders. Short and about nothing: what is being
+#: reconciled is the SHAPE of the render, so the content only has to be stable.
+PROBE_SYSTEM: Final = "You are a probe."
+PROBE_USER: Final = "Answer with the one word this shape allows."
+#: The turn the second probe call adds, so its prompt is the first one plus what
+#: came back plus one more turn - the exact shape a real item's two calls take.
+PROBE_FOLLOW_UP: Final = "Answer once more."
+#: The only value the constrained-decoding arm's schema admits.
+PROBE_ANSWER: Final = "probe"
+#: The decode budget for one probe call. Not a tunable: the grammar admits
+#: exactly one short document, so this is a ceiling on a shape that cannot vary,
+#: and raising it would only lengthen a refusal (Guardrail #6).
+PROBE_OUTPUT_TOKENS: Final = 32
+
+#: A GGUF opens with these four bytes, then its key-value block.
+_GGUF_MAGIC: Final = b"GGUF"
+_GGUF_ARCHITECTURE_KEY: Final = "general.architecture"
+_GGUF_STRING: Final = 8
+_GGUF_ARRAY: Final = 9
+#: Every other value type, and how many bytes it occupies. uint8, int8, uint16,
+#: int16, uint32, int32, float32, bool, uint64, int64, float64 in that order.
+_GGUF_FIXED_WIDTHS: Final = {0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8}
+#: How far into the header the architecture may sit before we give up. A GGUF
+#: writes general.* first and a model carries a few hundred keys, so this is a
+#: ceiling on a malformed file rather than a limit anybody meets.
+_GGUF_KEY_CEILING: Final = 4096
+
+
+class ProbeRefusedError(RuntimeError):
+    """One of the five start-up proofs did not hold, so no item runs.
+
+    The message names both sides - what the entry declared and what the server
+    or the weights reported - because a refusal that names only one of them
+    sends the reader to the wrong file.
+    """
+
+
+def _head(ids: Sequence[int]) -> str:
+    shown = list(ids[:8])
+    return f"{shown}..." if len(ids) > len(shown) else str(shown)
+
+
+def _first_difference(ours: Sequence[int], theirs: Sequence[int]) -> int:
+    for index, (mine, yours) in enumerate(zip(ours, theirs, strict=False)):
+        if mine != yours:
+            return index
+    return min(len(ours), len(theirs))
+
+
+def the_render_agrees(*, ours: Sequence[int], theirs: Sequence[int]) -> None:
+    """Arm 1. Our rendered prompt is the prompt the model's own template renders.
+
+    **Token ids, not bytes.** A chat template's output may open with the model's
+    own sequence token, and the runtime inserts that token again when it reads a
+    prompt string - so a byte comparison would push the entry to declare a
+    marker the runtime then doubles. Comparing ids lets the server's list carry
+    one leading token ours does not, and nothing else: a second difference, or a
+    difference anywhere but the head, is the envelope disagreeing.
+
+    The committed fixture's token ids are invented, so the test proves the
+    comparison rule and the config-derived prompt only; tokenizer agreement is
+    proved solely by this probe running against a server with weights.
+    """
+    lead = len(theirs) - len(ours)
+    if 0 <= lead <= 1 and list(theirs)[lead:] == list(ours):
+        return
+    raise ProbeRefusedError(
+        "the turn envelope does not render what this server's own chat template "
+        f"renders: the entry renders {len(ours)} tokens {_head(ours)} and the server "
+        f"renders {len(theirs)} tokens {_head(theirs)}, first difference at index "
+        f"{_first_difference(ours, theirs)}. Re-record models.summarize.turns off this "
+        "server rather than editing them by hand"
+    )
+
+
+def the_prefix_cache_is_live(*, first: Completion, second: Completion) -> None:
+    """Arm 2. The second call read the first call's prompt out of the slot.
+
+    The second probe's prompt IS the first one plus the reply plus one turn, so
+    every token the first call prefilled is a prefix of it. A reused count below
+    that is the prefix being re-read: a llama.cpp build that flipped the
+    prompt-cache default, a seam that re-splits, a leading-token mismatch, or a
+    slot lost to parallelism. Each doubles prefill on every item, and none of
+    them writes a line anywhere.
+    """
+    if first.prompt_tokens > 0 and second.cached_tokens >= first.prompt_tokens:
+        return
+    raise ProbeRefusedError(
+        "the prompt cache is not holding the prefix: the first probe prefilled "
+        f"{first.prompt_tokens} tokens and the second probe reused "
+        f"{second.cached_tokens} of them. Every item would pay full prefill twice"
+    )
+
+
+def one_document_schema(
+    output_schema: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """A schema exactly one document satisfies, and that document.
+
+    Built from the schema this run really sends, at call time, never from a
+    fixture: the real schema is generated from a model, so a committed copy
+    would be a second answer that drifts out of sync in silence (Guardrail #3).
+    What is borrowed is the field the real reply is keyed on, so the probe asks
+    the grammar for the same shape of thing the run asks it for.
+    """
+    required = [name for name in (output_schema.get("required") or []) if isinstance(name, str)]
+    field = required[0] if required else "answer"
+    schema = {
+        "type": "object",
+        "properties": {field: {"type": "string", "const": PROBE_ANSWER}},
+        "required": [field],
+        "additionalProperties": False,
+    }
+    return schema, {field: PROBE_ANSWER}
+
+
+def decoding_still_constrains(*, reply: str, only: Mapping[str, Any]) -> None:
+    """Arm 3. The grammar is still as narrow as the schema that built it.
+
+    One call under a schema exactly one document satisfies. A reply that is
+    anything else means the schema-to-grammar converter dropped a feature, so
+    the decoder is looser than the shape every item is held to - and nothing
+    else in the pipeline can see that, because a looser grammar still accepts
+    every good reply.
+    """
+    wanted = json.dumps(dict(only), sort_keys=True)
+    try:
+        got = json.loads(reply)
+    except json.JSONDecodeError:
+        got = None
+    if got == dict(only):
+        return
+    raise ProbeRefusedError(
+        "the decoder is not held to the schema it was given: the only document the "
+        f"grammar admits is {wanted}, and the server returned {reply!r}. Constrained "
+        "decoding is the control that survives an injection, so a run may not start "
+        "without it"
+    )
+
+
+def the_weights_are_the_declared_ones(*, declared: str, reported: str) -> None:
+    """Arm 4. The file the server opened is the architecture the entry names.
+
+    Beside the filename assertion `digest.yml` already makes, which says which
+    file. This says what that file is. A repackaged GGUF under a familiar name
+    is the one case where the alias, the path and the digest all agree with a
+    config somebody edited, and only the words get worse.
+    """
+    if declared == reported:
+        return
+    raise ProbeRefusedError(
+        f"the weights declare architecture {reported!r} and models.summarize declares "
+        f"{declared!r}. One of the two is wrong, and a run started on the pair files "
+        "every summary under a model that never produced it"
+    )
+
+
+def the_window_is_inside_the_trained_window(*, n_ctx: int, trained: int) -> None:
+    """Arm 5. The configured window is one the model was actually trained for.
+
+    `--no-context-shift` refuses a prompt past `n_ctx`. It never refuses one
+    past the length the weights were trained at, so a candidate with a short
+    native window under a larger `n_ctx` degrades quietly rather than raising. A
+    conservative default is not an assertion, so this is one.
+    """
+    if trained <= 0:
+        raise ProbeRefusedError(
+            "the server reports no trained context length for the model it loaded, so "
+            f"the configured window of {n_ctx} cannot be checked against it. An "
+            "unread proof is not a proof"
+        )
+    if n_ctx > trained:
+        raise ProbeRefusedError(
+            f"models.summarize.inference.n_ctx is {n_ctx} and the weights were trained "
+            f"for {trained}. The server will not refuse a prompt in between, so every "
+            "item past the trained length would degrade with nothing red"
+        )
+
+
+def trained_context(model_list: Mapping[str, Any]) -> int:
+    """`n_ctx_train` off the model list the server publishes. Zero when unreadable."""
+    entries = model_list.get("data")
+    if not isinstance(entries, list) or not entries:
+        return 0
+    first = entries[0]
+    meta = first.get("meta") if isinstance(first, dict) else None
+    if not isinstance(meta, dict):
+        return 0
+    try:
+        return int(meta.get("n_ctx_train") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _gguf_unsigned(stream: IO[bytes], width: int) -> int:
+    raw = stream.read(width)
+    if len(raw) != width:
+        raise ValueError("the weights file ends inside its own header")
+    return int.from_bytes(raw, "little", signed=False)
+
+
+def _gguf_string_value(stream: IO[bytes]) -> str:
+    length = _gguf_unsigned(stream, 8)
+    raw = stream.read(length)
+    if len(raw) != length:
+        raise ValueError("the weights file ends inside a header string")
+    return raw.decode("utf-8", errors="replace")
+
+
+def _gguf_skip_value(stream: IO[bytes], kind: int) -> None:
+    if kind == _GGUF_STRING:
+        _gguf_string_value(stream)
+        return
+    if kind == _GGUF_ARRAY:
+        inner = _gguf_unsigned(stream, 4)
+        for _ in range(_gguf_unsigned(stream, 8)):
+            _gguf_skip_value(stream, inner)
+        return
+    width = _GGUF_FIXED_WIDTHS.get(kind)
+    if width is None:
+        raise ValueError(f"the weights file header uses value type {kind}, which is not GGUF")
+    stream.seek(width, 1)
+
+
+def gguf_architecture(weights: Path) -> str:
+    """The architecture name written inside the weights file.
+
+    The header only: a GGUF opens with its key-value block, so this reads a few
+    kilobytes off the front of a five-gigabyte file and stops at the key it came
+    for. The cost does not follow the model's size (Guardrail #12).
+
+    **It is read here because the server does not publish it.** `/props` names
+    the path, the alias, the file type, the build and the window; `/v1/models`
+    adds the vocabulary, the embedding width, the parameter count and the
+    trained window. Neither carries an architecture on the pinned build, so the
+    fact is read where it is written, from the file the server was pointed at.
+    """
+    try:
+        with weights.open("rb") as stream:
+            if stream.read(4) != _GGUF_MAGIC:
+                raise ValueError("the weights file does not open with a GGUF header")
+            _gguf_unsigned(stream, 4)
+            _gguf_unsigned(stream, 8)
+            pairs = min(_gguf_unsigned(stream, 8), _GGUF_KEY_CEILING)
+            for _ in range(pairs):
+                key = _gguf_string_value(stream)
+                kind = _gguf_unsigned(stream, 4)
+                if key != _GGUF_ARCHITECTURE_KEY:
+                    _gguf_skip_value(stream, kind)
+                    continue
+                if kind != _GGUF_STRING:
+                    raise ValueError("the architecture key in this file is not a string")
+                return _gguf_string_value(stream)
+    except (OSError, ValueError) as unreadable:
+        raise ProbeRefusedError(
+            f"the weights at {weights.as_posix()} do not say which architecture they "
+            f"are: {unreadable}. An unread proof is not a proof"
+        ) from unreadable
+    raise ProbeRefusedError(
+        f"the weights at {weights.as_posix()} declare no {_GGUF_ARCHITECTURE_KEY}, so "
+        "nothing can be compared against models.summarize.arch"
+    )
+
+
+def _ask(url: str, payload: Mapping[str, Any] | None, *, timeout: float) -> Any:
+    """One probe request. A server that will not answer refuses the run.
+
+    Unlike `props`, which records an absence and lets the stage carry on. What
+    is being asked here is whether the entry is true, and an unanswered question
+    is not a yes.
+    """
+    outbound = (
+        request.Request(url, method="GET")
+        if payload is None
+        else request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+    )
+    try:
+        with request.urlopen(outbound, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError) as unreachable:
+        raise ProbeRefusedError(
+            f"the server did not answer {url}, so what the entry claims cannot be "
+            f"checked: {unreachable}. None of the five start-up proofs has a skip flag"
+        ) from unreachable
+
+
+def _rendered_by_the_server(endpoint: str, *, thinking: bool, timeout: float) -> str:
+    body = _ask(
+        apply_template_url(endpoint),
+        {
+            "messages": [
+                {"role": "system", "content": PROBE_SYSTEM},
+                {"role": "user", "content": PROBE_USER},
+            ],
+            "chat_template_kwargs": {"enable_thinking": thinking},
+        },
+        timeout=timeout,
+    )
+    prompt = body.get("prompt") if isinstance(body, Mapping) else None
+    if not isinstance(prompt, str) or not prompt:
+        raise ProbeRefusedError(
+            "the server rendered no prompt for the probe conversation, so the turn "
+            "envelope has nothing to be reconciled against"
+        )
+    return prompt
+
+
+def _token_ids(endpoint: str, text: str, *, timeout: float) -> list[int]:
+    """What the server would really read. `add_special` off on both strings.
+
+    Both sides are tokenised the same way, so a sequence token the template
+    wrote into its own output arrives as one id on that side and is absent from
+    ours - which is the single leading difference arm 1 allows. Leaving
+    `add_special` on would put one on both and hide a real disagreement.
+    """
+    body = _ask(
+        tokenize_url(endpoint), {"content": text, "add_special": False}, timeout=timeout
+    )
+    tokens = body.get("tokens") if isinstance(body, Mapping) else None
+    if not isinstance(tokens, list) or not tokens:
+        raise ProbeRefusedError(
+            "the server tokenised nothing, so the render cannot be compared as tokens"
+        )
+    try:
+        return [int(token) for token in tokens]
+    except (TypeError, ValueError) as unreadable:
+        raise ProbeRefusedError(
+            f"the server returned token pieces rather than ids: {unreadable}"
+        ) from unreadable
+
+
+def prove_the_entry(
+    *,
+    model: ModelEntry,
+    weights: Path,
+    output_schema: Mapping[str, Any],
+    endpoint: str = DEFAULT_ENDPOINT,
+    timeout: float,
+) -> None:
+    """Turn the entry's claims into facts, or refuse the run.
+
+    Five arms, in cost order: the two that cost a render and a tokenisation
+    first, then the two completions, then the file read and the model list. The
+    first refusal stops the rest, because a server whose render disagrees has
+    nothing useful to say about its own cache.
+
+    `output_schema` is handed in rather than imported. The schema this run sends
+    is built in `idhazh.classify.calls`, which imports this module, so taking it
+    as an argument is what keeps the model layer at the bottom of the graph
+    (`CLAUDE.md` section 4) - and it means the probe is held to whatever shape
+    the caller really uses rather than to a copy of it.
+    """
+    inference = model.inference
+    ours = render_prompt(
+        system=PROBE_SYSTEM, user=PROBE_USER, thinking=inference.thinking, turns=model.turns
+    )
+    theirs = _rendered_by_the_server(endpoint, thinking=inference.thinking, timeout=timeout)
+    the_render_agrees(
+        ours=_token_ids(endpoint, ours, timeout=timeout),
+        theirs=_token_ids(endpoint, theirs, timeout=timeout),
+    )
+
+    schema, only = one_document_schema(output_schema)
+    address = completion_url(endpoint)
+    first_payload = completion_payload(
+        model_id=model.id,
+        system=PROBE_SYSTEM,
+        user=PROBE_USER,
+        output_schema=schema,
+        inference=inference,
+        turns=model.turns,
+        max_output_tokens=PROBE_OUTPUT_TOKENS,
+    )
+    first = post(first_payload, endpoint=address, timeout=timeout)
+    decoding_still_constrains(reply=first.content, only=only)
+    second = post(
+        continued_completion_payload(
+            first_payload,
+            reply=first.content,
+            user=PROBE_FOLLOW_UP,
+            output_schema=schema,
+            turns=model.turns,
+            max_output_tokens=PROBE_OUTPUT_TOKENS,
+        ),
+        endpoint=address,
+        timeout=timeout,
+    )
+    the_prefix_cache_is_live(first=first, second=second)
+
+    the_weights_are_the_declared_ones(
+        declared=model.arch, reported=gguf_architecture(weights)
+    )
+    the_window_is_inside_the_trained_window(
+        n_ctx=inference.n_ctx,
+        trained=trained_context(_ask(models_url(endpoint), None, timeout=timeout)),
+    )
