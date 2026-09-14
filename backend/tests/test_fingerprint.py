@@ -29,11 +29,11 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR
 
+from idhazh import config
 from idhazh.classify import calls
 from idhazh.contracts.app_config import (
-    AppConfig,
     InferenceConfig,
     ModelEntry,
     ModelRef,
@@ -415,14 +415,14 @@ def test_an_unmeasured_weights_digest_raises_rather_than_stamping_zeros(
         stamp_with(unmeasured)
 
 
-@pytest.mark.parametrize("role", sorted(ModelsConfig.model_fields))
+@pytest.mark.parametrize("role", ModelsConfig.roles())
 def test_the_committed_config_records_a_measured_digest_for_every_model(role: str) -> None:
     """An expectation the run has to meet, and the CI gate checks the bytes against it.
 
     Driven off the roles the contract declares rather than a list here, so a
     role that arrives or retires cannot leave this check naming the other set.
     """
-    models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
+    models = config.load(CONFIG_DIR).models
     recorded = getattr(models, role).sha256
     assert recorded is not None, f"config records no sha256 for models.{role}"
     assert recorded != PLACEHOLDER_DIGEST, f"models.{role} carries the placeholder"

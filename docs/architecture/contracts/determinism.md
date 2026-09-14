@@ -68,7 +68,7 @@ Every field is read from the thing it describes, not from a literal beside the c
 
 | Field | Read from | When that source is silent |
 | --- | --- | --- |
-| `model_sha256` | `models.summarize.sha256` in config, which is not yet the observation the contract asks for - see the gap below | Raises. A run without a recorded weights digest stops rather than stamping one that validates and says nothing. |
+| `model_sha256` | `models.summarize.sha256` in the active model file, which is not yet the observation the contract asks for - see the gap below | Raises. A run without a recorded weights digest stops rather than stamping one that validates and says nothing. |
 | `runtime_build` | `LLAMA_CPP_BUILD`, set by `digest.yml` beside the download it checks against a recorded sha256 | `build-not-recorded`. It is not a llama.cpp release tag and cannot be read as one. |
 | `chat_template_sha256` | the Jinja source `llama-server` returns from `GET /props` - the template it will apply to every request | a digest of `chat-template-not-recorded`. |
 | `runner_class` | `RUNNER_ENVIRONMENT` / `RUNNER_OS` / `RUNNER_ARCH` | `local/<system>/<machine>` from `platform`. A machine that publishes none of the three is a developer machine and says so. |

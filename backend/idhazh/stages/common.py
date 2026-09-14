@@ -367,8 +367,8 @@ def _one_call(
     article: Article, settings: config.Settings, *, endpoint: str
 ) -> tuple[Summary, Completion | None, float]:
     """One live inference call, timed, with the reply kept for the gates."""
-    inference = settings.app.models.summarize.inference
-    model_id = settings.app.models.summarize.id
+    inference = settings.models.summarize.inference
+    model_id = settings.models.summarize.id
     payload = summarize.build_request(
         article,
         model_id=model_id,

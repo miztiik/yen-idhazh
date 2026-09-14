@@ -502,6 +502,24 @@ SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 
+#: The top-level `config/idhazh.json` keys this file used to carry. `models`
+#: held the whole active model inline, so a swap edited eleven lines in the file
+#: every other knob lives in. It is a file of its own now and `models_file`
+#: names which one, so the old block is refused by name rather than lifted: a
+#: lift would read one model out of the shared file while `models_file` named
+#: another, and the run would stand a server up on whichever won.
+SUPERSEDED_APP_NAMES: Final[Mapping[str, str]] = MappingProxyType({"models": "models_file"})
+
+
+#: Where the active model's whole entry lives, relative to `config/`. Pinned to
+#: one directory and to `.json` by the schema rather than checked in the loader:
+#: the value is an operator's edit that becomes a path this build opens, so the
+#: grammar is what rules out a traversal, an absolute path and a Windows
+#: separator (CLAUDE.md section 2).
+MODELS_FILE_PATTERN: Final = r"^models/[a-z0-9]+(?:[.-][a-z0-9]+)*\.json$"
+ModelsFile = Annotated[str, StringConstraints(pattern=MODELS_FILE_PATTERN)]
+
+
 #: The `finetune` roles this block used to carry. `student` named the small
 #: model plan 11 row #6 retired, and re-pointing it at `summarize` would make
 #: the teacher and the student one model - a session that trains a model on its
@@ -1033,19 +1051,69 @@ _RERECORD_THE_MARKERS: Final = (
 )
 
 
-class ModelsConfig(Model):
-    """One entry per role, and each entry carries the settings it runs on.
+class ModelsConfig(Contract):
+    """`config/models/<name>.json` - one whole model, in one file of its own.
 
-    There is no block shared between the entries. A role is a model family
-    served by its own llama-server process, and one block over two roles is a
-    measurement about one of them quietly applied to the other.
+    One entry per role, and each entry carries the settings it runs on. There is
+    no block shared between the entries. A role is a model family served by its
+    own llama-server process, and one block over two roles is a measurement
+    about one of them quietly applied to the other.
 
     One role is left. Plan 11 row #6 retired the small visual planner: the two
     calls the work stage now makes per item run on these weights, so the picture
     is decided by the same model that wrote the summary.
+
+    It is a file rather than a block of `config/idhazh.json` because everything
+    in it is a fact about one set of weights - the repository, the digest, the
+    window they were measured in, the markers their server renders. Held in the
+    shared file, a swap is an edit across every one of those lines and a revert
+    is the same edit backwards, with the previous model's numbers gone. Held
+    here, the incumbent and the candidate are two committed files and the swap
+    is `models_file` in `config/idhazh.json`.
     """
 
+    __schema_stem__: ClassVar[str] = "models-config"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14",
+            change=(
+                "Initial shape, lifted whole out of app-config.models with no field "
+                "renamed, retyped or given a different default. It is the same "
+                "ModelsConfig, now a document of its own under config/models/, and it "
+                "carries a version date-stamp because a persisted document does. "
+                "app-config.models is gone in the same commit and app-config.models_file "
+                "names which of these files is active."
+            ),
+            why=(
+                "Plan 28 row #6. Swapping the summarizer has to cost no source edit, and "
+                "it used to cost eleven lines edited in place in the one file every "
+                "other knob lives in - so a revert had to reconstruct the previous "
+                "model's measured numbers from git rather than read them off disk. One "
+                "file per model makes both directions a pointer, and puts the numbers "
+                "that were measured for a set of weights in the same file that names "
+                "them. Ruled by Fowler, 2026-09-14."
+            ),
+        ),
+    )
+
     summarize: ModelEntry
+
+    @classmethod
+    def roles(cls) -> tuple[str, ...]:
+        """The roles this document declares, in name order.
+
+        Not `model_fields`. A persisted document carries a `version` stamp of
+        its own, so the field list stopped being the role list on the day this
+        shape became a file - and a caller that read it as one would offer
+        `version` as a model an operator could name.
+        """
+        return tuple(
+            sorted(
+                name
+                for name, field in cls.model_fields.items()
+                if field.annotation is ModelEntry
+            )
+        )
 
     @model_validator(mode="before")
     @classmethod
@@ -1072,7 +1140,7 @@ class ModelsConfig(Model):
         The stamp already refuses to run on one: `idhazh.fingerprint.build_inputs`
         stops when the weights have no recorded digest.
         """
-        for role in sorted(type(self).model_fields):
+        for role in type(self).roles():
             entry: ModelEntry = getattr(self, role)
             for block, declared, repair in (
                 ("inference", entry.inference.declared_for, _REDERIVE_THE_NUMBERS),
@@ -3802,6 +3870,32 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14",
+            change=(
+                "models is gone and models_file replaces it. The block held the whole "
+                "active model inline; the same shape is now the models-config document "
+                "under config/models/, and models_file names which of those files is "
+                "read. This is a contract break and the read-side migration ships with "
+                "it: a config that still carries models is refused by name through "
+                "refuse_a_removed_knob rather than through 'extra inputs are not "
+                "permitted'. Refused rather than lifted, because a lift would read one "
+                "model out of the old block while models_file named another file, and "
+                "the run would stand a server up on whichever won. models_file defaults "
+                "to the committed file, so a fresh clone still runs unconfigured, and "
+                "its grammar pins it to config/models/ and to .json - the value is an "
+                "operator's edit that becomes a path this build opens."
+            ),
+            why=(
+                "Plan 28 row #6. Swapping the summarizer had to cost no source edit and "
+                "did not: it cost eleven lines edited in place in the file every other "
+                "knob lives in, and a revert had to reconstruct the previous model's "
+                "measured numbers out of git rather than read them off disk. One file "
+                "per model makes the swap and the revert the same one-line edit, and "
+                "puts the numbers measured for a set of weights in the file that names "
+                "them. Ruled by Fowler, 2026-09-14."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T23:55",
             change=(
                 "models.<role>.turns is new, required, and has no default. It carries "
@@ -6384,7 +6478,18 @@ class AppConfig(Contract):
     collect: CollectConfig = Field(default_factory=CollectConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     elements: ElementsConfig = Field(default_factory=ElementsConfig)
-    models: ModelsConfig
+    models_file: ModelsFile = Field(
+        default="models/qwen3.5-9b-q4km.json",
+        description=(
+            "Which file under config/models/ holds the active model. The whole swap: "
+            "every fact about a set of weights - the repository, the digest, the window "
+            "they were measured in, the markers their server renders - lives in the "
+            "file this names, so pointing at another committed file swaps the model and "
+            "pointing back reverts it, with the previous model's measured numbers still "
+            "on disk rather than in git history. It carries a default naming the "
+            "committed file so a fresh clone runs unconfigured (Guardrail #6)."
+        ),
+    )
     summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
@@ -6400,6 +6505,18 @@ class AppConfig(Contract):
     reference_dataset: ReferenceDatasetConfig = Field(default_factory=ReferenceDatasetConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_removed_top_level_block_is_refused_by_name(cls, data: Any) -> Any:
+        """`models` left this file on 2026-09-14 and is answered by name.
+
+        The read-side migration `CLAUDE.md` section 11 owes for the removal. A
+        config that still carries the block would otherwise fail with "extra
+        inputs are not permitted", which does not tell an operator that their
+        eleven lines are now a file and a pointer.
+        """
+        return refuse_a_removed_knob("config", data, SUPERSEDED_APP_NAMES)
 
     @model_validator(mode="after")
     def _the_ladder_and_the_extract_floor_agree(self) -> Self:
@@ -6433,7 +6550,7 @@ class AppConfig(Contract):
         difference matters to whoever is reading the failure: they did not
         misspell a key, the model is gone.
         """
-        roles = set(ModelsConfig.model_fields)
+        roles = set(ModelsConfig.roles())
         named = self.finetune.teacher
         if named in SUPERSEDED_MODELS_NAMES:
             raise ValueError(

@@ -151,48 +151,7 @@
   "logging": {
     "level": "INFO"
   },
-  "models": {
-    "summarize": {
-      "file": "Qwen3.5-9B-Q4_K_M.gguf",
-      "hf_base_repo": "Qwen/Qwen3.5-9B",
-      "id": "qwen3-5-9b-q4-k-m",
-      "inference": {
-        "cache_type_k": null,
-        "cache_type_v": null,
-        "declared_for": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
-        "flash_attention": "on",
-        "load_mode": null,
-        "log_verbosity": 4,
-        "max_output_tokens": 900,
-        "metrics": true,
-        "n_batch": 512,
-        "n_ctx": 49152,
-        "n_parallel": 1,
-        "n_threads": 4,
-        "n_threads_batch": null,
-        "n_ubatch": 512,
-        "poll": null,
-        "priority": null,
-        "request_timeout_minutes": 22.1,
-        "seed": 0,
-        "startup_warmup": true,
-        "temperature": 0.0,
-        "thinking": false,
-        "top_p": 1.0
-      },
-      "quantisation": "Q4_K_M",
-      "repo": "unsloth/Qwen3.5-9B-GGUF",
-      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
-      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
-      "turns": {
-        "declared_for": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
-        "reply_opening": "<|im_start|>assistant\n<think>\n\n</think>\n\n",
-        "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
-        "turn_closing": "<|im_end|>\n",
-        "turn_opening": "<|im_start|>$role\n"
-      }
-    }
-  },
+  "models_file": "models/qwen3.5-9b-q4km.json",
   "observability": {
     "cost_currency": "USD",
     "cost_input_per_million": 0.2,

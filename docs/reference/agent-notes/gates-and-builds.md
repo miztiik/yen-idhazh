@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
@@ -62,7 +62,7 @@ git grep -n '"--<your flag>"' -- backend
 
 **The opposite rule applies to `tests/fixtures/contracts/`, where the model IS the right writer.** `test_fixture_round_trips_byte_identically` demands the file bytes equal `to_json`, and the serializer sorts keys, so one new field on a nested model breaks every fixture carrying it - four at once on 2026-09-02. Re-serialise through `BY_STEM[<folder>].from_json(text).to_json` rather than editing by hand.
 
-**The one `app-config` fixture asks for a second thing, and its name is the only place that says so.** `every-knob-differs-from-the-committed-config.json` holds a value the committed `config/idhazh.json` does not, knob by knob, so a reader that ignored the file and fell back to a default would fail rather than pass. Re-serialising a new field into it therefore is not enough: it arrives carrying the default, which is exactly the value the fixture exists not to hold. Set it to something else first, then re-serialise. Observed 2026-09-10 adding `summarize.key_point_words_max`.
+**A fixture named `every-knob-differs-from-the-committed-config.json` asks for a second thing, and its name is the only place that says so.** There is one under `app-config` and one under `models-config`, and each holds a value the committed file does not, knob by knob, so a reader that ignored the file and fell back to a default would fail rather than pass. Re-serialising a new field into one therefore is not enough: it arrives carrying the default, which is exactly the value the fixture exists not to hold. Set it to something else first, then re-serialise. Observed 2026-09-10 adding `summarize.key_point_words_max`.
 
 **An argparse option in `backend/utilities/` may not be spelled like a llama-server flag.** `test_summarize.test_exactly_one_function_spells_a_llama_server_flag` globs `backend/**/*.py` for any quoted flag `server_argv` emits and compares the file set by equality, so `parser.add_argument("--port", ...)` puts your tool in that set and fails a test about the inference server. `--server-port` passes, because the guard searches for the literal `"--port"` including its quotes. Observed 2026-09-10.
 
@@ -127,6 +127,8 @@ node node_modules\playwright\cli.js test tests/<the spec>.spec.ts --reporter=lis
 That needs the canary already built, and it does not re-check the build fingerprint, so build the canary first if anything under `backend/` or `config/` moved.
 
 **Killing a queued build under the lock leaves the tree unservable.** The waiter and the build it wraps are one process tree, so the kill can land after `vite build` has cleared `.svelte-kit/output/` - `vite preview` then reports `Server files not found` on a checkout that built cleanly minutes earlier, while `frontend/build/` is still there and still looks complete. The fix is one more `npm run build`.
+
+**Do not run the whole backend suite inside `gate_lock.py`.** `backend/tests/test_gate_lock.py` spawns five workers and asserts all five overlap; running the suite under the lock puts that test in a queue behind itself. Even unlocked it is load-sensitive: on 2026-09-14 it reported `assert 4 == 5` with four intervals recorded, and passed on three consecutive retries with nothing changed. **The tell is a count one short of `WORKERS` and no other failure in the suite.** Retry it on its own with `-n 0` before believing it.
 
 `os.kill(pid, 0)` is not a liveness probe on Windows: CPython routes every signal but the two console events to `TerminateProcess`, so the textbook probe can kill the process it was only asking about. `OpenProcess` alone is not enough either - it still opens a handle for an exited process while anything holds one - so only the wait separates them, 258 (`WAIT_TIMEOUT`) running against 0 exited.
 

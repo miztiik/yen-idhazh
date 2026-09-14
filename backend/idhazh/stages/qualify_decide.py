@@ -45,7 +45,7 @@ def stage_qualify_decide(
         shards,
         evaluation=evaluation,
         summarize=settings.app.summarize,
-        inference=settings.app.models.summarize.inference,
+        inference=settings.models.summarize.inference,
         run=settings.app.run,
         budget_=qualify.Budget(
             job_budget_minutes=job_budget_minutes,
@@ -99,7 +99,7 @@ def stage_qualify_decide(
             ValidationRow(
                 version=ValidationRow.schema_version(),
                 model_id=report.candidate.model_id,
-                is_incumbent=report.candidate.model_id == settings.app.models.summarize.id,
+                is_incumbent=report.candidate.model_id == settings.models.summarize.id,
                 selected=report.qualified,
                 leaderboard_hhem=None,
                 leaderboard_provenance=LeaderboardProvenance.NOT_REPORTED,

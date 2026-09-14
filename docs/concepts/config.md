@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -33,7 +33,25 @@ Knobs, by the surface they tune:
 
 These are the *surfaces*, not a field list. The field-level truth is `schemas/app-config.schema.json`, generated from the model - read it there rather than restating it here, because a list copied into prose is a list that goes stale.
 
-The knobs are spread across five files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+The knobs are spread across six files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/models/<name>.json` for everything that is a fact about one set of weights, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+
+## `config/models/<name>.json` - one file per model, and a pointer
+
+Everything that is a fact about one set of weights lives in one file of its own: the repository, the revision, the digest, the window and threads they were measured in, and the turn markers their server renders. `config/idhazh.json` carries `models_file` and nothing else about the model.
+
+**The swap is that one line, and so is the revert.** Point `models_file` at another committed file and the run opens another model; point it back and the incumbent's measured numbers are still on disk rather than in git history. Before 2026-09-14 a swap was eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's numbers out of a diff.
+
+`models_file` is spelled relative to `config/` and its grammar pins it to `config/models/` and to `.json`, because the value is an operator's edit that becomes a path this build opens (`CLAUDE.md` section 2). It ships a default naming the committed file, so a fresh clone still runs unconfigured.
+
+**`config/idhazh.json` still carrying a `models` block is refused by name**, and refused rather than lifted onto the new file: a lift would read one model out of the old block while `models_file` named another file, and the run would stand a server up on whichever won.
+
+**Both files travel with the run.** `Settings.digests` records the pointer file and the model file it names, because the pointer moving and the file it points at being re-tuned are two different edits and a record that held only one of them could not tell them apart.
+
+### Design rationale
+
+The alternative was to leave the block where it was and make the swap a careful multi-line edit with a checklist. It was rejected because the checklist is the failure: the summarizer moved from the 8B to the 9B on 2026-08-27 and the settings block did not move with it, which is the incident the `declared_for` rule below exists for. A rule that catches a half-done edit is worth having; not needing the edit is worth more.
+
+The second alternative was one file holding every model, keyed by name, with the pointer naming a key rather than a file. It was rejected because a candidate is then an edit to a file the incumbent is also in, so a bad candidate can break the model that is running - and because two models in one file is exactly the shape that let one measured `inference` block be applied to weights it was never measured on. Ruled by Fowler, 2026-09-14.
 
 ## `config/appearance.json` - the published surface's own file
 
@@ -101,7 +119,7 @@ One cross-block rule is worth naming because it is the one that bites in product
 
 Two knobs in that block decide what a chart's axis and its readout look like, and both exist because a number written into a component is a number nobody can move. **`chart.tick_density` is the most date labels an x axis may carry** - a ceiling and never a target, because the axis then measures those labels against the room the plot actually has and drops more of them until none touch. So a month of columns gets six dates on a desktop rather than one span string, three on a phone rather than six overlapping ones, and a column whose date was dropped keeps its tick mark. **`chart.readout_max_share` is the widest the readout strip under a plot may be, as a share of that plot** - 0.33, bounded above 0 and at or below 1. The strip sits below the plot, so no value here can cover a mark; the cap is what stops it becoming a paragraph. The floating box it replaced was measured on 2026-08-29 at 88 to 121px over a 220px plot, which is 40 to 55 percent of the chart it was explaining.
 
-Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml`, `measure.yml` and `validate.yml` each read `models.summarize` from here and republish it as job outputs, including into the weights cache key ([../reference/github-actions.md](../reference/github-actions.md)).
+Every knob ships a sane default, `models_file` included. The values with no default are the model references themselves, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml`, `measure.yml` and `validate.yml` each follow `models_file` to the active model file, read `summarize` out of it, and republish it as job outputs, including into the weights cache key ([../reference/github-actions.md](../reference/github-actions.md)).
 
 **Six spellings were retired on 2026-09-13, and a file still carrying one is
 refused by name.** Plan 11 row #6 deleted `models.visual_planner`,
@@ -127,7 +145,12 @@ workflow step reading the raw JSON, or resolving a `models` key by attribute
 name, sees the file and not the model - so `digest.yml`, `measure.yml` and
 `.github/scripts/start-llama-server.sh` move with the key rather than relying on
 the contract. Retiring a key without moving those readers breaks the next
-scheduled run.
+scheduled run. The same applies to the pointer: those readers follow
+`models_file` to the model's own file rather than naming that file, so a swap
+stays one line for them too, and
+`backend/tests/test_workflows.py::test_every_config_key_a_workflow_indexes_is_in_the_committed_config`
+resolves each key path against whichever of the two documents the step really
+opened.
 
 Extraction has three shape and access control groups:
 
@@ -470,7 +493,7 @@ the run finished with 6.8 times the bar
 
 Until 2026-09-09 there was one `models.inference` block and both roles were
 served on it. Editing `models.summarize` to name a different repository, file,
-revision and digest raised nothing at all: `AppConfig.model_validate` accepted
+revision and digest raised nothing at all: `ModelsConfig` accepted
 it, `llama-server` started on the old numbers, and the run published a whole
 plausible day. **It is not hypothetical.** The summarizer moved from the 8B to
 the 9B on 2026-08-27 and the block did not move with it, and the 4B visual
@@ -543,12 +566,16 @@ Digesting it would have moved the stamp on a swap that `model_sha256` already
 moves.
 
 **The qualification path declares the pairing out loud instead of inheriting
-it.** `validate.yml` builds a scratch config whose `models.summarize` is the
-candidate and whose every other control is the committed one, which is what makes
-it an experiment rather than a second pipeline. It now copies the incumbent's
-block onto the candidate entry and sets `declared_for` to the candidate's digest:
-that run is what puts those numbers in front of those weights, and `context_fit`
-is the gate that says whether they held.
+it.** `validate.yml` copies `config/` to a scratch directory and rewrites the
+model file the pointer names, so the candidate's entry is the candidate and
+every other control is the committed one - which is what makes it an experiment
+rather than a second pipeline. The pointer itself is left alone, so a candidate
+is qualified through the same one line a swap would later move. Both of the
+incumbent's declared blocks travel onto the candidate entry and both
+`declared_for` values become the candidate's digest: that run is what puts those
+numbers in front of those weights, and `context_fit` is the gate that says
+whether they held. `turns` has no default, so a candidate built without it is a
+config that cannot load.
 
 #### Rejected alternatives
 

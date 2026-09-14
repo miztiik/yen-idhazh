@@ -99,8 +99,11 @@ jobs:
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import pathlib
 
-          models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
+          config = json.load(open("config/idhazh.json", encoding="utf-8"))
+          models_file = pathlib.Path("config") / config["models_file"]
+          models = json.load(open(models_file, encoding="utf-8"))
           refs = []
           for role in ("summarize",):
               for field in ("repo", "revision", "file"):
@@ -364,7 +367,7 @@ jobs:
       - name: Verify the weights
         run: |
           set -euo pipefail
-          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["sha256"] or "")')
+          EXPECTED=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
           if [ -z "$EXPECTED" ]; then
             echo "config records no sha256 for models.summarize" >&2
             exit 1
@@ -437,7 +440,7 @@ jobs:
           from pathlib import Path
 
           from idhazh import config
-          from idhazh.contracts.app_config import AppConfig
+          from idhazh.contracts.app_config import ModelsConfig
           from idhazh.llm.server import server_argv
 
           CANDIDATE = os.environ["RUNTIME_CANDIDATE"]
@@ -486,10 +489,13 @@ jobs:
               if dst.exists():
                   shutil.rmtree(dst)
               shutil.copytree("config", dst)
-              path = dst / "idhazh.json"
+              pointer = json.loads(
+                  (dst / "idhazh.json").read_text(encoding="utf-8")
+              )["models_file"]
+              path = dst / pointer
               payload = json.loads(path.read_text(encoding="utf-8"))
-              payload["models"]["summarize"]["inference"].update(update)
-              path.write_text(AppConfig.model_validate(payload).to_json(), encoding="utf-8")
+              payload["summarize"]["inference"].update(update)
+              path.write_text(ModelsConfig.model_validate(payload).to_json(), encoding="utf-8")
               return dst
 
           def read_status(pid):
@@ -582,8 +588,8 @@ jobs:
               argv = server_argv(
                   binary=Path("backend/bin/llama-server"),
                   weights=Path("backend/models") / MODEL_FILE,
-                  model=settings.app.models.summarize,
-                  inference=settings.app.models.summarize.inference,
+                  model=settings.models.summarize,
+                  inference=settings.models.summarize.inference,
                   port=SERVER_PORT,
               )
               env = os.environ.copy()
@@ -858,11 +864,12 @@ jobs:
         # reading follows it.
         run: |
           set -euo pipefail
+          MODELS_FILE="config/$(jq -er '.models_file' config/idhazh.json)"
           for key in n_ctx n_batch n_ubatch n_threads; do
-            value=$(jq -er ".models.summarize.inference.${key}" config/idhazh.json)
+            value=$(jq -er ".summarize.inference.${key}" "$MODELS_FILE")
             case "$value" in
               ''|*[!0-9]*)
-                echo "config/idhazh.json models.summarize.inference.${key} must be a positive integer, got '${value}'" >&2
+                echo "${MODELS_FILE} summarize.inference.${key} must be a positive integer, got '${value}'" >&2
                 exit 2
                 ;;
             esac
@@ -891,7 +898,7 @@ jobs:
       - name: Verify the weights
         run: |
           set -euo pipefail
-          EXPECTED=$(python3 -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["sha256"] or "")')
+          EXPECTED=$(python3 -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
           if [ -z "$EXPECTED" ]; then
             echo "config records no sha256 for models.summarize" >&2
             exit 1

@@ -21,8 +21,8 @@ from conftest import (
     refill_recorded,
 )
 
-from idhazh import corpus, summarize
-from idhazh.contracts.app_config import AppConfig, FinetuneConfig
+from idhazh import config, corpus, summarize
+from idhazh.contracts.app_config import AppConfig, FinetuneConfig, ModelsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
@@ -38,6 +38,11 @@ def contract_fixture(stem: str, name: str) -> str:
 @pytest.fixture
 def app() -> AppConfig:
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+
+
+@pytest.fixture
+def models() -> ModelsConfig:
+    return config.load(CONFIG_DIR).models
 
 
 @pytest.fixture
@@ -79,7 +84,7 @@ def row_at(date: str, key: str, vertical: str = "ai") -> CorpusRow:
 
 
 def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
-    app: AppConfig, article: Article
+    app: AppConfig, models: ModelsConfig, article: Article
 ) -> None:
     """The whole point of the module, asserted directly rather than by token diff.
 
@@ -91,8 +96,8 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
     """
     request = summarize.build_request(
         article,
-        model_id=app.models.summarize.id,
-        inference=app.models.summarize.inference,
+        model_id=models.summarize.id,
+        inference=models.summarize.inference,
         prompt_config=app.summarize,
     )
     harvested = corpus.harvest_rows(

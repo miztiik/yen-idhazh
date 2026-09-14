@@ -24,7 +24,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR
 
 from idhazh import config, summarize
-from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.app_config import ModelsConfig
 from idhazh.contracts.article import Article
 from idhazh.llm.server import Completion
 from idhazh.sanitize import untrusted_block
@@ -55,8 +55,8 @@ RECORDED_TWO: Final = Completion(
 )
 
 
-def loaded_app() -> AppConfig:
-    return config.load(CONFIG_DIR).app
+def loaded_models() -> ModelsConfig:
+    return config.load(CONFIG_DIR).models
 
 
 @pytest.mark.parametrize(
@@ -318,18 +318,18 @@ def test_a_turn_whose_first_line_is_not_a_title_keeps_its_first_paragraph() -> N
     assert kept == body
 
 
-def declaring(app: AppConfig, digest: str) -> AppConfig:
-    """The same config, declaring a different set of summarizer weights.
+def declaring(models: ModelsConfig, digest: str) -> ModelsConfig:
+    """The same model file, declaring a different set of summarizer weights.
 
     All three cells move, because `ModelsConfig` refuses a block whose
     `declared_for` is not its own entry's `sha256` - which is exactly why the
     tool has to hash the bytes on disk rather than reading any of them.
     """
-    raw: dict[str, Any] = app.model_dump(mode="json")
-    raw["models"]["summarize"]["sha256"] = digest
-    raw["models"]["summarize"]["inference"]["declared_for"] = digest
-    raw["models"]["summarize"]["turns"]["declared_for"] = digest
-    return AppConfig.model_validate(raw)
+    raw: dict[str, Any] = models.model_dump(mode="json")
+    raw["summarize"]["sha256"] = digest
+    raw["summarize"]["inference"]["declared_for"] = digest
+    raw["summarize"]["turns"]["declared_for"] = digest
+    return ModelsConfig.model_validate(raw)
 
 
 def test_the_harness_accepts_the_weights_config_declares(tmp_path: Path) -> None:
@@ -337,7 +337,7 @@ def test_the_harness_accepts_the_weights_config_declares(tmp_path: Path) -> None
     weights = tmp_path / "declared.gguf"
     weights.write_bytes(b"GGUF the config names")
     digest = hashlib.sha256(weights.read_bytes()).hexdigest()
-    assert refuse_undeclared_weights(weights, declaring(loaded_app(), digest)) == digest
+    assert refuse_undeclared_weights(weights, declaring(loaded_models(), digest)) == digest
 
 
 def test_the_harness_refuses_weights_config_does_not_declare(tmp_path: Path) -> None:
@@ -347,10 +347,10 @@ def test_the_harness_refuses_weights_config_does_not_declare(tmp_path: Path) -> 
     model without anybody noticing: the tool read the inference block from
     config and the weights from the command line, and never compared them.
     """
-    app = loaded_app()
+    models = loaded_models()
     impostor = tmp_path / "not-the-weights.gguf"
     impostor.write_bytes(b"GGUF, but not the right ones")
     with pytest.raises(WrongWeightsError) as refusal:
-        refuse_undeclared_weights(impostor, app)
-    assert str(app.models.summarize.inference.declared_for) in str(refusal.value)
+        refuse_undeclared_weights(impostor, models)
+    assert str(models.summarize.inference.declared_for) in str(refusal.value)
     assert hashlib.sha256(impostor.read_bytes()).hexdigest() in str(refusal.value)

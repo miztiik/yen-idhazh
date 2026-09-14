@@ -1,0 +1,43 @@
+{
+  "summarize": {
+    "file": "Qwen3-8B-Q4_K_M.gguf",
+    "hf_base_repo": null,
+    "id": "qwen3-8b-q4-k-m",
+    "inference": {
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "declared_for": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+      "flash_attention": "off",
+      "load_mode": null,
+      "log_verbosity": 9,
+      "max_output_tokens": 320,
+      "metrics": true,
+      "n_batch": 256,
+      "n_ctx": 4096,
+      "n_parallel": null,
+      "n_threads": 2,
+      "n_threads_batch": null,
+      "n_ubatch": 256,
+      "poll": null,
+      "priority": null,
+      "request_timeout_minutes": 22.1,
+      "seed": 0,
+      "startup_warmup": true,
+      "temperature": 0.0,
+      "thinking": false,
+      "top_p": 1.0
+    },
+    "quantisation": "Q4_K_M",
+    "repo": "Qwen/Qwen3-8B-GGUF",
+    "revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
+    "sha256": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+    "turns": {
+      "declared_for": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+      "reply_opening": "<|start_header_id|>assistant<|end_header_id|>\n\n",
+      "reply_opening_thinking": "<|start_header_id|>assistant<|end_header_id|>\n\n<think>\n",
+      "turn_closing": "<|eot_id|>",
+      "turn_opening": "<|start_header_id|>${role}<|end_header_id|>\n\n"
+    }
+  },
+  "version": "2026-09-14"
+}

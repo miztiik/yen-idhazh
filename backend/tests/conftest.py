@@ -310,7 +310,7 @@ def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> Ele
 
 
 def call_one_payload(article: Article) -> dict[str, Any]:
-    entry = config.load(CONFIG_DIR).app.models.summarize
+    entry = config.load(CONFIG_DIR).models.summarize
     return build_call_one_request(
         article,
         a_table(article),

@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-14
 
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
@@ -54,7 +54,7 @@ A number from another build is a separate measurement.
 **The weights.**
 
 Every URL names a commit rather than a branch. A branch hands back whatever was
-uploaded last, so a download from one is not the file `config/idhazh.json`
+uploaded last, so a download from one is not the file the active model file
 records the SHA-256 of. The commit below is `models.summarize.revision` in that
 file - copy it from there rather than from
 here, because there it is the value the pipeline itself fetches.
@@ -132,12 +132,12 @@ from idhazh import config
 from idhazh.llm.server import server_argv
 
 settings = config.load(Path("config"))
-model = settings.app.models.summarize
+model = settings.models.summarize
 print(" ".join(server_argv(
  binary=Path("backend/bin/llama-server"),
  weights=Path("backend/models") / model.file,
  model=model,
- inference=settings.app.models.summarize.inference,
+ inference=model.inference,
 )))
 PY
 ```
@@ -377,8 +377,8 @@ gh workflow run measure.yml \
  -f threads='4,8'
 ```
 
-Leave `models` out and the job measures both models `config/idhazh.json` names,
-at the commits it pins. The input exists for a model config does not name, which
+Leave `models` out and the job measures the model `config/` names, at the commit
+it pins. The input exists for a model config does not name, which
 is what this harness is for; nothing in the workflow file names a model itself.
 
 The LLM job downloads only that model, runs both thread counts and uploads

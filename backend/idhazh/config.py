@@ -6,7 +6,10 @@ a startup failure with a readable message rather than a strange result four
 hundred seconds into a run.
 
 The digests of the files that were read travel with the run, because a knob
-edited between two runs changes every output and is otherwise invisible.
+edited between two runs changes every output and is otherwise invisible. The
+active model's file is one of them: it is named by `models_file` rather than
+fixed, so a run that did not record it could not say which model's numbers it
+read.
 """
 
 from __future__ import annotations
@@ -16,7 +19,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.app_config import AppConfig, months_a_window_can_touch
+from pydantic import ValidationError
+
+from idhazh.contracts.app_config import AppConfig, ModelsConfig, months_a_window_can_touch
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
@@ -41,11 +46,22 @@ _APPEARANCE_FILE: Final = "appearance.json"
 RETIRED_TURN_MARKERS: Final = Path(__file__).parent / "prompts" / "turn_markers.json"
 
 
+def models_path(config_dir: Path, app: AppConfig) -> Path:
+    """Where the active model is, following the pointer and nothing else.
+
+    One function so that a test, an operator utility and the loader all resolve
+    it the same way. The grammar on `AppConfig.models_file` is what keeps this
+    inside `config/models/`, so this joins rather than checks.
+    """
+    return config_dir / app.models_file
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Every tunable the run will consult, already validated."""
 
     app: AppConfig
+    models: ModelsConfig
     appearance: AppearanceConfig
     sources: Sources
     taxonomy: Taxonomy
@@ -58,11 +74,20 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     if RETIRED_TURN_MARKERS.exists():
         raise ValueError(
             f"{RETIRED_TURN_MARKERS.name} is back in backend/idhazh/prompts/ and nothing "
-            "reads it. The turn envelope is models.<role>.turns in config/idhazh.json, "
-            "pinned to the weights by declared_for - delete this file and edit the entry"
+            "reads it. The turn envelope is models.<role>.turns in the file "
+            "config/idhazh.json points models_file at, pinned to the weights by "
+            "declared_for - delete this file and edit the entry"
         )
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
+    read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")
+    try:
+        models = ModelsConfig.from_json(read[app.models_file])
+    except ValidationError as error:
+        # Which file, named in the first line. Every model has a file of its own
+        # now, so the one thing a refusal could no longer say for itself is the
+        # one an operator needs before they can edit anything.
+        raise ValueError(f"config/{app.models_file} is refused: {error}") from error
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
     )
@@ -72,6 +97,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     )
     return Settings(
         app=app,
+        models=models,
         appearance=appearance,
         sources=Sources.from_json(read["sources.json"]),
         taxonomy=Taxonomy.from_json(read["taxonomy.json"]),

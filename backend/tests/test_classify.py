@@ -93,7 +93,7 @@ def configured() -> ModelEntry:
     Read through `config.load`, which is what a stage calls, so a test never
     reaches the markers by a second route.
     """
-    return config.load(CONFIG_DIR).app.models.summarize
+    return config.load(CONFIG_DIR).models.summarize
 
 #: How to re-record after a DELIBERATE prompt or bound change. Nothing else may
 #: move these bytes, which is the whole point of the file. It rewrites the two
@@ -1750,7 +1750,7 @@ class TestARepliedCutByTheBudget:
         for the other.
         """
         app = config.load(CONFIG_DIR).app
-        window = app.models.summarize.inference.n_ctx
+        window = configured().inference.n_ctx
         asked_for = call_two_output_tokens(app.summarize)
         body = json.loads(read_text(CALL_TWO_REPLIES / "cut-in-the-plan.json"))
         content = body["choices"][0]["message"]["content"]

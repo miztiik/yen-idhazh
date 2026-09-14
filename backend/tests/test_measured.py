@@ -7,7 +7,7 @@ from datetime import date
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh.contracts.app_config import AppConfig
+from idhazh import config
 from idhazh.measured import (
     EVERY_MEASURED,
     UNREACHED_BY_THIS_GATE,
@@ -20,9 +20,8 @@ pytestmark = pytest.mark.contract
 
 
 def configured_weights() -> str:
-    """The sha256 of the weights `config/idhazh.json` currently names for summarizing."""
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    declared = committed.models.summarize.sha256
+    """The sha256 of the weights `config/` currently names for summarizing."""
+    declared = config.load(CONFIG_DIR).models.summarize.sha256
     assert declared is not None, "the configured summarizer names no weights digest"
     return declared
 

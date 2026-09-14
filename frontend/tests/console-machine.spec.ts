@@ -45,7 +45,7 @@ const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
 ) as {
 	run: { shard_timeout_minutes: number };
-	models: { summarize: { inference: { n_ctx: number } } };
+	models_file: string;
 	observability: {
 		cost_currency: string;
 		cost_input_per_million: number;
@@ -53,8 +53,13 @@ const CONFIG = JSON.parse(
 	};
 };
 
+/** The active model, reached through the pointer and never by filename. */
+const MODELS = JSON.parse(
+	readFileSync(resolve(process.cwd(), '..', 'config', CONFIG.models_file), 'utf8')
+) as { summarize: { inference: { n_ctx: number } } };
+
 const LIMITS: MachineLimits = {
-	contextWindow: CONFIG.models.summarize.inference.n_ctx,
+	contextWindow: MODELS.summarize.inference.n_ctx,
 	jobTimeoutSeconds: CONFIG.run.shard_timeout_minutes * 60
 };
 
@@ -266,10 +271,10 @@ test.describe('the prompt cache', () => {
 
 test.describe('context headroom', () => {
 	test('the longest sequence is a maximum over shards, against the window', () => {
-		const [bar] = contextHeadroom([onlyRun(TWO_SHARDS)], CONFIG.models.summarize.inference.n_ctx);
+		const [bar] = contextHeadroom([onlyRun(TWO_SHARDS)], MODELS.summarize.inference.n_ctx);
 		expect(bar.longest).toBe(4096);
-		expect(bar.spare).toBe(CONFIG.models.summarize.inference.n_ctx - 4096);
-		expect(bar.usedPct).toBe(Math.round((4096 / CONFIG.models.summarize.inference.n_ctx) * 100));
+		expect(bar.spare).toBe(MODELS.summarize.inference.n_ctx - 4096);
+		expect(bar.usedPct).toBe(Math.round((4096 / MODELS.summarize.inference.n_ctx) * 100));
 		expect(bar.from).toBe(2);
 	});
 
@@ -457,7 +462,7 @@ test.describe('the committed ledger, read as the page reads it', () => {
 	const limits = machineLimits();
 
 	test('the ceilings come from config, and the runner memory from the platform', () => {
-		expect(limits.contextWindow).toBe(CONFIG.models.summarize.inference.n_ctx);
+		expect(limits.contextWindow).toBe(MODELS.summarize.inference.n_ctx);
 		expect(limits.jobTimeoutSeconds).toBe(runConfig().shard_timeout_minutes * 60);
 		// CLAUDE.md Guardrail #2: a stock ubuntu-latest runner has 16 GB.
 		expect(RUNNER_MEMORY_BYTES).toBe(16 * 1024 * 1024 * 1024);

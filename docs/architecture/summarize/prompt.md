@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -431,7 +431,8 @@ with no number is a valid summary. The ban now names the job it belongs to.
 ### What is in the prompt bytes, and who wrote each part
 
 Three strings open and close a turn, and since 2026-09-13 they live on the model
-entry that names the weights - `models.summarize.turns` in `config/idhazh.json`.
+entry that names the weights - `models.summarize.turns`, in the file
+`config/idhazh.json` points `models_file` at.
 They are model-shaped text and they move when the model does, so they belong
 beside the weights rather than in a package this project writes: held apart, a
 swap moved the entry and left the markers, and nothing raised. A wrong value
@@ -601,7 +602,7 @@ the same token counts on a runner.
 | plus call 1's own output budget | 34,532 | `call_one_output_tokens()` is 6,491 |
 | plus the seam call 2 adds in front of its reply | 34,590 | `idhazh.measured.CALL_TWO_SEAM_TOKENS` |
 | plus the reply call 2's grammar may write | **39,284** | `call_two_output_tokens()` is 4,694 |
-| `models.summarize.inference.n_ctx` | 49,152 | `config/idhazh.json` |
+| `models.summarize.inference.n_ctx` | 49,152 | the active model file |
 | **spare** | **9,868** | 80 percent of the window used |
 
 **Call 1's reply is paid twice** - once as its own decode, once again inside

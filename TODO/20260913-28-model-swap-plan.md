@@ -50,8 +50,8 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 2 | The turn envelope moves onto the model entry | - | A | DONE | p28-r2 | #692 | worker |
 | 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | DONE | p28-r3 | #691 | worker |
 | 4 | Benchmark records lose the date from their filename | 2, 3 | B | DONE | p28-r4 | #694 | owner |
-| 5 | Five things the server proves before the first item | 2 | C | PENDING | - | - | - |
-| 6 | One complete config file per model, selected by a pointer | 2 | C | PENDING | - | - | - |
+| 5 | Five things the server proves before the first item | 2, 6 | D | PENDING | - | - | - |
+| 6 | One complete config file per model, selected by a pointer | 2 | C | DONE | p28-r6 | #697 | Fowler |
 | 7 | The model dossier, and the index that points at every one | 3, 4 | D | PENDING | - | - | - |
 | 11 | Where the system text goes, and which keyword the runtime is told | 5, 6 | D | PENDING | - | - | - |
 | 12 | The sanitizer learns the control tokens of the model it guards | 11 | E | PENDING | - | - | - |
@@ -68,8 +68,8 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | --- | --- | --- |
 | A | 1, 2, 3 | Row #1 writes one workflow and its test. Row #2 writes the llm package, the config contract, the stamp and four test modules. Row #3 writes `measured.py`, its test and the instrument log. No pair shares a file. |
 | B | 4 | Alone. It shares `backend/idhazh/classify/calls.py`, `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/throughput.md` and `docs/concepts/config.md` with row #2, and `docs/reference/measurements.md` with row #3, so it cannot run beside either. That file overlap is the whole of its `Depends-on`. |
-| C | 5, 6 | Row #5 writes `server.py`, `test_summarize.py`, a new fixture directory and `digest.yml`. Row #6 writes `app_config.py`, the config files, the schemas, `config.py` and `test_contracts.py`. No shared file. |
-| D | 7, 11 | Row #7 is documentation only. Row #11 is the contract and the llm package. No shared file. |
+| C | 5, 6 | Row #5 writes `server.py`, `test_summarize.py`, a new fixture directory and `digest.yml`. Row #6 writes `app_config.py`, the config files, the schemas, `config.py` and `test_contracts.py`. **Corrected 2026-09-14: they are not disjoint.** Row #5's decision 2 adds a required field to `ModelRef`, which is `app_config.py`, and the value of that field has to be written into the per-model file row #6 created - so row #5 now depends on row #6 and sits alone in group D. Row #6 also wrote `test_summarize.py`, which row #5 writes. |
+| D | 5, 7, 11 | Row #5 writes `server.py`, `app_config.py`, the model file, its schema and `test_summarize.py`. Row #7 is documentation only. Row #11 is the contract and the llm package - it shares `app_config.py` and `server.py` with row #5, so **those two are not disjoint and may not run together**; row #11's own `Depends-on` already names row #5. |
 | E | 12, 13 | Row #12 writes `sanitize.py`, `app_config.py` and two test modules. Row #13 writes `taxonomy.py`, `visual.py`, `measured.py` and the instrument log. No shared file. |
 | F | 8 | Alone. It rewrites the workflow row #1 fixed and reads the shapes rows #6 and #7 created. |
 | G | 9 | Alone. It shares the how-to with row #8 and `AGENTS.md` with row #4. |
@@ -229,6 +229,9 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 - **Scope:** A start-up probe proves the entry against the running server on five axes and refuses the run on any disagreement.
 - **Files touched:**
   - `backend/idhazh/llm/server.py`
+  - `backend/idhazh/contracts/app_config.py`
+  - `config/models/qwen3.5-9b-q4km.json`
+  - `schemas/models-config.schema.json`
   - `backend/tests/test_summarize.py`
   - `tests/fixtures/llm/apply-template-probe.json` (new; this row creates the directory)
   - `tests/fixtures/llm/props-probe.json` (new)
@@ -251,11 +254,12 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Arm 1 is the field that converts the declared envelope from a claim into a fact, and row #2 is not safe to have shipped without it. If one pull request is taken from this plan, it is rows #2 and #5 together. | Andre and Fowler, agreeing, 2026-09-13 |
-| 2 | `ModelRef` gains `arch: str`, required, carrying the GGUF architecture string. | Carmack, 2026-09-13 |
+| 2 | `ModelRef` gains `arch: str`, required, carrying the GGUF architecture string. The field is declared in `backend/idhazh/contracts/app_config.py`; its value is written into the per-model file `config/models/qwen3.5-9b-q4km.json` that row #6 created. `config/idhazh.json` carries the pointer only and is not touched. Adding a required field to a shipped contract stamps `ModelsConfig.version` and appends a `changelog` entry in the same commit (CLAUDE.md section 11). | Carmack, 2026-09-13, ordering corrected by Fowler, 2026-09-14 |
 | 3 | Every arm is driven in tests by a recorded response. No test touches the network. | Fowler, 2026-09-13 |
 | 4 | No arm gains a flag to skip it. The proof is what paid for moving the envelope out of the package; a skip returns the tree to worse-summaries-and-no-error with extra ceremony. | Fowler, 2026-09-13 |
 | 5 | The template endpoint is already named in `backend/utilities/measure_two_calls.py`, which is one of two sites in the tree that mention it. That file's caution is against using it to tokenize a prompt the server was never sent - a different use from reconciling a render. | Carmack, 2026-09-13 |
 | 6 | Arm 2 protects the incumbent today, before any swap, and is the cheapest item in this plan. | Carmack, 2026-09-13 |
+| 7 | Row #6's identity-branch test is already in force, so the probe compares nothing whose operand is a model id, repo or filename. Every arm reads what it compares off the entry or off the server. | Fowler, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
@@ -295,6 +299,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 7 | Migration is the deletion of the model block from the committed config in this same commit, plus the version stamp and the changelog entry. No alias, no dual read. | Fowler, 2026-09-13 |
 | 8 | `ModelsConfig` becoming a `Contract` needs its own fixture, because `test_every_contract_has_at_least_one_fixture` fails otherwise. | Fowler, 2026-09-13 |
 | 9 | **This row builds the identity-branch test.** An ESCALATE trigger with no test is a comment. The shape copies the existing test that keeps `server_argv` the only place a flag is spelled: walk the syntax tree of everything under `backend/idhazh/llm/` and fail on any comparison whose operand is a model id, repo or filename. A branch on a value is config; a branch on an identity is a fork. | Carmack, 2026-09-13 |
+| 10 | The per-model file is digested with the rest of `config/` and travels with the run. Decision 4 rules that the **run stamp** is unaffected and says nothing about `ConfigDigest`; a record that held only the pointer file could not tell a swap from a re-tuning of the file the pointer names. `Settings.digests` therefore carries `config/<models_file>` beside `config/idhazh.json`. | Fowler, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |

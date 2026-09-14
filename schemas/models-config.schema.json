@@ -1,0 +1,398 @@
+{
+  "$defs": {
+    "InferenceConfig": {
+      "additionalProperties": false,
+      "description": "Decoding is pinned here so a change of output is a reviewable diff.",
+      "properties": {
+        "cache_type_k": {
+          "anyOf": [
+            {
+              "const": "q8_0",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -ctk. None omits the flag and keeps full-precision KV.",
+          "title": "Cache Type K"
+        },
+        "cache_type_v": {
+          "anyOf": [
+            {
+              "const": "q8_0",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -ctv. None omits the flag and keeps full-precision KV.",
+          "title": "Cache Type V"
+        },
+        "declared_for": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The weights this block is set for - the sha256 of the entry that carries it. Every number here is a measurement about one model on one runner, never a property of the pipeline, so the entry states which bytes the numbers were put in front of. Swap the weights and this is left behind, which is the one event the field exists to make loud. It says a person paired these numbers with these bytes; where the numbers came from is docs/concepts/config.md, because a runner and a date cannot be checked by a validator and a field nothing checks is a comment.",
+          "title": "Declared For"
+        },
+        "flash_attention": {
+          "anyOf": [
+            {
+              "enum": [
+                "on",
+                "off"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -fa. None omits the flag and leaves the runtime on auto.",
+          "title": "Flash Attention"
+        },
+        "load_mode": {
+          "anyOf": [
+            {
+              "const": "mmap+mlock",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -lm. None omits the flag and keeps the runtime default.",
+          "title": "Load Mode"
+        },
+        "log_verbosity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
+          "title": "Log Verbosity"
+        },
+        "max_output_tokens": {
+          "default": 900,
+          "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
+          "minimum": 1,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "metrics": {
+          "default": true,
+          "description": "If true, emit --metrics and llama-server serves its counters on /metrics. On by default: without them a run cannot say how close it came to n_ctx, and a concurrency result has no busy-slot number to read it by.",
+          "title": "Metrics",
+          "type": "boolean"
+        },
+        "n_batch": {
+          "default": 512,
+          "minimum": 1,
+          "title": "N Batch",
+          "type": "integer"
+        },
+        "n_ctx": {
+          "default": 8192,
+          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 49152, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for 16384, 1024.00 for 32768 and 2048.00 for 65536, which interpolates to 1536.00 MiB at the pinned 49152, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
+          "minimum": 512,
+          "title": "N Ctx",
+          "type": "integer"
+        },
+        "n_parallel": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -np. None omits the flag and keeps the runtime default.",
+          "title": "N Parallel"
+        },
+        "n_threads": {
+          "default": 4,
+          "minimum": 1,
+          "title": "N Threads",
+          "type": "integer"
+        },
+        "n_threads_batch": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -tb. None omits the flag and lets it follow n_threads.",
+          "title": "N Threads Batch"
+        },
+        "n_ubatch": {
+          "default": 512,
+          "minimum": 1,
+          "title": "N Ubatch",
+          "type": "integer"
+        },
+        "poll": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --poll. None omits the flag and keeps the runtime default.",
+          "title": "Poll"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "maximum": 3,
+              "minimum": -1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --prio. None omits the flag and keeps normal priority.",
+          "title": "Priority"
+        },
+        "request_timeout_minutes": {
+          "default": 22.1,
+          "description": "One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound.",
+          "exclusiveMinimum": 0.0,
+          "title": "Request Timeout Minutes",
+          "type": "number"
+        },
+        "seed": {
+          "default": 0,
+          "description": "Dead code under greedy decoding. Never cited as the determinism control.",
+          "title": "Seed",
+          "type": "integer"
+        },
+        "startup_warmup": {
+          "default": true,
+          "description": "If false, emit --no-warmup. True lets llama-server warm at startup.",
+          "title": "Startup Warmup",
+          "type": "boolean"
+        },
+        "temperature": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "thinking": {
+          "default": false,
+          "description": "Off. Reasoning measurably increases hallucination when summarizing.",
+          "title": "Thinking",
+          "type": "boolean"
+        },
+        "top_p": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Top P",
+          "type": "number"
+        }
+      },
+      "title": "InferenceConfig",
+      "type": "object"
+    },
+    "ModelEntry": {
+      "additionalProperties": false,
+      "description": "Which weights, and everything a run needs to talk to them.\n\n**This is the shape a person declares**, and `ModelsConfig` is made of it.\nIt is `ModelRef` plus the turn envelope, which is required here and absent\nfrom the recorded shape - so a config entry that forgets its markers fails\nat load, and a `run.json` written before the markers were declared still\nreads. A swap that moved the markers is still visible in a run record:\n`RunRecord.inputs.prompt_sha256` digests both turns rendered through them.\n\nDo not move `turns` down onto `ModelRef` as a tidy-up. That is the change\nthis split exists to prevent.",
+      "properties": {
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "hf_base_repo": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The safetensors repository a fine-tune trains against, when this entry names a GGUF conversion of somebody else's weights. It sits here rather than in `finetune` because the two strings describe the same model: held apart, a model swap moves one and leaves the other, and a LoRA adapter loads onto a mismatched base without raising. Optional - only an entry we intend to fine-tune needs it.",
+          "title": "Hf Base Repo"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "inference": {
+          "$ref": "#/$defs/InferenceConfig",
+          "description": "The runtime this entry's weights are served on. It sits on the entry for the same reason `hf_base_repo` does: held apart, a model swap moves the weights and leaves the numbers, and llama-server starts on them without raising. `ModelsConfig` refuses a block whose declared_for is not this entry's sha256, so a default block under measured weights is refused rather than inherited."
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Hugging Face repository the GGUF is pulled from.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The hub commit the weights are fetched at. A download that names a branch gets whatever was uploaded last, so the bytes can change under a config that still records the old sha256.",
+          "title": "Revision"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Recorded once measured. A weight that changes silently changes every output.",
+          "title": "Sha256"
+        },
+        "turns": {
+          "$ref": "#/$defs/TurnsConfig",
+          "description": "The turn envelope these weights are rendered with. Required and with no default: an entry that forgets its markers must fail rather than inherit the incumbent's, because inheriting them renders a prompt the grammar still accepts and nothing else can see is wrong."
+        }
+      },
+      "required": [
+        "id",
+        "repo",
+        "file",
+        "quantisation",
+        "turns"
+      ],
+      "title": "ModelEntry",
+      "type": "object"
+    },
+    "TurnsConfig": {
+      "additionalProperties": false,
+      "description": "How one turn is written for the weights this entry names.\n\nIt is the envelope, never the content. These four strings decide where a\nturn opens and closes and how a reply begins; what the turns SAY is\n`backend/idhazh/prompts/*.txt` and is the same set for every model\n(docs/architecture/summarize/model-boundary.md).\n\nThey sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,\nwhich put a fact about somebody else's weights in a package this project\nwrites and held it apart from the entry that names those weights. A swap\nthen moved the entry and left the markers, and nothing raised: a wrong\nmarker renders a prompt with no turn structure that the decoder's grammar\nstill accepts - worse summaries and no error anywhere.\n\n**The trailing newlines are load-bearing and invisible.** They survive here\nbecause JSON spells them `\\n` rather than leaving them at the end of a line\nfor an editor or a line-ending pass to rewrite.",
+      "properties": {
+        "declared_for": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The weights these markers are recorded from - the sha256 of the entry that carries them. It sits here for the reason inference.declared_for sits beside the numbers: swap the weights and the block is left behind, and this is the one event the field exists to make loud. Absent means an entry nobody has measured yet, which is legal; ModelsConfig refuses a block whose digest is not the entry's.",
+          "title": "Declared For"
+        },
+        "reply_opening": {
+          "description": "Where the model starts writing, with reasoning off. Not derived from turn_opening: a chat template ends a generation prompt with more than a role header, and what it ends with belongs to the model.",
+          "minLength": 1,
+          "title": "Reply Opening",
+          "type": "string"
+        },
+        "reply_opening_thinking": {
+          "description": "The same, with reasoning on. Recorded from the server that applies it.",
+          "minLength": 1,
+          "title": "Reply Opening Thinking",
+          "type": "string"
+        },
+        "turn_closing": {
+          "description": "Closes a turn. The second call's prompt is the first one's spliced on this marker, so an empty seam would join two turns into one and break the prefix the two-call design rests on.",
+          "minLength": 1,
+          "title": "Turn Closing",
+          "type": "string"
+        },
+        "turn_opening": {
+          "description": "Opens a turn, with the role substituted in. A string.Template placeholder, so `$role` or `${role}`; the substitution is strict, so a placeholder by any other name raises at the first render.",
+          "minLength": 1,
+          "title": "Turn Opening",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_opening",
+        "turn_closing",
+        "reply_opening",
+        "reply_opening_thinking"
+      ],
+      "title": "TurnsConfig",
+      "type": "object"
+    }
+  },
+  "$id": "models-config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape, lifted whole out of app-config.models with no field renamed, retyped or given a different default. It is the same ModelsConfig, now a document of its own under config/models/, and it carries a version date-stamp because a persisted document does. app-config.models is gone in the same commit and app-config.models_file names which of these files is active.",
+      "version": "2026-09-14",
+      "why": "Plan 28 row #6. Swapping the summarizer has to cost no source edit, and it used to cost eleven lines edited in place in the one file every other knob lives in - so a revert had to reconstruct the previous model's measured numbers from git rather than read them off disk. One file per model makes both directions a pointer, and puts the numbers that were measured for a set of weights in the same file that names them. Ruled by Fowler, 2026-09-14."
+    }
+  ],
+  "description": "`config/models/<name>.json` - one whole model, in one file of its own.\n\nOne entry per role, and each entry carries the settings it runs on. There is\nno block shared between the entries. A role is a model family served by its\nown llama-server process, and one block over two roles is a measurement\nabout one of them quietly applied to the other.\n\nOne role is left. Plan 11 row #6 retired the small visual planner: the two\ncalls the work stage now makes per item run on these weights, so the picture\nis decided by the same model that wrote the summary.\n\nIt is a file rather than a block of `config/idhazh.json` because everything\nin it is a fact about one set of weights - the repository, the digest, the\nwindow they were measured in, the markers their server renders. Held in the\nshared file, a swap is an edit across every one of those lines and a revert\nis the same edit backwards, with the previous model's numbers gone. Held\nhere, the incumbent and the candidate are two committed files and the swap\nis `models_file` in `config/idhazh.json`.",
+  "properties": {
+    "summarize": {
+      "$ref": "#/$defs/ModelEntry"
+    },
+    "version": {
+      "default": "2026-09-14",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "summarize"
+  ],
+  "title": "ModelsConfig",
+  "type": "object",
+  "version": "2026-09-14"
+}
