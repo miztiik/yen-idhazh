@@ -169,12 +169,19 @@ def unclassified_knobs(knobs: Iterable[str]) -> frozenset[str]:
 def model_shaped_fields() -> frozenset[str]:
     """The whole universe the closed set has to answer for.
 
-    Both shapes, not just the inference block. It was that block alone until
-    2026-09-13, which was closed over the wrong set the moment `turns` moved
-    onto the entry - a prompt-shaping field in no stamp and in no closed set,
-    with nothing saying so.
+    All three shapes, not just the inference block. It was that block alone
+    until 2026-09-13, which was closed over the wrong set the moment `turns`
+    moved onto the entry - a prompt-shaping field in no stamp and in no closed
+    set, with nothing saying so. The envelope's own fields joined on 2026-09-14
+    for the same reason: naming `turns` answers for the block and for nothing
+    inside it, so `system_role`, `system_joiner` and `thinking_kwarg` could have
+    landed unclassified.
     """
-    return frozenset(InferenceConfig.model_fields) | frozenset(ModelEntry.model_fields)
+    return (
+        frozenset(InferenceConfig.model_fields)
+        | frozenset(ModelEntry.model_fields)
+        | frozenset(TurnsConfig.model_fields)
+    )
 
 
 def test_every_inference_knob_is_digested_or_written_down_as_undigested() -> None:
@@ -201,7 +208,7 @@ def test_no_knob_is_both_digested_and_written_down_as_undigested() -> None:
 def test_the_undigested_set_names_only_real_knobs() -> None:
     """A renamed knob leaves a stale name here, and the stale name proves nothing."""
     assert frozenset(NOT_DIGESTED) <= model_shaped_fields()
-    assert frozenset(MODEL_FIELD_SPELLING) <= frozenset(ModelEntry.model_fields)
+    assert frozenset(MODEL_FIELD_SPELLING) <= model_shaped_fields()
 
 
 def test_the_turn_envelope_reaches_the_stamp_through_the_rendered_prompt() -> None:

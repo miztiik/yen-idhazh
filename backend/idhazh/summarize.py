@@ -348,8 +348,15 @@ def build_request(
     *,
     model_id: str,
     inference: InferenceConfig,
+    thinking_kwarg: str | None,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
+    """One chat-route body. `thinking_kwarg` is the entry's, never a literal here.
+
+    It carries no default for the reason `request_payload` gives: the name is a
+    variable in the model's own chat template, so a default here would send one
+    model's keyword to every model.
+    """
     return request_payload(
         model_id=model_id,
         system=system_prompt(
@@ -362,6 +369,7 @@ def build_request(
             brief=article.brief,
         ),
         inference=inference,
+        thinking_kwarg=thinking_kwarg,
     )
 
 
