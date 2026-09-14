@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 How an item gets a chart or - most of the time - nothing at all.
 The rule this subsystem serves is in [`../../concepts/digest.md`](../../concepts/digest.md): a
@@ -888,9 +888,13 @@ browser's.
 
 **What the ruling costs, named rather than implied.** A reader with JavaScript off gets no
 chart, where today they get one, because today the drawing is markup inside the document
-itself. That is the reason row 22 chose build-time SVG and it is a real loss. What such a
-reader still gets is the sentence: the figure carries `alt` on every path and that sentence
-states every figure the bars are drawn at.
+itself. That is the reason row 22 chose build-time SVG and it is a real loss. **They get no
+sentence either, and this page said they did until 2026-09-14.** Measured on the canary
+build that day: the prerendered document carries zero `<figure>` elements, because the
+figure exists only once the marks have arrived - so `alt` reaches a payload blob and never
+a reader who runs no script. What a reader who does run one hears is written in the browser
+off the same marks the bars are drawn from, and it states every one of them
+([../../concepts/design-system.md](../../concepts/design-system.md#every-fact-a-drawing-shows-is-reachable-without-a-pointer)).
 
 **And every day published before 2026-09-13 loses its chart, for every reader rather than
 only for one with JavaScript off.** The 495 committed drawings are deleted and no marks file
