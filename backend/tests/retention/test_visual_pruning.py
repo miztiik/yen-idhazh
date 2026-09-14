@@ -26,8 +26,6 @@ from ._trees import (
     site,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_only_visuals_are_candidates(tmp_path: Path) -> None:
     """A visual is a file named for an item, and nothing else in a day is.

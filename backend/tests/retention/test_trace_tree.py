@@ -22,9 +22,6 @@ from ._trees import (
     TODAY,
 )
 
-pytestmark = pytest.mark.slow
-
-
 #: A day inside the committed window's own month, so the fixtures below read as a
 #: recent run rather than one the seen tests already use.
 TRACE_TODAY: Final = date(2026, 8, 20)

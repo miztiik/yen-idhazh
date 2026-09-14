@@ -25,8 +25,6 @@ from ._builders import (
     summary,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_a_row_carries_everything_needed_to_read_it_years_later() -> None:
     built = row()

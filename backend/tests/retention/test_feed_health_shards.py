@@ -19,8 +19,6 @@ from ._trees import (
     months_back,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def feed_health_days(state_dir: Path) -> list[Path]:
     """Every feed-health day file, oldest first, through the pipeline's own walk."""

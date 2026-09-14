@@ -38,8 +38,6 @@ from ._trees import (
     site,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_an_absent_site_measures_as_nothing(tmp_path: Path) -> None:
     assert measure(tmp_path / "missing").bytes_used == 0

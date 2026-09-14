@@ -24,8 +24,6 @@ from ._trees import (
     TODAY,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def _seen_day(state: Path, day: str, rows: int = 1) -> Path:
     """One day of the seen ledger, written by the real appender."""

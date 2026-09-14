@@ -20,7 +20,7 @@ from ._harness import (
     _steps,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:

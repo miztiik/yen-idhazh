@@ -29,8 +29,6 @@ from ._trees import (
     totals_from_shard,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> None:
     """Every day inside the window is byte-identical, and every day outside is gone.

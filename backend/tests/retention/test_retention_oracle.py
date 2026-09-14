@@ -32,8 +32,6 @@ from ._trees import (
     totals_from_shard,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summary(
     tmp_path: Path,
