@@ -46,10 +46,10 @@ the story is to be worth your time.
 
 Start with how much we trust the feed that carried it. Then add a set amount for
 each of four things: more than one of our feeds carried the same link, it names a
-company or a person we follow, it matches a subject we weight (we call one of
+company or a person we follow, it matches a subject we weight (we the label call of
 those a **lens**), and it is recent. The day is then sorted, best first, and the
 three settings at the top of this page reshuffle the first twenty stories, so
-that one subject area (we call one a **desk**) cannot fill the whole first
+that one subject area (we the label call a **desk**) cannot fill the whole first
 screen. On the days we measured, most of those twenty slots moved.
 
 **Being carried by several feeds used to multiply the trust rather than add to

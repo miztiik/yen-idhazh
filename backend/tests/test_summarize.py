@@ -36,7 +36,7 @@ from pydantic import ValidationError
 
 from idhazh import config, extract
 from idhazh.classify import calls
-from idhazh.classify.calls import call_two_schema
+from idhazh.classify.calls import summarize_and_plan_schema
 from idhazh.contracts.app_config import (
     EvaluationConfig,
     InferenceConfig,
@@ -111,7 +111,7 @@ from idhazh.summarize import (
 COMPLETIONS = FIXTURES_DIR / "completions"
 LLM_ERRORS = COMPLETIONS / "errors"
 #: One reply off the rendered-completion route, which names its fields its own way.
-RENDERED_REPLY = COMPLETIONS / "rendered" / "call-one.json"
+RENDERED_REPLY = COMPLETIONS / "rendered" / "label.json"
 GENERATED_AT = "2026-08-21T06:12:53Z"
 
 
@@ -513,7 +513,7 @@ def test_server_argv_names_the_port_it_was_given() -> None:
 class TestTheRenderedCompletionEnvelope:
     """The second shape `parse_completion` reads, from a reply a server really sent.
 
-    Recorded 2026-09-12 by posting the committed call-one prompt to llama-server
+    Recorded 2026-09-12 by posting the committed label prompt to llama-server
     build b10444-5f754ea0e on the weights `models.summarize` declares, over its
     rendered-completion route. Nothing is hand-written: the route names its
     fields differently from the chat route, and a fake would agree with whatever
@@ -1701,7 +1701,7 @@ class TestTheThinkingReachesNothing:
             assert phrase not in persisted
 
     def test_the_reply_replayed_into_the_second_call_is_cut_at_the_answer_boundary(self) -> None:
-        """Call 2's prompt opens with call 1's prompt and call 1's ANSWER.
+        """The second prompt opens with the label prompt and the label ANSWER.
 
         What the slot holds behind that prompt also includes what span one
         thought, and none of it is replayed: a prompt is the one place a model's
@@ -1737,7 +1737,7 @@ class TestTheThinkingReachesNothing:
             + markers.turn_closing
             + markers.turn("user", "and then?")
             + markers.reply_opening_thinking
-        ), "what follows call 1's prompt is the answer, one new turn, and nothing else"
+        ), "what follows the label call's prompt is the answer, one new turn, and nothing else"
 
 
 def test_a_reply_without_a_think_block_passes_through() -> None:
@@ -2873,20 +2873,20 @@ class TestTheServerProvesTheEntry:
 
     def test_the_probe_schema_is_built_from_the_schema_the_run_really_sends(self) -> None:
         """Never a fixture: the real schema is generated, so a copy would drift."""
-        schema, only = one_document_schema(call_two_schema())
+        schema, only = one_document_schema(summarize_and_plan_schema())
 
         assert list(only) == list(schema["required"])
-        assert schema["required"][0] in (call_two_schema().get("required") or [])
+        assert schema["required"][0] in (summarize_and_plan_schema().get("required") or [])
         assert schema["additionalProperties"] is False
         assert schema["properties"][schema["required"][0]]["const"] == PROBE_ANSWER
 
     def test_a_reply_the_grammar_pinned_lets_the_run_start(self) -> None:
-        _, only = one_document_schema(call_two_schema())
+        _, only = one_document_schema(summarize_and_plan_schema())
 
         decoding_still_constrains(reply=json.dumps(only), only=only)
 
     def test_a_reply_the_grammar_did_not_pin_refuses_the_run(self) -> None:
-        _, only = one_document_schema(call_two_schema())
+        _, only = one_document_schema(summarize_and_plan_schema())
 
         with pytest.raises(ProbeRefusedError) as refusal:
             decoding_still_constrains(reply="Sure! Here is the answer.", only=only)
