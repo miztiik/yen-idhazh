@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the execution contract)
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-14
 
 The mechanics for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
@@ -97,6 +97,8 @@ Merging stays serialized - one at a time, re-checking the next branch against th
 AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md section 6), a new `## Design rationale` that would change a persisted contract, an unresolved persona conflict, a scope change (-> [handle-scope-change.md](handle-scope-change.md)), or a 3x cost overrun. Otherwise the owner advances without asking.
 
 **If the user goes quiet, stay in scope.** Do not invent scope, and do not quietly shrink it. Silence is not a new instruction.
+
+**A plan's scope line and its rejected alternatives are dated decisions, not laws.** A worker that meets one while pursuing the row's intent prices it and surfaces it; it does not quote the line back as a reason the intent cannot be met (CLAUDE.md section 0d). The plan is evidence of what somebody decided and why - if the why no longer holds, saying so is the job.
 
 ## Closure
 

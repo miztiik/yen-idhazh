@@ -1,6 +1,6 @@
 # How to author an execution-ready plan-doc
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-14
 
 The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-plan.md` that an autonomous agent can run end-to-end with no further instruction. This is the canonical home for the authoring ritual; the [`prepare-plan`](../../.claude/skills/prepare-plan/SKILL.md) skill is a thin wrapper that points here, mirroring how [`bootstrap`](../../.claude/skills/bootstrap/SKILL.md) points at [../agents/bootstrap.md](../agents/bootstrap.md).
 
@@ -33,7 +33,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
  | --- | --- |
  | Why this plan exists | one sentence |
  | Hard scope - in | bullets, no narrative |
- | Hard scope - out | bullets |
+ | Hard scope - out | a table, never bare bullets: `what is out`, `what it costs to leave out`, `what would bring it in`. A line with no cost named is a law nobody voted for, and the next agent quotes it as one |
  | ESCALATE triggers | enumerated |
  | Chosen strategy | one line + the persona that ruled it |
  | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` Four is the default; a lower number carries its reason on the same line. |
@@ -55,14 +55,16 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
  - **Scope:** one sentence, what ships.
  - **Files touched:** bullet list of exact paths.
  - **Acceptance gates:** name local checks separately from CI checks. Use the project's test selector and name the focused Oracle. A full-suite requirement belongs to CI unless the row states why it must also run locally. Record the selected inputs and results so the orchestrator can verify them without repeating an unchanged check.
- - **Oracle:** ONE load-bearing check (bijection / coverage / contract / parity) that proves correctness.
+ - **Oracle:** ONE load-bearing check (bijection / coverage / contract / parity) that proves correctness, **and one sentence naming what it cannot settle.** An oracle over a quantity that varies states the tolerance AND the noise it sits in; where the noise is wider than the effect, say so rather than inventing a tolerance that reads crisp and fails on the weather (Guardrail #10).
  - **Decisions** (enumerated table):
 
  | # | Decision | Authority |
 
  - **Rejected alternatives** (enumerated table):
 
- | # | Option | Why rejected | Authority |
+ | # | Option | Why rejected | What it would cost to take | Authority |
+
+ - `What it would cost to take` is required and may not be `unknown` on its own - name the measurement that would price it. A rejection with no price is indistinguishable from a prohibition, and the row after it inherits the prohibition (CLAUDE.md section 0d).
 
 - **The execution stamp**: one line, not a pasted block. See [execute-a-plan.md](execute-a-plan.md#the-one-line-stamp-a-plan-doc-carries). This is the part that makes "implement it" sufficient.
 

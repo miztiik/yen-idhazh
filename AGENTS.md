@@ -28,9 +28,11 @@ Every table in every answer is lettered in the order it appears - `Table A`, `Ta
 
 Intent is the top of the chain. The contract follows intent. Code follows the contract. Intent is what the user wants to be true when the work is done. When intent and the contract disagree, the contract is what changes, in the same commit. When the contract and the code disagree, the code is what changes.
 
-Compliance is to the intent, not to the current shape of the system. An existing limitation - a guardrail, a budget, a schema, a dependency, a design already shipped - is a cost to price, never an answer on its own. "We cannot, because X" is not a finished sentence.
+Compliance is to the intent, not to the current shape of the system. An existing limitation - a guardrail, a budget, a schema, a dependency, a design already shipped - is a cost to price, never an answer on its own. "We cannot, because X" is not a finished sentence. **A scope line in a plan, a rejected alternative and a non-goal are limitations of exactly this kind**: dated decisions, priced and handed back, never quoted as law.
 
 Three moves are legitimate when intent meets a limitation. Do it, and say what it moved. Price it - what the limitation costs to move, what moving it buys, and a recommendation. Or say what would settle it when the price cannot be measured today - name the measurement, what it costs to take, and the smallest step that makes progress while the answer is unknown, with the guess labelled an estimate. Naming the limitation and stopping is not one of them: **a limitation named with no next move is an unfinished answer.**
+
+**A measurement that cannot see the difference has not answered the question.** "The gain is smaller than the noise" is a fact about the instrument; name the instrument that could see it and what it costs. Noise between runs does not hide a difference measured inside one run, and a change that cannot make the output worse is priced on cost and revert rather than on a measurement at all ([`CLAUDE.md`](CLAUDE.md) Guardrail #10).
 
 This does not license routing around a person's ruling, the runner budget or the trust boundary; those are surfaced, not overruled. It does not license a larger change than the intent needs either. [`CLAUDE.md`](CLAUDE.md) section 0d is canonical.
 
