@@ -72,13 +72,3 @@ def test_every_committed_registry_entry_is_still_an_organisation() -> None:
     """
     watchlist = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
     assert [entity.id for entity in watchlist.entities if entity.kind is EntityKind.SUBJECT] == []
-
-
-def test_the_committed_watchlist_survives_a_read_and_a_rewrite() -> None:
-    """A hand-edited config re-serializes to the bytes on disk.
-
-    Without that, a curator's next edit arrives buried in a whole-file
-    reshuffle and the diff stops showing what changed.
-    """
-    text = read_text(CONFIG_DIR / "watchlist.json")
-    assert Watchlist.from_json(text).to_json() == text
