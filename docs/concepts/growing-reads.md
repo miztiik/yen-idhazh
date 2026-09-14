@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-15
 
 One question, asked of every read:
 
@@ -659,6 +659,31 @@ causes with a 529-to-1 spread, or a source sitting exactly on a display cap.
 And where the question really is about the whole tree, it is asked once and
 asserted on the total, because the producer already validated every payload at
 write time and a frozen day cannot grow a fault later.
+
+### A walk can cost more than time: it can take the shape of the thing it walks (2026-09-15)
+
+`frontend/tests/malformed-day.spec.ts` did not walk the archive to assert per
+story. It walked it to pick ONE day - the newest - and broke that day three
+ways. The bill was a directory listing, so the measurement above says nothing
+against it and nobody costed it out of the suite.
+
+It still had to go, and the reason is the one the cost argument does not reach.
+The spec takes the newest day, and on 2026-09-14 the newest day was empty, so
+`items[items.length - 1]` was `undefined`, the `TypeError` fired while the
+module was loading, and both arms of the file died - the guard arm and the
+browser-survives-it arm, neither of which has anything to do with an empty day.
+**A read over a collection a run appends to inherits every shape that collection
+can take**, and the shapes it can take are decided by a pipeline nobody runs
+while writing the test. A canary day cannot surprise a spec, because the spec
+and the builder are changed by the same person on the same afternoon.
+
+The second half of section 13's sentence is what paid for the move. The canary
+day carries eight stories against a seed of fifteen, so the spec stopped being
+able to demonstrate that the broken story sat past the seed. It is a real loss
+and nothing on the canary tree replaces it: there is one hostile article per
+file under `tests/fixtures/canaries` and the day is as long as that list. What
+survived is what was always load-bearing - that `validate-days` opens every
+story and names the contract that refused one.
 
 ## Design rationale
 
