@@ -68,7 +68,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 3. Row #2 - The window takes a value, and nothing is deleted yet
 
 - **Scope:** `retention.image_months` moves from `-1` to a real window derived from plan 04's measurement, with `dry_run` still `true`.
-- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `backend/tests/test_retention.py`, `docs/concepts/adaptive-pruning.md`, `docs/reference/measurements.md`
+- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `backend/tests/retention/`, `docs/concepts/adaptive-pruning.md`, `docs/reference/measurements.md`
 
   **The fixture is `every-knob-differs-from-the-committed-config.json`, and the `tuned.json` this row named until 2026-09-12 does not exist.** It is the only file under `tests/fixtures/contracts/app-config/`; corrected before dispatch.
 

@@ -229,7 +229,7 @@ class TestOneEncoderTwoRuntimes:
 
         The subject is `SHIPPED_MAX_TOKENS` and not the contract default, and
         that is what separates this mirror from the ones in
-        `backend/tests/test_contracts.py`. Those pin a frontend fallback that
+        `backend/tests/contracts/`. Those pin a frontend fallback that
         `config/` is merged over, so the default is the number a fallback has to
         match. `loader.ts` has no merge behind it: its literal is the only cap a
         tab ever uses. So the number it has to match is the one the runner

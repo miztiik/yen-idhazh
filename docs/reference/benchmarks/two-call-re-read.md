@@ -162,7 +162,7 @@ Call 2 has **980 tokens of room for a reply whose grammar can emit 4,694.**
 one with the picture already suppressed - 16,309 of 16,384, a margin of **75
 tokens, 0.46 percent.**
 
-`backend/tests/test_contracts.py::test_the_longest_article_the_cap_allows_still_fits_the_window`
+`backend/tests/contracts/test_app_config.py::test_the_longest_article_the_cap_allows_still_fits_the_window`
 sizes the single-call sequence at 14,088 and passes. Nothing sizes the two-call
 sequence. With `--no-context-shift` the overflow is not an error: the decode
 stops at the wall, `classify.calls.recovered_completion` salvages the summary,

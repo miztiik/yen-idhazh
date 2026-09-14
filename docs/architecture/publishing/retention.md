@@ -210,7 +210,7 @@ Three reads of each shard gave byte-identical archives, so the spread is zero - 
 
 **In years.** The ledger grew 4,266,655 bytes over the 12 published days from 2026-08-22 to 2026-09-02, which is 355,555 bytes a published day and 130 MB a year, with nothing bounding it (444.6 rows a day on average, 10 on the thinnest day and 731 on the fullest, so read the rate as the mean of a wide spread rather than as a constant). With this rule the item-level part stops growing at fourteen months - about 151 MB - and only the archive keeps going, at 46,441 bytes a published day and **17.0 MB a year**. The archive needs 8.9 years to reach the size those fourteen months of shards already are; the raw ledger reached it in fourteen months. That is **7.7 years of headroom for every one the store used to spend**, and the fourteen-month part stops growing at all.
 
-**A thin month summarises LARGER than it held, and that is not a defect.** The digest index scales with rows and the block of moments is a fixed cost per cohort, so a twelve-row month pays the second and barely earns the first. Fourteen-month-old months are the full ones, which is why the direction that matters is the one measured above. `backend/tests/test_retention.py` pins it at a run's worth of rows rather than at a figure, because a figure taken here would go stale the next time a column is added.
+**A thin month summarises LARGER than it held, and that is not a defect.** The digest index scales with rows and the block of moments is a fixed cost per cohort, so a twelve-row month pays the second and barely earns the first. Fourteen-month-old months are the full ones, which is why the direction that matters is the one measured above. `backend/tests/retention/` pins it at a run's worth of rows rather than at a figure, because a figure taken here would go stale the next time a column is added.
 
 
 **Measured on this checkout, 2026-08-30.** Folding the committed item-health month `2026-08` - 4,167 rows over six published days, 1,270,452 bytes, one month shard at the time and twenty day files now - gives 24 aggregate rows and 1,531 bytes: **829.8 times smaller**, 63.8 bytes an aggregate row, 255.2 bytes a published day, 93,136 bytes a year against the month's 77,285,830. Four rows a day and not five, because `plan` wrote no row that month. The grain change of 2026-09-13 moved no row and no byte, so the ratio stands; only the number of files the fold opens moved.
@@ -279,7 +279,7 @@ new blob of the current month.
 `evals/writer.py`, `cli.py`, the `drift.yml` inline program, four utilities, the
 canary builder, `payload.ts`, `commit-and-push.sh`'s staged list,
 `REFRESH_PATHS`, the closed-world path map and the merge-driver test in
-`test_workflows.py`, nine test modules, a fixture tree, and a migration of the
+`backend/tests/workflows/`, nine test modules, a fixture tree, and a migration of the
 committed file. It is a Level 4 change taken on an owner instruction, against a
 file that is not yet costing anything measurable.
 

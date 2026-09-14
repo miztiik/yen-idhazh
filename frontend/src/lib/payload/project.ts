@@ -37,7 +37,7 @@ type Json = Record<string, unknown>;
  * `DigestView.schema_version()` returns.
  *
  * It is written into every staged day so a shell can branch on the shape it
- * received. `backend/tests/test_contracts.py` reads this literal out of this
+ * received. `backend/tests/contracts/` reads this literal out of this
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */

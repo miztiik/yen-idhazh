@@ -65,7 +65,7 @@ function minus(date: string, days: number): string {
  * keeps 2025-07 through 2026-08. Restated here on purpose - nothing in a browser
  * can call the writer - so this is the reader's half of the promise and never
  * the authority on it. The writer's half is
- * `backend/tests/test_retention.py::test_the_oracle_fifteen_months_leave_...`,
+ * `backend/tests/retention/test_retention_oracle.py::test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summary`,
  * which sweeps the same property through `ledger.shards_in_window`.
  */
 function monthsKept(today: string, months: number): string[] {
