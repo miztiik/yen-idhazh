@@ -34,7 +34,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 15 | 13 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 9 | 4 | 3 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 10 | 4 | 3 |
 
 ## In flight - 0
 
@@ -71,7 +71,7 @@ section 3 is where it is answered.
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 |
-| #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 3, 7 |
+| #13b | 28 | E | Paste the three readings a dispatch takes | 13a |
 | #10 | 28 | H | Two spans on one call, so the model can think | 5, 6, 11 |
 
 ## Waiting on another row - 50
