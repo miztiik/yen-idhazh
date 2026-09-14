@@ -13,6 +13,7 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from ._harness import (
     CONFIG_FILE_NAME,
+    DRAFT_REF_OUTPUTS,
     LLAMA_RUNTIME_WORKFLOWS,
     MODEL_ENV_NAMES,
     MODEL_REF_FIELDS,
@@ -182,7 +183,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     """
     workflow = _load_workflows()["digest.yml"]
     outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
-    for name in MODEL_REF_OUTPUTS:
+    for name in (*MODEL_REF_OUTPUTS, *DRAFT_REF_OUTPUTS):
         assert outputs.get(name) == _expression(f"steps.models.outputs.{name}")
 
     step = _step(workflow, "plan", "id", "models")
@@ -192,10 +193,17 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     assert '>> "$GITHUB_OUTPUT"' in script
 
     models = _committed_models()
+    # The draft refs are published empty while no entry declares a draft head,
+    # which is the arm that matters: a guard that refused the absent case would
+    # take down every run this repository makes, and `"".split()` is `[]`
+    # rather than `[""]`, so the obvious shape check does exactly that.
     assert _run_the_inline_program(script, REPO_ROOT) == {
-        f"{role}_{field}": models[role][field]
-        for role in set(WEIGHTS_CACHE_ROLES.values())
-        for field in MODEL_REF_FIELDS
+        **{
+            f"{role}_{field}": models[role][field]
+            for role in set(WEIGHTS_CACHE_ROLES.values())
+            for field in MODEL_REF_FIELDS
+        },
+        **dict.fromkeys(DRAFT_REF_OUTPUTS, ""),
     }
 
     # Every ref is substituted straight into a shell command downstream, so the
