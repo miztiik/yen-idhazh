@@ -185,7 +185,7 @@ jobs:
       #
       # Two files move, and the arm declares one intention that moves both.
       # `visuals.enabled_kinds` empty is what makes no picture reachable, so the
-      # gate takes the plan fields off call 2's grammar;
+      # gate takes the plan fields off the summarize-and-plan call's grammar;
       # `summarize.asks_for_a_visual_plan` false is what sizes the window for
       # the call that is really sent. Apart they disagree, and the disagreement
       # refuses articles that fit.
@@ -368,10 +368,11 @@ jobs:
           RUN_DATE: ${{ steps.plan.outputs.date }}
         run: .github/scripts/run-pipeline-test-arm.sh baseline "$RUN_DATE"
 
-      # Arm two. No picture is reachable, so call 2 comes back with the summary
-      # alone and the plan's decode is not spent. The server is the same process
-      # arm one used - nothing about this arm is a start-time setting - so what
-      # the difference measures is the decode and nothing else.
+      # Arm two. No picture is reachable, so the summarize-and-plan call comes
+      # back with the summary alone and the plan's decode is not spent. The
+      # server is the same process arm one used - nothing about this arm is a
+      # start-time setting - so what the difference measures is the decode and
+      # nothing else.
       - name: Arm no-visual-decision
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}

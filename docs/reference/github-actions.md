@@ -658,7 +658,7 @@ the three hosts they drew. Sequential on one box cancels the host.
 | Arm | What it changes | What the difference prices |
 | --- | --- | --- |
 | `baseline` | nothing - the production path exactly | the number the other two are read against |
-| `no-visual-decision` | no picture is reachable, so call 2 returns the summary alone | the visual plan's decode, on the same server process |
+| `no-visual-decision` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
 | `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
 
 Each arm is a step rather than an iteration of a loop, so the run page shows

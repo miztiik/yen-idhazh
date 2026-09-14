@@ -1437,7 +1437,7 @@
       "properties": {
         "asks_for_a_visual_plan": {
           "default": true,
-          "description": "Whether the two-call sequence is sized for a second call that asks for a picture. True is what the production run does and what ships. It exists so an arm of the pipeline test workflow can run the summary-only path end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields off call 2's grammar, and this takes the plan's decode budget out of the window sizing beside it. The two move together or the sizing is wrong in the expensive direction - it reserves room for a decode that never happens, and refuses articles that would have fitted.",
+          "description": "Whether the two-call sequence is sized for a summarize-and-plan call that asks for a picture. True is what the production run does and what ships. It exists so an arm of the pipeline test workflow can run the summary-only path end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields off that call's grammar, and this takes the plan's decode budget out of the window sizing beside it. The two move together or the sizing is wrong in the expensive direction - it reserves room for a decode that never happens, and refuses articles that would have fitted.",
           "title": "Asks For A Visual Plan",
           "type": "boolean"
         },
