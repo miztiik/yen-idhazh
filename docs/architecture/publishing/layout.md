@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -128,12 +128,35 @@ Three things follow from that table and each one moved the design.
 
 ## The same story from several sources says so
 
-A day runs the same story from more than one of our feeds, and until 2026-09-01 nothing on the page said so. The published item now carries two more fields, and both are computed at build time from the vector block the payload already holds - the browser never computes this and no encoder is loaded to do it.
+A day runs the same story from more than one of our feeds, and until 2026-09-01 nothing on the page said so. The published item now carries two more fields, and both are computed at build time from what the payload already holds - the day's vector block and the day's own titles. The browser never computes this and no encoder is loaded to do it.
 
 | Field | What it says | What it is not |
 | --- | --- | --- |
 | `also_covered_by` | How many **other sources** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. |
 | `same_story_as` | The item a reading surface would draw for this story. | Not a deletion, and not something any page acts on today. |
+
+**Two items become one story down this path, and nowhere else.** `collapse_same_story` in [../../../backend/idhazh/assemble.py](../../../backend/idhazh/assemble.py) is the only thing that writes either field. Every rule below the diagram is one of its boxes.
+
+```mermaid
+flowchart TD
+  start["Two items on the same published day"] --> src{"Same source?"}
+  src -- yes --> apart["Two stories.<br/>One outlet twice is a different problem,<br/>bounded by collect.max_source_share_per_day"]
+  src -- no --> vec{"Do both carry a vector?"}
+  vec -- no --> unknown["No answer. also_covered_by stays null,<br/>which reads as unknown and not as zero"]
+  vec -- yes --> shape{"Do the headlines reduce<br/>to the same words?"}
+  shape -- yes --> nums{"Do their numbers agree at the<br/>coarser of the two precisions?"}
+  shape -- no --> cos["cosine over the stored int8 vectors"]
+  nums -- no --> cos
+  nums -- yes --> fits["Reads as one story"]
+  cos --> floor{"At or above<br/>assemble.duplicate_similarity_min?"}
+  floor -- yes --> fits
+  floor -- no --> apart
+  fits --> all{"Does it clear against<br/>EVERY member of the group?"}
+  all -- no --> apart
+  all -- yes --> join["One group. The strongest rank_score is<br/>what a reading surface draws;<br/>every member carries also_covered_by"]
+```
+
+Two things the diagram is deliberate about. The headline branch and the vector branch are **two ways to clear one bar**, not two passes - which is why the all-pairs check at the bottom is shared. And nothing on it deletes: every item keeps its place, its address and its search entry whichever way it exits.
 
 **`also_covered_by` is what a reader sees.** The item's footer, under the summary, reads `Also covered by N other sources today.`, or `Only one of our sources carried this.` where nothing grouped with it. Both are facts about our feed set and never claims about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does.
 
@@ -143,7 +166,7 @@ A day runs the same story from more than one of our feeds, and until 2026-09-01 
 
 **A group is always across sources**, and that is a rule rather than an observation. The sentence a reader gets is about sources, so a group of one source has nothing to say - the survivor's line is the one it already had, and forming it would still cost a story. It is also where the encoder is least trustworthy: two press releases off one desk share their boilerplate and differ only in a date, so the Federal Reserve's June minutes and its July minutes score **0.9867** against each other on the committed 2026-08-25 day and are two different documents. One outlet publishing twice is bounded by `collect.max_source_share_per_day` instead.
 
-**Every pair inside a group clears the threshold**, not only each item against the one it joined. Single-link grouping chains: A is the same story as B and B as C while A and C are two different stories, and the chain quietly loses one of them.
+**Every pair inside a group clears the bar**, not only each item against the one it joined. Single-link grouping chains: A is the same story as B and B as C while A and C are two different stories, and the chain quietly loses one of them. Since 2026-09-14 there are two ways to clear the bar rather than one, which makes this rule matter more rather than less (below).
 
 **The keeper is the strongest by `rank_score`**, and where two items tie the earlier run wins - a returning reader keeps the item they already saw rather than watching the day swap it for a copy. An item published before `rank_score` existed has none, so it ranks below any scored item.
 
@@ -166,11 +189,50 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **`assemble.duplicate_similarity_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
 
+### One headline, two outlets, and why 0.94 was not what changed
+
+The vector pass alone left the same story on the page several times. `dolly parton, country music icon, dies at 80` published five times on 2026-08-25 from five different feeds. On 2026-09-03 one acquisition ran five times under two spellings of its price.
+
+**The cause is what the vector is built over, not the number it is compared against.** `embed.text_for` encodes `f"{title}. {summary}"`, and the summary is our own model's prose about one article - roughly nineteen words in twenty of the encoded text. Two outlets writing the same story produce two different articles, so our summariser produces two different summaries, so the comparison is dominated by the one part guaranteed to differ. Coverage is not the problem either: 9,351 of the 9,353 committed items carry a vector.
+
+**No threshold fixes it, and that is measured rather than argued.** Over the 53 cross-source pairs on the committed days whose headlines match once case and spacing are set aside, the stored vectors score: min **0.7298**, median **0.9177**, max **1.0000**. The floor of 0.94 catches 19 of the 53. Dropping the floor to 0.88 would catch 39 of them and admit 730 other-story pairs, and the one pair a person has marked as two stories already sits at **0.9317** - above the median of the pairs we want to catch. The two populations overlap, so the number is not the lever. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 committed days, 9,353 items, 2,300,847 cross-source pairs scored; the counts are deterministic and have no spread.
+
+**So a second joiner runs beside the vector one: two items are the same story when their reduced headlines are identical.** It has no threshold, because a string is equal or it is not. It sits under `assemble.group_identical_titles`, default on, and turning it off restores the vector-only rule exactly.
+
+**The reduction is a source constant and deliberately not a config value.** It defines the key rather than tunes it, and a key rule a config can change would break `build_day`'s promise that rebuilding a day reaches the same groups. `story_key` applies NFKC, case-folds, turns every non-word character into a space and collapses runs of spaces. It does **not** strip accents and does not restrict itself to Latin letters: `[a-z0-9]+` over a lower-cased string - which is what `tag.normalise` does for its own, different job - reduces two unrelated Devanagari headlines to the same empty string and would join them, and an accent-blind reduction finds the same 57 cross-source pairs over the committed days and not one more, so the risk buys nothing. A headline that reduces to nothing, and the `Untitled item` fallback, both refuse to key at all.
+
+**Numbers come out of the words and are compared separately**, because the two need different rules. The words have to match exactly. A number only has to agree to the coarser of the two precisions it was written with, and a scale word is read into the value rather than left among the words. A desk that writes `2 million` is not claiming to know the next six digits; a desk that writes `2,000,035` is. So `$12.9 billion`, `$12.93 billion` and `$13 billion` are one acquisition, and `$12.9bn` is the same headline as `$12.9 billion`. What it refuses is the pair written to the same precision and different inside it: `25 percent` against `50 percent`, `Budget 2025` against `Budget 2026`, `7 dead` against `70 dead`, and `100` against `104` - because a trailing zero is a written digit, so `100` claims three of them.
+
+**That rule is bounded by the words around it, which is why it is safe.** A number is only ever compared against a headline that is otherwise identical word for word, so the question is never "are these two numbers close" - it is "did two desks write one sentence and round one figure differently". Measured 2026-09-14 over the twenty-five committed days, it admits **12 cross-source pairs** the exact-digit rule refused and **every one of them is the same Nvidia acquisition**. No false merge, and the 42 groups the exact rule already found are unchanged. Owner ruling, 2026-09-14, over Andre's narrower stop-at-punctuation: two decimal places are not a reason to print one story twice, and the corroboration claim survives because a genuine disagreement - a different figure at the same precision - still refuses.
+
+**A matching headline does not lift the vector gate.** It decides that two items are the same story; it does not decide that an item with no vector may be grouped. That item stays out, as it always did.
+
+**The two rules are combined all-pairs, and that is load-bearing.** Equality is transitive on its own and a cosine is not, so their union is not either. Scoring each candidate only against the item it joined would chain a group through whichever of the two rules happened to fire - A and B share a headline, B and C clear the cosine, A and C share neither, and single-link would publish all three as one story. Every pair inside a group clears one of the two rules against every other pair.
+
+**Two classes of headline would break this, and neither fires on today's evidence.** The first is a headline that names no event - a round-up, a live blog, a branded column - where two outlets can share a title and carry different stories. All 42 cross-source same-headline groups on the committed days were read by hand and every one is a genuine same story; the shortest headline that groups is seven words. The second is a headline that repeats on a schedule. Of 9,333 distinct source-and-headline pairs, **12** repeat across days, and none of them is an editorial slot: they are extraction failures such as `article fails to load due to technical issues`, all within one source, which the across-sources rule already refuses, and empty titles, which the reduction already refuses. Both counts are of the archive as it stood on 2026-09-14 and are re-measurable rather than permanent.
+
+**What is still unmeasured is recall.** Every number above starts from pairs found *by* matching headlines, so it says nothing about same-story pairs whose headlines differ. The measurement that would settle it is a blind hand-label of same-day cross-source pairs drawn without consulting titles; if a large share of true pairs turn out to have different headlines, a title-only encoder returns as a third rule.
+
+**What it changed, replayed through the shipped pass over every committed day.** Both arms call `collapse_same_story`; the only difference between them is the flag, so this is a measurement of the code rather than of a description of it. The unit here is a group, not a pair - a group of five is ten pairs - so these counts are not the 53 above. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 days, 9,353 items, floor 0.94; the pass is deterministic and the counts have no spread.
+
+| | One-headline cross-source groups | Of those, still apart | Groups formed | Items in a group | Largest group |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Vectors only | 42 | **27** | 65 | 138 | 4 |
+| With the headline rule | 42 | **1** | 84 | 183 | 6 |
+
+Nineteen more groups form and 45 more items sit in one. Dolly Parton's death, which ran five times on 2026-08-25 from five feeds, is now one group of five. The largest group the pass has ever formed is the Nvidia acquisition at six, and it only reaches six because the rounding rule folds three spellings of its price.
+
+**The one that stays apart is the all-pairs rule refusing, not the headline rule failing**, and it was read. On 2026-08-31 two outlets share a headline about the lake renaming, but one of them had already joined a third item on its vector, and the newcomer does not clear the bar against that third item. The group that exists is correct and the item left out is a story the reader still gets; joining it would mean dropping complete-link, which is the trade `Every pair inside a group clears the bar` above already refused.
+
+**Editor's asymmetry is deferred, not repealed.** The rule above leans the *other* way from `What chose 0.94` - it adds groups rather than withholding them - and that is allowed only while `same_story_as` is recorded and not drawn. A missed group today prints a false sentence on a page the reader can see, five times over; a false merge today prints one wrong count on a card that still runs. The day the collapse is drawn, a false merge starts costing a story nobody can see is missing, and this paragraph expires with it.
+
 ### What it costs the runner
 
 The pass is one pass over the day's vectors and it is quadratic in the day's item count. Measured 2026-09-01 on a developer machine / / Python 3.14.2, over each committed day at 0.94: **10.5 s on the largest day ever published** (2026-08-24, 731 items), 3.6 s on 2026-08-30 (431 items) and 0.5 s on 2026-08-23 (147). The assemble job's timeout is 20 minutes and the month index rebuild beside it takes 88 to 122 milliseconds, so this is now the stage's largest single cost and still under one percent of its budget.
 
 It compares int8 vectors directly rather than decoding them. `embed.dequantise` divides by the quantisation scale and then normalises, so the scale cancels and the angle between two stored vectors is the angle between the unit vectors they decode to - a test asserts that rather than leaving it as a claim.
+
+**The headline rule added 0.5 percent and the readings above stand.** It costs one reduction per item before the pass, which is linear, and inside the pass it is a dictionary lookup and a string comparison that runs *instead of* the cosine whenever it matches. Measured 2026-09-14 on a developer machine / Python 3.14.2 as seven alternating rounds inside one process on 2026-08-24, the largest day: **11.601 s with the vector rule alone, 11.664 s with both, a difference of 0.064 s**. Alternating the arms is what makes that number readable - this box's own run-to-run spread on the same day is 10.8 to 17.5 s, so a between-run comparison could not have seen a difference this size, and an A-against-B inside one process cancels the box instead.
 
 ### The grouping runs before the lead block, and that order is fixed
 
