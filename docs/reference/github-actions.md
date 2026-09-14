@@ -1024,27 +1024,36 @@ Verified 2026-08-20.
  `run.shard_timeout_minutes`, and 33 items their ledger steps had already
  recorded as published never reached `assemble`. **Fixing one step in a file is
  not fixing the file.**
-- **A pipeline intermediate is gone within two days, so "re-render the day from
- its decisions" is not a repair option for any day older than 24 hours.** Verified
- 2026-08-27. `digest.yml` sets `retention-days: 1` on `plan`, `items-<shard>`
- and `shard-visuals-<shard>` - the last of which carries this run's rendered
- charts - and 2 on `runtime-log-<shard>`. Nothing under `backend/var/` is
- committed either: `.gitignore` line 47 is `backend/var/`, and
- `git ls-files backend/var` returns no files. **The committed record of a run
- is the digest under `frontend/public/digest/` plus the rows under `state/`,
- and never the intermediates.** Repairing an older day therefore means reading
- its articles again and paying the whole work stage again - there is no cheaper
- path, and a
+- **Every `digest.yml` artifact is gone within 14 days, and the ones a re-render
+ needs are gone within one - so "re-render the day from its decisions" is not a
+ repair option for any day older than 24 hours.** Read off `digest.yml` on
+ 2026-09-14, it keeps six: `plan` 1 day, `shard-visuals-<shard>` 1 - that one
+ carries this run's rendered charts - `runtime-log-<shard>` 2, `items-<shard>`
+ 7, `review` 7, and `evidence-<shard>` 14. **The re-render window is set by the
+ shortest of those and never by the longest**, which is the trap in reading the
+ list: `assemble` downloads `plan`, `items-*` and `shard-visuals-*` and needs
+ all three, so a week-old `items-*` repairs nothing once the other two have
+ gone. Nothing under `backend/var/` is committed either: `.gitignore` line 52
+ is `backend/var/`, and `git ls-files backend/var` returns no files. **The
+ committed record of a run is the digest under `frontend/public/digest/` plus
+ the rows under `state/`, and never the intermediates.** Repairing an older day
+ therefore means reading its articles again and paying the whole work stage
+ again - there is no cheaper path, and a
  plan that assumes one is proposing something that cannot be done. Job *logs*
  are the exception: they outlive every artifact here, which is why a question
- about what a past run did is asked with `gh run view --job <id> --log`.
+ about what a past run did is asked with `gh run view --job <id> --log`. A
+ seventh artifact at 90 days, holding each call's prompt and reply behind a
+ config flag, is row 8 of
+ [../../TODO/20260914-27-pipeline-observability-plan.md](../../TODO/20260914-27-pipeline-observability-plan.md)
+ and has not landed.
 - **A re-run is per job, never per step, and it reuses the original commit.**
  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
  again from its first step; there is no way to resume at the step that failed.
  That is survivable here only because the expensive jobs are separate: a failed
  `assemble` re-runs alone - 82 s in run `33270983446` - while `plan` and the
  `work` shards keep their results and are not repeated. It works
- for one day, because the artifacts it downloads carry
+ for one day, because `plan` and `shard-visuals-*`, two of the three artifacts
+ `assemble` downloads, carry
  `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
  workflow file as the original event**, so it cannot pick up a fix that landed
  afterwards, and a job that failed against a `main` which has since moved will
