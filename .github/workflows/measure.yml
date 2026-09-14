@@ -11,17 +11,33 @@ on:
         description: 'Measurement target'
         type: choice
         required: true
-        default: llm
+        default: bench
         options:
-          - llm
+          - bench
           - image
           - corpus
-          - runtime
           - batched
-      models:
-        description: >-
-          Comma-separated GGUF refs, each repo@revision:file. Leave empty to
-          measure the two models config/idhazh.json names.
+      # One candidate, typed once, and every arm below reads the answer the
+      # `models` job published rather than repeating the fallback. Leave them
+      # empty and the bench measures the model config already names, which is
+      # how the arm is checked against the page it is supposed to reproduce.
+      candidate_repo:
+        description: 'Hugging Face repository. Empty benches the configured model.'
+        default: ''
+      candidate_revision:
+        description: 'The 40-character commit those weights were uploaded in'
+        default: ''
+      candidate_file:
+        description: 'Weights filename inside that repository'
+        default: ''
+      candidate_sha256:
+        description: 'The digest those bytes must have, or the bench refuses them'
+        default: ''
+      candidate_id:
+        description: 'The alias the server answers to'
+        default: ''
+      candidate_quantisation:
+        description: 'The quantisation those bytes carry, for example Q4_K_M'
         default: ''
       threads:
         description: 'Comma-separated llama-bench thread counts, for example 4,8'
@@ -77,9 +93,9 @@ jobs:
   # dependent, so gating it would skip whichever target was dispatched. It reads
   # one file and finishes in seconds.
   #
-  # A target may still measure a model config does not name - that is what this
-  # harness is for. The `models` input carries the candidates and wins whenever
-  # it is set; only the DEFAULT comes from here (Guardrail #6).
+  # It is also where the candidate is decided: the dispatch input where one was
+  # given, the configured model otherwise. One place, so the two arms of the
+  # bench cannot disagree about which bytes they measured.
   models:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -87,37 +103,71 @@ jobs:
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
       summarize_file: ${{ steps.models.outputs.summarize_file }}
-      configured_refs: ${{ steps.models.outputs.configured_refs }}
+      candidate_repo: ${{ steps.models.outputs.candidate_repo }}
+      candidate_revision: ${{ steps.models.outputs.candidate_revision }}
+      candidate_file: ${{ steps.models.outputs.candidate_file }}
+      candidate_sha256: ${{ steps.models.outputs.candidate_sha256 }}
+      candidate_id: ${{ steps.models.outputs.candidate_id }}
+      candidate_quantisation: ${{ steps.models.outputs.candidate_quantisation }}
+      candidate_ref: ${{ steps.models.outputs.candidate_ref }}
     steps:
       - uses: actions/checkout@v6
 
       # Each value is asserted to be one bare word at the one point that writes
       # them, so an expression that substitutes one into a shell command below
-      # cannot carry a space, a quote or a newline into it.
+      # cannot carry a space, a quote or a newline into it. The inputs arrive
+      # through `env` for the same reason: a value pasted into this program
+      # would be text before it was a value.
       - id: models
+        env:
+          CANDIDATE_REPO: ${{ inputs.candidate_repo }}
+          CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
+          CANDIDATE_FILE: ${{ inputs.candidate_file }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          CANDIDATE_QUANTISATION: ${{ inputs.candidate_quantisation }}
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import os
           import pathlib
 
           config = json.load(open("config/idhazh.json", encoding="utf-8"))
           models_file = pathlib.Path("config") / config["models_file"]
           models = json.load(open(models_file, encoding="utf-8"))
-          refs = []
           for role in ("summarize",):
               for field in ("repo", "revision", "file"):
                   value = models[role].get(field) or ""
                   if value.split() != [value]:
                       raise SystemExit(f"models.{role}.{field} is empty or not one word")
                   print(f"{role}_{field}={value}")
-              ref = models[role]
-              refs.append(f"{ref['repo']}@{ref['revision']}:{ref['file']}")
-          print("configured_refs=" + ",".join(refs))
+          configured = models["summarize"]
+          candidate = {}
+          for field in ("repo", "revision", "file", "sha256", "id", "quantisation"):
+              value = os.environ.get(f"CANDIDATE_{field.upper()}", "").strip()
+              value = value or configured.get(field) or ""
+              if value.split() != [value]:
+                  raise SystemExit(f"candidate {field} is empty or not one word")
+              candidate[field] = value
+              print(f"candidate_{field}={value}")
+          print(
+              "candidate_ref="
+              f"{candidate['repo']}@{candidate['revision']}:{candidate['file']}"
+          )
           PY
 
+  # The bench, arm one: raw prefill and decode throughput with nothing else in
+  # the process. This is the arm that says whether the weights can move tokens
+  # at all, and it is the cheap one - it runs first so a model that cannot clear
+  # the bar never costs the server arm a runner hour.
+  #
+  # It also holds the cache both arms read. The entry is keyed on the candidate
+  # digest rather than its filename, because two builds of one model share a
+  # name and a key that cannot tell them apart serves the wrong weights under
+  # the right alias.
   llm:
-    if: ${{ inputs.target == 'llm' }}
+    if: ${{ inputs.target == 'bench' }}
     needs: models
     runs-on: ubuntu-latest
     timeout-minutes: 330
@@ -157,14 +207,28 @@ jobs:
             df -h / /mnt 2>/dev/null | sed -n '1,4p'
           } | tee backend/var/hardware.txt
 
+      # Keyed on the candidate bytes, and shared with the server arm below. One
+      # model per entry, so the cache never holds two multi-gigabyte sets of
+      # weights at once (Guardrail #2).
+      - name: Cache the candidate weights and runtime
+        id: weights
+        uses: actions/cache@v6
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+
       # The measurement runtime is immutable even while production still
       # follows the latest compatible release. A candidate and an incumbent
       # measured on different builds are not a controlled comparison.
       - name: Install pinned llama.cpp
+        if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          mkdir -p backend/bin
           URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
             | jq -r --arg asset "$LLAMA_CPP_ASSET" \
@@ -178,22 +242,40 @@ jobs:
           echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           # The whole directory, not one binary. These builds are dynamically
-          # linked, so copying llama-bench alone leaves libllama-bench-impl.so
+          # linked, so copying llama-bench alone leaves its shared objects
           # behind and the binary dies at exec with a 127 that names a library
-          # rather than the mistake.
-          BIN=$(dirname "$(find llama -type f -name 'llama-bench' | head -1)")
-          echo "LLAMA_BIN=$BIN" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=$BIN" >> "$GITHUB_ENV"
-          chmod +x "$BIN"/llama-* || true
+          # rather than the mistake. `cp -a`, not `find -type f`: the builds
+          # ship versioned shared objects as symlinks and `-type f` skips one.
+          SRC=$(dirname "$(find llama -type f -name 'llama-bench' | head -1)")
+          cp -a "$SRC"/. backend/bin/
+
+      # No `if:`. A restored entry is the one case where nobody watched the
+      # bytes arrive, so this runs on a cache hit too and the hardware record
+      # names the binary either way (Guardrail #10).
+      - name: Record the runtime identity
+        run: |
+          set -euo pipefail
+          chmod +x backend/bin/llama-* || true
+          echo "LLAMA_BIN=backend/bin" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=backend/bin" >> "$GITHUB_ENV"
           {
             echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
             echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
-            sha256sum "$BIN/llama-bench"
+            echo "weights_cache_hit=${WEIGHTS_CACHE_HIT}"
+            sha256sum backend/bin/llama-bench
           } | tee -a backend/var/hardware.txt
-
-      - name: Download and benchmark exact models
         env:
-          MODEL_REFS: ${{ inputs.models || needs.models.outputs.configured_refs }}
+          WEIGHTS_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
+
+      # The bench refuses any bytes but the declared ones, so every number it
+      # writes is about a model somebody can fetch again (Guardrail #10). It
+      # also writes the raw half of the dossier body the server arm finishes.
+      - name: Benchmark the candidate
+        env:
+          CANDIDATE_REF: ${{ needs.models.outputs.candidate_ref }}
+          CANDIDATE_SHA256: ${{ needs.models.outputs.candidate_sha256 }}
+          CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
+          CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
           THREAD_COUNTS: ${{ inputs.threads }}
         run: |
           set -euo pipefail
@@ -209,16 +291,25 @@ jobs:
               exit 2
             fi
           done
-          python3 backend/utilities/measure_llm.py \
-            --models "$MODEL_REFS" \
+          python3 backend/utilities/measure_llm.py bench \
+            --models "$CANDIDATE_REF" \
+            --expect-sha256 "$CANDIDATE_SHA256" \
+            --candidate-id "$CANDIDATE_ID" \
+            --quantisation "$CANDIDATE_QUANTISATION" \
             --threads "$THREAD_COUNTS" \
-            --binary "$LLAMA_BIN/llama-bench"
+            --binary "$LLAMA_BIN/llama-bench" \
+            --readings backend/var/bench/raw-arm.json
 
+      # Ninety days, not seven. A dossier is pasted from these numbers weeks
+      # after the dispatch that read them, and an artifact that expired is a
+      # re-run of a five-hour job. The whole tree is a few hundred kilobytes of
+      # JSON and text against the 500 MB ceiling (Guardrail #2).
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: bench-llm
+          name: bench-raw
           path: backend/var/
+          retention-days: 90
 
   image:
     if: ${{ inputs.target == 'image' }}
@@ -298,15 +389,25 @@ jobs:
           name: bench-corpus
           path: backend/var/corpus.json
 
+  # The bench, arm two: a real llama-server, real fetches, real summaries. Raw
+  # throughput says what the weights can do; this says what a shard of the daily
+  # run costs, which is the number the job budget is spent against.
+  #
+  # It needs the raw arm rather than running beside it, for two reasons. The
+  # weights cache is already warm, so this job downloads nothing. And the emit
+  # step at the end needs both halves in one place to write the page body.
   runtime:
-    if: ${{ inputs.target == 'runtime' }}
-    needs: models
+    if: ${{ inputs.target == 'bench' }}
+    needs: [models, llm]
     runs-on: ubuntu-latest
     timeout-minutes: 330
     env:
-      MODEL_REPO: ${{ needs.models.outputs.summarize_repo }}
-      MODEL_REVISION: ${{ needs.models.outputs.summarize_revision }}
-      MODEL_FILE: ${{ needs.models.outputs.summarize_file }}
+      CANDIDATE_REPO: ${{ needs.models.outputs.candidate_repo }}
+      CANDIDATE_REVISION: ${{ needs.models.outputs.candidate_revision }}
+      CANDIDATE_FILE: ${{ needs.models.outputs.candidate_file }}
+      CANDIDATE_SHA256: ${{ needs.models.outputs.candidate_sha256 }}
+      CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
+      CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
     steps:
       - uses: actions/checkout@v6
 
@@ -339,7 +440,20 @@ jobs:
       - name: Install
         run: pip install -e .
 
+      # The same key the raw arm wrote, so this job restores what that job
+      # already paid for. A miss here is a second download of the same bytes,
+      # and download seconds are wall-clock seconds exactly like compute is.
+      - name: Restore the candidate weights and runtime
+        id: weights
+        uses: actions/cache@v6
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+
       - name: Fetch runtime and weights
+        if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -358,34 +472,70 @@ jobs:
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
           cp -a "$SRC"/. backend/bin/
-          chmod +x backend/bin/llama-server
-          curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${MODEL_FILE}" \
-            "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
+          curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${CANDIDATE_FILE}" \
+            "https://huggingface.co/${CANDIDATE_REPO}/resolve/${CANDIDATE_REVISION}/${CANDIDATE_FILE}?download=true"
 
       # A throughput number is about a model only if it names the bytes that
-      # produced it (Guardrail #10).
+      # produced it (Guardrail #10). No `if:`, because a restored cache entry is
+      # the one case where nobody watched the bytes arrive.
       - name: Verify the weights
         run: |
           set -euo pipefail
-          EXPECTED=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
-          if [ -z "$EXPECTED" ]; then
-            echo "config records no sha256 for models.summarize" >&2
-            exit 1
-          fi
-          echo "${EXPECTED}  backend/models/${MODEL_FILE}" | sha256sum --check
+          chmod +x backend/bin/llama-server
+          echo "${{ needs.models.outputs.candidate_sha256 }}  backend/models/${CANDIDATE_FILE}" \
+            | sha256sum --check
 
       - name: Record input identity
+        env:
+          GGUF_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
         run: |
           {
-            echo "gguf_cache_hit=false"
+            echo "gguf_cache_hit=${GGUF_CACHE_HIT}"
             echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
             echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
             sha256sum backend/bin/llama-server
-            echo "model_repo=${MODEL_REPO}"
-            echo "model_revision=${MODEL_REVISION}"
-            stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
-            sha256sum "backend/models/${MODEL_FILE}"
+            echo "model_repo=${CANDIDATE_REPO}"
+            echo "model_revision=${CANDIDATE_REVISION}"
+            stat -c 'model_bytes=%s' "backend/models/${CANDIDATE_FILE}"
+            sha256sum "backend/models/${CANDIDATE_FILE}"
           } | tee backend/var/runtime-sweep/cache-state.txt
+
+      # The committed config still names the incumbent, and a bench does not
+      # edit it. The scratch copy differs in the ACTIVE MODEL FILE and nothing
+      # else, so every control the run holds fixed - prompt, schema, sampler,
+      # context, threads, truncation cap - is the committed one by construction.
+      # The pointer is left alone and the file it names is rewritten, so a
+      # candidate is benched through the same one line a swap would later move.
+      - name: Build the candidate config
+        run: |
+          set -euo pipefail
+          mkdir -p backend/var
+          rm -rf backend/var/candidate-config
+          cp -a config backend/var/candidate-config
+          python - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path("backend/var/candidate-config")
+          pointer = json.loads((root / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
+          path = root / pointer
+          models = json.loads(path.read_text(encoding="utf-8"))
+          entry = dict(models["summarize"])
+          inference = dict(entry["inference"])
+          inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
+          turns = dict(entry["turns"])
+          turns["declared_for"] = os.environ["CANDIDATE_SHA256"]
+          entry.update({
+              "file": os.environ["CANDIDATE_FILE"],
+              "id": os.environ["CANDIDATE_ID"],
+              "inference": inference,
+              "quantisation": os.environ["CANDIDATE_QUANTISATION"],
+              "repo": os.environ["CANDIDATE_REPO"],
+              "revision": os.environ["CANDIDATE_REVISION"],
+              "sha256": os.environ["CANDIDATE_SHA256"],
+              "turns": turns,
+          })
+          models["summarize"] = entry
+          path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
 
       - name: Build fixed five-article corpus
         run: |
@@ -423,7 +573,10 @@ jobs:
           RUNTIME_CANDIDATE: ${{ inputs.runtime_candidate }}
           RUNTIME_THREADS: ${{ inputs.runtime_threads }}
           RUNTIME_THREADS_BATCH: ${{ inputs.runtime_threads_batch }}
-          GGUF_CACHE_HIT: 'false'
+          # Whether the weights were already on the machine decides what the
+          # first server start of this job measures, so the summary records it
+          # rather than asserting it.
+          GGUF_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -447,7 +600,8 @@ jobs:
           DATE = os.environ["RUNTIME_DATE"]
           ROOT = Path("backend/var/runtime-sweep")
           CONFIG_ROOT = ROOT / "configs"
-          MODEL_FILE = os.environ["MODEL_FILE"]
+          CANDIDATE = Path("backend/var/candidate-config")
+          CANDIDATE_FILE = os.environ["CANDIDATE_FILE"]
           THREADS = int(os.environ["RUNTIME_THREADS"])
           THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
           MAX_THREADS = 2 * (os.cpu_count() or 1)
@@ -488,7 +642,10 @@ jobs:
               dst = CONFIG_ROOT / label
               if dst.exists():
                   shutil.rmtree(dst)
-              shutil.copytree("config", dst)
+              # From the candidate copy, not from `config`. The committed config
+              # still names the incumbent, and a sweep that copied it would
+              # measure the wrong weights under the candidate's name.
+              shutil.copytree(CANDIDATE, dst)
               pointer = json.loads(
                   (dst / "idhazh.json").read_text(encoding="utf-8")
               )["models_file"]
@@ -587,7 +744,7 @@ jobs:
               items_dir.mkdir(parents=True, exist_ok=True)
               argv = server_argv(
                   binary=Path("backend/bin/llama-server"),
-                  weights=Path("backend/models") / MODEL_FILE,
+                  weights=Path("backend/models") / CANDIDATE_FILE,
                   model=settings.models.summarize,
                   inference=settings.models.summarize.inference,
                   port=SERVER_PORT,
@@ -762,13 +919,33 @@ jobs:
               raise SystemExit(verdict)
           PY
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: bench-raw
+          path: backend/var/raw-arm/
+
+      # The whole point of the arm. Two artifacts of numbers are a
+      # transcription job; a page body with the numbers already in it is a
+      # paste. This step never writes the committed config and never touches
+      # `docs/` - a person reads the emitted page and decides.
+      - name: Emit the dossier body
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/measure_llm.py emit \
+            --raw backend/var/raw-arm/bench/raw-arm.json \
+            --server backend/var/runtime-sweep/runtime-summary.json \
+            --corpus 'Five articles' \
+            --dossier backend/var/runtime-sweep/dossier.md \
+            --readings backend/var/runtime-sweep/readings.json
+          cat backend/var/runtime-sweep/dossier.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload runtime sweep
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: runtime-sweep-${{ inputs.runtime_candidate }}
+          name: bench-server-${{ inputs.runtime_candidate }}
           path: backend/var/runtime-sweep/
-          retention-days: 7
+          retention-days: 90
 
   batched:
     if: ${{ inputs.target == 'batched' }}
