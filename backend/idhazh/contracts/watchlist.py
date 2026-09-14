@@ -22,7 +22,7 @@ from typing import Annotated, ClassVar, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url
+from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url, records_json
 from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceTier
 
 Cik = Annotated[str, StringConstraints(pattern=r"^[0-9]{10}$")]
@@ -143,6 +143,14 @@ class Watchlist(Contract):
 
     entities: list[EntityDef]
     edgar: EdgarPolicy = Field(default_factory=EdgarPolicy)
+
+    def to_json(self) -> str:
+        """One entity a line - see `records_json`.
+
+        Same reason `config/sources.json` has: a person curates it, and an
+        alias list is read against the display name it belongs to.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     def entity_terms(self) -> dict[str, list[str]]:
         """The entity match surface. A retired entity keeps its tombstone and stops matching."""
