@@ -269,7 +269,16 @@ def score(
 
 @dataclass(frozen=True, slots=True)
 class Ranked:
-    """One story after scoring, before anything decides whether to take it."""
+    """One story after scoring, before anything decides whether to take it.
+
+    `score_counterfactual` is what the same story would have scored if one lens
+    weight had been a different number, and it is `None` on a run that asked no
+    such question. It comes from a second call to `score` over the same
+    candidates rather than from arithmetic on `score`, because a lens term that
+    is added flatly today is an implementation detail and not a promise - the
+    day it stops being flat, a subtraction would keep returning a number and
+    the number would be wrong.
+    """
 
     score: float
     candidate: Candidate
@@ -279,6 +288,30 @@ class Ranked:
     watchlist_hit: bool
     on_front_page: bool
     lens_bonus: float = 0.0
+    score_counterfactual: float | None = None
+
+
+class DeskPlan(NamedTuple):
+    """What one desk scored, and what it took out of that.
+
+    Three facts about one pass. `pool` is every candidate the desk scored -
+    taken and refused alike, in the order the take read them - and it is the
+    one of the three that exists nowhere else. `items` is the subset that
+    survived `max_per_source` and the day ceiling, and the grouping, the
+    already-published drop and the too-old drop that decide who is in the pool
+    at all all happen inside `plan_vertical`. A second function recomputing a
+    refused candidate would be a second copy of the rules that decide the day,
+    which is the drift a single scoring path exists to prevent.
+
+    Returned rather than appended to a list the caller passes in:
+    `stages.plan._plan_desks` runs twice on a day whose source ceiling binds,
+    and only the second pass is the true one. A return value is replaced by the
+    rebinding that is already there; an accumulator stacks both passes.
+    """
+
+    summary: VerticalPlan
+    items: list[PlannedItem]
+    pool: list[Ranked]
 
 
 def _ordered(scored: list[Ranked]) -> list[Ranked]:
@@ -437,9 +470,10 @@ def plan_vertical(
     watchlist_keys: frozenset[str] = frozenset(),
     front_page_keys: frozenset[str] = frozenset(),
     lens_bonuses: Mapping[str, float] | None = None,
+    counterfactual_lens_bonuses: Mapping[str, float] | None = None,
     day_ceiling: DayCeiling | None = None,
     reliability: Mapping[str, float] | None = None,
-) -> tuple[VerticalPlan, list[PlannedItem]]:
+) -> DeskPlan:
     """Rank one vertical's candidates and take what its feeds actually offered.
 
     Supply, the score and `max_per_source` set the size. A vertical below its
@@ -480,9 +514,24 @@ def plan_vertical(
     times the runs the day had, which is a count and not a share - and the
     share is what a reader sees. A run that does not pass one plans exactly
     what it planned before.
+
+    The scored pool comes back beside the summary and the items, because a
+    candidate this desk refused is recorded nowhere else and the only honest
+    way to know what the score refused is to keep the scores it refused on.
+    `DeskPlan` says what the three are.
+
+    `counterfactual_lens_bonuses` is the same mapping under a different set of
+    lens weights, and it decides nothing. Every story is scored a second time
+    with it and the second answer is carried on `Ranked.score_counterfactual`
+    for a ledger to record; the take, the order and the plan are the first
+    answer's alone. Passing it is what makes a run able to say what a weight
+    change would have cost, and the only way to know that from committed data
+    is to have asked at the time - after the fact, the candidates a run
+    refused are gone.
     """
     sightings = first_seen or {}
     themes = lens_bonuses or {}
+    probes = counterfactual_lens_bonuses
     dropped = already_published | settled_today
     grouped = {
         url_key: carried
@@ -499,7 +548,7 @@ def plan_vertical(
         below_feed_floor=below_floor,
     )
     if below_floor:
-        return summary, []
+        return DeskPlan(summary, [], [])
 
     scored: list[Ranked] = []
     stale = 0
@@ -538,12 +587,24 @@ def plan_vertical(
                 watchlist_hit=watchlist_hit,
                 on_front_page=on_front_page,
                 lens_bonus=theme,
+                score_counterfactual=(
+                    None
+                    if probes is None
+                    else score(
+                        carried,
+                        config=config,
+                        watchlist_hit=watchlist_hit,
+                        lens_bonus=probes.get(url_key, 0.0),
+                        appeared=appeared.at,
+                        now=now,
+                        reliability=reliability,
+                    )
+                ),
             )
         )
 
-    taken = _take(
-        _ordered(scored), max_per_source=config.max_per_source, day_ceiling=day_ceiling
-    )
+    ordered = _ordered(scored)
+    taken = _take(ordered, max_per_source=config.max_per_source, day_ceiling=day_ceiling)
     items = [
         PlannedItem(
             item_id=item_id(vertical.id, item.candidate.url_key),
@@ -564,7 +625,11 @@ def plan_vertical(
         )
         for item in taken
     ]
-    return summary.model_copy(update={"planned": len(items), "too_old": stale}), items
+    return DeskPlan(
+        summary.model_copy(update={"planned": len(items), "too_old": stale}),
+        items,
+        ordered,
+    )
 
 
 # --- day-wide duplicates: the same story at two addresses --------------------

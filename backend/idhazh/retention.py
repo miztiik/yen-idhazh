@@ -1213,6 +1213,83 @@ def prune_seen(
     )
 
 
+# --- The counterfactual score day files --------------------------------------
+
+
+@dataclass(frozen=True)
+class CounterfactualPruneResult:
+    """Which counterfactual day files went, and what they weighed.
+
+    The same shape as `SeenPruneResult` and for the same reason: this knob is
+    counted in days too, so the boundary is a day and the file the reader named
+    is the file this deletes. There is no month here to group by.
+    """
+
+    deleted: tuple[str, ...]
+    bytes_freed: int
+    kept: tuple[str, ...]
+    dry_run: bool
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.deleted)
+
+
+def prune_counterfactual_scores(
+    state_dir: Path,
+    *,
+    today: str,
+    within_days: int,
+    dry_run: bool = False,
+) -> CounterfactualPruneResult:
+    """Delete every counterfactual day file outside the window anyone reads.
+
+    This ledger is appended to on every run and read only over a trailing window
+    - `lens_weights.window_days` - so a day older than that window's oldest is
+    bytes in the working tree answering no question. Without this prune it grows
+    for ever at a rate nothing bounds, and the row that added it put the
+    unbounded arithmetic in writing: about 180 rows a run and 900 a day, which
+    is roughly 135 KB a day and 49 MB a year at 150 bytes a row (estimate; the
+    measured width is in that row's pull request).
+
+    The keep-set comes from `day_partition.days_in_window`, the same helper the
+    reader consults, rather than from a second date calculation here. Two
+    calculations drift, and the day they drift this one deletes a file a reader
+    wanted.
+
+    **Only what is older than that set goes, never what is newer**, for the
+    reason `prune_seen` states at length: a run can be handed a date in the
+    past, and deleting everything outside the window would then take the live
+    day with it.
+
+    There is no fuse. A day nobody reads is not the archive, and the worst case
+    is that a later tuning pass has a shorter history to argue from - which is
+    the same thing the window already decided.
+    """
+    oldest_read = min(day_partition.days_in_window(today, within_days))
+    deleted: list[str] = []
+    kept: list[str] = []
+    freed = 0
+
+    for day in day_partition.day_files(state_dir / ledger.COUNTERFACTUAL_SCORES_DIRNAME):
+        on = day_partition.date_of(day)
+        if on >= oldest_read:
+            kept.append(ledger.counterfactual_scores_relpath(on))
+            continue
+        deleted.append(ledger.counterfactual_scores_relpath(on))
+        freed += day.stat().st_size
+        if not dry_run:
+            day.unlink()
+            _drop_empty_day_dirs(day)
+
+    return CounterfactualPruneResult(
+        deleted=tuple(deleted),
+        bytes_freed=freed,
+        kept=tuple(kept),
+        dry_run=dry_run,
+    )
+
+
 # --- The trace tree ----------------------------------------------------------
 
 

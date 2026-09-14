@@ -41,10 +41,12 @@ from idhazh.contracts.app_config import (
     AppConfig,
     CollectConfig,
     ConsoleConfig,
+    LensWeightsConfig,
     ObservabilityConfig,
     RetentionConfig,
 )
 from idhazh.contracts.base import ITEM_ID_PATTERN
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import (
@@ -82,6 +84,7 @@ from idhazh.retention import (
     over_budget,
     over_cap,
     prune,
+    prune_counterfactual_scores,
     prune_feed_health,
     prune_row,
     prune_scores,
@@ -2414,6 +2417,122 @@ def test_a_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
     assert result.deleted == ("state/seen/2024/01/15.csv",)
     assert result.dry_run
     assert stale.exists()
+
+
+# --- the counterfactual day files --------------------------------------------
+
+
+def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
+    """One day of the counterfactual ledger, written by the real appender."""
+    ledger.append_counterfactual_scores(
+        state,
+        day,
+        [
+            CounterfactualScoreRow(
+                version=CounterfactualScoreRow.schema_version(),
+                date=day,
+                run_id=f"{day}-1",
+                vertical="ai",
+                url_key=hashlib.sha256(f"{day}-{n}".encode()).hexdigest(),
+                taken=n == 0,
+                lens_id="chips",
+                lens_bonus=0.3,
+                lens_multiplier=1.25,
+                score_committed=1.2,
+                score_counterfactual=1.275,
+            )
+            for n in range(rows)
+        ],
+    )
+    return ledger.counterfactual_scores_path(state, day)
+
+
+def test_a_counterfactual_day_outside_the_window_goes_and_says_what_it_weighed(
+    tmp_path: Path,
+) -> None:
+    """The ledger is appended to on every run, so without this it has no ceiling.
+
+    `2024-01-15` is far outside any window this config can name. The day inside
+    the window stays, and the empty year directory goes with the last day in it
+    - a walk that kept them would cost more every year while reading the same
+    rows.
+    """
+    state = tmp_path / "state"
+    window = LensWeightsConfig().window_days
+    today = TODAY.isoformat()
+    stale = _counterfactual_day(state, "2024-01-15", rows=3)
+    weight = stale.stat().st_size
+    kept = _counterfactual_day(state, today)
+
+    result = prune_counterfactual_scores(state, today=today, within_days=window)
+
+    assert result.deleted == ("state/counterfactual-scores/2024/01/15.csv",)
+    assert result.kept == (f"state/counterfactual-scores/{today[:4]}/{today[5:7]}/{today[8:10]}.csv",)
+    assert result.bytes_freed == weight
+    assert not stale.exists()
+    assert kept.exists()
+    assert not (state / ledger.COUNTERFACTUAL_SCORES_DIRNAME / "2024").exists()
+
+
+def test_a_counterfactual_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    stale = _counterfactual_day(state, "2024-01-15")
+
+    result = prune_counterfactual_scores(
+        state, today=TODAY.isoformat(), within_days=LensWeightsConfig().window_days, dry_run=True
+    )
+
+    assert result.deleted == ("state/counterfactual-scores/2024/01/15.csv",)
+    assert result.dry_run
+    assert stale.exists()
+
+
+def test_a_counterfactual_day_the_window_still_names_is_never_deleted(tmp_path: Path) -> None:
+    """The boundary is the window's OLDEST day, not the window's edges.
+
+    A run can be handed a date in the past, and deleting everything outside the
+    window would then take the live day with it. The anchor here is a month
+    before the day on disk, so the day on disk is newer than every date the
+    window names - and it still has to survive.
+    """
+    state = tmp_path / "state"
+    on = TODAY.isoformat()
+    day = _counterfactual_day(state, on)
+    past = (TODAY - timedelta(days=30)).isoformat()
+
+    result = prune_counterfactual_scores(state, today=past, within_days=7)
+
+    assert result.deleted == ()
+    assert day.exists()
+
+
+def test_the_stage_deletes_the_counterfactual_days_nobody_reads(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The wiring, asserted through the step an operator actually runs.
+
+    A prune nothing calls is a prune that does not happen, and the ledger it
+    would have bounded is the one that grows on every run.
+    """
+    state = tmp_path / "state"
+    stale = _counterfactual_day(state, "2024-01-15")
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                lens_weights=LensWeightsConfig(),
+                run_id=RUN_ID,
+                today=TODAY,
+                state_dir=state,
+            )
+            == 0
+        )
+
+    assert not stale.exists()
+    assert "removed state/counterfactual-scores/2024/01/15.csv" in caplog.text
 
 
 def test_the_stage_says_so_when_every_seen_day_is_inside_the_window(

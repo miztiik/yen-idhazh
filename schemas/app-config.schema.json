@@ -958,6 +958,35 @@
       "title": "LengthPolicy",
       "type": "object"
     },
+    "LensWeightsConfig": {
+      "additionalProperties": false,
+      "description": "What a run asks about its own lens weights, and how much of the answer it keeps.\n\nA lens weight is a number somebody picked, and nothing committed said what a\ndifferent number would have done. Every run now scores a bounded pool of its\ncandidates twice - once at the committed weights and once at a candidate\nweight - and writes both to `state/counterfactual-scores/`. Nothing here\nmoves a weight, an item, or a published payload. These knobs decide what the\nrun asks and how many rows it leaves behind.\n\nThe ledger is appended to forever, so every knob here is a bound on ONE\nrun's work rather than on the archive's size (CLAUDE.md Guardrail #12).\n`window_days` is the other end of the same rule: it is how far back a reader\nof the ledger may look, and it is what the retention pass keeps.",
+      "properties": {
+        "counterfactual_multiplier": {
+          "default": 1.25,
+          "description": "What the counterfactual multiplies each committed lens weight by. Above 1.0 on purpose: a heavier weight is the question a committed archive cannot answer afterwards, because it is the one that would have lifted a story the run refused, and a refused story leaves no other trace. 1.25 is an ESTIMATE and has not been measured - it is large enough to move a story across the cut on a crowded desk and small enough to stay inside the step a later tuning loop would allow. Exactly 1.0 asks nothing: both scores come out equal and every row is a byte with no question in it.",
+          "exclusiveMinimum": 0.0,
+          "title": "Counterfactual Multiplier",
+          "type": "number"
+        },
+        "counterfactual_refused_per_desk": {
+          "default": 20,
+          "description": "How many of each desk's refused candidates the run records, highest score first. Everything the run TOOK is recorded whatever this says. 20 keeps the band around the cut, where a bonus decides; a candidate further down would not cross under any weight this probe asks about, so its row carries no question. At about 80 items taken and five desks this is roughly 180 rows a run. 0 records the taken items alone.",
+          "minimum": 0,
+          "title": "Counterfactual Refused Per Desk",
+          "type": "integer"
+        },
+        "window_days": {
+          "default": 30,
+          "description": "How far back a reader of the counterfactual ledger may look, and so how much of it the retention pass keeps. Both ends of one rule, in one knob, because a window a reader opens and a window the prune keeps have to be the same window or the reader reads a hole. 30 days is an ESTIMATE: long enough that a lens firing a few times a day still has a few hundred rows in it, short enough that a weight changed last month is not still being argued from.",
+          "minimum": 1,
+          "title": "Window Days",
+          "type": "integer"
+        }
+      },
+      "title": "LensWeightsConfig",
+      "type": "object"
+    },
     "LogLevel": {
       "enum": [
         "DEBUG",
@@ -1842,6 +1871,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "lens_weights is new, with three knobs: counterfactual_multiplier, counterfactual_refused_per_desk and window_days. Additive and optional - the block carries a default for every knob, so a config file written before today validates unchanged and a fresh clone runs on the defaults.",
+      "version": "2026-09-14T11:00",
+      "why": "Every run now scores a bounded pool of its candidates a second time at a candidate lens weight and writes both scores to state/counterfactual-scores/. Nothing moves as a result. The block holds what the run asks - the multiplier - and what it costs - how many refused candidates a desk records, and how long the rows are kept."
+    },
+    {
       "change": "visuals.canvas_width is gone and nothing replaces it, and so is the VisualsConfig.canvas_height property derived from it. This is a contract break and the read-side migration ships with it: a config that still carries the knob is refused by name through refuse_a_removed_knob rather than through 'extra inputs are not permitted'. Refused rather than lifted, because there is no knob left that answers the same question - a width the operator sets and a width the reader's screen has are not the same number, and carrying the old one forward would let somebody keep believing they had set the drawing box.",
       "version": "2026-09-14T09:30",
       "why": "Plan 12 row #2. The knob sized one fixed drawing box for every visual, back when the pipeline rendered the picture. The reader's browser draws it now (owner ruling, 2026-09-13) and takes the width the card actually gives it, measured in the browser - so no build-time number can say how wide a drawing is, and one that tried would only ever be a scale factor shrinking the drawn type. The smallest drawn string read 4.8 CSS px at a 390 px viewport against a --text-xs of 12, which is 60 percent under the token it was set from, and that scale is what this removal ends. canvas_height went with it because it was 16:10 of a number that no longer exists and had no caller of its own."
@@ -2506,6 +2540,9 @@
     "finetune": {
       "$ref": "#/$defs/FinetuneConfig"
     },
+    "lens_weights": {
+      "$ref": "#/$defs/LensWeightsConfig"
+    },
     "logging": {
       "$ref": "#/$defs/LoggingConfig"
     },
@@ -2541,7 +2578,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-14T09:30",
+      "default": "2026-09-14T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2552,5 +2589,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-14T09:30"
+  "version": "2026-09-14T11:00"
 }

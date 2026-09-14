@@ -16,6 +16,7 @@ from idhazh import (
 )
 from idhazh.contracts.app_config import (
     CollectConfig,
+    LensWeightsConfig,
     ObservabilityConfig,
     RetentionConfig,
 )
@@ -31,6 +32,7 @@ def stage_prune_state(
     retention_config: RetentionConfig,
     run_id: str,
     today: date_type,
+    lens_weights: LensWeightsConfig | None = None,
     state_dir: Path | None = None,
     public_root: Path | None = None,
     digest_root: Path | None = None,
@@ -99,6 +101,9 @@ def stage_prune_state(
 
     removed: list[str] = []
     removed += _prune_seen_shards(state, collect, today, dry_run=dry_run)
+    removed += _prune_counterfactual_shards(
+        state, lens_weights or LensWeightsConfig(), today, dry_run=dry_run
+    )
     removed += _prune_trace_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
@@ -260,6 +265,43 @@ def _prune_seen_shards(
         seen.kept[0] if seen.kept else "no day file",
     )
     return list(seen.deleted)
+
+
+def _prune_counterfactual_shards(
+    state: Path, lens_weights: LensWeightsConfig, today: date_type, *, dry_run: bool
+) -> list[str]:
+    """Delete the counterfactual day files outside the window anyone reads.
+
+    Its own helper beside the seen one, for the reason that one gives: a day
+    that will not delete in one ledger must not stop another being cleaned, and
+    the log line names one ledger at a time.
+
+    Counted rather than listed, the way the seen line is. The window is 30 days,
+    so `kept` is up to 31 paths and joining them would be a wall nobody reads -
+    `_report_removals` already names every removed file, one line each.
+    """
+    scores = retention.prune_counterfactual_scores(
+        state,
+        today=today.isoformat(),
+        within_days=lens_weights.window_days,
+        dry_run=dry_run,
+    )
+    if not scores.changed:
+        LOG.info(
+            "counterfactual prune: every day file is inside the %s-day window, so none "
+            "was deleted",
+            lens_weights.window_days,
+        )
+        return []
+    LOG.info(
+        "counterfactual prune%s: deleted %s day files, freed %s bytes, kept %s back to %s",
+        " (dry run)" if scores.dry_run else "",
+        len(scores.deleted),
+        scores.bytes_freed,
+        len(scores.kept),
+        scores.kept[0] if scores.kept else "no day file",
+    )
+    return list(scores.deleted)
 
 
 def _prune_trace_shards(
