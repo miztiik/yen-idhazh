@@ -604,7 +604,7 @@ jobs:
           DATE = os.environ["RUNTIME_DATE"]
           ROOT = Path("backend/var/runtime-sweep")
           CONFIG_ROOT = ROOT / "configs"
-          CANDIDATE = Path("backend/var/candidate-config")
+          CANDIDATE_CONFIG = Path("backend/var/candidate-config")
           CANDIDATE_FILE = os.environ["CANDIDATE_FILE"]
           THREADS = int(os.environ["RUNTIME_THREADS"])
           THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
@@ -649,7 +649,7 @@ jobs:
               # From the candidate copy, not from `config`. The committed config
               # still names the incumbent, and a sweep that copied it would
               # measure the wrong weights under the candidate's name.
-              shutil.copytree(CANDIDATE, dst)
+              shutil.copytree(CANDIDATE_CONFIG, dst)
               pointer = json.loads(
                   (dst / "idhazh.json").read_text(encoding="utf-8")
               )["models_file"]
