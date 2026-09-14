@@ -249,7 +249,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | 1a | The fingerprint stops gating and stops being read | - | C | DONE #647 | p23-1a | #647 | worker |
 | P5 | Which distribution the runtime reports at a masked token | - | C | PENDING | - | - | - |
 | 2 | Every label vocabulary becomes config | P1 | D | DONE #618 | p23-r2 | #618 | worker |
-| P3 | A person labels the dev split and the test split | P2 | D | DONE (all 641 rows, 2026-09-13; **no kappa** - see below) | p23-p3 | - | worker |
+| P3 | A person labels the dev split and the test split | P2 | D | DONE #698 (641 of 641 rows: dev 321, test 320, 2026-09-13; **no kappa** - see below) | p23-p3 | #698 | worker |
 | 3 | Lens and event ids become slugs, and a retired id keeps its tombstone | 2 | E | DONE #619 | p23-r3 | #619 | worker |
 | 7a | The classification code gets its own package | - | E | DONE #629 | p23-7a | #629 | worker |
 | 4 | An event gets a lifecycle | 3 | F | DONE #663 | p23-4 | #663 | worker |
