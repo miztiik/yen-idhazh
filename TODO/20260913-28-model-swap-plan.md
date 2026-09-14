@@ -52,7 +52,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 4 | Benchmark records lose the date from their filename | 2, 3 | B | DONE | p28-r4 | #694 | owner |
 | 5 | Five things the server proves before the first item | 2 | C | PENDING | - | - | - |
 | 6 | One complete config file per model, selected by a pointer | 2 | C | PENDING | - | - | - |
-| 7 | The model dossier, and the index that points at every one | 3, 4 | D | PENDING | - | - | - |
+| 7 | The model dossier, and the index that points at every one | 3, 4 | D | DONE | p28-r7 | - | Fowler |
 | 11 | Where the system text goes, and which keyword the runtime is told | 5, 6 | D | PENDING | - | - | - |
 | 12 | The sanitizer learns the control tokens of the model it guards | 11 | E | PENDING | - | - | - |
 | 13 | Retake the two budgets that were sized on a retired vocabulary | 3, 7 | E | PENDING | - | - | - |
@@ -324,6 +324,12 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 4 | This makes the one-current-reading guardrail mechanically checkable for the first time: one quantity, one model, one row. Naming the decode rate today requires reading which model a row was about. | Andre, 2026-09-13 |
 | 5 | The status line is the only place a model's lifecycle is written - `evaluated`, `incumbent`, `superseded` - and row #9's adopt and revert steps move it. | Fowler, 2026-09-13 |
 | 6 | `licence` gets no validator. It is a dossier field with one human reader, and a validator over a licence string would assert a legal judgement. | Andre, 2026-09-13 |
+| 7 | **The move set is decision 2's list and nothing else.** A quantity decision 2 does not name has no slot on the dossier, so moving it would delete a reading rather than relocate it, and the oracle requires every moved quantity to appear once - on the dossier. Decision 3's "that is most of its length" is a prediction of the effect, not a licence to cut readings with nowhere to go: the log lost 43 lines of 2,178. | Fowler, 2026-09-14 |
+| 8 | **The discriminator is whether a quantity is a property of the model or a property of a setting measured while that model ran.** Identity, throughput, memory marks, load time, seconds an item and the verdict are the model's, and they move. The window, cap and shard-timeout pricings measure a config knob and stay, because the instrument log's own rule is that it holds the reading and never the decision. | Fowler, 2026-09-14 |
+| 9 | **Only the configured model's readings move.** The retired Qwen3-8B-Q4_K_M, the retired Qwen3-4B-Q4_K_M visual planner and the offline faithfulness scorer have no dossier, so their figures stay in the instrument log labelled as theirs. The index carries the rule that would bring one of them here. | Fowler, 2026-09-14 |
+| 10 | **The dossier carries the qualification verdict; the log keeps what one gate taught about the instrument.** The `injection_canaries` failure was a false security finding, and its correction is a Guardrail #10 lesson about a measuring instrument rather than a reading of the weights. Three inbound links already point at that subsection. | Fowler, 2026-09-14 |
+| 11 | **Every heading stays and only its body becomes a pointer.** Five inbound anchors from `docs/concepts/evaluation.md`, `docs/archive/measurements-2026-08.md` and the log itself resolve to the two headings whose bodies moved, and those pages are outside this row's file list. | Fowler, 2026-09-14 |
+| 12 | **A figure that is a term of the log's own argument stays there at the same value.** The weight byte count remains in the cache-transition sum and in the mapped-memory argument, and 14.31 GiB remains in a section title and in the retraction that needs it. A term of an arithmetic is not a second answer to the quantity, and splitting evidence from the claim it refutes makes the claim unreviewable. | Fowler, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
