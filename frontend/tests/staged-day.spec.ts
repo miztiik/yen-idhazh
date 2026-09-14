@@ -30,7 +30,7 @@ import {
  * Runs in Node over the tree the build just staged, like the arithmetic tests
  * in `frame.spec.ts`. No page is loaded.
  *
- * **Nothing here reads the committed archive** (2026-09-15). The last test
+ * **Nothing here reads the committed archive** (2026-09-14). The last test
  * needs one day on the source side of the projection, and it used to take the
  * newest one under `frontend/public/digest` - a walk over a collection every
  * run appends to, banned by `CLAUDE.md` section 13 and Guardrail #12. It also

@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-14
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
