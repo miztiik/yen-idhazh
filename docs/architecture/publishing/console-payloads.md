@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 The operator console reads twelve datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
@@ -31,6 +31,14 @@ Every path below is under `frontend/public/`. Every schema is under `schemas/`.
 | Machine counters | `runtime-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `runtime-counters-row` |
 | Span rollup | `span-rollup.ts` `loadSpanRollup` | `span-rollup/<YYYY-MM>.csv` | `span-rollup-row` |
 | Source health | `payload.ts` `sourceHealthView` | `source-health.json` | `source-health-view` |
+
+**`source-health.json` is the one entry in that table nothing fetches**, and
+that has not changed since the panels reading it moved to `/console/voices/` on
+2026-09-14. `sourceHealthView` opens it at build time from a path derived off
+`DIGEST_ROOT`; it is not in `copy-visuals.mjs`'s `CONSOLE_SERIES`, so it is never
+staged into `frontend/static/` and never reaches the build. A
+`page_weight.payload_ceilings_bytes` key naming it would therefore match nothing
+and fail the bundle gate.
 
 **Twelve datasets, nine schemas.** Three console reads answer off the run-day
 row and two off the telemetry shard. That is not a shortcut: `loadManifests`,
@@ -378,6 +386,15 @@ projection field-for-field identical to its source - two schemas for one row,
 which is what rejected alternative 2 refuses for telemetry. The refusal is the
 same either way and it is written down either way; what changes is whether a
 committed shard has one shape to validate against or two.
+
+**A dataset's entry names its producer and its reader function, never its
+route.** Row #13 moved four panels from `/console/` to `/console/voices/` on
+2026-09-14 and not one row of the table above changed: `feedResults`,
+`itemHealthRows`, `sourceHealthView` and `shardDays` are called from a different
+`+page.server.ts` and read the same files by the same rule. That is the table
+working rather than the table being lucky. A route column would have gone stale
+on a change that moved no data, and it would have had to be maintained by
+whoever moved a panel rather than by whoever moved a payload.
 
 **Row 10 measured before it moved anything, and the measurement changed the
 order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so

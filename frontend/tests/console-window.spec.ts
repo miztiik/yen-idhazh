@@ -256,11 +256,9 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'chart-arm',
 		'extraction',
 		'failure-rate',
-		'feed-outcomes',
 		'item-cost',
 		'run-health',
 		'site-cost-per-item',
-		'source-cuts',
 		'telemetry-viewport'
 	]);
 
@@ -291,7 +289,6 @@ test('THE ORACLE: the Model route obeys the same control over its own surfaces',
 		found.map((surface) => surface.name).sort(),
 		'the model route publishes no windowed surfaces, so the oracle asserts nothing'
 	).toEqual(['daily-figures', 'model-cards']);
-
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
 		for (const surface of await windowed(page)) {
@@ -325,6 +322,36 @@ test('THE ORACLE: the Machine route obeys the same control over its own surfaces
 		'machine-runs',
 		'machine-tokens'
 	]);
+
+	for (const preset of PRESETS) {
+		await setWindow(page, preset);
+		const surfaces = await windowed(page);
+		expect(surfaces.length, 'a surface stopped declaring itself windowed').toBe(found.length);
+		for (const surface of surfaces) {
+			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
+			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
+				`${preset} days`
+			);
+		}
+	}
+});
+
+test('THE ORACLE: the Voices route obeys the same control over its own surfaces', async ({
+	page
+}) => {
+	// The four feed and source panels left /console/ for /console/voices/ on
+	// 2026-09-14, and two of the four follow the control. They arrived on a route
+	// that had none, so this is the pair the move could most easily have stranded:
+	// a surface that still declares a day count while nothing on the page can
+	// change it. Same oracle, same loop, fourth route.
+	await page.goto('/console/voices/');
+	await hydrated(page);
+
+	const found = await windowed(page);
+	expect(
+		found.map((surface) => surface.name).sort(),
+		'the voices route publishes no windowed surfaces, so the oracle asserts nothing'
+	).toEqual(['feed-outcomes', 'source-cuts']);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
@@ -451,7 +478,7 @@ async function cutFacts(page: Page) {
 }
 
 test('the source table follows the window, and drops what falls outside it', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	await hydrated(page);
 
 	// The canary writes one cut ten days back, under a source with a single cut.
@@ -498,8 +525,26 @@ test('a rule stated over 14 days prints no median in a 7-day window', async ({ p
 	await expect(section.locator('[data-charts-verdict]')).toHaveCount(0);
 });
 
-test('two surfaces do not follow the window, and each says so', async ({ page }) => {
+test('three surfaces do not follow the window, and each says so', async ({ page }) => {
+	// The site size is a level, not a rate, and since 2026-08-30 it is in the
+	// standing band - which is not windowed at all, because that band stands on
+	// every console route and a figure that moved with a control on one of them
+	// would read as five different sites. So the whole sentence holds at every
+	// preset, not only the number in it.
 	await page.goto('/console/');
+	await hydrated(page);
+
+	const size = page.locator('[data-band-size]');
+	const before = ((await size.textContent()) ?? '').trim();
+	await setWindow(page, 7);
+	await expect(size).toHaveText(before);
+	await expect(size).toContainText(/of the 1 GB limit/);
+
+	// The other two are on Voices, which is where the feed and source panels went
+	// on 2026-09-14. They arrived on a route with no control and left with one
+	// above them, so the sentence that says they ignore it is load-bearing now in
+	// a way it was not before the move.
+	await page.goto('/console/voices/');
 	await hydrated(page);
 
 	// A windowed quarantine count would disagree with the resting the pipeline
@@ -510,16 +555,11 @@ test('two surfaces do not follow the window, and each says so', async ({ page })
 	await expect(feeds).toContainText('does not follow the window');
 	await expect(feeds).not.toHaveAttribute('data-window-days', /.*/);
 
-	// The site size is a level, not a rate, and since 2026-08-30 it is in the
-	// standing band - which is not windowed at all, because that band stands on
-	// all three console routes and a figure that moved with a control on one of
-	// them would read as three different sites. So the whole sentence holds at
-	// every preset, not only the number in it.
-	const size = page.locator('[data-band-size]');
-	const before = ((await size.textContent()) ?? '').trim();
-	await setWindow(page, 7);
-	await expect(size).toHaveText(before);
-	await expect(size).toContainText(/of the 1 GB limit/);
+	// And the ranking weight, which the run reduced over its own span when it
+	// ran. Redrawing it over seven days would print a number no run applied.
+	const weight = page.locator('[data-window-exempt="reliability"]');
+	await expect(weight).toContainText('does not follow the window control');
+	await expect(weight).not.toHaveAttribute('data-window-days', /.*/);
 });
 
 /** Both daily tables, and what each says about the span it is drawn over. */

@@ -29,16 +29,17 @@ import { expect, test, type Page } from '@playwright/test';
  * tabs on 2026-09-12, is in `console-nav.spec.ts`.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'] as const;
+const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'] as const;
 
-/** The two routes opened with no panel of their own on 2026-09-12.
+/** The route still opened with no panel of its own on 2026-09-12.
  *
- * They are not in `ROUTES` because the rule above counts panel titles and
- * demands more than two - a route with no panels would fail it for being empty
- * rather than for being ungrammatical. The grammar still binds their one
- * heading, which is what this list is for.
+ * It is not in `ROUTES` because the rule above counts panel titles and demands
+ * more than two - a route with no panels would fail it for being empty rather
+ * than for being ungrammatical. The grammar still binds its one heading, which
+ * is what this list is for. `/console/voices/` was here until 2026-09-14, when
+ * four panels moved onto it and it started drawing three headings.
  */
-const EMPTY_ROUTES = ['/console/judgement/', '/console/voices/'] as const;
+const EMPTY_ROUTES = ['/console/judgement/'] as const;
 
 /** An opening that turns the rest of the line into a question. */
 const AUXILIARY =
@@ -146,12 +147,22 @@ test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) 
 		'the strip does not carry the five labels'
 	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices']);
 
-	// The ids did not, and neither did what they point at.
+	// The ids did not, and neither did what they point at. Typed out in strip
+	// order rather than spliced from `ROUTES` and `EMPTY_ROUTES`: those two lists
+	// are split by how many headings a route draws, which stopped matching strip
+	// order on 2026-09-14 when Voices filled.
 	expect(
 		drawn.map((tab) => tab.id),
 		'a tab id moved with a label, which is an address and not a label'
 	).toEqual(['pipelines', 'model', 'machine', 'judgement', 'voices']);
-	for (const [index, path] of [...ROUTES, ...EMPTY_ROUTES].entries()) {
+	const IN_STRIP_ORDER = [
+		'/console/',
+		'/console/model/',
+		'/console/machine/',
+		'/console/judgement/',
+		'/console/voices/'
+	];
+	for (const [index, path] of IN_STRIP_ORDER.entries()) {
 		expect(drawn[index].href, `${drawn[index].id} stopped pointing at ${path}`).toContain(path);
 	}
 });

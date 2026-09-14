@@ -193,6 +193,13 @@ def build(
     `active_feeds` returned and `retired_on` maps an endpoint key to the day its
     retirement was filed, which is the retirement ledger with nothing else of it
     carried.
+
+    `health` is read twice on two different terms and that is deliberate. The
+    four facts are folded out of the **settled** rows over the whole read, which
+    is the loop the quarantine runs. The reliability factor is folded out of the
+    **unsettled** rows of the narrower `collect.reliability_window_days`, which
+    is the loop the ranker ran - see `_reliability_evidence`. Publishing one
+    from the other's rows would put a number on the page that no run applied.
     """
     settled_rows = settled(health)
     by_feed: dict[str, list[FeedHealthRow]] = defaultdict(list)
@@ -200,6 +207,7 @@ def build(
         by_feed[row.feed_id].append(row)
     resting_ids = resting(settled_rows, after_failures=collect.availability_strikes_before_rest)
     records = endpoint_records(settled_rows)
+    factors = _reliability_evidence(health, date=date, window=collect.reliability_window_days)
 
     keep = collect.source_yield_min_complete_days
     dates = _complete_dates(items, today=date, keep=keep)
@@ -219,6 +227,7 @@ def build(
             else _PERMISSION[record.permission]
         )
         opportunities, publications, lost = census.of(feed.id)
+        evidence = factors.get(feed.id, [])
         rows.append(
             SourceHealthRow(
                 source_id=feed.id,
@@ -233,6 +242,8 @@ def build(
                 opportunities=opportunities,
                 publications=publications,
                 source_failures=lost,
+                reliability=ledger.feed_reliability(evidence, floor=collect.reliability_floor),
+                reliability_reads=len(evidence),
             )
         )
 
@@ -240,6 +251,15 @@ def build(
         version=SourceHealthView.schema_version(),
         generated_at=generated_at,
         run_id=run_id,
+        headline_sentence=headline(
+            rows,
+            complete_dates=len(dates),
+            reliability_floor=collect.reliability_floor,
+            alarm_point=collect.source_yield_alarm_point,
+            min_decisions=collect.source_yield_alarm_min_decisions,
+        ),
+        reliability_floor=collect.reliability_floor,
+        reliability_window_days=collect.reliability_window_days,
         min_complete_days=keep,
         complete_dates=len(dates),
         yield_readable=len(dates) >= keep,
@@ -247,6 +267,121 @@ def build(
         last_date=dates[-1] if dates else None,
         sources=rows,
     )
+
+
+def _reliability_evidence(
+    health: Sequence[FeedHealthRow], *, date: str, window: int
+) -> dict[str, list[FeedHealthRow]]:
+    """The evidence-bearing rows the ranker reduced, per feed, out of one read.
+
+    Three things make this a filter rather than a second load. The rows are
+    **unsettled**, because `ledger.reliability` groups what `load_health`
+    returned and never calls `settled` - a row the settling loop would drop is a
+    row the ranker counted, and dropping it here would publish a factor no run
+    ever applied. The window is `collect.reliability_window_days` rather than
+    the wider `HEALTH_WINDOW_DAYS` this view is otherwise built from, named
+    through the same `day_partition.days_in_window` the ranker's read walks, so
+    the two select the same dates across a month boundary without either owning
+    a calendar table. And a row that preserves the streak is dropped here rather
+    than inside `ledger.feed_reliability`, so the list that is reduced is the
+    list that is counted: `reliability_reads` is the denominator of the factor
+    beside it, and a second definition of evidence is how those two drift.
+
+    Narrowing a read we already hold rather than opening the shards again keeps
+    the cost of publishing this view flat as the ledger grows (Guardrail #12).
+    """
+    inside = set(day_partition.days_in_window(date, window))
+    grouped: dict[str, list[FeedHealthRow]] = defaultdict(list)
+    for row in health:
+        if row.date in inside and not row.preserves:
+            grouped[row.feed_id].append(row)
+    return grouped
+
+
+def headline(
+    rows: Sequence[SourceHealthRow],
+    *,
+    complete_dates: int,
+    reliability_floor: float,
+    alarm_point: float,
+    min_decisions: int,
+) -> str:
+    """The one line the page opens with, worst figure first.
+
+    Three forms and nothing else: a figure that is outside its own bound, a
+    count of the figures the record cannot compute yet, or the sentence that
+    says neither happened. There is no fourth form and no empty string, so the
+    page never has to decide what to draw when the sentence is missing.
+
+    **Worst is the figure the run already acted on.** A feed on the floor has
+    had its authority discounted as far as the ranking goes, so it outranks a
+    source that merely reads badly - one has changed what published, the other
+    is a claim about slots we spent. Uncomputed figures come third and not last,
+    because a page cannot say nothing is outside its bound while figures are
+    missing: absence would read as an all-clear.
+
+    A retired source is never named. Its factor is whatever the window still
+    holds from before we stopped asking, and a headline about a feed nobody will
+    ask again is a line an operator can do nothing with - which is the same
+    reason `below_the_yield_bar` sets one aside.
+
+    No adjective. Every form is a count, a denominator and the bound it is
+    measured against, so a reader who disagrees with the judgement can still
+    check the arithmetic.
+    """
+    total = len(rows)
+    if not total:
+        return "No source is configured, so there is no figure on this page yet."
+
+    floored = [
+        row
+        for row in rows
+        if not row.retired
+        and row.reliability_reads
+        and row.reliability <= reliability_floor
+    ]
+    if floored:
+        return (
+            f"{len(floored)} of {total} feeds are discounted to the "
+            f"{reliability_floor:.0%} floor, which is as far as the ranking takes one."
+        )
+
+    thin = below_the_yield_bar(rows, alarm_point=alarm_point, min_decisions=min_decisions)
+    if thin:
+        return (
+            f"{len(thin)} of {total} sources decided {min_decisions} or more addresses "
+            f"and published under {alarm_point:.0%} of them, over {complete_dates} "
+            f"complete day(s)."
+        )
+
+    missing = sum(1 for row in rows if not row.reliability_reads)
+    missing += sum(1 for row in rows if row.source_yield is None)
+    if missing:
+        return f"{missing} figures on this page are not computed yet."
+
+    return "Nothing on this page is outside its bound."
+
+
+def below_the_yield_bar(
+    rows: Sequence[SourceHealthRow], *, alarm_point: float, min_decisions: int
+) -> list[SourceHealthRow]:
+    """Live sources that decided enough addresses and published too few of them.
+
+    One predicate, so the headline sentence and the operator alarm below it
+    cannot name different sources. Worst first, then by id, so two runs over the
+    same evidence print the same order.
+    """
+    named = [
+        row
+        for row in rows
+        if not row.retired
+        and row.permission is SourcePermission.ALLOWED
+        and row.availability is SourceAvailability.ANSWERING
+        and row.decisions >= min_decisions
+        and row.source_yield is not None
+        and row.source_yield < alarm_point
+    ]
+    return sorted(named, key=lambda row: (row.source_yield or 0.0, row.source_id))
 
 
 def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[ItemHealthRow]:
@@ -293,15 +428,24 @@ def publish(
 
     The health read is the one the quarantine reads - `HEALTH_WINDOW_DAYS`
     anchored on this run's date - because this file publishes the run's decision
-    rather than a second opinion about it. The item read selects the newest
-    `source_yield_min_complete_days` recorded dates first and opens only those, so
-    a gap in the record cannot shorten the census and the history behind the
-    window is never read (`_recent_item_health`).
+    rather than a second opinion about it. It is widened to
+    `collect.reliability_window_days` when a curator sets that wider, so the one
+    read always covers both windows and `build` narrows it rather than opening
+    the shards again: taking the maximum here is what stops a raised knob from
+    quietly publishing a factor reduced over fewer days than the ranker used.
+    The item read selects the newest `source_yield_min_complete_days` recorded
+    dates first and opens only those, so a gap in the record cannot shorten the
+    census and the history behind the window is never read
+    (`_recent_item_health`).
 
     Returns the view rather than the path because `yield_alarm` reads it and the
     caller already holds the path it passed in.
     """
-    health = ledger.load_health(state_root, today=date, within_days=ledger.HEALTH_WINDOW_DAYS)
+    health = ledger.load_health(
+        state_root,
+        today=date,
+        within_days=max(ledger.HEALTH_WINDOW_DAYS, collect.reliability_window_days),
+    )
     view = build(
         feeds=active_feeds(sources, [vertical.id for vertical in taxonomy.verticals]),
         collect=collect,
@@ -347,19 +491,11 @@ def yield_alarm(
     we spent, not about whether the writing was any good, and only a person can
     tell those apart.
     """
-    named = [
-        row
-        for row in view.sources
-        if not row.retired
-        and row.permission is SourcePermission.ALLOWED
-        and row.availability is SourceAvailability.ANSWERING
-        and row.decisions >= min_decisions
-        and row.source_yield is not None
-        and row.source_yield < alarm_point
-    ]
-    if not named:
+    worst = below_the_yield_bar(
+        view.sources, alarm_point=alarm_point, min_decisions=min_decisions
+    )
+    if not worst:
         return None
-    worst = sorted(named, key=lambda row: (row.source_yield or 0.0, row.source_id))
     listed = ", ".join(
         f"{row.source_id} {row.publications}/{row.decisions} ({(row.source_yield or 0.0):.0%})"
         for row in worst

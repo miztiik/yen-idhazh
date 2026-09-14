@@ -71,7 +71,7 @@ function boundariesFrom(rows: Record<string, string>[]): string[] {
 	return found;
 }
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'];
+const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'];
 
 interface Declared {
 	route: string;

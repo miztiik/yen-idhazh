@@ -29,8 +29,10 @@ import { expect, test, type Page } from '@playwright/test';
  * build system uses on itself (CLAUDE.md section 0b).
  *
  * `Judgement` and `Voices` joined on 2026-09-12, opened empty by the row that
- * added them. `Judgement` is singular because the other three name a place and
- * this one names an act; `Voices` is the owner's word over Susan's `Sources`.
+ * added them; `Voices` filled on 2026-09-14 when four feed and source panels
+ * moved onto it off Pipelines. `Judgement` is singular because the other three
+ * name a place and this one names an act; `Voices` is the owner's word over
+ * Susan's `Sources`.
  */
 const ROUTES = [
 	{ id: 'pipelines', label: 'Pipelines', path: '/console/' },
@@ -40,11 +42,17 @@ const ROUTES = [
 	{ id: 'voices', label: 'Voices', path: '/console/voices/' }
 ] as const;
 
-/** The two routes opened with no panel of their own, and the row that fills
- * each. A strip that names a page nobody can reach is a strip that lies. */
+/** The routes still opened with no panel of their own, and the row that fills
+ * each. A strip that names a page nobody can reach is a strip that lies.
+ *
+ * `Voices` was here until 2026-09-14, when row #13 moved four feed and source
+ * panels onto it off Pipelines. It has a window control and four panels now, so
+ * it fails every assertion below and belongs to the console suite instead. Its
+ * own absent state is still checked - `console-voices-sources.spec.ts` owns the
+ * census half and `console-voices.spec.ts` owns the one-route-per-panel half.
+ */
 const EMPTY_ROUTES = [
-	{ id: 'judgement', path: '/console/judgement/', rows: ['row #12', 'row #15'] },
-	{ id: 'voices', path: '/console/voices/', rows: ['row #13'] }
+	{ id: 'judgement', path: '/console/judgement/', rows: ['row #12', 'row #15'] }
 ] as const;
 
 /** The three verdict colours, as the tokens a stylesheet would have to name. */
@@ -270,13 +278,13 @@ for (const view of STRIP_WIDTHS) {
 	});
 }
 
-test.describe('the two routes opened empty', () => {
+test.describe('the routes opened empty', () => {
 	for (const route of EMPTY_ROUTES) {
 		test(`${route.path} answers, names itself and names the row that fills it`, async ({
 			page
 		}) => {
 			// A tab in a strip whose page does not exist is a strip that lies, and
-			// rows #12 and #13 land later. So the absence is named rather than
+			// rows #12 and #15 land later. So the absence is named rather than
 			// blank, and it names where the specification is - which is the only
 			// part of it that stays true as those rows are written.
 			const errors: string[] = [];
@@ -479,9 +487,10 @@ test.describe('the cross-boundary carries', () => {
 		pipelines: '/console/model/',
 		model: '/console/machine/',
 		machine: '/console/',
-		// The two empty routes point at the route that holds the nearest figure
-		// they have none of: what the checker doubted is on Summaries, and which
-		// feeds broke is on Pipelines.
+		// Judgement is still empty and points at the route that holds the nearest
+		// figure it has none of: what the checker doubted is on Summaries. Voices
+		// points back at Pipelines because a broken feed is a question about a run,
+		// and the run record is the one thing Voices does not carry.
 		judgement: '/console/model/',
 		voices: '/console/'
 	};

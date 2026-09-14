@@ -46,9 +46,15 @@ import { resolve } from 'node:path';
 
 const BUILD = resolve(process.cwd(), 'build');
 
-/** The three documents the console shell renders into. The band and the window
- * strip are shared, so a claim added to `console-shell.ts` reaches all three. */
-const ROUTES = ['console', 'console/model', 'console/machine'] as const;
+/** The console documents this reads. The band and the window strip are shared,
+ * so a claim added to `console-shell.ts` reaches all of them.
+ *
+ * `console/voices` joined on 2026-09-14. The four panels that moved onto it are
+ * the ones this file was opened for - the feed sentence that said feeds "have
+ * never failed" is on Voices now, and a route list that had not followed it
+ * would have kept the guard pointing at a page the sentence had left.
+ */
+const ROUTES = ['console', 'console/model', 'console/machine', 'console/voices'] as const;
 
 interface Claim {
 	/** What the pattern is about, in the message a failure prints. */

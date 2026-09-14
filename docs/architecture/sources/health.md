@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-14
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -327,7 +327,9 @@ four places and were published in none, so the console re-derived the two it
 could reach in TypeScript and simply could not see the other two. Since
 2026-09-03 the run writes them together, once, to
 `frontend/public/source-health.json` through
-`backend/idhazh/publish_source_health.py`.
+`backend/idhazh/publish_source_health.py`. The console panel that draws them is
+on `/console/voices/` since 2026-09-14, headed `Sources we may ask, and what
+they yield`.
 
 | Column | What it answers | Where it is decided |
 | --- | --- | --- |
@@ -519,7 +521,7 @@ Keeping those separate is what makes a bad afternoon survivable. A run that coul
 ## Two readers, one record
 
 - **The planning step** reads the recent tail to decide which feeds to skip this run.
-- **The console** reads the same rows to show which sources are broken. It names only feeds that failed at least once; a list that names all seventy sources hides the four that matter. See [../publishing/frontend.md](../publishing/frontend.md).
+- **The console** reads the same rows to show which sources are broken, on `/console/voices/` since 2026-09-14. It names only feeds that failed at least once; a list that names all seventy sources hides the four that matter. See [../publishing/frontend.md](../publishing/frontend.md).
 
 They read the same file so they can never disagree about what a feed did - and, since 2026-09-02, they reduce it the same way as well. `discover.settled` and `settled` in `frontend/src/lib/feed-health.ts` are one rule in two languages, and so are `discover.streak` and `streak` beside it. Both pairs are driven from one committed fixture, `tests/fixtures/feed-health/one-result-per-run.csv`: nine rows, seven runs, one strike. A second copy of those rows in each language is a fixture that drifts, and a page that quietly disagrees with the run that produced it is the defect the shared rule exists to remove.
 
@@ -594,6 +596,10 @@ The record came before the quarantine, and that order was the point: you cannot 
 Making a zero-item `200` a failure is the finding that justifies the whole ledger. Every other failure mode is visible in a log line at the moment it happens. A feed that quietly stops carrying entries looks healthy in every single run and is only visible as a shape across runs, which is exactly what a ledger is for.
 
 The self-lifting rest is there because the alternative was tested by imagination and failed: a quarantine that only a human can lift is a deletion with extra steps, and the human who has to lift it will not be reading a CSV on a Sunday.
+
+**`ledger.reliability` was drawn nowhere until 2026-09-14.** It is the per-feed multiplier the ranker applies to authority, recalculated every run over the trailing `collect.reliability_window_days`, clamped to `[collect.reliability_floor, 1.0]`, and 1.0 for a feed with no evidence in the window. It writes nothing to `config/` and it lives for the length of one run, which is why it went so long without a surface: nothing persisted it, so nothing could draw it. It is on `/console/voices/` now, one bar a feed, and the page reads the factor the run applied off the published view rather than reducing the shards a second time. Two derivations of one ranking factor is two verdicts, and the day they disagreed neither would be worth drawing. Placement plan row #13, decisions 4 and 7; that row reads the factor and changes no feed score.
+
+**The factor is not the quantity `reliability` in `frontend/src/lib/feed-health.ts` names**, which shares the word and answers a different question: how many feeds did not fail a read, out of how many were asked, over how many runs. Both are on Voices now, which is the one place the collision could mislead a reader, so each panel names what it counts rather than leaning on the word they share.
 
 ## Rejected alternatives
 

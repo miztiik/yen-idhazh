@@ -653,7 +653,7 @@ ORACLE = FIXTURES_DIR / "feed-health" / "one-result-per-run.csv"
 
 
 def oracle_rows() -> list[FeedHealthRow]:
-    """The fixture `frontend/tests/console-feeds.spec.ts` opens as well.
+    """The fixture `frontend/tests/console-voices-feeds.spec.ts` opens as well.
 
     One feed over seven runs, written down nine times: run 2 recorded twice by
     two attempts that both failed, run 3 recorded twice by an attempt that

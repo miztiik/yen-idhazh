@@ -33,6 +33,19 @@
           "title": "Publications",
           "type": "integer"
         },
+        "reliability": {
+          "description": "The multiplier the ranker applied to this feed's authority on this run, from `ledger.feed_reliability` over the trailing `collect.reliability_window_days`. Published rather than recomputed by a page: a console figure that is a second derivation of a ranking factor is two verdicts, and the day they disagree neither is trustworthy.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Reliability",
+          "type": "number"
+        },
+        "reliability_reads": {
+          "description": "Evidence-bearing reads the factor was reduced over - every read that did not preserve the streak, so a rest and a robots answer are set aside. Zero means the factor is the 1.0 a feed with no evidence scores and not a record of perfect answering, which is the difference a page draws as a dash rather than a full bar.",
+          "minimum": 0,
+          "title": "Reliability Reads",
+          "type": "integer"
+        },
         "retired": {
           "description": "Has a run stopped asking this address for good? True only when the retirement ledger holds its endpoint. The console renders this decision and never re-derives it.",
           "title": "Retired",
@@ -84,7 +97,9 @@
         "retired",
         "opportunities",
         "publications",
-        "source_failures"
+        "source_failures",
+        "reliability",
+        "reliability_reads"
       ],
       "title": "SourceHealthRow",
       "type": "object"
@@ -105,6 +120,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Each row gains reliability and reliability_reads; the view gains reliability_floor, reliability_window_days and headline_sentence.",
+      "version": "2026-09-13",
+      "why": "The ranker has discounted a feed's authority by a measured factor since the reliability window landed, and no surface has ever drawn it, so an operator could see that a feed was failing and not that the ranking had already acted on it. Publishing the factor the run applied - rather than letting a page reduce the feed-health rows a second time - keeps one answer to one question (Guardrail #3). reliability_reads carries the denominator, because a feed with no evidence scores the same 1.0 as a feed that never missed and a page must not draw those two the same. headline_sentence is computed here for the same reason the view carries yield_readable: the page and this file cannot be allowed to disagree about which figure is the worst one."
+    },
     {
       "change": "Initial shape: the run that wrote it, the window the publishing record covers, whether that window is deep enough to read as a rate, and one row per configured address.",
       "version": "2026-09-03T09:00",
@@ -138,6 +158,13 @@
       "title": "Generated At",
       "type": "string"
     },
+    "headline_sentence": {
+      "description": "The one line the page opens with: the worst figure on it against that figure's own bound, or a count of the figures the record cannot compute yet, or a sentence saying nothing here is outside its bound. Computed here rather than in the page, so the sentence and the table below it are reduced from the same rows. Never absent and never empty - a page whose summary line can vanish teaches an operator to scroll past it.",
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Headline Sentence",
+      "type": "string"
+    },
     "last_date": {
       "anyOf": [
         {
@@ -158,6 +185,19 @@
       "title": "Min Complete Days",
       "type": "integer"
     },
+    "reliability_floor": {
+      "description": "`collect.reliability_floor` - the furthest down the ranker will discount a feed, and the mark a page puts on the bar it draws each factor in. Carried because the bound and the figure must come from one run: a page holding a published factor to a floor it read somewhere else is drawing two runs on one bar.",
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0,
+      "title": "Reliability Floor",
+      "type": "number"
+    },
+    "reliability_window_days": {
+      "description": "`collect.reliability_window_days` - how far back the factor was reduced. Published so the page can say what the number covers; a bare share with no period is not a measurement.",
+      "exclusiveMinimum": 0,
+      "title": "Reliability Window Days",
+      "type": "integer"
+    },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
       "title": "Run Id",
@@ -172,7 +212,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-03T09:00",
+      "default": "2026-09-13",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -186,6 +226,9 @@
   "required": [
     "generated_at",
     "run_id",
+    "headline_sentence",
+    "reliability_floor",
+    "reliability_window_days",
     "min_complete_days",
     "complete_dates",
     "yield_readable",
@@ -193,5 +236,5 @@
   ],
   "title": "SourceHealthView",
   "type": "object",
-  "version": "2026-09-03T09:00"
+  "version": "2026-09-13"
 }

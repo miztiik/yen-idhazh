@@ -80,7 +80,7 @@ async function drawn(page: Page): Promise<Drawn> {
 test('THE ORACLE: the plot fills its frame at every width, and no label leaves it', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	await expect(page.locator(PLOT)).toHaveCount(1);
 
 	for (const width of WIDTHS) {
@@ -111,7 +111,7 @@ test('THE ORACLE: the plot fills its frame at every width, and no label leaves i
 });
 
 test('the label column is measured, and no name is shortened to fit it', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	// The canary's source ids are short - `cut-a`, `cut-b` - so the gutter fits
 	// beside the plot at every width this checks, and the stacked form is driven

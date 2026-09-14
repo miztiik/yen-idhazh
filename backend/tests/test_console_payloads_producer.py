@@ -676,7 +676,13 @@ def test_a_feed_read_only_through_a_robots_answer_is_unread_and_not_working() ->
 
 
 def _source(
-    source_id: str, *, publications: int, failures: int, retired: bool = False
+    source_id: str,
+    *,
+    publications: int,
+    failures: int,
+    retired: bool = False,
+    reliability: float = 1.0,
+    reliability_reads: int = 0,
 ) -> SourceHealthRow:
     """One address on the source-health view, at a chosen size of record."""
     return SourceHealthRow(
@@ -690,6 +696,8 @@ def _source(
         opportunities=publications + failures + 5,
         publications=publications,
         source_failures=failures,
+        reliability=reliability,
+        reliability_reads=reliability_reads,
     )
 
 
@@ -760,24 +768,18 @@ def test_voices_names_a_feed_the_ranker_has_discounted_as_far_as_it_goes() -> No
 
     `feed_reliability` clamps at `collect.reliability_floor`, so a feed sitting
     exactly there is as far down as the multiplier goes - and until this route
-    no page said so.
+    no page said so. The band reads the factor the source-health view published
+    rather than reducing feed rows a second time, so a feed carrying the default
+    1.0 over no evidence is not counted as a discount nobody measured.
     """
-    dead = [
-        _feed_row("2026-12", feed_id="wire-co", outcome=FetchOutcome.PERMANENT, items=0).model_copy(
-            update={"run_id": f"2026-12-0{n}-1", "date": f"2026-12-0{n}"}
-        )
-        for n in range(1, 5)
-    ]
-    good = [
-        _feed_row("2026-12", feed_id="good-co", outcome=FetchOutcome.OK, items=4).model_copy(
-            update={"run_id": f"2026-12-0{n}-1", "date": f"2026-12-0{n}"}
-        )
-        for n in range(1, 5)
+    rows = [
+        _source("wire-co", publications=40, failures=0, reliability=0.5, reliability_reads=4),
+        _source("good-co", publications=40, failures=0, reliability=1.0, reliability_reads=4),
+        _source("quiet-co", publications=40, failures=0, reliability=1.0, reliability_reads=0),
     ]
 
     found = publish_console_band.voices_candidates(
-        [*dead, *good],
-        [],
+        rows,
         reliability_floor=COLLECT.reliability_floor,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,
     )
@@ -804,7 +806,6 @@ def test_a_source_too_thin_to_judge_carries_its_denominator_and_is_ranked_lower(
     ]
 
     found = publish_console_band.voices_candidates(
-        [],
         rows,
         reliability_floor=COLLECT.reliability_floor,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,

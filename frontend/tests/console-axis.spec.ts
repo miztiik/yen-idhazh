@@ -26,23 +26,25 @@ import { expect, test, type Page } from '@playwright/test';
  * that cannot be made to fail is not measuring anything.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'];
+const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'];
 const WIDTHS = [1440, 768, 390];
 
 /** Which routes draw a date axis of their own.
  *
- * Every route does since 2026-09-01. The Machine route drew none until then -
- * every chart on it was engine-drawn and handed its labels to the engine's own
- * overlap rule - and it now draws two of its own, for context headroom and for
- * the latency plots. Both label a column that is a RUN rather than a day, so a
- * day carrying several runs is labelled once and the tick mark stays. That is
- * stated here rather than discovered, so a route that stops declaring one fails
- * this file instead of passing it with an empty scan.
+ * Every route that has one does since 2026-09-01. The Machine route drew none
+ * until then - every chart on it was engine-drawn and handed its labels to the
+ * engine's own overlap rule - and it now draws two of its own, for context
+ * headroom and for the latency plots. Both label a column that is a RUN rather
+ * than a day, so a day carrying several runs is labelled once and the tick mark
+ * stays. Voices draws the feed strip's axis, which arrived with the panels on
+ * 2026-09-14. That is stated here rather than discovered, so a route that stops
+ * declaring one fails this file instead of passing it with an empty scan.
  */
 const DECLARES: Record<string, boolean> = {
 	'/console/': true,
 	'/console/model/': true,
-	'/console/machine/': true
+	'/console/machine/': true,
+	'/console/voices/': true
 };
 
 /** A label's box, and the box of the `svg` that may clip it. */

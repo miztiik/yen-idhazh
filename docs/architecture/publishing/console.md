@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
@@ -43,11 +43,21 @@ strip. It was three; it took a fourth and a fifth on 2026-09-12:
 
 | Path | Label | What it answers |
 | --- | --- | --- |
-| `/console/` | **Pipelines** | Did the runs work, which feeds broke, and what each stage cost. |
+| `/console/` | **Pipelines** | Did the runs work, and what each stage cost. |
 | `/console/model/` | **Summaries** | What the model wrote, how long it took, and what it got wrong. |
 | `/console/machine/` | **Hardware** | The hardware the model ran on, and how much it varied between runs. |
 | `/console/judgement/` | **Judgement** | What the model made of each article, and where we disagreed. |
 | `/console/voices/` | **Voices** | Who supplied the day, and how far each feed is discounted. |
+
+Pipelines answered three questions until 2026-09-14 and its description said so:
+*did the runs work, which feeds broke, and what each stage cost*. The middle
+clause went with the four feed and source panels that moved to Voices. The
+description is written in two places -
+[publish_console_band.py](../../../backend/idhazh/publish_console_band.py) for
+the published band and
+[band.ts](../../../frontend/src/lib/console/band.ts) for the fallback - and both
+moved in the same commit, because the strip a reader sees is whichever one
+answered.
 
 `/console/` keeps its path. It is the one an operator types and the one every
 existing bookmark points at, so moving it to `/console/pipelines/` would have
@@ -76,11 +86,15 @@ this one names an act, so `Judgements` would be a count of things and the tab is
 not a list (Susan). `Voices` is the owner's word over Susan's `Sources` - her
 case was that `Voices` appears nowhere else in this repository while `source_id`,
 `config/sources.json` and `source-health.json` all do, and the owner overruled it
-(`CLAUDE.md` section 0). Both routes carry a heading and a named absence and draw
-no panel: a tab in a strip whose page does not exist is a strip that lies, and
-the pages that fill them are specified by rows #12 and #13 of the placement plan
-and row #15 of the classification plan. Each empty route names those rows on the
-page, so a reader of the strip can find the specification.
+(`CLAUDE.md` section 0). Both routes opened carrying a heading and a named
+absence and drawing no panel: a tab in a strip whose page does not exist is a
+strip that lies, and the pages that fill them are specified by rows #12 and #13
+of the placement plan and row #15 of the classification plan.
+
+**Voices filled on 2026-09-14 and Judgement is still empty.** Row #13 was a
+split rather than an addition: four panels moved onto Voices off Pipelines and
+Pipelines kept none of them. Judgement still names the rows that will fill it on
+the page, so a reader of the strip can find the specification.
 
 **Every panel title on the five routes is a noun phrase**, and that rule is
 mechanical so it can be checked: no trailing question mark, and no opening
@@ -643,6 +657,12 @@ Beneath the strip, the section leads with its own denominator: **how many feeds 
 
 ## Four facts about every source we may ask
 
+**On `/console/voices/` since 2026-09-14**, with the failure list, the clean-read
+count and the truncation-cap cost. Its heading on the page is `Sources we may
+ask, and what they yield`; "four facts" is what the panel does rather than what
+it is called, and the phrase is load-bearing here because it is the argument
+against combining them into a score.
+
 Above the failure list sits the census the list needs: **one row per state, per fact, over the addresses a curator has left active**. Permission, reading, retirement and the publishing record, and no cell combines two of them. It is drawn from `frontend/public/source-health.json`, which the run writes once a day, and the page renders that decision rather than making a second one ([../sources/health.md](../sources/health.md)).
 
 - **A table of states, not a chart.** Four categorical facts over 144 addresses, most of them in one state, is a tally - and a tally is a table. Every state is drawn whether or not it is empty, because a census that hides its empty states is a sample. The oracle asserts the drawn counts sum to the census, so a state that stopped being drawn cannot pass as a state nothing is in.
@@ -650,7 +670,7 @@ Above the failure list sits the census the list needs: **one row per state, per 
 - **Then the sources held back, loudest state first.** Retirement and a refusal come before a rest, because a rest lifts itself and neither of those does. Capped at `console.source_rows`, with the tail in one sentence, exactly as the failure list is.
 - **The curated title is not unique, so the row carries the id too.** Two feeds in this repository are both titled `Anthropic`, and the thing an operator edits is one configured address. The title alone drew two identical rows.
 - **The publishing record is counts and never a rate while the record is short.** `collect.source_yield_min_complete_days` is 30 and the ledger is nine complete days deep, so the sentence prints what was offered, what was published and what a source lost, and says in the same breath that this is too short to read as a rate.
-- **It does not follow the window control.** Permission, reading and retirement are read over the whole record, and the publishing record has a fixed span of its own. It declares no `data-windowed` surface for that reason, and its own spec asserts the span instead.
+- **It does not follow the window control.** Permission, reading and retirement are read over the whole record, and the publishing record has a fixed span of its own. It declares no `data-windowed` surface for that reason, and its own spec asserts the span instead. On Voices that sentence matters more than it did on Pipelines: it arrived beside two panels that DO follow the control, so the paragraph saying it ignores one is the only thing separating them.
 - **Its population is smaller than the failure list's, and it says so.** The census counts the addresses a run may ask; the list below reads the whole ledger, tombstoned feeds included. Measured 2026-09-03, the 24 tombstoned sources in the item ledger were offered 560 addresses over the window and published none, so the smaller population loses no publication and stops the denominator counting sources nobody may ask.
 
 **Nothing fetches it, so nothing stages it.** `frontend/public/source-health.json` is read at build time by `sourceHealthView` in `frontend/src/lib/server/payload.ts` and never by a browser, so it is not copied into `frontend/static/` and `frontend/scripts/copy-visuals.mjs` is untouched. Its path is derived from `DIGEST_ROOT` the way `INDEX_ROOT` is, so a canary build reads the canary's own census.
@@ -760,14 +780,15 @@ in the air. Narrowing costs nothing.
 prerender.** First paint is therefore always the window the server drew, so the
 prerendered document and the control cannot disagree while the page hydrates.
 
-Three surfaces do not simply follow the span, and each says so on the page:
+Three surfaces on the console do not simply follow the span, and each says so on the page. The first two are on Voices and the third on Pipelines:
 
-| Surface | What it does | Why |
-| --- | --- | --- |
-| `Feeds that failed` | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
-| `Sources we may ask, and what they yield` | Permission, reading and retirement read every run on record; the publishing record reads `collect.source_yield_min_complete_days` complete days | It renders the run's own decisions, and the run rests on the whole count. The publishing record has a fixed span because that span is also its readability bar - one question, one number. |
-| `Site size` | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
-| `Minutes per visual` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
+| Surface | Route | What it does | Why |
+| --- | --- | --- | --- |
+| `Feeds that failed` | Voices | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
+| `Sources we may ask, and what they yield` | Voices | Permission, reading and retirement read every run on record; the publishing record reads `collect.source_yield_min_complete_days` complete days | It renders the run's own decisions, and the run rests on the whole count. The publishing record has a fixed span because that span is also its readability bar - one question, one number. |
+| `What the ranking makes of each feed` | Voices | Reads the factor the run applied, over the span the run reduced it on | The run reduced it over `collect.reliability_window_days` when it happened. Redrawing it over seven days would print a number no run ever applied. |
+| `Site size` | every route | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
+| `Minutes per visual` | Pipelines | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
 **Known defect: two of those readers walk the whole score ledger and will lose
 history when a day is deleted.** `pipelineChanges`, which draws the model-change
@@ -1387,7 +1408,6 @@ about it, and each one is on the surface that already owns its grain.
 | `Too long to send` | the model table | one day | `state/item-health/` |
 | `n read only in part` | the run square's own label | one run | `state/item-health/` |
 | `Sources cut short most often` | its own range plot | one source, the open window | `state/item-health/` |
-
 **The run grain is a clause on a label and never a published figure.** Measured
 2026-08-29 over the 19 committed runs, the count is 1 to 12 articles of 160 to
 200 - 0.6 to 7.5 percent - and that swing is which articles the feeds carried
@@ -1449,7 +1469,7 @@ the six tracks drew inside 91px of it.
  `tickAnchor` anchors the end labels inwards, so `10,000` needs no room outside
  the plot and the 12px right margin is the track's own round cap. The
  `10,00` clip measured on 2026-08-31 was fixed there;
- [../../../frontend/tests/console-source-cuts.spec.ts](../../../frontend/tests/console-source-cuts.spec.ts)
+ [../../../frontend/tests/console-voices-cuts.spec.ts](../../../frontend/tests/console-voices-cuts.spec.ts)
  asserts it stays fixed rather than fixing it again.
 - **`thinLabels` drops the axis labels that will not fit, and keeps both ends.**
  A label survives only where its left edge clears the last kept label's right
@@ -1483,7 +1503,7 @@ rows say two - measured on this tree the file says 10,000 tokens, which is 7,692
 words, and the window's cut rows sit at 1,923 and 3,846 from the two caps
 before it. And a rule from the file draws even in a window where nothing was cut
 at all, which a derived one cannot.
-[frontend/tests/console-sources.spec.ts](../../../frontend/tests/console-sources.spec.ts)
+[frontend/tests/console-voices-sources.spec.ts](../../../frontend/tests/console-voices-sources.spec.ts)
 holds it with a pair of calls over rows cut at two different lengths: no
 constant satisfies both.
 
@@ -1673,28 +1693,72 @@ is what the per-article chart now answers directly.
 
 ### Design rationale
 
-**`/console/judgement/` and `/console/voices/` fail the "does it use the screen
-it is on" sufficiency check, and they ship anyway.** Each is a heading, two
-sentences and one bordered panel; at 1440px most of the frame is empty. The
-other three checks pass and are inherited rather than invented - figure
-separates from ground through the shared `.console-panel` border, surface and
-shadow; the panel is the only block in the route's own content, so there is one
-thing the eye lands on; and the route takes the page title, the five-tab strip
-and the standing band from the layout before it draws anything of its own.
+**`/console/judgement/` fails the "does it use the screen it is on" sufficiency
+check, and it ships anyway.** It is a heading, two sentences and one bordered
+panel; at 1440px most of the frame is empty. The other three checks pass and are
+inherited rather than invented - figure separates from ground through the shared
+`.console-panel` border, surface and shadow; the panel is the only block in the
+route's own content, so there is one thing the eye lands on; and the route takes
+the page title, the five-tab strip and the standing band from the layout before
+it draws anything of its own.
+
+`/console/voices/` was the other half of this entry until 2026-09-14. It passes
+the check now: row #13 moved four panels onto it, two of which draw a chart.
 
 The check cannot be passed. The only way to fill the frame of a page with no
 data is to put something on it that is not a measurement, on the one surface
 whose doctrine is that it takes no ornament and spends no reader attention. The
 alternative considered was a list of the figures each page will carry, drawn
 empty - refused because it is a promise the page cannot keep: the moment rows
-#12 and #13 change a panel the list is a lie and nothing fails. What the
+#12 and #15 change a panel the list is a lie and nothing fails. What the
 operator gets instead is the row id, which stays true and costs no maintenance.
 
 The alternative to shipping empty was landing the strip and both tab rows
 together, which would have put three rows on `ConsoleNav.svelte` in one parallel
 group - and a strip that names a page nobody can reach is worse than three tabs.
-**This entry is deleted when rows #12 and #13 land**, which is why it names them.
+**This entry is deleted when rows #12 and #15 land**, which is why it names them.
 Authority: Susan, 2026-09-12.
+
+**The fifth tab is a split, not an addition, and Pipelines keeps none of the
+four panels.** Row #13 of the placement plan. The four are the census, the
+ranking weight, the failure list and what the truncation cap cost each source.
+Leaving any of them behind would give two routes an answer to "which feed is
+broken" and neither of them ownership of it, and the split is what pays for the
+tab existing at all. Pipelines answers one question now - did the runs work -
+and its route description says so in both producers. Authority: Editor, row #13
+decision 2.
+
+**The reliability factor is read from the published view and never recomputed in
+the page.** `ledger.reliability` is the only self-adjusting number in this
+project and it was drawn nowhere until this row. Two derivations of one ranking
+factor is two verdicts, and the day they disagree neither is worth drawing - the
+same lesson the standing band learned when it moved to a producer. Authority:
+row #13 decision 4.
+
+**Voices gained the window control the panels arrived with; it did not arrive
+with one.** Two of the four moved panels declare a day count, and they landed on
+a route whose own panel had argued against a control: the ranking weight was
+reduced over `collect.reliability_window_days` when the run happened, so a
+control that redrew it would print a number no run applied. The resolution is
+the pattern the console already uses rather than a new one - the control governs
+the surfaces that follow it, and the three that do not each say so in a
+`data-window-exempt` paragraph. Unwinding the two panels' windowing was the
+alternative, and it was refused: the window is what makes "which source is the
+cap costing us most, lately" answerable at all, and removing it to fit the route
+would have cost the reader a question to protect a sentence.
+
+**No page ceiling and no payload ceiling were added for this route.** The row's
+acceptance gate asked for a `payload_ceilings_bytes` entry and the clause was
+corrected on 2026-09-14, because there is no instrument that can hold it.
+`payload_ceilings_bytes` keys resolve against the build directory and
+`frontend/public/source-health.json` never reaches it - `copy-visuals.mjs` stages
+seven named console directories and that file is in none of them - so the key
+would match nothing and `bundle-gate.mjs` fails a key that matches nothing.
+`page_weight.ceilings_bytes` is not a fallback: every console route left it on
+2026-09-10 because those numbers move when a run publishes, and Voices inlines
+feed rows, a census and four source-cut tables. Voices fetches one payload,
+`console/band.json`, which the layout already fetched on every route and which
+`payload_ceilings_bytes` already caps at 2,000 bytes.
 
 
 article, spread 23,066 to 26,538, which is the built bundle's cumulative average

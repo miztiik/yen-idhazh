@@ -23,6 +23,13 @@ units and different remedies, and a single score tells an operator that
 something is wrong and nothing about what to do
 (`docs/architecture/sources/health.md`).
 
+**The reliability factor is carried beside those four and is not a fifth
+judgement of the same kind.** The four say what the record holds; the factor
+says what the run already did about it - the multiplier the ranker applied to
+this feed's authority. It is copied from `ledger.feed_reliability` rather than
+reduced again here, because a console figure that re-derives a ranking factor is
+a second verdict on a question that already has one.
+
 **This file is a projection and never control state.** Nothing in the pipeline
 reads it back. Collect keeps deriving every decision from the private ledgers,
 so deleting this file costs a console section and changes no run.
@@ -54,6 +61,12 @@ from idhazh.contracts.base import (
 #: and every published item already carries it, so it crosses on terms nothing
 #: about this view changes. Bounded because a page renders it in a table cell.
 SourceTitle = Annotated[str, StringConstraints(min_length=1, max_length=120)]
+
+#: The one line at the top of the page, computed where the figures are. Bounded
+#: at one sentence a person reads without scrolling, and `min_length=1` because
+#: an empty headline is a heading that says nothing while looking like it said
+#: something - the failure this field exists to make impossible.
+HeadlineSentence = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 
 #: Every private cell this view exists to leave behind. Checked at import
 #: against the fields below, so a later widening that reaches for one of them
@@ -163,6 +176,27 @@ class SourceHealthRow(Model):
             "subtracted from it, so one lost article is counted once."
         ),
     )
+    reliability: float = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "The multiplier the ranker applied to this feed's authority on this run, "
+            "from `ledger.feed_reliability` over the trailing "
+            "`collect.reliability_window_days`. Published rather than recomputed by a "
+            "page: a console figure that is a second derivation of a ranking factor is "
+            "two verdicts, and the day they disagree neither is trustworthy."
+        ),
+    )
+    reliability_reads: int = Field(
+        ge=0,
+        description=(
+            "Evidence-bearing reads the factor was reduced over - every read that did "
+            "not preserve the streak, so a rest and a robots answer are set aside. "
+            "Zero means the factor is the 1.0 a feed with no evidence scores and not a "
+            "record of perfect answering, which is the difference a page draws as a "
+            "dash rather than a full bar."
+        ),
+    )
 
     @model_validator(mode="after")
     def _the_record_is_arithmetically_possible(self) -> Self:
@@ -220,6 +254,27 @@ class SourceHealthView(Contract):
     __schema_stem__: ClassVar[str] = "source-health-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "Each row gains reliability and reliability_reads; the view gains "
+                "reliability_floor, reliability_window_days and headline_sentence."
+            ),
+            why=(
+                "The ranker has discounted a feed's authority by a measured factor "
+                "since the reliability window landed, and no surface has ever drawn "
+                "it, so an operator could see that a feed was failing and not that "
+                "the ranking had already acted on it. Publishing the factor the run "
+                "applied - rather than letting a page reduce the feed-health rows a "
+                "second time - keeps one answer to one question (Guardrail #3). "
+                "reliability_reads carries the denominator, because a feed with no "
+                "evidence scores the same 1.0 as a feed that never missed and a page "
+                "must not draw those two the same. headline_sentence is computed "
+                "here for the same reason the view carries yield_readable: the page "
+                "and this file cannot be allowed to disagree about which figure is "
+                "the worst one."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-03T09:00",
             change=(
                 "Initial shape: the run that wrote it, the window the publishing "
@@ -238,6 +293,35 @@ class SourceHealthView(Contract):
 
     generated_at: Timestamp
     run_id: RunId
+    headline_sentence: HeadlineSentence = Field(
+        description=(
+            "The one line the page opens with: the worst figure on it against that "
+            "figure's own bound, or a count of the figures the record cannot compute "
+            "yet, or a sentence saying nothing here is outside its bound. Computed "
+            "here rather than in the page, so the sentence and the table below it "
+            "are reduced from the same rows. Never absent and never empty - a page "
+            "whose summary line can vanish teaches an operator to scroll past it."
+        )
+    )
+    reliability_floor: float = Field(
+        gt=0.0,
+        le=1.0,
+        description=(
+            "`collect.reliability_floor` - the furthest down the ranker will discount "
+            "a feed, and the mark a page puts on the bar it draws each factor in. "
+            "Carried because the bound and the figure must come from one run: a page "
+            "holding a published factor to a floor it read somewhere else is drawing "
+            "two runs on one bar."
+        ),
+    )
+    reliability_window_days: int = Field(
+        gt=0,
+        description=(
+            "`collect.reliability_window_days` - how far back the factor was reduced. "
+            "Published so the page can say what the number covers; a bare share with "
+            "no period is not a measurement."
+        ),
+    )
     min_complete_days: int = Field(
         gt=0,
         description=(
@@ -302,6 +386,27 @@ class SourceHealthView(Contract):
             raise ValueError("sources must name each source once")
         if ids != sorted(ids):
             raise ValueError("sources must be ordered by source id")
+        return self
+
+    @model_validator(mode="after")
+    def _every_factor_is_inside_the_floor_it_ships_with(self) -> Self:
+        """A drawn factor sits between the floor and 1.0, and a bare 1.0 says so.
+
+        `ledger.feed_reliability` clamps into `[floor, 1.0]` and returns exactly
+        1.0 when it found no evidence, so both properties hold at the writer.
+        Checking them here is what stops a later producer from publishing a
+        factor the bar cannot draw - a value under the mark, or a full bar over
+        an empty denominator that reads as a perfect record.
+        """
+        for row in self.sources:
+            if row.reliability < self.reliability_floor:
+                raise ValueError(
+                    f"{row.source_id} carries a factor under reliability_floor"
+                )
+            if row.reliability_reads == 0 and row.reliability != 1.0:
+                raise ValueError(
+                    f"{row.source_id} scored no evidence, so its factor must be 1.0"
+                )
         return self
 
 

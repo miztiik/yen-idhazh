@@ -124,13 +124,15 @@ VERDICT_WORD: Final[dict[Health, str]] = {
 
 #: The strip's word for each route, its address, and the line under it. The
 #: labels are the owner's own, taken verbatim on 2026-08-30 and 2026-08-31; the
-#: ids and the addresses did not move with them.
+#: ids and the addresses did not move with them. Pipelines lost its "which feeds
+#: broke" clause on 2026-09-14, when the four feed and source panels moved to
+#: Voices and it kept none of them.
 ROUTES: Final[tuple[tuple[RouteId, str, str, str], ...]] = (
     (
         RouteId.PIPELINES,
         "Pipelines",
         "/console/",
-        "Did the runs work, which feeds broke, and what each stage cost.",
+        "Did the runs work, and what each stage cost.",
     ),
     (
         RouteId.MODEL,
@@ -799,7 +801,6 @@ def dead_gate_candidates(
 
 
 def voices_candidates(
-    feeds: Sequence[FeedHealthRow],
     sources: Sequence[SourceHealthRow],
     *,
     reliability_floor: float,
@@ -811,24 +812,24 @@ def voices_candidates(
 
     The first is a feed the ranker is actively discounting: `feed_reliability`
     clamps at `collect.reliability_floor`, so a feed sitting exactly there is as
-    far down as the multiplier goes and no page says so. It reduces the rows the
-    band already holds rather than re-reading the ledger.
+    far down as the multiplier goes. It reads the factor off the source-health
+    view rather than reducing the feed rows again, because the panel on that
+    route draws the same published number - and a band that reduced its own
+    copy would eventually count a feed the page does not draw, over a window
+    nobody could see. A row with no evidence behind its factor is not counted:
+    the 1.0 it carries is a default, not a reading.
 
     The second is a feed with too little record to judge - under
     `collect.source_yield_alarm_min_decisions` addresses it decided - because
-    the quality figures row #13 draws print a dash for it, and a dash is
-    invisible at a glance. It is ranked lower on purpose: too little evidence is
-    not the same as bad evidence, and ranking it higher would publish a
+    the quality figures the Voices route draws print a dash for it, and a dash
+    is invisible at a glance. It is ranked lower on purpose: too little evidence
+    is not the same as bad evidence, and ranking it higher would publish a
     judgement the record cannot carry. The denominator rides on the fragment,
     because a bare count is a number with no scale.
     """
-    by_feed: dict[str, list[FeedHealthRow]] = defaultdict(list)
-    for row in feeds:
-        by_feed[row.feed_id].append(row)
+    live = [row for row in sources if not row.retired]
     discounted = sum(
-        1
-        for rows in by_feed.values()
-        if ledger.feed_reliability(rows, floor=reliability_floor) <= reliability_floor
+        1 for row in live if row.reliability_reads and row.reliability <= reliability_floor
     )
     found: list[Candidate] = []
     if discounted > 0:
@@ -843,7 +844,6 @@ def voices_candidates(
                 severity=WORTH_A_LOOK,
             )
         )
-    live = [row for row in sources if not row.retired]
     thin = sum(1 for row in live if row.decisions < min_decisions)
     if thin > 0:
         found.append(
@@ -968,7 +968,6 @@ def build(
     worst_voices = worst_of(
         editorial(
             voices_candidates(
-                feeds,
                 sources,
                 reliability_floor=collect.reliability_floor,
                 min_decisions=collect.source_yield_alarm_min_decisions,

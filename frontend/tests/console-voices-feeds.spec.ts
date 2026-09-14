@@ -316,7 +316,7 @@ test.describe('the strip geometry, without a browser', () => {
 });
 
 test('THE ORACLE: the printed count is the run the pipeline rests on', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const rows = await drawn(page);
 	const recomputed = byFeed(ledger());
@@ -357,7 +357,7 @@ test('THE ORACLE: the printed count is the run the pipeline rests on', async ({ 
 });
 
 test('THE ORACLE: the marker sits on the quarantine threshold', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const rows = await drawn(page);
 	expect(rows.length, 'nothing to measure').toBeGreaterThan(0);
@@ -399,7 +399,7 @@ test('THE ORACLE: the marker sits on the quarantine threshold', async ({ page })
 });
 
 test('the list is ranked by nearness to a rest, then by how much went wrong', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const rows = await drawn(page);
 	expect(rows.length, 'nothing to rank').toBeGreaterThan(1);
@@ -423,7 +423,7 @@ test('the list is ranked by nearness to a rest, then by how much went wrong', as
 });
 
 test('the strip follows the window while the count does not', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const control = page.locator('[data-window-control] [data-window-preset="7"] input');
 	await expect(control).toBeEnabled();
 
@@ -446,7 +446,7 @@ test('the strip follows the window while the count does not', async ({ page }) =
 });
 
 test('every square carries a sentence, not only a colour', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const squares = page.locator('[data-feed-strip] [data-feed-day]');
 	const count = await squares.count();
@@ -486,7 +486,7 @@ function rungOf(outcome: string): 'high' | 'low' | null {
 for (const theme of THEMES) {
 	test(`the squares are painted from the fill ramp, ${theme}`, async ({ page }) => {
 		await page.addInitScript(`localStorage.setItem('idhazh:theme', '${theme}')`);
-		await page.goto('/console/');
+		await page.goto('/console/voices/');
 		await expect
 			.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
 			.toBe(theme);
@@ -562,7 +562,7 @@ for (const theme of THEMES) {
 }
 
 test('the date axis labels the same columns the squares sit in', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	const columns = await page
 		.locator('[data-feed-strip]')
@@ -615,7 +615,7 @@ test('THE ORACLE: a source we were only ever refused by is in neither count', as
 	// whose every result is a robots answer, and one the run only ever rested.
 	expect(unread.length, 'the canary has no feed the pipeline left unread').toBeGreaterThan(0);
 
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const headline = page.locator('[data-feed-reliability]');
 	await expect(headline).toHaveAttribute('data-feed-ineligible', String(unread.length));
 
@@ -642,7 +642,7 @@ test('THE ORACLE: a source we were only ever refused by is in neither count', as
 });
 
 test('the two counts still add up to the denominator beside them', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const headline = page.locator('[data-feed-reliability]');
 	const attribute = async (name: string) => Number(await headline.getAttribute(name));
 	const clean = await attribute('data-feed-clean');
