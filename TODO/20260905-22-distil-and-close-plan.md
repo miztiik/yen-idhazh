@@ -37,7 +37,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 - **Scope:** Walk both working documents; for every durable finding, check whether the living doc already holds it, and write the ones that do not.
 - **Files touched:** `docs/concepts/digest.md`, `docs/concepts/design-system.md`, `docs/concepts/evaluation.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/**`, `docs/reference/agent-notes.md`, `docs/reference/measurements.md`
-- **Acceptance gates:** the full suite; the docs cross-link check; `test_contracts.py`'s ASCII and LF check.
+- **Acceptance gates:** the full suite; the docs cross-link check; `backend/tests/contracts/`'s ASCII and LF check.
 - **Oracle:** Every owner decision, correction, gap and contradiction in the pseudo-plan is accounted for by exactly one of: **implemented** (name the plan and the PR), **recorded** (name the living doc and the section), or **superseded** (name what replaced it). A table with no fourth column - because a fourth column is where a lost decision hides.
 
 ### Decisions

@@ -148,7 +148,7 @@ the contract. Retiring a key without moving those readers breaks the next
 scheduled run. The same applies to the pointer: those readers follow
 `models_file` to the model's own file rather than naming that file, so a swap
 stays one line for them too, and
-`backend/tests/test_workflows.py::test_every_config_key_a_workflow_indexes_is_in_the_committed_config`
+`backend/tests/workflows/test_weights_and_model_refs.py::test_every_config_key_a_workflow_indexes_is_in_the_committed_config`
 resolves each key path against whichever of the two documents the step really
 opened.
 
@@ -253,7 +253,7 @@ copies of one file are free to drift with nothing gating them. The copy is in
 code rather than in a published file, so no gate caught it. The rungs were
 corrected as of 2026-08-29, went to six on 2026-09-09 and back to five on
 2026-09-10, and the copy is now pinned:
-`backend/tests/test_contracts.py::test_the_console_fallback_bands_match_the_committed_ladder`
+`backend/tests/contracts/test_taxonomy_and_prompts.py::test_the_console_fallback_bands_match_the_committed_ladder`
 reads the committed bands and the `SUMMARIZE_DEFAULTS` literal and fails when
 they disagree, printing both ladders. The guard sits with the writer because a
 frontend test cannot import that module without dragging in the SvelteKit
@@ -842,7 +842,7 @@ pipeline did nothing.
 The retired check compared the old age times 30 against `max_window_days` - `390
 > 366` - which is arithmetic about days, not about the files a read selects. A
 month is not thirty days. The check now compares against the shards, and
-`backend/tests/test_contracts.py` sweeps every end date in one 400-year
+`backend/tests/contracts/` sweeps every end date in one 400-year
 Gregorian cycle to prove it. Measured 2026-09-02 over all **146,097** anchor
 dates - arithmetic over the calendar, so the spread is zero by construction:
 fourteen months keeps back at least as far as the console reads on every one of

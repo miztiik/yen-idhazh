@@ -391,7 +391,7 @@ def shards_in_window(today: str, within_days: int) -> list[str]:
     against: how many month-shaped buckets a day-counted window reaches. That is
     why `observability.item_health_full_grain_months` is 14 and not 13 against a
     366-day `console.max_window_days`, and `contracts.app_config` states the
-    rule while `test_contracts` and `test_retention` drive it. A grain change
+    rule while `tests/contracts/` and `tests/retention/` drive it. A grain change
     does not touch it, because both knobs are still counted in months.
 
     Walking days rather than subtracting months keeps the arithmetic honest

@@ -376,7 +376,7 @@ to clear.
 ## 2. Row #1 - Six numbers the job already has and throws away
 
 - **Scope:** `kv_cache_bytes`, `compute_buffer_bytes`, `n_ctx_configured`, `model_buffer_bytes`, `python_peak_rss_bytes` and `cgroup_peak_bytes` added to the runtime counters row, all from data the job already collects.
-- **Files touched:** `backend/idhazh/contracts/runtime_counters.py`, `schemas/runtime-counters-row.schema.json`, `backend/idhazh/llm/**` (the server-log reader), `.github/workflows/digest.yml`, `tests/fixtures/contracts/runtime-counters-row/*.json`, `state/runtime-counters.csv` (widened), `backend/tests/test_contracts.py`, `docs/reference/measurements.md`
+- **Files touched:** `backend/idhazh/contracts/runtime_counters.py`, `schemas/runtime-counters-row.schema.json`, `backend/idhazh/llm/**` (the server-log reader), `.github/workflows/digest.yml`, `tests/fixtures/contracts/runtime-counters-row/*.json`, `state/runtime-counters.csv` (widened), `backend/tests/contracts/`, `docs/reference/measurements.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; one dispatch writing the new cells.
 - **Oracle:** The widened ledger re-parses every existing row with the new values absent, and the byte delta equals exactly the new commas plus the new header characters - counted, not estimated. A widening that moved a cell would fail that arithmetic.
 
@@ -399,7 +399,7 @@ to clear.
 ## 3. Row #2 - A model swap can no longer inherit in silence
 
 - **Scope:** End the shared `InferenceConfig`, so a settings block is bound to the model entry it was derived against.
-- **Files touched:** `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/idhazh/llm/server.py`, `backend/idhazh/evals/qualify.py`, `frontend/src/lib/server/config.ts`, `backend/tests/test_contracts.py`, `backend/tests/test_qualify.py`, `docs/concepts/config.md`
+- **Files touched:** `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/idhazh/llm/server.py`, `backend/idhazh/evals/qualify.py`, `frontend/src/lib/server/config.ts`, `backend/tests/contracts/`, `backend/tests/test_qualify.py`, `docs/concepts/config.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** A config that names a different model without supplying settings for it **fails validation with a message naming the missing block**. Whether that is achieved by moving the block onto the model reference or by a qualification gate that refuses an unmeasured pairing is the row's call; what is not open is leaving it silent.
 

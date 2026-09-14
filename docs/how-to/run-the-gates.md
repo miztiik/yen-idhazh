@@ -355,7 +355,7 @@ broken install. It prints nothing on a pass, and a silent run is the pass.
 
 It reads files, so it covers `.github/scripts/` and nothing else. The shell
 written inline in a workflow `run:` body is held by the contract tests in
-`backend/tests/test_workflows.py`
+`backend/tests/workflows/`
 ([../reference/github-actions.md](../reference/github-actions.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
 
 **`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
@@ -634,7 +634,7 @@ It is also the safer shape, and that would have decided it on its own. The
 but it builds it with `static/assist` moved out of the way, and then overwrites
 the whole tree with the canary. Running this spec beside either of those is
 running it against exactly the tree it was written to refuse. Its own job has
-its own `frontend/build` and races nothing. `backend/tests/test_workflows.py`
+its own `frontend/build` and races nothing. `backend/tests/workflows/`
 holds the job to that: the canary build may not appear in it, and the real build
 has to come before the spec.
 

@@ -527,7 +527,7 @@ The margin falls from 1.9x to **1.16x**. At the 8,192 window committed the day
 before, 14,089 tokens is 172 percent of the window: this cap raise was not
 possible until that window raise landed, and the two are one decision.
 `test_the_longest_article_the_cap_allows_still_fits_the_window` in
-[../../backend/tests/test_contracts.py](../../backend/tests/test_contracts.py)
+[../../backend/tests/contracts/](../../backend/tests/contracts/)
 reads both sides from `config/` and fails on any later pair that does not fit.
 
 **A two-call design has almost nothing left.** The pseudo-plan's second call
@@ -1009,7 +1009,7 @@ rows; the block of moments is a fixed cost per cohort. A twelve-row month pays
 the second and barely earns the first, and the archive comes out about 18 percent
 larger than the shard. Fourteen-month-old months are the full ones, which is why
 the direction measured above is the one the policy rests on.
-`backend/tests/test_retention.py` pins the direction at a run's worth of rows
+`backend/tests/retention/` pins the direction at a run's worth of rows
 rather than pinning a figure, because a figure taken there goes stale the next
 time a column is added.
 
@@ -2012,7 +2012,7 @@ rest - so 12 is the last count anything took, not a live figure.
 
 | Change | Before | After |
 | --- | --- | --- |
-| `test_workflows.py` | 121 tests, 146.0 s | 99 tests, 106.5 s |
+| `backend/tests/workflows/` | 121 tests, 146.0 s | 99 tests, 106.5 s |
 | `test_labels.py`, the determinism test | 1.81 s | **0.04 s** |
 | `test_labels.py`, the pooled-draw tool test | 0.64 s | 0.03 s |
 | The eval ledger those tests read | 6,966 rows over 15 days | 80 built rows |

@@ -46,7 +46,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
   - `frontend/src/lib/charts/series.ts` (`TELEMETRY_COLUMNS`)
   - `frontend/scripts/build-canary.mjs` (the third copy of the header, in JavaScript)
   - `frontend/public/telemetry/*.csv` (republished)
-  - `backend/tests/test_telemetry.py`, `backend/tests/test_contracts.py`
+  - `backend/tests/test_telemetry.py`, `backend/tests/contracts/`
   - `docs/concepts/telemetry.md`, `docs/architecture/**/telemetry-series.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + `git diff --exit-code -- schemas/`; the full suite; the canary build (`build_canary_day.py` then `npm run build:canary`); `npm run build` and `bundle-gate`.
 - **Oracle:** Re-running the publisher over the committed `state/` reproduces each republished shard such that **every pre-existing column is byte-identical cell by cell** and each row has gained exactly eight cells. Comparing whole files would pass on a file that lost a row; comparing cell by cell against the old header cannot.
@@ -140,7 +140,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 6. Row #5 - The ceilings are re-recorded by the plan that grew them
 
 - **Scope:** `page_weight.ceilings_bytes` for `/console/`, `/console/model/` and `/console/machine/` re-derived on this plan's tree, with headroom sized in published days.
-- **Files touched:** `config/idhazh.json`, `backend/tests/test_contracts.py`, `docs/reference/measurements.md`, `docs/how-to/run-the-gates.md`
+- **Files touched:** `config/idhazh.json`, `backend/tests/contracts/`, `docs/reference/measurements.md`, `docs/how-to/run-the-gates.md`
 - **Acceptance gates:** `bundle-gate` green; the contracts module; the full suite.
 - **Oracle:** The recorded ceiling equals the heaviest of at least five builds plus a stated number of published days at the measured per-day rate plus the tolerance, and the arithmetic is printed in the commit so the two terms can be checked to sum.
 

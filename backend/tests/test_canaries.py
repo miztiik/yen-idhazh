@@ -25,8 +25,8 @@ from typing import Any, Final, Literal
 import pytest
 import test_spans as spans
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from contracts._fixtures import copy_config, entry_with
 from pydantic import ValidationError
-from test_contracts import copy_config, entry_with
 
 from idhazh import cli, config, extract, telemetry
 from idhazh.contracts.app_config import VisualsConfig

@@ -40,7 +40,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 2. Row #1 - One contract, six kinds, two tiers
 
 - **Scope:** The element contract covering `quantity`, `entity`, `date`, `quote`, `claim`, `place`, with Tier 1 fields that only code may write and Tier 2 fields a later model may assign.
-- **Files touched:** `backend/idhazh/contracts/element.py` (new), `schemas/element.schema.json` (generated), `tests/fixtures/contracts/element/*.json` (new), `backend/tests/test_contracts.py`, `docs/architecture/extraction/**` (new or extended)
+- **Files touched:** `backend/idhazh/contracts/element.py` (new), `schemas/element.schema.json` (generated), `tests/fixtures/contracts/element/*.json` (new), `backend/tests/contracts/`, `docs/architecture/extraction/**` (new or extended)
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + `git diff --exit-code -- schemas/`; the full suite.
 - **Oracle:** **No Tier 2 field is required.** An element constructed with only its Tier 1 fields validates; an element carrying a Tier 2 field with no Tier 1 anchor does not. That pair is what the two-tier split means, and testing only the first half proves nothing.
 
@@ -118,7 +118,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 5. Row #4 - A span that no longer points where it did
 
 - **Scope:** The span-drift invariant, in three parts: a write-time validator, a read-time re-slice that degrades that item alone, and a CI contract test over canary fixtures.
-- **Files touched:** `backend/idhazh/contracts/element.py`, `backend/idhazh/elements.py`, `backend/idhazh/cli.py`, `backend/tests/test_contracts.py`, `backend/tests/test_elements.py`, `tests/fixtures/**`, `docs/architecture/extraction/**`
+- **Files touched:** `backend/idhazh/contracts/element.py`, `backend/idhazh/elements.py`, `backend/idhazh/cli.py`, `backend/tests/contracts/`, `backend/tests/test_elements.py`, `tests/fixtures/**`, `docs/architecture/extraction/**`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** A fixture whose article text has moved by one character causes exactly **that item** to degrade with a recorded reason, while every sibling item in the same run still publishes. A build that fails wholesale on one drifted span has implemented a different rule.
 

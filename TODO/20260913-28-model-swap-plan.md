@@ -69,7 +69,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | --- | --- | --- |
 | A | 1, 2, 3 | Row #1 writes one workflow and its test. Row #2 writes the llm package, the config contract, the stamp and four test modules. Row #3 writes `measured.py`, its test and the instrument log. No pair shares a file. |
 | B | 4 | Alone. It shares `backend/idhazh/classify/calls.py`, `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/throughput.md` and `docs/concepts/config.md` with row #2, and `docs/reference/measurements.md` with row #3, so it cannot run beside either. That file overlap is the whole of its `Depends-on`. |
-| C | 5, 6 | Row #5 writes `server.py`, `test_summarize.py`, a new fixture directory and `digest.yml`. Row #6 writes `app_config.py`, the config files, the schemas, `config.py` and `test_contracts.py`. **Corrected 2026-09-14: they are not disjoint.** Row #5's decision 2 adds a required field to `ModelRef`, which is `app_config.py`, and the value of that field has to be written into the per-model file row #6 created - so row #5 now depends on row #6 and sits alone in group D. Row #6 also wrote `test_summarize.py`, which row #5 writes. |
+| C | 5, 6 | Row #5 writes `server.py`, `test_summarize.py`, a new fixture directory and `digest.yml`. Row #6 writes `app_config.py`, the config files, the schemas, `config.py` and `backend/tests/contracts/`. **Corrected 2026-09-14: they are not disjoint.** Row #5's decision 2 adds a required field to `ModelRef`, which is `app_config.py`, and the value of that field has to be written into the per-model file row #6 created - so row #5 now depends on row #6 and sits alone in group D. Row #6 also wrote `test_summarize.py`, which row #5 writes. |
 | D | 5, 7, 11 | Row #5 writes `server.py`, `app_config.py`, the model file, its schema and `test_summarize.py`. Row #7 is documentation only. Row #11 is the contract and the llm package - it shares `app_config.py` and `server.py` with row #5, so **those two are not disjoint and may not run together**; row #11's own `Depends-on` already names row #5. |
 | E | 12, 13a | Row #12 writes `sanitize.py`, `app_config.py` and two test modules. Row #13a writes `measured.py`, `extract.py`, the two contract docstrings, a new utility, `measure.yml` and the instrument log. No shared file. Row #13b waits on #13a and on a box with weights, so it is not in this group. |
 | F | 8 | Alone. It rewrites the workflow row #1 fixed and reads the shapes rows #6 and #7 created. |
@@ -83,15 +83,15 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 - **Scope:** The runtime-sweep job builds a candidate config by updating a key that does not exist, so the job dies at that line.
 - **Files touched:**
   - `.github/workflows/measure.yml`
-  - `backend/tests/test_workflows.py`
-- **Acceptance gates:** local - `python backend/utilities/gate_lock.py -- python -m pytest backend/tests/test_workflows.py -q`. CI - `ci.yml`. Manual post-merge proof: one dispatch of `measure.yml` with `target=runtime` and `runtime_candidate=baseline` reaching the server-start step.
+  - `backend/tests/workflows/`
+- **Acceptance gates:** local - `python backend/utilities/gate_lock.py -- python -m pytest backend/tests/workflows/ -q`. CI - `ci.yml`. Manual post-merge proof: one dispatch of `measure.yml` with `target=runtime` and `runtime_candidate=baseline` reaching the server-start step.
 - **Oracle:** `python -c "import json; json.load(open('config/idhazh.json'))['models']['summarize']['inference']"` resolves and the same expression without `summarize` raises `KeyError`. The patched line must use the path that resolves.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The correct path is `payload["models"]["summarize"]["inference"]`. Lines 367, 862 and 894 of the same file already read `["models"]["summarize"]["sha256"]`, so the file disagrees with itself. | Carmack, 2026-09-13 |
 | 2 | This ships before row #8 rewrites the workflow and before row #6 moves the block again, so the fix is provably the thing that made a dispatch work. | Fowler, 2026-09-13 |
-| 3 | A test is added to `backend/tests/test_workflows.py`, which already asserts this file's dispatch inputs, job names and retention at fifteen sites. The assertion is that every config path the workflow's inline Python indexes resolves against the committed config. | Fowler, 2026-09-13 |
+| 3 | A test is added to `backend/tests/workflows/`, which already asserts this file's dispatch inputs, job names and retention at fifteen sites. The assertion is that every config path the workflow's inline Python indexes resolves against the committed config. | Fowler, 2026-09-13 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
@@ -114,7 +114,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `config/idhazh.json`
   - `schemas/app-config.schema.json`
   - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
-  - `backend/tests/test_contracts.py`
+  - `backend/tests/contracts/`
   - `backend/tests/test_fingerprint.py`
   - `backend/tests/test_summarize.py`
   - `backend/tests/test_classify.py`
@@ -122,7 +122,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `docs/architecture/summarize/prompt.md`
   - `docs/architecture/summarize/throughput.md`
   - `docs/architecture/summarize/model-boundary.md`
-- **Acceptance gates:** local - `python backend/utilities/gate_lock.py -- ruff check backend`, `mypy backend`, the contract export followed by `git diff --exit-code -- schemas/`, and `python -m pytest backend/tests/test_contracts.py backend/tests/test_fingerprint.py backend/tests/test_summarize.py backend/tests/test_classify.py -q`. CI - `ci.yml` full suite and the drift gate.
+- **Acceptance gates:** local - `python backend/utilities/gate_lock.py -- ruff check backend`, `mypy backend`, the contract export followed by `git diff --exit-code -- schemas/`, and `python -m pytest backend/tests/contracts/ backend/tests/test_fingerprint.py backend/tests/test_summarize.py backend/tests/test_classify.py -q`. CI - `ci.yml` full suite and the drift gate.
 - **Oracle:** the rendered prompt for a fixture article is **byte-identical** before and after. Capture the render on the base tree into a fixture, assert equality on the branch. One differing byte stops the row (ESCALATE trigger 4).
 
 | # | Decision | Authority |
@@ -287,10 +287,10 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `schemas/models-config.schema.json` (new)
   - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
   - `tests/fixtures/contracts/models-config/every-knob-differs-from-the-committed-config.json` (new)
-  - `backend/tests/test_contracts.py`
+  - `backend/tests/contracts/`
   - `docs/concepts/config.md`
   - `docs/architecture/contracts/schemas.md`
-- **Acceptance gates:** local - ruff, mypy, the contract export followed by `git diff --exit-code -- schemas/`, `python -m pytest backend/tests/test_contracts.py -q`. CI - `ci.yml` full suite and the drift gate.
+- **Acceptance gates:** local - ruff, mypy, the contract export followed by `git diff --exit-code -- schemas/`, `python -m pytest backend/tests/contracts/ -q`. CI - `ci.yml` full suite and the drift gate.
 - **Oracle:** the resolved entry is byte-identical to the same entry serialized from **`origin/main` at row #2 DONE**, which is the fixed baseline. The pointer changes where bytes are read from, never what they say.
 
 | # | Decision | Authority |
@@ -360,11 +360,11 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `schemas/app-config.schema.json`
   - `schemas/models-config.schema.json`
   - `tests/fixtures/contracts/models-config/every-knob-differs-from-the-committed-config.json`
-  - `backend/tests/test_contracts.py`
+  - `backend/tests/contracts/`
   - `backend/tests/test_summarize.py`
   - `docs/architecture/summarize/prompt.md`
   - `docs/architecture/summarize/model-boundary.md`
-- **Acceptance gates:** local - ruff, mypy, contract export plus `git diff --exit-code -- schemas/`, `python -m pytest backend/tests/test_contracts.py backend/tests/test_summarize.py -q`. CI - `ci.yml` full suite and the drift gate.
+- **Acceptance gates:** local - ruff, mypy, contract export plus `git diff --exit-code -- schemas/`, `python -m pytest backend/tests/contracts/ backend/tests/test_summarize.py -q`. CI - `ci.yml` full suite and the drift gate.
 - **Oracle:** two arms. Under `own_turn` the rendered prompt is byte-identical to the incumbent's. Under a built `fold_into_first_user` entry the rendered bytes differ **while `prompt_sha256` is unchanged** - which is the envelope-and-content split of section 0.2 stated as a test.
 
 | # | Decision | Authority |
@@ -439,11 +439,11 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `.github/workflows/measure.yml`
   - `backend/tests/test_measure_budgets.py`
   - `backend/tests/test_measured.py`
-  - `backend/tests/test_workflows.py`
+  - `backend/tests/workflows/`
   - `backend/tests/test_marks.py`
   - `tests/fixtures/llm/budget-probe.json`
   - `docs/reference/measurements.md`
-- **Acceptance gates:** local - ruff, mypy, `python -m idhazh.contracts.export` with no drift, `python -m pytest backend/tests/test_measured.py backend/tests/test_measure_budgets.py backend/tests/test_workflows.py -q`, then the full backend suite. CI - `ci.yml`.
+- **Acceptance gates:** local - ruff, mypy, `python -m idhazh.contracts.export` with no drift, `python -m pytest backend/tests/test_measured.py backend/tests/test_measure_budgets.py backend/tests/workflows/ -q`, then the full backend suite. CI - `ci.yml`.
 - **Oracle:** `python backend/utilities/measure_budgets.py check` names all three constants, prints the retired digest beside the configured one, and exits 1. Every value at its site is byte-identical to what it was before this row.
 
 | # | Decision | Authority |
@@ -471,7 +471,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `backend/idhazh/contracts/taxonomy.py` (only if the definition bound moves)
   - `backend/idhazh/contracts/visual.py` (only if the plan ceiling moves)
   - `docs/reference/measurements.md`
-- **Acceptance gates:** local - ruff, mypy, `python backend/utilities/measure_budgets.py check` exits 0, `python -m pytest backend/tests/test_measured.py backend/tests/test_measure_budgets.py backend/tests/test_contracts.py -q`. CI - `ci.yml`.
+- **Acceptance gates:** local - ruff, mypy, `python backend/utilities/measure_budgets.py check` exits 0, `python -m pytest backend/tests/test_measured.py backend/tests/test_measure_budgets.py backend/tests/contracts/ -q`. CI - `ci.yml`.
 - **Oracle:** each constant carries its number, its `subject` equals the configured weights' digest, and **the retired-vocabulary reading is deleted rather than kept beside the new one** (row #13's Decision 3, Guardrail #10).
 - **How to take it:** dispatch `.github/workflows/measure.yml` with `target: budgets`. The run summary carries the paste block. Or, on any box with weights: start `llama-server` on the configured model, then `python backend/utilities/measure_budgets.py read --runner <where you ran it>`.
 
@@ -489,9 +489,9 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `.github/scripts/start-llama-server.sh`
   - `backend/utilities/measure_llm.py`
   - `backend/tests/test_measure_llm.py`
-  - `backend/tests/test_workflows.py`
+  - `backend/tests/workflows/`
   - `docs/how-to/evaluate-new-summarizer-model.md`
-- **Acceptance gates:** local - ruff, mypy, `python -m pytest backend/tests/test_measure_llm.py backend/tests/test_workflows.py -q`. CI - `ci.yml`. Manual post-merge proof: one real dispatch against the incumbent's own digest.
+- **Acceptance gates:** local - ruff, mypy, `python -m pytest backend/tests/test_measure_llm.py backend/tests/workflows/ -q`. CI - `ci.yml`. Manual post-merge proof: one real dispatch against the incumbent's own digest.
 - **Oracle:** dispatched against the incumbent, the emitted dossier reproduces the committed dossier's readings within their stated spread. A bench that cannot reproduce the model it was calibrated on is measuring something else.
 
 | # | Decision | Authority |
@@ -500,14 +500,14 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 2 | Two jobs, not one. One job puts both arms under a single six-hour ceiling and loses per-arm restart. | Carmack, 2026-09-13 |
 | 3 | The candidate is a repository reference at an immutable commit plus file and expected digest, materialized into the gitignored candidate directory. Empty means today's behaviour. **A candidate is therefore benchmarked without touching the committed config at all.** | Carmack, 2026-09-13 |
 | 4 | Raw throughput alone is not enough. It never starts a server, so it yields no seconds per item and no resident set. The project's own how-to already concedes that raw fit is not production fit. | Carmack, 2026-09-13 |
-| 5 | Artifact retention rises from seven days to ninety. Seven days is shorter than the gap between benchmarking and deciding, and the emitted files are kilobytes against a 500 MB ceiling. `backend/tests/test_workflows.py` asserts the current value and moves with it. | Carmack, 2026-09-13 |
+| 5 | Artifact retention rises from seven days to ninety. Seven days is shorter than the gap between benchmarking and deciding, and the emitted files are kilobytes against a 500 MB ceiling. `backend/tests/workflows/` asserts the current value and moves with it. | Carmack, 2026-09-13 |
 | 6 | The workflow never writes the committed config, never publishes, and never scores quality. A bench that can score becomes the selector, and a bench that can adopt is an adoption path with no gates in it. | Andre, 2026-09-13 |
 | 7 | Qualification is not chained to this. The bench is cheap and answers whether a model fits; qualification is expensive and answers whether it is good. Chaining spends the expensive one on candidates already dead. | Carmack, 2026-09-13 |
 | 8 | The resident-set arm records rather than gates, and names the measurement that would settle headroom: the split between anonymous and file-backed pages, taken by the same sampler on the runner. Memory refuses nothing in this plan. | Carmack, 2026-09-13 |
 | 9 | **The bench reports a cold arm as well as a warm one.** The first day after a swap is all-cold on every shard at once - the cache key carries the filename and revision - so a warm-box reading is not the first real day. One cold model-load and one cold weights-fetch figure, labelled as such. | Carmack, 2026-09-13 |
 | 10 | The artifact is the page body, not JSON to reformat: numbers filled, hardware, build and spread inline, `Last Updated` set. Transcription is a copy. | Fowler, 2026-09-13 |
 | 11 | **Decision 5's premise was wrong and the work is an addition, not a move.** No retention assertion for `measure.yml` existed to move: the only one in `backend/tests/` is `retention-days > 0` on `digest.yml`'s review tree. The raw arm declared no retention at all, so it was on the platform default. Both arms now declare ninety and a new test pins the number. | Carmack, 2026-09-14 |
-| 12 | **The two arms keep the job names `llm` and `runtime`.** They are the raw arm and the server arm, and renaming them would have rewritten six closed-world entries in `backend/tests/test_workflows.py` plus four pages, one of them an archive record of what the `runtime` job measured in August. The target is what changed: `llm` and `runtime` are gone as dispatch values and `bench` runs both jobs, so the harness lost a path rather than gaining one. | Carmack, 2026-09-14 |
+| 12 | **The two arms keep the job names `llm` and `runtime`.** They are the raw arm and the server arm, and renaming them would have rewritten six closed-world entries in `backend/tests/workflows/` plus four pages, one of them an archive record of what the `runtime` job measured in August. The target is what changed: `llm` and `runtime` are gone as dispatch values and `bench` runs both jobs, so the harness lost a path rather than gaining one. | Carmack, 2026-09-14 |
 | 13 | **The 95th-percentile row is not on the emitted page.** Five articles cannot carry one, and printing a quantile over five samples is inventing precision (Guardrail #10). The page says so and names what would give the number: the published ledger over a real day. | Carmack, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
@@ -570,17 +570,17 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `schemas/models-config.schema.json`
   - `schemas/run-manifest.schema.json`
   - `tests/fixtures/contracts/models-config/every-knob-differs-from-the-committed-config.json`
-  - `backend/tests/test_contracts.py`
+  - `backend/tests/contracts/`
   - `backend/tests/test_summarize.py`
   - `backend/tests/test_classify.py`
   - `backend/tests/test_fingerprint.py`
   - `backend/tests/test_qualify.py`
-  - `backend/tests/test_workflows.py`
+  - `backend/tests/workflows/`
   - `.github/workflows/digest.yml`
   - `docs/architecture/summarize/prompt.md`
   - `docs/architecture/summarize/throughput.md`
   - `docs/architecture/contracts/determinism.md`
-- **Acceptance gates:** local - ruff, mypy, contract export plus schema diff, `python -m pytest backend/tests/test_contracts.py backend/tests/test_summarize.py backend/tests/test_classify.py backend/tests/test_fingerprint.py backend/tests/test_qualify.py backend/tests/test_workflows.py -q`. CI - `ci.yml` full suite. **Adoption gate: a qualification run comparing the incumbent against the incumbent-with-thinking on the same frozen corpus, same build, interleaved repeats.**
+- **Acceptance gates:** local - ruff, mypy, contract export plus schema diff, `python -m pytest backend/tests/contracts/ backend/tests/test_summarize.py backend/tests/test_classify.py backend/tests/test_fingerprint.py backend/tests/test_qualify.py backend/tests/workflows/ -q`. CI - `ci.yml` full suite. **Adoption gate: a qualification run comparing the incumbent against the incumbent-with-thinking on the same frozen corpus, same build, interleaved repeats.**
 - **Oracle:** on a recorded thinking reply, the persisted summary contains no part of the think block, the reply replayed into the second call is cut at the answer boundary, and the answer span's budget is the declared answer budget rather than whatever the thinking left over.
 
 | # | Decision | Authority |

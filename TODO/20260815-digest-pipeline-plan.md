@@ -885,7 +885,7 @@ is what makes row 14 a single `rm -r` with no second edit.
 ## Row #14 - Retention job + site-budget alarm
 
 - **Scope:** Bound the published site against the 1 GB Pages cap without ever deleting a measurement, and measure the ceiling long before the policy is needed.
-- **Files touched:** `.github/workflows/retention.yml`, `backend/utilities/prune_assets.py`, `backend/utilities/site_budget.py`, `config/idhazh.json`, `backend/tests/test_retention.py`
+- **Files touched:** `.github/workflows/retention.yml`, `backend/utilities/prune_assets.py`, `backend/utilities/site_budget.py`, `config/idhazh.json`, `backend/tests/retention/`
 - **Acceptance gates:** the job is a separate monthly workflow, never inside `daily.yml`; dry-run by default; refuses to act above `max_deletes_per_run`; ships disabled; `site_bytes` and `site_files` recorded on every daily run from day one.
 - **Oracle:** the fuse - point the job at a fixture tree with a deliberately malformed date and assert it deletes nothing, reports the refusal, and exits non-zero. A retention job that cannot refuse is a retention job that will one day delete the archive.
 

@@ -198,7 +198,7 @@ and the operator widens past the seeded span.
 
 **Nothing in the frontend can see the writer, so a contract test holds the two
 lists together.**
-`backend/tests/test_contracts.py::test_the_console_reads_a_prefix_of_the_published_telemetry_columns`
+`backend/tests/contracts/test_taxonomy_and_prompts.py::test_the_console_reads_a_prefix_of_the_published_telemetry_columns`
 pulls `TELEMETRY_COLUMNS` out of `series.ts` with a regex and asserts it is a
 prefix of `PUBLIC_COLUMNS`. It passes an append on the writer's side, fails an
 insert, a rename or a reorder at any position the browser reads, and fails a

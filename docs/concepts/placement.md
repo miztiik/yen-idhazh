@@ -26,7 +26,7 @@ a rule that is applied on none of the five runs.
 
 Three numbers in `config/idhazh.json` are that decision. Each has a sane default,
 so a fresh clone runs on them, and each has a test that fails when the rule is
-broken (`backend/tests/test_placement.py`).
+broken (`backend/tests/placement/`).
 
 | Knob | Value | The decision it carries |
 | --- | ---: | --- |
@@ -306,7 +306,7 @@ whether the desk is worth opening at all, and six stories is a fragment on a
 ceiling moves to its second desk, and a thin desk is opened from stories the day
 already carries. The day is exactly as long either way, so nothing a reader
 could have seen is ever taken out
-(`backend/tests/test_placement.py`).
+(`backend/tests/placement/`).
 
 ### The four things neither rule may do
 

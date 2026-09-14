@@ -606,7 +606,7 @@ export function uiConfig(): UiConfig {
  * would ride to every reader on every page for ever.
  *
  * The fallback is the same number `UiConfig.shell_seed_items` defaults to, and
- * `backend/tests/test_contracts.py` fails if the two copies drift.
+ * `backend/tests/contracts/` fails if the two copies drift.
  */
 const SHELL_SEED_ITEMS = 15;
 
@@ -626,7 +626,7 @@ export function shellSeedItems(): number {
  * `frontend/tests/payload-weight.spec.ts` is the guard that reads it.
  *
  * The fallback is the same number `UiConfig.leading_stories` defaults to, and
- * `backend/tests/test_contracts.py` fails if the two copies drift.
+ * `backend/tests/contracts/` fails if the two copies drift.
  */
 const LEADING_STORIES = 5;
 
@@ -641,7 +641,7 @@ export function leadingStories(): number {
  * a browser is never told the number. Every other day is inside its month.
  *
  * The fallback is the same number `UiConfig.archive_recent_days` defaults to,
- * and `backend/tests/test_contracts.py` fails if the two copies drift.
+ * and `backend/tests/contracts/` fails if the two copies drift.
  */
 const ARCHIVE_RECENT_DAYS = 14;
 

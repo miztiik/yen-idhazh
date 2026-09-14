@@ -54,7 +54,7 @@ $p = Start-Process -FilePath pwsh -ArgumentList '-NoProfile','-File','x.ps1' -Wa
 
 **`DONE.txt` beside `done.txt` is the same file.** Windows paths are case-insensitive, so a gate script writing `$out\ruff.txt` and then `$out\RUFF.txt` silently overwrites the result with the word `RUFF-DONE` - the run looks like it passed and the exit code you needed is gone (2026-08-26). Give a sentinel a name that is not the stem of any output file, and anchor the pattern you poll for, because `PIP_EXIT` also matches `ENSUREPIP_EXIT`.
 
-**A log that stops growing is not a stalled process.** A detached script's redirect buffers, so the file sits at one size for minutes while the child works: a healthy `pytest` run was killed twice on 2026-08-30 for looking frozen at 94 percent, when the suite is 1,599 tests and 579 s and `test_workflows.py` alone spends minutes inside `git` subprocesses with nothing to print. Ask the process, not the file - `UserModeTime` is in 100-ns units, so a value climbing between two samples is work and only a value that does not move is a stall:
+**A log that stops growing is not a stalled process.** A detached script's redirect buffers, so the file sits at one size for minutes while the child works: a healthy `pytest` run was killed twice on 2026-08-30 for looking frozen at 94 percent, when the suite is 1,599 tests and 579 s and `backend/tests/workflows/` alone spends minutes inside `git` subprocesses with nothing to print. Ask the process, not the file - `UserModeTime` is in 100-ns units, so a value climbing between two samples is work and only a value that does not move is a stall:
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='python.exe'" |

@@ -70,7 +70,7 @@ check while `evals.writer.append` names its own file `2025-01`. That is two file
 claiming one month, and a fold would summarise over one of them. CPython's date parser
 happens to refuse that stem today, but through how it compiles its digit class rather
 than through anything this rule asked for, and a detail is not a rule - so the check is
-written out, and `backend/tests/test_retention.py::test_the_month_readers_all_agree_on_what_a_month_is`
+written out, and `backend/tests/retention/test_telemetry_fold.py::test_the_month_readers_all_agree_on_what_a_month_is`
 holds all four readers to it.
 
 Authority: Guardrail #5 - a structural fix rather than a third copy of the rule. Found while

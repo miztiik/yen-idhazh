@@ -47,7 +47,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
   - `schemas/app-config.schema.json` (generated)
   - `tests/fixtures/contracts/app-config/tuned.json`
   - `frontend/src/lib/server/config.ts` (the TypeScript mirror)
-  - `backend/tests/test_contracts.py`
+  - `backend/tests/contracts/`
   - `docs/concepts/config.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; `python -m idhazh.contracts.export` then `git diff --exit-code -- schemas/`; contracts and config test modules; the full suite in CI.
 - **Oracle:** A config file spelling the **old** key loads and produces the same settings object as one spelling the new key - asserted by loading both and comparing the model, not by reading the code. And `git grep -n 'route' -- config/` returns nothing.
@@ -110,7 +110,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
   - `schemas/run-manifest.schema.json` (generated)
   - `backend/idhazh/assemble.py` and every producer
   - `frontend/src/lib/server/payload.ts` if it reads the value
-  - `backend/tests/test_contracts.py`, `backend/tests/test_assemble.py`
+  - `backend/tests/contracts/`, `backend/tests/test_assemble.py`
   - `docs/architecture/**`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; a load of **every committed `run.json`** through the new model.
 - **Oracle:** Every `run.json` under `frontend/public/digest/` parses through the new contract with no error, **and** the count of manifests carrying the stage is unchanged from the base tree. A rename that broke the wire value would drop that count to zero, which is the failure this row exists to prevent.
@@ -138,17 +138,17 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 - **Files touched:**
   - `.github/workflows/digest.yml`
   - `.github/workflows/*.yml` naming the job or its artifacts
-  - `backend/tests/test_workflows.py`
+  - `backend/tests/workflows/`
   - `docs/reference/github-actions.md`
-- **Acceptance gates:** `shellcheck` on `.github/scripts/`; `backend/tests/test_workflows.py`; the full suite; one `workflow_dispatch` of `digest.yml` completing with the renamed job.
-- **Oracle:** A live dispatch reaches `assemble` with the renamed job's outputs consumed - the job graph is only proved by running it, and `test_workflows.py` proves the shape but not the wiring.
+- **Acceptance gates:** `shellcheck` on `.github/scripts/`; `backend/tests/workflows/`; the full suite; one `workflow_dispatch` of `digest.yml` completing with the renamed job.
+- **Oracle:** A live dispatch reaches `assemble` with the renamed job's outputs consumed - the job graph is only proved by running it, and `backend/tests/workflows/` proves the shape but not the wiring.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The job is renamed, not removed. Plan 11 removes it when the second call replaces what it does | Carmack |
-| 2 | `test_workflows.py` holds closed-world sets keyed by job name; each must be updated in the same commit or the rename passes every targeted gate and fails only the full suite | Recorded trap, agent-notes |
+| 2 | `backend/tests/workflows/` holds closed-world sets keyed by job name; each must be updated in the same commit or the rename passes every targeted gate and fails only the full suite | Recorded trap, agent-notes |
 
 ### Rejected alternatives
 
@@ -196,7 +196,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
   - `docs/**`
   - `README.md`, `AGENTS.md`
   - `TODO/20260902-visual-planner-pseudo-plan.md`
-- **Acceptance gates:** `backend/tests/test_contracts.py` (the ASCII and LF check); a repo-wide link check on any heading this row renames; the full suite.
+- **Acceptance gates:** `backend/tests/contracts/` (the ASCII and LF check); a repo-wide link check on any heading this row renames; the full suite.
 - **Oracle:** `git grep -in 'route'` over the whole tree returns only: the wire values row 3 protects, the changelog entries recording the old names, and ordinary English uses of the word ("en route" is not this domain). Every hit is enumerated in the PR body with a one-line reason - **a grep that returns nothing is not the goal; a grep whose every hit is explained is.**
 
 ### Decisions

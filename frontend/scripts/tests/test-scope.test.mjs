@@ -100,9 +100,19 @@ test('a document a test reads is that test input, not documentation', () => {
 test('specific backend modules select existing module and integration tests', () => {
 	const selection = selectPaths(['backend/idhazh/discover.py']);
 	assert.deepEqual(selection.groups, ['backend']);
-	assert.deepEqual(selection.backendFiles, ['backend/tests/test_discover.py', 'backend/tests/test_pipeline.py']);
+	assert.deepEqual(selection.backendFiles, ['backend/tests/pipeline/', 'backend/tests/test_discover.py']);
 	assert.deepEqual(selectPaths(['backend/tests/test_ledger.py']).backendFiles, ['backend/tests/test_ledger.py']);
 	assert.ok(selectPaths(['backend/idhazh/extract.py']).backendFiles.includes('backend/tests/test_evals.py'));
+});
+
+test('a test module inside a package is selected like a flat one', () => {
+	// The five biggest test modules became packages. A selector that only knew
+	// the flat shape would answer "documentation only" for a change to one of
+	// them and run nothing at all.
+	const selection = selectPaths(['backend/tests/contracts/test_app_config.py']);
+	assert.deepEqual(selection.groups, ['backend']);
+	assert.deepEqual(selection.backendFiles, ['backend/tests/contracts/test_app_config.py']);
+	assert.equal(selection.reasons[0].reason, 'changed backend test module');
 });
 
 test('contract and config changes include both languages and drift checks', () => {

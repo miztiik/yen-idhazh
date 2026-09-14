@@ -142,7 +142,7 @@ version is read once, in `scope`, and both jobs key on that output - the same
 shape `digest.yml` uses for the weights key, and for the same reason: a key
 written out twice drifts, and a drifted key misses silently for ever.
 
-**Two contract tests hold it**, in `backend/tests/test_workflows.py`. One finds
+**Two contract tests hold it**, in `backend/tests/workflows/`. One finds
 every job in the repository that installs a browser - found, not listed, so a
 new job that downloads Chromium on every run cannot slip past - and asserts they
 share one key, one path, and a restore ahead of the install. The other resolves

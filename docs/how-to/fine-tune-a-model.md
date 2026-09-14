@@ -423,7 +423,7 @@ prompt overhead, up to 12,191 for the longest and hardest-tokenizing article
 `extract.truncation_cap_tokens` lets through, and 900 of answer: 14,088 of
 16,384, or 86 percent. The serving window went to 49,152 the same day to hold
 the two-call pair, which nothing trains on. Both windows are still asserted in
-`backend/tests/test_contracts.py` and against the cap, so a later move of the
+`backend/tests/contracts/` and against the cap, so a later move of the
 cap fails rather than drifts - **against two sums now rather than one**, because
 the two paths render different prompts.
 

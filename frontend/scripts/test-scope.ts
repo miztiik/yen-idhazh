@@ -56,7 +56,7 @@ const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
  *
  * A pure function of the changed paths, so the truth table is checked here at
  * microseconds a case rather than through a temporary git repository and a
- * shell. `backend/tests/test_workflows.py` still drives the real script end to
+ * shell. `backend/tests/workflows/` still drives the real script end to
  * end, on a handful of cases, because the plumbing can break on its own.
  */
 export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
@@ -86,14 +86,27 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 				paths.some((path) => ARCHIVE_TOUCHED.test(path.replaceAll('\\', '/'))))
 	};
 }
+// A value is a pytest target, so a package directory stands for every module
+// in it - which is what a split left behind where one module used to be.
 const MODULE_TESTS: Record<string, string[]> = {
-	discover: ['test_discover', 'test_pipeline'],
-	rank: ['test_discover', 'test_pipeline'],
-	extract: ['test_extract', 'test_canaries', 'test_evals', 'test_pipeline'],
-	sanitize: ['test_extract', 'test_canaries'],
-	ledger: ['test_ledger', 'test_pipeline', 'test_telemetry', 'test_publish_telemetry', 'test_publish_source_health'],
-	telemetry: ['test_telemetry', 'test_publish_telemetry'],
-	publish_telemetry: ['test_publish_telemetry', 'test_telemetry']
+	discover: ['backend/tests/test_discover.py', 'backend/tests/pipeline/'],
+	rank: ['backend/tests/test_discover.py', 'backend/tests/pipeline/'],
+	extract: [
+		'backend/tests/test_extract.py',
+		'backend/tests/test_canaries.py',
+		'backend/tests/test_evals.py',
+		'backend/tests/pipeline/'
+	],
+	sanitize: ['backend/tests/test_extract.py', 'backend/tests/test_canaries.py'],
+	ledger: [
+		'backend/tests/test_ledger.py',
+		'backend/tests/pipeline/',
+		'backend/tests/test_telemetry.py',
+		'backend/tests/test_publish_telemetry.py',
+		'backend/tests/test_publish_source_health.py'
+	],
+	telemetry: ['backend/tests/test_telemetry.py', 'backend/tests/test_publish_telemetry.py'],
+	publish_telemetry: ['backend/tests/test_publish_telemetry.py', 'backend/tests/test_telemetry.py']
 };
 
 export function selectPaths(paths: readonly string[]): Selection {
@@ -112,7 +125,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 			reason = 'documentation a test reads';
 		} else if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|\.claude\/|\.github\/(agents|instructions|prompts|skills)\/)/.test(path)) {
 			selected = [];
-		} else if (/^backend\/tests\/test_[^/]+\.py$/.test(path)) {
+		} else if (/^backend\/tests\/(?:[^/]+\/)?test_[^/]+\.py$/.test(path)) {
 			selected = ['backend'];
 			backendFiles.add(path);
 			reason = 'changed backend test module';
@@ -139,7 +152,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 			const module = path.split('/').at(-1)!.replace(/\.py$/, '');
 			const tests = MODULE_TESTS[module];
 			if (tests) {
-				for (const name of tests) backendFiles.add(`backend/tests/${name}.py`);
+				for (const name of tests) backendFiles.add(name);
 				selected = ['backend'];
 				if (['extract', 'sanitize'].includes(module)) selected.push('logic', 'publishing');
 				if (['ledger', 'telemetry', 'publish_telemetry'].includes(module)) selected.push(...FRONTEND_GROUPS);

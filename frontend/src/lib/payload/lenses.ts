@@ -13,7 +13,7 @@
  * short. Retiring a lens stops it being matched onto NEW items, which is a
  * decision for the pipeline and not for this file.
  *
- * `test_contracts.py::test_the_frontend_names_every_committed_lens_including_a_tombstone`
+ * `backend/tests/contracts/test_taxonomy_and_prompts.py::test_the_frontend_names_every_committed_lens_including_a_tombstone`
  * reads the config and fails on any drift, in either direction.
  */
 export const LENS_NAMES: Readonly<Record<string, string>> = {

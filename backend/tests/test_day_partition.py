@@ -1,8 +1,8 @@
 """One rule for every `state/` day tree, held to by every reader of one.
 
-The day-side twin of `test_retention.test_the_month_readers_all_agree_on_what_a
-_month_is`, which found three month readers disagreeing on 2026-09-08 and one
-file left alone in one store and deleted in another.
+The day-side twin of `retention/test_telemetry_fold.py::test_the_month_readers
+_all_agree_on_what_a_month_is`, which found three month readers disagreeing on
+2026-09-08 and one file left alone in one store and deleted in another.
 
 **Behaviour rather than identity.** Asserting that two names point at one
 function proves nothing about a third place that reimplemented the walk, and a

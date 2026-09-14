@@ -1423,7 +1423,7 @@ honest; picking a new one is the next row's work.
 
 **Why the alarm point cannot be checked by size alone.** A test that only asks
 whether the alarm sits below 1,024 MB passes at 1,023 MB, which is the last row
-of the table and zero days of warning. `backend/tests/test_retention.py` pins the
+of the table and zero days of warning. `backend/tests/retention/` pins the
 days instead, against the rate above.
 
 ## The month search index, as written

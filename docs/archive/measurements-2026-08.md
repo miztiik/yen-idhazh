@@ -1306,7 +1306,7 @@ same line, which makes the denominator free.
 GitHub-hosted `ubuntu-latest`: two reads 20 s apart differ by **7,991 ticks**
 against the 8,000 that 20 seconds of 4 processors at 100 Hz has to be - 0.11
 percent. That is the check no hand-written fixture can pass, and it is why
-`backend/tests/test_contracts.py` parses a real capture.
+`backend/tests/contracts/` parses a real capture.
 
 **First readings, run `2026-08-29-3`, four shards** (from the `runtime-log-*`
 artifacts of run `33274853468`, before the cells existed to hold them):
@@ -3749,7 +3749,7 @@ un-windowed rate expires sooner rather than later, which is the safe direction
 and is what a ratchet is for.
 
 **The contract test's bound moved with them.**
-`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
+`backend/tests/contracts/` holds
 every console ceiling under a constant that stands in for the page it cannot see:
 the heaviest console document plus the 313,300. That was 433,000 while the
 document was 119,700; the document is 222,819 now, so the constant is 536,000. At

@@ -514,7 +514,7 @@ callers want opposite dispositions out of one answer.
 | Write time | `element_table` | Raises `SpanDriftError`. The pass cut every excerpt out of the string it hashed moments earlier, so a mismatch is its own arithmetic being wrong and every article in the run has it |
 | Read time | a consumer holding a table it did not build | Records the reason against that item and moves to the next. No sibling changes |
 | Census | `elements.extraction_health`, through `telemetry.classify_item` | Catches `SpanDriftError` and writes `span_integrity=false` on that item's row. The item degrades, the run continues, and `span_integrity_rate` is what makes the refusal visible |
-| CI | `backend/tests/test_elements.py`, `backend/tests/test_contracts.py` | The nine bounded fixtures re-slice against their own text; a built run of five items with one text moved by a character degrades exactly one |
+| CI | `backend/tests/test_elements.py`, `backend/tests/contracts/` | The nine bounded fixtures re-slice against their own text; a built run of five items with one text moved by a character degrades exactly one |
 
 The write-time half is what makes the one-hash-per-article decision mechanical:
 the hash, the length and every excerpt come out of one call against one string,

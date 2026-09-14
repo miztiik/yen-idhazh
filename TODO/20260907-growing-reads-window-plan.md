@@ -172,7 +172,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 2 - Row #1 - Stale numbers, and record what the guard drops
 
 - **Scope:** Correct the ledger's own arithmetic, and make visible the one number this design turns on. Today [cli.py](../backend/idhazh/cli.py) logs `addresses this run will not plan published=%s` to stderr and nothing commits it, so nobody can say how often the guard fires or how old the addresses it refuses are.
-- **Files:** `backend/idhazh/ledger.py` (docstring), `backend/idhazh/cli.py`, `backend/idhazh/contracts/run_plan.py`, `schemas/run-plan.schema.json`, `backend/tests/test_plan.py`, `backend/tests/test_contracts.py`
+- **Files:** `backend/idhazh/ledger.py` (docstring), `backend/idhazh/cli.py`, `backend/idhazh/contracts/run_plan.py`, `schemas/run-plan.schema.json`, `backend/tests/test_plan.py`, `backend/tests/contracts/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** a plan built over a fixture ledger holding one address published 200 days ago and one yesterday records `dropped_published = 2` and an age histogram naming both buckets. Assert on the built fixture, never on the committed ledger.
 
@@ -198,7 +198,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 4 - Row #3 - The cover setting, and the value it refuses
 
 - **Scope:** `collect.published_window_days`, default `-1`. The validator's job is to make one specific mistake impossible.
-- **Files:** `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/tests/test_contracts.py`
+- **Files:** `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/tests/contracts/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** the contract refuses `0`, `89` and `90`; accepts `-1`, `91` and `120`; the refusal message names `collect.seen_window_days` and its current value; a test asserts the committed config carries `-1`.
 
@@ -224,15 +224,15 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 6 - Row #5 - The writer routes by day
 
 - **Scope:** `append_published` takes a date and appends to `state/published/YYYY/MM/DD.csv`, mirroring `frontend/public/digest/YYYY/MM/DD/`. The flat file is no longer written and is still read. `published_path` gains a date parameter; `published_relpath` is added to match every other partitioned collection.
-- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `.gitattributes`, `.github/workflows/digest.yml`, `backend/tests/test_ledger.py`, `backend/tests/test_workflows.py`, `backend/tests/rebuild_day.py`
-- **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, plus `backend/tests/test_workflows.py` run directly. CI - full suite.
-- **Oracle:** a run on `2026-09-07` writes `state/published/2026/09/07.csv` and touches no other file; a run on `2026-10-01` leaves September byte-identical. `REFRESH_PATHS` and its mirror in `test_workflows.py` both name `state/published` and are asserted equal.
+- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `.gitattributes`, `.github/workflows/digest.yml`, `backend/tests/test_ledger.py`, `backend/tests/workflows/`, `backend/tests/rebuild_day.py`
+- **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, plus `backend/tests/workflows/` run directly. CI - full suite.
+- **Oracle:** a run on `2026-09-07` writes `state/published/2026/09/07.csv` and touches no other file; a run on `2026-10-01` leaves September byte-identical. `REFRESH_PATHS` and its mirror in `backend/tests/workflows/` both name `state/published` and are asserted equal.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **`.gitattributes` gets an explicit line for `state/published/**/*.csv`**, not the existing `state/**/*.csv` catch-all. The catch-all would already cover it, and that is the problem: a merge rule a new collection inherits without anyone choosing it is the same defect as a growing cost nobody chose | Owner, 2026-09-07 |
 | 2 | `merge=union` stays correct for the reason the existing comment gives - rows are independent and the reader keeps the earliest of two. Restated at the new line rather than assumed from the neighbour | Fowler |
-| 3 | `REFRESH_PATHS` names the directory `state/published`, matching `state/scores` and `state/item-health`. The mirror in `test_workflows.py` reds in CI if the two drift - move both in one commit | Fowler |
+| 3 | `REFRESH_PATHS` names the directory `state/published`, matching `state/scores` and `state/item-health`. The mirror in `backend/tests/workflows/` reds in CI if the two drift - move both in one commit | Fowler |
 | 4 | A run whose date falls in a closed day performs a correction, the case `append_seen` already handles and the freeze rule already permits | [partitions.md](../docs/concepts/partitions.md) |
 
 ## 7 - Row #6 - The one-shot split
@@ -252,7 +252,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 8 - Row #7 - The cover, the fallback deleted, and the docs
 
 - **Scope:** `load_published` gains `today` and `within_days`, drops the flat-file fallback, and reads the day files its cover names. Every doc that describes the old shape moves in the same commit.
-- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/test_pipeline.py`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/measurements.md`, `docs/reference/data-growth-audit.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
+- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/pipeline/`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/measurements.md`, `docs/reference/data-growth-audit.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** with the committed config the mapping is **equal cell-for-cell to what it returned before this plan started** - the guarantee is untouched, which is the whole point of shipping `-1`. A second arm sets 120 over a built fixture spanning six months and proves the older day files are not opened, by counting file reads rather than by timing them.
 
@@ -267,7 +267,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 9 - Row #8 - The eval writer reads a digest index
 
 - **Scope:** `evals.writer.append` builds `recorded_observations` before writing one row, and that set is the union of every live score shard and every archived month - 6,095 KB now, about 173 MB at steady state.
-- **Files:** `backend/idhazh/evals/writer.py`, `backend/idhazh/evals/archive.py`, `backend/idhazh/contracts/` (the index shape), `schemas/`, `backend/tests/test_evals.py`, `backend/tests/test_contracts.py`
+- **Files:** `backend/idhazh/evals/writer.py`, `backend/idhazh/evals/archive.py`, `backend/idhazh/contracts/` (the index shape), `schemas/`, `backend/tests/test_evals.py`, `backend/tests/contracts/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** an append refuses exactly the observations it refuses today, including one whose only record is an archived digest. Over a built fixture of 200,000 observations the writer reads bytes proportional to the index, not to the rows.
 
@@ -281,8 +281,8 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 10 - Row #9 - Settlement touches the files the run staged
 
 - **Scope:** after a push race, git's union merge concatenates both sides of a state CSV and a keyed row appears twice. `stage_dedupe_ledgers` runs after the rebase and rewrites each keyed file without repeats. It currently globs every feed-health shard, every item-health shard and every score shard - 9,715 KB today, and the shard count rises every month.
-- **Files:** `backend/idhazh/cli.py`, `backend/idhazh/ledger.py`, `backend/idhazh/evals/writer.py`, `backend/tests/test_ledger.py`, `backend/tests/test_workflows.py`
-- **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, plus `backend/tests/test_workflows.py` run directly. CI - full suite.
+- **Files:** `backend/idhazh/cli.py`, `backend/idhazh/ledger.py`, `backend/idhazh/evals/writer.py`, `backend/tests/test_ledger.py`, `backend/tests/workflows/`
+- **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, plus `backend/tests/workflows/` run directly. CI - full suite.
 - **Oracle:** the real-Git race tests still settle a duplicated row correctly, and a settlement after a run on `2026-09-07` opens no file from an earlier month.
 
 | # | Decision | Authority |
@@ -318,7 +318,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 13 - Row #12 - A frozen day is never re-validated
 
 - **Scope:** `cli.stage_validate_days` parses and validates every published day against both shapes on every scheduled publication - 426 files and 23.02 MB today.
-- **Files:** `backend/idhazh/cli.py`, `backend/idhazh/contracts/` (the receipt shape), `schemas/`, `backend/tests/test_pipeline.py`, `backend/tests/test_contracts.py`
+- **Files:** `backend/idhazh/cli.py`, `backend/idhazh/contracts/` (the receipt shape), `schemas/`, `backend/tests/pipeline/`, `backend/tests/contracts/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** three arms - a new day is validated fully; an unchanged day with an unchanged validator is not opened; and changing the validator identity invalidates every receipt so the whole archive is validated once.
 
@@ -330,7 +330,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 14 - Row #13 - Site size is a maintained total
 
 - **Scope:** `assemble.site_size` walks the whole public tree on every assembly; `retention.measure` and `count_published_items` walk it again separately.
-- **Files:** `backend/idhazh/assemble.py`, `backend/idhazh/retention.py`, `backend/tests/test_retention.py`
+- **Files:** `backend/idhazh/assemble.py`, `backend/idhazh/retention.py`, `backend/tests/retention/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** the total after a build equals an independent full walk of the same tree, including after a deletion. Growing the tree does not grow what the ordinary path reads.
 
@@ -342,7 +342,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 15 - Row #14 - Visual cleanup walks dated directories
 
 - **Scope:** `retention.visuals_older_than` sorts the entire public tree before selecting expired assets. The deletion fuse caps removals, not the scan.
-- **Files:** `backend/idhazh/retention.py`, `backend/tests/test_retention.py`
+- **Files:** `backend/idhazh/retention.py`, `backend/tests/retention/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** expiry over a built tree of 400 days returns the same set as the full sort, and opens only the dated directories its policy names.
 
@@ -354,7 +354,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 16 - Row #15 - State cleanup asks the catalogue what is due
 
 - **Scope:** `retention.month_shards` and the prune inventories list and sort every partition directory across every store, on every maintenance pass, including passes where nothing is due.
-- **Files:** `backend/idhazh/retention.py`, `backend/tests/test_retention.py`
+- **Files:** `backend/idhazh/retention.py`, `backend/tests/retention/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** a not-due pass opens no partition. A due pass touches exactly the partitions past their age and no others. Dry-run output is identical to today's.
 
