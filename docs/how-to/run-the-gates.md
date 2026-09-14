@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -171,6 +171,21 @@ worker for a small selection. The full-suite defaults are unchanged.
 When the change reaches further than one module, the third line can use a mark
 selector: `-m contract`, `-m visual`, `-m workflow` or `-m "not slow"`, priced
 [below](#run-only-the-tests-a-change-can-break).
+
+**Read the jobs, not the run's conclusion.** The `scope` job selects which of
+`gates`, `site`, `browser`, `robots` and `whole-day` run, so a commit that
+touched no matching path produces a run marked success with most of them
+skipped. That is correct for the commit and worthless as a statement about the
+branch: a suite can be fatally broken while every run on `main` reads green,
+because every commit in between only touched data. Before trusting any baseline,
+list what actually ran.
+
+```powershell
+gh run view <run-id> --json jobs --jq '.jobs[]|"\(.name) = \(.status)/\(.conclusion)"'
+```
+
+A `skipped` is not a pass. When you need one, push a branch that touches the
+path which selects it.
 
 **Run the full local suite when you cannot push, or when you are about to merge
 and want the answer now.** The commands are below, and none of them is the
