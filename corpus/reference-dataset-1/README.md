@@ -1,9 +1,10 @@
 # Reference dataset 1
 
 **Built**: 2026-09-13
-**Labelled**: 2026-09-13, all 641 rows. **Read "Who wrote the labels" below before
+**Labelled**: 2026-09-13, all rows. **Read "Who wrote the labels" below before
 quoting any number taken on this set** - it is not a person-written set, and that
 changes what the number means.
+**Cleaned**: 2026-09-14. 34 rows left the set; see "What was removed".
 
 A frozen set of news articles, drawn from what this pipeline published, with the
 article text beside each row. It exists so that an accuracy figure for the
@@ -21,7 +22,8 @@ This is the datasheet. `docs/how-to/measure-a-classifier.md` is the procedure.
 | Article text | `articles/<url_key>.txt`, one file an article |
 | Rows | `dataset.jsonl`, one JSON object a line, shaped by `backend/idhazh/contracts/reference_dataset.py` |
 | Splits | `splits/dev.txt` and `splits/test.txt`, committed lists of `url_key` |
-| Labels | all 641 rows, 2026-09-13, against `config/taxonomy.json` version `2026-09-12`. Written by `backend/utilities/label_reference_dataset.py` |
+| Labels | all 607 rows. 500 taken 2026-09-13 against `config/taxonomy.json` `2026-09-12`, 107 re-taken 2026-09-14 against `2026-09-14`. Written by `backend/utilities/label_reference_dataset.py` |
+| Removed | `removed.tsv`, one line an article that left the set and why |
 
 ## What is in it
 
@@ -30,11 +32,12 @@ committed.
 
 | | Rows | Registrable domains | Article words, median | p10 | p90 | Longest |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `dev` | 321 | 55 | 717 | 244 | 2,280 | 9,155 |
-| `test` | 320 | 55 | 866 | 305 | 2,365 | 7,572 |
-| **Total** | **641** | **110** | | | | |
+| `dev` | 312 | 55 | 717 | 244 | 2,280 | 9,155 |
+| `test` | 295 | 52 | 866 | 305 | 2,365 | 7,572 |
+| **Total** | **607** | **107** | | | | |
 
-- **4,657,791 bytes of article text**, in 641 files under `articles/`.
+- **607 article files** under `articles/`, one a row. The set was built with 641
+  and 34 were removed on 2026-09-14.
 - Articles published **2026-08-21 to 2026-09-12**.
 - The floors it was built to, from `config/idhazh.json`: 200 rows and 20
   registrable domains a side. Both sides clear both with room.
@@ -217,37 +220,94 @@ un-evaluated**, and row #11 may not ship on the strength of anything here.
 
 ## What the labels say
 
-Whole set, 641 rows.
+Whole set, 607 rows, after the 2026-09-14 clean and re-label.
 
 | Field | Distribution |
 | --- | --- |
-| `desk` | `ai` 200 (31.2%), `energy` 139 (21.7%), `business-economy` 119 (18.6%), `world` 118 (18.4%), `india` 65 (10.1%) |
-| `article_kind` | `report` 345 (53.8%), `announcement` 117 (18.3%), `analysis` 71 (11.1%), `opinion` 62 (9.7%), `research` 46 (7.2%) |
-| `lenses` | empty on 507 (79.1%); `markets` 37, `china` 32, `war` 32, `trade` 22, `cyber` 19, `chips` 17 |
-| `sentiment` | null 515 (80.3%), `positive` 62, `neutral` 33, `negative` 31 |
-| `stances` | live on at least one axis on 55 rows (8.6%). The political gate is shut on every `report`, every `research` paper and every company `announcement` |
-| `reference_summary` | 59 to 136 words, median 94 |
+| `desk` | `ai` 187 (30.8%), `energy` 130 (21.4%), `business-economy` 101 (16.6%), `world` 87 (14.3%), `india` 60 (9.9%), `science` 26 (4.3%), `climate` 16 (2.6%) |
+| `lenses` | empty on 469 (77.3%); `markets` 33, `china` 29, `war` 29, `trade` 21, `cyber` 18, `chips` 16, `climate` 14 |
+| `definition_version` | `2026-09-12` on 500 rows, `2026-09-14` on the 107 re-read when the vocabulary changed |
 
-**The read desk disagrees with the feed's declared vertical on 171 of 641 rows -
-agreement is 73.3 percent.** That is the gap plan 23 exists to close, and it is
-the first time it has been measured on labelled data.
+`article_kind`, `sentiment` and `stances` are as they were on 2026-09-13:
+`report` about 54 percent, `announcement` about 18, sentiment null on about 80,
+and the political gate shut on every `report`, `research` paper and company
+`announcement`.
+
+**The read desk disagrees with the feed's declared vertical on 186 of 607 rows -
+agreement is 69.4 percent**, down from 73.3 on 2026-09-13. It fell because the
+two new desks are ones **no feed declares**, so all 42 rows on `science` and
+`climate` disagree by construction. That is the gap plan 23 exists to close, and
+it is now larger and more honest than it was.
 
 **The feed says 84.4 percent of published items are `reporting`. Read from the
-text it is 53.8 percent `report`**, with 18.3 percent `announcement` - vendor
-blogs, ministry notices and press releases the feed files as journalism.
+text it is about 54 percent `report`**, with about 18 percent `announcement` -
+vendor blogs, ministry notices and press releases the feed files as journalism.
 
-## The vocabulary did not fit about one row in five
+## What was removed, and why
+
+34 of the original 641 rows left the set on 2026-09-14. `removed.tsv` carries one
+line each with the reason, the split it was on, its outlet and a sentence of
+evidence; the article text went with it and git holds both.
+
+| Reason | Rows | What it means |
+| --- | --- | --- |
+| `truncated` | 17 | Something the piece promised is absent - a list that opens and stops, a comparison that covers one side, the event the title names |
+| `many-articles` | 14 | The file concatenated two or more unrelated stories, each with its own lede. Mostly live blogs, newsletter editions and video-brief pages |
+| `no-article` | 2 | No reporting at all. One is seven "About NVIDIA" boilerplate blocks; one is sixty bare headlines |
+| `title-mismatch` | 1 | The file's subject is a different story from the one the title names |
+
+**Why remove rather than flag.** A row whose text does not support its own title,
+or stops before its argument lands, cannot be labelled - so a classifier scored
+against it is being asked to reproduce a guess. Keeping it and marking it would
+mean every later reader re-deciding whether to include it, and the answer would
+drift. Removing it costs the set 5.3 percent of its rows and both splits stay
+well clear of their floors.
+
+**Every removal was verified against the text by a second reader, and 8 of the 42
+proposed removals were cleared.** The labellers' flags were the claim; a
+verification pass tested each one and disagreed with about one in five - a short
+abstract page called truncated, a related-papers rail called a second article, a
+reading-tool artefact mistaken for a truncation marker. Those eight are still in
+the set. **That is the reason the pass exists: a row removed on hearsay is worse
+than a row left in.**
+
+**The census is not exhaustive.** These 34 are the rows twenty labellers happened
+to flag while labelling. Nothing scanned the other 573 for the same defects, and
+a detector was not built: the project already measured one - an article ending
+without a full stop - calling 198 complete articles truncated.
+
+## The vocabulary gained two desks and a lens on 2026-09-14
+
+`science`, `climate` and a `climate` lens, all committed as **drafts** - defined,
+labellable, and offered to no prompt and no page because no feed declares either
+word. [`../../docs/concepts/taxonomy.md`](../../docs/concepts/taxonomy.md)
+carries the eight tie-breaks that decide them and the four desks nobody has
+built.
+
+107 rows were re-read in full against the new vocabulary: the 68 a screening pass
+nominated, plus the 39 whose `article_kind` is `research`, which the widened
+`science` definition could take. **46 moved and 61 stayed.** Those 107 carry
+`definition_version` of `2026-09-14`; the other 500 carry `2026-09-12`, which is
+the field doing its job - it says which vocabulary each label was taken against.
+
+**The rows that did not move were not re-read.** A row on `ai` or `india` that
+nothing nominated still carries a label taken when five desks existed. The
+screen read titles and summaries rather than articles, so it will have missed
+some.
+
+## The vocabulary still did not fit about one row in five
 
 Twenty readers labelled this set without seeing each other's work, and they
 reported the same holes. The count is how many of the twenty named it.
 
 | Missing | Named by | A row forced by its absence |
 | --- | --- | --- |
-| a **science** desk | 13 | a NIST gravitational-constant measurement, filed `business-economy` |
-| a **climate / environment** desk, and a **climate** lens | 11 | 26 million Canadians facing climate impacts, filed `world` |
+| ~~a **science** desk~~ | 13 | **Filled 2026-09-14.** A NIST gravitational-constant measurement is now `science`, not `business-economy` |
+| ~~a **climate** desk and lens~~ | 11 | **Filled 2026-09-14.** 26 million Canadians facing climate impacts is now `climate`, not `world` |
 | a **consumer technology / software** desk | 9 | a Windows 11 update breaking mouse cursors, filed `business-economy` |
 | a **culture / sport** desk | 9 | Messi's international retirement, filed `world` |
 | a **health** desk | 8 | Pennsylvania measles deaths, filed `world` |
+| an **environment** desk that is not climate | 5 | a PFAS contamination settlement - `climate` covers greenhouse gases and this is chemistry |
 | a **crime / courts** desk | 5 | a Melbourne murder trial, filed `world` |
 | a **privacy / surveillance** lens | 4 | Georgian state face recognition - `cyber` means an attack, not this |
 | a **compute build-out** lens | 4 | data-centre grid load, which crosses `ai` and `energy` |
@@ -262,29 +322,25 @@ Also reported: no `article_kind` names an interview, a tutorial, a fact-check, a
 link roundup, sponsored content, or a profile. Those landed on `report`,
 `analysis`, `announcement` or `opinion` by the who-is-speaking test.
 
-## Faults found in the articles themselves
+## Two more faults, which removing rows did not fix
 
-Reading all 641 surfaced defects the builder's own checks cannot see, because
-they are about meaning rather than shape.
+The 34 unusable rows are gone. Two things the readers found are still in the set,
+because neither is a reason to drop a row.
 
-- **One row's title does not describe its text.** `11c86136` is listed as a US
-  Secret Service story and the file is a six-month accounting of the US-Iran war.
-- **One row has no article in it.** `0122ec22` is seven "About NVIDIA" boilerplate
-  blocks; the figure in its title appears nowhere in the body.
-- **About 15 rows are page scrapes rather than articles** - live blogs, newsletter
-  editions and video-brief pages carrying three to twenty unrelated stories. Each
-  was labelled on the story its title names, and the reader said so.
-- **About 15 rows are truncated** mid-argument.
 - **Several rows are wholly in Devanagari.** The ASCII rule and the "every name in
   the summary appears in the article" rule cannot both hold there, so those
-  summaries carry transliterated names.
+  summaries carry transliterated names. The labels are sound; the summaries are
+  not literal quotations of the text.
+- **Many rows carry publisher furniture inside the article body** - a subscription
+  block mid-paragraph, an affiliate advertisement, a donation appeal, an author
+  biography, a cookie line. It is noise a summariser reads and it did not stop
+  anybody labelling.
 
-Those counts are estimates from the readers' own reports, not a census.
-
-**No article tried to instruct a labeller.** Zero attempts across all 641. Several
-carry reader-directed imperatives - subscription pitches, affiliate blocks,
-"add us as a preferred source" - and several quote prompts or attack techniques
-as subject matter. None was aimed at the labelling task.
+**No article tried to instruct a labeller. Zero attempts across all 641 read.**
+Several carry reader-directed imperatives - subscription pitches, affiliate
+blocks, "add us as a preferred source" - and several quote prompts or attack
+techniques as subject matter. One prints a shell command. None was aimed at the
+labelling task, and none of it reached a shell, a path or a URL.
 
 ## What a person does next
 
