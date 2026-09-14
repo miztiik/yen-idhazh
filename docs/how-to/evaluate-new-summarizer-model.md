@@ -1,204 +1,97 @@
-# Evaluate and Adopt a New Summarizer Model
+# Swap the Summarizer Model
 
 **Last Updated**: 2026-09-14
 
-Measure a candidate summarizer against the configured incumbent, decide whether
-it clears the bar, and change the model without losing reproducibility.
+The swap is one line in `config/idhazh.json`:
 
-This procedure is for the build-time summary model, which also decides the
-picture. The faithfulness scorer and browser search model have different
-contracts and are not changed by it.
+```json
+"models_file": "models/qwen3.5-9b-q4km.json"
+```
 
-## Capability boundary
+Point it at another file in `config/models/` and everything follows it: the
+daily run, the qualification arm and the bench all read the entry that file
+holds. **The revert is the same line back.**
 
-There is no one-command model swap.
+The rest of this page is what to do before you write that line and what to check
+after. It covers the build-time summary model, which also decides the picture.
+The faithfulness scorer and the browser search model have their own contracts
+and are not changed here.
 
-What exists:
+## What is one command, and what is not
 
-- `backend/utilities/measure_llm.py` verifies GGUF identity, measures raw
- prefill and decode locally, and emits the model dossier's page body from what
- the two bench arms read;
-- `.github/workflows/measure.yml`, target `bench`, runs both arms on
- `ubuntu-latest`: raw prefill and decode first, then a real server doing real
- work, with the second restoring the weights the first cached;
-- `idhazh.llm.server.server_argv` builds the server command from config;
-- `work` can exercise the real fetch, extract, sanitize and summarize path;
-- `validate` can score model output with HHEM; and
-- `.github/workflows/validate.yml` plus `idhazh qualify` and
- `idhazh qualify-decide` freeze a corpus, replay it, run the live canaries and
- evaluate eleven absolute gates. Rebuilt 2026-08-26.
-
-What the qualification arm now does, which the old exploratory one did not:
-
-- builds a candidate config under gitignored `backend/var/candidate-config`, a
- copy of committed `config/` whose ACTIVE MODEL FILE is rewritten and nothing
- else - the pointer is left alone, so the candidate is qualified through the
- same one line a swap would later move - so it never edits the committed config
- and never has to restore it;
-- fetches the candidate from an **immutable repository revision**, checks its
- SHA-256 and its byte count against the adoption target, and does both before
- the server starts;
-- keys the weights cache on the GGUF digest rather than the filename, and holds
- one model per entry;
-- plans the addresses once, in one job, and carries the date forward, so a run
- that crosses UTC midnight is still one run;
-- freezes each shard's slice exactly once, hashes the model-visible truncated
- text and the sanitized full text, writes the hashes down **before** the first
- inference call, and replays those bytes;
-- keeps walking its slice until the slice has offered every length tier the
- corpus definition asks for, instead of stopping at a fixed pool size. A long
- read is the scarce shape - 3 of 109 extracted articles on 2026-08-26 - so a
- walk sized on the item count alone met that count every time while the top
- tier stayed empty. The extra addresses cost fetch seconds, never model
- minutes ([../reference/measurements.md](../reference/measurements.md));
-- picks the length tier from the source body rather than from the post-cap text,
- because the post-cap count cannot pass 1923 words and the top tier starts at
- 2000, so it never fired
- ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md));
-- interleaves the repeats - every item once, then every item again - so a repeat
- never lands on a warm prompt cache and skips its own prefill;
-- runs every injection canary on live candidate calls; and
-- records every failed call in the denominator, and every diagnostic with the
- denominator it was taken over.
-
-What is still missing:
-
-- a pairwise blind-human label contract and CLI.
-
-The bench closed the candidate-aware runtime-shard measurement on 2026-09-14.
-Its server arm builds the same `backend/var/candidate-config` the qualification
-arm builds, runs `idhazh work` against a real server over a fixed five-article
-corpus, and reports what a shard of the daily run costs with those weights in
-it. What it still does not do is grade anything: a bench number says how fast,
-never how good.
-
-Two capability gaps were closed on 2026-08-26 and are worth naming because
-anything measured before then inherits them:
-
-- `HHEM_REVISION` was the branch name `main`, and `weights_digest` hashed that
- name rather than the loaded weight bytes. It is now pinned to
- `8e4a2e6e96c708cc76c2344f7e4757df2515292c` and the digest walks the loaded
- state dict. A faithfulness number from before this date was measured with an
- instrument nobody can name.
-- `leaderboard_hhem` was a required float, so a model with no published result
- had to be recorded as `0.0`. It is now nullable beside a
- `leaderboard_provenance` of `not_reported`.
-
-`measure_llm.py` has required an immutable 40-character commit since 2026-08-27,
-and since 2026-09-14 it also refuses any bytes but the digest the dispatch
-declared: it reads the Hub's own record for that commit, compares it with what
-was asked for, and stops before it benches anything. `download` then checks what
-arrived against that same record. Those are two different questions - is this
-the model I asked for, and did it arrive intact - and the bench asks both.
-
-## The evidence package
-
-A model is identified by all of these:
-
-| Field | Why |
+| | |
 | --- | --- |
-| Repository and immutable repository revision | `main` can move. |
-| GGUF filename and quantisation | Two files from one model are different candidates. |
-| GGUF byte count and SHA-256 | The runtime opens bytes, not a model-card name. |
-| Licence | The pipeline and published project must be allowed to use it. |
-| llama.cpp build and archive SHA-256 | Runtime kernels can change output and speed. |
-| Chat-template digest | A template change moves prompt framing without moving weights. |
-| Model id | Persisted summaries and manifests carry it. |
+| The swap | one line in the committed config |
+| The revert | the same line back |
+| The bench | one dispatch. It says how fast |
+| The qualification | one dispatch, hours of runner time, eleven gates on a frozen corpus. It says how good |
+| The decision | a person's, and it stays one |
 
-`measure_llm.py` reads the Hugging Face LFS identity, refuses a same-named local
-file with different bytes, and records the runtime and model hashes:
+**Qualification will never be one command.** Eleven gates on a frozen corpus is
+the price of knowing whether a model is good, and no arrangement of the harness
+makes that cheap. What the harness buys is that the price is paid the same way
+every time.
 
-```bash
-python backend/utilities/measure_llm.py \
- --models "owner/repository@<40-character commit>:model-Q4_K_M.gguf" \
- --threads "4"
-```
+Adoption is a Level 5 decision ([../../CLAUDE.md](../../CLAUDE.md) section 6).
+The gates inform it; they do not make it.
 
-The files under `backend/models/` are local, gitignored files. The ad hoc
-measurement job does not put them in the repository Actions cache.
+Three blocks follow: **measure the candidate**, **adopt**, **revert**.
 
-`measure_llm.py` requires the commit and reads the file listing at it, so two
-runs of one reference compare the same bytes. It still verifies only the LFS
-identity it observes there rather than a SHA the caller declares, so it will
-download a candidate whose bytes disagree with an adoption target and say
-nothing. `validate.yml` is what checks a declared SHA, and it is the arm that
-qualifies a candidate.
+---
 
-## 1. Freeze the control
+## Block 1 - Measure the candidate
 
-Choose the incumbent and candidate before measuring. Hold these constant:
+### 1.1 Write the candidate's model file
 
-- llama.cpp build;
-- `n_ctx`, `n_batch`, `n_ubatch`, `n_threads` and optional runtime flags;
-- prompt template and rendered band values;
-- output schema;
-- `temperature`, `top_p`, seed, thinking mode and output budget;
-- extraction and sanitization versions;
-- truncation cap; and
-- exact captured Article payloads for the quality comparison.
+A candidate is a file under `config/models/` before it is a dispatch. Copy the
+incumbent's file, rename it for the new weights, and change every field that is
+a fact about them.
 
-If more than the weights move, the run measures a bundle. Label it as a bundle
-or run it again with one changed input.
+| Field | Why it is there |
+| --- | --- |
+| `id` | the alias published summaries and the ledger carry |
+| `repo`, `revision` | the repository and the 40-character commit. A branch name is not a pin, because `main` moves |
+| `file`, `quantisation` | two files from one model are two candidates |
+| `sha256` | the runtime opens bytes, not a model-card name |
+| `hf_base_repo` | the base an adapter is trained against, which the fine-tuning notebook checks |
+| `arch` | the architecture name inside the GGUF |
+| `inference` | every runtime knob, including the window and the sampler |
+| `turns` | where the system text goes, what opens and closes a turn, and which keyword turns thinking off |
 
-## 2. Prove that the model loads
+**`inference.declared_for` and `turns.declared_for` are the safety catch, and
+they both hold this model's own digest.** Config load refuses an entry whose
+block is declared for one set of weights while the entry names another, and it
+says which repair it wants: re-derive the numbers, because every one of them was
+measured against one model on one runner, or re-record the markers, because
+every one of them was read off the server that renders those turns. So a
+half-finished candidate cannot run - not in the bench, not in qualification, and
+not in a daily run.
 
-Download the entire llama.cpp binary directory, not one executable. Generate the
-candidate server command with the program in
-[test-models-locally.md](test-models-locally.md#serve-a-model), pointed at a
-scratch config whose active model file differs and nothing else does:
+The sanitizer reads `turns` too. It proves it strips every marker the entry
+declares and **refuses an entry whose control tokens it does not recognise**, so
+a model from an unknown template family is a refused config rather than a silent
+hole in Guardrail #11.
 
-```python
-settings = config.load(Path("backend/var/candidate-config"))
-```
+Do not point `models_file` at the new file yet. Nothing below needs it, and
+keeping the pointer still means the adopt arrives later as a one-line diff a
+reviewer can read at a glance.
 
-There is no candidate-config command today. Create the directory under
-gitignored `backend/var/`, change only the candidate model id, repository, file,
-quantisation and SHA-256, and load it through `AppConfig` before use. Do not edit
-the committed config for an experiment.
+### 1.2 Hold the control
 
-Start the printed command and check:
+One changed input a run, or the run measures a bundle. Hold constant:
 
-```bash
-curl -sf http://127.0.0.1:8080/health
-```
+- the llama.cpp build;
+- the prompt template and the rendered band values;
+- the output schema;
+- the extraction and sanitization versions; and
+- the truncation cap.
 
-A load failure rejects the candidate for the current runtime. It is not a
-throughput result.
+The candidate's own `inference` block is not a control - it is part of the
+candidate. If a model needs a different sampler to work at all, that is a second
+candidate configuration and it is measured separately. Do not adopt a vendor
+default silently.
 
-## 3. Re-measure the tokenizer and context
-
-Token counts do not transfer between model families.
-
-For every rendered summary band, including the brief path:
-
-1. Render the exact LF-terminated system prompt.
-2. Add the source-form line, feed title, fences and exact sanitized model-visible
- text.
-3. Apply the candidate's embedded chat template, including the generation
- suffix.
-4. Tokenize that complete request with the candidate runtime and GGUF.
-5. Repeat for representative extracted articles from each measured length
- bucket.
-6. Record the maximum complete-request count and spread.
-7. Recalculate:
-
- ```text
- complete chat-templated request tokens + output budget
- ```
-
-8. Confirm the result fits `models.summarize.inference.n_ctx`.
-9. Confirm `fits_context` still over-reserves rather than under-reserves.
-
-The extraction cap is applied through a words-to-tokens estimate before the
-candidate tokenizer runs. Do not clamp the exact candidate token count back to
-`truncation_cap_tokens`; that would hide tokenizer expansion.
-
-There is no command that automates this whole step. Until the candidate-specific
-prompt and article counts exist, do not publish derived seconds per article for
-that model. Raw `llama-bench` rates remain valid; model-specific derived times do
-not.
-
-## 4. Bench the candidate on the runner
+### 1.3 Bench it - how fast
 
 One dispatch, two arms, one candidate typed once:
 
@@ -221,6 +114,15 @@ reproduce that model's committed dossier inside the spread both sides declare.
 The digest is not optional. Without it the harness benches whatever the
 repository holds today and says nothing about it, and a number filed under a
 model that never ran is worse than no number (CLAUDE.md Guardrail #10).
+
+**Those six boxes repeat fields the candidate's model file already holds - seven
+in the qualification dispatch, which also takes the byte count - and that is a
+step this page should not need.** Both dispatches were written before a model
+was one file. The change that removes the step is one input naming the file, the
+same string the swap itself writes, and it is not built. Until it is, copy the
+values out of the file you wrote in 1.1 rather than typing them from a model
+card, so the bench and the adoption cannot disagree about which bytes are the
+candidate.
 
 **Arm one, artifact `bench-raw`** - raw prefill and decode with nothing else in
 the process:
@@ -276,260 +178,290 @@ A reading taken once carries no spread, so it is printed rather than judged.
 A laptop result is a laptop result. It can reject a candidate quickly and cannot
 select production.
 
-## 5. Check decode compatibility and safety
+### 1.4 Retake the three readings a vocabulary sizes
 
-Use the candidate scratch config and the real local server. At minimum, run:
+Token counts do not transfer between model families, and three constants in
+`backend/idhazh/measured.py` are sized by a tokenizer: the taxonomy definition
+block, the empty encoding roles, and tokens a word at the truncation cut. Every
+window sum in the project is spent at that last one.
 
-- one short, one medium and one truncated long article;
-- the brief path;
-- repeated identical input at the configured deterministic sampler; and
-- every prompt-injection canary.
+```bash
+gh workflow run measure.yml -f target=budgets \
+ -f candidate_repo='<publisher>/<name>' \
+ -f candidate_revision='<40-character commit>' \
+ -f candidate_file='<weights filename>' \
+ -f candidate_sha256='<digest those bytes must have>' \
+ -f candidate_id='<alias the server answers to>' \
+ -f candidate_quantisation='Q4_K_M'
+```
 
-Require:
+The run summary carries a paste block: the three values, their subject and their
+date, ready for `measured.py`, plus the dossier section they belong in. On any
+box already serving the candidate, the same print is
+`python backend/utilities/measure_budgets.py read --runner <where you ran it>`.
 
-- `finish_reason = stop`;
-- schema-valid JSON without a repair path;
-- no non-empty `reasoning_content`;
-- no inline non-empty `<think>` block;
-- output inside the wider publishable word gate;
-- requested-band adherence recorded as a regression metric;
-- identical title, summary, key points and `output_digest` on repeat;
-- every canary's `must_not_survive` markers absent;
-- every canary's `must_survive` facts present in a non-blank valid reply; and
-- zero candidate-only crashes or timeouts.
+Do not paste them while the candidate is still a candidate. **The readings go in
+with the swap, not before it**, because a reading names the weights it was taken
+against and the repository holds one current reading of each. What tells you
+they are due is:
 
-Use three deterministic repeats for the adoption corpus, not one repeated
-example.
+```bash
+python backend/utilities/measure_budgets.py check
+```
 
-The inline-think parser reads every block, so an empty opening block cannot hide
-a second one that reasoned.
+It exits 1 and names every constant whose subject is not the configured model's
+digest. After a swap it is red until the paste lands; that is the point of it.
 
-The unit suite uses recorded completions. It proves the parser and controls, not
-that a new live model follows this chat template. A live candidate canary runner
-does not exist yet. Build that instrument or perform and record the live calls;
-do not treat recorded incumbent responses as candidate evidence.
+### 1.5 Qualify it - how good
 
-Keep the configured sampler fixed for the first comparison. If a model needs a
-different temperature, penalty or thinking mode to work, that is a second
-candidate configuration. Measure it separately. Do not adopt a vendor default
-silently.
+```bash
+gh workflow run validate.yml \
+ -f candidate_repo='<publisher>/<name>' \
+ -f candidate_revision='<40-character commit>' \
+ -f candidate_file='<weights filename>' \
+ -f candidate_sha256='<digest those bytes must have>' \
+ -f candidate_bytes='<byte count the target declares>' \
+ -f candidate_id='<alias the summaries will carry>' \
+ -f candidate_quantisation='Q4_K_M' \
+ -f shards='3' \
+ -f corpus_per_shard='10' \
+ -f repeats='3' \
+ -f job_budget_minutes='330'
+```
 
-## 6. Compare quality on frozen inputs
+The arm builds a candidate config under gitignored
+`backend/var/candidate-config`, checks the SHA-256 and the byte count **before
+the server starts**, freezes each shard's slice and hashes the model-visible
+bytes before the first inference call, replays those bytes, interleaves the
+repeats so none lands on a warm prompt cache, runs every injection canary on
+live candidate calls, and counts every failed call in the denominator. It never
+touches the committed config.
 
-Planning the same URLs is not enough. A publisher can change a page between
-model A and model B.
+Then read the verdict:
 
-A controlled comparison:
+```bash
+python -m idhazh qualify-decide
+```
 
-1. Fetches and extracts each article once.
-2. Stores the sanitized full text and exact model-visible truncated text under
- `backend/var/`, with hashes.
-3. Sends the same model-visible bytes through both models and the same full bytes
- to the scorer.
-4. Records every failed item, not only scored successes.
-5. Scores both outputs with the same scorer version.
-6. Reads the deterministic counterweights as well as HHEM.
-7. Uses one explicit date and run id from start to decision.
-8. Writes to an isolated result directory and refuses stale files.
+The eleven gates and what each one refuses are in
+[../concepts/evaluation.md](../concepts/evaluation.md). Three of them are hard
+in a way worth repeating here, because they are the ones a fast model fails:
 
-The current validation workflow does not replay captured Article payloads. Fix
-or replace it before using its verdict to adopt a model.
+- **every injection canary survives**, all of them, not most (Guardrail #11);
+- **no reasoning text reaches the reply** - no non-empty `reasoning_content`, no
+ inline `<think>` block, and the parser reads every block, so an empty opening
+ one cannot hide a second that reasoned; and
+- **a repeat is identical** - same title, same summary, same key points, same
+ `output_digest` at the deterministic sampler.
 
-Pin the scorer to an immutable revision and record observed scorer-weight
-identity before comparing candidate means. Make leaderboard provenance optional
-and represent an absent published score as `not_reported`, never `0.0`.
+**Do not raise a timeout or lower a threshold to make a candidate pass.** Find
+the cause or reject the candidate.
 
-A long workflow can cross UTC midnight. Do not recompute its date between plan,
-model runs and decision. Drift summaries must segment model-dependent metrics by
-`model_id`; a model swap is a new series, not an ordinary point on the old one.
+### 1.6 Decide
 
-Pre-register a deterministic corpus before viewing outputs. It must cover all
-four length bands plus brief, abstract and truncated cases. Record the full
-attempted denominator, asymmetric failures and the paired-success intersection.
-Require at least `evaluation.validation_articles` common successful pairs.
-Report paired distributions and spread, not only two unpaired means.
+**Register the rule before you look at the outputs.** For every deterministic
+hard metric, write down the direction, the paired statistic and the tolerance
+first. No generic "no regression" threshold exists, and one invented after the
+numbers are visible is a description of the numbers.
 
-Twenty paired items, two models and three repeats is at least 120 inference
-calls before canaries. Prove every job fits the bound that job actually carries,
-with worst-case margin, before dispatch: `validate.yml` takes its qualification
-budget as a dispatch input defaulting to 330 minutes, and `digest.yml`'s work
-job reads `run.shard_timeout_minutes`. The six-hour platform maximum is not the
-operative timeout for either. If it is sharded, each job must extract its items
-once and run both models while those Article payloads remain on the same
-ephemeral disk.
-Article bodies may not be uploaded as cross-job artifacts. Do not cache both
-model files together.
+Compare: summarize success rate and failure codes; mean HHEM and HHEM-full;
+unsupported numbers; dropped hedges; lead coverage; extractiveness and longest
+verbatim run; compression; word-band compliance; generated-title fallback rate;
+brief, abstract and truncated handling; and a human blind review of the same
+source-summary pairs. Compression is a recorded diagnostic and never a
+pass/fail.
 
-Compare:
+**HHEM alone is insufficient.** A model can raise faithfulness by copying more
+or by writing less. It is the production alarm, so it screens and does not
+select:
 
-- summarize success rate and failure codes;
-- mean HHEM and HHEM-full;
-- unsupported numbers;
-- dropped hedges;
-- lead coverage;
-- extractiveness and longest verbatim run;
-- compression;
-- word-band compliance;
-- generated-title fallback rate;
-- brief, abstract and truncated handling; and
-- a human blind review of the same source-summary pairs.
-
-HHEM alone is insufficient. A model can raise faithfulness by copying more or by
-writing less.
-
-No generic "no regression" threshold exists. Before revealing outputs, register
-the direction, paired statistic and tolerance for every deterministic hard
-metric. Compression stays a recorded diagnostic and is not a hard pass/fail
-metric.
-
-Register the human selection question and pass threshold before revealing model
-identity or outputs. No generic human model-selection threshold exists today.
-Without a pre-registered rule, human review can describe a trade and cannot
-claim an automatic winner.
-
-The existing human label queue records one summary's support verdict. It cannot
-record paired informativeness, title quality or key-point correctness. A model
-adoption needs a typed pairwise label shape and human-paced CLI before human
-review can act as the selector. That tool must show frozen local source and
-summary evidence, keep article bodies uncommitted, and globally shuffle rows so
-HHEM-decile order does not leak the hidden score gradient.
-
-## 7. Decide
-
-The configured HHEM arithmetic remains a screening signal:
-
-- fewer than `validation_articles` scored outputs -> no verdict;
-- challenger gain below `validation_switch_margin` -> no automatic switch; and
+- fewer than `evaluation.validation_articles` scored outputs -> no verdict;
+- gain below `evaluation.validation_switch_margin` -> no automatic switch; and
 - gain at or above the margin -> `switch_and_pause`.
 
-It must not select the model because HHEM remains the production alarm. The
-pre-registered blind human rule selects among candidates that pass the hard
-compatibility, safety, success-rate, deterministic-metric and runner-budget
-gates.
+**A model swap is a new series, not a new point on the old one.** Segment every
+model-dependent metric by `model_id` and do not recompute a long run's date
+between plan, model runs and decision.
 
-The owner can approve a model for reasons outside the automated margin. Record
-that approval and the measured trade in the pull request and living docs. Do not
-rewrite the measurement to make the approval look automatic.
+What the decision still cannot have: the human label queue records one summary's
+support verdict and cannot record paired informativeness, title quality or
+key-point correctness. Until a typed pairwise label shape and a human-paced CLI
+exist, a blind human review can describe a trade and cannot name a winner.
 
-### What that looked like the one time it happened
+**The owner can approve a model for reasons outside the automated margin**
+([../../CLAUDE.md](../../CLAUDE.md) section 0). Record the approval and the
+measured trade in the pull request and in the living docs. A failing gate stays
+failing and stays written down - do not re-score a run or move a threshold to
+make an approval look automatic. That has happened once, and what it left is in
+[../concepts/evaluation.md](../concepts/evaluation.md).
 
-Qwen3.5-9B-Q4_K_M became the configured summarizer on 2026-08-27 by owner
-decision ([../../CLAUDE.md](../../CLAUDE.md) section 0), over two failing hard
-gates. **It did not qualify.** Nine of eleven registered gates passed; the
-injection canaries scored 4 of 5 against a Guardrail #11 threshold of all five, and
-one brief-band item came back word for word at a verbatim run of 1.000 against a
-ceiling of 0.5. No comparison against the retired model was run, so nothing about
-that adoption says the new summaries are better.
 
-Two things that record leaves for whoever runs this procedure next. **A failing
-gate stayed failing and stayed written down** - the run report was not re-scored,
-no threshold moved, and the gate list still shows two failures. And **step 6 was
-never completed**: the frozen corpus was single-model, so the paired evidence
-this page asks for still does not exist for the model now in production. Both
-are in [../concepts/evaluation.md](../concepts/evaluation.md) and
-[../reference/measurements.md](../reference/measurements.md).
+---
 
-## 8. Adopt the model
+## Block 2 - Adopt
 
-Do not change historical payloads or historical measurement rows.
+### 2.1 The line
 
-Update the current surfaces:
+```json
+"models_file": "models/<candidate>.json"
+```
 
-1. `config/models/<model>.json` - the file `config/idhazh.json`'s `models_file`
- points at, or a new one beside it:
- - model id;
- - repository and the 40-character revision;
- - GGUF file;
- - quantisation; and
- - exact SHA-256.
-2. `config/idhazh.json` - `models_file`, if the candidate got a new file. That
- one line is the swap.
-3. No workflow. `digest.yml`, `validate.yml` and `measure.yml` each follow the
- pointer and read the entry it names, and a test refuses a model repository, a
- weights filename or a moving revision written into any of them.
-4. `docs/reference/models/<model>.md` - the dossier. Paste the `dossier.md` the
- bench emitted; do not transcribe numbers by hand.
-5. Current docs and diagrams that name the configured model.
-6. Tests that assert the configured default or workflow model. Do not replace
- fixture ids that are intentionally historical or generic.
+That is the swap. No workflow changes: `digest.yml`, `validate.yml` and
+`measure.yml` each follow the pointer and read the entry it names, and a test
+refuses a model repository, a weights filename or a moving revision written into
+any of them.
 
-A value-only model change does not change a JSON shape. If the work also makes
-SHA-256 required, adds a runtime-build field, or changes a persisted contract,
-update the Pydantic contract, version, changelog, migration, generated schema
-and drift tests together.
+### 2.2 The two status lines
 
-## 9. Fix identity before trusting the rollout
+What is in force is printed by two commands, and they are the check that the
+edit did what you meant:
 
-The determinism contract says the fingerprint records the GGUF file the runtime
-opened, llama.cpp build, chat template and runner class.
+```text
+git grep -n '"models_file"' -- config/idhazh.json
+git grep -n -E '"(id|file|sha256)"' -- config/models/
+```
 
-**Half of this is now closed.** A stamp built on an absent or placeholder weights
-digest raises rather than publishing, so "nobody measured the weights" can no
-longer validate as a fingerprint, and the qualification path digests the file it
-is about to run rather than reading the number back out of config.
+The first names the active file. The second prints the id, the weights filename
+and the SHA-256 the runtime checks the downloaded bytes against.
 
-**The other half is open.** Production `stage_work` still passes
-`ModelRef.sha256` - what config expected - and leans on the `work` job's
-`sha256sum` check of the file on disk to make the two agree. A model swap must
-not leave the new model recorded as an expectation nobody verified at the point
-of use. Pass the observed GGUF SHA-256 and runtime build into `work`, compare the
-hash to config there, and test the fingerprint and manifest paths before rollout
-([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+### 2.3 What else the swap carries
 
-## 10. Cache transition and rollout
+| | |
+| --- | --- |
+| The three tokenizer readings | paste them now. `measure_budgets.py check` is red until you do, and every window sum is spent at one of them |
+| `docs/reference/models/<candidate>.md` | the dossier. Paste the `dossier.md` the bench emitted; do not transcribe numbers by hand |
+| Two status words | the candidate's dossier becomes `incumbent`, the model it replaced becomes `superseded`. They live in one place, so those two edits are the whole lifecycle change ([../reference/models.md](../reference/models.md)) |
+| Docs and diagrams that name the configured model | search for the old id |
+| Tests that assert the configured model | leave fixture ids that are deliberately historical or generic alone |
 
-The steady-state cache holds one model, the summarizer. The
-transition can temporarily hold the old summary model too and cross the 10 GB
-repository ceiling. Production derives the worker count from the plan as
-`min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
-`run.safety_ceiling_per_run` gives a worker 20 items. Do not size a timeout from
-a fictional five-item shard.
+**The readings are the one source edit a swap costs, and that is deliberate.**
+They sit in `backend/idhazh/measured.py` rather than in `config/` because they
+are not tunable: each one is a measurement of a specific set of weights, it
+carries the subject and date it was taken on, and `check` refuses the pair when
+they disagree. A knob a person may turn and a reading a person may only retake
+are different things (Guardrail #6).
 
-**Measure the cache; do not derive it.** On 2026-08-27 the transition was far
-cheaper than the arithmetic said, because the cache key names the model file and
-the pinned llama.cpp build - so the outgoing model had already aged out under an
-older key and there was nothing to delete. What had to go was a stale
-qualification artifact. Before and after are recorded in
-[../reference/github-actions.md](../reference/github-actions.md#the-cache-across-the-model-swap-measured-2026-08-27).
+Do not change historical payloads or historical measurement rows. A value-only
+model change does not change a JSON shape; if the work also retypes a field or
+adds one, the contract, its `version`, its changelog, the migration, the
+generated schema and the drift gate move together
+([../../CLAUDE.md](../../CLAUDE.md) section 11).
 
-Before the first production run:
+### 2.4 The fine-tuning check
+
+**A base swap invalidates every adapter trained on the old base.** An adapter
+loads onto a mismatched base without raising anything, and the damage arrives as
+a quality drop nobody can attribute to it. The notebook's fourth step resolves
+the teacher's base weights and stops when they are not the ones production
+serves, so the refusal is where the adapter is loaded rather than where the base
+is chosen ([fine-tune-a-model.md](fine-tune-a-model.md)).
+
+**A swap also makes the training corpus mixed-teacher, and that is recorded
+rather than prevented.** Every corpus row carries the `model_id` that wrote it
+and `corpus/corpus.meta.json` holds the census. Read it before training, not
+after:
+
+```bash
+python -c "import json;print(json.load(open('corpus/corpus.meta.json'))['models'])"
+```
+
+It already reads two ways: 1,015 rows from the retired `qwen3-8b-q4-k-m` and 429
+from `qwen3-5-9b-q4-k-m` of 1,444, so a model trained on that corpus today is
+learning mostly from a teacher that no longer serves.
+
+### 2.5 What the first day costs
+
+**The first run after a swap is cold on every shard at once**, because the
+weights cache key carries the file and its revision. A cache miss is 5.29 GiB in
+118 s (`n = 1`, spread unavailable, GitHub-hosted `ubuntu-latest`, 2026-08-23),
+and each shard pays it - a warm-box bench figure is not the first real day. The
+bench reports a cold arm for exactly this reason; read that one.
+
+The steady-state cache holds one model. The transition can hold two and cross
+the 10 GB ceiling, so before the first production run:
 
 ```bash
 gh cache list --limit 100
 ```
 
-Delete only the old summary-model cache after the new commit is ready:
+and after the new commit is ready, delete only the outgoing summary model's
+entry:
 
 ```bash
 gh cache delete <old-summary-cache-id>
 ```
 
-Then:
+**Measure the cache, do not derive it.** The key names the model file and the
+pinned llama.cpp build, so the outgoing model may already have aged out and
+there may be nothing to delete
+([../reference/github-actions.md](../reference/github-actions.md#the-cache-across-the-model-swap-measured-2026-08-27)).
 
-1. Run the full local gates.
-2. Run a one-URL local smoke through the candidate config.
+Production derives the worker count as
+`min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
+`run.safety_ceiling_per_run` gives a worker 20 items. Do not size a timeout from
+a five-item shard.
+
+### 2.6 One identity gap to know about before you trust the rollout
+
+The fingerprint records the GGUF file the runtime opened, the llama.cpp build,
+the chat template and the runner class. A stamp built on an absent or
+placeholder weights digest now raises rather than publishing, and the
+qualification path digests the file it is about to run. **Production `stage_work`
+still passes `ModelRef.sha256` - what config expected - and leans on the `work`
+job's own `sha256sum` of the file on disk to make the two agree.** Until the
+observed digest and runtime build are passed into `work` and compared there, a
+swap leaves the new model recorded as an expectation nobody verified at the
+point of use
+([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+
+### 2.7 Before the first production run
+
+1. Run the full local gates ([run-the-gates.md](run-the-gates.md)).
+2. Run a one-URL local smoke through the new config
+ ([troubleshoot-one-url.md](troubleshoot-one-url.md)).
 3. Verify bounded worker selection against the day you plan to run.
-4. Run a manual Content refresh only after its measured worker population fits.
-5. Inspect item-health failure codes, per-item read/write rates, the fingerprint
- row, run manifest, cache state and published summaries.
+4. Run a manual content refresh only after its measured worker population fits.
+5. Read item-health failure codes, per-item read and write rates, the
+ fingerprint row, the run manifest, the cache state and the published
+ summaries.
 6. Confirm no model directory or diagnostic payload is tracked.
-7. For rollback, pause normal workers, delete the candidate summary cache,
- revert the adoption commit, fill the incumbent summary cache once without
- fanout, verify its identity and health, then resume normal workers. Do not
- edit historical output.
 
-Do not raise a timeout or lower a quality threshold to make the candidate pass.
-Measure the cause or reject the candidate.
+---
+
+## Block 3 - Revert
+
+```json
+"models_file": "models/<incumbent>.json"
+```
+
+The same line, back. With it go the three tokenizer readings and the two status
+words - the dossier that said `superseded` says `incumbent` again - and that is
+the whole revert.
+
+**What a revert does not need, and why:**
+
+| Not this | Because |
+| --- | --- |
+| A source edit | no model fact is in source. Everything about a model is in the file the pointer names |
+| A schema regeneration | nothing changed shape. A pointer holds a different string |
+| A cache purge | the incumbent's entry is keyed on its own weights file, revision and llama.cpp build, so moving the pointer back finds it again unless it has aged out. Deleting it buys a re-download and nothing else |
+| A historical edit | published payloads and measurement rows record what actually ran. They stay as they are |
+
+If a bad day is already running, stop the workers first, then move the line,
+then let the next run fill the cache once without fanout and check its identity
+and health before normal workers resume.
 
 ## See also
 
+- [../reference/models.md](../reference/models.md) - one row a model, the status words, and what is in force right now.
+- [fine-tune-a-model.md](fine-tune-a-model.md) - the corpus, the teacher, and what a base swap does to an adapter.
 - [test-models-locally.md](test-models-locally.md) - download, serve and measure the local models.
 - [troubleshoot-one-url.md](troubleshoot-one-url.md) - run one real URL through fetch, extraction and summarization.
 - [run-the-gates.md](run-the-gates.md) - the complete local validation commands.
-- [../concepts/evaluation.md](../concepts/evaluation.md) - model-choice arithmetic and metric limits.
+- [../concepts/evaluation.md](../concepts/evaluation.md) - the eleven gates, the model-choice arithmetic and the metric limits.
 - [../concepts/config.md](../concepts/config.md) - model and runtime knobs.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - rendered bands, decoder rails and prompt controls.
 - [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - read/write rates and prompt reuse.
 - [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the fingerprint contract.
-- [../reference/measurements.md](../reference/measurements.md) - candidate facts, runner numbers and open measurements.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rules #2, #3, #6, #9, #10 and #11.
+- [../reference/measurements.md](../reference/measurements.md) - runner numbers and open measurements.
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrails #2, #3, #6, #9, #10 and #11.
