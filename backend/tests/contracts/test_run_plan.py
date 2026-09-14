@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
@@ -201,6 +201,49 @@ def test_every_declared_band_is_written_and_a_short_histogram_is_refused() -> No
     short = [band.model_dump(mode="json") for band in bands if band.addresses]
     with pytest.raises(ValidationError):
         RunPlan.model_validate(bare_plan(dropped_published=3, dropped_published_ages=short))
+
+
+#: The thirteen score fields a planned item started carrying on 2026-09-14 -
+#: the eight terms rank_score is built from, and five slots with no producer yet.
+SELECTION_TERMS: Final = (
+    "authority_score",
+    "tier_score",
+    "feed_weight",
+    "feed_reliability",
+    "carriage_step",
+    "watchlist_bonus",
+    "lens_bonus",
+    "recency_bonus",
+    "label_confidence",
+    "relationship_score",
+    "fit_weight",
+    "dual_score",
+    "null_score",
+)
+
+
+def test_a_plan_written_before_the_score_terms_reads_every_one_as_unknown() -> None:
+    """Thirteen fields absent, thirteen nulls, and nothing raised.
+
+    Read off `tests/fixtures/superseded/run-plan-live-feeds.json`, which is a
+    plan an earlier build wrote and committed, recovered from git and kept
+    unedited - so this checks the migration against bytes a build really wrote
+    rather than against a payload the test builds for itself. A zero would say
+    the term fired and was worth nothing, which is a claim no old plan can make.
+
+    Not the `run-plan` contract fixture, which is regenerated through the model
+    every time the shape moves and so carries all thirteen keys as nulls today.
+    A frozen payload is the only one that can still be missing them tomorrow.
+    """
+    raw = read_text(FIXTURES_DIR / "superseded" / "run-plan-live-feeds.json")
+    for name in SELECTION_TERMS:
+        assert f'"{name}"' not in raw, f"the payload is only a migration test while it omits {name}"
+
+    plan = RunPlan.from_json(raw)
+    assert plan.items, "the payload carries planned items"
+    for item in plan.items:
+        invented = [name for name in SELECTION_TERMS if getattr(item, name) is not None]
+        assert not invented, f"{item.item_id} invented {invented}"
 
 
 def test_a_manifest_written_before_the_floor_was_recorded_reads_as_unknown() -> None:
