@@ -10,9 +10,10 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from idhazh import config
 from idhazh.measured import (
     EVERY_MEASURED,
-    UNREACHED_BY_THIS_GATE,
+    SIZED_BY_A_READING_HERE,
     Measured,
     TokenizerMeasured,
+    readings_awaiting_a_retake,
     refuse_a_reading_taken_against_other_weights,
 )
 
@@ -157,18 +158,55 @@ def test_the_refusal_hands_over_the_three_sites_the_gate_cannot_reach() -> None:
         )
 
     said = str(refusal.value)
-    for site in UNREACHED_BY_THIS_GATE:
+    for site in SIZED_BY_A_READING_HERE:
         assert site.module in said
         assert site.constant in said
+        assert site.reading_name in said
+
+
+def test_the_refusal_lists_only_the_sites_that_are_actually_stale() -> None:
+    """The other half of the same rule, and the half row #13b turns green one at a time.
+
+    Driven off a digest a committed reading already names, so it keeps working
+    when a retake lands. A refusal that listed all three whatever their subjects
+    said would be a refusal that stopped meaning anything after the first retake.
+    """
+    current = SIZED_BY_A_READING_HERE[0].reading.subject
+    still_stale = readings_awaiting_a_retake(configured_sha256=current)
+    assert len(still_stale) < len(SIZED_BY_A_READING_HERE) or not still_stale
+
+    with pytest.raises(ValueError) as refusal:
+        refuse_a_reading_taken_against_other_weights(
+            configured_sha256=current, records=[a_tokenizer_reading("b" * 64)]
+        )
+
+    said = str(refusal.value)
+    assert f"{len(still_stale)} of {len(SIZED_BY_A_READING_HERE)} constants" in said
 
 
 def test_each_site_the_gate_names_still_exists_and_still_declares_its_constant() -> None:
     """A list of what to retake is worth nothing once a rename has made it a lie."""
-    for site in UNREACHED_BY_THIS_GATE:
+    for site in SIZED_BY_A_READING_HERE:
         module = REPO_ROOT / site.module
         assert module.is_file(), f"{site.module} has moved and the list now points at nothing"
         assert site.constant in read_text(module), (
             f"{site.module} no longer declares {site.constant}"
+        )
+
+
+def test_a_constant_sized_by_a_reading_is_not_also_a_record_in_the_walked_set() -> None:
+    """Two homes for one number is the drift this module exists to remove.
+
+    These three are deliberately out of `EVERY_MEASURED`: every one of them names
+    the retired 8B, so a gate that walked them would be red on every commit until
+    row #13b retakes them, and a gate that is red on a state nobody has fixed is a
+    gate people learn to scroll past (`CLAUDE.md` section 13).
+    """
+    walked = {record.measures for record in EVERY_MEASURED}
+    for site in SIZED_BY_A_READING_HERE:
+        assert site.reading.measures not in walked, (
+            f"{site.reading_name} is in both EVERY_MEASURED and SIZED_BY_A_READING_HERE, so "
+            "the gate would refuse every commit until it is retaken"
         )
 
 
