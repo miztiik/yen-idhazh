@@ -288,6 +288,21 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T07:00",
+            change=(
+                "The embedded ModelRef gained an optional draft block. It defaults to "
+                "null and nothing here requires it, so every committed run.json still "
+                "reads and no migration is needed."
+            ),
+            why=(
+                "Plan 28 row 2a. A run that was decoded with a draft head and a run "
+                "that was not took different times to write the same words, and a "
+                "manifest that could not say which one it was could not explain its "
+                "own throughput. It is on ModelRef rather than ModelEntry for exactly "
+                "that reason - the recorded shape is the one a later reader has."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-14T06:00",
             change=(
                 "The embedded ModelRef gained an optional byte_count. It defaults to "
