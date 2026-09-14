@@ -13,7 +13,8 @@
       "flash_attention": "off",
       "load_mode": null,
       "log_verbosity": 9,
-      "max_output_tokens": 320,
+      "max_answer_tokens": 320,
+      "max_think_tokens": 64,
       "metrics": true,
       "n_batch": 256,
       "n_ctx": 4096,
@@ -27,7 +28,6 @@
       "seed": 0,
       "startup_warmup": true,
       "temperature": 0.0,
-      "thinking": false,
       "top_p": 1.0
     },
     "quantisation": "Q4_K_M",
@@ -40,10 +40,11 @@
       "reply_opening_thinking": "<|start_header_id|>assistant<|end_header_id|>\n\n<think>\n",
       "system_joiner": "\n\n",
       "system_role": "fold_into_first_user",
-      "thinking_kwarg": null,
+      "thinking_close": "</think>",
+      "thinking_kwarg": "reasoning",
       "turn_closing": "<|eot_id|>",
       "turn_opening": "<|start_header_id|>${role}<|end_header_id|>\n\n"
     }
   },
-  "version": "2026-09-14T03:00"
+  "version": "2026-09-14T04:00"
 }

@@ -8,13 +8,13 @@
       "temperature": 0.2,
       "top_p": 0.85,
       "seed": 7,
-      "max_output_tokens": 777,
-      "thinking": true
+      "max_answer_tokens": 777
     },
     "turns": {
       "declared_for": null,
       "reply_opening": "<|im_start|>assistant\n<think>\n\n</think>\n\n",
       "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
+      "thinking_close": "</think>",
       "turn_closing": "<|im_end|>\n",
       "turn_opening": "<|im_start|>$role\n"
     },
