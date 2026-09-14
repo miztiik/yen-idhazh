@@ -1,9 +1,17 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-14
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
+
+## Commit identity
+
+**A guessed GitHub noreply email can credit a stranger.** `noreply@users.noreply.github.com` maps to the real `noreply` account, not an anonymous placeholder. GitHub's contributor list uses author credit; the authenticated pusher is a different fact, available from the repository activity API. On 2026-09-14, both affected pushes named `miztiik`. Local `user.name` and `user.email` override global settings, and changing either does not change an old commit. Check `git var GIT_AUTHOR_IDENT` and `git var GIT_COMMITTER_IDENT` before committing; do not replace configured identities with test placeholders. A guessed `yen-idhazh@users.noreply.github.com` address does not reserve that GitHub account either.
+
+**The one-time attribution repair changes commit IDs, not the recorded files.** Under the [owner approval in CLAUDE.md section 8](../../../CLAUDE.md#8-git-hygiene), `b8cd2c41` becomes `b615a0b4` and `83d47ac3` becomes `172e259e`. Their `noreply` fields use `yen-idhazh <yen-idhazh@users.noreply.github.com>` instead. Their descendants receive new IDs too. A complete local Git bundle keeps the original history; the repair checks every affected file tree, message, date, parent mapping and unaffected identity.
+
+**Merging the old history back restores the wrong credit.** Other agents and their worktrees were left running at the owner's request. Before publishing from an old branch, carry only its unmerged changes onto the repaired `main` in a fresh branch and worktree. Do not merge old `main` back into repaired `main`, and do not reset a worktree that holds another agent's work. GitHub's cached contributor display can lag behind the corrected branch history.
 
 ## Worktrees
 
