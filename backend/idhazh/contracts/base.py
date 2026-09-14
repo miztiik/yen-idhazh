@@ -131,6 +131,55 @@ def compact_json(payload: Any) -> str:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True, ensure_ascii=True) + "\n"
 
 
+def _one_line(record: Any) -> str:
+    """One record, no newline in it. The space after the colon is the only one kept."""
+    return json.dumps(record, sort_keys=True, ensure_ascii=True, separators=(",", ": "))
+
+
+def _record_lines(value: Any, indent: str) -> str:
+    """`canonical_json`'s layout, except that a list of objects is one object a line."""
+    step = indent + "  "
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        pairs = (
+            f"{step}{json.dumps(key, ensure_ascii=True)}: {_record_lines(value[key], step)}"
+            for key in sorted(value)
+        )
+        return "{\n" + ",\n".join(pairs) + f"\n{indent}}}"
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        records = all(isinstance(item, dict) for item in value)
+        items = (
+            step + (_one_line(item) if records else _record_lines(item, step)) for item in value
+        )
+        return "[\n" + ",\n".join(items) + f"\n{indent}]"
+    return json.dumps(value, ensure_ascii=True)
+
+
+def records_json(payload: Any) -> str:
+    """The same serialization with each record on one line.
+
+    Sorted keys, ASCII-escaped, one trailing newline and the same two-space
+    indent, exactly as `canonical_json` - so a file that is read and re-written
+    is still byte-identical and a diff still shows a changed value rather than
+    a reshuffled dict. The one thing that moves is where the newlines go: a
+    list of objects is written one object a line, and everything else is
+    unchanged.
+
+    A payload uses this when a person curates it by hand and its entries are
+    records of a dozen short fields that are read together or not at all. A
+    feed in `config/sources.json` is one such record; at one field a line the
+    215 of them are 2,391 lines, so comparing two feeds means scrolling past
+    everything they agree on and adding one is a twelve-line diff. On one line
+    a record the whole record is in view and the diff is one line per feed
+    changed. Every other payload keeps the field-a-line layout, because a
+    payload a program writes is reviewed by reading down a single record.
+    """
+    return _record_lines(payload, "") + "\n"
+
+
 def derive_output_digest(
     summary: str | None, key_points: Sequence[str], *, title: str | None = None
 ) -> str:
