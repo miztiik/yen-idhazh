@@ -537,11 +537,11 @@ A worker commits the rows for its own items, and Assemble writes the rest.
 Assemble was the only writer until 2026-08-27, to keep a diagnostic append out of
 a rebase race with the publish commit. What that reasoning missed is where the
 rows live in between: a shard's verdicts leave the runner only inside its
-`items-<shard>` artifact, which is kept for one day and is not uploaded at all
-when a job is cancelled. A run stopped between the workers and the publish had
-measured every item and recorded none of it - and a bad day is exactly the day
-worth measuring. The race the old rule avoided is answered instead by the two
-things that already existed for it: `merge=union` on `state/**/*.csv`, and the
+`items-<shard>` artifact, which expires and is never committed. A run stopped
+between the workers and the publish had measured every item and recorded none of
+it - and a bad day is exactly the day worth measuring. The race the old rule
+avoided is answered instead by the two things that already existed for it:
+`merge=union` on `state/**/*.csv`, and the
 rebase loop in `.github/scripts/commit-and-push.sh` that the plan job has always
 used for the same reason. The double-write the old rule also avoided is answered
 by the row identity above. Authority: Fowler, over Carmack's original ruling.
@@ -562,7 +562,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Prune the ledger on a retention schedule | The rows worth keeping longest are the ones from the worst days, and those are the first a size-driven prune would take. Windows are a read-side parameter instead. |
 | Serve `state/item-health/` directly to the console | The row carries `canonical_url`, `url_key` and `detail`, none of which belongs in a browser. The narrow projection under `frontend/public/telemetry/` exists so the forbidden columns are absent by construction rather than filtered on read. |
 | One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
-| Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is not uploaded at all when a job is cancelled, so a longer retention protects nothing in the case that loses the rows. |
+| Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is never committed and expires, so a longer retention delays the loss rather than preventing it. The committed row is what a later run and the console read. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |
 | Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `publish_day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |

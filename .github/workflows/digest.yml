@@ -667,9 +667,8 @@ jobs:
 
       # The rows this shard earned, committed here rather than three hours later
       # in assemble. Until then they exist only inside the items artifact at the
-      # end of this job, which keeps them for one day and is not uploaded at all
-      # when a job is cancelled - so a run stopped after the workers had measured
-      # every item recorded none of it.
+      # end of this job, which is never committed and expires - so a run stopped
+      # after the workers had measured every item recorded none of it.
       #
       # First of the `always()` steps for that reason: a cancelled job runs them
       # in order inside a grace period, and this is the one whose loss the pair
@@ -909,7 +908,21 @@ jobs:
       # runs a day held for seven days is 18.6 MB against the 500 MB of artifact
       # storage Guardrail #2 allows - 3.7 percent of the budget, for the only copy of
       # the text that exists.
+      #
+      # `always()`, because a step with no condition runs on `success()` and a
+      # job stopped by `timeout-minutes` is cancelled rather than successful.
+      # Run 34852763827 on 2026-09-14 is what that cost: three of four shards
+      # were cancelled at the bound, the `always()` ledger steps above them ran
+      # and filed 33 items as published, and this upload was skipped on all
+      # three - so assemble composed the day from shard 3 alone. The census read
+      # 46 published items and the committed day carries 13.
+      #
+      # There is something to upload because `work` writes each item's payloads
+      # as it finishes that item rather than once at the end. The record step
+      # above reads this same directory and did file rows on every cancelled
+      # shard, which is the evidence the files are on disk when the bound lands.
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: items-${{ matrix.shard }}
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
@@ -929,7 +942,14 @@ jobs:
       # This run's day and never the whole tree: `render.write.asset_relpath`
       # files every chart under the day that names it, so a wider line sends
       # every committed day back to Actions on every run (Guardrail #12).
+      #
+      # `always()` for the reason written over the items artifact, and it has to
+      # be the same answer for both: the decision naming a chart travels in
+      # `items/` and the chart's bytes travel here, so guarding one alone
+      # publishes a story naming a picture file that is not there - which is
+      # what `_picture_faults` refuses the day for.
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: shard-visuals-${{ matrix.shard }}
           path: ${{ needs.plan.outputs.day_dir }}/

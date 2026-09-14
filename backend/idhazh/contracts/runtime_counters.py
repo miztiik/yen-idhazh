@@ -59,8 +59,8 @@ where it can only be done the one correct way.
 enough. The grain is wrong - a manifest run record is one run and this is one
 shard, so the manifest would grow a variable-length list. The producer is wrong
 - the manifest is written by `assemble`, in another job hours later, so these
-numbers would have to travel inside the items artifact, which expires in a day
-and is not uploaded at all when a job is cancelled. The audience is wrong -
+numbers would have to travel inside the items artifact, which expires and is
+never committed. The audience is wrong -
 `run.json` is a published payload a reader's browser fetches, and this is
 measurement evidence that belongs under `state/`, which is never served. And the
 timing is wrong - a concurrent branch was also opening `RunManifest`, and two

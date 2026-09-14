@@ -1,4 +1,4 @@
-"""Does a worker's row survive the run that produced it being thrown away?"""
+"""Does a worker's work survive the run that produced it being thrown away?"""
 
 from __future__ import annotations
 
@@ -26,6 +26,8 @@ from ._harness import (
     SUBSTITUTED_SHARDS,
     TOLERATED,
     WORK_LEDGER_STEPS,
+    WORK_PAYLOAD_ARTIFACTS,
+    _artifact_upload,
     _commit_call,
     _git,
     _isolated_env,
@@ -53,9 +55,10 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
     """The Oracle, in YAML: a cancelled job runs `always()` steps and skips the rest.
 
-    The items artifact carries a shard's verdicts for one day and has no `if:`,
-    so a cancelled job never uploads it. A run stopped between the workers and
-    the publish had measured every item and kept none of the measurements.
+    A shard's verdicts leave the runner inside its `items-<shard>` artifact,
+    which is never committed and expires. Until these steps existed a run
+    stopped between the workers and the publish had measured every item and kept
+    none of the measurements, so they are the copy that outlives the artifact.
     """
     workflow = _load_workflows()["digest.yml"]
     names = [step.get("name") for step in _steps(workflow, "work")]
@@ -86,6 +89,58 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         names.index(RECORD_STEP) + offset for offset in range(len(WORK_LEDGER_STEPS))
     ]
     assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
+
+
+def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
+    """The Oracle, in YAML: a step with no `if:` runs on `success()`, and a killed job is not one.
+
+    `work` writes each item's payloads as it finishes that item, so the items
+    directory holds every story the shard completed at the moment the bound
+    lands - which is how `record` above files rows on a cancelled shard at all.
+    Both artifacts carried no condition, so a cancelled shard uploaded neither
+    and assemble composed the day without them.
+
+    Measured on run 34852763827 (2026-09-14, four shards): three were cancelled
+    at `run.shard_timeout_minutes`, their `always()` ledger steps ran and filed
+    33 items as `outcome=ok, stage=publish`, and all three uploads were skipped.
+    The committed day carries 13 items - shard 3's count, and shard 3 is the one
+    shard that finished. The census over-reported by 3.5x and 33 articles of
+    model time were paid for and thrown away.
+
+    The two are named together because they have to be guarded together: the
+    decision naming a chart travels in `items/` and the chart's own bytes travel
+    in `shard-visuals-*`, so a guard on one alone publishes a story naming a
+    picture file that is not there.
+
+    It cannot settle whether assemble composes a partially-uploaded shard
+    correctly in every case; a real run is the check for that.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    steps = _steps(workflow, "work")
+    uploads = [
+        _artifact_upload(workflow, "work", artifact) for artifact in WORK_PAYLOAD_ARTIFACTS
+    ]
+
+    for artifact, step in zip(WORK_PAYLOAD_ARTIFACTS, uploads, strict=True):
+        guard = step.get("if")
+        assert guard is not None, (
+            f"the {artifact} upload carries no condition, so it runs on success() alone "
+            f"and a shard stopped by its own timeout skips it"
+        )
+        assert _normalize_condition(guard, f"work upload {artifact}") == "always()", (
+            f"a shard stopped by its own timeout must still upload {artifact}"
+        )
+
+    # Behind the ledger steps and never in front of them. A cancelled job spends
+    # one grace period on every `always()` step in order, and the committed rows
+    # are the copy that outlives this artifact's own expiry.
+    last_ledger = max(
+        steps.index(_step(workflow, "work", "name", name)) for name in WORK_LEDGER_STEPS
+    )
+    for artifact, step in zip(WORK_PAYLOAD_ARTIFACTS, uploads, strict=True):
+        assert steps.index(step) > last_ledger, (
+            f"the {artifact} upload must not spend the grace period the ledger steps need"
+        )
 
 
 def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:

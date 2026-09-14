@@ -267,8 +267,7 @@ The plan job also commits first-sighting and feed-health state before it starts
 the workers. This keeps observations from a failed refresh. Each worker then
 commits the item-health and eval rows for the items its own shard settled, for
 the same reason: those rows otherwise ride only in that shard's `items-<shard>`
-artifact, which is kept for one day and is not uploaded at all when a job is
-cancelled.
+artifact, which expires and is never committed.
 
 A worker commits a third row in the same step: what its model server counted for
 the whole shard, read once from `/metrics` at job end and filed in
@@ -1019,7 +1018,12 @@ Verified 2026-08-20.
  **`skipped`**.
  88 planning decisions and 9 rendered charts existed on that runner and none of
  them left it. **Any upload step that carries a job's only copy of its output
- needs `if: always`.**
+ needs `if: always`.** The rule was written and three sibling steps in the same
+ file never got it: on 2026-09-14, run `34852763827`, the `work` job's three
+ uploads still carried no condition, three of four shards were cancelled at
+ `run.shard_timeout_minutes`, and 33 items their ledger steps had already
+ recorded as published never reached `assemble`. **Fixing one step in a file is
+ not fixing the file.**
 - **A pipeline intermediate is gone within two days, so "re-render the day from
  its decisions" is not a repair option for any day older than 24 hours.** Verified
  2026-08-27. `digest.yml` sets `retention-days: 1` on `plan`, `items-<shard>`

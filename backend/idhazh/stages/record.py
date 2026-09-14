@@ -26,9 +26,9 @@ def stage_record(
 
     `stage_assemble` writes the whole day's census, and it runs in another job on
     another machine hours later. Until then a shard's verdicts exist only inside
-    its `items-<shard>` artifact, which expires in a day and is not uploaded at
-    all when the job is cancelled. So a run stopped between the workers and the
-    publish had measured every item and recorded none of it.
+    its `items-<shard>` artifact, which expires and is never committed. So a run
+    stopped between the workers and the publish had measured every item and
+    recorded none of it.
 
     Only settled items are recorded, which is what `telemetry.is_final` decides.
     An item whose summary is not written yet was interrupted rather than failed,
