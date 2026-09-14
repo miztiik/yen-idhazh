@@ -364,6 +364,7 @@ class LiveSummarizer:
                 article,
                 model_id=model_id,
                 inference=inference,
+                thinking_kwarg=self._settings.models.summarize.turns.thinking_kwarg,
                 prompt_config=ask,
             )
             payload["messages"][0]["content"] = render_system(
@@ -454,6 +455,7 @@ class ModelJudge:
             user=user,
             output_schema=schema,
             inference=inference,
+            thinking_kwarg=self._settings.models.summarize.turns.thinking_kwarg,
             schema_name=schema_name,
         )
         completion = post(
