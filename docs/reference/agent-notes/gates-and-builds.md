@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
@@ -62,7 +62,7 @@ git grep -n '"--<your flag>"' -- backend
 
 **The opposite rule applies to `tests/fixtures/contracts/`, where the model IS the right writer.** `test_fixture_round_trips_byte_identically` demands the file bytes equal `to_json`, and the serializer sorts keys, so one new field on a nested model breaks every fixture carrying it - four at once on 2026-09-02. Re-serialise through `BY_STEM[<folder>].from_json(text).to_json` rather than editing by hand.
 
-**The one `app-config` fixture asks for a second thing, and its name is the only place that says so.** `every-knob-differs-from-the-committed-config.json` holds a value the committed `config/idhazh.json` does not, knob by knob, so a reader that ignored the file and fell back to a default would fail rather than pass. Re-serialising a new field into it therefore is not enough: it arrives carrying the default, which is exactly the value the fixture exists not to hold. Set it to something else first, then re-serialise. Observed 2026-09-10 adding `summarize.key_point_words_max`.
+**A fixture named `every-knob-differs-from-the-committed-config.json` asks for a second thing, and its name is the only place that says so.** There is one under `app-config` and one under `models-config`, and each holds a value the committed file does not, knob by knob, so a reader that ignored the file and fell back to a default would fail rather than pass. Re-serialising a new field into one therefore is not enough: it arrives carrying the default, which is exactly the value the fixture exists not to hold. Set it to something else first, then re-serialise. Observed 2026-09-10 adding `summarize.key_point_words_max`.
 
 **An argparse option in `backend/utilities/` may not be spelled like a llama-server flag.** `test_summarize.test_exactly_one_function_spells_a_llama_server_flag` globs `backend/**/*.py` for any quoted flag `server_argv` emits and compares the file set by equality, so `parser.add_argument("--port", ...)` puts your tool in that set and fails a test about the inference server. `--server-port` passes, because the guard searches for the literal `"--port"` including its quotes. Observed 2026-09-10.
 
