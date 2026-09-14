@@ -18,6 +18,7 @@ from conftest import CONFIG_DIR, FIXTURES_DIR
 from idhazh import cli, config, day_partition, ledger
 from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -89,6 +90,30 @@ def prune_row(*, on: str = DATE, run: str = "1", before: int = 1000) -> VisualPr
         oldest_kept=None,
         payload_bytes_before=before,
         payload_bytes_after=before,
+    )
+
+
+def counterfactual_row(
+    *, on: str = DATE, run: str = "1", url_key: str = "example.org/a"
+) -> CounterfactualScoreRow:
+    """One candidate scored twice. The lens is worth 0.3 and the probe asks 1.25x.
+
+    So the two scores differ by 0.075, which the row's own validator checks - a
+    helper that got the arithmetic wrong would fail here rather than in the test
+    that uses it.
+    """
+    return CounterfactualScoreRow(
+        version=CounterfactualScoreRow.schema_version(),
+        date=on,
+        run_id=f"{on}-{run}",
+        vertical="ai",
+        url_key=url_key,
+        taken=True,
+        lens_id="chips",
+        lens_bonus=0.3,
+        lens_multiplier=1.25,
+        score_committed=1.2,
+        score_counterfactual=1.275,
     )
 
 
@@ -1308,7 +1333,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same five ledgers on a tree with one day of each in it.
+    Both covers name the same six ledgers on a tree with one day of each in it.
     What separates them is what a second day would add: to the operator's pass, a
     file; to a run's pass, nothing.
     """
@@ -1316,6 +1341,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ledger.append_health(tmp_path, DATE, [health_row()])
     ledger.append_runtime_counters(tmp_path, [counters_row(0)])
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
+    ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
@@ -1323,6 +1349,10 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
         (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
+        (
+            f"counterfactual-scores/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            ledger.COUNTERFACTUAL_SCORE_KEY,
+        ),
         (f"feed-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.FEED_HEALTH_KEY),
         (f"item-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.ITEM_HEALTH_KEY),
     ]

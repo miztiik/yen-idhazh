@@ -8,7 +8,7 @@ directory is the collection and the name says the period - `<YYYY-MM>` for a mon
 the rest. A writer appends to the period its own date names and leaves the rest
 alone.
 
-**A month is the usual unit here and it is not the only one.** Four collections
+**A month is the usual unit here and it is not the only one.** Five collections
 partition by **day** instead, and the first two below are the same series - the
 state ledger is derived from the published tree:
 
@@ -18,6 +18,7 @@ state ledger is derived from the published tree:
 | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` |
 | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `publish_day_metrics.write` |
 | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` |
+| `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` |
 
 Every rule on this page reads the same with "day" in place of "month": a writer
 appends to the day its own date names, a reader opens the days its window names,
@@ -171,6 +172,7 @@ Authority: owner, 2026-09-06.
 | Item health | `state/item-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_item_health` | Partitioned by **day** since 2026-09-13. It takes one date and appends to that day alone, filtering against `ITEM_HEALTH_KEY` in that one file. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which `merge=union` cannot express. |
 | Feed health | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_health` | Partitioned by **day** since 2026-09-13. The same one-date append, then it settles that one day file against `FEED_HEALTH_KEY`. Closed once the run's date leaves the day. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. Its mirror under `frontend/public/feed-health/` stays monthly, folded from that month's day files. |
 | Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
+| Counterfactual scores | `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` | Partitioned by **day** since 2026-09-14. The plan stage appends the run's own digest date and nothing else, so the day closes when the day's last run finishes. It is the one collection here whose day file is created even when the run has no rows for it: the plan job's commit step names the directory, and `git add` under `set -e` aborts on a path that is not there. Its only reader opens a trailing window, and `retention.prune_counterfactual_scores` deletes what falls below it. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.fold_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the fold is where the two grains meet, reading at most 31 day files and writing one. Closed the moment it is written; the days it summarises are gone, so there is nothing left to append. No file is committed yet. |
 | Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of that month's day files. It stays **monthly** while the ledger below it files by day, for the reason the folded item health gives: it summarises a month. Closed the moment it is written. No file is committed yet. |
