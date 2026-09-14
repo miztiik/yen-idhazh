@@ -69,7 +69,7 @@ from idhazh.classify.calls import (
     call_two_output_tokens,
     call_two_user_turn,
 )
-from idhazh.contracts.app_config import AppConfig, TurnsConfig
+from idhazh.contracts.app_config import AppConfig, ModelsConfig, TurnsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
@@ -111,7 +111,7 @@ def weights_digest(weights: Path) -> str:
     return digest.hexdigest()
 
 
-def refuse_undeclared_weights(weights: Path, app: AppConfig, role: str = "summarize") -> str:
+def refuse_undeclared_weights(weights: Path, models: ModelsConfig, role: str = "summarize") -> str:
     """Hash the file and compare it with the block that configures it.
 
     `inference.declared_for` is the sha256 of the entry its inference block
@@ -119,7 +119,7 @@ def refuse_undeclared_weights(weights: Path, app: AppConfig, role: str = "summar
     disagree. So this is the one comparison config cannot make for itself: the
     bytes on this disk against the bytes the run was tuned for.
     """
-    entry = getattr(app.models, role)
+    entry = getattr(models, role)
     declared = entry.inference.declared_for
     if declared is None:
         raise WrongWeightsError(
@@ -632,6 +632,7 @@ def run_item(
     *,
     label: str,
     app: AppConfig,
+    models: ModelsConfig,
     endpoint: str,
     tokenizer: Tokenizer,
     timeout: float,
@@ -640,7 +641,7 @@ def run_item(
     question_tokens: int | None,
 ) -> Reading:
     article = sample.article
-    model = app.models.summarize
+    model = models.summarize
     table = element_table(article, config=app.elements)
     first = build_call_one_request(
         article,
@@ -695,6 +696,7 @@ def pick_samples(
     samples: Sequence[Sample],
     *,
     app: AppConfig,
+    models: ModelsConfig,
     tokenizer: Tokenizer,
     wanted: int,
     prompt_ceiling: int,
@@ -706,7 +708,7 @@ def pick_samples(
     prompt is tokenised by the server that will answer it, so "fits" is a fact
     rather than a words-to-tokens rule of thumb.
     """
-    model = app.models.summarize
+    model = models.summarize
     chosen: list[tuple[Sample, int]] = []
     for seen, sample in enumerate(samples, start=1):
         table = element_table(sample.article, config=app.elements)
@@ -875,9 +877,10 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = config.load(REPO_ROOT / "config")
     app = settings.app
-    model = app.models.summarize
+    models = settings.models
+    model = models.summarize
     try:
-        digest = refuse_undeclared_weights(args.weights, app)
+        digest = refuse_undeclared_weights(args.weights, models)
     except WrongWeightsError as refusal:
         print(f"REFUSED: {refusal}", file=sys.stderr)
         return 2
@@ -944,7 +947,12 @@ def main(argv: list[str] | None = None) -> int:
 
         chosen = (
             pick_samples(
-                samples, app=app, tokenizer=tokenizer, wanted=wanted, prompt_ceiling=ceiling
+                samples,
+                app=app,
+                models=models,
+                tokenizer=tokenizer,
+                wanted=wanted,
+                prompt_ceiling=ceiling,
             )
             if wanted
             else []
@@ -994,6 +1002,7 @@ def main(argv: list[str] | None = None) -> int:
                     sample,
                     label=label,
                     app=app,
+                    models=models,
                     endpoint=endpoint,
                     tokenizer=tokenizer,
                     timeout=timeout,

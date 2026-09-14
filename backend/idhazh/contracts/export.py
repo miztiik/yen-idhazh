@@ -11,7 +11,7 @@ import argparse
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.app_config import AppConfig, ModelsConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
@@ -83,6 +83,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     IconManifest,
     ItemHealthRow,
     LabelRow,
+    ModelsConfig,
     ObservationIndexRow,
     PublicEvalRow,
     PublicFeedRow,

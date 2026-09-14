@@ -446,7 +446,14 @@ interface RawConfig {
 	assist?: Partial<AssistConfig>;
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
-  models?: { summarize?: { inference?: Partial<InferenceConfig> } };
+	/** Which file under `config/models/` holds the active model. The whole
+	 * model left `idhazh.json` on 2026-09-14; this names where it went. */
+	models_file?: string;
+}
+
+/** The active model's own file. Only the one block a console panel reads. */
+interface RawModels {
+	summarize?: { inference?: Partial<InferenceConfig> };
 }
 
 /** Keys the `digest` block carries that no page reads.
@@ -549,6 +556,24 @@ const raw = once<RawConfig>('config', 'idhazh.json');
  * fallback below exists for.
  */
 const appearance = once<RawAppearance>('config', 'appearance.json');
+
+/** The active model's file, found by following the pointer and never by name.
+ *
+ * Read the same way `once` reads a fixed path, but the path is a value rather
+ * than a literal: a build that spelled the filename would keep reading the old
+ * model on the day somebody swapped the pointer, and would show a context
+ * window the run never used.
+ */
+let heldModels: RawModels | undefined;
+function models(): RawModels {
+	if (heldModels === undefined) {
+		const pointer = raw().models_file;
+		const read =
+			pointer === undefined ? null : readJson<RawModels>('config', ...pointer.split('/'));
+		heldModels = frozen(read ?? ({} as RawModels));
+	}
+	return heldModels;
+}
 
 /** Three layers, most specific last: defaults, the legacy block, the new file.
  *
@@ -664,7 +689,7 @@ export function visualsConfig(): VisualsConfig {
 }
 
 export function inferenceConfig(): InferenceConfig {
-	return { ...INFERENCE_DEFAULTS, ...(raw().models?.summarize?.inference ?? {}) };
+	return { ...INFERENCE_DEFAULTS, ...(models().summarize?.inference ?? {}) };
 }
 
 export function retentionConfig(): RetentionConfig {
