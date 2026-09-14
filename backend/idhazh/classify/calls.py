@@ -37,7 +37,7 @@ article's own length picked, and the fields the grammar will hold this reply to.
 The question used to carry both jobs in full and cost 687 tokens an item on
 every item for ever, because the article in front of it differs and a prefix
 cache cannot reach past it - 69.7 s an item at the measured 9.85 tokens a second
-(`docs/reference/benchmarks/2026-09-12-instructions-in-front.md`).
+(`docs/reference/benchmarks/instructions-in-front.md`).
 
 The picture they lead to is `idhazh.visual_planner`, which decides whether an
 item gets a chart. It stays there: it is a different subject that happened to
@@ -339,7 +339,7 @@ def call_one_schema() -> dict[str, Any]:
 #: tokens and `parse_call_one` failed at character 2,805 of it - measured
 #: 2026-09-12 on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding, one
 #: reply, no spread
-#: (`docs/reference/benchmarks/2026-09-12-instructions-in-front.md`).
+#: (`docs/reference/benchmarks/instructions-in-front.md`).
 MEASURED_REPLY_CHARACTERS: Final = 2805
 MEASURED_REPLY_TOKENS: Final = 900
 #: **An estimate, and it is labelled one** (Guardrail #10). It is taken from a
