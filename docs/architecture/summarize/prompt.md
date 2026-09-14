@@ -452,12 +452,31 @@ instructions are one set for every model
 | `turn_closing` | closes a turn | `<\|im_end\|>\n` |
 | `reply_opening` | where the model starts writing, reasoning off | `<\|im_start\|>assistant\n<think>\n\n</think>\n\n` |
 | `reply_opening_thinking` | the same, reasoning on | `<\|im_start\|>assistant\n<think>\n` |
+| `system_role` | own turn, or folded into the first user turn | `own_turn` |
+| `system_joiner` | what separates the two when they share a turn | `null` - nothing to separate |
+| `thinking_kwarg` | the template variable that turns reasoning off | `enable_thinking` |
 
 **Four validators, because each failure is silent.** `turn_opening` must name
 `$role` - a substitution over a string that names nothing returns it unchanged
-and renders every turn anonymous. The other three may not be empty;
+and renders every turn anonymous. The other three markers may not be empty;
 `continued_prompt` splices call 2 onto `turn_closing`, so an empty seam joins
 two turns into one and the grammar still answers.
+
+**The last three arrived on 2026-09-14, and each carries a refusal.** They are
+the facts a model cannot share with another model: where the system text goes,
+what holds it apart from the article when it shares a turn, and which variable
+name the runtime is told. `system_role` is a closed choice of two, because each
+value is a turn topology - a code path - and a free-form string here would be a
+template language in config. `system_joiner` is required under
+`fold_into_first_user` and refused under `own_turn`, so it is never set on the
+arm that ignores it. `thinking_kwarg` null means this template reads no
+variables at all, the request then carries no `chat_template_kwargs`, and the
+entry refuses that beside `inference.thinking` true - a claim nothing can
+satisfy.
+
+**The wording does not follow them.** A model that needs different
+instructions is a model that failed qualification, not a model that needs a
+file ([model-boundary.md](model-boundary.md)).
 
 **The validators check the shape; the server checks the values.** A marker that
 passes all four and is still wrong for these weights was, until 2026-09-14, a
@@ -960,9 +979,15 @@ not open.
 
 ## Model compatibility is mechanical
 
-The request sends `chat_template_kwargs.enable_thinking` from
-`models.summarize.inference.thinking`. The configured value is false. The pipeline does
-not rely on `/nothink` or another instruction in the untrusted user turn.
+The chat route sends `chat_template_kwargs` with one key, and the key is named
+by `models.summarize.turns.thinking_kwarg` rather than spelled in this project's
+source - it is a variable in somebody else's Jinja template, so it moves when
+the model does. On the configured weights it is `enable_thinking`, and its value
+is `models.summarize.inference.thinking`, which is false. An entry may declare
+it null, which means the template reads no variables and the request sends no
+`chat_template_kwargs` at all. The two calls the digest run makes render their
+own prompt bytes and send none either way. The pipeline does not rely on
+`/nothink` or another instruction in the untrusted user turn.
 
 The control rejects reasoning in either channel:
 

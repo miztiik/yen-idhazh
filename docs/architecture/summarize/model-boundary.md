@@ -94,8 +94,8 @@ design.
 | --- | --- | --- |
 | How a turn opens and closes | Envelope, per model | Different between model families; nothing this project wrote decides it |
 | How an assistant reply opens | Envelope, per model | A generation prompt ends with more than a role header, and what it ends with is the model's |
-| Whether a system role exists, and where its text goes when it does not | Envelope, per model | A turn topology. The bytes do not change; their address does |
-| Which template keyword turns reasoning off | Envelope, per model | It is a variable name belonging to that model's template |
+| Whether a system role exists, and where its text goes when it does not | Envelope, per model | A turn topology. The bytes do not change; their address does. `turns.system_role` is a closed choice of two, and `turns.system_joiner` is what separates the two blocks when they share a turn |
+| Which template keyword turns reasoning off | Envelope, per model | It is a variable name belonging to that model's template. `turns.thinking_kwarg` carries it, and null means the template reads none |
 | Which control tokens the sanitizer strips | Envelope, per model | A forged turn is only forged in a syntax some model honours |
 | The window, the batch sizes, the budgets | Envelope, per model | Measured against those weights, and pinned to their digest |
 | **The instructions** | **Content, global** | See below |
@@ -121,8 +121,20 @@ instructions to score well is a model that failed, not a model that needs a
 file. Keeping the words fixed is what makes the comparison honest.
 
 A model with no system role is the case that looks like an exception and is
-not. The same bytes go to a different address, so the prompt digest does not
-move and an envelope field records that the placement changed.
+not. The same bytes go to a different address: `turns.system_role` says which
+address, and `backend/idhazh/prompts/*.txt` is untouched either way.
+
+**The two stamps disagree about whether they can see that, and the difference
+is the reason the envelope is declared rather than inferred.** The digest run's
+`prompt_sha256` renders both turns through the envelope, so a placement change
+moves it exactly as a reworded instruction would - measured 2026-09-14: the
+same two turns render 28 bytes shorter under the fold and the digest moves. The
+qualification run's stamp does not. `stages/qualify.py` hands `build_inputs`
+the content-only digest from `summarize.prompt_inputs`, which takes no envelope
+and carries no turn marker, so nothing on `turns` can move it - and the eleven
+gates are what adopt a model. A candidate compared through a digest that is
+blind to how its turns were written needs the envelope stated on the entry and
+checked against the running server, which is arm 1 of the start-up proof.
 
 ## Two shapes, and which one a run writes down
 
@@ -160,7 +172,9 @@ Three steps, in order, all reading the entry and never a model name.
 
 1. **Place the system text.** Its own turn, or folded into the first user turn
    behind a declared joiner. A closed choice of two, because each is a turn
-   topology and a free-form string would be a template language in config.
+   topology and a free-form string would be a template language in config. The
+   joiner is required under the fold and refused beside a system turn, so the
+   field is never set on the arm that would ignore it.
 2. **Wrap the turns.** Substitute the role into the opening, append the
    closing, and end with the reply opening the model expects.
 3. **Build the request.** Attach the output schema, ask for the prompt cache,
@@ -332,11 +346,15 @@ second one arrives within a release of the first.
 ## What is wrong with the boundary today
 
 Both shims exist and both work, and the schema constrains the decode on both
-transports - measured on build b10444, 2026-09-12. What is wrong is **where the
-model-shaped facts are declared.** The system placement and the thinking keyword
-are spelled in source; arm 2 of the bench indexes a config key that does not
-exist, so it cannot run at all. The boundary is real, but it is not yet
-configuration all the way down.
+transports - measured on build b10444, 2026-09-12. The system placement and the
+thinking keyword stopped being source on 2026-09-14 and are entry fields now.
+
+What is left is **the one control that is still written for the family we
+happen to run.** The sanitizer's control-token pattern knows three model
+families, and it is the control that keeps a forged turn out of an article
+(Guardrail #11) - so an entry may declare markers the pattern would not strip,
+and nothing refuses it. That is a reader-safety boundary, so it is surfaced
+rather than adapted.
 
 The turn envelope is no longer part of that list. It sits on the model entry,
 and since 2026-09-14 the five proofs above reconcile it against the running

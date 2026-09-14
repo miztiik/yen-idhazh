@@ -36,7 +36,13 @@ from typing import IO, Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
-from idhazh.contracts.app_config import InferenceConfig, ModelEntry, ModelRef, TurnsConfig
+from idhazh.contracts.app_config import (
+    InferenceConfig,
+    ModelEntry,
+    ModelRef,
+    SystemPlacement,
+    TurnsConfig,
+)
 
 # One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
 # read it here: the argv the server binds with, and the address the stage posts
@@ -125,12 +131,30 @@ class TurnMarkers:
     turn_closing: str
     reply_opening: str
     reply_opening_thinking: str
+    system_role: SystemPlacement
+    #: Empty under `own_turn`, where nothing reads it. The contract refuses a
+    #: fold that declares no joiner, so the empty string is unreachable on the
+    #: arm that does read it.
+    system_joiner: str
 
     def turn(self, role: str, content: str) -> str:
         """One whole turn. `substitute` rather than `safe_substitute`: a renamed
         placeholder raises here instead of reaching a model as the literal it
         looks like (`docs/architecture/summarize/prompt.md`)."""
         return self.turn_opening.substitute(role=role) + content + self.turn_closing
+
+    def conversation(self, *, system: str, user: str) -> str:
+        """Both turns, with the system text at the address this model's template gives it.
+
+        Two code paths chosen by a value, never by a model id. The fold is the
+        model with no system role: the same bytes, one turn earlier, behind the
+        joiner the entry declares. What the turns say does not change and cannot
+        - the instructions are one set for every model
+        (`docs/architecture/summarize/model-boundary.md`).
+        """
+        if self.system_role is SystemPlacement.FOLD_INTO_FIRST_USER:
+            return self.turn("user", system + self.system_joiner + user)
+        return self.turn("system", system) + self.turn("user", user)
 
     def opening(self, *, thinking: bool) -> str:
         return self.reply_opening_thinking if thinking else self.reply_opening
@@ -159,13 +183,20 @@ class TurnMarkers:
 
 @lru_cache(maxsize=8)
 def _markers(
-    turn_opening: str, turn_closing: str, reply_opening: str, reply_opening_thinking: str
+    turn_opening: str,
+    turn_closing: str,
+    reply_opening: str,
+    reply_opening_thinking: str,
+    system_role: SystemPlacement,
+    system_joiner: str,
 ) -> TurnMarkers:
     return TurnMarkers(
         turn_opening=Template(turn_opening),
         turn_closing=turn_closing,
         reply_opening=reply_opening,
         reply_opening_thinking=reply_opening_thinking,
+        system_role=system_role,
+        system_joiner=system_joiner,
     )
 
 
@@ -178,16 +209,21 @@ def turn_markers(turns: TurnsConfig) -> TurnMarkers:
     accept every reply.
     """
     return _markers(
-        turns.turn_opening, turns.turn_closing, turns.reply_opening, turns.reply_opening_thinking
+        turns.turn_opening,
+        turns.turn_closing,
+        turns.reply_opening,
+        turns.reply_opening_thinking,
+        turns.system_role,
+        # Null only under `own_turn`, where the fold never runs and nothing reads
+        # it. The contract refuses a fold whose joiner is absent or empty.
+        turns.system_joiner or "",
     )
 
 
 def render_prompt(*, system: str, user: str, thinking: bool, turns: TurnsConfig) -> str:
     """The prompt bytes a rendered completion is sent, from the turns it is made of."""
     markers = turn_markers(turns)
-    return markers.turn("system", system) + markers.turn("user", user) + markers.opening(
-        thinking=thinking
-    )
+    return markers.conversation(system=system, user=user) + markers.opening(thinking=thinking)
 
 
 def continued_prompt(prompt: str, *, reply: str, user: str, turns: TurnsConfig) -> str:
@@ -359,14 +395,21 @@ def request_payload(
     user: str,
     output_schema: dict[str, Any],
     inference: InferenceConfig,
+    thinking_kwarg: str | None,
     schema_name: str = "summary",
 ) -> dict[str, Any]:
     """The request body, with the output shape enforced by the decoder.
 
     `response_format` is the control that survives an injection: text inside the
     user turn can change the words, and cannot change the shape.
+
+    `thinking_kwarg` is handed in and has no default here. The name is a
+    variable in somebody else's Jinja template, so it belongs to the entry that
+    names the weights (`models.<role>.turns.thinking_kwarg`) - a default in this
+    signature would be a project constant sent to every model, which is what
+    this argument replaced.
     """
-    return {
+    payload: dict[str, Any] = {
         "model": model_id,
         "messages": [
             {"role": "system", "content": system},
@@ -381,11 +424,15 @@ def request_payload(
             "type": "json_schema",
             "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
         },
-        # Reasoning measurably increases hallucination when summarizing, and
-        # summarization is compression - every reasoning token is a chance to
-        # leave the source.
-        "chat_template_kwargs": {"enable_thinking": inference.thinking},
     }
+    # Reasoning measurably increases hallucination when summarizing, and
+    # summarization is compression - every reasoning token is a chance to leave
+    # the source. A null keyword is a template that reads none, so the key is
+    # absent rather than carrying a name no template answers to; the entry
+    # refuses that pair with reasoning asked for.
+    if thinking_kwarg is not None:
+        payload["chat_template_kwargs"] = {thinking_kwarg: inference.thinking}
+    return payload
 
 
 def completion_payload(
@@ -909,7 +956,16 @@ def _ask(url: str, payload: Mapping[str, Any] | None, *, timeout: float) -> Any:
         ) from unreachable
 
 
-def _rendered_by_the_server(endpoint: str, *, thinking: bool, timeout: float) -> str:
+def _rendered_by_the_server(
+    endpoint: str, *, thinking: bool, thinking_kwarg: str | None, timeout: float
+) -> str:
+    """The server's own render of the probe conversation, asked for the same way.
+
+    The keyword comes from the entry rather than from a literal here. Arm 1
+    compares our render against this one, so a keyword spelled in source would
+    make the probe agree with itself while both sides asked the template a
+    question it does not answer.
+    """
     body = _ask(
         apply_template_url(endpoint),
         {
@@ -917,7 +973,11 @@ def _rendered_by_the_server(endpoint: str, *, thinking: bool, timeout: float) ->
                 {"role": "system", "content": PROBE_SYSTEM},
                 {"role": "user", "content": PROBE_USER},
             ],
-            "chat_template_kwargs": {"enable_thinking": thinking},
+            **(
+                {"chat_template_kwargs": {thinking_kwarg: thinking}}
+                if thinking_kwarg is not None
+                else {}
+            ),
         },
         timeout=timeout,
     )
@@ -979,7 +1039,12 @@ def prove_the_entry(
     ours = render_prompt(
         system=PROBE_SYSTEM, user=PROBE_USER, thinking=inference.thinking, turns=model.turns
     )
-    theirs = _rendered_by_the_server(endpoint, thinking=inference.thinking, timeout=timeout)
+    theirs = _rendered_by_the_server(
+        endpoint,
+        thinking=inference.thinking,
+        thinking_kwarg=model.turns.thinking_kwarg,
+        timeout=timeout,
+    )
     the_render_agrees(
         ours=_token_ids(endpoint, ours, timeout=timeout),
         theirs=_token_ids(endpoint, theirs, timeout=timeout),

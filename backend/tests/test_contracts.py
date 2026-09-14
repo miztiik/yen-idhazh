@@ -53,6 +53,7 @@ from idhazh.contracts.app_config import (
     ObservabilityConfig,
     PageWeightConfig,
     RetentionConfig,
+    SystemPlacement,
     UiConfig,
     VisualSide,
     months_a_window_can_touch,
@@ -2143,6 +2144,93 @@ def point_at(root: Path, models_file: str) -> None:
     (root / "config" / "idhazh.json").write_text(
         canonical_json(raw), encoding="utf-8", newline="\n"
     )
+
+
+def entry_with(**turns: Any) -> dict[str, Any]:
+    """The committed entry with its turn envelope edited, as raw JSON.
+
+    Built off the committed file rather than written out here, so a required
+    field added to the entry later fails these tests at the edit that added it
+    rather than leaving them asserting against a shape nothing declares.
+    """
+    payload = committed_models_raw()
+    payload["summarize"]["turns"] |= turns
+    return payload
+
+
+def test_folding_the_system_text_without_a_joiner_is_refused() -> None:
+    """Decision 2, first half. The separator is what keeps the two blocks apart.
+
+    Absent, the last instruction and the opening fence of the untrusted block
+    render on one line. The prompt is still well formed, the grammar still
+    accepts the reply, and the only symptom is a worse summary.
+    """
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(entry_with(system_role="fold_into_first_user"))
+
+    assert "system_joiner is required under system_role='fold_into_first_user'" in str(
+        raised.value
+    )
+
+
+def test_a_joiner_declared_beside_a_system_turn_is_refused() -> None:
+    """Decision 2, second half. A dead field is a field somebody will trust.
+
+    `own_turn` gives the system text a turn of its own, so nothing joins it to
+    anything. A joiner set here is a value an operator chose, a reviewer read,
+    and no render ever applied.
+    """
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(entry_with(system_role="own_turn", system_joiner="\n\n"))
+
+    assert "where the system text has a turn of its own" in str(raised.value)
+
+
+def test_a_fold_that_declares_a_joiner_loads() -> None:
+    """The bite proof for both halves: the pair the refusals permit is legal."""
+    folded = ModelsConfig.model_validate(
+        entry_with(system_role="fold_into_first_user", system_joiner="\n\n")
+    )
+
+    assert folded.summarize.turns.system_joiner == "\n\n"
+
+
+def test_a_template_that_reads_no_keyword_may_not_be_asked_to_think() -> None:
+    """Decision 3, second half, and the two halves sit in different blocks.
+
+    A null keyword means the request carries no `chat_template_kwargs` at all,
+    so `inference.thinking` true asks for reasoning through a channel nothing
+    sends. Neither block can see the other, so the entry is where the pair is
+    checked.
+    """
+    payload = entry_with(thinking_kwarg=None)
+    payload["summarize"]["inference"]["thinking"] = True
+
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(payload)
+
+    assert "sends no chat_template_kwargs at all" in str(raised.value)
+
+
+def test_a_template_that_reads_no_keyword_loads_with_reasoning_off() -> None:
+    """The bite proof. Null is a legal declaration, not a broken entry."""
+    silent = ModelsConfig.model_validate(entry_with(thinking_kwarg=None))
+
+    assert silent.summarize.turns.thinking_kwarg is None
+    assert silent.summarize.inference.thinking is False
+
+
+def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> None:
+    """The name is a model fact, so the file that names the weights names it too.
+
+    It was spelled in `backend/idhazh/llm/server.py` and sent to every model
+    until 2026-09-14. The default is the incumbent's, which is why this asserts
+    the file carries it rather than asserting the default resolves.
+    """
+    raw = committed_models_raw()
+
+    assert raw["summarize"]["turns"]["thinking_kwarg"] == "enable_thinking"
+    assert committed_models().summarize.turns.system_role is SystemPlacement.OWN_TURN
 
 
 def changed_lines(before: str, after: str) -> int:

@@ -209,13 +209,31 @@ class InferenceConfig(Model):
 TURN_ROLE: Final = "role"
 
 
+class SystemPlacement(StrEnum):
+    """Where this model's template takes the system text. Two, and no third.
+
+    A turn topology, so it is an enum rather than a free-form string: what
+    "folded into the first user turn" MEANS is a code path, and expressing it as
+    data would need a template language in config - a second renderer nobody
+    tests (docs/architecture/summarize/model-boundary.md).
+    """
+
+    #: A system turn of its own, ahead of the first user turn. Every chat
+    #: template that has a system role.
+    OWN_TURN = "own_turn"
+    #: No system role exists, so the same bytes open the first user turn instead,
+    #: behind the joiner the entry declares. The same words at a different
+    #: address, never different words.
+    FOLD_INTO_FIRST_USER = "fold_into_first_user"
+
+
 class TurnsConfig(Model):
     """How one turn is written for the weights this entry names.
 
-    It is the envelope, never the content. These four strings decide where a
-    turn opens and closes and how a reply begins; what the turns SAY is
-    `backend/idhazh/prompts/*.txt` and is the same set for every model
-    (docs/architecture/summarize/model-boundary.md).
+    It is the envelope, never the content. These strings decide where a turn
+    opens and closes, where the system text goes and how a reply begins; what
+    the turns SAY is `backend/idhazh/prompts/*.txt` and is the same set for
+    every model (docs/architecture/summarize/model-boundary.md).
 
     They sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,
     which put a fact about somebody else's weights in a package this project
@@ -257,6 +275,46 @@ class TurnsConfig(Model):
         min_length=1,
         description="The same, with reasoning on. Recorded from the server that applies it.",
     )
+    system_role: SystemPlacement = Field(
+        default=SystemPlacement.OWN_TURN,
+        description=(
+            "Where this model's template takes the system text - its own turn, or "
+            "folded into the first user turn. It is read by "
+            "idhazh.llm.server.render_prompt, which never reads a model id: without "
+            "this field a model with no system role could not be configured at all, "
+            "only coded for. It has a default where the markers beside it have none, "
+            "because the default is the topology of every template that HAS a system "
+            "role rather than the incumbent's own string, and because arm 1 of "
+            "idhazh.llm.server.prove_the_entry refuses a run whose render disagrees "
+            "with the server's own render of the same turns - so a placement declared "
+            "wrong is caught before the first item rather than inherited in silence."
+        ),
+    )
+    system_joiner: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "What sits between the system text and the article when the two share a "
+            "turn. Required under fold_into_first_user and refused under own_turn: a "
+            "field that is read on one arm and ignored on the other is a field "
+            "somebody will set and trust. It may not be empty, because folding with no "
+            "separator runs the last instruction into the opening fence of the "
+            "untrusted block on one line, and the grammar still accepts the reply."
+        ),
+    )
+    thinking_kwarg: str | None = Field(
+        default="enable_thinking",
+        min_length=1,
+        description=(
+            "The template variable that turns this model's reasoning on and off, sent "
+            "as the one key of chat_template_kwargs. It is a name belonging to "
+            "somebody else's Jinja template, so it is a model fact and not a project "
+            "constant - it was spelled in this project's source and sent to every "
+            "model until 2026-09-14. Null means this template reads no keywords at "
+            "all, and then the request carries no chat_template_kwargs and "
+            "inference.thinking must be false; ModelEntry refuses the pair."
+        ),
+    )
     declared_for: Sha256 | None = Field(
         default=None,
         description=(
@@ -286,6 +344,33 @@ class TurnsConfig(Model):
                 "role header renders cleanly and says nothing about who is speaking"
             )
         return value
+
+    @model_validator(mode="after")
+    def _the_joiner_belongs_to_the_fold(self) -> Self:
+        """The joiner is required by one placement and read by no other.
+
+        Both directions raise, because both failures are silent. Absent under
+        the fold renders the instructions and the article as one unbroken line.
+        Present under `own_turn` is a value an operator set, a reviewer read,
+        and nothing ever applied.
+        """
+        folded = self.system_role is SystemPlacement.FOLD_INTO_FIRST_USER
+        if folded and self.system_joiner is None:
+            raise ValueError(
+                f"turns.system_joiner is required under system_role="
+                f"'{SystemPlacement.FOLD_INTO_FIRST_USER.value}' and is absent - "
+                "folding the system text into the first user turn with no declared "
+                "separator runs the last instruction into the opening fence of the "
+                "untrusted block, and the grammar still accepts the reply"
+            )
+        if not folded and self.system_joiner is not None:
+            raise ValueError(
+                f"turns.system_joiner is {self.system_joiner!r} under system_role="
+                f"'{SystemPlacement.OWN_TURN.value}', where the system text has a turn "
+                "of its own and nothing joins it to anything - remove the joiner, or "
+                f"declare system_role='{SystemPlacement.FOLD_INTO_FIRST_USER.value}'"
+            )
+        return self
 
 
 class ModelRef(Model):
@@ -376,6 +461,27 @@ class ModelEntry(ModelRef):
             "still accepts and nothing else can see is wrong."
         ),
     )
+
+    @model_validator(mode="after")
+    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
+        """Reasoning is asked for through a template keyword, so a null name refuses it.
+
+        The two halves sit in different blocks - the keyword is a fact about
+        somebody else's template and the switch is a decoding choice - so
+        neither block can see the pair and the entry has to. A null keyword with
+        reasoning on is a claim nothing can satisfy: the request carries no
+        `chat_template_kwargs` at all, the template renders its own default, and
+        the only symptom is whatever that default happens to be.
+        """
+        if self.turns.thinking_kwarg is None and self.inference.thinking:
+            raise ValueError(
+                f"models entry {self.id} sets turns.thinking_kwarg null, so the request "
+                "sends no chat_template_kwargs at all, and inference.thinking true, "
+                "which asks this template to turn reasoning on through a keyword "
+                "nothing sends. Name the keyword this model's template reads, or set "
+                "inference.thinking false"
+            )
+        return self
 
 
 class TierWeights(Model):
@@ -1089,6 +1195,30 @@ class ModelsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T03:00",
+            change=(
+                "models.<role>.turns gains system_role, system_joiner and "
+                "thinking_kwarg. system_role is a closed choice of own_turn and "
+                "fold_into_first_user; system_joiner is required under the fold and "
+                "refused under own_turn; thinking_kwarg names the template variable "
+                "chat_template_kwargs carries and defaults to the incumbent's "
+                "enable_thinking, with null meaning the request sends no template "
+                "keywords at all and inference.thinking must then be false. All three "
+                "sit on TurnsConfig, which ModelEntry carries and ModelRef does not, so "
+                "a run.json written before today still reads."
+            ),
+            why=(
+                "Plan 28 row #11. Where the system text goes and which keyword turns "
+                "reasoning off are facts about somebody else's chat template, and both "
+                "were spelled in this project's source and sent to every model - so a "
+                "model with no system role could not be configured at all, only coded "
+                "for. The prompt TEXT does not follow them onto the entry and cannot: "
+                "prose_changed_alone reports nothing whenever model_sha256 moved, so "
+                "per-model wording would hide every prompt edit that rode in on a swap. "
+                "Ruled by Andre, 2026-09-14."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T02:00",
             change=(

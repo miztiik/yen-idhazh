@@ -373,6 +373,7 @@ def _one_call(
         article,
         model_id=model_id,
         inference=inference,
+        thinking_kwarg=settings.models.summarize.turns.thinking_kwarg,
         prompt_config=settings.app.summarize,
     )
     started = time.monotonic()
