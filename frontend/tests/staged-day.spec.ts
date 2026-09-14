@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
 	DAY_FIELDS,
@@ -29,10 +29,19 @@ import {
  *
  * Runs in Node over the tree the build just staged, like the arithmetic tests
  * in `frame.spec.ts`. No page is loaded.
+ *
+ * **Nothing here reads the committed archive** (2026-09-15). The last test
+ * needs one day on the source side of the projection, and it used to take the
+ * newest one under `frontend/public/digest` - a walk over a collection every
+ * run appends to, banned by `CLAUDE.md` section 13 and Guardrail #12. It also
+ * inherited whatever the pipeline last wrote: on 2026-09-14 that was an empty
+ * day, which carries no vector block because it carries no stories, and the
+ * control failed over a day that was never its subject. It reads the canary day
+ * now, which the production embedder writes and which is fixed in size.
  */
 
 const STAGED = resolve(process.cwd(), 'static', 'digest');
-const COMMITTED = resolve(process.cwd(), 'public', 'digest');
+const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
 /** Traced along the render path, not guessed: `DigestList` scopes and filters
  * the list, and `DigestItem` with `ItemMeta`, `ItemVisual`, `LensChips`,
@@ -103,30 +112,38 @@ function staged(): Day[] {
 	return found;
 }
 
-/** The newest committed day, found by walking the tree rather than parsing it.
+/** The canary day that carries stories - the source the projection reads from.
  *
- * The control below needs one day that carries a vector block, and the newest
- * is the one the current writer produced. Parsing all of them to find one cost
- * a parse per published day and answered the same question sixteen times
- * (`CLAUDE.md` Guardrail #12).
+ * It used to be the newest day under `frontend/public/digest`, and that was a
+ * walk over a collection every run appends to: banned by `CLAUDE.md` section 13
+ * and Guardrail #12, and it cost more than a rule. On 2026-09-14 the pipeline
+ * published an empty day, an empty day carries no vector block because it
+ * carries no stories, and this control failed over a day that was never its
+ * subject. A committed day is frozen; the day that can still be wrong is the
+ * one a producer is writing.
+ *
+ * The canary is that day. `backend/utilities/build_canary_day.py` runs the
+ * production `build_embeddings` over the production `Embedder`, so the block it
+ * writes is the one the pipeline writes - not a fixture somebody typed - and
+ * the tree is a fixed nineteen quiet days plus one that publishes. Exactly one
+ * may carry stories; if that stops being true the builder changed shape, and
+ * this says so instead of picking one.
  */
-function newestCommittedDay(): Day {
-	const deepest = (at: string, depth: number): string =>
-		depth === 0
-			? at
-			: deepest(
-					join(
-						at,
-						readdirSync(at, { withFileTypes: true })
-							.filter((entry) => entry.isDirectory())
-							.map((entry) => entry.name)
-							.sort()
-							.at(-1) as string
-					),
-					depth - 1
-				);
-	const path = join(deepest(COMMITTED, 3), 'digest.json');
-	return { path, payload: JSON.parse(readFileSync(path, 'utf8')) };
+function canaryDayWithStories(): Day {
+	if (!existsSync(CANARY)) {
+		throw new Error(
+			`no canary tree at ${CANARY}. Run \`python backend/utilities/build_canary_day.py\`, ` +
+				'which `npm run build:canary` does for the browser suite'
+		);
+	}
+	const carrying = daysUnder(CANARY).filter((day) => items(day).length > 0);
+	if (carrying.length !== 1) {
+		throw new Error(
+			`the canary tree holds ${carrying.length} days with stories, not 1. ` +
+				'The builder changed shape and this control no longer knows which day to read'
+		);
+	}
+	return carrying[0]!;
 }
 
 function items(day: Day): Record<string, unknown>[] {
@@ -207,14 +224,17 @@ test('a staged visual carries the three fields the image needs', () => {
 });
 
 /**
- * The block this projection exists to drop, and the tree that must keep it.
+ * The block this projection exists to drop, and the day that must keep it.
  *
- * The vectors have one store - the committed day payloads - and one production
- * reader, the backend's index rebuild. If a day loses them the rebuild does not
- * raise: it writes every entry and a zero-byte vector file, and search answers
- * nothing for every query with no log line saying why.
+ * The vectors have one store - the day payload the producer writes - and one
+ * production reader, the backend's index rebuild. If a day loses them the
+ * rebuild does not raise: it writes every entry and a zero-byte vector file,
+ * and search answers nothing for every query with no log line saying why. So
+ * the drop and the keep are asserted together, in one test: proving only that
+ * staging drops the block would pass just as happily over a source that had
+ * already lost it.
  */
-test('the vectors are gone from the staged copy and still in the committed one', () => {
+test('the vectors are gone from the staged copy and still in the day it came from', () => {
 	for (const day of staged()) {
 		expect(
 			Object.keys(day.payload),
@@ -222,9 +242,16 @@ test('the vectors are gone from the staged copy and still in the committed one',
 		).not.toContain('embeddings');
 	}
 
-	const committed = newestCommittedDay();
+	const source = canaryDayWithStories();
+	const block = source.payload.embeddings as { vectors?: Record<string, unknown> } | null;
 	expect(
-		committed.payload.embeddings,
-		`${committed.path} carries no vector block - the index rebuild has no source left`
+		block,
+		`${source.path} carries no vector block - the index rebuild has no source left`
 	).not.toBeNull();
+	// An empty block is the same outage as a missing one, and it is the shape
+	// the rebuild cannot tell apart: every entry written, nothing to search.
+	expect(
+		Object.keys(block?.vectors ?? {}).length,
+		`${source.path} carries an empty vector block - the rebuild would write a zero-byte file`
+	).toBeGreaterThan(0);
 });
