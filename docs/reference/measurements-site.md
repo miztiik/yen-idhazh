@@ -139,7 +139,7 @@ is missing.
 
 The full record - conditions, method, both arms, the spread and what it does not
 settle - is
-[benchmarks/2026-09-12-prerender-on-and-off.md](benchmarks/2026-09-12-prerender-on-and-off.md).
+[benchmarks/prerender-on-and-off.md](benchmarks/prerender-on-and-off.md).
 
 ## What compression level the reader actually pays, 2026-09-10
 

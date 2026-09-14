@@ -2,15 +2,16 @@
 
 **Last Updated**: 2026-09-13
 
-Frozen. This is one session on one day; it is not updated when a later run
-disagrees. A later run gets its own record.
+Living, one question one answer. The reading below was taken on one day and
+the date is in the title; a re-run of this measurement REPLACES this page and
+moves **Last Updated**, and git history holds what it said.
 
 Plan 11 row #3f had to raise `models.summarize.inference.n_ctx` so both calls
 fit at the truncation cap, and it was dispatched with a table measured on one
 cap-length article. This session re-measured the whole sequence on eight, took
 the memory reading at three windows, and decomposed call 1's prompt into the
 three things that pay for it. It supersedes the sizing half of
-[`2026-09-12-two-call-re-read.md`](2026-09-12-two-call-re-read.md); that record's
+[`two-call-re-read.md`](two-call-re-read.md); that record's
 re-read findings stand and are not touched here.
 
 ## Conditions
@@ -156,6 +157,6 @@ the row that owns it is row #3d's.
 
 ## See also
 
-- [`2026-09-12-two-call-re-read.md`](2026-09-12-two-call-re-read.md) - where call 2's re-read tokens go. Its sizing table is superseded by this record; its re-read findings are not.
+- [`two-call-re-read.md`](two-call-re-read.md) - where call 2's re-read tokens go. Its sizing table is superseded by this record; its re-read findings are not.
 - [`../../architecture/summarize/prompt.md`](../../architecture/summarize/prompt.md) - the page that owns the window, and what the assertion reads.
 - [`../measurements.md`](../measurements.md) - the instrument log, which carries the memory table above.
