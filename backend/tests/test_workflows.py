@@ -19,7 +19,7 @@ import tempfile
 import tomllib
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Final, cast
+from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -183,19 +183,19 @@ WEIGHTS_CHECKS: Final = {
         "Fetch runtime and weights",
         "Verify the weights",
         "Start the model",
-        '["models"]["summarize"]["sha256"]',
+        '["summarize"]["sha256"]',
     ),
     ("measure.yml", "runtime"): (
         "Fetch runtime and weights",
         "Verify the weights",
         "Measure runtime candidate",
-        '["models"]["summarize"]["sha256"]',
+        '["summarize"]["sha256"]',
     ),
     ("measure.yml", "batched"): (
         "Download the summarizer weights",
         "Verify the weights",
         "Benchmark parallel decode",
-        '["models"]["summarize"]["sha256"]',
+        '["summarize"]["sha256"]',
     ),
     # The one candidate whose digest is not a config field: the plan job decides
     # it once, from the dispatch input or from config, and republishes it.
@@ -687,6 +687,12 @@ def _run_bodies(workflow: dict[str, object]) -> list[str]:
 
 
 CONFIG_FILE_NAME: Final = "idhazh.json"
+#: The key in `config/idhazh.json` that names the active model's own file. A
+#: program that indexes it is no longer reading the pointer file from that
+#: point on, so this is what tells the two documents apart.
+MODELS_POINTER_KEY: Final = "models_file"
+#: What this file calls the document the pointer names, in a key-path result.
+MODELS_DOCUMENT: Final = "models"
 
 
 def _inline_programs(script: str) -> list[str]:
@@ -743,37 +749,81 @@ def _own_nodes(scope: ast.AST) -> list[ast.AST]:
     return owned
 
 
-def _config_mapping_names(nodes: list[ast.AST]) -> frozenset[str]:
-    """The names one scope binds to a parsed `idhazh.json`.
+def _committed_models() -> dict[str, Any]:
+    """The active model's file, found the way the workflows find it.
 
-    Two spellings reach the file: a direct `json.load(open(...))`, and a copy
-    of `config/` re-read through a path built earlier. Keying on the filename
+    Never by filename. A workflow follows the pointer, so a test that named the
+    file would keep passing on the day the pointer moved and the workflow read
+    something else.
+    """
+    pointer = json.loads(read_text(CONFIG_DIR / CONFIG_FILE_NAME))[MODELS_POINTER_KEY]
+    payload: dict[str, Any] = json.loads(read_text(CONFIG_DIR / pointer))
+    return payload
+
+
+def _follows_the_pointer(node: ast.AST, tainted: frozenset[str]) -> bool:
+    """Does this expression reach the model file rather than the pointer file?
+
+    The whole model left `config/idhazh.json` on 2026-09-14, so a program that
+    reads it opens two files: the pointer, and whatever the pointer names. A key
+    path resolved against the wrong one of those two is a guard that passes on a
+    key nothing carries, which is worse than no guard.
+
+    Reaching `models_file` once taints the name it is bound to, and a name built
+    out of a tainted name is tainted too - which is how the two-step form the
+    workflows use (build the path, then open it) is followed.
+    """
+    return any(
+        (
+            isinstance(inner, ast.Subscript)
+            and isinstance(inner.slice, ast.Constant)
+            and inner.slice.value == MODELS_POINTER_KEY
+        )
+        or (isinstance(inner, ast.Name) and inner.id in tainted)
+        for inner in ast.walk(node)
+    )
+
+
+def _config_mapping_names(nodes: list[ast.AST]) -> tuple[frozenset[str], frozenset[str]]:
+    """The names one scope binds to each of the two committed config documents.
+
+    Returns the names holding a parsed `idhazh.json`, and the names holding the
+    model file it points at.
+
+    Two spellings reach a file: a direct `json.load(open(...))`, and a copy of
+    `config/` re-read through a path built earlier. Keying on the filename
     rather than on one call shape is what lets this see the copy the runtime
     sweep writes. The scan repeats until it stops growing, so a path built two
     statements before it is read is still recognised.
     """
     aliases: set[str] = set()
     mappings: set[str] = set()
+    models: set[str] = set()
+    tainted: set[str] = set()
     while True:
-        before = (frozenset(aliases), frozenset(mappings))
+        before = (frozenset(aliases), frozenset(mappings), frozenset(models))
         for node in nodes:
             if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                 continue
             target = node.targets[0]
             if not isinstance(target, ast.Name):
                 continue
-            if not _reads_the_config_file(node.value, frozenset(aliases)):
+            reachable = frozenset(aliases | mappings | models)
+            if not _reads_the_config_file(node.value, reachable):
                 continue
+            follows = _follows_the_pointer(node.value, frozenset(tainted))
+            if follows:
+                tainted.add(target.id)
             if isinstance(node.value, ast.Call) and _parses_json(node.value):
-                mappings.add(target.id)
+                (models if follows else mappings).add(target.id)
             else:
                 aliases.add(target.id)
-        if before == (frozenset(aliases), frozenset(mappings)):
-            return frozenset(mappings)
+        if before == (frozenset(aliases), frozenset(mappings), frozenset(models)):
+            return frozenset(mappings), frozenset(models)
 
 
-def _config_key_paths(program: str) -> list[tuple[str, ...]]:
-    """Every literal key path an inline program indexes on the parsed config.
+def _config_key_paths(program: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Every literal key path an inline program indexes, and which document on.
 
     A chain nested inside a longer one is skipped, because resolving the longest
     chain resolves every prefix of it. A key that is not a literal string cannot
@@ -786,10 +836,10 @@ def _config_key_paths(program: str) -> list[tuple[str, ...]]:
         for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     )
-    found: list[tuple[str, ...]] = []
+    found: list[tuple[str, tuple[str, ...]]] = []
     for scope in scopes:
         nodes = _own_nodes(scope)
-        mappings = _config_mapping_names(nodes)
+        mappings, models = _config_mapping_names(nodes)
         nested = {id(node.value) for node in nodes if isinstance(node, ast.Subscript)}
         for node in nodes:
             if not isinstance(node, ast.Subscript) or id(node) in nested:
@@ -805,12 +855,14 @@ def _config_key_paths(program: str) -> list[tuple[str, ...]]:
                 current = current.value
             if not keys:
                 continue
-            if (isinstance(current, ast.Name) and current.id in mappings) or (
+            if isinstance(current, ast.Name) and current.id in models:
+                found.append((MODELS_DOCUMENT, tuple(reversed(keys))))
+            elif (isinstance(current, ast.Name) and current.id in mappings) or (
                 isinstance(current, ast.Call)
                 and _parses_json(current)
                 and _reads_the_config_file(current, frozenset())
             ):
-                found.append(tuple(reversed(keys)))
+                found.append((CONFIG_FILE_NAME, tuple(reversed(keys))))
     return found
 
 
@@ -4011,7 +4063,7 @@ def test_the_health_check_names_the_weights_that_answered() -> None:
     script = health.get("run")
     assert isinstance(script, str)
 
-    assert '["models"]["summarize"]["id"]' in script, "the alias comes from config"
+    assert '["summarize"]["id"]' in script, "the alias comes from config"
     assert "/v1/models" in script, "assert the served alias"
     assert "/props" in script, "assert the loaded path"
     assert _plan_output("summarize_file") in script
@@ -4093,9 +4145,10 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     step = _step(workflow, "plan", "id", "models")
     script = _script(step, "digest.yml/plan/models")
     assert "config/idhazh.json" in script, "the refs come from config"
+    assert MODELS_POINTER_KEY in script, "and through the pointer, never by filename"
     assert '>> "$GITHUB_OUTPUT"' in script
 
-    models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
+    models = _committed_models()
     assert _run_the_inline_program(script, REPO_ROOT) == {
         f"{role}_{field}": models[role][field]
         for role in set(WEIGHTS_CACHE_ROLES.values())
@@ -4105,10 +4158,12 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     # Every ref is substituted straight into a shell command downstream, so the
     # one step that writes them is where a value that is not one bare word has
     # to stop. Nothing else between config and those commands can catch it.
-    (tmp_path / "config").mkdir()
+    pointer = "models/probe.json"
+    (tmp_path / "config" / "models").mkdir(parents=True)
     models["summarize"]["file"] = "Qwen3-8B-Q4_K_M.gguf; rm -rf /"
+    (tmp_path / "config" / pointer).write_text(json.dumps(models), encoding="utf-8")
     (tmp_path / "config" / "idhazh.json").write_text(
-        json.dumps({"models": models}), encoding="utf-8"
+        json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
         _run_the_inline_program(script, tmp_path)
@@ -4117,31 +4172,41 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
 def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> None:
     """A key that moved is a `KeyError` on the runner, and nothing earlier looks.
 
-    The inline programs index `config/idhazh.json` by literal key. The schema
+    The inline programs index the committed config by literal key. The schema
     cannot catch a stale one: the runtime sweep reads its copy as a plain dict,
     indexes it, and only validates the result afterwards, so the index raises
     first. This is the one place a renamed or moved knob is caught before a job
     spends a runner minute reaching for it.
+
+    Two documents since 2026-09-14. A program that indexes `models_file` is
+    reading the model's own file from that point on, so the key path is resolved
+    against whichever of the two it really opened - resolving both against the
+    pointer file would pass on a key neither carries.
     """
-    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    seen: set[tuple[str, tuple[str, ...]]] = set()
+    documents: dict[str, object] = {
+        CONFIG_FILE_NAME: json.loads(read_text(CONFIG_DIR / CONFIG_FILE_NAME)),
+        MODELS_DOCUMENT: _committed_models(),
+    }
+    seen: set[tuple[str, str, tuple[str, ...]]] = set()
     for filename, workflow in sorted(_load_workflows().items()):
         for script in _run_bodies(workflow):
             for program in _inline_programs(script):
-                for keys in _config_key_paths(program):
-                    seen.add((filename, keys))
-                    node: object = committed
+                for document, keys in _config_key_paths(program):
+                    seen.add((filename, document, keys))
+                    node: object = documents[document]
                     for depth, key in enumerate(keys):
                         assert isinstance(node, dict) and key in node, (
-                            f"{filename} indexes config/idhazh.json at "
+                            f"{filename} indexes the {document} document at "
                             f"{'.'.join(keys)}, and there is no "
                             f"{'.'.join(keys[: depth + 1])}"
                         )
                         node = cast(dict[str, object], node)[key]
 
     # The sweep rewrites its own copy of the config, which is the read that went
-    # stale. Naming it keeps this test from passing by finding nothing.
-    assert ("measure.yml", ("models", "summarize", "inference")) in seen
+    # stale. Naming it keeps this test from passing by finding nothing, and it
+    # names a path in EACH document so neither half can go quiet on its own.
+    assert ("measure.yml", MODELS_DOCUMENT, ("summarize", "inference")) in seen
+    assert ("digest.yml", CONFIG_FILE_NAME, (MODELS_POINTER_KEY,)) in seen
 
 
 def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
@@ -4159,7 +4224,7 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     keys = dict(_runtime_cache_keys(workflow))
     assert set(keys) == set(WEIGHTS_CACHE_ROLES)
 
-    models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
+    models = _committed_models()
     for job_name, role in WEIGHTS_CACHE_ROLES.items():
         weights = _plan_output(f"{role}_file")
         revision = _plan_output(f"{role}_revision")

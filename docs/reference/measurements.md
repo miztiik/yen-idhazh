@@ -654,8 +654,8 @@ below are rewritten to their repository-relative form.
 The build is llama.cpp `b10444`, commit `5f754ea0e`, and `digest.yml` pins
 `b10598` - 154 builds away, so a line this build prints is evidence about a
 neighbour of the pinned build rather than about the pinned build itself. And the
-weights are `Qwen3-8B-Q4_K_M.gguf`, 5,027,783,488 bytes: the 8B, where
-`config/idhazh.json` names a 9B for `models.summarize`. The 9B is not on this
+weights are `Qwen3-8B-Q4_K_M.gguf`, 5,027,783,488 bytes: the 8B, where the
+active model file names a 9B for `models.summarize`. The 9B is not on this
 machine. Every megabyte below is therefore the 8B's and none of them may be
 quoted as the 9B's. What does carry across is which lines the binary prints and
 what those lines are called, because that is a property of the binary - and the
@@ -1913,7 +1913,7 @@ larger than that by whatever the rest of the machine was holding, and that amoun
 has never been measured here.
 
 **Two: summed RSS is not committed memory.**
-`config/idhazh.json` leaves `models.summarize.inference.load_mode` null, so
+The active model file leaves `models.summarize.inference.load_mode` null, so
 `idhazh.llm.server.server_argv` passes no `-lm` flag and llama.cpp maps the weight
 file instead of reading it into anonymous memory. The weights are
 `Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes - **5.29 GiB, measured 2026-08-23**.
