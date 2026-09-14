@@ -31,7 +31,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1a | The payload carries the chart's data, and nothing draws it from there yet | - | A | DONE #687 | p12-r1a | #687 | worker |
 | 1b | The browser draws the chart, and the pipeline stops rendering | 1a | B | DONE #689 | p12-r1b | #689 | worker |
-| 2 | The drawing takes the width it is given | 1b | C | IN-FLIGHT #716 | p12-r2 | #716 | worker |
+| 2 | The drawing takes the width it is given | 1b | C | DONE #716 | p12-r2 | #716 | worker |
 | 3 | Numbers a reader can say out loud | 1b | C | PENDING | - | - | - |
 | 4 | The smallest label a person can read, and enough marks to be worth the space | 2, 3 | D | PENDING | - | - | - |
 | 5 | A caption, and one mark that lands first | 4 | E | PENDING | - | - | - |
