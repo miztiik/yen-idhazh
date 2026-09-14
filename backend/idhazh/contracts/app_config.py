@@ -350,9 +350,24 @@ class ModelEntry(ModelRef):
     `RunRecord.inputs.prompt_sha256` digests both turns rendered through them.
 
     Do not move `turns` down onto `ModelRef` as a tidy-up. That is the change
-    this split exists to prevent.
+    this split exists to prevent. `arch` is here for the same reason and not
+    for a different one.
     """
 
+    arch: str = Field(
+        min_length=1,
+        description=(
+            "The architecture name inside the GGUF - its `general.architecture` key, "
+            "which reads `qwen35` for the weights this entry names. Required and with "
+            "no default, for the reason `turns` is: an entry that inherits the "
+            "incumbent's architecture claims something nobody checked. "
+            "`idhazh.llm.server.prove_the_entry` reads the key back out of the file "
+            "the server was pointed at and refuses the run before the first item when "
+            "the two disagree, which is what makes this a fact rather than a claim. It "
+            "catches a repackaged GGUF under a familiar name - the one case where the "
+            "digest, the alias and the filename all agree and only the words get worse."
+        ),
+    )
     turns: TurnsConfig = Field(
         description=(
             "The turn envelope these weights are rendered with. Required and with no "
@@ -1074,6 +1089,25 @@ class ModelsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T02:00",
+            change=(
+                "models.<role>.arch, required: the architecture name inside the GGUF. "
+                "It sits on ModelEntry, not on ModelRef, so a run.json written before "
+                "today still reads - run_manifest.ModelUse embeds ModelRef, and a "
+                "required field there would stop this build reading yesterday's run "
+                "(CLAUDE.md section 11)."
+            ),
+            why=(
+                "Plan 28 row #5. Row #2 moved the turn envelope onto the entry, so the "
+                "entry now claims how a turn opens and closes and nothing checked the "
+                "claim against the running server. The start-up probe checks all five "
+                "claims before the first item, and this is the field the fourth of them "
+                "compares: the weights on disk declare an architecture, and an entry "
+                "that names a different one is serving a repackaged file under a "
+                "familiar name. Ruled by Carmack, 2026-09-14."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14",
             change=(

@@ -195,6 +195,12 @@ class Undigested(NamedTuple):
 #: contract test in `backend/tests/test_fingerprint.py`.
 NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
     {
+        "arch": Undigested(
+            False,
+            "The architecture written inside the weights. It is a property of the bytes "
+            "model_sha256 already carries, so it cannot move on its own - and it exists "
+            "to be compared against those bytes at start-up, not to describe the run.",
+        ),
         "declared_for": Undigested(
             False,
             "Names the weights the block is set for. The manifest already carries those "

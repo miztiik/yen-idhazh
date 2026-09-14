@@ -230,8 +230,14 @@
     },
     "ModelEntry": {
       "additionalProperties": false,
-      "description": "Which weights, and everything a run needs to talk to them.\n\n**This is the shape a person declares**, and `ModelsConfig` is made of it.\nIt is `ModelRef` plus the turn envelope, which is required here and absent\nfrom the recorded shape - so a config entry that forgets its markers fails\nat load, and a `run.json` written before the markers were declared still\nreads. A swap that moved the markers is still visible in a run record:\n`RunRecord.inputs.prompt_sha256` digests both turns rendered through them.\n\nDo not move `turns` down onto `ModelRef` as a tidy-up. That is the change\nthis split exists to prevent.",
+      "description": "Which weights, and everything a run needs to talk to them.\n\n**This is the shape a person declares**, and `ModelsConfig` is made of it.\nIt is `ModelRef` plus the turn envelope, which is required here and absent\nfrom the recorded shape - so a config entry that forgets its markers fails\nat load, and a `run.json` written before the markers were declared still\nreads. A swap that moved the markers is still visible in a run record:\n`RunRecord.inputs.prompt_sha256` digests both turns rendered through them.\n\nDo not move `turns` down onto `ModelRef` as a tidy-up. That is the change\nthis split exists to prevent. `arch` is here for the same reason and not\nfor a different one.",
       "properties": {
+        "arch": {
+          "description": "The architecture name inside the GGUF - its `general.architecture` key, which reads `qwen35` for the weights this entry names. Required and with no default, for the reason `turns` is: an entry that inherits the incumbent's architecture claims something nobody checked. `idhazh.llm.server.prove_the_entry` reads the key back out of the file the server was pointed at and refuses the run before the first item when the two disagree, which is what makes this a fact rather than a claim. It catches a repackaged GGUF under a familiar name - the one case where the digest, the alias and the filename all agree and only the words get worse.",
+          "minLength": 1,
+          "title": "Arch",
+          "type": "string"
+        },
         "file": {
           "minLength": 1,
           "title": "File",
@@ -309,6 +315,7 @@
         "repo",
         "file",
         "quantisation",
+        "arch",
         "turns"
       ],
       "title": "ModelEntry",
@@ -372,6 +379,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "models.<role>.arch, required: the architecture name inside the GGUF. It sits on ModelEntry, not on ModelRef, so a run.json written before today still reads - run_manifest.ModelUse embeds ModelRef, and a required field there would stop this build reading yesterday's run (CLAUDE.md section 11).",
+      "version": "2026-09-14T02:00",
+      "why": "Plan 28 row #5. Row #2 moved the turn envelope onto the entry, so the entry now claims how a turn opens and closes and nothing checked the claim against the running server. The start-up probe checks all five claims before the first item, and this is the field the fourth of them compares: the weights on disk declare an architecture, and an entry that names a different one is serving a repackaged file under a familiar name. Ruled by Carmack, 2026-09-14."
+    },
+    {
       "change": "Initial shape, lifted whole out of app-config.models with no field renamed, retyped or given a different default. It is the same ModelsConfig, now a document of its own under config/models/, and it carries a version date-stamp because a persisted document does. app-config.models is gone in the same commit and app-config.models_file names which of these files is active.",
       "version": "2026-09-14",
       "why": "Plan 28 row #6. Swapping the summarizer has to cost no source edit, and it used to cost eleven lines edited in place in the one file every other knob lives in - so a revert had to reconstruct the previous model's measured numbers from git rather than read them off disk. One file per model makes both directions a pointer, and puts the numbers that were measured for a set of weights in the same file that names them. Ruled by Fowler, 2026-09-14."
@@ -383,7 +395,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-14",
+      "default": "2026-09-14T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -394,5 +406,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-14"
+  "version": "2026-09-14T02:00"
 }

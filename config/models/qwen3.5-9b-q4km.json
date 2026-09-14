@@ -1,5 +1,6 @@
 {
   "summarize": {
+    "arch": "qwen35",
     "file": "Qwen3.5-9B-Q4_K_M.gguf",
     "hf_base_repo": "Qwen/Qwen3.5-9B",
     "id": "qwen3-5-9b-q4-k-m",
@@ -39,5 +40,5 @@
       "turn_opening": "<|im_start|>$role\n"
     }
   },
-  "version": "2026-09-14"
+  "version": "2026-09-14T02:00"
 }

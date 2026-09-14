@@ -1,0 +1,88 @@
+{
+  "endpoint": "POST /apply-template, then POST /tokenize on each of the two strings",
+  "recorded": false,
+  "why_not_recorded": "Constructed from llama.cpp's documented API shape, not captured from a live server. The machine this was written on has no weights and no llama-server, so nothing here is a capture and it does not claim to be (CLAUDE.md Guardrail #7). The response SHAPES are llama.cpp's own and are documented: /apply-template returns a JSON object with a prompt field, and /tokenize returns a JSON object with a tokens array of ids when with_pieces is false. The template_prompt below is what the markers models.summarize.turns declares render for the two probe turns, so it is derived from committed config rather than invented. The token ids are stand-ins: the rule arm 1 applies is positional - the server's list may lead by at most one token and must otherwise equal ours - so the arm is exercised by the POSITIONS and not by any model's real vocabulary. A capture would pin one model's ids and say nothing more about the rule. These token ids are invented, so the test proves the comparison rule and the config-derived prompt only; tokenizer agreement is proved solely by the live probe on a box with weights.",
+  "how_to_record": "Start the server as digest.yml does, then: curl -s http://127.0.0.1:8080/apply-template -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"system\",\"content\":\"You are a probe.\"},{\"role\":\"user\",\"content\":\"Answer with the one word this shape allows.\"}],\"chat_template_kwargs\":{\"enable_thinking\":false}}' and then, for each of that prompt and idhazh.llm.server.render_prompt of the same two turns: curl -s http://127.0.0.1:8080/tokenize -H 'Content-Type: application/json' -d '{\"content\":\"<the string>\",\"add_special\":false}'",
+  "template_reply": {
+    "prompt": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+  },
+  "agrees": {
+    "ours": [
+      151644,
+      8948,
+      198,
+      2610,
+      525,
+      264,
+      22317,
+      13,
+      151645,
+      198
+    ],
+    "theirs": [
+      151644,
+      8948,
+      198,
+      2610,
+      525,
+      264,
+      22317,
+      13,
+      151645,
+      198
+    ]
+  },
+  "agrees_under_one_leading_sequence_token": {
+    "ours": [
+      151644,
+      8948,
+      198,
+      2610,
+      525,
+      264,
+      22317,
+      13,
+      151645,
+      198
+    ],
+    "theirs": [
+      128000,
+      151644,
+      8948,
+      198,
+      2610,
+      525,
+      264,
+      22317,
+      13,
+      151645,
+      198
+    ]
+  },
+  "disagrees_on_the_opening_marker": {
+    "ours": [
+      151644,
+      8948,
+      198,
+      2610,
+      525,
+      264,
+      22317,
+      13,
+      151645,
+      198
+    ],
+    "theirs": [
+      27,
+      91,
+      318,
+      4906,
+      91,
+      29,
+      8948,
+      198,
+      2610,
+      525
+    ]
+  }
+}

@@ -20,7 +20,7 @@ import threading
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
 from conftest import (
@@ -34,6 +34,7 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh import config, extract
+from idhazh.classify.calls import call_two_schema
 from idhazh.contracts.app_config import (
     EvaluationConfig,
     InferenceConfig,
@@ -52,13 +53,26 @@ from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import (
     FLASH_FUSED,
+    PROBE_ANSWER,
+    PROBE_SYSTEM,
+    PROBE_USER,
     Completion,
     FlashAttention,
+    ProbeRefusedError,
+    decoding_still_constrains,
     flash_attention_state,
+    gguf_architecture,
     is_context_exceeded,
+    one_document_schema,
     parse_completion,
+    render_prompt,
     request_payload,
     server_argv,
+    the_prefix_cache_is_live,
+    the_render_agrees,
+    the_weights_are_the_declared_ones,
+    the_window_is_inside_the_trained_window,
+    trained_context,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, LINK_PLACEHOLDER
 from idhazh.stages.validate import _summarize_one
@@ -2123,3 +2137,276 @@ def test_an_error_the_transport_does_not_recognise_stays_unreachable() -> None:
 
     assert result.status is SummaryStatus.FAILED
     assert result.failure_code is FailureCode.MODEL_UNREACHABLE
+
+
+# --- The five things the server proves before the first item ----------------
+#: The two probe documents row #5 records. Neither is a capture; each says so in
+#: its own `recorded` field and explains what was constructed and why.
+LLM_PROBES: Final = FIXTURES_DIR / "llm"
+
+
+def _gguf_text(text: str) -> bytes:
+    raw = text.encode("utf-8")
+    return len(raw).to_bytes(8, "little") + raw
+
+
+def _built_weights(architecture: str) -> bytes:
+    """A GGUF header that declares one architecture, and nothing else.
+
+    Built rather than captured, which is what `CLAUDE.md` section 13 asks for
+    when the awkward shape is the point: a committed 5 GiB file could not be a
+    fixture, and a built header carries the case the archive has never produced
+    - a second key in front of the one we came for, so the skipper is exercised
+    rather than assumed.
+    """
+    pairs = (
+        _gguf_text("general.quantization_version")
+        + (4).to_bytes(4, "little")
+        + (2).to_bytes(4, "little"),
+        _gguf_text("general.architecture") + (8).to_bytes(4, "little") + _gguf_text(architecture),
+    )
+    return (
+        b"GGUF"
+        + (3).to_bytes(4, "little")
+        + (0).to_bytes(8, "little")
+        + len(pairs).to_bytes(8, "little")
+        + b"".join(pairs)
+    )
+
+
+#: What every file under `tests/fixtures/llm/` has to say about itself. Written
+#: honesty decays and a loader that fails does not, so the provenance is read
+#: rather than trusted: a file that does not declare whether it was captured, or
+#: declares it was not and then does not say how to capture it, is refused here.
+PROBE_PROVENANCE: Final = ("recorded", "why_not_recorded", "how_to_record")
+
+
+def probe_fixture(name: str) -> dict[str, Any]:
+    """A probe fixture, refused unless it says where it came from."""
+    loaded: dict[str, Any] = json.loads(read_text(LLM_PROBES / name))
+    missing = [key for key in PROBE_PROVENANCE if key not in loaded]
+    if missing:
+        raise ValueError(f"{name} declares no provenance: it is missing {', '.join(missing)}")
+    if not loaded["recorded"] and not str(loaded["how_to_record"]).strip():
+        raise ValueError(
+            f"{name} says it was not captured and does not say how to capture it, "
+            "so nobody can ever replace it with the real thing"
+        )
+    return loaded
+
+
+class TestTheServerProvesTheEntry:
+    """Plan 28 row #5. The entry claims; these five arms make each claim a fact.
+
+    Every arm is driven by a constructed or built value and nothing here touches
+    the network (Guardrail #7). Every arm has both halves: with the agreeing
+    value it passes, and with one value changed it refuses and the message names
+    both sides. A check nobody has made fail is a check nobody has tested.
+
+    **These fixtures were not captured off a live server** - there are no weights
+    on the machine that wrote them, and each file says so and says how to capture
+    it. So this class proves the comparison rules and the config-derived prompt;
+    tokenizer agreement is proved solely by the live probe on a box with weights.
+    """
+
+    def render(self, name: str) -> dict[str, list[int]]:
+        return dict(probe_fixture("apply-template-probe.json")[name])
+
+    def models(self, name: str) -> dict[str, Any]:
+        return dict(probe_fixture("props-probe.json")[name])
+
+    def test_a_probe_fixture_that_hides_where_it_came_from_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The provenance is enforced, not requested.
+
+        Both committed fixtures are constructed rather than captured, which is
+        only safe while the next reader can tell. Proved by writing a file that
+        hides it, never by asserting the committed pair are fine - that passes on
+        a tree where the check does not exist.
+        """
+        monkeypatch.setattr("test_summarize.LLM_PROBES", tmp_path)
+        (tmp_path / "silent.json").write_text('{"data": []}\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="declares no provenance"):
+            probe_fixture("silent.json")
+
+        (tmp_path / "mute.json").write_text(
+            json.dumps(
+                {"recorded": False, "why_not_recorded": "no weights", "how_to_record": " "}
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="does not say how to capture it"):
+            probe_fixture("mute.json")
+
+    # Arm 1 - the render agrees.
+
+    def test_the_committed_markers_render_the_probe_conversation(self) -> None:
+        """Ties the fixture to config: the recorded template is what the entry renders."""
+        entry = config.load(CONFIG_DIR).models.summarize
+        recorded = probe_fixture("apply-template-probe.json")
+
+        assert (
+            render_prompt(
+                system=PROBE_SYSTEM,
+                user=PROBE_USER,
+                thinking=entry.inference.thinking,
+                turns=entry.turns,
+            )
+            == recorded["template_reply"]["prompt"]
+        )
+
+    def test_a_render_that_agrees_lets_the_run_start(self) -> None:
+        agrees = self.render("agrees")
+
+        the_render_agrees(ours=agrees["ours"], theirs=agrees["theirs"])
+
+    def test_a_server_render_that_leads_by_one_sequence_token_still_agrees(self) -> None:
+        """Why ids and not bytes: the runtime adds that token back for us."""
+        leads = self.render("agrees_under_one_leading_sequence_token")
+
+        the_render_agrees(ours=leads["ours"], theirs=leads["theirs"])
+
+    def test_a_render_that_disagrees_refuses_the_run(self) -> None:
+        differs = self.render("disagrees_on_the_opening_marker")
+
+        with pytest.raises(ProbeRefusedError) as refusal:
+            the_render_agrees(ours=differs["ours"], theirs=differs["theirs"])
+
+        said = str(refusal.value)
+        assert "the turn envelope does not render" in said
+        assert "10 tokens" in said and "first difference at index 0" in said
+
+    # Arm 2 - the prefix cache is live.
+
+    def test_a_second_call_that_reused_the_prefix_lets_the_run_start(self) -> None:
+        the_prefix_cache_is_live(
+            first=Completion(content="", prompt_tokens=40),
+            second=Completion(content="", prompt_tokens=52, cached_tokens=44),
+        )
+
+    def test_a_second_call_that_re_read_the_prefix_refuses_the_run(self) -> None:
+        with pytest.raises(ProbeRefusedError) as refusal:
+            the_prefix_cache_is_live(
+                first=Completion(content="", prompt_tokens=40),
+                second=Completion(content="", prompt_tokens=52, cached_tokens=0),
+            )
+
+        said = str(refusal.value)
+        assert "the prompt cache is not holding the prefix" in said
+        assert "40 tokens" in said and "reused 0" in said
+
+    # Arm 3 - constrained decoding still constrains.
+
+    def test_the_probe_schema_is_built_from_the_schema_the_run_really_sends(self) -> None:
+        """Never a fixture: the real schema is generated, so a copy would drift."""
+        schema, only = one_document_schema(call_two_schema())
+
+        assert list(only) == list(schema["required"])
+        assert schema["required"][0] in (call_two_schema().get("required") or [])
+        assert schema["additionalProperties"] is False
+        assert schema["properties"][schema["required"][0]]["const"] == PROBE_ANSWER
+
+    def test_a_reply_the_grammar_pinned_lets_the_run_start(self) -> None:
+        _, only = one_document_schema(call_two_schema())
+
+        decoding_still_constrains(reply=json.dumps(only), only=only)
+
+    def test_a_reply_the_grammar_did_not_pin_refuses_the_run(self) -> None:
+        _, only = one_document_schema(call_two_schema())
+
+        with pytest.raises(ProbeRefusedError) as refusal:
+            decoding_still_constrains(reply="Sure! Here is the answer.", only=only)
+
+        said = str(refusal.value)
+        assert "the decoder is not held to the schema it was given" in said
+        assert json.dumps(only, sort_keys=True) in said
+        assert "Sure! Here is the answer." in said
+
+    # Arm 4 - the loaded weights are the declared weights.
+
+    def test_weights_that_declare_the_entrys_architecture_let_the_run_start(
+        self, tmp_path: Path
+    ) -> None:
+        entry = config.load(CONFIG_DIR).models.summarize
+        weights = tmp_path / "built.gguf"
+        weights.write_bytes(_built_weights(entry.arch))
+
+        assert gguf_architecture(weights) == entry.arch
+        the_weights_are_the_declared_ones(declared=entry.arch, reported=gguf_architecture(weights))
+
+    def test_weights_that_declare_another_architecture_refuse_the_run(
+        self, tmp_path: Path
+    ) -> None:
+        """A repackaged file under a familiar name: alias, path and digest all agree."""
+        entry = config.load(CONFIG_DIR).models.summarize
+        weights = tmp_path / "built.gguf"
+        weights.write_bytes(_built_weights("llama"))
+
+        with pytest.raises(ProbeRefusedError) as refusal:
+            the_weights_are_the_declared_ones(
+                declared=entry.arch, reported=gguf_architecture(weights)
+            )
+
+        said = str(refusal.value)
+        assert "the weights declare architecture 'llama'" in said
+        assert f"models.summarize declares '{entry.arch}'" in said
+
+    def test_a_file_that_is_not_weights_at_all_refuses_the_run(self, tmp_path: Path) -> None:
+        """An HTTP error body saved under the weights name is the real version of this."""
+        weights = tmp_path / "built.gguf"
+        weights.write_bytes(b'{"error": "not found"}')
+
+        with pytest.raises(ProbeRefusedError) as refusal:
+            gguf_architecture(weights)
+
+        assert "do not say which architecture they are" in str(refusal.value)
+
+    # Arm 5 - the window is inside the trained window.
+
+    def test_a_window_inside_the_trained_window_lets_the_run_start(self) -> None:
+        entry = config.load(CONFIG_DIR).models.summarize
+        trained = trained_context(self.models("inside_the_trained_window"))
+
+        assert trained == 262144
+        the_window_is_inside_the_trained_window(n_ctx=entry.inference.n_ctx, trained=trained)
+
+    def test_a_window_past_the_trained_window_refuses_the_run(self) -> None:
+        trained = trained_context(self.models("a_short_native_window"))
+
+        with pytest.raises(ProbeRefusedError) as refusal:
+            the_window_is_inside_the_trained_window(n_ctx=49152, trained=trained)
+
+        said = str(refusal.value)
+        assert "n_ctx is 49152" in said and "trained for 32768" in said
+
+    def test_a_server_that_names_no_trained_window_refuses_the_run(self) -> None:
+        """Arm 5 has no skip either. An unread proof is not a proof."""
+        trained = trained_context(self.models("a_model_list_that_names_no_trained_window"))
+
+        with pytest.raises(ProbeRefusedError) as refusal:
+            the_window_is_inside_the_trained_window(n_ctx=49152, trained=trained)
+
+        assert "reports no trained context length" in str(refusal.value)
+
+    # The contract half: a required field on the declared shape, never on the
+    # recorded one.
+
+    def test_a_run_record_written_before_this_field_existed_still_reads(self) -> None:
+        """`run_manifest.ModelUse` embeds `ModelRef`, so a required field there
+        would stop today's build reading yesterday's run (`CLAUDE.md` section 11)."""
+        from idhazh.contracts.app_config import ModelRef
+
+        recorded = ModelRef.model_validate(
+            {"id": "m", "repo": "r", "file": "w.gguf", "quantisation": "Q4_K_M"}
+        )
+
+        assert not hasattr(recorded, "arch")
+
+    def test_an_entry_that_declares_no_architecture_is_refused_at_load(self) -> None:
+        document = json.loads(read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json"))
+        del document["summarize"]["arch"]
+
+        with pytest.raises(ValidationError, match="arch"):
+            ModelsConfig.model_validate(document)

@@ -532,6 +532,51 @@ jobs:
             exit 1
           }
 
+      # Healthy says a server answers and the step above says which file it
+      # opened. Neither says the entry is true. Row #2 moved the turn envelope
+      # onto the model entry, so the entry now CLAIMS how a turn opens and
+      # closes - and a wrong marker renders a prompt with no turn structure that
+      # the grammar still accepts, so the only symptom is worse summaries and
+      # nothing goes red.
+      #
+      # Five arms, and none of them has a skip flag: the render, the prefix
+      # cache, the grammar, the architecture in the weights, and the window
+      # against the length the model was trained for. Each refuses by name and
+      # says what was declared and what was reported.
+      #
+      # Here rather than anywhere later, because a refusal costs this step where
+      # the failure it prevents costs a shard of summaries filed under a model
+      # that never rendered a turn. Per server rather than per run: every shard
+      # starts its own. It costs one template render, two tokenisations, two
+      # completions of at most 32 tokens, one model list and a few kilobytes off
+      # the front of the weights file.
+      #
+      # The schema is handed in from the module that builds it rather than
+      # copied here, so the grammar arm is held to the shape this run really
+      # sends (`docs/architecture/summarize/model-boundary.md`).
+      - name: The server proves the entry
+        env:
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.summarize_file }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from idhazh import config
+          from idhazh.classify.calls import call_two_schema
+          from idhazh.llm.server import prove_the_entry
+
+          entry = config.load(Path("config")).models.summarize
+          prove_the_entry(
+              model=entry,
+              weights=Path(os.environ["LLAMA_WEIGHTS"]),
+              output_schema=call_two_schema(),
+              timeout=entry.inference.request_timeout_minutes * 60,
+          )
+          print("the entry and the server agree on all five")
+          PY
+
       # A shard's throughput varies with the host it drew, and no run log named
       # the host, the binary or the weights - so no number a shard produced could
       # say which bytes produced it (Guardrail #10). These six lines settle all three.
