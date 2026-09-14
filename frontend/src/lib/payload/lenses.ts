@@ -19,6 +19,7 @@
 export const LENS_NAMES: Readonly<Record<string, string>> = {
 	chips: 'Chips',
 	china: 'China',
+	climate: 'Climate',
 	cyber: 'Cyber',
 	markets: 'Markets',
 	trade: 'Trade and tariffs',
