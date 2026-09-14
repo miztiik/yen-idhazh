@@ -56,7 +56,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 11 | Where the system text goes, and which keyword the runtime is told | 5, 6 | D | DONE | p28-r11 | - | Andre |
 | 12 | The sanitizer learns the control tokens of the model it guards | 11 | E | DONE | p28-r12 | #704 | Andre |
 | 13a | Ship the budget reader and its dispatch print | 3, 7 | E | DONE | p28-r13a | - | Fowler |
-| 13b | Paste the three readings a dispatch takes | 13a | E | PENDING | - | - | - |
+| 13b | Paste the three readings a dispatch takes | 13a | E | DONE | p28-r13b | #722 | worker |
 | 8 | Both bench arms in one workflow, emitting a page ready to paste | 1, 6, 7 | F | DONE | p28-r8 | - | Carmack |
 | 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | PENDING | - | - | - |
 | 10 | Two spans on one call, so the model can think | 5, 6, 11 | H | PENDING | - | - | - |

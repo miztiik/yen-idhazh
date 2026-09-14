@@ -38,6 +38,7 @@
   "stage": "extract",
   "summarize_ms": null,
   "summary_words": null,
+  "truncation_cap_tokens": null,
   "url_key": "6e0f8a691257f0e0e909fd6e380bc42528e82ee35b4123e44225982c3726eb06",
   "version": "2026-08-23T18:15",
   "vertical": "policy"

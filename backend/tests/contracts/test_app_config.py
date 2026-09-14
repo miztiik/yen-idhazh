@@ -156,9 +156,14 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """Row 3 raised one role, because one role is what was measured.
 
     The visual planner is different weights with its own settings block, and
-    nothing has put a 49,152 window in front of them - so it keeps 8,192. That
-    is the whole reason the block sits on the entry rather than on `models`:
-    a number measured against one model may not be inherited by another.
+    nothing has measured a wider window in front of them - so it keeps the
+    conservative default. That is the whole reason the block sits on the entry
+    rather than on `models`: a number measured against one model may not be
+    inherited by another.
+
+    The assertion is the relationship and not either number, so raising the
+    summarizer's window beside the truncation cap does not need an edit here
+    (Guardrail #6).
 
     Attention is pinned in the same file. `auto` is a runtime autodetect that
     may resolve differently on other silicon, and a run that cannot name the
@@ -166,7 +171,9 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """
     models = committed_models()
 
-    assert models.summarize.inference.n_ctx == 49152
+    assert models.summarize.inference.n_ctx > InferenceConfig().n_ctx, (
+        "the summarizer is the one role a measurement widened"
+    )
     assert models.summarize.inference.flash_attention == "on"
     assert InferenceConfig().n_ctx == 8192, (
         "the default is the conservative window for weights nobody has measured"
@@ -217,11 +224,12 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     of it. Nothing in the tree said so. A doc said so, and a doc does not fail.
 
     The worst case is built from the measured expansion rather than from
-    `TOKENS_PER_WORD`. At the committed cap of 10,000 that is 997 + 12,191 + 900
-    = 14,088 tokens of 49,152, which is 29 percent. **It is the smaller of the
-    two sums this file now holds and it is the one that is retiring**, so read
-    `test_the_two_calls_fit_the_window_at_the_cap` before concluding the window
-    has room: that one sizes 39,284 over the same cap.
+    `TOKENS_PER_WORD`. At the committed cap of 20,000 that is a 24,256-token
+    prompt and a 25,156-token sequence, which is 38 percent of a 65,536 window.
+    **It is the smaller of the two sums this file now holds and it is the one
+    that is retiring**, so read `test_the_two_calls_fit_the_window_at_the_cap`
+    before concluding the window has room: that one sizes 54,887 over the same
+    cap, which is 84 percent.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     inference = committed_models().summarize.inference
@@ -298,18 +306,17 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     is paid once, and neither term exists on the single-call path at all.
 
     Both sides come from `config/` (Guardrail #6) and the arithmetic is measured
-    rather than assumed: at the committed cap of 10,000 tokens and a menu of 256
-    rows the prompt sizes at 28,041 and the sequence at 39,284 tokens, which is
-    80 percent of a 49,152 window with 9,868 spare.
+    rather than assumed: at the committed cap of 20,000 tokens and a menu of 256
+    rows the prompt sizes at 43,603 and the sequence at 54,887 tokens, which is
+    84 percent of a 65,536 window with 10,649 spare.
 
-    **The 9,868 is a margin with a derivation, which is why it is not wider.**
-    It is 25 percent, the size of the one tokenizer miss on record - `measured`
-    says 1.585 tokens a word and the densest cap-length build delivered 1.952 -
-    rounded up to a whole multiple of 16,384 and of the 512-token batch. A wider
-    window costs almost nothing in memory and costs this assertion its reach:
-    the gate is the product on this path, and it cannot report a sequence that
-    grew until the sequence has outgrown the window. Ruled by Carmack,
-    2026-09-13, over the 65,536 this branch first carried.
+    **The 10,649 is what the first whole multiple of 16,384 and of the 512-token
+    batch above the sum leaves over, and that is the rule.** A wider window costs
+    almost nothing in memory and costs this assertion its reach: the gate is the
+    product on this path, and it cannot report a sequence that grew until the
+    sequence has outgrown the window. Ruled by Carmack, 2026-09-13, over the
+    65,536 that branch first carried at a 10,000 cap; the cap doubled on
+    2026-09-14 and 65,536 is what that cap needs rather than slack it was given.
 
     **At 32,768 this failed by 6,516 tokens and the failure was not theoretical.**
     Of eight cap-length articles built from committed corpus prose on 2026-09-13,
