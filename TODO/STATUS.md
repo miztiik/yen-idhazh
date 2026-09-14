@@ -34,14 +34,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 15 | 13 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 8 | 5 | 2 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 10 | 4 | 3 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 23
+## Ready now - 24
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -70,10 +70,11 @@ section 3 is where it is answered.
 | #8a | 25 | J | The second desk reaches the reader | 8 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
-| #11 | 28 | D | Where the system text goes, and which keyword the runtime is told | 5, 6 |
-| #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 3, 7 |
+| #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 |
+| #13b | 28 | E | Paste the three readings a dispatch takes | 13a |
+| #10 | 28 | H | Two spans on one call, so the model can think | 5, 6, 11 |
 
-## Waiting on another row - 52
+## Waiting on another row - 50
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -126,9 +127,7 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 is PENDING |
 | #9 | 28 | G | The runbook: swap and revert in one line each | 12 is PENDING |
-| #10 | 28 | H | Two spans on one call, so the model can think | 11 is PENDING |
 
 ## Finished - 18 plans with no live row
 

@@ -27,6 +27,7 @@ from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.evals.metrics import _SENTENCE_SPLIT
 from idhazh.fetch import FetchResult
+from idhazh.measured import TOKENS_A_WORD_AT_THE_CUT
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 #: Bumped when extraction changes shape. It is a fingerprint input, because a
@@ -35,8 +36,14 @@ EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-2"
 
 # English averages a little over one token per word. Exact enough to place a
 # truncation point deterministically, and it is only a placement: the decoder
-# enforces the real budget. Recorded here so nobody mistakes it for a count.
-TOKENS_PER_WORD: Final = 1.3
+# enforces the real budget.
+#
+# Read off its record rather than written here, so the ratio and its provenance
+# cannot drift apart. The record says which vocabulary it belongs to, that it is
+# a judgement rather than a measurement, and how to take it properly - none of
+# which a bare literal could carry, and all of which a design leaning on it has
+# to see (Guardrail #10).
+TOKENS_PER_WORD: Final = TOKENS_A_WORD_AT_THE_CUT.value
 
 _DETAIL_MAX: Final = 500
 _JSON_LD = re.compile(

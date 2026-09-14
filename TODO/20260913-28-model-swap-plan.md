@@ -54,8 +54,9 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 6 | One complete config file per model, selected by a pointer | 2 | C | DONE | p28-r6 | #697 | Fowler |
 | 7 | The model dossier, and the index that points at every one | 3, 4 | D | DONE | p28-r7 | - | Fowler |
 | 11 | Where the system text goes, and which keyword the runtime is told | 5, 6 | D | DONE | p28-r11 | - | Andre |
-| 12 | The sanitizer learns the control tokens of the model it guards | 11 | E | DONE | p28-r12 | - | Andre |
-| 13 | Retake the two budgets that were sized on a retired vocabulary | 3, 7 | E | PENDING | - | - | - |
+| 12 | The sanitizer learns the control tokens of the model it guards | 11 | E | DONE | p28-r12 | #704 | Andre |
+| 13a | Ship the budget reader and its dispatch print | 3, 7 | E | DONE | p28-r13a | - | Fowler |
+| 13b | Paste the three readings a dispatch takes | 13a | E | PENDING | - | - | - |
 | 8 | Both bench arms in one workflow, emitting a page ready to paste | 1, 6, 7 | F | DONE | p28-r8 | - | Carmack |
 | 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | PENDING | - | - | - |
 | 10 | Two spans on one call, so the model can think | 5, 6, 11 | H | PENDING | - | - | - |
@@ -70,7 +71,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | B | 4 | Alone. It shares `backend/idhazh/classify/calls.py`, `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/throughput.md` and `docs/concepts/config.md` with row #2, and `docs/reference/measurements.md` with row #3, so it cannot run beside either. That file overlap is the whole of its `Depends-on`. |
 | C | 5, 6 | Row #5 writes `server.py`, `test_summarize.py`, a new fixture directory and `digest.yml`. Row #6 writes `app_config.py`, the config files, the schemas, `config.py` and `test_contracts.py`. **Corrected 2026-09-14: they are not disjoint.** Row #5's decision 2 adds a required field to `ModelRef`, which is `app_config.py`, and the value of that field has to be written into the per-model file row #6 created - so row #5 now depends on row #6 and sits alone in group D. Row #6 also wrote `test_summarize.py`, which row #5 writes. |
 | D | 5, 7, 11 | Row #5 writes `server.py`, `app_config.py`, the model file, its schema and `test_summarize.py`. Row #7 is documentation only. Row #11 is the contract and the llm package - it shares `app_config.py` and `server.py` with row #5, so **those two are not disjoint and may not run together**; row #11's own `Depends-on` already names row #5. |
-| E | 12, 13 | Row #12 writes `sanitize.py`, `app_config.py` and two test modules. Row #13 writes `taxonomy.py`, `visual.py`, `measured.py` and the instrument log. No shared file. |
+| E | 12, 13a | Row #12 writes `sanitize.py`, `app_config.py` and two test modules. Row #13a writes `measured.py`, `extract.py`, the two contract docstrings, a new utility, `measure.yml` and the instrument log. No shared file. Row #13b waits on #13a and on a box with weights, so it is not in this group. |
 | F | 8 | Alone. It rewrites the workflow row #1 fixed and reads the shapes rows #6 and #7 created. |
 | G | 9 | Alone. It shares the how-to with row #8 and `AGENTS.md` with row #4. |
 | H | 10 | Alone. It is the last row and it touches most of the summarize package. |
@@ -426,26 +427,57 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 
 ---
 
-### Row #13 - Retake the two budgets that were sized on a retired vocabulary
+### Row #13a - Ship the budget reader and its dispatch print
 
-- **Scope:** The taxonomy definition budget and the visual plan budgets are re-measured against the configured weights and given a subject, closing the gap row #3's gate names but cannot reach.
+- **Scope:** The three constants a vocabulary sizes get a record each in `idhazh.measured`, carrying the value in force today and the weights it was taken against, so row #3's gate can read every subject. A reader retakes all three from a running server's own `/tokenize`, a dispatch target prints them paste-ready, and an operator command says which are stale. **No number moves.**
 - **Files touched:**
+  - `backend/idhazh/measured.py`
+  - `backend/idhazh/extract.py`
   - `backend/idhazh/contracts/taxonomy.py`
   - `backend/idhazh/contracts/visual.py`
-  - `backend/idhazh/measured.py`
+  - `backend/utilities/measure_budgets.py`
+  - `.github/workflows/measure.yml`
+  - `backend/tests/test_measure_budgets.py`
+  - `backend/tests/test_measured.py`
+  - `backend/tests/test_workflows.py`
+  - `backend/tests/test_marks.py`
+  - `tests/fixtures/llm/budget-probe.json`
   - `docs/reference/measurements.md`
-- **Acceptance gates:** local - ruff, mypy, `python -m pytest backend/tests/test_measured.py backend/tests/test_contracts.py -q`. CI - `ci.yml`.
-- **Oracle:** each retaken number's `subject` equals the configured entry's `sha256`, and row #3's gate refuses a built value whose subject does not. Readings come from the runtime's own tokenizer against the committed weights, with hardware and date inline.
+- **Acceptance gates:** local - ruff, mypy, `python -m idhazh.contracts.export` with no drift, `python -m pytest backend/tests/test_measured.py backend/tests/test_measure_budgets.py backend/tests/test_workflows.py -q`, then the full backend suite. CI - `ci.yml`.
+- **Oracle:** `python backend/utilities/measure_budgets.py check` names all three constants, prints the retired digest beside the configured one, and exits 1. Every value at its site is byte-identical to what it was before this row.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Both budgets were measured against the retired 8B, which is not the incumbent. The 8B-to-9B move left them behind, so this is a correction rather than a precaution. | Fowler, 2026-09-13 |
 | 2 | The numbers are taken by asking the runtime's own tokenizer, not by reasoning about a vocabulary. The tokenizer is the model's and it moves when the model does. | Carmack, 2026-09-13 |
-| 3 | A number whose retake changes it gets its old reading deleted, not kept beside the new one. A reading is a variable; git history holds what it used to say. | Fowler, 2026-09-13 |
+| 3 | **Row #13 splits.** The reader ships now; the three readings land when a box with weights runs it. Rejected option 1's load-bearing clause was *writing a measurement into a commit*, and printing is not writing - a dispatch that prints a paste-ready block decides nothing, because a person still edits the file. So the machinery is not blocked on the measurement. | Carmack and Fowler, converging, 2026-09-14 |
+| 4 | **The staleness check ships with #13a, not with #13b.** Shipped with #13b it would police only itself. Shipped here, the risk that #13b never runs is loud rather than silent: every reading's `subject` names the retired weights and two surfaces say so. | Fowler, 2026-09-14 |
+| 5 | **The three records live in `idhazh.measured`, not in `config/`.** All three sites are import-time values - two are in `contracts/`, which may import no other subpackage (`CLAUDE.md` section 4), and `TOKENS_PER_WORD` is read by an import-time assertion in `classify.calls` - so a config edit could stop an import rather than change a behaviour. `measured.py` already says why: a reading's subject is a historical fact and a literal for that reason (Guardrail #6). | Fowler, 2026-09-14 |
+| 6 | **The check is an operator command that exits 1, not a test.** All three are stale on every commit until #13b lands, and a test that is red on a state nobody has fixed is a test people learn to scroll past (`CLAUDE.md` section 13). It also rides on row #3's refusal, which fires at the one moment a person is provably looking at weights. | Fowler, 2026-09-14 |
+| 7 | **`budgets` is its own dispatch target, not a step on the bench.** Retaking three token counts is minutes; the bench is hours. It shares the bench's weights cache key, so the bytes are paid for once. | Carmack, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Re-measure these in CI on every swap | A workflow would be writing a measurement into a commit, which this tree reserves for people. The gate names the number as wrong; a person takes the reading. | Carmack |
+| 2 | Move the three constants into `config/` | The substitution test cannot be met where the value is consumed at import: `config/` would then be able to raise an `ImportError`, and `schemas/taxonomy.schema.json` would become a function of `config/idhazh.json`. Decision 5 is the placement that survives it. | Fowler, 2026-09-14 |
+
+---
+
+### Row #13b - Paste the three readings a dispatch takes
+
+- **Scope:** A box with the configured weights runs the `budgets` dispatch, and a person pastes the three values, subjects and dates into `idhazh.measured`. Any constant whose derivation moves with its reading moves in the same commit, with the schema stamped and changelogged where it is a persisted bound.
+- **Files touched:**
+  - `backend/idhazh/measured.py`
+  - `backend/idhazh/contracts/taxonomy.py` (only if the definition bound moves)
+  - `backend/idhazh/contracts/visual.py` (only if the plan ceiling moves)
+  - `docs/reference/measurements.md`
+- **Acceptance gates:** local - ruff, mypy, `python backend/utilities/measure_budgets.py check` exits 0, `python -m pytest backend/tests/test_measured.py backend/tests/test_measure_budgets.py backend/tests/test_contracts.py -q`. CI - `ci.yml`.
+- **Oracle:** each constant carries its number, its `subject` equals the configured weights' digest, and **the retired-vocabulary reading is deleted rather than kept beside the new one** (row #13's Decision 3, Guardrail #10).
+- **How to take it:** dispatch `.github/workflows/measure.yml` with `target: budgets`. The run summary carries the paste block. Or, on any box with weights: start `llama-server` on the configured model, then `python backend/utilities/measure_budgets.py read --runner <where you ran it>`.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | A number whose retake changes it gets its old reading deleted, not kept beside the new one. A reading is a variable; git history holds what it used to say. | Fowler, 2026-09-13 |
 
 ---
 
@@ -589,5 +621,5 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and the no-two-rows-one-file rule.
 - [`../docs/how-to/evaluate-new-summarizer-model.md`](../docs/how-to/evaluate-new-summarizer-model.md) - the page row #9 rewrites.
 - [`../docs/how-to/fine-tune-a-model.md`](../docs/how-to/fine-tune-a-model.md) - the page row #9 gives a base-swap refusal.
-- [`../docs/reference/measurements.md`](../docs/reference/measurements.md) - the instrument log row #7 thins, row #4 renames a rule inside, and row #13 corrects two readings in.
+- [`../docs/reference/measurements.md`](../docs/reference/measurements.md) - the instrument log row #7 thins, row #4 renames a rule inside, and row #13b corrects two readings in.
 - [`../docs/concepts/config.md`](../docs/concepts/config.md) - the page that owns the config shape rows #2 and #6 change.
