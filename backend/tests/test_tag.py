@@ -81,9 +81,15 @@ def test_every_lens_and_event_carries_terms() -> None:
     terms on one would be dead weight that reads as live. The event half was
     unscoped until 2026-09-13 only because `EventDef` had no status to read; with
     one, the first event anybody retires would have turned this red.
+
+    A **draft** is out for the same reason from the other end. It is a word
+    somebody has defined and nobody has chosen keywords for yet, so terms on one
+    would start tagging published items before anybody decided they should.
+    `climate` arrived on 2026-09-14 as exactly that: labellable, unmatched.
     """
-    live_lenses = [lens for lens in TAXONOMY.lenses if lens.status is not LifecycleStatus.RETIRED]
-    live_events = [event for event in TAXONOMY.events if event.status is not LifecycleStatus.RETIRED]
+    matching = (LifecycleStatus.RETIRED, LifecycleStatus.DRAFT)
+    live_lenses = [lens for lens in TAXONOMY.lenses if lens.status not in matching]
+    live_events = [event for event in TAXONOMY.events if event.status not in matching]
     assert live_lenses, "a taxonomy with no live lens tags nothing"
     assert live_events, "a taxonomy with no live event tags nothing"
     assert [lens.id for lens in live_lenses if not lens.keywords] == []

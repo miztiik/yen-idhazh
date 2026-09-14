@@ -11,7 +11,13 @@ Three verbs.
   against the committed vocabulary before a byte is written, so a label nobody
   declared is RefusedError here rather than discovered in a measurement.
 - `status` counts what is done.
-
+`retire` is the fourth, and it is the only one that takes a row out. Labelling
+all 641 rows surfaced defects no shape check can see - a file with no story in
+it, a file whose title names a different story, a file holding several unrelated
+stories, and a story that stops before it lands. It reads a verdict file a second
+reader wrote against the text, drops the rows, deletes their article files, and
+appends `removed.tsv` beside the set so the removal is a record rather than a
+gap. It refuses to take either split under the floors it was built to.
 `apply` reads JSON Lines, one object an article::
 
     {"url_key": "...", "labels": {...}, "second_labels": {...}}
@@ -30,6 +36,7 @@ import argparse
 import json
 import sys
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import date
 from pathlib import Path
 from typing import Final
 
@@ -67,6 +74,14 @@ DECLINE: Final = "not-applicable"
 #: and the labeller carries that half.
 GATE_OPENS_ON: Final = ("opinion", "analysis", "announcement")
 
+#: Why a row leaves the set. Four defects a builder's shape checks cannot see,
+#: because each is about meaning: the file carries no story, a different story
+#: from the one its title names, several unrelated stories, or a story that
+#: stops before it lands. `keep` is here because the verdict file carries the
+#: rows that were cleared as well as the rows that go.
+RETIRE_REASONS: Final = ("no-article", "title-mismatch", "many-articles", "truncated")
+REMOVED_FILENAME: Final = "removed.tsv"
+
 
 class RefusedError(Exception):
     """A label that may not be written, named so the operator can fix one line."""
@@ -91,10 +106,17 @@ def read_splits(root: Path) -> dict[str, ReferenceSplit]:
 
 
 def active_vocabulary(root: Path) -> tuple[frozenset[str], frozenset[str], str]:
-    """The desks and lenses a label may name, and the taxonomy version it is taken against."""
+    """The desks and lenses a label may name, and the taxonomy version it is taken against.
+
+    A **draft** entry counts. It is a word somebody committed and defined but has
+    not let the pipeline publish - no feed declares it, or nobody has chosen its
+    keywords - and a labeller reading an article needs it precisely then. What a
+    draft may not do is reach a reader, and nothing here does.
+    """
     taxonomy = Taxonomy.from_json((root / TAXONOMY_RELPATH).read_text(encoding="utf-8"))
-    desks = frozenset(entry.id for entry in taxonomy.verticals if entry.status == "active")
-    lenses = frozenset(entry.id for entry in taxonomy.lenses if entry.status == "active")
+    usable = {"active", "draft"}
+    desks = frozenset(entry.id for entry in taxonomy.verticals if entry.status in usable)
+    lenses = frozenset(entry.id for entry in taxonomy.lenses if entry.status in usable)
     return desks, lenses, taxonomy.version
 
 
@@ -220,6 +242,72 @@ def plan(root: Path, offset: int, size: int, side: str | None) -> Iterable[str]:
         )
 
 
+def retire(root: Path, source: Path, today: str) -> tuple[int, int]:
+    """Drop verified-unusable rows from the set, and record why beside it.
+
+    A row leaves only on a verdict a second reader took against the text. The
+    floors are re-checked after the removal rather than before it: a cleaning
+    pass that quietly takes a split under the size the set was built to is the
+    one way this verb could make the measurement worse instead of better.
+    """
+    dataset = _dataset_dir(root)
+    rows = read_rows(root)
+    where = read_splits(root)
+    by_key = {row.url_key: row for row in rows}
+    settings = json.loads((root / "config" / "idhazh.json").read_text(encoding="utf-8"))
+    floors = settings["reference_dataset"]
+
+    going: dict[str, tuple[str, str]] = {}
+    cleared = 0
+    for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) != 3:
+            raise RefusedError(f"line {number}: expected key, verdict and evidence")
+        key, verdict, evidence = (part.strip() for part in parts)
+        if verdict == "keep":
+            cleared += 1
+            continue
+        if verdict not in RETIRE_REASONS:
+            raise RefusedError(f"line {number}: {verdict!r} is not one of {list(RETIRE_REASONS)}")
+        if key not in by_key:
+            raise RefusedError(f"line {number}: {key[:12]} is not in the set")
+        if not evidence:
+            raise RefusedError(f"line {number}: {key[:12]} has no evidence, so it is an opinion")
+        going[key] = (verdict, evidence)
+
+    kept = [row for row in rows if row.url_key not in going]
+    for side in (ReferenceSplit.DEV, ReferenceSplit.TEST):
+        on_side = [row for row in kept if where.get(row.url_key) == side]
+        domains = {row.source_domain for row in on_side}
+        if len(on_side) < floors["rows_per_split_min"]:
+            raise RefusedError(f"{side.value} would fall to {len(on_side)} rows, under its floor")
+        if len(domains) < floors["domains_per_split_min"]:
+            raise RefusedError(
+                f"{side.value} would fall to {len(domains)} domains, under its floor"
+            )
+
+    write_rows(root, kept)
+    for side in (ReferenceSplit.DEV, ReferenceSplit.TEST):
+        keys = [row.url_key for row in kept if where.get(row.url_key) == side]
+        path = dataset / "splits" / f"{side.value}.txt"
+        path.write_text("".join(key + "\n" for key in keys), encoding="utf-8", newline="")
+
+    record = dataset / REMOVED_FILENAME
+    header = "url_key\treason\tremoved_on\tsplit\tsource_domain\tevidence\n"
+    body = header if not record.exists() else ""
+    for key, (verdict, evidence) in going.items():
+        row = by_key[key]
+        (dataset / "articles" / f"{key}.txt").unlink(missing_ok=True)
+        split_name = where.get(key, ReferenceSplit.DEV).value
+        body += "\t".join((key, verdict, today, split_name, row.source_domain, evidence))
+        body += "\n"
+    with record.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(body)
+    return len(going), cleared
+
+
 def status(root: Path) -> None:
     where = read_splits(root)
     rows = read_rows(root)
@@ -247,6 +335,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     put = verbs.add_parser("apply", help="merge a labels file into dataset.jsonl")
     put.add_argument("source", type=Path)
 
+    drop = verbs.add_parser("retire", help="remove verified-unusable rows and record why")
+    drop.add_argument("source", type=Path, help="key, verdict and evidence, tab separated")
+    drop.add_argument("--on", default=date.today().isoformat(), help="the day it was decided")
+
     verbs.add_parser("status", help="count what is labelled")
 
     args = parser.parse_args(argv)
@@ -258,6 +350,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(line)
         elif args.verb == "apply":
             print(f"wrote {apply(root, args.source)} rows")
+        elif args.verb == "retire":
+            gone, cleared = retire(root, args.source, args.on)
+            print(f"removed {gone} rows, cleared {cleared}")
         else:
             status(root)
     except RefusedError as refusal:

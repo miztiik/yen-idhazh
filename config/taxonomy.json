@@ -169,6 +169,14 @@
       "weight": 0.0
     },
     {
+      "definition": "The story turns on a changing climate - warming, sea level, or the greenhouse gas emissions driving them - while being mainly about something else. One weather event is not enough, and it never rides on the Climate desk.",
+      "display_name": "Climate",
+      "id": "climate",
+      "keywords": [],
+      "status": "draft",
+      "weight": 0.0
+    },
+    {
       "definition": "The story turns on an attack on a computer system or the defence against one - a breach, ransomware, a stolen dataset, spyware or a security flaw.",
       "display_name": "Cyber",
       "id": "cyber",
@@ -275,7 +283,7 @@
       "weight": 0.0
     }
   ],
-  "version": "2026-09-12",
+  "version": "2026-09-14",
   "verticals": [
     {
       "ceiling": 0.35,
@@ -326,6 +334,26 @@
       "min_feeds": 21,
       "retired_on": null,
       "status": "active"
+    },
+    {
+      "ceiling": 0.25,
+      "definition": "The story is mainly about research into how the world works - a study, an experiment, a measurement or a discovery, in any field. Not models or the machines that run them, which is AI.",
+      "display_name": "Science",
+      "floor": 6,
+      "id": "science",
+      "min_feeds": 21,
+      "retired_on": null,
+      "status": "draft"
+    },
+    {
+      "ceiling": 0.25,
+      "definition": "The story is mainly about the climate and the living world - warming and what it does, greenhouse gas emissions and their targets, or habitats and species lost or protected. One storm or flood is World; the climate behind it is here.",
+      "display_name": "Climate",
+      "floor": 6,
+      "id": "climate",
+      "min_feeds": 21,
+      "retired_on": null,
+      "status": "draft"
     }
   ]
 }
