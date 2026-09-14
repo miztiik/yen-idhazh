@@ -269,7 +269,7 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         """
         first = call_one_payload(article_ok)
         reply = read_text(FIXTURES_DIR / "completions" / "call-one" / "labelled.json")
-        turns = config.load(CONFIG_DIR).app.models.summarize.turns
+        turns = config.load(CONFIG_DIR).models.summarize.turns
         whole = build_call_two_request(
             first, reply, turns=turns, source_words=article_ok.band_source_words
         )

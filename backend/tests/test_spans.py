@@ -172,6 +172,7 @@ def traced_settings() -> config.Settings:
                 )
             }
         ),
+        models=settings.models,
         appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,
@@ -195,6 +196,7 @@ def untraced_settings() -> config.Settings:
                 )
             }
         ),
+        models=settings.models,
         appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,

@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-14
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -187,7 +187,7 @@ value and nothing else, so changing the config number changes the bound.
 `run.safety_ceiling_per_run` is the item ceiling sized against it.
 
 Each worker checks its weights before it starts the server. `sha256sum` compares
-the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a
+the file on disk against `models.summarize.sha256` in the active model file, on a
 cache hit as well as a miss, because a restored cache entry is the one case where
 nobody watched the bytes arrive. So do the two measurement jobs that load the summarizer.
 The rule is written once, under
@@ -629,11 +629,14 @@ downloads weights fails the test until it carries the same pair of steps.
 
 ## One place writes a production model ref, and it is config
 
-`config/idhazh.json` holds `models.summarize`. None of the
+`config/models/<name>.json` holds `models.summarize`, and `config/idhazh.json`
+says which of those files is active through `models_file`. None of the
 three workflows that load weights - `digest.yml`, `measure.yml`, `validate.yml` -
 holds a model repository, a weights filename or a publisher name of its own.
 Grepping all three for a `.gguf` name, a Hugging Face repository or a branch in a
 download path returns nothing, and a workflow contract test asserts exactly that.
+None of them names the model file either: each one reads the pointer and follows
+it, so a swap is one line for a workflow as well.
 
 Each one reads config in a `models` step and publishes job outputs. `digest.yml`
 does it inside `plan`, which `work` already needs; `measure.yml` has

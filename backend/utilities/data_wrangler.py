@@ -224,7 +224,7 @@ def _token_report(rows: Sequence[CorpusRow], settings: config.Settings) -> list[
     cannot find out cheaply once it has started.
     """
     role = settings.app.finetune.teacher
-    base = getattr(settings.app.models, role).hf_base_repo
+    base = getattr(settings.models, role).hf_base_repo
     if not base:
         return [f"models.{role}.hf_base_repo is not set, so there is no tokenizer to load"]
     try:

@@ -47,8 +47,8 @@ def _summarize_one(
     number.
     """
     trace = tracer if tracer is not None else silent_tracer()
-    inference = settings.app.models.summarize.inference
-    model_id = settings.app.models.summarize.id
+    inference = settings.models.summarize.inference
+    model_id = settings.models.summarize.id
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
         with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
@@ -111,7 +111,7 @@ def stage_validate(
 
     read_url = fetcher or common.live_fetcher(settings)
     plan = _load_plan(date)
-    model_id = settings.app.models.summarize.id
+    model_id = settings.models.summarize.id
     scores: list[float] = []
 
     for index, item in enumerate(plan.items, start=1):

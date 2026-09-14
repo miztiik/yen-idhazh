@@ -245,13 +245,18 @@ def test_a_fresh_clone_loads_its_committed_config() -> None:
 
 def test_the_config_that_was_read_travels_with_the_run() -> None:
     """A knob edited between two runs changes every output and is otherwise invisible."""
-    digests = config.load(CONFIG_DIR).digests
-    assert {digest.path for digest in digests} == {
+    settings = config.load(CONFIG_DIR)
+    assert {digest.path for digest in settings.digests} == {
         "config/idhazh.json",
+        # Named through the pointer, never spelled here: a swap moves it, and a
+        # test that spelled the incumbent's filename would then be asserting
+        # that the record still names a model the run did not read.
+        f"config/{settings.app.models_file}",
         "config/sources.json",
         "config/taxonomy.json",
         "config/watchlist.json",
     }
+    digests = settings.digests
     assert all(len(digest.sha256) == 64 for digest in digests)
 
 
@@ -1061,18 +1066,15 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     # key the model really has. Aimed one level too high it sets an attribute
     # nothing reads, the request keeps the committed 22.1-minute bound, and this
     # test sits on the hanging endpoint until the job's own timeout kills it.
-    summarizer = settings.app.models.summarize
+    summarizer = settings.models.summarize
     fast_settings = config.Settings(
-        app=settings.app.model_copy(
+        app=settings.app,
+        models=settings.models.model_copy(
             update={
-                "models": settings.app.models.model_copy(
+                "summarize": summarizer.model_copy(
                     update={
-                        "summarize": summarizer.model_copy(
-                            update={
-                                "inference": summarizer.inference.model_copy(
-                                    update={"request_timeout_minutes": 0.01}
-                                )
-                            }
+                        "inference": summarizer.inference.model_copy(
+                            update={"request_timeout_minutes": 0.01}
                         )
                     }
                 )
@@ -1218,7 +1220,7 @@ def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
     assert recorded is not None
     assert recorded.runtime_build != "llama-server-local"
     assert recorded.runner_class != "local"
-    assert recorded.chat_template_sha256 != text_digest(settings.app.models.summarize.id)
+    assert recorded.chat_template_sha256 != text_digest(settings.models.summarize.id)
 
 
 def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
@@ -2703,6 +2705,7 @@ def observed(observability: ObservabilityConfig) -> config.Settings:
     settings = config.load(CONFIG_DIR)
     return config.Settings(
         app=settings.app.model_copy(update={"observability": observability}),
+        models=settings.models,
         appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,
@@ -3516,8 +3519,8 @@ class TestTheWorkStageDispatchesBothCalls:
         assert stamped == text_digest(
             calls.prompt_inputs(
                 settings.app.summarize,
-                turns=settings.app.models.summarize.turns,
-                inference=settings.app.models.summarize.inference,
+                turns=settings.models.summarize.turns,
+                inference=settings.models.summarize.inference,
             )
         )
         assert stamped != text_digest(summarize.prompt_inputs(settings.app.summarize))

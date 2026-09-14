@@ -323,8 +323,8 @@ def stage_qualify(
 
     started = time.monotonic()
     read_url = fetcher or common.live_fetcher(settings)
-    inference = settings.app.models.summarize.inference
-    model = settings.app.models.summarize
+    inference = settings.models.summarize.inference
+    model = settings.models.summarize
     observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
     inputs = build_inputs(
         model=model,

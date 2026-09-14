@@ -13,7 +13,7 @@
 # never names one.
 #
 # Usage: start-llama-server.sh <role> <name>
-#   role  the attribute on settings.app.models - `summarize`
+#   role  the attribute on settings.models - `summarize`
 #   name  the stem for <name>.log and <name>.pid
 #
 # Reads LLAMA_WEIGHTS and LLAMA_PORT from the environment.
@@ -50,7 +50,7 @@ from idhazh import config
 from idhazh.llm.server import server_argv
 
 settings = config.load(Path("config"))
-role = getattr(settings.app.models, os.environ["LLAMA_ROLE"])
+role = getattr(settings.models, os.environ["LLAMA_ROLE"])
 argv = server_argv(
     binary=Path("backend/bin/llama-server"),
     weights=Path(os.environ["LLAMA_WEIGHTS"]),
