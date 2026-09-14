@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import EvaluationConfig, SummarizeConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.evals import metrics

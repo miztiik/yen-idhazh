@@ -19,7 +19,6 @@ from typing import Any, ClassVar, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
-from idhazh.contracts.app_config import ModelRef
 from idhazh.contracts.base import (
     ChangelogEntry,
     CommitSha,
@@ -34,6 +33,7 @@ from idhazh.contracts.base import (
     without_retired_keys,
 )
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.models import ModelRef
 
 
 class RunStatus(StrEnum):

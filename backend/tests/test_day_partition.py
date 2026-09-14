@@ -32,8 +32,8 @@ from typing import Final
 import pytest
 
 from idhazh import day_partition, ledger
-from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 

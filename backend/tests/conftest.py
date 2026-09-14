@@ -12,13 +12,16 @@ import pytest
 
 from idhazh import config
 from idhazh.classify.calls import build_call_one_request
-from idhazh.contracts.app_config import AppConfig, ElementsConfig, InferenceConfig, ModelRef
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_output_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier

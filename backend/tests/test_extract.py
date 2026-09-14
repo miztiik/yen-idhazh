@@ -23,11 +23,11 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier

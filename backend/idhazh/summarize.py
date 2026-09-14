@@ -41,17 +41,13 @@ from pydantic import (
     create_model,
 )
 
-from idhazh.contracts.app_config import (
-    EvaluationConfig,
-    InferenceConfig,
-    OverLengthAction,
-    SummarizeConfig,
-    SummaryBand,
-)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import restates_summary, verbatim_run
 from idhazh.llm.server import Completion, request_payload

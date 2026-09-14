@@ -31,9 +31,6 @@ from idhazh import (
     tag,
     telemetry,
 )
-from idhazh.contracts.app_config import (
-    ExtractConfig,
-)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay
@@ -41,6 +38,7 @@ from idhazh.contracts.feed_health import (
     RobotsOutcome,
 )
 from idhazh.contracts.item_health import FailureCode, ItemStage
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
 )

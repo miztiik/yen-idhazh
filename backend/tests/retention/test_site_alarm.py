@@ -12,7 +12,8 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 
 from idhazh.cli import main
-from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, AppConfig, RetentionConfig
+from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.retention import (
     BYTES_PER_MB,
     SiteSize,

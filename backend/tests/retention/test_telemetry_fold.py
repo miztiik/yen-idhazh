@@ -10,8 +10,8 @@ from typing import Final
 import pytest
 
 from idhazh import day_partition, ledger, publish_telemetry
-from idhazh.contracts.app_config import ObservabilityConfig
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.telemetry_aggregate import percentile
 from idhazh.evals import archive as score_archive
 from idhazh.retention import fold_month, month_shards, oldest_month_kept, prune_telemetry

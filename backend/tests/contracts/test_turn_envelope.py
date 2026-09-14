@@ -11,7 +11,7 @@ from conftest import CONFIG_DIR, REPO_ROOT
 from pydantic import ValidationError
 
 from idhazh import config
-from idhazh.contracts.app_config import ModelEntry, ModelRef, ModelsConfig
+from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse
 
 from ._envelope import (

@@ -22,10 +22,12 @@ from conftest import (
 )
 
 from idhazh import config, corpus, summarize
-from idhazh.contracts.app_config import AppConfig, FinetuneConfig, ModelsConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.knobs.finetune import FinetuneConfig
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 
 DATE = "2026-08-28"

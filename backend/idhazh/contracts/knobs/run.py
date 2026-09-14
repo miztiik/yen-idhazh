@@ -1,0 +1,87 @@
+"""What one run of the pipeline is allowed to do."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, Final
+
+from pydantic import Field, model_validator
+
+from idhazh.contracts.base import Model
+from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+
+
+class RunConfig(Model):
+    safety_ceiling_per_run: int = Field(
+        default=80,
+        ge=1,
+        description=(
+            "What sizes a run. It began as a crash guard against a mis-parsed feed and "
+            "supply overtook it: items_planned has been exactly this number on every run "
+            "since 2026-08-25, so it is the cap whatever it is called. Owner decision, "
+            "2026-09-05: it comes down to 80 from 160 - the day publishes half as many "
+            "stories, and the gain is that those 80 slots go to articles worth reading "
+            "rather than to a second copy of one already chosen or to a feed that has "
+            "been publishing badly. It is an editorial choice about the day now, not a "
+            "crash guard. It is also what sizes the worst case a work shard and the "
+            "route stage have to finish - a smaller run makes a smaller worst case - and "
+            "a worker killed at run.shard_timeout_minutes uploads nothing."
+        ),
+    )
+    shard_size: int = Field(
+        default=5,
+        ge=1,
+        description="URLs per worker VM. Set by measured model-load amortization, not by taste.",
+    )
+    max_parallel: int = Field(
+        default=4,
+        ge=1,
+        description=(
+            "The most workers a run may derive for itself. It is four rather than the "
+            "eight digest.yml lets an operator dispatch, because eight has never "
+            "published a day; the three conditions that would move it are in "
+            "docs/reference/measurements.md."
+        ),
+    )
+    shard_timeout_minutes: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "The work job's own timeout, which digest.yml reads from here. A backstop, "
+            "never a budget: a worker has no clock of its own, and one killed at this "
+            "bound uploads nothing, so the run loses every item that worker held. It "
+            "rose to 200 from 150 as headroom for the coming two-call summariser "
+            "change, not because any worker got slower - at run.safety_ceiling_per_run "
+            "of 80 a worker draws 20 items, half of the 40 it drew before, so the base "
+            "work roughly halves. Sized from the worst measured shard, not the median: "
+            "over 80 shard rows on 2026-09-02 the worst used 135.4 minutes of the old "
+            "150-minute bound and the median used 78.5, and the second model call an "
+            "item spends exactly that margin. 200 is 56 percent of the six-hour platform "
+            "ceiling, well inside Guardrail #2. A slow worker is still answered by lowering "
+            "the ceiling, never by raising this."
+        ),
+    )
+    success_floor_pct: int = Field(
+        default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_removed_knob_is_refused_by_name(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("run", data, SUPERSEDED_RUN_NAMES)
+
+
+#: The `run` knobs this block used to carry. Both sized or switched the visual
+#: planner stage, which plan 11 row #6 deleted with the model it ran, so there
+#: is no knob answering the same question and the value is empty.
+#: `route_budget_minutes` is the older spelling of the budget and is refused
+#: here rather than migrated: it used to be read as `visual_planner_budget_minutes`,
+#: which would now migrate an operator's number onto a key nothing reads.
+SUPERSEDED_RUN_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "route_budget_minutes": "",
+        "two_calls_per_item": "",
+        "visual_planner_budget_minutes": "",
+    }
+)

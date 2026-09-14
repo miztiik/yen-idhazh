@@ -31,9 +31,11 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import InferenceConfig, ModelEntry, ModelRef, TurnsConfig
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.models import ModelEntry, ModelRef
+from idhazh.contracts.knobs.turns import TurnsConfig
 
 #: Sixty-four zeroes. It satisfies `Sha256`, so a manifest built on it validates,
 #: publishes, and still says nothing about which weights ran (Guardrail #10).

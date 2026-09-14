@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
 
 

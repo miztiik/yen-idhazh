@@ -69,10 +69,12 @@ from idhazh.classify.calls import (
     call_two_output_tokens,
     call_two_user_turn,
 )
-from idhazh.contracts.app_config import AppConfig, ModelsConfig, TurnsConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
+from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.elements import element_table
 from idhazh.extract import TOKENS_PER_WORD, approx_tokens, truncate_to_tokens
 from idhazh.llm.server import Completion, completion_url, post, props, server_argv, turn_markers

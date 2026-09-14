@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import day_partition, ledger
-from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ConsoleConfig
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import (
     TERMINAL_STAGES,
@@ -20,6 +19,8 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
+from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.measured import SITE_GROWTH_KB_A_DAY
 from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS

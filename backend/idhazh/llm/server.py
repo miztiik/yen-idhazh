@@ -36,13 +36,9 @@ from typing import IO, Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
-from idhazh.contracts.app_config import (
-    InferenceConfig,
-    ModelEntry,
-    ModelRef,
-    SystemPlacement,
-    TurnsConfig,
-)
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.models import ModelEntry, ModelRef
+from idhazh.contracts.knobs.turns import SystemPlacement, TurnsConfig
 
 # One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
 # read it here: the argv the server binds with, and the address the stage posts

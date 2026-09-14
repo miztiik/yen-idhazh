@@ -9,8 +9,10 @@ from pathlib import Path
 import pytest
 
 from idhazh import day_partition, ledger, publish_telemetry
-from idhazh.contracts.app_config import CollectConfig, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.retention import month_shards
 from idhazh.stages.prune_state import stage_prune_state
 

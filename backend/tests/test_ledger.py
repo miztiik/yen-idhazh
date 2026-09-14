@@ -16,13 +16,13 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh import cli, config, day_partition, ledger
-from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow

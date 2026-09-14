@@ -105,11 +105,11 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import day_partition
-from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow

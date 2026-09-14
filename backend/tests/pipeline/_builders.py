@@ -11,10 +11,10 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, RecordedEn
 from pytest import MonkeyPatch
 
 from idhazh import assemble, config
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceKind

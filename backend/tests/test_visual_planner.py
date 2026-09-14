@@ -37,9 +37,9 @@ from idhazh.classify.calls import (
     parse_call_two,
     recovered_completion,
 )
-from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual import (
     EncodingRole,

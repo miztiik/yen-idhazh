@@ -24,8 +24,8 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR
 
 from idhazh import config, summarize
-from idhazh.contracts.app_config import ModelsConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.llm.server import Completion
 from idhazh.sanitize import untrusted_block
 from utilities.measure_two_calls import (

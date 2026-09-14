@@ -55,12 +55,6 @@ from idhazh.assemble import (
     to_digest_visual,
     write_atomic,
 )
-from idhazh.contracts.app_config import (
-    EvaluationConfig,
-    ModelRef,
-    SummarizeConfig,
-    VisualsConfig,
-)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
@@ -74,6 +68,10 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.models import ModelRef
+from idhazh.contracts.knobs.summarize import SummarizeConfig
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.source_health_view import SourceHealthView

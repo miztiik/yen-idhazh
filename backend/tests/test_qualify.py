@@ -14,12 +14,10 @@ from typing import Any
 
 import pytest
 
-from idhazh.contracts.app_config import (
-    EvaluationConfig,
-    InferenceConfig,
-    RunConfig,
-    SummarizeConfig,
-)
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
     CandidateIdentity,
