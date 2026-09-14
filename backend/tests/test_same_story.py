@@ -31,7 +31,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
-from idhazh.assemble import collapse_same_story, cosine_int8, story_key
+from idhazh.assemble import collapse_same_story, cosine_int8, numbers_agree, story_key
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings, DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, cosine, from_base64, to_base64
@@ -358,6 +358,53 @@ def test_one_outlet_running_one_headline_twice_is_still_not_a_group() -> None:
     assert [one.also_covered_by for one in stamped] == [0, 0]
 
 
+def test_two_desks_rounding_one_price_are_one_group() -> None:
+    """The owner's ruling, 2026-09-14, end to end rather than on the key alone.
+
+    Two decimal places are not a reason to print the same acquisition twice.
+    This is the 2026-09-03 Nvidia pair, at vectors that cannot form the group.
+    """
+    items = [
+        item(
+            "business-01",
+            source="wire",
+            score=1.0,
+            title="Nvidia agrees to acquire Hugging Face for $12.9 billion",
+        ),
+        item(
+            "business-02",
+            source="paper",
+            score=9.0,
+            title="Nvidia agrees to acquire Hugging Face for $12.93 billion",
+        ),
+    ]
+    vectors = {"business-01": unit(0), "business-02": unit(_APART)}
+    assert cosine(from_base64(vectors["business-01"]), from_base64(vectors["business-02"])) < (
+        committed_threshold()
+    ), "the arm is only a test of the headline if the vectors cannot form this group"
+
+    stamped = collapse_same_story(items, block(vectors), similarity_min=committed_threshold())
+
+    assert groups_of(stamped) == {"business-02": ["business-01"]}
+    assert [one.also_covered_by for one in stamped] == [1, 1]
+
+
+def test_two_desks_printing_different_figures_are_two_groups() -> None:
+    """The control for the arm above. One word of one headline, one digit apart."""
+    items = [
+        item("business-01", source="wire", score=1.0, title="Tariff raised to 25 percent"),
+        item("business-02", source="paper", score=9.0, title="Tariff raised to 50 percent"),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"business-01": unit(0), "business-02": unit(_APART)}),
+        similarity_min=committed_threshold(),
+    )
+
+    assert groups_of(stamped) == {}
+    assert [one.also_covered_by for one in stamped] == [0, 0]
+
+
 def test_turning_the_joiner_off_restores_the_vector_only_rule() -> None:
     """Guardrail #6's substitution test: change the config, change the behaviour."""
     items = [
@@ -378,6 +425,7 @@ def test_turning_the_joiner_off_restores_the_vector_only_rule() -> None:
 
 
 # --- what the pass refuses to guess ----------------------------------------
+
 
 def test_a_day_with_no_vectors_says_it_does_not_know() -> None:
     """Null, never 0. A day whose encoder never ran carried no claim either way."""
@@ -465,22 +513,6 @@ def test_the_reduction_folds_case_and_punctuation() -> None:
         assert story_key(one) == story_key(other), other
 
 
-def test_the_reduction_keeps_every_digit() -> None:
-    """A price, a toll or a percentage is often the whole story.
-
-    This pass publishes `Also covered by N other sources today.`, which is a
-    claim that those sources corroborate each other. A rule that read past a
-    number would make that claim on exactly the pairs where two desks printed
-    different figures. What it costs is stated rather than hidden: on
-    2026-09-03 one acquisition ran under three prices and stays three groups.
-    """
-    assert story_key("Tariff raised to 25 percent") != story_key("Tariff raised to 50 percent")
-    assert story_key("Hugging Face for $12.9 billion") != story_key(
-        "Hugging Face for $12.93 billion"
-    )
-    assert story_key("Budget 2025 lands") != story_key("Budget 2026 lands")
-
-
 def test_the_reduction_keeps_a_script_it_cannot_fold() -> None:
     """Latin is not the rule. Two headlines that share no letter are not one key."""
     assert story_key("\u0938\u092e\u093e\u091a\u093e\u0930 \u090f\u0915") is not None
@@ -496,6 +528,104 @@ def test_a_headline_that_reduces_to_nothing_is_not_a_key() -> None:
     assert story_key("--- ... ---") is None
     assert story_key("Untitled item") is None
     assert story_key("untitled  ITEM.") is None
+
+
+# --- the numbers in a headline ----------------------------------------------
+#
+# The words have to match exactly; a number only has to agree to the coarser of
+# the two precisions it was written with. Owner ruling, 2026-09-14: two desks
+# rounding one figure differently are still reporting one story, and a rule
+# that split them would cost the reader a group for two decimal places.
+# Measured the same day over the twenty-five committed days, the rule admits
+# twelve cross-source pairs the exact-digit rule refused and every one of them
+# is the same acquisition - no false merge.
+
+
+def one_headline(left: str, right: str) -> bool:
+    """Would the pass read these two headlines as one story?"""
+    first, second = story_key(left), story_key(right)
+    if first is None or second is None or first.shape != second.shape:
+        return False
+    return numbers_agree(first.numbers, second.numbers)
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "why"),
+    [
+        (
+            "Quake kills 2 million",
+            "Quake kills 2,000,035",
+            "a desk that writes 2 million does not claim the next six digits",
+        ),
+        (
+            "Nvidia agrees to acquire Hugging Face for $12.9 billion",
+            "Nvidia agrees to acquire Hugging Face for $13 billion",
+            "two digits of precision against three, and they agree at two",
+        ),
+        (
+            "Nvidia agrees to acquire Hugging Face for $12.93 billion",
+            "Nvidia agrees to acquire Hugging Face for $12.9 billion",
+            "the pair that ran five times on 2026-09-03",
+        ),
+        (
+            "Nvidia agrees to acquire Hugging Face for $12.9bn",
+            "Nvidia agrees to acquire Hugging Face for $12.9 billion",
+            "the scale word is read into the value, not left in the words",
+        ),
+    ],
+)
+def test_two_desks_rounding_one_figure_are_one_story(left: str, right: str, why: str) -> None:
+    assert one_headline(left, right), why
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "why"),
+    [
+        (
+            "Tariff raised to 25 percent",
+            "Tariff raised to 50 percent",
+            "both written to two digits and different inside them",
+        ),
+        (
+            "Budget 2025 lands",
+            "Budget 2026 lands",
+            "the period label the Editor named as the watch class",
+        ),
+        (
+            "Quake kills 2 million",
+            "Quake kills 3 million",
+            "one digit each, and one digit is enough to tell these apart",
+        ),
+        (
+            "Ferry sinks, 7 dead",
+            "Ferry sinks, 70 dead",
+            "rounding is not magnitude-blind",
+        ),
+        (
+            "Toll rises to 104",
+            "Toll rises to 100",
+            "a trailing zero is a written digit, so 100 claims three of them",
+        ),
+        (
+            "Nvidia acquires Hugging Face for $12.9 billion",
+            "Nvidia acquires Hugging Face for $12.9 million",
+            "the scale word is part of the value it multiplies",
+        ),
+    ],
+)
+def test_two_desks_printing_different_figures_are_two_stories(
+    left: str, right: str, why: str
+) -> None:
+    assert not one_headline(left, right), why
+
+
+def test_a_headline_with_one_number_is_never_one_with_two() -> None:
+    """Counting the numbers is part of matching them.
+
+    A headline that carries a figure the other does not is not the same
+    sentence, whatever the figures say.
+    """
+    assert not one_headline("Deal worth $5 billion agreed", "Deal worth $5 billion agreed by 3")
 
 
 # --- the oracle: a hand-labelled day ---------------------------------------

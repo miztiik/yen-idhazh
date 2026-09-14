@@ -591,6 +591,48 @@ def _strength_order(item: DigestItem) -> tuple[float, float, int, str]:
 _TITLE_NOISE: Final = re.compile(r"[^\w]+", re.UNICODE)
 #: More than one space, after the reduction above has left some behind.
 _RUN_OF_SPACES: Final = re.compile(r" +")
+#: A written number, with the scale word a desk may attach to it. Digit-group
+#: separators are inside the match so `2,000,035` is one number and not three.
+_WRITTEN_NUMBER: Final = re.compile(
+    r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)\s*"
+    r"(bn|b|k|m|mn|tn|thousand|million|billion|trillion|crore|lakh)?\b",
+    re.IGNORECASE,
+)
+#: What each scale word multiplies its number by.
+_SCALE: Final = {
+    "k": 1_000,
+    "thousand": 1_000,
+    "m": 1_000_000,
+    "mn": 1_000_000,
+    "million": 1_000_000,
+    "b": 1_000_000_000,
+    "bn": 1_000_000_000,
+    "billion": 1_000_000_000,
+    "tn": 1_000_000_000_000,
+    "trillion": 1_000_000_000_000,
+    "lakh": 100_000,
+    "crore": 10_000_000,
+}
+
+
+@dataclass(frozen=True)
+class StoryKey:
+    """A published headline split into the words and the numbers in it.
+
+    The words have to match exactly. The numbers only have to agree to the
+    coarser of the two precisions they were written with, which is what lets
+    `$12.9 billion` and `$12.93 billion` be one story while `25 percent` and
+    `50 percent` are two.
+
+    A number leaves no trace in `shape`; what pairs them up is their position in
+    `numbers`, and a headline carrying a figure the other does not carry is
+    refused on the count before any value is compared.
+    """
+
+    #: The reduced headline with the numbers taken out of it.
+    shape: str
+    #: Each number's value and how many significant digits it was written with.
+    numbers: tuple[tuple[float, int], ...]
 
 
 def _reduce(title: str) -> str:
@@ -604,19 +646,66 @@ def _reduce(title: str) -> str:
 _UNTITLED_KEY: Final = _reduce(_UNTITLED)
 
 
-def story_key(title: str) -> str | None:
+def _written(digits: str, scale: str | None) -> tuple[float, int]:
+    """One written number as its value and the precision it was written with.
+
+    Precision is the count of significant digits on the page, so `2 million` is
+    one digit of precision and `2,000,035` is seven. A scale word multiplies the
+    value and adds no precision - writing `2 million` does not claim to know the
+    next six digits, and the whole rule below rests on that.
+    """
+    plain = digits.replace(",", "")
+    value = float(plain) * (_SCALE[scale.lower()] if scale else 1)
+    significant = len(plain.replace(".", "").lstrip("0")) or 1
+    return value, significant
+
+
+def _rounds_to(value: float, significant: int) -> float:
+    """`value` written with `significant` digits and no more."""
+    if value == 0:
+        return 0.0
+    exponent = math.floor(math.log10(abs(value)))
+    return round(value, -(exponent - significant + 1))
+
+
+def numbers_agree(
+    left: tuple[tuple[float, int], ...], right: tuple[tuple[float, int], ...]
+) -> bool:
+    """Do two headlines' numbers report the same facts?
+
+    A number is only as precise as it was written, so two of them agree when
+    they agree at the coarser of the two precisions. `2 million` and
+    `2,000,035` are one death toll written twice; `25 percent` and `50 percent`
+    are two different figures, and `2025` and `2026` are two different years,
+    because both of those pairs were written to the same precision and differ
+    inside it.
+    """
+    if len(left) != len(right):
+        return False
+    for (one, one_digits), (other, other_digits) in zip(left, right, strict=True):
+        coarser = min(one_digits, other_digits)
+        if _rounds_to(one, coarser) != _rounds_to(other, coarser):
+            return False
+    return True
+
+
+def story_key(title: str) -> StoryKey | None:
     """A published headline reduced to what two outlets would share, or nothing.
 
     Compatibility-normalise, casefold, and turn everything that is not a letter
     or a digit into a space. That folds the three differences two desks make to
     one headline - capitalisation, a comma, a typographic quote - and folds
-    nothing else. **Digits survive**, so a headline is only ever equal to one
-    that carries the same numbers: a price, a death toll or a percentage is
-    often the whole story, and this pass publishes a corroboration sentence
-    rather than a private note, so a rule that reads past a number would tell a
-    reader two sources agree on exactly the pairs where they printed different
-    figures. What that costs is named in the docs page this rule is written up
-    on - two spellings of one price stay two groups.
+    nothing else.
+
+    **Numbers come out of the words and are compared separately**, because the
+    two need different rules. The words have to match exactly. A number only has
+    to agree to the coarser of the two precisions it was written with, since a
+    desk that writes `2 million` is not claiming the next six digits and a desk
+    that writes `2,000,035` is. `$12.9 billion` and `$12.93 billion` are one
+    acquisition; `25 percent` and `50 percent` are two different figures, and
+    `Budget 2025` and `Budget 2026` are two different years. A scale word is
+    read into the value rather than left in the words, so `$12.9bn` and
+    `$12.9 billion` are one headline.
 
     Non-Latin scripts are kept whole. An accent is kept too: stripping combining
     marks would fold Devanagari matras into each other, and over the twenty-five
@@ -627,10 +716,17 @@ def story_key(title: str) -> str | None:
     the untitled fallback - two sources can both land on it, and two unrelated
     stories both called `Untitled item` are not one story.
     """
-    key = _reduce(title)
-    if not key or key == _UNTITLED_KEY:
+    folded = unicodedata.normalize("NFKC", title).casefold()
+    numbers: list[tuple[float, int]] = []
+
+    def take(found: re.Match[str]) -> str:
+        numbers.append(_written(found.group(1), found.group(2)))
+        return " "
+
+    shape = _reduce(_WRITTEN_NUMBER.sub(take, folded))
+    if not shape or shape == _UNTITLED_KEY:
         return None
-    return key
+    return StoryKey(shape=shape, numbers=tuple(numbers))
 
 
 def _pair_fit(
@@ -638,7 +734,7 @@ def _pair_fit(
     right: str,
     vectors: dict[str, array[int]],
     norms: dict[str, float],
-    keys: Mapping[str, str],
+    keys: Mapping[str, StoryKey],
 ) -> float:
     """How strongly two items read as one story, on a 0 to 1 scale.
 
@@ -653,8 +749,10 @@ def _pair_fit(
     never equal to anything, including another item with no key.
     """
     key = keys.get(left)
-    if key is not None and key == keys.get(right):
-        return 1.0
+    other = keys.get(right)
+    if key is not None and other is not None and key.shape == other.shape:
+        if numbers_agree(key.numbers, other.numbers):
+            return 1.0
     return cosine_int8(
         vectors[left],
         vectors[right],
@@ -668,7 +766,7 @@ def _group_fit(
     item_id: str,
     vectors: dict[str, array[int]],
     norms: dict[str, float],
-    keys: Mapping[str, str],
+    keys: Mapping[str, StoryKey],
     floor: float,
 ) -> float | None:
     """How well this item fits the whole group, or nothing if it does not.
@@ -715,6 +813,10 @@ def collapse_same_story(
     below a pair a person marked as two different stories - so no threshold
     separates them and the text is what was wrong.
 
+    Two headlines match on their words exactly and on their numbers to the
+    coarser precision of the two, so a desk rounding a figure does not cost the
+    reader a group. `story_key` owns that rule and states what it refuses.
+
     Runs at build time over the block the payload already holds (Guardrail #1): the
     browser never computes this, and no encoder is loaded to do it. A day with
     no vectors, and an item without one, come back untouched - both fields stay
@@ -739,7 +841,7 @@ def collapse_same_story(
         return list(items)
 
     by_id = {item.item_id: item for item in items}
-    keys: dict[str, str] = {}
+    keys: dict[str, StoryKey] = {}
     if group_identical_titles:
         for item in items:
             key = story_key(item.title)

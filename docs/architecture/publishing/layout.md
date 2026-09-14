@@ -135,6 +135,29 @@ A day runs the same story from more than one of our feeds, and until 2026-09-01 
 | `also_covered_by` | How many **other sources** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. |
 | `same_story_as` | The item a reading surface would draw for this story. | Not a deletion, and not something any page acts on today. |
 
+**Two items become one story down this path, and nowhere else.** `collapse_same_story` in [../../../backend/idhazh/assemble.py](../../../backend/idhazh/assemble.py) is the only thing that writes either field. Every rule below the diagram is one of its boxes.
+
+```mermaid
+flowchart TD
+  start["Two items on the same published day"] --> src{"Same source?"}
+  src -- yes --> apart["Two stories.<br/>One outlet twice is a different problem,<br/>bounded by collect.max_source_share_per_day"]
+  src -- no --> vec{"Do both carry a vector?"}
+  vec -- no --> unknown["No answer. also_covered_by stays null,<br/>which reads as unknown and not as zero"]
+  vec -- yes --> shape{"Do the headlines reduce<br/>to the same words?"}
+  shape -- yes --> nums{"Do their numbers agree at the<br/>coarser of the two precisions?"}
+  shape -- no --> cos["cosine over the stored int8 vectors"]
+  nums -- no --> cos
+  nums -- yes --> fits["Reads as one story"]
+  cos --> floor{"At or above<br/>assemble.duplicate_similarity_min?"}
+  floor -- yes --> fits
+  floor -- no --> apart
+  fits --> all{"Does it clear against<br/>EVERY member of the group?"}
+  all -- no --> apart
+  all -- yes --> join["One group. The strongest rank_score is<br/>what a reading surface draws;<br/>every member carries also_covered_by"]
+```
+
+Two things the diagram is deliberate about. The headline branch and the vector branch are **two ways to clear one bar**, not two passes - which is why the all-pairs check at the bottom is shared. And nothing on it deletes: every item keeps its place, its address and its search entry whichever way it exits.
+
 **`also_covered_by` is what a reader sees.** The item's footer, under the summary, reads `Also covered by N other sources today.`, or `Only one of our sources carried this.` where nothing grouped with it. Both are facts about our feed set and never claims about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does.
 
 **`same_story_as` is recorded and not yet drawn**, and that is deliberate. Collapsing a group in `DigestList` was built and then taken out again on the evidence of its own smoke: the reading routes reach an item by paging a topic, so an item filtered out of the list is not merely undrawn on the first screen - it becomes unreachable through every reading route while its address still exists. **Half of that has since been answered and half has not.** A story's own address now pages the stream down to it and focuses it (below), so a reader who follows a link to a collapsed story arrives at it. What is still missing is the way in for a reader who has no link: nothing on the page names the stories a group swallowed, so drawing the collapse today would take five stories off the 2026-08-30 page with no route a reader could find them by. The field is on the committed day so the decision is recorded and auditable; it is **not** on the served projection, because a field with no renderer does not earn the wire.
@@ -178,7 +201,9 @@ The vector pass alone left the same story on the page several times. `dolly part
 
 **The reduction is a source constant and deliberately not a config value.** It defines the key rather than tunes it, and a key rule a config can change would break `build_day`'s promise that rebuilding a day reaches the same groups. `story_key` applies NFKC, case-folds, turns every non-word character into a space and collapses runs of spaces. It does **not** strip accents and does not restrict itself to Latin letters: `[a-z0-9]+` over a lower-cased string - which is what `tag.normalise` does for its own, different job - reduces two unrelated Devanagari headlines to the same empty string and would join them, and an accent-blind reduction finds the same 57 cross-source pairs over the committed days and not one more, so the risk buys nothing. A headline that reduces to nothing, and the `Untitled item` fallback, both refuse to key at all.
 
-**Digits survive the reduction.** Dropping them would have closed thirteen more pairs on the committed days, twelve of them the Nvidia price, and every one of the thirteen reads as one story. It is still not the rule: `also_covered_by` is a claim that our sources corroborated each other, and a digit-blind key would print that claim exactly where two outlets published different figures. The same rule that folds `$12.9 billion` into `$12.93 billion` folds `25 percent` into `50 percent`, and the ladder's own shape says they are different rules - setting aside case adds 10 pairs, punctuation adds 4, and digits add 13. The cost is stated rather than hidden: two spellings of one number stay two groups, and a reader sees that acquisition twice. Ruled by Andre, who owns the instrument ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)), over the Editor's preference to fold them; 2026-09-14.
+**Numbers come out of the words and are compared separately**, because the two need different rules. The words have to match exactly. A number only has to agree to the coarser of the two precisions it was written with, and a scale word is read into the value rather than left among the words. A desk that writes `2 million` is not claiming to know the next six digits; a desk that writes `2,000,035` is. So `$12.9 billion`, `$12.93 billion` and `$13 billion` are one acquisition, and `$12.9bn` is the same headline as `$12.9 billion`. What it refuses is the pair written to the same precision and different inside it: `25 percent` against `50 percent`, `Budget 2025` against `Budget 2026`, `7 dead` against `70 dead`, and `100` against `104` - because a trailing zero is a written digit, so `100` claims three of them.
+
+**That rule is bounded by the words around it, which is why it is safe.** A number is only ever compared against a headline that is otherwise identical word for word, so the question is never "are these two numbers close" - it is "did two desks write one sentence and round one figure differently". Measured 2026-09-14 over the twenty-five committed days, it admits **12 cross-source pairs** the exact-digit rule refused and **every one of them is the same Nvidia acquisition**. No false merge, and the 42 groups the exact rule already found are unchanged. Owner ruling, 2026-09-14, over Andre's narrower stop-at-punctuation: two decimal places are not a reason to print one story twice, and the corroboration claim survives because a genuine disagreement - a different figure at the same precision - still refuses.
 
 **A matching headline does not lift the vector gate.** It decides that two items are the same story; it does not decide that an item with no vector may be grouped. That item stays out, as it always did.
 
@@ -193,11 +218,11 @@ The vector pass alone left the same story on the page several times. `dolly part
 | | One-headline cross-source groups | Of those, still apart | Groups formed | Items in a group | Largest group |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Vectors only | 42 | **27** | 65 | 138 | 4 |
-| With the headline rule | 42 | **2** | 84 | 181 | 5 |
+| With the headline rule | 42 | **1** | 84 | 183 | 6 |
 
-Nineteen more groups form and 43 more items sit in one. Dolly Parton's death, which ran five times on 2026-08-25 from five feeds, is now one group of five - the largest the pass has ever formed.
+Nineteen more groups form and 45 more items sit in one. Dolly Parton's death, which ran five times on 2026-08-25 from five feeds, is now one group of five. The largest group the pass has ever formed is the Nvidia acquisition at six, and it only reaches six because the rounding rule folds three spellings of its price.
 
-**The two that stay apart are the all-pairs rule refusing, not the headline rule failing**, and both were read. On 2026-08-31 two outlets share a headline about the lake renaming, but one of them had already joined a third item on its vector, and the newcomer does not clear the bar against that third item. On 2026-09-03 the same shape holds for one spelling of the Nvidia price. In each case the group that exists is correct and the item left out is a story the reader still gets; joining it would mean dropping complete-link, which is the trade `Every pair inside a group clears the bar` above already refused.
+**The one that stays apart is the all-pairs rule refusing, not the headline rule failing**, and it was read. On 2026-08-31 two outlets share a headline about the lake renaming, but one of them had already joined a third item on its vector, and the newcomer does not clear the bar against that third item. The group that exists is correct and the item left out is a story the reader still gets; joining it would mean dropping complete-link, which is the trade `Every pair inside a group clears the bar` above already refused.
 
 **Editor's asymmetry is deferred, not repealed.** The rule above leans the *other* way from `What chose 0.94` - it adds groups rather than withholding them - and that is allowed only while `same_story_as` is recorded and not drawn. A missed group today prints a false sentence on a page the reader can see, five times over; a false merge today prints one wrong count on a card that still runs. The day the collapse is drawn, a false merge starts costing a story nobody can see is missing, and this paragraph expires with it.
 

@@ -2857,15 +2857,18 @@ class AssembleConfig(Model):
         default=True,
         description=(
             "Whether two of a day's items are one story when their published headlines "
-            "reduce to the same key - compatibility-normalised, casefolded, and with "
-            "everything that is not a letter or a digit turned into a space. Digits "
-            "survive, so two spellings of one price stay two groups. This is a second "
-            "way into a group beside duplicate_similarity_min, never a replacement: "
-            "every pair inside a group still has to clear one of the two, and an item "
-            "with no vector is still never grouped. It exists because the cosine is "
-            "taken over `title. summary`, and the summary is our own prose about ONE "
-            "article and is most of that string, so two honest tellings of one story "
-            "are pulled apart by the part that is guaranteed to differ. Measured "
+            "say the same thing - compatibility-normalised, casefolded, and with "
+            "everything that is not a letter or a digit turned into a space. The words "
+            "must match exactly; the numbers only have to agree to the coarser of the "
+            "two precisions they were written with, so `$12.9 billion` and `$12.93 "
+            "billion` are one acquisition while `25 percent` and `50 percent` are two "
+            "different figures. This is a second way into a group beside "
+            "duplicate_similarity_min, never a replacement: every pair inside a group "
+            "still has to clear one of the two, and an item with no vector is still "
+            "never grouped. It exists because the cosine is taken over `title. "
+            "summary`, and the summary is our own prose about ONE article and is most "
+            "of that string, so two honest tellings of one story are pulled apart by "
+            "the part that is guaranteed to differ. Measured "
             "2026-09-14 on a developer machine / Python 3.14.2 over the "
             "twenty-five committed days and 9,353 items: fifty-three cross-source "
             "pairs share a headline, their cosine has a median of 0.9177 against a "
@@ -2874,7 +2877,8 @@ class AssembleConfig(Model):
             "populations and lowering duplicate_similarity_min cannot fix this. Turning "
             "this off restores the vector-only rule, which is the revert path an "
             "operator has if a shared headline ever turns out to be two stories. Ruled "
-            "by Andre and the Editor, 2026-09-14; the reasoning is in "
+            "by Andre and the Editor, 2026-09-14, and the rounding tolerance by the "
+            "owner the same day; the reasoning is in "
             "docs/architecture/publishing/layout.md."
         ),
     )
@@ -4064,10 +4068,11 @@ class AppConfig(Contract):
             change=(
                 "Added assemble.group_identical_titles, default true. The same-story "
                 "pass gains a second way into a group: two items whose published "
-                "headlines reduce to the same key are one story, beside the cosine it "
-                "already used. Additive with a default, so an older config/idhazh.json "
-                "still validates and no read-side migration is owed. "
-                "assemble.duplicate_similarity_min is untouched at 0.94."
+                "headlines say the same thing are one story, beside the cosine it "
+                "already used. The words must match exactly and the numbers to the "
+                "coarser of the two precisions written. Additive with a default, so an "
+                "older config/idhazh.json still validates and no read-side migration "
+                "is owed. assemble.duplicate_similarity_min is untouched at 0.94."
             ),
             why=(
                 "The digest published one story five times in a day and the pass did "
@@ -4080,7 +4085,9 @@ class AppConfig(Contract):
                 "threshold was never the defect. The knob exists because the new joiner "
                 "has no threshold of its own, so without it part of the pass would be "
                 "invisible to config/ (Guardrail #6). Ruled by Andre, the Editor and "
-                "Fowler, 2026-09-14."
+                "Fowler, 2026-09-14; the rounding tolerance on numbers by the owner the "
+                "same day, measured to admit twelve cross-source pairs over those days "
+                "and no false merge."
             ),
         ),
         ChangelogEntry(

@@ -57,14 +57,18 @@ as two stories sits at **0.9317** - above that median. No floor separates the tw
 populations, so lowering one would have traded this defect for a worse one.
 
 **What shipped is a second joiner, not a new number.** Two items are also the
-same story when their reduced headlines are identical - threshold-free, still
-vector-gated, still across sources, still all-pairs. `assemble.duplicate_similarity_min`
-is untouched at 0.94. Replayed through the shipped pass over every committed day:
-**27 of the 42 were apart before, 2 after**. Digits survive the reduction, which
-leaves the `$12.9` / `$12.93` / `$13` spellings of that acquisition as separate
-groups; Andre ruled the stop there on 2026-09-14 and the reasoning, the two
-headline classes that would break the rule, and the guard measurements that say
-neither fires today are in
+same story when their reduced headlines say the same thing - threshold-free,
+still vector-gated, still across sources, still all-pairs.
+`assemble.duplicate_similarity_min` is untouched at 0.94. The words must match
+exactly; the numbers only have to agree to the coarser of the two precisions
+they were written with, so `$12.9 billion`, `$12.93 billion` and `$13 billion`
+are one acquisition while `25 percent` and `50 percent` are two figures. That
+tolerance admits twelve cross-source pairs the exact-digit rule refused and
+every one is the same acquisition - no false merge. Owner ruling 2026-09-14,
+over Andre's narrower stop-at-punctuation. Replayed through the shipped pass
+over every committed day: **27 of the 42 were apart before, 1 after**. The
+reasoning, the flowchart of the whole rule, the two headline classes that would
+break it, and the guard measurements that say neither fires today are in
 [../docs/architecture/publishing/layout.md](../docs/architecture/publishing/layout.md).
 
 **What is still unmeasured is recall** - every number above starts from pairs
