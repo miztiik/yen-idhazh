@@ -32,7 +32,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 14 | 14 | 3 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 15 | 13 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
 | [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 11 | 3 | 3 |
 
@@ -74,7 +74,7 @@ section 3 is where it is answered.
 | #9 | 28 | G | The runbook: swap and revert in one line each | 6, 8, 12 |
 | #10 | 28 | H | Two spans on one call, so the model can think | 5, 6, 11 |
 
-## Waiting on another row - 50
+## Waiting on another row - 49
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -115,14 +115,13 @@ section 3 is where it is answered.
 | #6 | 21 | F | How this loop knows when it is done | 5 is PENDING |
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
-| #P3 | 23 | D | A person labels the dev split and the test split | - |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
 | #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 8 is PENDING |
 | #9 | 23 | K | Confidence is a masked probability over the label's whole span | 8 is PENDING; 14 is PENDING; P5 is PENDING |
 | #15 | 23 | K | The console tab, at `/console/judgement/` | 14 is PENDING; plan 25 row #12 is PENDING |
 | #10 | 23 | L | Five stances, each with its own decline, behind a gate written in code | 8 is PENDING; 14 is PENDING |
-| #11 | 23 | M | Sentiment about one named subject | 8 is PENDING; 14 is PENDING; P3 is BLOCKED |
-| #18 | 23 | M | The closing measurement: is a read desk better than a declared one | P3 is BLOCKED; 14 is PENDING |
+| #11 | 23 | M | Sentiment about one named subject | 8 is PENDING; 14 is PENDING |
+| #18 | 23 | M | The closing measurement: is a read desk better than a declared one | 14 is PENDING |
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |
