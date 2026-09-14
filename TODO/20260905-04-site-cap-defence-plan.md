@@ -70,7 +70,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
   - `config/idhazh.json`
   - `schemas/app-config.schema.json` (generated)
   - `tests/fixtures/contracts/app-config/tuned.json`
-  - `backend/tests/test_retention.py`, `backend/tests/test_contracts.py`
+  - `backend/tests/retention/`, `backend/tests/contracts/`
   - `docs/concepts/config.md`, `docs/architecture/publishing/layout.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** A config setting the cap **above** 1024 fails validation with a message naming the bound; a config setting it below loads and the alarm fires earlier. Both arms asserted, because a bound only tested in the permitted direction is not a bound.
@@ -129,7 +129,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
   - a contract for the cleanup row plus its generated schema
   - `state/` (the new ledger, header committed)
   - `.github/workflows/digest.yml` and `.github/scripts/commit-and-push.sh` (staging)
-  - `backend/tests/test_retention.py`, `backend/tests/test_workflows.py`
+  - `backend/tests/retention/`, `backend/tests/workflows/`
   - `docs/concepts/adaptive-pruning.md` (new, or its stub)
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; `shellcheck`; the full suite; one dispatch of the workflow writing a row.
 - **Oracle:** On a fixture backlog deliberately larger than `max_deletes_per_run`, the run reports `deleted` at the cap **and** `skipped_by_fuse` non-zero. `deleted` alone is capped at 200, so `deleted` can never show whether the backlog is shrinking - only the pair can.

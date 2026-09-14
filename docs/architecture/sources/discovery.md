@@ -303,7 +303,7 @@ second feed carrying one address, so `ui.lead_shared_subject_weight` sits under
 a subject that recurs across a week may not outrank a story two independent feeds
 carried today.
 
-`backend/tests/test_contracts.py::test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story`
+`backend/tests/contracts/test_app_config.py::test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story`
 holds it, reading both numbers off the config rather than spelling them, so an
 edit to the step moves the bound with it.
 
@@ -409,7 +409,7 @@ is a floor read from the health ledger rather than from config, and that is a
 contract change nobody has costed - recorded here rather than done.
 
 **What the floor does have is a merge gate.**
-`backend/tests/test_contracts.py::test_every_vertical_clears_its_own_feed_floor`
+`backend/tests/contracts/test_run_plan.py::test_every_vertical_clears_its_own_feed_floor`
 reads the committed `config/sources.json` against the committed
 `config/taxonomy.json` and fails the build when any vertical's active feed count
 drops under `min_feeds`. It says what a failing vertical would cost:

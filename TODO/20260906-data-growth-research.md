@@ -334,8 +334,8 @@ IDs differ. In particular, coordinate these existing files:
   projection changes, browser coverage and per-panel reductions.
 - [frontend/scripts/build-state.ts](../frontend/scripts/build-state.ts) and
   [.github/workflows/ci.yml](../.github/workflows/ci.yml): build reuse and test receipts.
-- [backend/tests/test_contracts.py](../backend/tests/test_contracts.py) and
-  [backend/tests/test_workflows.py](../backend/tests/test_workflows.py): shared oracles.
+- [backend/tests/contracts/](../backend/tests/contracts/) and
+  [backend/tests/workflows/](../backend/tests/workflows/): shared oracles.
 
 ## Planning Routing Index
 

@@ -144,7 +144,7 @@ stopped publishing three months ago.
 
 `REFRESH_PATHS` on the `Commit the day` step names what a rebuild owns after a
 lost push race, and `COMMIT_REFRESH_PATHS['assemble']` in
-`backend/tests/test_workflows.py` mirrors it and is asserted by exact list
+`backend/tests/workflows/` mirrors it and is asserted by exact list
 equality. A payload absent from either builds locally and never reaches the
 site. Both moved in the commit that added the producers, and so did the staged
 path list on the same step.

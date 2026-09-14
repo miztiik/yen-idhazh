@@ -187,7 +187,7 @@ Retired on 2026-09-13, in the commit after the split. `cli.stage_work` does not
 resolve, every caller and every sentence names the module that defines what it
 means, and `cli.py` declares no `__all__` because it exports what it defines and
 nothing else. `test_the_router_exposes_no_name_a_stage_owns` in
-`backend/tests/test_contracts.py` reads the imported router against every
+`backend/tests/contracts/` reads the imported router against every
 module-level name the stage modules declare and fails on any it can still see.
 
 **The nine roots the tests redirect are reached through `common`.** A stage
