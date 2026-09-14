@@ -85,6 +85,39 @@ def _picture_faults(public_root: Path, day: DigestDay) -> list[str]:
     return faults
 
 
+def _census_faults(day: DigestDay) -> list[str]:
+    """A day whose planned stories are neither published nor counted as failed.
+
+    **An empty day is not a fault, and two of them are normal.** A day that
+    planned nothing published nothing: the pipeline found no new article, so
+    `partial` is false and the console paints it amber, which is the correct
+    reading (`backend/utilities/build_canary_day.py::quiet_day`). A day where
+    everything failed publishes empty and says `partial`, because a run that
+    publishes nothing on a bad day is a run whose bad days are invisible
+    (`idhazh.stages.assemble`). 2026-09-14 is the second kind and stays
+    published - refusing it would delete the only record that the day went
+    wrong.
+
+    The third empty day is the one nothing can write honestly: stories were
+    planned, none failed, and none came out. `ItemOutcome` has two members, so
+    every story the pipeline touched is `ok` or `failed`, and `items_planned` is
+    never below `len(items) + items_failed` - a day holding neither has lost its
+    whole plan with nothing recording where it went. On a reader's page and on
+    the console it is indistinguishable from a quiet day, which is what makes it
+    worth refusing rather than merely counting.
+
+    `DigestDay` pins `partial` to `items_failed > 0` on its own. It cannot pin
+    this one: what makes the day wrong is a plan the day itself is silent about,
+    so the arithmetic only closes once, here, over the whole payload.
+    """
+    if day.items or not day.items_planned or day.items_failed:
+        return []
+    return [
+        f"planned {day.items_planned} stories and accounts for none of them: "
+        f"nothing published and nothing failed"
+    ]
+
+
 def _day_faults(path: Path, public_root: Path, *, payload: bytes | None = None) -> list[str]:
     """What is wrong with one committed day, in sentences, or an empty list.
 
@@ -115,9 +148,12 @@ def _day_faults(path: Path, public_root: Path, *, payload: bytes | None = None) 
 
     faults: list[str] = []
     try:
-        faults.extend(_picture_faults(public_root, DigestDay.model_validate(parsed)))
+        day = DigestDay.model_validate(parsed)
     except ValidationError as error:
         faults.append(f"fails digest-day.schema.json: {error.error_count()} problems\n{error}")
+    else:
+        faults.extend(_picture_faults(public_root, day))
+        faults.extend(_census_faults(day))
     try:
         DigestView.project(parsed)
     except ValidationError as error:
@@ -143,10 +179,11 @@ def _validator_identity() -> str:
     A published day is frozen, so the only thing that can turn a pass into a
     failure is a move in the rules. This is what "the rules" means, spelled out
     so that nobody has to remember to bump it: the two generated schemas, and
-    the source of the four functions that do the checking. Change a field, a
+    the source of the five functions that do the checking. Change a field, a
     constraint, an enum member or a line of `_day_faults`, `_picture_faults`,
-    `assets_in_day` or `DigestView.project`, and this moves - which invalidates
-    every receipt at once and re-validates the whole archive, once.
+    `_census_faults`, `assets_in_day` or `DigestView.project`, and this moves -
+    which invalidates every receipt at once and re-validates the whole archive,
+    once.
 
     It is derived rather than declared on purpose. A hand-maintained constant is
     a check that silently stops checking on the day somebody forgets it, and the
@@ -157,7 +194,7 @@ def _validator_identity() -> str:
     stage did on every run before the receipt existed - the error is on the side
     of doing the work again rather than skipping it.
     """
-    rules = (_picture_faults, _day_faults, assets_in_day, DigestView.project)
+    rules = (_picture_faults, _census_faults, _day_faults, assets_in_day, DigestView.project)
     material = canonical_json(
         {
             "digest_day": DigestDay.json_schema(),
