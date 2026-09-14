@@ -331,10 +331,10 @@ A diagram in this repository is Mermaid in a fenced ` ```mermaid ` block, and it
 ### The opening line, which is not optional
 
 ```
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 ```
 
-`theme: base` is what stops the renderer choosing. Without it the `themeVariables` are merged into a palette that still flips. The four that are easy to forget are the four that break: `textColor` paints edge labels and subgraph titles, `lineColor` paints the arrows, and `clusterBkg` with `clusterBorder` paint the box a `subgraph` draws.
+`theme: base` is what stops the renderer choosing. Without it the `themeVariables` are merged into a palette that still flips. The five that are easy to forget are the five that break: `textColor` paints edge labels and subgraph titles, `edgeLabelBackground` paints the chip behind an edge label - left unset the renderer computes one, and it comes out a muddy olive - `lineColor` paints the arrows, and `clusterBkg` with `clusterBorder` paint the box a `subgraph` draws.
 
 ### The class vocabulary
 

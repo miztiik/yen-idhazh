@@ -112,6 +112,7 @@ cancelled queued runs on this repository (2026-08-24 and 2026-08-25 carry six
 how many runs happen, and this page is where that is written down.
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart LR
  PR["ordinary pull request"] --> CI["CI<br/>ci.yml"]
  PUSH["merge or push to main"] --> CI
@@ -122,6 +123,16 @@ flowchart LR
  FILTER -->|"no"| NO_PAGES
  REFRESH_DONE["Content refresh completed"] --> PAGES
  PAGES --> STATIC["static GitHub Pages bundle"]
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+ classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+ classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+
+ class PR,PUSH,CI,REFRESH_DONE,STATIC stage;
+ class VERDICT,FILTER decision;
+ class PAGES yes;
+ class NO_PAGES no;
 ```
 
 ## Content refresh
@@ -212,14 +223,21 @@ does not exit non-zero: failing there would skip the steps that commit the day,
 which is the invisibility `if: always()` exists to prevent.
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart LR
  SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
  MANUAL["manual dispatch"] --> PLAN
  PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
-  WORK --> ASSEMBLE["assemble"]
- ASSEMBLE --> COMMIT["commit digest and state"]
+ WORK --> ASSEMBLE["assemble"]
+ ASSEMBLE --> COMMIT[("commit digest and state")]
  COMMIT --> COMPLETE["Content refresh completed"]
  COMPLETE --> PAGES["Pages publication"]
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+
+ class SCHEDULE,MANUAL,PLAN,WORK,ASSEMBLE,COMPLETE,PAGES stage;
+ class COMMIT store;
 ```
 
 The plan job also commits first-sighting and feed-health state before it starts
@@ -434,7 +452,7 @@ too, and the reason it is never scheduled is in
 [Vector backfill](#vector-backfill).
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart LR
  PERSON["manual dispatch"] --> VALIDATE["Model validation"]
  PERSON --> MEASURE["Measurements"]
@@ -449,10 +467,10 @@ flowchart LR
 ### Testing a candidate model, end to end
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "fontSize": "14px"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart TB
  subgraph NAME["What a person types"]
-  FORM["one form field<br/>candidate_models_file"] --> FILE[("config/models/&lt;name&gt;.json<br/>repo, commit, filename, digest,<br/>byte count, alias, quantisation")]
+  FORM["one form field<br/>candidate_models_file"] --> FILE[("config/models/NAME.json<br/>repo, commit, filename, digest,<br/>byte count, alias, quantisation")]
  end
 
  subgraph BENCH["Measure - measure.yml, target llm"]
@@ -835,18 +853,20 @@ The named inputs:
 - **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
  `measure.target`, `measure.runtime_candidate`.
 - **Read by name** - `measure.models`, `measure.runtime_threads`,
- `measure.runtime_threads_batch`, and the six `validate.candidate_*` fields,
- which the `candidate` step asserts are one bare word each before it
- republishes them.
+ `measure.runtime_threads_batch`, and `candidate_models_file` on both
+ `measure.yml` and `validate.yml`. That one becomes a file path, so the step
+ resolves it and proves it sits inside `config/` rather than matching its
+ spelling, then asserts every field it republishes is one bare word.
 - **Matched** - `digest.date`, `drift.recent_days`, `drift.baseline_days`,
  `measure.corpus_links`, `measure.threads`, `validate.shards`,
  `validate.repeats`, `validate.corpus_per_shard`,
- `validate.job_budget_minutes`, `validate.candidate_bytes`.
+ `validate.job_budget_minutes`.
 
-`validate.yml` shapes its five numbers in one step of the `plan` job, which is
+`validate.yml` shapes its four numbers in one step of the `plan` job, which is
 the job every other job needs, so "before its first use" is anywhere after that
-step - the qualify matrix, the job bound, the byte check and the gate all read
-them later.
+step - the qualify matrix, the job bound and the gate all read them later. The
+byte check reads the size the candidate's own entry declares, not a number the
+form carried.
 
 `drift.yml` was the other one worth fixing. Its two window sizes were pasted
 into a Python program inside the step, so a value that is not a number was a
