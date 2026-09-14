@@ -5,6 +5,11 @@ assembly, with the faithfulness model standing in as a recorded number - the
 model is not what is under test here, the composition is (CLAUDE.md section 13).
 
 No mocks and no network. The recorded score is a float, not a stub object.
+
+`digest_item` is deliberately the hard case: every run it is asked for returns a
+different story, and a later run's story outscores the rest. Do not simplify it
+back to one story - that is what made every two-run test here blind to the
+ordering crash of 2026-09-13.
 """
 
 from __future__ import annotations
@@ -967,13 +972,36 @@ def test_a_truncated_article_is_scored_against_both_texts() -> None:
 
 
 def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
-    return assemble.to_digest_item(
+    """A different story for every run, and a later run's story outscores the rest.
+
+    The distinctness is the point, not a convenience. Four of the five daily runs
+    add a story the earlier runs could not see, and it often outscores what is
+    already on the page. A fixture that handed back one story cannot express
+    that shape at all: `build_day` drops an item the day already carries, so a
+    two-run test built on it publishes one block and the ordering stage never
+    meets a second one. That is why every test in this file stayed green while
+    `assemble` ordered across runs, and why `DigestDay` first refused the day in
+    production on 2026-09-13 rather than here.
+
+    Run 1 keeps the address the summary fixture declares, so a test that names
+    `ai-01` still gets it. The title, the link and the score are derived from the
+    run so that two runs are two stories and not one story twice.
+    """
+    built = assemble.to_digest_item(
         article=article(),
         summary=summary(),
         band=row().band,
         source_name="Example Lab",
         source_kind=SourceKind.ANNOUNCEMENT,
         run_n=run_n,
+    )
+    return built.model_copy(
+        update={
+            "item_id": f"{built.vertical}-{run_n:02d}",
+            "title": f"The story run {run_n} published",
+            "source_url": f"{built.source_url}/run-{run_n}",
+            "rank_score": float(run_n),
+        }
     )
 
 
@@ -2011,10 +2039,18 @@ def test_the_census_assemble_adds_names_no_machine(
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:
+    """Run 2 offers a better story and the one already published, and both rules hold.
+
+    The better story goes under what the day already carried, because a reader
+    who read at breakfast must find it where they left it. The one already
+    published is dropped whole rather than published a second time.
+    """
     settings = config.load(CONFIG_DIR)
+    carried = digest_item(run_n=1)
+    added = digest_item(run_n=2)
     first = assemble.build_day(
         plan=plan(),
-        items=[digest_item(run_n=1)],
+        items=[carried],
         previous=None,
         taxonomy=settings.taxonomy,
         run_n=1,
@@ -2023,15 +2059,18 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     )
     second = assemble.build_day(
         plan=plan(),
-        items=[digest_item(run_n=1)],
+        items=[added, carried],
         previous=first,
         taxonomy=settings.taxonomy,
         run_n=2,
         generated_at="2026-08-21T19:00:00Z",
         retention_window_months=-1,
     )
-    assert [item.item_id for item in second.items] == [item.item_id for item in first.items]
-    assert second.runs[-1].items_added == 0, "an item already published is not published twice"
+    assert [item.item_id for item in second.items] == [carried.item_id, added.item_id]
+    assert [item.introduced_by_run for item in second.items] == [1, 2], (
+        "the better story moved under a reader who had already read the day"
+    )
+    assert second.runs[-1].items_added == 1, "an item already published is not published twice"
 
 
 def test_a_desk_publishes_why_it_ran_what_it_ran() -> None:
@@ -2115,7 +2154,7 @@ def test_a_desk_keeps_the_strongest_shortfall_any_run_recorded() -> None:
     )
     second = assemble.build_day(
         plan=narrow,
-        items=[digest_item(run_n=1)],
+        items=[digest_item(run_n=2)],
         previous=first,
         taxonomy=settings.taxonomy,
         run_n=2,
@@ -2132,30 +2171,21 @@ def test_a_desk_keeps_the_strongest_shortfall_any_run_recorded() -> None:
 def test_a_second_runs_better_story_is_published_below_what_the_day_already_had() -> None:
     """The crash of 2026-09-13, held at the stage that caused it.
 
-    The fresh story outscores the published one by a hundred to one, which is
-    the ordinary case: a run publishes what the earlier run could not see yet.
-    `DigestDay` refuses a day whose `introduced_by_run` decreases, so an order
-    taken over the whole day fails here exactly as it failed in production -
-    `ValidationError`, not a wrong assertion.
+    The fresh story outscores the published one, which is the ordinary case: a
+    run publishes what the earlier run could not see yet. `DigestDay` refuses a
+    day whose `introduced_by_run` decreases, so an order taken over the whole
+    day fails here exactly as it failed in production - `ValidationError`, not a
+    wrong assertion.
+
+    Every field this needs comes off `digest_item`, which is the whole of the
+    control: the case is the fixture's default, so a test written next year
+    without a thought for ordering still meets it.
     """
     settings = config.load(CONFIG_DIR)
-    seed = digest_item(run_n=1)
-    published = seed.model_copy(
-        update={
-            "item_id": f"{seed.vertical}-01",
-            "title": "The story the morning run published",
-            "source_url": "https://example.test/morning",
-            "rank_score": 1.0,
-        }
-    )
-    fresh = digest_item(run_n=2).model_copy(
-        update={
-            "item_id": f"{seed.vertical}-02",
-            "title": "The story the evening run found",
-            "source_url": "https://example.test/evening",
-            "rank_score": 100.0,
-        }
-    )
+    published = digest_item(run_n=1)
+    fresh = digest_item(run_n=2)
+    assert fresh.rank_score is not None and published.rank_score is not None
+    assert fresh.rank_score > published.rank_score, "the fixture stopped being the hard case"
 
     morning = assemble.build_day(
         plan=plan(),
@@ -2178,10 +2208,7 @@ def test_a_second_runs_better_story_is_published_below_what_the_day_already_had(
 
     introduced = [item.introduced_by_run for item in evening.items]
     assert introduced == [1, 2], "a story a reader read at breakfast moved under them"
-    assert [item.item_id for item in evening.items] == [
-        f"{seed.vertical}-01",
-        f"{seed.vertical}-02",
-    ]
+    assert [item.item_id for item in evening.items] == [published.item_id, fresh.item_id]
 
 
 def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
@@ -2203,7 +2230,7 @@ def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
     )
     second = assemble.build_day(
         plan=base.model_copy(update={"verticals": []}),
-        items=[digest_item(run_n=1)],
+        items=[digest_item(run_n=2)],
         previous=first,
         taxonomy=settings.taxonomy,
         run_n=2,
