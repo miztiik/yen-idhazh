@@ -150,8 +150,8 @@ def stage_work(
         now=assemble.utc_now,
     )
     read_url = fetcher or common.live_fetcher(settings, tracer=tracer)
-    inference = settings.app.models.summarize.inference
-    model = settings.app.models.summarize
+    inference = settings.models.summarize.inference
+    model = settings.models.summarize
     observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
     inputs = build_inputs(
         model=model,
@@ -561,7 +561,7 @@ def _two_calls_one_item(
     both are a cell in the census rather than a silence.
     """
     trace = tracer if tracer is not None else silent_tracer()
-    model = settings.app.models.summarize
+    model = settings.models.summarize
     inference = model.inference
     model_id = model.id
     # Both calls render their own prompt bytes, so they go to the completions
@@ -806,7 +806,7 @@ def _decide_the_visual(
     if not wants_a_plan:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if two.hit_the_budget:
-        inference = settings.app.models.summarize.inference
+        inference = settings.models.summarize.inference
         asked_for = calls.call_two_output_tokens(settings.app.summarize)
         if two.prompt_tokens + asked_for > inference.n_ctx:
             LOG.warning(

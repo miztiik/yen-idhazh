@@ -237,7 +237,7 @@ def stage_assemble(
         previous=previous_manifest,
         summaries=summaries,
         models=[
-            ModelUse(role=ModelRole.SUMMARIZE, model_ref=settings.app.models.summarize),
+            ModelUse(role=ModelRole.SUMMARIZE, model_ref=settings.models.summarize),
         ],
         commit_sha=commit_sha,
         runner=runner,

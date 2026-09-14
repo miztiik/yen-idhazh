@@ -13,7 +13,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh import corpus
+from idhazh import config, corpus
 from idhazh.contracts.app_config import AppConfig, FinetuneConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
@@ -246,8 +246,8 @@ def test_the_committed_config_names_a_base_repo_for_every_model_we_would_tune() 
     swap, and a LoRA adapter loads onto a mismatched base without raising - so
     the damage arrives later as a quality drop nobody can attribute.
     """
-    config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    for role in (config.finetune.teacher,):
-        ref = getattr(config.models, role)
+    settings = config.load(CONFIG_DIR)
+    for role in (settings.app.finetune.teacher,):
+        ref = getattr(settings.models, role)
         assert ref.hf_base_repo, f"models.{role} is a fine-tune target with no base repository"
         assert ref.hf_base_repo != ref.repo, "the GGUF repo is not the safetensors repo"

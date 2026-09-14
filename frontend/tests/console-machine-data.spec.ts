@@ -416,10 +416,13 @@ test.describe('the ledger this reads is the committed one', () => {
 		const config = JSON.parse(
 			readFileSync(join(HERE, '..', '..', 'config', 'idhazh.json'), 'utf8')
 		) as {
-			models: { summarize: { inference: { n_ctx: number } } };
+			models_file: string;
 			run: { shard_timeout_minutes: number };
 		};
-		expect(limits.contextWindow).toBe(config.models.summarize.inference.n_ctx);
+		const models = JSON.parse(
+			readFileSync(join(HERE, '..', '..', 'config', config.models_file), 'utf8')
+		) as { summarize: { inference: { n_ctx: number } } };
+		expect(limits.contextWindow).toBe(models.summarize.inference.n_ctx);
 		expect(limits.jobTimeoutSeconds).toBe(config.run.shard_timeout_minutes * 60);
 	});
 
@@ -720,8 +723,20 @@ const CONSOLE = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 ).console as { window_presets: number[]; min_attempts_for_rate: number };
 const INFERENCE = JSON.parse(
-	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-).models.summarize.inference as { n_ctx: number };
+	readFileSync(
+		resolve(
+			process.cwd(),
+			'..',
+			'config',
+			(
+				JSON.parse(
+					readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
+				) as { models_file: string }
+			).models_file
+		),
+		'utf8'
+	)
+).summarize.inference as { n_ctx: number };
 
 const WIDEST = Math.max(...CONSOLE.window_presets);
 

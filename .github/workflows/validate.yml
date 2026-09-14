@@ -131,10 +131,13 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os
+          import json, os, pathlib
 
           config = json.load(open("config/idhazh.json", encoding="utf-8"))
-          configured = config["models"]["summarize"]
+          models = json.load(
+              open(pathlib.Path("config") / config["models_file"], encoding="utf-8")
+          )
+          configured = models["summarize"]
           for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
               value = os.environ.get(f"CANDIDATE_{field.upper()}", "").strip()
               value = value or configured.get(field) or ""
@@ -212,14 +215,20 @@ jobs:
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
       # The committed config still names the incumbent, and an experiment does
-      # not edit it. The scratch copy differs in `models.summarize` and nothing
-      # else, so every control the gates hold fixed - prompt, schema, sampler,
-      # context, threads, truncation cap - is the committed one by construction.
-      # The incumbent's settings block travels onto the candidate entry, and
-      # `declared_for` becomes the candidate's digest: this run is what puts
-      # those numbers in front of these weights, and `context_fit` is what then
-      # says whether they held. Written out rather than inherited, because an
-      # inherited block is the thing this repository stopped allowing.
+      # not edit it. The scratch copy differs in the ACTIVE MODEL FILE and
+      # nothing else, so every control the gates hold fixed - prompt, schema,
+      # sampler, context, threads, truncation cap - is the committed one by
+      # construction. The pointer is left alone and the file it names is
+      # rewritten, so a candidate is qualified through the same one line a swap
+      # would later move.
+      #
+      # Both of the incumbent's declared blocks travel onto the candidate entry
+      # and both `declared_for` values become the candidate's digest: this run
+      # is what puts those numbers in front of these weights, and `context_fit`
+      # is what then says whether they held. Written out rather than inherited,
+      # because an inherited block is the thing this repository stopped
+      # allowing - and `turns` has no default, so a candidate built without it
+      # is a config that cannot load.
       - name: Build the candidate config
         run: |
           set -euo pipefail
@@ -228,11 +237,16 @@ jobs:
           cp -a config backend/var/candidate-config
           python - <<'PY'
           import json, os, pathlib
-          path = pathlib.Path("backend/var/candidate-config/idhazh.json")
-          config = json.loads(path.read_text(encoding="utf-8"))
-          inference = dict(config["models"]["summarize"]["inference"])
+          root = pathlib.Path("backend/var/candidate-config")
+          pointer = json.loads((root / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
+          path = root / pointer
+          models = json.loads(path.read_text(encoding="utf-8"))
+          incumbent = models["summarize"]
+          inference = dict(incumbent["inference"])
           inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          config["models"]["summarize"] = {
+          turns = dict(incumbent["turns"])
+          turns["declared_for"] = os.environ["CANDIDATE_SHA256"]
+          models["summarize"] = {
               "file": os.environ["CANDIDATE_FILE"],
               "id": os.environ["CANDIDATE_ID"],
               "inference": inference,
@@ -240,8 +254,9 @@ jobs:
               "repo": os.environ["CANDIDATE_REPO"],
               "revision": os.environ["CANDIDATE_REVISION"],
               "sha256": os.environ["CANDIDATE_SHA256"],
+              "turns": turns,
           }
-          path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
         env:
           CANDIDATE_FILE: ${{ needs.plan.outputs.candidate_file }}
@@ -338,8 +353,8 @@ jobs:
           argv = server_argv(
               binary=Path("backend/bin/llama-server"),
               weights=Path(os.environ["LLAMA_WEIGHTS"]),
-              model=settings.app.models.summarize,
-              inference=settings.app.models.summarize.inference,
+              model=settings.models.summarize,
+              inference=settings.models.summarize.inference,
               port=int(os.environ["LLAMA_PORT"]),
           )
           sys.stdout.write("\0".join(argv) + "\0")
