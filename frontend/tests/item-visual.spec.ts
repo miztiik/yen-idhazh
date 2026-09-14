@@ -364,6 +364,190 @@ test.describe('THE ORACLE: a drawn bar is a figure the article states', () => {
 	});
 });
 
+test.describe('THE ORACLE: every fact is reachable without a mouse', () => {
+	/**
+	 * No fact exists only on hover, and the check is a comparison of two SETS.
+	 *
+	 * **Asserting that some keyboard route exists is not the check.** The defect
+	 * this row hunts is always one fact that only a pointer reaches, so an arm
+	 * that stops at "the figure has a name" passes on the day a bar goes missing
+	 * from that name. Both sides are enumerated and compared whole, and both are
+	 * printed when they differ.
+	 *
+	 * **The pointer side is read off the drawn DOM**, node by node - the names,
+	 * the figures and the unit the browser actually painted. **The keyboard side
+	 * is read by pressing Tab**, from the top of the document, taking what each
+	 * stop announces. Neither side is computed from the other.
+	 *
+	 * Two things this catches that the page passed before 2026-09-14: a figure
+	 * that is not in the tab order at all, and an announcement cut short so the
+	 * last bars are drawn and never spoken.
+	 */
+
+	/** Every fact the drawing paints, per figure, in document order.
+	 *
+	 * A fact is what one bar says: its name, its figure, and the unit the axis
+	 * counts. The three come off three separate nodes the browser placed.
+	 */
+	function byPointer(page: Page): Promise<string[][]> {
+		return page.evaluate(() =>
+			[...document.querySelectorAll('main article figure svg')].map((svg) => {
+				const names = [...svg.querySelectorAll('text.name')].map((node) => node.textContent ?? '');
+				const figures = [...svg.querySelectorAll('text.figure')].map(
+					(node) => node.textContent ?? ''
+				);
+				const unit = svg.querySelector('text.unit')?.textContent ?? '';
+				return names.map(
+					(name, at) => `${name} ${figures[at] ?? ''}${unit ? ` ${unit}` : ''}`
+				);
+			})
+		);
+	}
+
+	/** What one announcement lists, split back into the facts a reader hears. */
+	function heard(announced: string): string[] {
+		return announced
+			.replace(/^Bar chart\.\s*/, '')
+			.replace(/\.\s*$/, '')
+			.split(';')
+			.map((clause) => clause.trim())
+			.filter((clause) => clause.length > 0);
+	}
+
+	/** Tab from the top of the document and take what every figure announces.
+	 *
+	 * It walks until focus leaves the document, which is what tabbing past the
+	 * last stop does, so a figure missing from the tab order returns one fewer
+	 * list rather than an exception. The bound is a stop against a page that
+	 * cycles focus rather than a count anybody measured.
+	 */
+	async function byKeyboard(page: Page): Promise<string[][]> {
+		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+		const reached: string[][] = [];
+		for (let press = 0; press < 500; press += 1) {
+			await page.keyboard.press('Tab');
+			const stop = await page.evaluate(() => {
+				const node = document.activeElement;
+				if (!(node instanceof Element) || node === document.body) return null;
+				return node.matches('main article figure') ? (node.getAttribute('aria-label') ?? '') : '';
+			});
+			if (stop === null) break;
+			if (stop !== '') reached.push(heard(stop));
+		}
+		return reached;
+	}
+
+	test('the set a keyboard reaches is the set a pointer reaches', async ({ page }) => {
+		await drawnDay(page);
+		const drawn = await byPointer(page);
+		expect(drawn.flat().length, 'the canary day drew no fact to compare').toBeGreaterThan(0);
+
+		const tabbed = await byKeyboard(page);
+		expect(
+			tabbed,
+			`by pointer: ${JSON.stringify(drawn)}\nby keyboard: ${JSON.stringify(tabbed)}`
+		).toEqual(drawn);
+	});
+
+	test('a figure announces every string it painted and invents none', async ({ page }) => {
+		// The same comparison without the sentence's own shape in it: every string
+		// the browser put on screen, against the characters the announcement
+		// carries. This is the arm that catches a figure re-written on its way to
+		// the announcement - `1,200` spoken for a `1200` drawn.
+		await drawnDay(page);
+		const figures = await page.evaluate(() =>
+			[...document.querySelectorAll('main article figure')].map((figure) => ({
+				announced: figure.getAttribute('aria-label') ?? '',
+				painted: [...figure.querySelectorAll('svg text')].map((node) => node.textContent ?? '')
+			}))
+		);
+		expect(figures.length, 'the canary day drew no figure').toBeGreaterThan(0);
+		for (const figure of figures) {
+			for (const string of figure.painted) {
+				expect(
+					figure.announced,
+					`"${string}" is drawn and not announced: ${JSON.stringify(figure.announced)}`
+				).toContain(string);
+			}
+			// A decimal part only counts when a digit follows the point, or the full
+			// stop that ends the sentence joins the last figure.
+			const spoken = figure.announced.match(/\d[\d,]*(?:\.\d+)?/g) ?? [];
+			for (const number of spoken) {
+				expect(
+					figure.painted,
+					`${number} is announced and never drawn: ${JSON.stringify(figure.painted)}`
+				).toContain(number);
+			}
+		}
+	});
+
+	test('the platform reads the figure by the sentence, not by its marks', async ({ page }) => {
+		// The accessible name as the browser computes it rather than as we wrote
+		// it, so a role that swallowed the name would show here.
+		await drawnDay(page);
+		const drawn = (await byPointer(page))[0];
+		await expect(page.locator('main article figure[role="img"]').first()).toHaveAccessibleName(
+			`Bar chart. ${drawn.join('; ')}.`
+		);
+	});
+
+	test('a chart at the mark ceiling is announced whole', async ({ page }) => {
+		// **Built rather than found.** The canary's charts carry four bars and
+		// three, and the case that breaks is the one the archive has never
+		// produced: `visuals.max_chart_points` is 8 and a bar name may run to 40
+		// characters, so eight ordinary names pass 300 characters - the cap the
+		// compiled sentence was cut at. The bars all draw; before 2026-09-14 the
+		// last of them were drawn and never spoken.
+		await drawnDay(page);
+		const target = fileDrawing((await drawnCharts(page))[0]);
+		const names = [
+			'Northern offshore wind consortium',
+			'Southern coastal generation trust',
+			'Eastern estuary tidal partnership',
+			'Western highland hydro authority',
+			'Central lowland solar cooperative',
+			'Coastal interconnector operator',
+			'National grid balancing reserve',
+			'Island community microgrid'
+		];
+		await page.route(`**/${target}`, async (route) => {
+			const data = (await (await route.fetch()).json()) as VisualData;
+			data.marks = [
+				...names.map((text, at) => ({
+					mark_id: `c${at}`,
+					text,
+					value: null,
+					unit: null,
+					element_id: `e${at}`,
+					derived: null
+				})),
+				...names.map((_, at) => ({
+					mark_id: `q${at}`,
+					text: null,
+					value: String(1100 + at * 370),
+					unit: 'mw',
+					element_id: `f${at}`,
+					derived: null
+				}))
+			];
+			data.encoding.category = names.map((_, at) => `c${at}`);
+			data.encoding.quantity = names.map((_, at) => `q${at}`);
+			return route.fulfill({ json: data });
+		});
+		await drawnDay(page);
+
+		const drawn = await byPointer(page);
+		const wide = drawn.find((facts) => facts.length === names.length);
+		expect(wide, `no figure drew ${names.length} bars: ${JSON.stringify(drawn)}`).toBeDefined();
+
+		const tabbed = await byKeyboard(page);
+		expect(
+			tabbed,
+			`by pointer: ${JSON.stringify(drawn)}\nby keyboard: ${JSON.stringify(tabbed)}`
+		).toEqual(drawn);
+	});
+});
+
 test.describe('THE ORACLE: a drawn string can be measured against the floor', () => {
 	/**
 	 * The second oracle, because the first one cannot see the reader. This row

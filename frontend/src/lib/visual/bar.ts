@@ -143,3 +143,32 @@ export function drawBars(data: VisualData): Drawing {
 		bars
 	};
 }
+
+/**
+ * What the drawing says, as one sentence, read off the marks it just placed.
+ *
+ * **The sentence and the picture come out of one `Drawing`, so they cannot
+ * disagree.** Every string the drawing paints is in here and nothing else is:
+ * each bar's name, each bar's stated figure, and the unit the axis counts. That
+ * is the property `ItemVisual.svelte` hands to a keyboard, and
+ * `frontend/tests/item-visual.spec.ts` compares the two sets on a real page
+ * rather than taking this sentence's word for it.
+ *
+ * **The compiler writes a sentence too, and this replaces it on the page.**
+ * `alt_text` on the day payload is a second derivation of the same figures, and
+ * measured on the canary day 2026-09-14 it had already drifted from them two
+ * ways. It re-groups the article's own `1200` as `1,200`, so the reader who
+ * hears the chart and the reader who sees it are given different characters.
+ * And it is cut to 300 characters, which an eight-bar chart - the ceiling
+ * `visuals.max_chart_points` allows - goes past on names of 25 characters, so
+ * the last bar is drawn and never spoken. A fact a reader can see and cannot
+ * hear is the whole defect here, and one source is the only fix that stays
+ * fixed. The compiler still writes `alt_text` and `backend/tests/test_render.py`
+ * still holds it to the element table; what changed is that the reading page no
+ * longer carries it.
+ */
+export function statedBars(drawing: Drawing): string {
+	const tail = drawing.unit ? ` ${drawing.unit}` : '';
+	const facts = drawing.bars.map((bar) => `${bar.name} ${bar.stated}${tail}`);
+	return `Bar chart. ${facts.join('; ')}.`;
+}

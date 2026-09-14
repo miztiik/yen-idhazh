@@ -229,6 +229,12 @@ test.describe('the visual path', () => {
 		// no `alt`, so the sentence is on the figure and `role="img"` is what makes
 		// that one named image rather than a tree of unnamed marks.
 		//
+		// **The characters are the article's, not a re-grouped copy of them.** The
+		// sentence is written in the browser off the marks the bars were drawn
+		// from, so it says `3400` exactly as the bar's own figure does. It said
+		// `3,400` until 2026-09-14, when the day payload's compiled `alt_text` was
+		// what the figure carried.
+		//
 		// The set rather than the positions: the stream runs newest first by the
 		// time on the story, so which of the two figures the page draws first is
 		// the day's business and not this file's.
@@ -238,7 +244,7 @@ test.describe('the visual path', () => {
 			.locator('main figure[role="img"]')
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
 		expect(alts).toHaveLength(2);
-		expect(alts.filter((alt) => alt.includes('3,400'))).toHaveLength(1);
+		expect(alts.filter((alt) => alt.includes('3400'))).toHaveLength(1);
 		expect(alts.filter((alt) => alt.includes('Filed'))).toHaveLength(1);
 	});
 

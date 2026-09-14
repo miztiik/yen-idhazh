@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -384,6 +384,20 @@ What the figure did give back is height. A fixed 16:10 box reserved space the ch
 
 **And since 2026-09-05 the drawing takes its colours from these tokens like everything else on the card.** A story holds the SVG itself rather than a link to it - the build puts it there for the stories a prerendered document carries, and the browser fetches it for the rest - so the page's stylesheet reaches the marks: the bars take `--chart-1`, the axis type takes `--color-text-secondary`, the ticks and the axis line take `--chart-axis` and the grid takes `--chart-grid`. Nothing was added to the file to make that work - a presentation attribute is the lowest priority in the cascade, so `fill="#000"` loses to any rule. What the drawing brought with it, and what it cost, are in [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#a-story-carries-its-drawing-so-the-drawing-can-read-the-page).
 
+### Every fact a drawing shows is reachable without a pointer
+
+> **A drawing is one carrier of a fact, never the only one.** The dominant reading device has no hover, so a value behind a pointer is a value most readers never get.
+
+An item's figure is **one tab stop**, and the name it announces lists every bar the drawing painted: each bar's name, each bar's figure, and the unit the axis counts. One stop per chart and never one per bar. A day runs to hundreds of stories, so a stop per bar would make the stream something a keyboard cannot get past - and `role="img"` replaces the subtree with a single name anyway, so a bar given its own stop would announce nothing.
+
+**The name is written in the browser, off the same `Drawing` the marks are drawn from.** That is what makes the two sets equal by construction rather than by two derivations agreeing - and they had not agreed. The compiler writes `alt_text` on the day payload from the same figures, and measured on the canary day 2026-09-14 it re-grouped the article's own `1200` as `1,200`, so the reader who hears the chart and the reader who sees it were given different characters. It is also cut to 300 characters, which eight bars at the `visuals.max_chart_points` ceiling pass on ordinary names - so the last bars were drawn and never spoken. The compiler still writes it and the backend still holds it to the element table; what changed is that the reading page stopped carrying it.
+
+**What the reader loses is nothing on screen and one thing off it.** A reader with JavaScript off gets neither the chart nor the sentence. Measured on the canary build 2026-09-14, the prerendered document carries **zero `<figure>` elements**: the figure exists only once the marks have arrived, so the sentence had already stopped reaching that reader when the browser took over the drawing on 2026-09-13. This row states the loss rather than causing it.
+
+[../../frontend/tests/item-visual.spec.ts](../../frontend/tests/item-visual.spec.ts) is the memory. It reads the pointer-reachable set off the drawn nodes, walks the keyboard-reachable set by pressing Tab from the top of the document, and compares the two whole, printing both when they differ. **Asserting that some keyboard route exists is not the check** - the defect is always one fact that only a pointer reaches. One arm is driven from a **built** eight-bar chart rather than from the canary's four, because the case that breaks is the one the archive has never produced.
+
+Authority: Reader, plan 14 row #2.
+
 ### A control that needs a script is not left on the page without one
 
 > **A dead input that swallows typing is worse than no input.**
@@ -532,12 +546,9 @@ Source is [Lucide](https://lucide.dev) under the ISC licence; only the icons in 
 
 ## Charts are static first, enhanced only when interaction earns it
 
-A chart on an item is rendered at build time from a specification and shipped as
-an asset ([digest.md](digest.md)). Every chart on the dashboard is hand-written
-markup over a committed CSV or the published telemetry projection.
+An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
-**No chart library on a reader's route.** An item's chart is already an asset, so
-an engine there is a runtime dependency for nothing. That half is settled.
+**No chart ENGINE on a reader's route, and that half is settled.** The arithmetic is a different question and is answered below: `d3-scale` and `d3-array` reach the reader and nothing else does.
 
 **The operator surface is a separate question, and it was answered wrongly
 twice.** An engine was carried for pan and zoom between 2026-08-23 and
@@ -580,8 +591,11 @@ What a chart may take from a library is the arithmetic. `d3-scale` and
 element, no canvas and no theme, and the marks, the SVG and the prerendering
 stay ours. `.nice` and `ticks` are the part a hand-rolled axis gets wrong,
 and getting it wrong shows as an axis labelled 0, 37, 74 that nobody can read a
-value off. The two are 20.5 KB together, and nothing on a reader's route imports
-either one.
+value off. The two are 20.5 KB together. **They are the only two that reach a
+reader**, since 2026-09-13: a bar takes its band scale from `d3-scale` in the
+browser, and `d3-selection`, `d3-axis` and `d3-shape` are not installed at all,
+which is a control rather than a preference - a package outside the lockfile
+cannot be imported onto a reading page.
 
 **A chart draws in CSS pixels at the width it occupies.** A `viewBox` is a scale
 factor, not a unit: four charts that each pick their own and then stretch to the

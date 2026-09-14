@@ -1,6 +1,6 @@
 # 14 - The rest of the ship-or-not bar
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-14
 **Level**: 3 (build-failing checks on the published surface, and the test one compliance clause now rests on)
 
 **Chain**: previous [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md) | next [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md).
@@ -28,7 +28,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A drawing that costs too much is not drawn | - | A | PENDING | - | - | - |
-| 2 | Every fact is reachable without a mouse | - | A | PENDING | - | - | - |
+| 2 | Every fact is reachable without a mouse | - | A | DONE | p14-r2 | #696 | - |
 | 3 | The browser draws exactly what the build drew | 1, 2 | B | PENDING | - | - | - |
 | 4 | Motion that can be turned off, and that ends | 3 | C | PENDING | - | - | - |
 
@@ -61,7 +61,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 3. Row #2 - Every fact is reachable without a mouse
 
 - **Scope:** No fact exists only on hover. Every value a visual communicates is reachable by keyboard, and the accessible description carries what the drawing says.
-- **Files touched:** `frontend/src/lib/charts/**`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/tests/**`, `docs/concepts/design-system.md`
+- **Files touched:** `frontend/src/lib/visual/**`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/tests/**`, `docs/concepts/design-system.md`, `docs/architecture/publishing/visuals.md`. **It said `frontend/src/lib/charts/**` until 2026-09-14, and that is the operator console's own chart engine - 19 files, imported by console components only.** The reader's drawing has lived in `frontend/src/lib/visual/` since plan 12 row #1b, and this row is the reader's surface.
 - **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke at 390 and 1440 in both themes.
 - **Oracle:** For every published visual on a real day, the set of values reachable by keyboard equals the set reachable by pointer. Comparing the two sets is the check; asserting that *some* keyboard route exists is not, because the defect is always one fact that only hover reaches.
 
