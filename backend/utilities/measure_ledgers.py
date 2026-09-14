@@ -521,7 +521,7 @@ def main() -> int:
             args.state,
             cap_tokens=settings.app.extract.truncation_cap_tokens,
             context_tokens=settings.models.summarize.inference.n_ctx,
-            output_tokens=settings.models.summarize.inference.max_output_tokens,
+            output_tokens=settings.models.summarize.inference.max_answer_tokens,
         )
     )
     return 0

@@ -33,6 +33,7 @@ from idhazh import (
 )
 from idhazh.contracts.app_config import (
     ExtractConfig,
+    TurnsConfig,
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
@@ -55,8 +56,11 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import (
     Completion,
+    answer_span,
     is_context_exceeded,
+    one_reply,
     post,
+    thinking_span,
 )
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
@@ -255,6 +259,65 @@ def _log_no_reply(
     )
 
 
+def _two_spans(
+    payload: dict[str, Any],
+    *,
+    article: Article,
+    turns: TurnsConfig,
+    max_think_tokens: int,
+    endpoint: str,
+    timeout: float,
+) -> Completion:
+    """One call, decoded as an unconstrained think and then the constrained answer.
+
+    **Span one is the same body with the grammar off, a hard budget and a stop
+    at the entry's closing marker.** It is derived from the answer body rather
+    than rendered again, so both spans open on one string object and the KV slot
+    span one filled is the slot span two continues - the prompt cache is asked
+    for in `completion_payload` and this is what makes asking worth anything.
+
+    **What span one wrote is spliced into span two's prompt and goes nowhere
+    else.** It is discarded here: it is not returned, not persisted, not
+    replayed into the next call and not shown to anybody. It is model-written
+    text, and a prompt is exactly the channel Guardrail #11 keeps that out of -
+    so the one place it is allowed to reach is the request body of the span it
+    was thought for, where the schema binds the decode from the first token and
+    nothing written in span one can change the shape that comes back.
+
+    A span one that spends its whole budget is logged as what it is. It is not
+    an item failure: `answer_span` writes the closing marker itself, so the
+    block is closed either way and span two answers under its own budget.
+    """
+    thought = post(
+        thinking_span(payload, turns=turns, max_think_tokens=max_think_tokens),
+        endpoint=endpoint,
+        timeout=timeout,
+    )
+    if thought.hit_the_budget:
+        LOG.warning(
+            "the thinking span spent its whole budget id=%s tokens=%s",
+            article.item_id,
+            thought.completion_tokens,
+        )
+    answer = post(
+        answer_span(payload, thought=thought.content, turns=turns),
+        endpoint=endpoint,
+        timeout=timeout,
+    )
+    # What the answer span really had to prefill. It is the one reading that
+    # settles whether the slot held the thinking or re-read it, which is an
+    # estimate until a run prints this (Guardrail #10).
+    LOG.info(
+        "two spans id=%s think_tokens=%s answer_tokens=%s answer_prefilled=%s cached=%s",
+        article.item_id,
+        thought.completion_tokens,
+        answer.completion_tokens,
+        answer.prompt_tokens - answer.cached_tokens,
+        answer.cached_tokens,
+    )
+    return one_reply(thought=thought, answer=answer)
+
+
 def _ask_the_model(
     payload: dict[str, Any],
     article: Article,
@@ -265,6 +328,8 @@ def _ask_the_model(
     prompt_digest: str,
     run_id: str | None,
     trace: telemetry.Tracer,
+    turns: TurnsConfig | None = None,
+    max_think_tokens: int = 0,
 ) -> tuple[Completion | None, FailureCode]:
     """One request, its reply, and the code that says why there is none.
 
@@ -272,6 +337,13 @@ def _ask_the_model(
     what a caller does with a reply differs and how a reply is asked for does
     not. The generation span is opened here so a run that makes two calls an
     item draws two spans rather than one covering both.
+
+    `turns` decides whether that request is one decode or two. An envelope that
+    declares a closing marker gets a thinking span in front of the answer, and
+    what comes back is the pair's cost carrying the answer's words. It is
+    optional because a caller that has already rendered a chat body has no
+    second span to run: the model's own template wrote those bytes, so there is
+    no prompt to continue.
     """
     completion: Completion | None
     no_reply = FailureCode.MODEL_UNREACHABLE
@@ -279,7 +351,18 @@ def _ask_the_model(
         span.set(telemetry.AttrKey.MODEL_ID, model_id)
         span.set(telemetry.AttrKey.PROMPT_DIGEST, prompt_digest)
         try:
-            completion = post(payload, endpoint=endpoint, timeout=timeout)
+            completion = (
+                _two_spans(
+                    payload,
+                    article=article,
+                    turns=turns,
+                    max_think_tokens=max_think_tokens,
+                    endpoint=endpoint,
+                    timeout=timeout,
+                )
+                if turns is not None and turns.thinks
+                else post(payload, endpoint=endpoint, timeout=timeout)
+            )
         except HTTPError as error:
             # Before OSError, which HTTPError subclasses. A server that answered is
             # not an unreachable one, and the body is the only place it says why it
@@ -366,14 +449,21 @@ def _canary_article(
 def _one_call(
     article: Article, settings: config.Settings, *, endpoint: str
 ) -> tuple[Summary, Completion | None, float]:
-    """One live inference call, timed, with the reply kept for the gates."""
+    """One live inference call, timed, with the reply kept for the gates.
+
+    The chat route, so the model's own template writes the prompt and the
+    runtime owns the split between thinking and answer. That is why this path
+    runs one decode where the digest's runs two: there is no prompt of ours to
+    stop at a marker and continue under a grammar.
+    """
     inference = settings.models.summarize.inference
+    turns = settings.models.summarize.turns
     model_id = settings.models.summarize.id
     payload = summarize.build_request(
         article,
         model_id=model_id,
         inference=inference,
-        thinking_kwarg=settings.models.summarize.turns.thinking_kwarg,
+        turns=turns,
         prompt_config=settings.app.summarize,
     )
     started = time.monotonic()
@@ -402,6 +492,7 @@ def _one_call(
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
         no_reply=no_reply,
+        thinking=turns.thinks,
     )
     return summary, completion, seconds
 

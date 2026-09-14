@@ -52,6 +52,20 @@ class PipelineInputs(Model):
     )
     chat_template_sha256: Sha256
     prompt_sha256: Sha256
+    turn_markers_sha256: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The turn envelope the prompts were rendered through - every marker "
+            "string, the system placement and its joiner, digested as one. "
+            "prompt_sha256 already moves when a marker moves, and stops short of two "
+            "envelope facts that move an output without moving a rendered prompt: "
+            "which of the two reply openings a call ends on, and the marker the "
+            "thinking span stops at. Absent means a run written before 2026-09-14, "
+            "when the markers first became able to move at all. It is never a default "
+            "value: a substituted digest would say the envelope was recorded and "
+            "unchanged, which is the one thing an absent key must not be read as."
+        ),
+    )
     output_schema_sha256: Sha256 = Field(
         description="The constrained-decoding schema. Its shape is the only guard on the output."
     )
