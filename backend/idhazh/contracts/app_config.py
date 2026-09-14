@@ -2298,7 +2298,94 @@ class RetentionConfig(Model):
 
 
 class LoggingConfig(Model):
-    level: LogLevel = LogLevel.INFO
+    """Which records the pipeline builds, and how loud the logger that prints them is.
+
+    Those are two different questions and this block holds both. **The flags
+    choose which records EXIST; `level` chooses how loud the logger is.** Turning
+    the level down to WARNING does not stop a per-item record being built, and
+    turning it up to DEBUG does not create one.
+
+    One switch would not have done. Per-item lines cost a few hundred bytes a
+    run and prompt capture costs a run artifact, so an operator has to be able to
+    keep the cheap instrument and drop the expensive one. That is why there are
+    five flags here rather than a verbosity dial (Fowler, 2026-09-14).
+
+    Every flag defaults ON, because the reason they exist is a 5x model-time
+    regression that ran for six days with nothing printing during a 200-minute
+    shard. They are defaulted on to be switched off once that is closed, so
+    **every one of them except `item_lines` carries its removal condition on the
+    line that declares it** (Guardrail #6), and each condition names the reading
+    that retires it rather than a piece of work that lands.
+    """
+
+    level: LogLevel = Field(
+        default=LogLevel.INFO,
+        description=(
+            "How loud the logger is, and nothing else. Unrelated to the flags beside "
+            "it: they decide which records are built, this decides which of the built "
+            "records are printed. It predates them and no removal condition applies."
+        ),
+    )
+    item_lines: bool = Field(
+        default=True,
+        description=(
+            "Whether an item logs a record when it starts and another when it "
+            "finishes, success or failure. NO REMOVAL CONDITION, on purpose: this is "
+            "the permanent instrument and not a debugging aid. A run that cannot say "
+            "which item it is on, and which ones it got through, is the blind window "
+            "the rest of this block exists to end. It is a knob at all only so an "
+            "operator re-running one shard by hand can quieten it for that "
+            "invocation."
+        ),
+    )
+    stage_lines: bool = Field(
+        default=True,
+        description=(
+            "Whether fetch, extract, label, summarize and faithfulness each log a "
+            "record when they end. Retire it when the per-stage split has stopped "
+            "saying anything the completion record does not: a week of runs in which "
+            "no stage's share of item time moves by more than the run-to-run spread, "
+            "and no item time is left unattributed. Until then a shard that dies on a "
+            "timeout names no stage at all, and the completion record arrives only "
+            "for an item that finished."
+        ),
+    )
+    waiting_heartbeat_seconds: int = Field(
+        default=30,
+        ge=0,
+        description=(
+            "How often, in seconds, to log elapsed time while a model call is in "
+            "flight. 0 turns the heartbeat off and IS the retirement, so this knob "
+            "retires itself rather than being deleted. A NEGATIVE VALUE IS REFUSED: a "
+            "number that quietly means never when the operator meant often is the "
+            "worst shape a misconfiguration of this knob can take. Set it to 0 once "
+            "the slowest single model call in a full run has stayed under a minute "
+            "for a week, because then a stuck call is visible from its own completion "
+            "record and elapsed time adds nothing. Today the slowest call returns "
+            "after 22 minutes having printed nothing at all."
+        ),
+    )
+    capture_prompts: bool = Field(
+        default=True,
+        description=(
+            "Whether the rendered prompts are written to a run artifact. Retire it "
+            "when the prompt is no longer in question - a week of runs in which every "
+            "item's recorded prompt token count matches what the budget predicts, "
+            "with nothing truncated. At that point the SHA-256 and the token count "
+            "each row already carries say what the text said, for a fraction of the "
+            "bytes."
+        ),
+    )
+    capture_replies: bool = Field(
+        default=True,
+        description=(
+            "Whether the raw model replies are written to a run artifact. The most "
+            "expensive thing this block can switch on, because a reply is the longest "
+            "text in the run. Retire it when no item has been cut short for a week "
+            "and the decoded token counts agree with what each row records, because "
+            "the reply text is then answering a question nobody is asking."
+        ),
+    )
 
 
 class ObservabilityConfig(Model):
@@ -4435,6 +4522,34 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T13:00",
+            change=(
+                "logging gains five flags beside level: item_lines, stage_lines, "
+                "waiting_heartbeat_seconds, capture_prompts and capture_replies. Each "
+                "defaults on, waiting_heartbeat_seconds to 30 seconds and the four "
+                "booleans to true, and a negative heartbeat is refused. Additive and "
+                "defaulted, so a config file written before today validates unchanged "
+                "and a config file with no logging block at all still loads - no "
+                "read-side migration is owed. level is untouched at INFO and is "
+                "unrelated: these flags decide which records exist, level decides how "
+                "loud the logger that prints them is."
+            ),
+            why=(
+                "A 5x model-time regression ran for six days and nothing named it. "
+                "Median model time per item moved 97,879 ms to 475,890 ms between run "
+                "34745383977 on 2026-09-13 and run 34852763827 on 2026-09-14, and "
+                "nothing printed during a 200-minute shard. The new records close that "
+                "blind window, and they cost bytes, so each one has to be switchable "
+                "on its own - one verbosity dial cannot keep the per-item lines while "
+                "dropping prompt capture, which is the expensive one. Every flag "
+                "except item_lines carries the reading that retires it on the line "
+                "that declares it (Guardrail #6); item_lines carries none because it "
+                "is the permanent instrument rather than a debugging aid. This entry "
+                "adds configuration only - no record is emitted here. Ruled by the "
+                "owner and Fowler, 2026-09-14 (plan 27, row 4)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T12:40",
             change=(
