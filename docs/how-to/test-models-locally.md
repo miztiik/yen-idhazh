@@ -372,19 +372,23 @@ Run the hosted sweep after this workflow version is on the default branch:
 
 ```bash
 gh workflow run measure.yml \
- -f target=llm \
- -f models='unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf' \
+ -f target=bench \
  -f threads='4,8'
 ```
 
-Leave `models` out and the job measures the model `config/` names, at the commit
-it pins. The input exists for a model config does not name, which
-is what this harness is for; nothing in the workflow file names a model itself.
+Leave every `candidate_*` box empty and the bench measures the model `config/`
+names, at the commit it pins. Those inputs exist for a model config does not
+name, which is what this harness is for; nothing in the workflow file names a
+model itself.
 
-The LLM job downloads only that model, runs both thread counts and uploads
-`hardware.txt`, `weights.txt`, `resources.json` and `llm.json` in the
-`bench-llm` artifact. Image and corpus jobs are separate suites, so a CPU
-question does not start two unrelated jobs.
+That one dispatch runs both arms. Arm one downloads only that model, runs both
+thread counts and uploads `hardware.txt`, `weights.txt`, `resources.json`,
+`llm.json` and `bench/raw-arm.json` in the `bench-raw` artifact. Arm two then
+restores those same weights out of the cache, stands a real server up, runs a
+fixed five-article shard three times and uploads
+`bench-server-<runtime_candidate>`, which carries the model dossier's page body
+with the numbers already in it. Image and corpus jobs are separate suites, so a
+CPU question does not start two unrelated jobs.
 
 The hosted screen has already rejected eight threads for the configured runner.
 Run `32672629352` exposed two physical cores with two SMT siblings each. Eight
@@ -394,7 +398,7 @@ unless a future runner topology or model changes the screen:
 
 ```bash
 gh workflow run measure.yml \
- -f target=runtime \
+ -f target=bench \
  -f runtime_candidate=threads \
  -f runtime_threads=8
 ```
