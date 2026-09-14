@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 8 | 6 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 2 | 5 | 1 |
+| [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 3 | 4 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 1 | 3 | 1 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
@@ -32,18 +32,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 15 | 13 | 2 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 11 | 3 | 3 |
 
-## In flight - 2
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #2 | 12 | C | The drawing takes the width it is given | p12-r2 |
-| #21 | 23 | L | The unpublished pool is scored with the bonus and without it | p23-r21 |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 22
+## Ready now - 23
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -68,13 +66,14 @@ section 3 is where it is answered.
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b, 2 |
 | #8a | 25 | J | The second desk reaches the reader | 8 |
+| #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3, plan 23 row #21 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #13b | 28 | E | Paste the three readings a dispatch takes | 13a |
 | #9 | 28 | G | The runbook: swap and revert in one line each | 6, 8, 12 |
 | #10 | 28 | H | Two spans on one call, so the model can think | 5, 6, 11 |
 
-## Waiting on another row - 49
+## Waiting on another row - 48
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -83,7 +82,7 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #4 | 12 | D | The smallest label a person can read, and enough marks to be worth the space | 2 is IN-FLIGHT; 3 is PENDING |
+| #4 | 12 | D | The smallest label a person can read, and enough marks to be worth the space | 3 is PENDING |
 | #5 | 12 | E | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | F | A whole day, again | 5 is PENDING |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING |
@@ -124,8 +123,7 @@ section 3 is where it is answered.
 | #18 | 23 | M | The closing measurement: is a read desk better than a declared one | 14 is PENDING |
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
-| #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is IN-FLIGHT |
-| #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | plan 23 row #21 is IN-FLIGHT |
+| #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 
 ## Finished - 18 plans with no live row
