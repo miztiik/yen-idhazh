@@ -31,7 +31,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import InferenceConfig, ModelEntry, ModelRef
+from idhazh.contracts.app_config import InferenceConfig, ModelEntry, ModelRef, TurnsConfig
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
 
@@ -177,19 +177,20 @@ class Undigested(NamedTuple):
     reason: str
 
 
-#: Every `InferenceConfig` and `ModelEntry` field the manifest does not carry,
-#: and why each one is out.
+#: Every `InferenceConfig`, `ModelEntry` and `TurnsConfig` field the manifest
+#: does not carry, and why each one is out.
 #:
 #: Every field left here is one that cannot move an output. The five inference
 #: knobs that could - `cache_type_k`, `cache_type_v`, `flash_attention`,
 #: `n_parallel` and `n_threads_batch` - were listed here as known blind spots
 #: until 2026-08-26 and are now folded into `runtime_flags`.
 #:
-#: **The universe is both shapes, not just `InferenceConfig`.** It was the
+#: **The universe is all three shapes, not just `InferenceConfig`.** It was the
 #: inference block alone until 2026-09-13, which was closed over the wrong set
 #: the moment a model-shaped fact lived outside that block: `turns` moved onto
 #: the entry and would have sat in no stamp and in no closed set, with no test
-#: saying so.
+#: saying so. The envelope's own fields joined on 2026-09-14 for the same
+#: reason - naming `turns` answers for the block and for nothing inside it.
 #:
 #: The set is closed: a field that is neither here nor recorded fails the
 #: contract test in `backend/tests/test_fingerprint.py`.
@@ -253,19 +254,42 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
         "request_timeout_minutes": Undigested(
             False, "A clock bound on one call. It stops a call, it does not reword one."
         ),
+        "thinking_kwarg": Undigested(
+            False,
+            "The name of the template variable chat_template_kwargs carries. The run's "
+            "two calls render their own prompt bytes and send no template keywords at "
+            "all, so no published word is decoded under it; it reaches only the "
+            "start-up probe and the chat route. What it would turn on is already "
+            "recorded - sampling carries thinking on or off, and the rendered prompt "
+            "ends on whichever reply opening that chose.",
+        ),
     }
 )
 
-#: Where a `ModelEntry` field arrives in the manifest when it is not carried
-#: under its own name. `turns` is folded into `prompt_sha256` because
-#: `classify.calls.prompt_inputs` renders both turns through the envelope, and
-#: that is the whole of the envelope's reach: `run_manifest.ModelUse` embeds the
-#: recorded `ModelRef`, which carries no markers at all.
+#: Where a `ModelEntry` or `TurnsConfig` field arrives in the manifest when it is
+#: not carried under its own name. The whole envelope is folded into
+#: `prompt_sha256` because `classify.calls.prompt_inputs` renders both turns
+#: through it, and that is the whole of the envelope's reach:
+#: `run_manifest.ModelUse` embeds the recorded `ModelRef`, which carries no
+#: markers at all.
+#:
+#: `system_role` and `system_joiner` are in here for the same reason the four
+#: markers are, and the reason is worth stating because the design once read the
+#: other way: a placement change moves the same bytes to a different address, so
+#: it was argued that the stamp could not see it. Since the prompt bytes became
+#: ours the stamp renders through the envelope, so it does - which is what makes
+#: a topology change as loud as a reworded instruction.
 MODEL_FIELD_SPELLING: Final[Mapping[str, str]] = MappingProxyType(
     {
         "inference": "sampling",
         "sha256": "model_sha256",
         "turns": "prompt_sha256",
+        "turn_opening": "prompt_sha256",
+        "turn_closing": "prompt_sha256",
+        "reply_opening": "prompt_sha256",
+        "reply_opening_thinking": "prompt_sha256",
+        "system_role": "prompt_sha256",
+        "system_joiner": "prompt_sha256",
     }
 )
 
@@ -285,17 +309,25 @@ def digested_inference_fields() -> frozenset[str]:
 
 
 def digested_model_fields() -> frozenset[str]:
-    """The `ModelEntry` fields the manifest carries, read back from the manifest.
+    """The declared model-shaped fields the manifest carries, read back from the manifest.
 
-    `quantisation` reaches it under its own name. The other three arrive under a
-    manifest field of a different name, and `MODEL_FIELD_SPELLING` is where that
-    is written down - each entry is checked against `PipelineInputs`, so a
-    manifest field that is renamed away drops its claim rather than keeping it.
+    Both shapes, because the envelope is a nested block: `ModelEntry` holds
+    `turns` and `TurnsConfig` holds the strings that render a turn. Asking only
+    the outer shape would answer for `turns` as a whole and for none of the
+    fields inside it, so a seventh envelope field could land in no stamp and in
+    no closed set with nothing saying so.
+
+    `quantisation` reaches the manifest under its own name. The rest arrive
+    under a manifest field of a different name, and `MODEL_FIELD_SPELLING` is
+    where that is written down - each entry is checked against `PipelineInputs`,
+    so a manifest field that is renamed away drops its claim rather than keeping
+    it.
     """
     carried = frozenset(PipelineInputs.model_fields)
+    declared = frozenset(ModelEntry.model_fields) | frozenset(TurnsConfig.model_fields)
     return frozenset(
         name
-        for name in ModelEntry.model_fields
+        for name in declared
         if name in carried or MODEL_FIELD_SPELLING.get(name, "") in carried
     )
 

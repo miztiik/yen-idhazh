@@ -36,9 +36,12 @@
       "declared_for": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
       "reply_opening": "<|start_header_id|>assistant<|end_header_id|>\n\n",
       "reply_opening_thinking": "<|start_header_id|>assistant<|end_header_id|>\n\n<think>\n",
+      "system_joiner": "\n\n",
+      "system_role": "fold_into_first_user",
+      "thinking_kwarg": null,
       "turn_closing": "<|eot_id|>",
       "turn_opening": "<|start_header_id|>${role}<|end_header_id|>\n\n"
     }
   },
-  "version": "2026-09-14T02:00"
+  "version": "2026-09-14T03:00"
 }

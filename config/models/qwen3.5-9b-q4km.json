@@ -36,9 +36,12 @@
       "declared_for": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
       "reply_opening": "<|im_start|>assistant\n<think>\n\n</think>\n\n",
       "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
+      "system_joiner": null,
+      "system_role": "own_turn",
+      "thinking_kwarg": "enable_thinking",
       "turn_closing": "<|im_end|>\n",
       "turn_opening": "<|im_start|>$role\n"
     }
   },
-  "version": "2026-09-14T02:00"
+  "version": "2026-09-14T03:00"
 }
