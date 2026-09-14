@@ -96,11 +96,39 @@ design.
 | How an assistant reply opens | Envelope, per model | A generation prompt ends with more than a role header, and what it ends with is the model's |
 | Whether a system role exists, and where its text goes when it does not | Envelope, per model | A turn topology. The bytes do not change; their address does. `turns.system_role` is a closed choice of two, and `turns.system_joiner` is what separates the two blocks when they share a turn |
 | Which template keyword turns reasoning off | Envelope, per model | It is a variable name belonging to that model's template. `turns.thinking_kwarg` carries it, and null means the template reads none |
-| Which control tokens the sanitizer strips | Envelope, per model | A forged turn is only forged in a syntax some model honours |
 | The window, the batch sizes, the budgets | Envelope, per model | Measured against those weights, and pinned to their digest |
+| **Which control tokens the sanitizer strips** | **Content, global** | A forged turn is written in whatever syntax the attacker picks, so a pattern that knew only the model in use is a pattern an attacker walks around. See below |
 | **The instructions** | **Content, global** | See below |
 | **The output schema** | **Content, global** | It is the one control that survives an injection, and a per-model control is a per-model hole |
 | **Every gate threshold** | **Content, global** | A gate never moves to let a candidate through |
+
+### Why the control tokens are global and the refusal is not
+
+The sanitizer is the control that keeps a forged turn out of an article
+(Guardrail #11), and it is the one model-shaped fact that does **not** move onto
+the entry. An article is fetched once and read by whatever is loaded, and the
+attacker picks the syntax - so a pattern derived from the configured entry's own
+markers would defend the one family nobody was attacking. The pattern knows
+seven families: ChatML and its pipe-delimited descendants, Llama 2's instruct
+brackets, markdown role headers, DeepSeek's fullwidth-pipe tokens, Mistral's
+bracket directives, the bare angle-bracket token Gemma and Nemotron use, and the
+reasoning channel the incumbent opens its own replies with.
+
+That list cannot be complete - somebody ships a new family every few months - so
+the per-model half is a **refusal, not a pattern**. `idhazh.config.load` renders
+every marker the entry declares, asks
+`idhazh.sanitize.why_a_forged_turn_would_survive` whether the pattern strips it,
+and stops the run naming the marker when it does not. An unknown family is then
+a config error before anything is fetched rather than an open turn boundary on
+the first article.
+
+It asks two questions, because either alone lets a marker through. **Is the
+marker recognised at all** - one the pattern never matches is one an article may
+write out in full. **Is anything structural left** - a marker matched only in
+part leaves its delimiters behind. The second question is what refuses a model
+whose turn boundary is ordinary words, `USER: `, and that refusal is the right
+answer rather than a gap: a pattern wide enough to strip it would strip a line
+of dialogue out of an article.
 
 ### Why the instructions never become per-model
 
@@ -349,12 +377,12 @@ Both shims exist and both work, and the schema constrains the decode on both
 transports - measured on build b10444, 2026-09-12. The system placement and the
 thinking keyword stopped being source on 2026-09-14 and are entry fields now.
 
-What is left is **the one control that is still written for the family we
-happen to run.** The sanitizer's control-token pattern knows three model
-families, and it is the control that keeps a forged turn out of an article
-(Guardrail #11) - so an entry may declare markers the pattern would not strip,
-and nothing refuses it. That is a reader-safety boundary, so it is surfaced
-rather than adapted.
+The control-token pattern was the last thing still written for the family we
+happen to run, and it stopped being that on 2026-09-14. It knew three families
+and now knows seven, and an entry whose markers it would not strip is refused at
+config load with the marker named. What it still cannot do is anticipate a
+family nobody has shipped yet - which is why the refusal exists, and why the
+failure it produces is a config error rather than a summary that obeyed a page.
 
 The turn envelope is no longer part of that list. It sits on the model entry,
 and since 2026-09-14 the five proofs above reconcile it against the running

@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-14
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -26,7 +26,7 @@ This is the part that is easy to get wrong, so it is stated plainly: **nothing r
 | --- | --- |
 | C0/C1 controls, the zero-width family, bidi overrides, and the Unicode tag block | An instruction nobody can see is one nobody can review. Stripping these does not disarm the instruction - it *reveals* it. |
 | HTML comments | The same hiding place, one layer up. |
-| Chat-control tokens (`<\|im_start\|>`, `[INST]`, `<<SYS>>`, `## System:`) | These end the user's turn and open a forged operator turn. They are the only part of an injection that changes *who appears to be speaking*. |
+| Chat-control tokens (`<\|im_start\|>`, `[INST]`, `<<SYS>>`, `## System:`, `<start_of_turn>`, `<\|User\|>` spelled with the fullwidth pipe, `[SYSTEM_PROMPT]`, `<think>`) | These end the user's turn and open a forged operator turn. They are the only part of an injection that changes *who appears to be speaking*. |
 | Base64 and similar long encoded runs | Smuggles a payload past a human reading the extracted text. |
 | URLs and `data:` addresses | An address in the body is never needed - the item's own link comes from the feed, not from the page's text - and an address in a published summary turns a static page into a beacon. |
 
@@ -35,6 +35,26 @@ Legitimate prose survives, and that is asserted: every canary declares text that
 The transformation is **idempotent**, so a defensive second pass at the prompt boundary costs nothing and no caller has to remember the order.
 
 Its bounds are structural, not tunable. A knob that weakens the trust boundary is a knob that gets widened during an incident.
+
+### The control-token pattern knows seven families, and refuses the eighth
+
+A forged turn is written in whatever syntax the attacker picks. An article is fetched once and summarized by whatever model is loaded, and the model is one line in `config/idhazh.json` ([../summarize/model-boundary.md](../summarize/model-boundary.md)) - so the pattern covers the families a configured entry can bring rather than the entry's own markers. Deriving it from the entry would defend the one family nobody was attacking.
+
+| Family | Spelled | Who uses it |
+| --- | --- | --- |
+| ChatML and its pipe-delimited descendants | `<\|im_start\|>`, `<\|eot_id\|>`, `<\|channel\|>` | Qwen, Llama 3 and 4, Phi-3, Zephyr, Granite, Command-R, Harmony |
+| Llama 2's instruct brackets | `[INST]`, `[/INST]`, `<<SYS>>`, `<</SYS>>` | Llama 2, early Mistral |
+| Markdown role headers | `## System:`, `### User:` | Written by hand, and honoured by models trained on none of the above |
+| The fullwidth-pipe spelling | `<\|User\|>` where the pipe is U+FF5C, not the ASCII one | DeepSeek, whole vocabulary |
+| Mistral's bracket directives | `[SYSTEM_PROMPT]`, `[AVAILABLE_TOOLS]`, `[TOOL_CALLS]` | Mistral v3 and later |
+| Bare angle-bracket turn tokens | `<start_of_turn>`, `<extra_id_0>`, `</s>` | Gemma, Nemotron, and the sequence tokens a forged Mistral turn rides in on |
+| The reasoning channel | `<think>`, `</think>` | Qwen, DeepSeek-R1 - and the weights running here, which open a reply by closing an empty one |
+
+**That list cannot be complete**, because somebody ships a new family every few months. What closes the gap is a refusal rather than a wider pattern: `idhazh.config.load` renders every turn marker the configured entry declares, asks `idhazh.sanitize.why_a_forged_turn_would_survive` whether the pattern strips it, and stops the run naming the marker when it does not. An unknown family is a config error before anything is fetched, not an open turn boundary on the first article.
+
+It asks two questions, because either alone lets a marker through. **Is the marker recognised at all** - one the pattern never matches is one an article may write out in full. **Is anything structural left** - a marker matched only in part leaves behind the delimiters that make a token a token. The first question is what refuses a model whose turn boundary is ordinary words, `USER: `, and refusing it is the right answer rather than a gap: a pattern wide enough to strip that would strip a line of dialogue out of an article.
+
+**What the widening costs a reader**, named rather than assumed: a bracketed all-capital editorial tag like `[UPDATE]` becomes a space. The bracket family is matched case-sensitively and needs three characters, so `[sic]` and `[AP]` read out untouched, and no angle-bracket token may hold a space, so `a < b` stays arithmetic. Against a forged turn, that is the trade Guardrail #11 makes.
 
 ## The fence is guaranteed, not requested
 

@@ -486,6 +486,15 @@ token ids, so a rendered prompt with no turn structure refuses the shard before
 the first item instead of quietly producing worse summaries
 ([model-boundary.md](model-boundary.md)).
 
+**A fifth refusal reads the markers the other way round: as bytes an article
+could write.** They are exactly what a forged turn is spelled with, so config
+load asks the sanitizer whether it would strip each one and stops the run,
+naming the marker, when it would not. The pattern is global and the refusal is
+per model, because an article is fetched once and read by whatever is loaded -
+the reasoning why, and the seven families the pattern knows, are in
+[model-boundary.md](model-boundary.md); the control itself is
+[../sources/trust-boundary.md](../sources/trust-boundary.md).
+
 **The empty reasoning block is written deliberately, and writing it is what
 keeps this a transport change.** It is what the chat template put there, so the
 bytes the model sees are the bytes it saw before. Whether omitting it would move
