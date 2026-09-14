@@ -15,10 +15,12 @@ There is no one-command model swap.
 
 What exists:
 
-- `backend/utilities/measure_llm.py` verifies GGUF identity and measures raw
- prefill and decode locally;
-- `.github/workflows/measure.yml`, target `llm`, runs the same raw measurement on
- `ubuntu-latest`;
+- `backend/utilities/measure_llm.py` verifies GGUF identity, measures raw
+ prefill and decode locally, and emits the model dossier's page body from what
+ the two bench arms read;
+- `.github/workflows/measure.yml`, target `bench`, runs both arms on
+ `ubuntu-latest`: raw prefill and decode first, then a real server doing real
+ work, with the second restoring the weights the first cached;
 - `idhazh.llm.server.server_argv` builds the server command from config;
 - `work` can exercise the real fetch, extract, sanitize and summarize path;
 - `validate` can score model output with HHEM; and
@@ -61,8 +63,14 @@ What the qualification arm now does, which the old exploratory one did not:
 
 What is still missing:
 
-- a pairwise blind-human label contract and CLI; and
-- a candidate-aware runtime-shard measurement.
+- a pairwise blind-human label contract and CLI.
+
+The bench closed the candidate-aware runtime-shard measurement on 2026-09-14.
+Its server arm builds the same `backend/var/candidate-config` the qualification
+arm builds, runs `idhazh work` against a real server over a fixed five-article
+corpus, and reports what a shard of the daily run costs with those weights in
+it. What it still does not do is grade anything: a bench number says how fast,
+never how good.
 
 Two capability gaps were closed on 2026-08-26 and are worth naming because
 anything measured before then inherits them:
@@ -76,10 +84,12 @@ anything measured before then inherits them:
  had to be recorded as `0.0`. It is now nullable beside a
  `leaderboard_provenance` of `not_reported`.
 
-`measure_llm.py` still resolves Hugging Face `main` and cannot request an
-immutable revision or accept an expected SHA. That is sufficient for an
-exploratory measurement and not for reproducing an adoption candidate; the
-qualification arm does not use it.
+`measure_llm.py` has required an immutable 40-character commit since 2026-08-27,
+and since 2026-09-14 it also refuses any bytes but the digest the dispatch
+declared: it reads the Hub's own record for that commit, compares it with what
+was asked for, and stops before it benches anything. `download` then checks what
+arrived against that same record. Those are two different questions - is this
+the model I asked for, and did it arrive intact - and the bench asks both.
 
 ## The evidence package
 
@@ -188,42 +198,83 @@ prompt and article counts exist, do not publish derived seconds per article for
 that model. Raw `llama-bench` rates remain valid; model-specific derived times do
 not.
 
-## 4. Measure raw runner fit
+## 4. Bench the candidate on the runner
 
-Run incumbent and candidate in the **same workflow job**:
+One dispatch, two arms, one candidate typed once:
 
 ```bash
 gh workflow run measure.yml \
- -f target=llm \
- -f models='incumbent/repo:incumbent-Q4_K_M.gguf,candidate/repo:candidate-Q4_K_M.gguf' \
+ -f target=bench \
+ -f candidate_repo='<publisher>/<name>' \
+ -f candidate_revision='<40-character commit>' \
+ -f candidate_file='<weights filename>' \
+ -f candidate_sha256='<digest those bytes must have>' \
+ -f candidate_id='<alias the server answers to>' \
+ -f candidate_quantisation='Q4_K_M' \
  -f threads='4'
 ```
 
-Read the `bench-llm` artifact:
+Leave every `candidate_*` box empty and the bench measures the model config
+already names. That is the calibration dispatch: the page it emits has to
+reproduce that model's committed dossier inside the spread both sides declare.
+
+The digest is not optional. Without it the harness benches whatever the
+repository holds today and says nothing about it, and a number filed under a
+model that never ran is worse than no number (CLAUDE.md Guardrail #10).
+
+**Arm one, artifact `bench-raw`** - raw prefill and decode with nothing else in
+the process:
 
 - `hardware.txt`: CPU topology, cgroup limits and runtime identity;
 - `weights.txt`: exact GGUF size and SHA-256;
-- `llm.json`: prefill and decode rates with spread; and
+- `llm.json`: prefill and decode rates with spread;
 - `resources.json`: wall time, CPU pressure, throttling and memory events.
  Cgroup `memory.peak` can be absent or cumulative; it is not a per-model RSS
- comparison.
+ comparison; and
+- `bench/raw-arm.json`: the same numbers as readings, which is what arm two
+ folds into the page.
 
-Compare:
+**Arm two, artifact `bench-server-<runtime_candidate>`** - a real llama-server,
+real fetches, real summaries over a fixed five-article corpus:
 
-- prefill at 730, 1800 and 4850 tokens;
-- 250-token decode;
-- model load success;
-- peak memory and pressure;
-- download time, labelled `n=1` when it has no repeats; and
-- worst-case shard time after candidate tokenization is measured.
+- `runtime-summary.json`: per-repeat startup, work and per-item timings, the
+ resident-set samples, and the input and output drift verdicts;
+- `cache-state.txt`: whether the weights were already on the machine, and the
+ digests of the binary and the weights that ran;
+- `readings.json`: every quantity the page carries, machine-readable; and
+- `dossier.md`: **the page body, numbers already in it.** Paste it into
+ `docs/reference/models/<model>.md`. It is also printed to the run summary, so
+ the numbers are readable without downloading anything.
+
+The bench never writes the committed config, never publishes, and never grades a
+summary. It says how fast, not how good.
+
+Two readings are cold on purpose. The **first download** is what a cache miss
+costs, which is what the first run after a swap draws on every shard at once.
+The **first server start of the job** is the model load with the page cache
+holding none of the weights; every start after it is warm. Averaging the two
+would hide the one that hurts.
+
+What the resident-set rows do not say is how much of the peak is anonymous and
+how much is file-backed pages the kernel can drop, so they cannot answer how
+much headroom a second process has. `Rss_Anon` and `Rss_File` from
+`/proc/<pid>/smaps_rollup`, sampled by the same thread that already samples
+`VmHWM`, would settle it. It is unmeasured today and nothing gates on it.
+
+To compare one dispatch against another, compare the readings rather than the
+prose:
+
+```bash
+python backend/utilities/measure_llm.py compare \
+ --observed <new>/readings.json \
+ --declared <baseline>/readings.json
+```
+
+A quantity reproduces when the two values are closer than the two spreads added.
+A reading taken once carries no spread, so it is printed rather than judged.
 
 A laptop result is a laptop result. It can reject a candidate quickly and cannot
 select production.
-
-Raw `llama-bench` fit is not production fit. Measure the candidate through the
-real server with the faithfulness scorer resident, the actual worker population,
-peak process RSS, memory events, model load, prefix reuse, prefill, decode, worst
-item and job wall-clock.
 
 ## 5. Check decode compatibility and safety
 
@@ -384,19 +435,20 @@ Do not change historical payloads or historical measurement rows.
 
 Update the current surfaces:
 
-1. `config/idhazh.json`
+1. `config/models/<model>.json` - the file `config/idhazh.json`'s `models_file`
+ points at, or a new one beside it:
  - model id;
- - repository;
+ - repository and the 40-character revision;
  - GGUF file;
  - quantisation; and
  - exact SHA-256.
-2. `.github/workflows/digest.yml`
- - summary model repository and file;
- - cache identity includes verified GGUF SHA and pinned runtime identity.
-3. `.github/workflows/validate.yml`
- - configured incumbent and generic candidate handling.
-4. `.github/workflows/measure.yml`
- - runtime-sweep model when the candidate becomes the incumbent.
+2. `config/idhazh.json` - `models_file`, if the candidate got a new file. That
+ one line is the swap.
+3. No workflow. `digest.yml`, `validate.yml` and `measure.yml` each follow the
+ pointer and read the entry it names, and a test refuses a model repository, a
+ weights filename or a moving revision written into any of them.
+4. `docs/reference/models/<model>.md` - the dossier. Paste the `dossier.md` the
+ bench emitted; do not transcribe numbers by hand.
 5. Current docs and diagrams that name the configured model.
 6. Tests that assert the configured default or workflow model. Do not replace
  fixture ids that are intentionally historical or generic.
