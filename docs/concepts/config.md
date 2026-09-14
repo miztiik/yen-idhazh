@@ -35,6 +35,8 @@ These are the *surfaces*, not a field list. The field-level truth is `schemas/ap
 
 The knobs are spread across six files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/models/<name>.json` for everything that is a fact about one set of weights, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
 
+**Two of those files are lists rather than settings, and they are written one record a line.** `config/sources.json` holds a feed per line and `config/watchlist.json` an entity per line, keys sorted, every field spelled out even at its default. Adding a feed is one line; changing a tier is a one-line diff. A test holds the layout still, because nothing else can - every layout parses to the same payload, so a record hand-indented across ten lines is invisible to the schema and to every reader. See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
+
 ## `config/models/<name>.json` - one file per model, and a pointer
 
 Everything that is a fact about one set of weights lives in one file of its own: the repository, the revision, the digest, the window and threads they were measured in, and the turn markers their server renders. `config/idhazh.json` carries `models_file` and nothing else about the model.

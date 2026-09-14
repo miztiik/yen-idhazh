@@ -7,69 +7,10 @@
     "submissions_url_template": "https://data.sec.gov/submissions/CIK{cik}.json"
   },
   "entities": [
-    {
-      "aliases": [
-        "Example Lab, Inc."
-      ],
-      "cik": "0001045810",
-      "display_name": "Example Lab",
-      "feeds": [
-        {
-          "id": "example-lab-newsroom",
-          "retired_on": null,
-          "status": "active",
-          "tier": 1,
-          "title": "Example Lab newsroom",
-          "url": "https://blog.example-lab.org/newsroom.xml"
-        }
-      ],
-      "id": "example-lab",
-      "kind": "organisation",
-      "retired_on": null,
-      "status": "active"
-    },
-    {
-      "aliases": [],
-      "cik": null,
-      "display_name": "Example Fab",
-      "feeds": [
-        {
-          "id": "example-fab-press",
-          "retired_on": null,
-          "status": "active",
-          "tier": 1,
-          "title": "Example Fab press releases",
-          "url": "https://pr.example-fab.tw/rss"
-        }
-      ],
-      "id": "example-fab",
-      "kind": "organisation",
-      "retired_on": null,
-      "status": "active"
-    },
-    {
-      "aliases": [],
-      "cik": null,
-      "display_name": "Example Merged Corp",
-      "feeds": [],
-      "id": "example-merged",
-      "kind": "organisation",
-      "retired_on": "2026-05-30",
-      "status": "retired"
-    },
-    {
-      "aliases": [
-        "Example Outbreak",
-        "the Example outbreak"
-      ],
-      "cik": null,
-      "display_name": "Example Outbreak",
-      "feeds": [],
-      "id": "example-outbreak",
-      "kind": "subject",
-      "retired_on": null,
-      "status": "active"
-    }
+    {"aliases": ["Example Lab, Inc."],"cik": "0001045810","display_name": "Example Lab","feeds": [{"id": "example-lab-newsroom","retired_on": null,"status": "active","tier": 1,"title": "Example Lab newsroom","url": "https://blog.example-lab.org/newsroom.xml"}],"id": "example-lab","kind": "organisation","retired_on": null,"status": "active"},
+    {"aliases": [],"cik": null,"display_name": "Example Fab","feeds": [{"id": "example-fab-press","retired_on": null,"status": "active","tier": 1,"title": "Example Fab press releases","url": "https://pr.example-fab.tw/rss"}],"id": "example-fab","kind": "organisation","retired_on": null,"status": "active"},
+    {"aliases": [],"cik": null,"display_name": "Example Merged Corp","feeds": [],"id": "example-merged","kind": "organisation","retired_on": "2026-05-30","status": "retired"},
+    {"aliases": ["Example Outbreak","the Example outbreak"],"cik": null,"display_name": "Example Outbreak","feeds": [],"id": "example-outbreak","kind": "subject","retired_on": null,"status": "active"}
   ],
   "version": "2026-08-31"
 }

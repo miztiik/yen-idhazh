@@ -20,7 +20,7 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url
+from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url, records_json
 from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceKind, SourceTier
 
 
@@ -160,6 +160,15 @@ class Sources(Contract):
         which is the one thing `kind` exists to prevent.
         """
         return [*self.feeds, *self.retired]
+
+    def to_json(self) -> str:
+        """One feed a line - see `records_json`.
+
+        A person curates this file and a reviewer reads the diff, and a feed's
+        fields only mean anything together: the id says nothing without the
+        vertical, the tier nothing without the title.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     @model_validator(mode="after")
     def _each_list_holds_what_it_says(self) -> Self:
