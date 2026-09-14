@@ -27,7 +27,7 @@ def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runne
     if not results:
         raise SystemExit("no model was validated, so there is nothing to decide")
 
-    incumbent_id = settings.app.models.summarize.id
+    incumbent_id = settings.models.summarize.id
     measurements = [
         validation.Measurement(
             model_id=result.model_id,

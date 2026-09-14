@@ -21,7 +21,8 @@ labelled as the retired incumbent's
 
 ## Identity
 
-`config/idhazh.json` `models.summarize` is where these fields are declared. The
+`config/models/qwen3.5-9b-q4km.json` is where these fields are declared, and
+`config/idhazh.json` names that file in one line, `models_file`. The
 digest identifies the bytes the runtime opened; the repository revision
 identifies the snapshot they came from and is pinned rather than a branch, so the
 file, the alias, the revision and the expected digest move together or not at
@@ -49,7 +50,7 @@ identifies the actual weights.
 **Two of these fields have no config key.** `Licence` is an SPDX identifier with
 one human reader and no validator, because a check over a licence string asserts
 a legal judgement a schema cannot make (Andre, 2026-09-13). `Architecture` is
-what llama.cpp reported when it loaded the file; `config/idhazh.json` has no
+what llama.cpp reported when it loaded the file; the model file has no
 `arch` key today, so the value here comes from the loader's own report.
 
 ## On disk, and what it costs the cache
@@ -227,7 +228,7 @@ with one answer, and a re-run replaces its page rather than adding a second one.
 
 - [../models.md](../models.md) - the index, one row a model.
 - [../measurements.md](../measurements.md) - the instrument log: everything measured that is not a property of one model.
-- [../../../config/idhazh.json](../../../config/idhazh.json) - `models.summarize`, where the identity above is declared and in force.
+- [../../../config/models/qwen3.5-9b-q4km.json](../../../config/models/qwen3.5-9b-q4km.json) - where the identity above is declared. `config/idhazh.json` names this file in one line, `models_file`, and that line is the whole of a swap.
 - [../../../backend/idhazh/measured.py](../../../backend/idhazh/measured.py) - the readings a gate or a test reads, including which are pinned to these weights.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the procedure that produced the verdict above.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what the gates mean and why a model may not grade a published summary.

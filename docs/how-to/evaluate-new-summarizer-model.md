@@ -1,6 +1,6 @@
 # Evaluate and Adopt a New Summarizer Model
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-14
 
 Measure a candidate summarizer against the configured incumbent, decide whether
 it clears the bar, and change the model without losing reproducibility.
@@ -29,8 +29,10 @@ What exists:
 What the qualification arm now does, which the old exploratory one did not:
 
 - builds a candidate config under gitignored `backend/var/candidate-config`, a
- copy of committed `config/` with `models.summarize` replaced and nothing else,
- so it never edits the committed config and never has to restore it;
+ copy of committed `config/` whose ACTIVE MODEL FILE is rewritten and nothing
+ else - the pointer is left alone, so the candidate is qualified through the
+ same one line a swap would later move - so it never edits the committed config
+ and never has to restore it;
 - fetches the candidate from an **immutable repository revision**, checks its
  SHA-256 and its byte count against the adoption target, and does both before
  the server starts;
@@ -133,7 +135,7 @@ or run it again with one changed input.
 Download the entire llama.cpp binary directory, not one executable. Generate the
 candidate server command with the program in
 [test-models-locally.md](test-models-locally.md#serve-a-model), pointed at a
-scratch config that differs only in `models.summarize`:
+scratch config whose active model file differs and nothing else does:
 
 ```python
 settings = config.load(Path("backend/var/candidate-config"))

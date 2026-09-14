@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-14
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -39,6 +39,7 @@ The shapes, and where each one lives once written:
 | Model | Schema | Persisted as |
 | --- | --- | --- |
 | `AppConfig` | `app-config` | `config/idhazh.json` |
+| `ModelsConfig` | `models-config` | `config/models/<name>.json`, one file per model. Which one is active is `AppConfig.models_file` ([../../concepts/config.md](../../concepts/config.md)), so this is the one document whose persisted path is a value rather than a literal. |
 | `AppearanceConfig` | `appearance-config` | `config/appearance.json` |
 | `Sources` | `sources` | `config/sources.json` |
 | `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
@@ -283,7 +284,7 @@ The section above rules on *when* a name may move. This one rules on *which word
 
 Two more clauses, and each one has already cost a day:
 
-- **A model's size, vendor or revision never appears in an identifier.** `models.summarize` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen9b` would have to be renamed the day the weights change.
+- **A model's size, vendor or revision never appears in an identifier.** `models.summarize` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen9b` would have to be renamed the day the weights change. A **filename** under `config/models/` is not an identifier - it names one set of weights and is meant to, which is why `models_file` is the whole swap and no code may compare against what it says (`backend/tests/test_summarize.py::test_no_module_that_opens_a_model_branches_on_which_model_it_is`).
 - **A word that is wrong is renamed early, not when it is convenient.** `route` named a dispatch decision and the stage makes a planning decision. It reached a module, a contract, a schema stem, two config keys, a workflow job, an enum member, two TypeScript fields and about two hundred sentences before anybody paid it off. Every plan written against the wrong word writes more of it, so the bill grows with the calendar and never with the difficulty.
 
 Two names in this repository do not take the word a glossary would give them, recorded here so they are not argued twice. **`visual_planner.py`** is the module filename, decided ahead of any glossary because a glossary names steps and not files; the stage it was named for retired on 2026-09-13 and the file kept the name, because what it still holds is the gate and the ladder that decide a picture. **`density_floor`** was chosen over the more formal term outright, by the owner.

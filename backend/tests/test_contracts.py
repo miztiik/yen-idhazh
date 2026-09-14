@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import ast
 import csv
+import hashlib
 import inspect
 import json
 import logging
 import re
+import shutil
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
@@ -36,6 +38,7 @@ from idhazh.cli import main
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
+    SUPERSEDED_APP_NAMES,
     SUPERSEDED_COLLECT_NAMES,
     SUPERSEDED_MODELS_NAMES,
     SUPERSEDED_RETENTION_NAMES,
@@ -205,6 +208,23 @@ def paragraph_after(text: str, lead: str) -> str:
 APP_CONFIG_EVERY_KNOB_DIFFERS: Final = (
     CONTRACT_FIXTURES_DIR / "app-config" / "every-knob-differs-from-the-committed-config.json"
 )
+
+
+def committed_models_raw() -> dict[str, Any]:
+    """The active model's file as bytes on disk, found by following the pointer.
+
+    Never by naming the file. `config/idhazh.json` says which model is active
+    and a test that spelled the filename instead would keep passing on the day
+    somebody pointed the pointer somewhere else.
+    """
+    app = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    payload: dict[str, Any] = json.loads(read_text(CONFIG_DIR / app.models_file))
+    return payload
+
+
+def committed_models() -> ModelsConfig:
+    """The same file, validated - what `config.load` puts on `Settings.models`."""
+    return ModelsConfig.model_validate(committed_models_raw())
 
 
 def fixture_paths() -> list[Path]:
@@ -987,9 +1007,20 @@ def test_config_file_validates(name: str) -> None:
 
 
 def test_a_fresh_clone_runs_on_the_defaults() -> None:
-    """Every knob but the model refs has a default, so an empty config is usable."""
+    """Every knob has a default now, so an empty config is usable.
+
+    `models` was the one block with no default and it left this file on
+    2026-09-14. What replaced it is `models_file`, which defaults to the
+    committed model's file - so the empty mapping below is the whole config a
+    fresh clone needs.
+    """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    minimal = AppConfig.model_validate({"models": committed.models.model_dump()})
+    minimal = AppConfig.model_validate({})
+    assert minimal.models_file == committed.models_file, (
+        "the default names the committed file, or a fresh clone reads a model "
+        "nobody put there"
+    )
+    assert (CONFIG_DIR / minimal.models_file).is_file()
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
     assert minimal.retention.image_months == -1, "retention ships disabled"
     assert minimal.retention.dry_run is True
@@ -1067,16 +1098,17 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     the same rule, so its digest goes with them. The markers themselves stay,
     because they have no default and a clone that forgot them would not load.
     """
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    models = committed.models.model_dump()
-    for entry in models.values():
+    committed = committed_models()
+    models = committed.model_dump()
+    for role in ModelsConfig.roles():
+        entry = models[role]
         del entry["inference"]
         entry["sha256"] = None
         entry["turns"]["declared_for"] = None
-    fresh = AppConfig.model_validate({"models": models})
+    fresh = ModelsConfig.model_validate(models)
 
-    assert fresh.models.summarize.inference.metrics is True, "a fresh clone must count"
-    assert committed.models.summarize.inference.metrics is True, "the committed config must count"
+    assert fresh.summarize.inference.metrics is True, "a fresh clone must count"
+    assert committed.summarize.inference.metrics is True, "the committed config must count"
 
 
 def test_the_wider_window_is_the_summarizers_alone() -> None:
@@ -1091,7 +1123,7 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     may resolve differently on other silicon, and a run that cannot name the
     kernel it used cannot be compared with one that can (Guardrail #10).
     """
-    models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
+    models = committed_models()
 
     assert models.summarize.inference.n_ctx == 49152
     assert models.summarize.inference.flash_attention == "on"
@@ -1123,7 +1155,7 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     cap gave it, and both windows have to cover the article that did rather than
     the one that behaved.
     """
-    inference = committed.models.summarize.inference
+    inference = committed_models().summarize.inference
     cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
     worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
     return worst_prompt, worst_prompt + inference.max_output_tokens
@@ -1146,7 +1178,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     has room: that one sizes 39,284 over the same cap.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    inference = committed.models.summarize.inference
+    inference = committed_models().summarize.inference
     worst_prompt, worst_sequence = _worst_sequence_tokens(committed)
 
     assert worst_sequence <= inference.n_ctx, (
@@ -1244,7 +1276,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     many items carry a picture at all.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    inference = committed.models.summarize.inference
+    inference = committed_models().summarize.inference
     prompt, sequence = _worst_two_call_sequence_tokens(committed)
 
     assert sequence <= inference.n_ctx, (
@@ -1695,7 +1727,7 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     the defaults the code carries.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    fresh = AppConfig.model_validate({"models": committed.models.model_dump()})
+    fresh = AppConfig.model_validate({})
 
     assert fresh.observability == committed.observability
     assert fresh.observability.evaluation_enabled
@@ -1800,7 +1832,6 @@ def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
         "public_machine_keep_months",
         "public_span_rollup_keep_months",
     }
-    models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models.model_dump()
     # Three published payloads are held equal to the ledger they project, so
     # lowering either half has to lower both to reach the shortness check.
     paired = {
@@ -1818,7 +1849,7 @@ def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
         if partner is not None:
             short[partner] = months - 1
         with pytest.raises(ValidationError, match=name):
-            AppConfig.model_validate({"models": models, "observability": short})
+            AppConfig.model_validate({"observability": short})
 
 
 def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> None:
@@ -2044,16 +2075,150 @@ def test_no_other_contract_learned_to_accept_the_retired_key() -> None:
     assert checked >= 30, f"only {checked} contracts were offered the retired key"
 
 
-def swapped_summarizer() -> dict[str, Any]:
-    """The committed config with `models.summarize` pointed at other weights.
+def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
+    """A whole `config/` in a temp directory, with the active model file replaced.
 
-    Every field an operator edits to swap a model, and nothing else - which is
-    the shape the swap actually takes. It is not a new entry appearing from
-    nowhere; it is five strings changed in place under a settings block nobody
-    touched.
+    The whole tree, because `config.load` reads five files and cross-checks two
+    of them - a test that wrote only the file it cares about would be driving a
+    config that cannot load for a reason it did not mean to test.
+
+    Returns the pointer the copy carries, which is the path a refusal has to
+    name and the value a swap has to move.
     """
-    raw: dict[str, Any] = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    raw["models"]["summarize"] |= {
+    target = root / "config"
+    shutil.copytree(CONFIG_DIR, target)
+    pointer = str(AppConfig.from_json(read_text(target / "idhazh.json")).models_file)
+    if models is not None:
+        (target / pointer).write_text(canonical_json(models), encoding="utf-8", newline="\n")
+    return pointer
+
+
+def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path: Path) -> None:
+    """The Oracle for row #6: the pointer is the whole swap, both ways.
+
+    Before 2026-09-14 a swap was eleven lines edited in place in the file every
+    other knob lives in, and a revert had to rebuild the previous model's
+    measured numbers out of git history. Both models sit on disk now, so this
+    moves one string and reads the resolved entry back - then moves it back and
+    reads the incumbent.
+
+    The candidate is BUILT rather than copied from a committed second model,
+    because there is only one committed model and a test that waited for a
+    second one would prove nothing until the day it was needed.
+    """
+    incumbent = copy_config(tmp_path)
+    candidate = "models/other-model-q4km.json"
+    other = committed_models_raw()
+    other["summarize"] |= {
+        "id": "some-other-model-q4-k-m",
+        "repo": "someone/Other-GGUF",
+        "file": "Other-Q4_K_M.gguf",
+        "revision": "f" * 40,
+        "sha256": "1" * 64,
+        "hf_base_repo": None,
+    }
+    other["summarize"]["inference"]["declared_for"] = "1" * 64
+    other["summarize"]["turns"]["declared_for"] = "1" * 64
+    (tmp_path / "config" / candidate).write_text(
+        canonical_json(other), encoding="utf-8", newline="\n"
+    )
+    before = read_text(tmp_path / "config" / "idhazh.json")
+
+    point_at(tmp_path, candidate)
+    swapped = config.load(tmp_path / "config")
+    assert swapped.models.summarize.id == "some-other-model-q4-k-m"
+    assert swapped.models.summarize.sha256 == "1" * 64
+    assert changed_lines(before, read_text(tmp_path / "config" / "idhazh.json")) == 1
+
+    point_at(tmp_path, incumbent)
+    assert config.load(tmp_path / "config").models == committed_models()
+    assert read_text(tmp_path / "config" / "idhazh.json") == before, (
+        "the revert is the same one line, so the file comes back byte-identical"
+    )
+
+
+def point_at(root: Path, models_file: str) -> None:
+    raw = json.loads(read_text(root / "config" / "idhazh.json"))
+    raw["models_file"] = models_file
+    (root / "config" / "idhazh.json").write_text(
+        canonical_json(raw), encoding="utf-8", newline="\n"
+    )
+
+
+def changed_lines(before: str, after: str) -> int:
+    old = before.splitlines()
+    new = after.splitlines()
+    assert len(old) == len(new), "a swap that adds or removes a line is not a one-line swap"
+    return sum(1 for a, b in zip(old, new, strict=True) if a != b)
+
+
+def test_a_config_that_still_carries_the_old_models_block_is_refused_by_name() -> None:
+    """The read-side migration `CLAUDE.md` section 11 owes for the removal.
+
+    Refused rather than lifted onto the new file. A lift would read one model
+    out of the old block while `models_file` named another file, and the run
+    would stand a server up on whichever won - which is the failure this row
+    exists to end, one level up.
+    """
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw["models"] = {"summarize": committed_models_raw()["summarize"]}
+
+    with pytest.raises(ValidationError) as raised:
+        AppConfig.model_validate(raw)
+
+    assert "config.models is now config.models_file" in str(raised.value)
+    assert SUPERSEDED_APP_NAMES["models"] == "models_file"
+
+
+def test_the_pointer_may_not_leave_the_models_directory() -> None:
+    """An operator's edit becomes a path this build opens, so the grammar bounds it.
+
+    Held by the schema rather than checked in the loader, which is what makes it
+    a refusal at load rather than a read four hundred seconds into a run.
+    """
+    for escape in (
+        "../secrets.json",
+        "models/../../secrets.json",
+        "/etc/passwd",
+        "models\\qwen.json",
+        "models/qwen.txt",
+        "idhazh.json",
+    ):
+        with pytest.raises(ValidationError, match="should match pattern"):
+            AppConfig.model_validate({"models_file": escape})
+
+
+def test_the_model_file_is_digested_with_the_rest_of_the_config() -> None:
+    """A run that did not record it could not say which model's numbers it read.
+
+    `models_file` names the file, so the digest of `config/idhazh.json` moves
+    when the POINTER moves and says nothing about what the file it points at
+    says. Both have to travel or a re-tuned model file is invisible to the
+    record.
+    """
+    settings = config.load(CONFIG_DIR)
+    recorded = {digest.path: digest.sha256 for digest in settings.digests}
+
+    assert f"config/{settings.app.models_file}" in recorded
+    text = read_text(CONFIG_DIR / settings.app.models_file)
+    assert recorded[f"config/{settings.app.models_file}"] == sha256_of(text)
+
+
+def sha256_of(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def swapped_summarizer() -> dict[str, Any]:
+    """The committed model file with `summarize` pointed at other weights.
+
+    Every field an operator edits to swap a model IN PLACE, and nothing else.
+    Since 2026-09-14 that is no longer the swap an operator makes - a swap is a
+    second file and one pointer line - but it is still the edit this refusal
+    exists to catch, because it is what somebody does when they mean to move
+    fast in the file they already have open.
+    """
+    raw = committed_models_raw()
+    raw["summarize"] |= {
         "id": "some-other-model-q4-k-m",
         "repo": "someone/Other-GGUF",
         "file": "Other-Q4_K_M.gguf",
@@ -2074,22 +2239,40 @@ def test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it() -
     up on numbers derived for weights it never opened and published a whole
     plausible day.
     """
-    committed = AppConfig.model_validate(json.loads(read_text(CONFIG_DIR / "idhazh.json")))
-    assert committed.models.summarize.inference.declared_for == committed.models.summarize.sha256
+    committed = committed_models()
+    assert committed.summarize.inference.declared_for == committed.summarize.sha256
 
     with pytest.raises(ValidationError) as raised:
-        AppConfig.model_validate(swapped_summarizer())
+        ModelsConfig.model_validate(swapped_summarizer())
     message = str(raised.value)
     assert "models.summarize.inference" in message, "the message names the block"
     assert "1" * 64 in message, "and the weights the entry now names"
 
 
+def test_a_refused_model_file_is_named_by_the_loader(tmp_path: Path) -> None:
+    """Every model has a file of its own, so a refusal has to say which one.
+
+    The validator cannot: it is handed a payload, not a path. So the loader adds
+    the address, and this is the arm that proves it rather than trusting it - an
+    operator with two model files on disk and a refusal naming neither has to
+    guess which one they broke.
+    """
+    written = copy_config(tmp_path, models=swapped_summarizer())
+
+    with pytest.raises(ValueError) as raised:
+        config.load(tmp_path / "config")
+
+    message = str(raised.value)
+    assert f"config/{written}" in message, "the refusal names the file that is wrong"
+    assert "models.summarize.inference" in message, "and the block inside it"
+
+
 def test_an_entry_that_declares_no_settings_of_its_own_is_refused_by_name() -> None:
     """A new entry written with no block of its own does not fall back to one."""
     raw = swapped_summarizer()
-    del raw["models"]["summarize"]["inference"]
+    del raw["summarize"]["inference"]
     with pytest.raises(ValidationError, match=re.escape("models.summarize.inference")):
-        AppConfig.model_validate(raw)
+        ModelsConfig.model_validate(raw)
 
 
 def test_the_one_shared_settings_block_is_refused_by_name() -> None:
@@ -2103,10 +2286,10 @@ def test_the_one_shared_settings_block_is_refused_by_name() -> None:
     are roles that were retired outright, so they carry an empty string and the
     refusal says so rather than inventing a successor.
     """
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    raw["models"]["inference"] = {"n_ctx": 8192}
+    raw = committed_models_raw()
+    raw["inference"] = {"n_ctx": 8192}
     with pytest.raises(ValidationError) as raised:
-        AppConfig.model_validate(raw)
+        ModelsConfig.model_validate(raw)
     assert "models.inference is now models.<role>.inference" in str(raised.value)
     assert SUPERSEDED_MODELS_NAMES["inference"] == "<role>.inference"
     assert not SUPERSEDED_MODELS_NAMES["visual_planner"]
@@ -2115,10 +2298,10 @@ def test_the_one_shared_settings_block_is_refused_by_name() -> None:
 
 def test_every_committed_model_entry_declares_the_weights_its_settings_are_for() -> None:
     """The committed file states the pairing rather than implying it."""
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    assert "inference" not in raw["models"]
-    for role in sorted(ModelsConfig.model_fields):
-        entry = raw["models"][role]
+    raw = committed_models_raw()
+    assert "inference" not in raw
+    for role in ModelsConfig.roles():
+        entry = raw[role]
         assert entry["inference"]["declared_for"] == entry["sha256"], role
 
 
@@ -2147,7 +2330,7 @@ def test_a_run_manifest_written_before_the_settings_moved_still_reads() -> None:
 
 
 def turns_of(raw: dict[str, Any], role: str = "summarize") -> dict[str, Any]:
-    block: dict[str, Any] = raw["models"][role]["turns"]
+    block: dict[str, Any] = raw[role]["turns"]
     return block
 
 
@@ -2162,13 +2345,13 @@ def test_a_model_swap_can_no_longer_inherit_markers_nothing_declared_for_it() ->
     weights and `turns` left behind - because a swap that moved neither block is
     already refused by the settings gate above and would prove nothing here.
     """
-    committed = AppConfig.model_validate(json.loads(read_text(CONFIG_DIR / "idhazh.json")))
-    assert committed.models.summarize.turns.declared_for == committed.models.summarize.sha256
+    committed = committed_models()
+    assert committed.summarize.turns.declared_for == committed.summarize.sha256
 
     raw = swapped_summarizer()
-    raw["models"]["summarize"]["inference"]["declared_for"] = "1" * 64
+    raw["summarize"]["inference"]["declared_for"] = "1" * 64
     with pytest.raises(ValidationError) as raised:
-        AppConfig.model_validate(raw)
+        ModelsConfig.model_validate(raw)
     message = str(raised.value)
     assert "models.summarize.turns" in message, "the message names the block"
     assert "re-record them for these weights" in message, "and what to do about it"
@@ -2177,10 +2360,10 @@ def test_a_model_swap_can_no_longer_inherit_markers_nothing_declared_for_it() ->
 
 def test_an_entry_with_no_turn_envelope_at_all_is_refused() -> None:
     """Required with no default. An entry that forgets its markers fails at load."""
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    del raw["models"]["summarize"]["turns"]
+    raw = committed_models_raw()
+    del raw["summarize"]["turns"]
     with pytest.raises(ValidationError, match="turns"):
-        AppConfig.model_validate(raw)
+        ModelsConfig.model_validate(raw)
 
 
 @pytest.mark.parametrize("marker", ["turn_closing", "reply_opening", "reply_opening_thinking"])
@@ -2190,10 +2373,10 @@ def test_an_empty_marker_is_refused(marker: str) -> None:
     An empty seam joins two turns into one, the grammar still answers, and the
     prefix the two-call design rests on is gone with nothing to read it off.
     """
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw = committed_models_raw()
     turns_of(raw)[marker] = ""
     with pytest.raises(ValidationError, match="at least 1 character"):
-        AppConfig.model_validate(raw)
+        ModelsConfig.model_validate(raw)
 
 
 @pytest.mark.parametrize("opening", ["<|im_start|>\n", "<|im_start|>$speaker\n"])
@@ -2205,10 +2388,10 @@ def test_a_turn_opening_that_names_no_role_is_refused(opening: str) -> None:
     renamed placeholder, which raises at the first render rather than at load -
     late, and in the middle of a shard.
     """
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw = committed_models_raw()
     turns_of(raw)["turn_opening"] = opening
     with pytest.raises(ValidationError, match=re.escape("must name $role")):
-        AppConfig.model_validate(raw)
+        ModelsConfig.model_validate(raw)
 
 
 def test_a_run_records_which_weights_ran_and_not_how_their_turns_are_written() -> None:
@@ -2224,7 +2407,7 @@ def test_a_run_records_which_weights_ran_and_not_how_their_turns_are_written() -
     `RunRecord.inputs.prompt_sha256` digests both turns rendered through them,
     so a marker that moved still moves the stamp.
     """
-    entry = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models.summarize
+    entry = committed_models().summarize
     assert "turns" not in ModelRef.model_fields
     assert "turns" in ModelEntry.model_fields
 
@@ -2263,7 +2446,7 @@ def test_the_retired_marker_file_is_refused_if_it_comes_back(
         config.load(CONFIG_DIR)
 
     monkeypatch.undo()
-    assert config.load(CONFIG_DIR).app.models.summarize.turns.turn_closing
+    assert config.load(CONFIG_DIR).models.summarize.turns.turn_closing
 
 
 def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
@@ -2502,10 +2685,21 @@ def test_a_config_still_spelling_a_retired_knob_is_refused_by_name(block: str, k
     Every model here forbids unknown keys, so any of these already fails. What
     the row owes is that it fails by NAME: "extra inputs are not permitted" does
     not tell an operator their planner is gone.
+
+    Two documents since 2026-09-14: the `models` spellings are top-level keys of
+    the model file now, and the rest are blocks of `config/idhazh.json`.
     """
+    if block == "models":
+        payload = committed_models_raw()
+        assert knob not in payload, "the committed file must not spell the retired knob"
+        payload[knob] = payload["summarize"]
+        with pytest.raises(ValidationError, match=re.escape(f"{block}.{knob}")):
+            ModelsConfig.model_validate(payload)
+        return
+
     payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     assert knob not in payload[block], "the committed file must not spell the retired knob"
-    payload[block][knob] = payload[block].get("summarize", 1)
+    payload[block][knob] = 1
 
     with pytest.raises(ValidationError, match=re.escape(f"{block}.{knob}")):
         AppConfig.model_validate(payload)

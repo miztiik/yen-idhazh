@@ -46,17 +46,18 @@ bring one here is a model taking a live role.
 
 ## What the model in force actually is
 
-The configured model is declared in `config/idhazh.json` under
-`models.summarize`, and that file is what the pipeline obeys. This page and the
-dossier it points at are a description of it, so when the two disagree the config
-is right and the dossier is stale. One command prints what is in force:
+`config/idhazh.json` carries one line naming which model file is active -
+`models_file` - and that file holds the whole entry. This page and the dossier it
+points at are a description of it, so when the two disagree the config is right
+and the dossier is stale. Two commands print what is in force:
 
 ```text
-git grep -n -E '"(id|file|sha256)"' -- config/idhazh.json
+git grep -n '"models_file"' -- config/idhazh.json
+git grep -n -E '"(id|file|sha256)"' -- config/models/
 ```
 
-Three lines come back: the configuration id, the weight file and the SHA-256 the
-runtime checks the downloaded bytes against.
+The first names the active file; the second prints the configuration id, the
+weight file and the SHA-256 the runtime checks the downloaded bytes against.
 
 ## A dossier is not a benchmark record
 

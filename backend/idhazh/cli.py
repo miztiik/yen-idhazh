@@ -115,7 +115,7 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
     with different bytes - so the digest here is taken from the file the runtime
     will open (Guardrail #10).
     """
-    model = settings.app.models.summarize
+    model = settings.models.summarize
     weights = args.weights or (config.REPO_ROOT / "backend" / "models" / model.file)
     if not weights.exists():
         raise SystemExit(f"the candidate weights are not on disk: {model.file}")

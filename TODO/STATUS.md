@@ -23,7 +23,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 2 | 5 | 2 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
-| [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
+| [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 1 | 3 | 1 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-17-infographic-vocabulary-plan.md](20260905-17-infographic-vocabulary-plan.md) | 4 | 0 | 4 | 1 |
@@ -32,7 +32,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 1 | 5 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 14 | 14 | 4 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 15 | 13 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
 | [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 4 | 9 | 3 |
 
@@ -41,7 +41,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 26
+## Ready now - 24
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -56,7 +56,6 @@ section 3 is where it is answered.
 | #3 | 12 | C | Numbers a reader can say out loud | 1b |
 | #3 | 13 | C | The fuse comes out, and one run is watched | 2, plan 12 row #1b |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
-| #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
 | #2 | 16 | B | The four ways code may reach a number the article did not write | 1 |
 | #1 | 17 | A | A real sentence made to fit, without anyone re-writing it | - |
@@ -66,7 +65,6 @@ section 3 is where it is answered.
 | #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 |
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
-| #P3 | 23 | D | A person labels the dev split and the test split | P2 |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b, 2 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #8a | 25 | J | The second desk reaches the reader | 8 |
@@ -88,7 +86,7 @@ section 3 is where it is answered.
 | #4 | 12 | D | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | E | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | F | A whole day, again | 5 is PENDING |
-| #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
+| #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
 | #3 | 15 | C | Trend and magnitude: line, area | 2 is PENDING |
@@ -122,8 +120,8 @@ section 3 is where it is answered.
 | #9 | 23 | K | Confidence is a masked probability over the label's whole span | 8 is PENDING; 14 is PENDING; P5 is PENDING |
 | #15 | 23 | K | The console tab, at `/console/judgement/` | 14 is PENDING; plan 25 row #12 is PENDING |
 | #10 | 23 | L | Five stances, each with its own decline, behind a gate written in code | 8 is PENDING; 14 is PENDING |
-| #11 | 23 | M | Sentiment about one named subject | 8 is PENDING; 14 is PENDING; P3 is PENDING |
-| #18 | 23 | M | The closing measurement: is a read desk better than a declared one | P3 is PENDING; 14 is PENDING |
+| #11 | 23 | M | Sentiment about one named subject | 8 is PENDING; 14 is PENDING |
+| #18 | 23 | M | The closing measurement: is a read desk better than a declared one | 14 is PENDING |
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING |

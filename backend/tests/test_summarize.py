@@ -38,6 +38,7 @@ from idhazh.contracts.app_config import (
     EvaluationConfig,
     InferenceConfig,
     LengthPolicy,
+    ModelsConfig,
     OverLengthAction,
     SummarizeConfig,
     SummaryBand,
@@ -354,6 +355,98 @@ def test_exactly_one_function_spells_a_llama_server_flag() -> None:
     assert spellers == {"backend/idhazh/llm/server.py", "backend/tests/test_summarize.py"}
 
 
+#: What makes a string an IDENTITY rather than a value. The committed model's
+#: own strings, plus the shapes a model this repository has never run would
+#: arrive in - so the guard below catches a fork on the NEXT model too, not only
+#: on the one on disk today.
+_IDENTITY_SHAPES: Final = (
+    re.compile(r"\.gguf\b", re.IGNORECASE),
+    re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]*GGUF\b"),
+    re.compile(r"\b(?:Qwen|unsloth|bartowski|TheBloke)\b"),
+)
+#: Where the branch would be written. The model layer is the only code that
+#: opens a model at all, so a fork on which model is running would be here.
+_MODEL_LAYER: Final = "backend/idhazh/llm"
+
+
+def _committed_identities() -> set[str]:
+    settings = config.load(CONFIG_DIR)
+    named: set[str] = set()
+    for role in ModelsConfig.roles():
+        entry = getattr(settings.models, role)
+        named.update(
+            value
+            for value in (entry.id, entry.repo, entry.file, entry.hf_base_repo)
+            if isinstance(value, str) and value
+        )
+    return named
+
+
+def _branch_operands(tree: ast.AST) -> list[ast.expr]:
+    """Every expression a module compares something against.
+
+    Three shapes, and they are the three a fork can be written in: `==` and `in`
+    and their negations, a `match` case, and the two string predicates that are
+    a comparison wearing a method call.
+    """
+    operands: list[ast.expr] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            operands.append(node.left)
+            operands.extend(node.comparators)
+        elif isinstance(node, ast.MatchValue):
+            operands.append(node.value)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"startswith", "endswith"}
+        ):
+            operands.extend(node.args)
+    return operands
+
+
+def test_no_module_that_opens_a_model_branches_on_which_model_it_is() -> None:
+    """The Oracle for plan 28: a branch on a value is config, a branch on an identity is a fork.
+
+    A swap has to cost one line in `config/idhazh.json`. It cannot, if any code
+    asks which model is running: the second model then needs its own arm here,
+    the arm is written for the model somebody had in front of them, and the
+    one-line swap silently becomes a source change nobody priced.
+
+    Every setting a model needs is already a field - the window, the batch, the
+    turn markers, the thinking switch - so a comparison against a repository, a
+    filename or a model id is never the only way to get the behaviour. It is the
+    shortcut, which is why it is banned by name rather than left to review.
+
+    The identities come from the committed model file AND from shape, so this
+    fails on a fork written for weights that are not on disk yet.
+    """
+    identities = _committed_identities()
+    assert identities, "the committed model names nothing, so this would pass on anything"
+
+    modules = sorted((REPO_ROOT / _MODEL_LAYER).glob("*.py"))
+    assert modules, f"{_MODEL_LAYER} holds no modules, so this would pass on anything"
+
+    forks: list[str] = []
+    for path in modules:
+        source = path.read_text(encoding="utf-8")
+        where = path.relative_to(REPO_ROOT).as_posix()
+        for operand in _branch_operands(ast.parse(source)):
+            for inner in ast.walk(operand):
+                if not (isinstance(inner, ast.Constant) and isinstance(inner.value, str)):
+                    continue
+                text = inner.value
+                if text in identities or any(shape.search(text) for shape in _IDENTITY_SHAPES):
+                    forks.append(f"{where}:{inner.lineno} compares against {text!r}")
+
+    assert not forks, (
+        "a module that opens a model branches on which model it is:\n"
+        + "\n".join(forks)
+        + "\nRead the behaviour off a field of the entry instead - a swap is one "
+        "line in config/idhazh.json and it may not become a source edit."
+    )
+
+
 def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
     from idhazh.contracts.app_config import ModelRef
 
@@ -433,8 +526,8 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
     and a role that is left quiet fails here rather than at 04:00 on a runner.
     """
     settings = config.load(CONFIG_DIR)
-    for role in sorted(type(settings.app.models).model_fields):
-        entry = getattr(settings.app.models, role)
+    for role in ModelsConfig.roles():
+        entry = getattr(settings.models, role)
         argv = server_argv(
             binary=Path("bin/llama-server"),
             weights=Path(f"models/{entry.file}"),
