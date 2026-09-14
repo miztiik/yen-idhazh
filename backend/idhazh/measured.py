@@ -434,11 +434,11 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
 )
 
-#: Everything below is call 1's prompt, which the two-call path renders itself.
+#: Everything below is the label call's prompt, which the two-call path renders itself.
 #: Four numbers rather than one, because they move for different reasons: the
 #: scaffold moves when a prompt file is edited, the per-word rate when an article
 #: tokenizes harder, the per-row rate when the menu's layout changes, and the
-#: seam when call 2's trailing turn is reworded. One number would hide which.
+#: seam when the summarize-and-plan call's trailing turn is reworded. One number would hide which.
 #:
 #: All four were taken together on 2026-09-13 through `llama-server`'s own
 #: `/tokenize`, on a laptop (i7-1265U, 32 GiB, four other agents live). A
@@ -453,17 +453,17 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
 #: `CLAUDE.md` section 13 is the rule: where the awkward shape is the point, the
 #: shape is built, because a built one carries the case the archive never produced.
 
-CALL_ONE_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
+LABEL_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     value=2167,
-    measures="what call 1's prompt costs before a word of the article or a menu row lands",
+    measures="what the label call's prompt costs before a word of the article or a menu row lands",
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
-        "rendered `build_call_one_request` over a seven-word article with an empty "
+        "rendered `build_label_request` over a seven-word article with an empty "
         "candidate menu and tokenized the whole prompt. The system turn alone is "
         "2,055 of it, measured separately, so the remaining 112 is the title line, "
         "the two section headers and the fences. It is bigger than the single call's "
-        "997 because call 1's system turn carries both jobs since row #3e."
+        "997 because the label call's system turn carries both jobs since row #3e."
     ),
     when_it_fires=(
         "a prompt file under backend/idhazh/prompts/ changed, a turn marker moved, or "
@@ -476,7 +476,7 @@ CALL_ONE_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     ),
 )
 
-CALL_ONE_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
+LABEL_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     value=2.2285,
     measures="the article and its sentence addresses, per word of the cut article",
     taken_on=date(2026, 9, 13),
@@ -499,9 +499,9 @@ CALL_ONE_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
 )
 
-CALL_ONE_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
+LABEL_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
     value=34.115,
-    measures="one row of call 1's candidate menu, in tokens",
+    measures="one row of the label call's candidate menu, in tokens",
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
@@ -526,19 +526,22 @@ CALL_ONE_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
     ),
 )
 
-CALL_TWO_SEAM_TOKENS: Final = TokenizerMeasured(
+SUMMARIZE_AND_PLAN_SEAM_TOKENS: Final = TokenizerMeasured(
     value=58,
-    measures="what call 2 adds in front of its own reply, beyond call 1's prompt and reply",
+    measures=(
+        "what the summarize-and-plan call adds in front of its own reply, beyond the "
+        "label call's prompt and reply"
+    ),
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
-        "tokenized call 2's whole prompt and subtracted call 1's prompt and the reply "
-        "between them, over both plan states and two reply strings. 53 with the plan "
-        "asked for, 58 with it suppressed - the wider of the two, because the "
+        "tokenized the summarize-and-plan call's whole prompt and subtracted the label call's "
+        "prompt and the reply between them, over both plan states and two reply strings. 53 with "
+        "the plan asked for, 58 with it suppressed - the wider of the two, because the "
         "suppressed shape is the one that has to fit when the window is tightest."
     ),
     when_it_fires=(
-        "`call_two_user_turn` was reworded, a turn marker moved, or the weights moved. "
+        "`summarize_and_plan_user_turn` was reworded, a turn marker moved, or the weights moved. "
         "Re-tokenize both prompts on the same build and subtract again."
     ),
     why_a_number=(
@@ -554,8 +557,8 @@ EVERY_MEASURED: Final = (
     WARNING_DAYS_REQUIRED,
     PROMPT_OVERHEAD_TOKENS,
     WORST_TOKENS_A_WORD,
-    CALL_ONE_SCAFFOLD_TOKENS,
-    CALL_ONE_BODY_TOKENS_A_WORD,
-    CALL_ONE_MENU_TOKENS_A_ROW,
-    CALL_TWO_SEAM_TOKENS,
+    LABEL_SCAFFOLD_TOKENS,
+    LABEL_BODY_TOKENS_A_WORD,
+    LABEL_MENU_TOKENS_A_ROW,
+    SUMMARIZE_AND_PLAN_SEAM_TOKENS,
 )

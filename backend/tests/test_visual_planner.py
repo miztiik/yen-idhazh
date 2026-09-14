@@ -14,28 +14,28 @@ from typing import Any
 
 import pytest
 from conftest import (
-    CALL_TWO_REPLIES,
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
-    call_one_payload,
+    SUMMARIZE_AND_PLAN_REPLIES,
+    label_payload,
     read_text,
 )
 from pydantic import ValidationError
 
 from idhazh import config
 from idhazh.classify.calls import (
-    CALL_TWO_BUDGET_TOKENS,
     CHARS_PER_WORD,
+    SUMMARIZE_AND_PLAN_BUDGET_TOKENS,
     SUPPRESSED_BUDGET_TOKENS,
-    build_call_two_request,
-    call_one_system_prompt,
-    call_two_output_tokens,
-    call_two_prose_words,
-    call_two_schema,
-    call_two_user_turn,
-    parse_call_two,
+    build_summarize_and_plan_request,
+    label_system_prompt,
+    parse_summarize_and_plan,
     recovered_completion,
+    summarize_and_plan_budget_tokens,
+    summarize_and_plan_prose_words,
+    summarize_and_plan_schema,
+    summarize_and_plan_user_turn,
 )
 from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.article import Article
@@ -239,8 +239,8 @@ class TestTheReachabilityGate:
 class TestTheGateSuppressesThePlanAndNeverTheCall:
     def test_the_suppressed_grammar_has_nowhere_to_write_a_plan(self, article_ok: Article) -> None:
         """O43. The grammar is the control; a smaller budget is only a request."""
-        whole = call_two_schema(source_words=article_ok.band_source_words)
-        suppressed = call_two_schema(source_words=article_ok.band_source_words, plan=False)
+        whole = summarize_and_plan_schema(source_words=article_ok.band_source_words)
+        suppressed = summarize_and_plan_schema(source_words=article_ok.band_source_words, plan=False)
 
         assert set(whole["properties"]) == {"summary", "visual"}
         assert "visual" not in suppressed["properties"]
@@ -248,32 +248,32 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
 
     def test_the_suppressed_budget_is_derived_and_not_the_full_one_minus_the_plan(self) -> None:
         """Two ways of computing one quantity disagree the first time a bound moves."""
-        assert call_two_output_tokens(plan=False) == SUPPRESSED_BUDGET_TOKENS
-        assert call_two_output_tokens() == CALL_TWO_BUDGET_TOKENS
-        assert SUPPRESSED_BUDGET_TOKENS < CALL_TWO_BUDGET_TOKENS
+        assert summarize_and_plan_budget_tokens(plan=False) == SUPPRESSED_BUDGET_TOKENS
+        assert summarize_and_plan_budget_tokens() == SUMMARIZE_AND_PLAN_BUDGET_TOKENS
+        assert SUPPRESSED_BUDGET_TOKENS < SUMMARIZE_AND_PLAN_BUDGET_TOKENS
         ask = config.load(CONFIG_DIR).app.summarize
-        words = call_two_prose_words(ask)
+        words = summarize_and_plan_prose_words(ask)
         rebuilt = approx_tokens(words) + (
-            widest_json_characters(call_two_schema(ask, plan=False)) - words * CHARS_PER_WORD
+            widest_json_characters(summarize_and_plan_schema(ask, plan=False)) - words * CHARS_PER_WORD
         )
-        assert call_two_output_tokens(ask, plan=False) == rebuilt
+        assert summarize_and_plan_budget_tokens(ask, plan=False) == rebuilt
 
     def test_suppressing_the_plan_moves_nothing_in_front_of_the_article(
         self, article_ok: Article
     ) -> None:
         """The cached prefix a gated item reuses is the one an ungated item reuses.
 
-        Every difference sits after the system turn, the article and call 1's
-        reply, so both prompts open with call 1's prompt and its reply and only
+        Every difference sits after the system turn, the article and the label call's
+        reply, so both prompts open with the label call's prompt and its reply and only
         the trailing turn differs.
         """
-        first = call_one_payload(article_ok)
-        reply = read_text(FIXTURES_DIR / "completions" / "call-one" / "labelled.json")
+        first = label_payload(article_ok)
+        reply = read_text(FIXTURES_DIR / "completions" / "label" / "labelled.json")
         turns = config.load(CONFIG_DIR).models.summarize.turns
-        whole = build_call_two_request(
+        whole = build_summarize_and_plan_request(
             first, reply, turns=turns, source_words=article_ok.band_source_words
         )
-        suppressed = build_call_two_request(
+        suppressed = build_summarize_and_plan_request(
             first, reply, turns=turns, source_words=article_ok.band_source_words, plan=False
         )
         shared = first["prompt"] + reply
@@ -291,11 +291,11 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         half drifting between the two requests. There is one rendering of both
         halves now and the gate cannot reach it.
         """
-        system = call_one_system_prompt()
+        system = label_system_prompt()
 
         assert "The summary." in system
         assert "The plan, when the question below asks for one." in system
-        assert call_two_user_turn(source_words=0).startswith("Now write about the item above.")
+        assert summarize_and_plan_user_turn(source_words=0).startswith("Now write about the item above.")
 
     def test_the_gated_question_asks_for_the_summary_alone(self) -> None:
         """The last line is the recency position and it must agree with the grammar.
@@ -306,8 +306,8 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         reader reads. The two turns therefore differ in that line and nowhere
         else.
         """
-        whole = call_two_user_turn(source_words=0).strip().splitlines()
-        gated = call_two_user_turn(source_words=0, plan=False).strip().splitlines()
+        whole = summarize_and_plan_user_turn(source_words=0).strip().splitlines()
+        gated = summarize_and_plan_user_turn(source_words=0, plan=False).strip().splitlines()
 
         assert whole[-1] == 'Write "summary", then "visual".'
         assert '"visual"' not in gated[-1]
@@ -316,10 +316,10 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
 
     def test_a_suppressed_reply_parses_to_a_summary_and_no_plan(self) -> None:
         """`visual` is `None` because none was asked for, not because one was lost."""
-        body = json.loads(read_text(CALL_TWO_REPLIES / "summary-and-plan.json"))
+        body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))
         content = json.loads(body["choices"][0]["message"]["content"])
 
-        reply = parse_call_two(json.dumps(content["summary"]), plan=False)
+        reply = parse_summarize_and_plan(json.dumps(content["summary"]), plan=False)
 
         assert reply.visual is None
         assert reply.summary.title.startswith("Example Lab")
@@ -361,7 +361,7 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
 
         # E5. The budget cut the plan after the summary closed.
         cut = Completion(
-            content=json.loads(read_text(CALL_TWO_REPLIES / "cut-in-the-plan.json"))["choices"][0][
+            content=json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))["choices"][0][
                 "message"
             ]["content"],
             finish_reason="length",
@@ -372,9 +372,9 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
         # Row #3f. The SAME cut reply, when the window rather than the budget is
         # the wall. The server cannot tell them apart - both are `length` on an
         # ordinary 200 - so the discriminator is arithmetic over the prompt the
-        # server counted and the budget call 2's grammar derived.
+        # server counted and the budget the summarize-and-plan call's grammar derived.
         assert cut.hit_the_budget
-        asked_for = call_two_output_tokens()
+        asked_for = summarize_and_plan_budget_tokens()
         window = 8192
         at_the_wall = Completion(
             content=cut.content,
@@ -411,7 +411,7 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
 
         `asked_the_model` used to tell this gate apart from the retired planner's
         prefilter, which decided a fact-poor item without posting anything. That
-        producer is gone: call 2 writes the summary, so the model is asked on
+        producer is gone: the summarize-and-plan call writes the summary, so the model is asked on
         every item whatever the gate then does with the plan. A `false` in a
         committed day is history rather than something a run can still write.
         """

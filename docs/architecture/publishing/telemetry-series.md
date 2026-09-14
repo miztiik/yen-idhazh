@@ -41,16 +41,31 @@ rewrites is a file with every row twice.
 
 The published columns are exactly:
 
-`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, model_calls, call_1_kind, call_1_prefill_ms, call_1_decode_ms, call_1_input_tokens, call_1_output_tokens, call_1_cached_tokens`
+`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, model_calls, label_kind, label_prefill_ms, label_decode_ms, label_input_tokens, label_output_tokens, label_cached_tokens, summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens`
 
-The last six are the **first** model call's own share of the five cost cells
-before them, and the kind of call it was. The second call is the remainder - the
-total minus the first - which is exact because the contract refuses a row whose
-totals are not the sum of its calls, and `model_calls` says how many calls that
-remainder covers. Both calls spelled out would have cost 72.9 and 80.1 percent
-more gzipped on the two committed shards against 35.3 and 40.8 for these,
-measured 2026-09-12 with every timed row populated
+The last twelve are the two model calls' own shares of the five cost cells before
+them, and the kind of call each one was. The flat cells are their sum, and the
+contract refuses a row where they are not.
+
+**They used to be six, and the browser was told to subtract.** The shard ended at
+`label_cached_tokens`, on the reasoning that the second call is the total minus
+the first. That was wrong in three ways, each of which reads as a plausible
+number rather than as an error. A remainder has no kind, so nothing on the page
+could name what the second call was. The remainder is one call only where
+`model_calls` is 2, and that cell is empty on every row published before
+2026-09-12. And a reader who wanted the second call's cache share had to subtract
+two cells and divide, which is three chances to get wrong a ratio the producer
+already held exactly. Six more cells cost 72.9 and 80.1 percent more gzipped on
+the two committed shards against 35.3 and 40.8 for the first six, measured
+2026-09-12 with every timed row populated - and that is what the split is worth,
+because the panel it feeds cannot be drawn from a subtraction
 ([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
+
+**A shard published before 2026-09-15 still loads.** The first call's cells were
+headed `call_1_*` then; `PublicTelemetryRow.from_csv_row` reads a retired heading
+into the column that replaced it, one direction only. The six new cells are
+appended at the end, so the positional prefix `parseTelemetryCsv` reads is
+unchanged and a cached bundle keeps working.
 
 These source-ledger columns never cross to the browser:
 

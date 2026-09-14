@@ -268,8 +268,8 @@ with one answer, and a re-run replaces its page rather than adding a second one.
 
 | Record | What it settles |
 | --- | --- |
-| [Moving the instructions in front of the article](../benchmarks/instructions-in-front.md) | what a prefix cache can reach once call 2's question sits ahead of the article |
-| [Where call 2's re-read tokens go](../benchmarks/two-call-re-read.md) | how much of call 2's prompt the server answers from cache |
+| [Moving the instructions in front of the article](../benchmarks/instructions-in-front.md) | what a prefix cache can reach once the summarize-and-plan call's question sits ahead of the article |
+| [Where the summarize-and-plan call's re-read tokens go](../benchmarks/two-call-re-read.md) | how much of the summarize-and-plan call's prompt the server answers from cache |
 | [What the two calls cost at the truncation cap](../benchmarks/two-call-window-sizing.md) | what both calls cost at a cap-length article, and the memory reading at three windows |
 
 ## See also

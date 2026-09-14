@@ -223,7 +223,15 @@ def test_item_health_http_status_belongs_only_to_fetch() -> None:
         ItemHealthRow.model_validate(payload)
 
 
-def test_unknown_item_health_failure_carries_the_only_detail() -> None:
+def test_a_failed_item_health_row_may_say_why_and_an_ok_one_may_not() -> None:
+    """`unknown` still demands a detail; every other failure may now carry one.
+
+    The rule used to be that detail belonged to `unknown` alone, so a known
+    failure recorded its code and threw the exception message away - and a
+    person debugging it had to reproduce the failure to read the sentence the
+    process already had in hand. An ok row still carries none: a row that
+    succeeded has nothing to explain.
+    """
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json",
         code=FailureCode.UNKNOWN,
@@ -233,9 +241,23 @@ def test_unknown_item_health_failure_carries_the_only_detail() -> None:
 
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json",
-        detail="short source",
+        code=FailureCode.UNKNOWN,
+        detail=None,
     )
-    with pytest.raises(ValueError, match="detail belongs only"):
+    with pytest.raises(ValueError, match="must carry detail"):
+        ItemHealthRow.model_validate(payload)
+
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "summarize-model-unreachable.json",
+        detail="HTTPConnectionPool(host='127.0.0.1', port=8080): read timed out",
+    )
+    assert ItemHealthRow.model_validate(payload).detail is not None
+
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json",
+        detail="nothing went wrong",
+    )
+    with pytest.raises(ValueError, match="carries no detail"):
         ItemHealthRow.model_validate(payload)
 
 

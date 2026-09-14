@@ -16,7 +16,7 @@ idhazh work --date <D> # two calls an item: labels, then the summary and the pla
 idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
-Call 2 writes the summary and the plan in one reply, so the same model that read the article
+The summarize-and-plan call writes the summary and the plan in one reply, so the same model that read the article
 decides the picture and `work` draws it while it still holds the text.
 
 **It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
@@ -50,7 +50,7 @@ It needs an article a bar can legally be drawn from, which is rarer than it soun
 customers - so `units_convertible` refuses every bar expressible from it, correctly.
 `tests/fixtures/pages/wind.html` exists for this: four countries, four figures, one unit, matching
 the shape `tests/fixtures/visual-validator/` already keeps as the plan that passes. Its recorded
-pair is `call-one/wind-labelled.json` and `call-two/wind-summary-and-plan.json`, and the element
+pair is `label/wind-labelled.json` and `summarize-and-plan/wind-summary-and-plan.json`, and the element
 ids in the second are the ones this pipeline mints from the first - so an extractor change that
 moves a span turns the test red rather than quietly turning the picture off.
 
@@ -155,7 +155,7 @@ Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`, 2026-09-09) t
 | 6.01 tok/s, the configured summarizer, `ubuntu-latest`, 2026-08-23 | 4.7 s | 3.8 s | 5.1 to 6.2 min |
 
 Eighty is `run.safety_ceiling_per_run` and is the most items a run plans for, so the run figure is an
-upper bound - an item the reachability gate refuses never reaches call 2's plan half at all.
+upper bound - an item the reachability gate refuses never reaches the summarize-and-plan call's plan half at all.
 `digest.yml` fires five scheduled runs a day, so the day's ceiling is 400 plans: 26 to 31 minutes of
 runner wall-clock, spread over four shards rather than paid serially. The worst-case reply ceiling
 did not move: it already counted every declared key, because a grammar-constrained decoder emits
@@ -502,9 +502,9 @@ names the run manifest froze on 2026-09-05; the Python behind them is `items_dec
 
 ## The two-call gate suppresses the plan and never skips the call
 
-The single-call gate above skips a request. The two-call flow cannot, because **call 2 is the call
+The single-call gate above skips a request. The two-call flow cannot, because **the summarize-and-plan call is the call
 that writes the summary** - so what the gate takes away is the plan's decode, not the request. The
-grammar is what takes it: `call_two_model(plan=False)` is the summary draft alone, with no `visual`
+grammar is what takes it: `summarize_and_plan_model(plan=False)` is the summary draft alone, with no `visual`
 property, so the decoder has nowhere to write a plan. A smaller budget on its own would not do it -
 the decoder would start the plan and meet the cap part-way through, which spends the decode the gate
 exists to save and returns a cut reply.
@@ -536,12 +536,12 @@ channel of every ruled type, asserting the validator refuses all of them. One su
 the gate costs an item a picture a reader would have seen, which is the one way a cheap gate is
 expensive.
 
-| What the gate changes about call 2 | Before | Gated |
+| What the gate changes about the summarize-and-plan call | Before | Gated |
 | --- | --- | --- |
 | The decoder shape | `{summary, visual}` | the summary draft alone |
 | The output budget | 4,735 tokens | 946 tokens |
 | The trailing user turn | 2,555 characters | 961 characters |
-| The system turn, the article, call 1's reply | unchanged | unchanged |
+| The system turn, the article, the label call's reply | unchanged | unchanged |
 
 Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
 being the other minus the plan's - two ways of computing one quantity disagree the first time a
@@ -557,7 +557,7 @@ plan is 54 percent of what an ordinary reply decodes. At the 6.01 tok/s the summ
 (`ubuntu-latest`, 2026-08-23) that is **29.3 seconds an item**, on the items the gate fires for.
 **It is one reply and not a distribution**: the fixture is written by hand, so this sizes the saving
 rather than measuring a run, and no run had read one when it was written - the stage that dispatches
-call 2 shipped on 2026-09-12 behind a flag, and the flag went away with the old path on 2026-09-13.
+the summarize-and-plan call shipped on 2026-09-12 behind a flag, and the flag went away with the old path on 2026-09-13.
 (176 by direct count and 175
 by subtracting the summary from the whole - the one-token gap is a merge across the object
 boundary.) How often the gate fires is the other half of the bill and is a run measurement still
@@ -573,7 +573,7 @@ or out rather than two whole prompts, so the summary half cannot drift between t
 test asserts the two renders share it byte for byte.
 
 **Suppressing the plan moves nothing in front of the article.** All three differences sit after the
-system turn, the article and call 1's reply, so the cached prefix a gated item reuses is the prefix
+system turn, the article and the label call's reply, so the cached prefix a gated item reuses is the prefix
 an ungated one reuses, and the floor row #3 measured is the same floor for both.
 
 ## Every `none` says which gate refused it
@@ -596,7 +596,7 @@ what an operator acts on is the gate rather than the line of code. And **which**
 `ValidatorCheck`'s to say: one fact with two homes is a fact that can disagree with itself.
 
 `validation_failed` is the member that rule is doing the most work in. Three routes write it, and
-the last two only exist once a stage dispatches call 2: the validator refused the plan by name; the
+the last two only exist once a stage dispatches the summarize-and-plan call: the validator refused the plan by name; the
 reply's plan half would not hold `VisualPlan`'s own rules, which a grammar cannot enforce because
 they read one field against another; and every check passed and `compile_bar` still could not draw
 it. To an operator those are one answer - a plan was drafted and this build refuses it - so the
@@ -1409,7 +1409,7 @@ its whole output budget returns. One member for both would have made the largest
 can act on unreadable, because the fix for one is not the fix for the other - a budget cut is the
 reply shape's own arithmetic, and a window cut is `models.summarize.inference.n_ctx` against
 `extract.truncation_cap_tokens`. Separating them costs one comparison at the one call site that
-writes either, over numbers already in hand: the server counted the prompt, and call 2's budget is
+writes either, over numbers already in hand: the server counted the prompt, and the summarize-and-plan call's budget is
 derived from its own grammar. Plan 11 row #3f, 2026-09-13;
 [`../summarize/prompt.md`](../summarize/prompt.md) carries the sizing behind it.
 
@@ -1573,7 +1573,7 @@ file before it can be enabled.
 
 | Option | Why rejected |
 | --- | --- |
-| Skip call 2 entirely when the gate refuses | Call 2 is the call that writes the summary, so skipping it costs the item the thing a reader came for. The gate suppresses the plan fields inside the call and never the call (O43). |
+| Skip the summarize-and-plan call entirely when the gate refuses | The summarize-and-plan call is the call that writes the summary, so skipping it costs the item the thing a reader came for. The gate suppresses the plan fields inside the call and never the call (O43). |
 | Suppress the plan with a smaller budget and leave the grammar whole | The decoder starts the plan and meets the cap part-way through, which spends the decode the gate exists to save and hands back a cut reply. The grammar is the control; a budget is a request. |
 | Derive the suppressed budget as the full one minus the plan's characters | Two ways of computing one quantity, which disagree the first time a bound moves - and the one that is wrong is the one nobody reads. Both come off the same two-half arithmetic over their own schema. |
 | Leave the plan half in the call-2 prompt when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |

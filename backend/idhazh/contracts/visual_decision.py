@@ -79,9 +79,9 @@ class NoneReason(StrEnum):
     #: was never written. The item publishes; the picture is what was lost.
     OUTPUT_BUDGET_CUT = "output_budget_cut"
     #: The reply was cut at the end of the context window rather than at the end
-    #: of its budget: the article and call 1's reply in front of it left less room
-    #: than call 2's grammar may write. Separate from `output_budget_cut` because
-    #: the two ask an operator for different things - a budget cut says look at
+    #: of its budget: the article and the label call's reply in front of it left less room
+    #: than the summarize-and-plan call's grammar may write. Separate from `output_budget_cut`
+    #: because the two ask an operator for different things - a budget cut says look at
     #: the reply shape, and this one says look at
     #: `models.summarize.inference.n_ctx` beside `extract.truncation_cap_tokens`.
     WINDOW_EXHAUSTED = "window_exhausted"
@@ -151,7 +151,8 @@ class VisualDecision(Contract):
                 "a window cut is models.summarize.inference.n_ctx against "
                 "extract.truncation_cap_tokens. The arithmetic that separates them "
                 "needs nothing new - the server already reports the prompt's token "
-                "count, and call 2's budget is derived from its own grammar - so the "
+                "count, and the summarize-and-plan budget is derived from its own "
+                "grammar - so the "
                 "member costs one comparison at the one call site that writes it."
             ),
         ),

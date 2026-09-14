@@ -1,24 +1,27 @@
 """The calls one article takes, declared once as data and walked rather than written out.
 
 **Two nodes, and the number is decided here rather than a row at a time.** Call
-1 returns the element table and every label and score. Call 2 returns the
+1 returns the element table and every label and score. The summarize-and-plan call returns the
 summary and the visual plan. A third node is not a design this file can express
 by accident: `NODES` is checked against `NODE_COUNT` on import, and the check
 names what has to happen before the number moves.
 
 **The reason the list is a list at all is the token budget.** The window has to
 hold the longest single request the sequence ever makes, and on this path that
-is the last one - call 2's prompt is call 1's prompt plus call 1's whole reply,
+is the last one - the summarize-and-plan prompt is the label prompt plus the label
+call's whole reply,
 so every node's decode budget is paid inside the next node's prompt. A sequence
 assembled a row at a time is a budget nobody ever checks whole, and the failure
-is silent: `--no-context-shift` means a decode that runs into the wall stops on
-an ordinary HTTP 200, `recovered_completion` salvages the summary, and the item
-publishes with no picture. `sequence_tokens` is that sum, in one place, read by
+reads as an ordinary day: `--no-context-shift` means a decode that runs into the
+wall stops on an ordinary HTTP 200, `recovered_completion` salvages the summary,
+and the item publishes with no picture and `window_exhausted` recorded beside it.
+One item reading that way is the seatbelt working; a whole shard reading that way
+is a sequence nobody sized. `sequence_tokens` is that sum, in one place, read by
 the production gate and by the contract test together.
 
 **Item-major is a correctness rule, not a layout taste.**
 `models.summarize.inference` pins `n_parallel` to 1, so the server holds one
-prefix-cache slot. Every call 1 first and every call 2 afterwards would evict
+prefix-cache slot. Every label call first and every summarize-and-plan call afterwards would evict
 the prefix before it was reused, on every item, with nothing in any log to say
 so. `walk` runs every node of one item before the next item's first node, and
 the order is this module's tuple rather than the order somebody wrote two
@@ -39,16 +42,16 @@ from idhazh.contracts.app_config import ElementsConfig, InferenceConfig, Summari
 from idhazh.contracts.article import Article
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.measured import (
-    CALL_ONE_BODY_TOKENS_A_WORD,
-    CALL_ONE_MENU_TOKENS_A_ROW,
-    CALL_ONE_SCAFFOLD_TOKENS,
-    CALL_TWO_SEAM_TOKENS,
+    LABEL_BODY_TOKENS_A_WORD,
+    LABEL_MENU_TOKENS_A_ROW,
+    LABEL_SCAFFOLD_TOKENS,
+    SUMMARIZE_AND_PLAN_SEAM_TOKENS,
 )
 
-_SCAFFOLD_TOKENS: Final = int(CALL_ONE_SCAFFOLD_TOKENS.value)
-_BODY_TOKENS_A_WORD: Final = CALL_ONE_BODY_TOKENS_A_WORD.value
-_MENU_TOKENS_A_ROW: Final = CALL_ONE_MENU_TOKENS_A_ROW.value
-_SEAM_TOKENS: Final = int(CALL_TWO_SEAM_TOKENS.value)
+_SCAFFOLD_TOKENS: Final = int(LABEL_SCAFFOLD_TOKENS.value)
+_BODY_TOKENS_A_WORD: Final = LABEL_BODY_TOKENS_A_WORD.value
+_MENU_TOKENS_A_ROW: Final = LABEL_MENU_TOKENS_A_ROW.value
+_SEAM_TOKENS: Final = int(SUMMARIZE_AND_PLAN_SEAM_TOKENS.value)
 
 
 class CallName(StrEnum):
@@ -78,24 +81,24 @@ class CallNode(NamedTuple):
 
 
 def _label_output_tokens(_ask: SummarizeConfig) -> int:
-    """Call 1's budget takes no prompt config; the wrapper keeps the node shape one shape."""
-    return calls.call_one_output_tokens()
+    """The label budget takes no prompt config; the wrapper keeps the node shape one shape."""
+    return calls.label_budget_tokens()
 
 
 def _summary_output_tokens(ask: SummarizeConfig) -> int:
-    """Call 2 at its widest, which is with the plan asked for.
+    """The summarize-and-plan call at its widest, which is with the plan asked for.
 
     The suppressed shape is smaller, so sizing the window on the wider one is
     the conservative read and it does not depend on how often the visual gate
     opens. What the gate saves is a decode, and it is measured where it is spent
     (`docs/architecture/publishing/visuals.md`), not here.
     """
-    return calls.call_two_output_tokens(ask, plan=True)
+    return calls.summarize_and_plan_budget_tokens(ask, plan=True)
 
 
 #: The sequence, in order. **This tuple is the contract.** Adding to it is
 #: ESCALATE trigger 6 of `TODO/20260910-23-article-classification-plan.md`
-#: section 12a: a labelling row adds a field to call 1's reply shape, never a
+#: section 12a: a labelling row adds a field to the label call's reply shape, never a
 #: node here. A third call would be paid twice over - once as its own decode and
 #: again inside every prompt behind it - and `sequence_tokens` is where that
 #: shows up.
@@ -120,8 +123,9 @@ if len(NODES) != NODE_COUNT:
 
 if tuple(node.name for node in NODES) != (CallName.LABEL, CallName.SUMMARIZE_AND_PLAN):
     raise TypeError(
-        "the labelling call has to close before the summary opens - everything call 2 "
-        "points at is defined by call 1's reply, and call 2's prompt is call 1's prompt "
+        "the labelling call has to close before the summary opens - everything the "
+        "summarize-and-plan call points at is defined by the label call's reply, and "
+        "its prompt is the label call's prompt "
         f"plus that reply. Got {tuple(node.name.value for node in NODES)}."
     )
 
@@ -138,7 +142,7 @@ def output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
 
 
 def first_prompt_tokens(article_tokens: int, *, menu_rows: int) -> int:
-    """What call 1's prompt costs for an article of this size, in tokens.
+    """What the label call's prompt costs for an article of this size, in tokens.
 
     Three terms rather than one, and each reads something.
 
@@ -171,8 +175,9 @@ def sequence_tokens(
     """Everything the window has to hold at once, over the whole sequence.
 
     **The peak is the last node's request, not the sum of two independent
-    calls.** Call 2 opens with call 1's prompt and replays call 1's reply, so
-    what the window holds at the end is call 1's prompt, plus every decode
+    calls.** The summarize-and-plan call opens with the label prompt and replays the
+    label reply,
+    so what the window holds at the end is the label call's prompt, plus every decode
     budget behind it, plus one seam per turn boundary. Walking `NODES` is what
     makes that true of the sequence rather than of the two statements somebody
     wrote - add a node and this number grows by that node's budget and a seam,
@@ -180,7 +185,7 @@ def sequence_tokens(
 
     It is a sizing rather than a guarantee, and the reason is stated where each
     term is: both decode budgets are ceilings over reply shapes whose prose
-    rails are character rails, and `CALL_ONE_BODY_TOKENS_A_WORD` is the top of
+    rails are character rails, and `LABEL_BODY_TOKENS_A_WORD` is the top of
     an eight-build spread rather than a bound. The seatbelt behind it is
     `recovered_completion`; the brake is the budgets themselves.
     """
@@ -200,7 +205,7 @@ def fits_the_window(
     menu_rows: int,
     prompt_config: SummarizeConfig | None = None,
 ) -> bool:
-    """Whether this article's whole sequence fits, asked before call 1 is sent.
+    """Whether this article's whole sequence fits, asked before the label call is sent.
 
     **`summarize.fits_context` is the other one and it is not this one.** That
     function sizes the single call the qualification harness sends: one system
@@ -208,7 +213,7 @@ def fits_the_window(
     runs. Two paths render different prompts, so one derivation would be wrong
     about one of them, and the wrong one would be wrong in the expensive
     direction - the two-call sequence is 2.8 times the single call's, because
-    call 1's reply is paid twice and the candidate menu is paid once.
+    the label call's reply is paid twice and the candidate menu is paid once.
 
     **Refusing here costs the item and admitting it costs the picture.** An
     article that does not fit is not clipped or degraded: it lands as
@@ -234,7 +239,7 @@ def worst_menu_rows(elements: ElementsConfig | None = None) -> int:
 
     `elements.max_per_article` rather than a measured density, because the cap
     is what a saturated menu costs and the census says a cap-length article
-    reaches it - the working is beside `CALL_ONE_MENU_TOKENS_A_ROW`.
+    reaches it - the working is beside `LABEL_MENU_TOKENS_A_ROW`.
     """
     return (elements or ElementsConfig()).max_per_article
 
@@ -245,8 +250,8 @@ def walk[Stop](ask: Callable[[CallNode], Stop | None]) -> Stop | None:
     `ask` runs one node and returns nothing when the item may go on, or the
     answer that ends it when it may not. The walk stops at the first node that
     ends the item, because every node after the first reads the reply of the one
-    before: call 2's prompt replays call 1's reply verbatim, and a reply that
-    did not parse has not been held to a schema, so sending it would put
+    before: the summarize-and-plan call's prompt replays the label call's reply verbatim, and a
+    reply that did not parse has not been held to a schema, so sending it would put
     unchecked model text into a prompt on the argument that it is probably fine
     (Guardrail #11).
 

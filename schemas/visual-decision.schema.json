@@ -48,7 +48,7 @@
     {
       "change": "NoneReason takes a fifth member, window_exhausted. Additive: no payload written before today can carry it, and every reader that handled four members handles five.",
       "version": "2026-09-13",
-      "why": "Under --no-context-shift a reply that runs into the wall of the context window comes back on an ordinary HTTP 200 with the same finish_reason as a reply that spent its whole output budget, so the two were one member and an operator could not tell them apart. They are different work: a budget cut is the reply shape's arithmetic, and a window cut is models.summarize.inference.n_ctx against extract.truncation_cap_tokens. The arithmetic that separates them needs nothing new - the server already reports the prompt's token count, and call 2's budget is derived from its own grammar - so the member costs one comparison at the one call site that writes it."
+      "why": "Under --no-context-shift a reply that runs into the wall of the context window comes back on an ordinary HTTP 200 with the same finish_reason as a reply that spent its whole output budget, so the two were one member and an operator could not tell them apart. They are different work: a budget cut is the reply shape's arithmetic, and a window cut is models.summarize.inference.n_ctx against extract.truncation_cap_tokens. The arithmetic that separates them needs nothing new - the server already reports the prompt's token count, and the summarize-and-plan budget is derived from its own grammar - so the member costs one comparison at the one call site that writes it."
     },
     {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",

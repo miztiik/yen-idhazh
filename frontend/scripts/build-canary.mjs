@@ -126,10 +126,25 @@ function writeItemHealthCanary() {
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
 		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
 		'shard', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
-		'call_1_kind', 'call_1_prefill_ms', 'call_1_decode_ms', 'call_1_input_tokens',
-		'call_1_output_tokens', 'call_1_cached_tokens', 'call_2_kind', 'call_2_prefill_ms',
-		'call_2_decode_ms', 'call_2_input_tokens', 'call_2_output_tokens', 'call_2_cached_tokens',
-		'truncation_cap_tokens'
+		'label_kind', 'label_prefill_ms', 'label_decode_ms', 'label_input_tokens',
+		'label_output_tokens', 'label_cached_tokens', 'summary_kind', 'summary_prefill_ms',
+		'summary_decode_ms', 'summary_input_tokens', 'summary_output_tokens', 'summary_cached_tokens',
+		'truncation_cap_tokens', 'selection_score', 'authority_score', 'tier_score', 'feed_weight',
+		'feed_reliability', 'lens_bonus', 'recency_bonus', 'carriage_step', 'watchlist_bonus',
+		'carried_by', 'watchlist_hit', 'on_front_page', 'tier', 'source_form', 'published_at',
+		'time_source', 'item_started_at', 'item_ended_at', 'item_index', 'shard_item_count',
+		'queue_wait_ms', 'fetch_connect_ms', 'fetch_ttfb_ms', 'robots_ms', 'retry_count',
+		'retry_total_ms', 'label_ms', 'summary_ms', 'visual_plan_ms', 'visual_plan_ms_is_estimate',
+		'faithfulness_ms', 'model_wait_ms', 'item_total_ms', 'stage_gap_ms',
+		'visual_plan_tokens_written', 'label_cache_pct', 'summary_cache_pct', 'slot_id',
+		'kv_tokens_at_start', 'prefix_shared_with_previous', 'label_prefill_tokens_per_s',
+		'label_decode_tokens_per_s', 'summary_prefill_tokens_per_s', 'summary_decode_tokens_per_s',
+		'label_finish_reason', 'summary_finish_reason', 'recovered', 'cpu_model', 'runner_name',
+		'cpu_busy_pct', 'cpu_busy_max', 'cpu_busy_min', 'load_1m', 'llama_rss_bytes',
+		'llama_rss_peak_bytes', 'python_rss_bytes', 'cgroup_peak_bytes', 'model_id',
+		'model_quantisation', 'n_ctx_configured', 'n_parallel', 'n_threads', 'n_batch',
+		'max_output_tokens', 'label_budget_tokens', 'summary_budget_tokens', 'run_visual_decision',
+		'temperature', 'failed_field', 'failed_rule'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
@@ -192,11 +207,12 @@ function writeItemHealthCanary() {
 	const perCall = (model, calls) => {
 		if (!calls) return {};
 		const cells = { model_calls: calls.length };
+		const slots = ['label', 'summary'];
 		const names = ['prefill_ms', 'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens'];
 		calls.forEach(([kind, ...numbers], index) => {
-			cells[`call_${index + 1}_kind`] = kind;
+			cells[`${slots[index]}_kind`] = kind;
 			names.forEach((name, at) => {
-				cells[`call_${index + 1}_${name}`] = numbers[at];
+				cells[`${slots[index]}_${name}`] = numbers[at];
 			});
 		});
 		names.forEach((name, at) => {

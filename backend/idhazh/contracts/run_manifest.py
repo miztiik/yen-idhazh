@@ -144,8 +144,8 @@ class RunRecord(Model):
             "Items the retired visual planner decided without asking the model, because "
             "no enabled visual kind could survive the checks. Counted separately so a "
             "chart rate is never quoted against items_routed alone. **Zero on every run "
-            "since plan 11 row #6**: call 2 writes the summary and the plan in one "
-            "reply, so the model is asked on every item and the gate then decides what "
+            "since plan 11 row #6**: the summarize-and-plan call writes the summary and the plan "
+            "in one reply, so the model is asked on every item and the gate then decides what "
             "to do with the plan. Kept because the committed archive carries non-zero "
             "values a reader of an older day still needs."
         ),
@@ -342,8 +342,8 @@ class RunManifest(Contract):
             ),
             why=(
                 "Plan 11 row #6 retired the visual planner stage, which was the only "
-                "producer of a decision made without asking a model. Call 2 writes the "
-                "summary and the plan in one reply, so every item's model is asked. The "
+                "producer of a decision made without asking a model. The summarize-and-plan call "
+                "writes the summary and the plan in one reply, so every item's model is asked. The "
                 "column stays because the committed archive carries non-zero values, "
                 "and a reader of one of those days needs the field to mean what it "
                 "meant then - but a field that can only read zero from here on has to "

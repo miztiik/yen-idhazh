@@ -78,7 +78,7 @@ plan that fills none and the seven a `bar` leaves empty cost 87. That is **28
 tokens** on the declining plan and **23** on the four-bar one, about 3.1 tokens
 an empty role. At the 6.01 tok/s the configured summarizer decodes at
 (`ubuntu-latest`, 2026-08-23) that is 4.7 s and 3.8 s a plan. The plan is
-decoded by call 2, behind the summary, so this sits inside
+decoded by the summarize-and-plan call, behind the summary, so this sits inside
 `run.shard_timeout_minutes` (200) along with everything else an item costs.
 
 The reading is `idhazh.measured.EMPTY_ROLE_TOKENS` and it names weights this
@@ -135,9 +135,9 @@ cannot say "at most four roles for a bar". Which roles a type may fill is the
 validator's rule.
 
 `visuals.max_output_tokens` is 400 and it is the single-call planner's budget, not
-this shape's. Call 2 decodes a summary and this plan through one budget derived
+this shape's. The summarize-and-plan call decodes a summary and this plan through one budget derived
 from both shapes' bounds, which is the planner's work and not this contract's -
-`classify.calls.call_two_output_tokens` does the arithmetic and
+`classify.calls.summarize_and_plan_budget_tokens` does the arithmetic and
 `widest_json_characters` below is the half of it this module owns.
 """
 

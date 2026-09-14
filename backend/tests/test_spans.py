@@ -86,20 +86,20 @@ def page_carrying(sentinel: str, *, title: str) -> bytes:
 def completion_carrying(sentinel: str) -> tuple[bytes, ...]:
     """The committed two-call pair, with the sentinel written into every prose field.
 
-    Built from `tests/fixtures/completions/call-one/labelled.json` and
-    `call-two/summary-and-plan.json` rather than typed out here, so each reply
+    Built from `tests/fixtures/completions/label/labelled.json` and
+    `summarize-and-plan/summary-and-plan.json` rather than typed out here, so each reply
     keeps the shape its own decoder is constrained to and the work stage runs to
     the end instead of failing early on a reply it cannot read.
 
-    Call 1 answers in element ids and carries no prose to plant in, so the
-    sentinel goes into call 2 - which is the reply that becomes the summary, and
+    The label call answers in element ids and carries no prose to plant in, so the
+    sentinel goes into the summarize-and-plan call - which is the reply that becomes the summary, and
     the summary is the text `summary_attributes` is one line away from sending.
     """
     completions = CONTRACT_FIXTURES_DIR.parent / "completions"
-    one = read_text(completions / "call-one" / "labelled.json").encode("utf-8")
+    one = read_text(completions / "label" / "labelled.json").encode("utf-8")
 
     payload: dict[str, Any] = json.loads(
-        read_text(completions / "call-two" / "summary-and-plan.json")
+        read_text(completions / "summarize-and-plan" / "summary-and-plan.json")
     )
     content: dict[str, Any] = json.loads(payload["choices"][0]["message"]["content"])
     summary: dict[str, Any] = content["summary"]

@@ -31,7 +31,13 @@ from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Slug
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
-from idhazh.contracts.item_health import FailureCode, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    CALL_SLOTS,
+    RETIRED_CELLS,
+    FailureCode,
+    ItemOutcome,
+    ItemStage,
+)
 
 #: The three source-ledger cells that may never reach a browser. `detail` is
 #: diagnostic free text and the two address fields identify the page rather than
@@ -57,6 +63,31 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T00:00",
+            change=(
+                "The six first-call cells are named for what the call does - call_1_* "
+                "became label_*. The six second-call cells were appended: "
+                "summary_kind, summary_prefill_ms, summary_decode_ms, "
+                "summary_input_tokens, summary_output_tokens, summary_cached_tokens."
+            ),
+            why=(
+                "The projection published the first call and the total and stopped, on "
+                "the reasoning that a browser could derive the second call by "
+                "subtracting. It could not, in three ways that all read as plausible "
+                "numbers rather than as errors. The remainder has no kind, so nothing "
+                "on the page could say what the second call was. The remainder is one "
+                "call only if model_calls is 2, and model_calls is empty on every row "
+                "published before 2026-09-12. And a reader that wanted the second "
+                "call's cache rate had to subtract two cells and divide, which is "
+                "three chances to get a ratio wrong for a number the producer already "
+                "held exactly.\n\n"
+                "Appended at the end, so the positional prefix the console parses is "
+                "unchanged and a cached bundle keeps working. from_csv_row reads a "
+                "retired call_1_* heading into its label_* column, so a shard "
+                "published before this change still parses."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-14T01:30",
             change="ItemStage gained visual. No row here can carry it.",
             why=(
@@ -70,7 +101,7 @@ class PublicTelemetryRow(Contract):
         ChangelogEntry(
             version="2026-09-12T16:20",
             change=(
-                "Added nullable model_calls, call_1_kind and the first call's five cost "
+                "Added nullable model_calls, label_kind and the first call's five cost "
                 "cells at the end of the row. The second call is the remainder."
             ),
             why=(
@@ -89,7 +120,7 @@ class PublicTelemetryRow(Contract):
                 "and 80.1 percent more gzipped against 35.3 and 40.8 for these seven. "
                 "Appended at the end and nullable, because the browser reads this header "
                 "by position. Empty stays empty - a run that recorded no split writes no "
-                "cell, and a zero in call_1_cached_tokens is the cold-slot measurement."
+                "cell, and a zero in label_cached_tokens is the cold-slot measurement."
             ),
         ),
         ChangelogEntry(
@@ -202,7 +233,7 @@ class PublicTelemetryRow(Contract):
             "Tokens the server answered from its prompt cache rather than reading again, "
             "added over every call the row records. Zero is a real answer here and means "
             "nothing was cached; empty means the server reported no cache figure at all. "
-            "Where call_1_cached_tokens is filled, read the cache per call rather than "
+            "Where label_cached_tokens is filled, read the cache per call rather than "
             "here: a second call reusing the first call's prompt makes this non-zero on "
             "every item."
         ),
@@ -216,7 +247,7 @@ class PublicTelemetryRow(Contract):
             "total minus the first call - is one more call or several."
         ),
     )
-    call_1_kind: CallKind | None = Field(
+    label_kind: CallKind | None = Field(
         default=None,
         description=(
             "Which call ran first: summarize, visual_plan, label or summarize_and_plan. "
@@ -224,7 +255,7 @@ class PublicTelemetryRow(Contract):
             "reads as the design change it is rather than as a regression."
         ),
     )
-    call_1_prefill_ms: int | None = Field(
+    label_prefill_ms: int | None = Field(
         default=None,
         ge=0,
         description=(
@@ -234,10 +265,10 @@ class PublicTelemetryRow(Contract):
             "rate is the one that composes."
         ),
     )
-    call_1_decode_ms: int | None = Field(default=None, ge=0)
-    call_1_input_tokens: int | None = Field(default=None, ge=0)
-    call_1_output_tokens: int | None = Field(default=None, ge=0)
-    call_1_cached_tokens: int | None = Field(
+    label_decode_ms: int | None = Field(default=None, ge=0)
+    label_input_tokens: int | None = Field(default=None, ge=0)
+    label_output_tokens: int | None = Field(default=None, ge=0)
+    label_cached_tokens: int | None = Field(
         default=None,
         ge=0,
         description=(
@@ -245,6 +276,27 @@ class PublicTelemetryRow(Contract):
             "measurement; empty means no split was published for this row."
         ),
     )
+    summary_kind: CallKind | None = Field(
+        default=None,
+        description=(
+            "Which call ran second, or empty where the item made one call. The pair of "
+            "kinds is what lets a reader see a two-call item as two calls rather than "
+            "inferring it from a subtraction."
+        ),
+    )
+    summary_prefill_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds the second call spent reading its prompt. Small on a warm "
+            "slot, because that prompt is the first call's prompt extended and the "
+            "server answers the shared head from its cache."
+        ),
+    )
+    summary_decode_ms: int | None = Field(default=None, ge=0)
+    summary_input_tokens: int | None = Field(default=None, ge=0)
+    summary_output_tokens: int | None = Field(default=None, ge=0)
+    summary_cached_tokens: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def _a_published_failure_says_why(self) -> Self:
@@ -255,30 +307,46 @@ class PublicTelemetryRow(Contract):
         return self
 
     @model_validator(mode="after")
-    def _the_remainder_is_a_call_and_not_a_negative_number(self) -> Self:
-        """The published split is the first call and the total; the rest is arithmetic.
+    def _a_published_call_is_published_whole(self) -> Self:
+        """A slot fills entirely or not at all, and the flat cells are their sum.
 
-        A browser derives the second call by subtracting, so the cells have to
-        leave a subtraction that can be made and can be trusted: the first call
-        fills whole or not at all, it never exceeds the total, and `model_calls`
-        says how many calls the remainder covers.
+        **The browser used to derive the second call by subtracting it from the
+        total, and the subtraction was the bug.** The month shard published six
+        first-call cells and stopped, so a reader that wanted the second call had
+        to assume the remainder was one call, could not name what kind of call it
+        was, and got a plausible number on any row where the assumption was
+        false. The cells are published now, and the rule here is the same one the
+        source ledger holds itself to - filled whole, and the flat cells equal the
+        sum - so the two can be compared without either side reinterpreting the
+        other.
         """
-        cells = [getattr(self, f"call_1_{field}") for field in COST_FIELDS]
-        if self.call_1_kind is None and all(cell is None for cell in cells):
+        filled = 0
+        for slot in CALL_SLOTS:
+            cells = [getattr(self, f"{slot}_{field}") for field in COST_FIELDS]
+            kind = getattr(self, f"{slot}_kind")
+            if kind is None and all(cell is None for cell in cells):
+                continue
+            if kind is None or any(cell is None for cell in cells):
+                raise ValueError(f"the {slot} call is published whole or not at all")
+            if getattr(self, f"{slot}_cached_tokens") > getattr(self, f"{slot}_input_tokens"):
+                raise ValueError(f"{slot}_cached_tokens cannot exceed {slot}_input_tokens")
+            filled += 1
+        if filled == 0:
             if self.model_calls is not None:
-                raise ValueError("model_calls is published only beside the call it counts")
+                raise ValueError("model_calls is published only beside the calls it counts")
             return self
-        if self.call_1_kind is None or any(cell is None for cell in cells):
-            raise ValueError("the first call is published whole or not at all")
-        if self.model_calls is None:
-            raise ValueError("a published call carries the count of calls it is one of")
-        if self.call_1_cached_tokens > self.call_1_input_tokens:  # type: ignore[operator]
-            raise ValueError("call 1 cached_tokens cannot exceed its input_tokens")
+        if self.label_kind is None:
+            raise ValueError("a second call is published only after a first")
+        if self.model_calls != filled:
+            raise ValueError("model_calls must equal the number of published calls")
         for field in COST_FIELDS:
-            total = getattr(self, field)
-            first = getattr(self, f"call_1_{field}")
-            if total is None or first > total:
-                raise ValueError(f"call_1_{field} must leave a remainder inside {field}")
+            total = sum(
+                getattr(self, f"{slot}_{field}")
+                for slot in CALL_SLOTS
+                if getattr(self, f"{slot}_kind") is not None
+            )
+            if getattr(self, field) != total:
+                raise ValueError(f"{field} must equal the sum over the published calls")
         return self
 
     @classmethod
@@ -300,8 +368,16 @@ class PublicTelemetryRow(Contract):
 
         A shard carries no `version` cell, so the row is stamped with the current
         one on read the way any document that omits it is.
+
+        **A cell under a retired heading is read into the column that replaced
+        it.** Every month shard published before this change heads its six
+        first-call cells `call_1_*`, and those shards are what a reader's browser
+        has cached.
         """
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.csv_columns()}
+        for retired, current in RETIRED_CELLS.items():
+            if current in payload and payload[current] == "":
+                payload[current] = row.get(retired, "")
         for name, field in cls.model_fields.items():
             if name in payload and field.default is None and payload[name] == "":
                 payload[name] = None

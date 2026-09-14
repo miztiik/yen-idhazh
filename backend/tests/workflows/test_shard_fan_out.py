@@ -238,7 +238,7 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
 def test_a_work_shard_hands_over_the_pictures_it_drew_itself() -> None:
     """The work shards are the only job that draws, and their checkouts go away.
 
-    Call 2 writes the summary and the plan in one reply, so `work` renders the
+    The summarize-and-plan call writes the summary and the plan in one reply, so `work` renders the
     picture on its own runner and its checkout is thrown away when the shard
     ends. The decisions travel inside `items-<shard>`; the drawn bytes do not,
     because that artifact is rooted at the items directory. Without this pair

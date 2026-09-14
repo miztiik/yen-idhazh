@@ -37,9 +37,9 @@ class CallKind(StrEnum):
     SUMMARIZE = "summarize"
     #: Today's small-model visual plan, dispatched in the separate visuals job.
     VISUAL_PLAN = "visual_plan"
-    #: Call 1 of the two-call planner: labels what the candidate pass found.
+    #: The label call of the two-call planner: labels what the candidate pass found.
     LABEL = "label"
-    #: Call 2 of the two-call planner: writes the summary and then the plan.
+    #: The summarize-and-plan call of the two-call planner: writes the summary and then the plan.
     SUMMARIZE_AND_PLAN = "summarize_and_plan"
 
 
@@ -48,7 +48,7 @@ class CallCost(Model):
 
     Nested rather than flattened because the same five have to be described once
     and checked once. The two CSV ledgers cannot nest, so they spell these names
-    with a `call_1_`/`call_2_` prefix and `idhazh.telemetry` is the one place
+    with a `label_`/`summary_` prefix and `idhazh.telemetry` is the one place
     that flattens - one translator, against one copy of this validator per
     contract that would otherwise carry it.
     """

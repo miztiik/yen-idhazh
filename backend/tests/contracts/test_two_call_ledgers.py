@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from idhazh import day_partition, ledger
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health import CALL_SLOTS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.summary import Summary
@@ -110,11 +110,10 @@ def test_a_payload_written_before_the_split_still_validates() -> None:
 
     row = json.loads(read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"))
     cells = ItemHealthRow.model_validate(row).csv_row()
-    for name in ItemHealthRow.csv_columns():
-        if name.startswith("call_") or name == "model_calls":
-            cells.pop(name)
+    for name in (*RETIRED_CELLS.values(), "model_calls"):
+        cells.pop(name)
     narrower = ItemHealthRow.from_csv_row(cells)
-    assert narrower.model_calls is None and narrower.call_1_kind is None
+    assert narrower.model_calls is None and narrower.label_kind is None
     assert narrower.cached_tokens == ItemHealthRow.model_validate(row).cached_tokens
 
 
@@ -131,10 +130,10 @@ def test_a_row_that_records_one_call_may_not_keep_the_other_call_s_total() -> No
         json.loads(read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"))
     )
     whole: dict[str, object] = {"model_calls": 2}
-    for slot, call in ((1, first), (2, second)):
-        whole[f"call_{slot}_kind"] = call.kind
+    for slot, call in zip(CALL_SLOTS, (first, second), strict=True):
+        whole[f"{slot}_kind"] = call.kind
         for field in ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens"):
-            whole[f"call_{slot}_{field}"] = getattr(call, field)
+            whole[f"{slot}_{field}"] = getattr(call, field)
     totals = {
         field: getattr(first, field) + getattr(second, field)
         for field in ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens")
@@ -145,46 +144,94 @@ def test_a_row_that_records_one_call_may_not_keep_the_other_call_s_total() -> No
         ItemHealthRow.model_validate({**row.model_dump(), **whole, **totals, "cached_tokens": 0})
     with pytest.raises(ValidationError, match="recorded whole or not at all"):
         ItemHealthRow.model_validate(
-            {**row.model_dump(), **whole, **totals, "call_2_cached_tokens": None}
+            {**row.model_dump(), **whole, **totals, "summary_cached_tokens": None}
         )
     with pytest.raises(ValidationError, match="must equal the number of recorded calls"):
         ItemHealthRow.model_validate({**row.model_dump(), **whole, **totals, "model_calls": 1})
 
 
-def test_the_published_projection_leaves_a_second_call_that_can_be_subtracted() -> None:
-    """The browser derives the second call, so the cells have to leave it derivable.
+def test_the_published_projection_carries_both_calls_rather_than_a_subtraction() -> None:
+    """The Oracle for the defect this row was opened on.
 
-    Publishing both calls would have cost more than the split is worth to a
-    runtime fetch: measured 2026-09-12 on the two committed shards with every
-    timed row populated, twelve cells cost 72.9 and 80.1 percent more gzipped
-    against 35.3 and 40.8 for these seven.
+    The projection used to publish the first call and the total and stop, on the
+    reasoning that a browser could subtract. The shard it wrote was 26 columns
+    ending at `label_cached_tokens`, so the second call had no kind on the page,
+    the remainder was one call only where `model_calls` said 2 - and that cell is
+    empty on every row published before 2026-09-12 - and a cache rate for the
+    second call cost the reader two subtractions and a division.
+
+    So the test is the shape of the row rather than the arithmetic: both slots
+    are published, both fill whole, and the flat cells are their sum.
     """
     first, second = _two_calls()
     row = PublicTelemetryRow.model_validate(
         json.loads(read_text(CONTRACT_FIXTURES_DIR / "public-telemetry" / "published.json"))
     )
     fields = ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens")
-    published = {
+    published: dict[str, object] = {
         "model_calls": 2,
-        "call_1_kind": first.kind,
-        **{f"call_1_{name}": getattr(first, name) for name in fields},
         **{name: getattr(first, name) + getattr(second, name) for name in fields},
     }
+    for slot, call in zip(CALL_SLOTS, (first, second), strict=True):
+        published[f"{slot}_kind"] = call.kind
+        published |= {f"{slot}_{name}": getattr(call, name) for name in fields}
     split = row.model_copy(update=published)
-    derived = {
-        name: (getattr(split, name) or 0) - (getattr(split, f"call_1_{name}") or 0)
-        for name in fields
-    }
-    assert derived == {name: getattr(second, name) for name in fields}, (
-        "the remainder is the second call, exactly"
-    )
 
-    with pytest.raises(ValidationError, match="must leave a remainder inside"):
+    assert split.summary_kind == second.kind, "the second call is named and not inferred"
+    for name in fields:
+        assert getattr(split, f"summary_{name}") == getattr(second, name)
+        assert getattr(split, name) == getattr(first, name) + getattr(second, name)
+
+    with pytest.raises(ValidationError, match="sum over the published calls"):
         PublicTelemetryRow.model_validate(
             {**row.model_dump(), **published, "prefill_ms": first.prefill_ms - 1}
         )
     with pytest.raises(ValidationError, match="whole or not at all"):
-        PublicTelemetryRow.model_validate({**row.model_dump(), **published, "call_1_kind": None})
+        PublicTelemetryRow.model_validate({**row.model_dump(), **published, "label_kind": None})
+
+
+def test_a_shard_written_under_the_retired_headings_still_reads() -> None:
+    """The read-side proof for the rename, taken by removing the new keys.
+
+    Every day file and every month shard an earlier run wrote heads its per-call
+    cells `call_1_*` and `call_2_*`. Those files are the archive, so a build that
+    cannot open them has not migrated the ledger - it has abandoned it.
+
+    The old spelling is put back on a built row rather than counted in the
+    committed tree, because a test that counted rows still carrying it would go
+    red on the day the last one aged out (`CLAUDE.md` section 13).
+    """
+    first, second = _two_calls()
+    fields = ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens")
+    split: dict[str, object] = {
+        "model_calls": 2,
+        **{name: getattr(first, name) + getattr(second, name) for name in fields},
+    }
+    for slot, call in zip(CALL_SLOTS, (first, second), strict=True):
+        split[f"{slot}_kind"] = call.kind
+        split |= {f"{slot}_{name}": getattr(call, name) for name in fields}
+    row = ItemHealthRow.model_validate(
+        json.loads(read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"))
+    ).model_copy(update=split)
+    assert row.label_kind is not None and row.summary_kind is not None
+
+    retired = row.csv_row()
+    for old, new in RETIRED_CELLS.items():
+        retired[old] = retired.pop(new)
+    assert not set(retired) & set(RETIRED_CELLS.values())
+
+    assert ItemHealthRow.from_csv_row(retired) == row
+
+    published = PublicTelemetryRow.model_validate(
+        json.loads(read_text(CONTRACT_FIXTURES_DIR / "public-telemetry" / "published.json"))
+    ).model_copy(update=split)
+    shard = published.csv_row()
+    for old, new in RETIRED_CELLS.items():
+        if new in shard:
+            shard[old] = shard.pop(new)
+    # By its cells rather than by the model: a shard carries no version cell, so
+    # the reader stamps the row with the current one on the way back in.
+    assert PublicTelemetryRow.from_csv_row(shard).csv_row() == published.csv_row()
 
 
 def test_the_canary_writes_every_column_the_counters_ledger_defines() -> None:

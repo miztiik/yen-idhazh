@@ -56,7 +56,7 @@ def test_an_entry_with_no_turn_envelope_at_all_is_refused() -> None:
 
 @pytest.mark.parametrize("marker", ["turn_closing", "reply_opening", "reply_opening_thinking"])
 def test_an_empty_marker_is_refused(marker: str) -> None:
-    """`continued_prompt` splices call 2 onto `turn_closing`.
+    """`continued_prompt` splices the summarize-and-plan call onto `turn_closing`.
 
     An empty seam joins two turns into one, the grammar still answers, and the
     prefix the two-call design rests on is gone with nothing to read it off.

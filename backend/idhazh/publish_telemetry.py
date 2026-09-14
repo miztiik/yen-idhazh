@@ -68,12 +68,23 @@ def shard_relpath(month: str) -> str:
     return f"frontend/public/{PUBLIC_TELEMETRY_DIRNAME}/{month}.csv"
 
 
+#: What a file has to carry to be an item-health census at all: the columns
+#: `ItemHealthRow` declares without a default. Every other column is nullable
+#: there, so its absence from an older day file is "not recorded" and not a
+#: broken file. Requiring the *current* column list instead would be a fuse: it
+#: goes red the day the contract gains a column, on every day file already
+#: written, for a projection that never reads the new one.
+REQUIRED_SOURCE_COLUMNS: Final[frozenset[str]] = frozenset(
+    name for name, field in ItemHealthRow.model_fields.items() if field.is_required()
+)
+
+
 def _read(path: Path) -> list[PublicTelemetryRow]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             return []
-        missing = set(ItemHealthRow.csv_columns()) - set(reader.fieldnames)
+        missing = REQUIRED_SOURCE_COLUMNS - set(reader.fieldnames)
         if missing:
             raise ValueError(f"{path.as_posix()} misses item-health columns: {sorted(missing)}")
         return [PublicTelemetryRow.from_csv_row(row) for row in reader]

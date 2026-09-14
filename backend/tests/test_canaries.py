@@ -388,7 +388,7 @@ def test_a_page_demanding_a_chart_never_reaches_the_model() -> None:
     """The strongest control against injection at this hop is not asking.
 
     A page can order us to draw it a chart. If its own numbers hold no unit group
-    wide enough for one, the gate settles the item on the elements and call 2 is
+    wide enough for one, the gate settles the item on the elements and the summarize-and-plan call is
     never asked for a plan - so the demand never reaches that turn at all.
     Asserting the absence of a request is a harder guarantee than asserting the
     shape of a reply.

@@ -1,19 +1,21 @@
 """The two model calls that read one article.
 
-**Call 1 draws nothing.** It hands the model the article itself rather than a
+**The label call draws nothing.** It hands the model the article itself rather than a
 summary of it, beside the table of quantities and dates the candidate pass
 already cut, and asks what each one means. Its reply cites addresses code minted
 and types nothing a reader sees.
 
-**Call 2's prompt IS call 1's prompt, plus call 1's reply, plus one question.**
-The bytes are rendered here rather than by the model's chat template, and call
-2's are the first one's extended - so the server's prefix cache answers for the
+**The summarize-and-plan prompt IS the label prompt, plus the label reply, plus
+one question.**
+The bytes are rendered here rather than by the model's chat template, and the
+summarize-and-plan prompt is the first one's extended - so the server's prefix
+cache answers for the
 system turn, the article and the reply, and only the new turn is prefilled. A
 template could not give that: it writes an empty reasoning block into a
 generation prompt and drops it when the same turn is replayed as history, so
-the two renderings diverge four tokens before the end of call 1's prompt and
+the two renderings diverge four tokens before the end of the label call's prompt and
 everything behind the break is read again - 100 tokens an item, measured on the
-configured weights 2026-09-12. Call 2's reply carries the summary first and the
+configured weights 2026-09-12. The summarize-and-plan call's reply carries the summary first and the
 plan second, and that order is the recovery: a decode the output budget cuts is
 cut in the plan, and the summary behind it is already closed. Both calls are
 built here and `idhazh.stages.work.stage_work` dispatches them, adjacently per item;
@@ -23,8 +25,8 @@ call site.
 **Each call's output budget is derived from its own grammar.** Neither is the
 summariser role's `max_answer_tokens`, which is sized for a summary and knows
 nothing about either shape - and which cost one ordinary 346-word article its
-whole item on 2026-09-12, because call 1's reply passed 900 tokens and was cut
-mid-string. Call 1's reply is one flat object, so there is no half to recover
+whole item on 2026-09-12, because the label call's reply passed 900 tokens and was cut
+mid-string. The label call's reply is one flat object, so there is no half to recover
 from a cut; what it has instead is that a cut is reported as one
 (`FailureCode.LABELS_TRUNCATED`) rather than raised as a JSON error several
 frames from the cause.
@@ -94,11 +96,11 @@ from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 #: than it was, so the walk up is stated once rather than in each path below.
 PROMPTS: Final = Path(__file__).parent.parent / "prompts"
 
-CALL_ONE_PROMPT_PATH: Final = PROMPTS / "label_article_elements.txt"
+LABEL_PROMPT_PATH: Final = PROMPTS / "label_article_elements.txt"
 #: The second job, in two files because the plan half is conditioned separately
 #: and a placeholder moved by accident has to be findable. Both are read into
 #: the SYSTEM turn, in front of the article, where they are the same bytes on
-#: every item; `call_one_system_prompt` joins them.
+#: every item; `label_system_prompt` joins them.
 SUMMARY_HALF_PROMPT_PATH: Final = PROMPTS / "summarize_and_plan_visual.txt"
 PLAN_HALF_PROMPT_PATH: Final = PROMPTS / "plan_visual.txt"
 #: The only thing left behind the article: what the band asks for, and which
@@ -112,7 +114,7 @@ _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
 
-# --- Call 1: the model reads the article and points at it --------------------
+# --- The label call: the model reads the article and points at it --------------------
 #
 # One sentence governs the whole section: code finds and cuts every character a
 # reader will see, and the model points at where to cut and says what the cut
@@ -141,7 +143,7 @@ LABEL_PASS_VERSION: Final = "2026-09-09"
 #: hold 256 candidates and the labels are for choosing between them, not for
 #: covering them, so twice a full chart's width is enough to choose with. What
 #: a maximal reply costs in output tokens, and what budget it needs, is
-#: `call_one_output_tokens` below - so moving one of these is moving the budget.
+#: `label_budget_tokens` below - so moving one of these is moving the budget.
 LABELS_MAX: Final = 16
 PROPOSED_MAX: Final = 4
 RANGES_MAX: Final = 8
@@ -291,8 +293,8 @@ class SentenceRange(BaseModel):
     attribution: Attribution
     hedge: bool
 
-class CallOneReply(BaseModel):
-    """What the decoder is constrained to emit on call 1.
+class LabelReply(BaseModel):
+    """What the decoder is constrained to emit on the label call.
 
     Closed to unknown keys, and **no field of it accepts a number**. Not a
     value, not a unit, not a count, not a span and not a character offset: every
@@ -329,14 +331,14 @@ class CallOneReply(BaseModel):
     lede_sentence_ids: list[Address] = Field(max_length=LEDE_MAX)
 
 
-def call_one_schema() -> dict[str, Any]:
-    return CallOneReply.model_json_schema()
+def label_schema() -> dict[str, Any]:
+    return LabelReply.model_json_schema()
 
 
 #: The one reading of how densely a real call-1 reply tokenises, kept as the two
 #: numbers it was read from rather than as a decimal, so nobody takes 3.12 for a
 #: tuned value. The reply that made this budget necessary decoded exactly 900
-#: tokens and `parse_call_one` failed at character 2,805 of it - measured
+#: tokens and `parse_label` failed at character 2,805 of it - measured
 #: 2026-09-12 on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding, one
 #: reply, no spread
 #: (`docs/reference/benchmarks/instructions-in-front.md`).
@@ -346,18 +348,18 @@ MEASURED_REPLY_TOKENS: Final = 900
 #: reply that was filling its lists, which is the composition the character
 #: ceiling below describes, so it is the right sample to extrapolate a ceiling
 #: from even at one reading. What overturns it: decode twenty corpus articles
-#: through call 1 at a budget no reply reaches, record characters and tokens per
+#: through the label call at a budget no reply reaches, record characters and tokens per
 #: reply, and take the LOWEST ratio. Under this figure the constant moves; under
 #: about 1.55 the design moves, because that is where the derived budget stops
 #: fitting the window the two calls share.
 CHARS_PER_OUTPUT_TOKEN: Final = MEASURED_REPLY_CHARACTERS / MEASURED_REPLY_TOKENS
 
 
-def call_one_output_tokens() -> int:
-    """Call 1's output budget, derived from the reply shape's own bounds.
+def label_budget_tokens() -> int:
+    """The label call's output budget, derived from the reply shape's own bounds.
 
     **Not picked, and not the summariser role's number.** Every array in
-    `CallOneReply` carries a `maxItems` and every decoded string a `maxLength`,
+    `LabelReply` carries a `maxItems` and every decoded string a `maxLength`,
     so the longest reply the grammar admits is arithmetic over the bounds, and
     the arithmetic runs again on every import - move a bound and this number
     moves with it, without anybody remembering to. Until 2026-09-13 the budget
@@ -365,13 +367,13 @@ def call_one_output_tokens() -> int:
     since 2026-09-14 - sized for a summary and knowing nothing about this shape,
     and one ordinary 346-word article lost its whole item to it.
 
-    **It is not call 2's rule, and the reason is arithmetic rather than taste.**
-    `call_two_output_tokens` spends its prose as words and counts everything
+    **It is not the summarize-and-plan call's rule, and the reason is arithmetic rather than
+    taste.** `summarize_and_plan_budget_tokens` spends its prose as words and counts everything
     else one token a character, because a token spans at least one character and
-    that makes the structural half a true ceiling. Call 1 has no word rails to
+    that makes the structural half a true ceiling. The label call has no word rails to
     spend - every bound on this shape is a character bound - so the same rule
-    reads the whole reply as structure and returns 20,229 tokens. Call 1's reply
-    is paid twice, once as its own decode and once inside call 2's prompt, so
+    reads the whole reply as structure and returns 20,229 tokens. The label call's reply
+    is paid twice, once as its own decode and once inside the summarize-and-plan call's prompt, so
     that budget puts the pair at 39,927 tokens of reply alone, before the
     article in front of them - against a window of 65,536 whose sizing already
     spends 54,887 on the pair at the truncation cap. A ceiling that fits no
@@ -379,11 +381,11 @@ def call_one_output_tokens() -> int:
 
     **So the ceiling is converted at the one measured density instead**, which
     is what `CHARS_PER_OUTPUT_TOKEN` holds and what makes this a sizing rather
-    than a guarantee - the same thing call 2's prose half is, and for the same
+    than a guarantee - the same thing the summarize-and-plan call's prose half is, and for the same
     stated reason: the budget is the brake, and a budget large enough to be an
     unbreakable ceiling would leave no window for the article it is reading.
-    Call 2's seatbelt is `recovered_completion`; call 1's is that a cut is
-    reported as a cut, typed, rather than raised as a JSON error several frames
+    The summarize-and-plan call's seatbelt is `recovered_completion`; the label call's is that a cut
+    is reported as a cut, typed, rather than raised as a JSON error several frames
     from the cause (`FailureCode.LABELS_TRUNCATED`).
 
     Measured against the committed bounds on 2026-09-13, the widest reply this
@@ -393,26 +395,26 @@ def call_one_output_tokens() -> int:
     anti-abuse rather than expected lengths, which is why counting them as
     tokens one for one overstates so heavily.
     """
-    return ceil(widest_json_characters(call_one_schema()) / CHARS_PER_OUTPUT_TOKEN)
+    return ceil(widest_json_characters(label_schema()) / CHARS_PER_OUTPUT_TOKEN)
 
 
 #: The budget the committed bounds produce, written down as well as computed.
-#: `CALL_TWO_BUDGET_TOKENS` is the precedent and the reason is the same: a
+#: `SUMMARIZE_AND_PLAN_BUDGET_TOKENS` is the precedent and the reason is the same: a
 #: number that only exists inside a function is a number nobody re-derives, and
 #: a bound can then move without anybody seeing what it cost. It is 7.2 times
 #: the reply that was lost and 68 times an ordinary one, which was measured at
 #: 96 tokens on 2026-09-12.
-CALL_ONE_BUDGET_TOKENS: Final = 6491
+LABEL_BUDGET_TOKENS: Final = 6491
 
-if call_one_output_tokens() != CALL_ONE_BUDGET_TOKENS:
+if label_budget_tokens() != LABEL_BUDGET_TOKENS:
     raise TypeError(
-        "a bound moved and call 1's output budget did not follow it - the reply shape "
-        f"now needs {call_one_output_tokens()} tokens against a recorded "
-        f"{CALL_ONE_BUDGET_TOKENS}; re-derive it in `call_one_output_tokens`"
+        "a bound moved and the label call's output budget did not follow it - the reply shape "
+        f"now needs {label_budget_tokens()} tokens against a recorded "
+        f"{LABEL_BUDGET_TOKENS}; re-derive it in `label_budget_tokens`"
     )
 
 
-def call_one_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
+def label_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
     """Both jobs, in one turn, in front of the article.
 
     Three files joined here rather than one file holding all of it, and the
@@ -436,7 +438,7 @@ def call_one_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
     ask = prompt_config or SummarizeConfig()
     return "\n".join(
         (
-            CALL_ONE_PROMPT_PATH.read_text(encoding="utf-8"),
+            LABEL_PROMPT_PATH.read_text(encoding="utf-8"),
             _summary_half().substitute(
                 title_words_min=ask.title_words_min,
                 title_words_max=ask.title_words_max,
@@ -505,7 +507,7 @@ def candidate_menu(table: ElementTable) -> str:
     )
 
 
-def call_one_user_turn(article: Article, table: ElementTable) -> str:
+def label_user_turn(article: Article, table: ElementTable) -> str:
     """The title, the addressed article and the candidate table - all fenced.
 
     It refuses a table built over a different string than the article it is
@@ -527,7 +529,7 @@ def call_one_user_turn(article: Article, table: ElementTable) -> str:
     return "\n\n".join(parts)
 
 
-def build_call_one_request(
+def build_label_request(
     article: Article,
     table: ElementTable,
     *,
@@ -536,15 +538,15 @@ def build_call_one_request(
     turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
-    """Call 1's request body, with the reply shape enforced by the decoder.
+    """The label call's request body, with the reply shape enforced by the decoder.
 
     The prompt bytes are rendered here rather than by the model's chat
-    template, which is what lets call 2 open with them unchanged. The output
-    budget is derived from this call's own grammar, as call 2's is from both
+    template, which is what lets the summarize-and-plan call open with them unchanged. The output
+    budget is derived from this call's own grammar, as the summarize-and-plan call's is from both
     replies' bounds together; the role's `max_answer_tokens` sizes the single
     call and is not this shape's number.
 
-    `prompt_config` reaches call 1 because the system turn carries both jobs
+    `prompt_config` reaches the label call because the system turn carries both jobs
     now. Every number it spends is a config-level one, the same on every item,
     so the turn is still the same bytes on every item.
 
@@ -553,21 +555,21 @@ def build_call_one_request(
     """
     return completion_payload(
         model_id=model_id,
-        system=call_one_system_prompt(prompt_config),
-        user=call_one_user_turn(article, table),
-        output_schema=call_one_schema(),
+        system=label_system_prompt(prompt_config),
+        user=label_user_turn(article, table),
+        output_schema=label_schema(),
         inference=inference,
         turns=turns,
-        max_answer_tokens=call_one_output_tokens(),
+        max_answer_tokens=label_budget_tokens(),
     )
 
 
-def parse_call_one(raw: str) -> CallOneReply:
+def parse_label(raw: str) -> LabelReply:
     content = _THINK.sub("", raw).strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    return CallOneReply.model_validate_json(content)
+    return LabelReply.model_validate_json(content)
 
 
 def _slug(words: str) -> str | None:
@@ -616,7 +618,7 @@ def _judgements(
 
 def apply_labels(
     table: ElementTable,
-    reply: CallOneReply,
+    reply: LabelReply,
     *,
     label_source: str,
     entity_slugs: Mapping[str, str] | None = None,
@@ -690,7 +692,7 @@ def _locate(
     return start, start + len(surface)
 
 
-def proposed_quantities(text: str, reply: CallOneReply) -> list[Element]:
+def proposed_quantities(text: str, reply: LabelReply) -> list[Element]:
     """The figures the pattern missed, cut out of the article's own bytes.
 
     The escape hatch decision 3 asks for, and the reason it is safe is that the
@@ -912,7 +914,7 @@ def range_elements(
 
 def model_anchored(
     text: str,
-    reply: CallOneReply,
+    reply: LabelReply,
     *,
     label_source: str,
     entity_slugs: Mapping[str, str],
@@ -963,7 +965,7 @@ def model_anchored(
 def anchored(
     table: ElementTable,
     text: str,
-    reply: CallOneReply,
+    reply: LabelReply,
     *,
     config: ElementsConfig,
     label_source: str,
@@ -1047,11 +1049,12 @@ def anchored(
         }
     )
     if (drift := whole.span_drift(text)) is not None:
-        raise SpanDriftError(f"call 1 cannot re-slice its own output: {drift}")
+        raise SpanDriftError(f"the label call cannot re-slice its own output: {drift}")
     return whole
 
 
-# --- Call 2: the summary and the plan, over the prefix call 1 already paid for
+# --- The summarize-and-plan call: the summary and the plan, over the prefix the label call already
+# paid for
 
 
 #: How many characters of a decoded string one word may cost, matching
@@ -1060,12 +1063,12 @@ def anchored(
 CHARS_PER_WORD: Final = 12
 
 
-class CallTwoReply(NamedTuple):
-    """What call 2 came back with, as the two contracts it stands for.
+class SummarizeAndPlanReply(NamedTuple):
+    """What the summarize-and-plan call came back with, as the two contracts it stands for.
 
     The decoder shape is not this. That one is generated per band and carries
     neither of the fields code stamps; it exists to be a grammar and it stops at
-    `parse_call_two`. What a caller gets is a summary draft the summarizer's own
+    `parse_summarize_and_plan`. What a caller gets is a summary draft the summarizer's own
     gates can read and a plan the validator can rule on.
 
     `visual` is `None` when the reachability gate took the plan fields off the
@@ -1118,24 +1121,24 @@ def _plan_draft_model() -> type[BaseModel]:
 
 
 @lru_cache(maxsize=16)
-def _call_two_model(draft: type[BaseModel]) -> type[BaseModel]:
+def _summarize_and_plan_model(draft: type[BaseModel]) -> type[BaseModel]:
     """Keyed on the band-narrowed summary shape, which is a hashable type."""
     return create_model(
-        "CallTwoReply",
+        "SummarizeAndPlanReply",
         __base__=ContractModel,
         summary=(draft, Field(description="The reader's summary. Decoded first, and whole.")),
         visual=(_plan_draft_model(), Field(description="The plan for one picture, or none.")),
     )
 
 
-def call_two_model(
+def summarize_and_plan_model(
     prompt_config: SummarizeConfig | None = None,
     *,
     source_words: int | None = None,
     brief: bool = False,
     plan: bool = True,
 ) -> type[BaseModel]:
-    """What the decoder is constrained to emit on call 2.
+    """What the decoder is constrained to emit on the summarize-and-plan call.
 
     **`summary` is declared before `visual`, and the order is load-bearing.**
     Field order is decode order, so the summary is written and closed before the
@@ -1164,10 +1167,10 @@ def call_two_model(
     draft = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
     if not plan:
         return draft
-    return _call_two_model(draft)
+    return _summarize_and_plan_model(draft)
 
 
-def call_two_schema(
+def summarize_and_plan_schema(
     prompt_config: SummarizeConfig | None = None,
     *,
     source_words: int | None = None,
@@ -1175,12 +1178,12 @@ def call_two_schema(
     plan: bool = True,
 ) -> dict[str, Any]:
     """Generated from the model, never hand-written (Guardrail #3)."""
-    return call_two_model(
+    return summarize_and_plan_model(
         prompt_config, source_words=source_words, brief=brief, plan=plan
     ).model_json_schema()
 
 
-def call_two_user_turn(
+def summarize_and_plan_user_turn(
     prompt_config: SummarizeConfig | None = None,
     *,
     source_words: int | None = None,
@@ -1197,7 +1200,7 @@ def call_two_user_turn(
 
     **Everything that could be shared already is.** Both jobs are described in
     the system turn, in front of the article, where they are read once per shard
-    (`call_one_system_prompt`). What is left here is what differs per item, and
+    (`label_system_prompt`). What is left here is what differs per item, and
     it is the whole of what differs: the band the article's own length picked,
     and the fields the grammar will hold this reply to. Until 2026-09-12 this
     turn carried both jobs in full - 687 tokens re-read on every item for ever,
@@ -1224,7 +1227,7 @@ def call_two_user_turn(
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
     key_points_min, key_points_max = summarize.key_point_rail(ask, source_words, brief)
-    shape = call_two_model(ask, source_words=source_words, brief=brief, plan=plan)
+    shape = summarize_and_plan_model(ask, source_words=source_words, brief=brief, plan=plan)
     return _pointer_template().substitute(
         target_words_min=band.target_words_min,
         target_words_max=band.target_words_max,
@@ -1234,7 +1237,7 @@ def call_two_user_turn(
     )
 
 
-def call_two_prose_words(prompt_config: SummarizeConfig | None = None) -> int:
+def summarize_and_plan_prose_words(prompt_config: SummarizeConfig | None = None) -> int:
     """Every word the reply's prose fields can hold, at their widest.
 
     The union rail rather than one band's, because the budget is a property of
@@ -1250,10 +1253,10 @@ def call_two_prose_words(prompt_config: SummarizeConfig | None = None) -> int:
     )
 
 
-def call_two_output_tokens(
+def summarize_and_plan_budget_tokens(
     prompt_config: SummarizeConfig | None = None, *, plan: bool = True
 ) -> int:
-    """Call 2's output budget, derived from the reply shape's own bounds.
+    """The summarize-and-plan call's output budget, derived from the reply shape's own bounds.
 
     **Not picked.** Every array in the shape carries a `maxItems` and every
     decoded string a `maxLength`, so the longest reply the grammar admits is
@@ -1298,8 +1301,9 @@ def call_two_output_tokens(
     inside the summary, where `recovered_completion` has nothing to recover.
     """
     ask = prompt_config or SummarizeConfig()
-    words = call_two_prose_words(ask)
-    structure = widest_json_characters(call_two_schema(ask, plan=plan)) - words * CHARS_PER_WORD
+    words = summarize_and_plan_prose_words(ask)
+    widest = widest_json_characters(summarize_and_plan_schema(ask, plan=plan))
+    structure = widest - words * CHARS_PER_WORD
     return approx_tokens(words) + structure
 
 
@@ -1307,7 +1311,7 @@ def call_two_output_tokens(
 #: `visual.WORST_CASE_REPLY_CHARACTERS` is the precedent and the reason is the
 #: same: a number that only exists inside a function is a number nobody
 #: re-derives, and a bound can then move without anybody seeing what it cost.
-CALL_TWO_BUDGET_TOKENS: Final = 4735
+SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 4735
 #: The same arithmetic with the plan off the grammar. The gap between the two is
 #: what the reachability gate saves per item, and it is a decode rather than a
 #: call (O43): 3,789 tokens off a 4,735-token ceiling, which is 80 percent of it.
@@ -1316,27 +1320,27 @@ CALL_TWO_BUDGET_TOKENS: Final = 4735
 #: rate. The working is in `docs/architecture/publishing/visuals.md`.
 SUPPRESSED_BUDGET_TOKENS: Final = 946
 
-if call_two_output_tokens() != CALL_TWO_BUDGET_TOKENS:
+if summarize_and_plan_budget_tokens() != SUMMARIZE_AND_PLAN_BUDGET_TOKENS:
     raise TypeError(
-        "a bound moved and call 2's output budget did not follow it - the reply shape "
-        f"now needs {call_two_output_tokens()} tokens against a recorded "
-        f"{CALL_TWO_BUDGET_TOKENS}; re-derive it in `call_two_output_tokens`"
+        "a bound moved and the summarize-and-plan call's output budget did not follow it - the "
+        f"reply shape now needs {summarize_and_plan_budget_tokens()} tokens against a recorded "
+        f"{SUMMARIZE_AND_PLAN_BUDGET_TOKENS}; re-derive it in `summarize_and_plan_budget_tokens`"
     )
-if call_two_output_tokens(plan=False) != SUPPRESSED_BUDGET_TOKENS:
+if summarize_and_plan_budget_tokens(plan=False) != SUPPRESSED_BUDGET_TOKENS:
     raise TypeError(
         "a bound moved and the suppressed output budget did not follow it - the summary "
-        f"alone now needs {call_two_output_tokens(plan=False)} tokens against a recorded "
-        f"{SUPPRESSED_BUDGET_TOKENS}; re-derive it in `call_two_output_tokens`"
+        f"alone now needs {summarize_and_plan_budget_tokens(plan=False)} tokens against a recorded "
+        f"{SUPPRESSED_BUDGET_TOKENS}; re-derive it in `summarize_and_plan_budget_tokens`"
     )
-if tuple(call_two_model().model_fields) != ("summary", "visual"):
+if tuple(summarize_and_plan_model().model_fields) != ("summary", "visual"):
     raise TypeError(
         "field order is decode order, and the summary has to close before the plan "
         "starts or a cut reply loses the half a reader came for - "
-        f"got {tuple(call_two_model().model_fields)}"
+        f"got {tuple(summarize_and_plan_model().model_fields)}"
     )
 
 
-def build_call_two_request(
+def build_summarize_and_plan_request(
     first: Mapping[str, Any],
     reply: str,
     *,
@@ -1346,22 +1350,22 @@ def build_call_two_request(
     brief: bool = False,
     plan: bool = True,
 ) -> dict[str, Any]:
-    """Call 2's request body, built by extending call 1's prompt.
+    """The summarize-and-plan call's request body, built by extending the label call's prompt.
 
-    `first` is the payload call 1 was sent and `reply` is what came back, so
-    call 2's prompt is not "the same bytes as" call 1's - it opens with the same
-    string object. That is the point of taking them as arguments: a prefix cache
+    `first` is the payload the label call was sent and `reply` is what came back, so
+    the summarize-and-plan call's prompt is not "the same bytes as" the label call's - it opens with
+    the same string object. That is the point of taking them as arguments: a prefix cache
     reuses the longest common prefix of the tokenised prompt, and nothing about
     a broken prefix is loud.
 
-    **Call 1's system prompt is reused rather than replaced.** A prompt of call
-    2's own would end the common prefix at the first turn marker, and the whole
-    article would prefill a second time - roughly double the stage's wall clock
+    **The label call's system prompt is reused rather than replaced.** A prompt of the
+    summarize-and-plan call's own would end the common prefix at the first turn marker, and the
+    whole article would prefill a second time - roughly double the stage's wall clock
     for a wording nobody could measure the benefit of.
 
     The two calls belong **adjacent, per item**. `models.summarize.inference`
-    pins `n_parallel` to 1, so the server holds one cache slot: every call 1
-    first and every call 2 after would evict the prefix before it was reused,
+    pins `n_parallel` to 1, so the server holds one cache slot: every label call
+    first and every summarize-and-plan call after would evict the prefix before it was reused,
     every time, with nothing in any log to say so. Owning the bytes makes a
     mis-ordering more expensive rather than less - what an eviction now costs is
     the prompt and the reply behind it.
@@ -1369,20 +1373,20 @@ def build_call_two_request(
     **Suppressing the plan moves nothing in front of the article.** The three
     things `plan=False` changes - the trailing turn's last line, the decoder
     shape and the output budget - all sit after the system turn, the article and
-    call 1's reply, so the cached prefix a gated item reuses is the same prefix
+    the label call's reply, so the cached prefix a gated item reuses is the same prefix
     an ungated one reuses.
     """
     return continued_completion_payload(
         first,
         reply=reply,
-        user=call_two_user_turn(
+        user=summarize_and_plan_user_turn(
             prompt_config, source_words=source_words, brief=brief, plan=plan
         ),
-        output_schema=call_two_schema(
+        output_schema=summarize_and_plan_schema(
             prompt_config, source_words=source_words, brief=brief, plan=plan
         ),
         turns=turns,
-        max_answer_tokens=call_two_output_tokens(prompt_config, plan=plan),
+        max_answer_tokens=summarize_and_plan_budget_tokens(prompt_config, plan=plan),
     )
 
 
@@ -1413,23 +1417,25 @@ def prompt_inputs(
     span's closing marker is spliced into a prompt this never renders, and a
     reply opening only reaches these bytes as whichever one the envelope chose.
 
-    The article and call 1's reply are rendered as empty strings, which is what
+    The article and the label call's reply are rendered as empty strings, which is what
     leaves the result the same on every item.
     """
     ask = prompt_config or SummarizeConfig()
-    first = render_prompt(system=call_one_system_prompt(ask), user="", turns=turns)
-    rendered = continued_prompt(first, reply="", user=call_two_user_turn(ask), turns=turns)
+    first = render_prompt(system=label_system_prompt(ask), user="", turns=turns)
+    rendered = continued_prompt(
+        first, reply="", user=summarize_and_plan_user_turn(ask), turns=turns
+    )
     return rendered + canonical_json(ask.model_dump(mode="json"))
 
 
-def parse_call_two(
+def parse_summarize_and_plan(
     raw: str,
     prompt_config: SummarizeConfig | None = None,
     *,
     source_words: int | None = None,
     brief: bool = False,
     plan: bool = True,
-) -> CallTwoReply:
+) -> SummarizeAndPlanReply:
     """A whole reply, held to the band the article is in, as the two contracts it stands for.
 
     The decoder shape is an implementation detail of the grammar and stops here.
@@ -1448,9 +1454,9 @@ def parse_call_two(
         content = fenced.group(1)
     draft_shape = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
     if not plan:
-        return CallTwoReply(summary=draft_shape.model_validate_json(content), visual=None)
+        return SummarizeAndPlanReply(summary=draft_shape.model_validate_json(content), visual=None)
     body = (
-        call_two_model(prompt_config, source_words=source_words, brief=brief)
+        summarize_and_plan_model(prompt_config, source_words=source_words, brief=brief)
         .model_validate_json(content)
         .model_dump(mode="json")
     )
@@ -1458,7 +1464,7 @@ def parse_call_two(
     plan_made = VisualPlan.model_validate(
         body["visual"] | {"plan_version": PLAN_VOCABULARY_VERSION}
     )
-    return CallTwoReply(summary=draft, visual=plan_made)
+    return SummarizeAndPlanReply(summary=draft, visual=plan_made)
 
 
 def summary_object(raw: str) -> str | None:
@@ -1494,26 +1500,37 @@ def summary_object(raw: str) -> str | None:
 
 
 def recovered_completion(completion: Completion) -> Completion | None:
-    """A reply the output budget cut, recast as the summary reply alone.
+    """The summarize-and-plan reply recast as the single-call reply it contains, or nothing.
 
-    The bytes came back on an ordinary HTTP 200 and `to_summary` used to fail
-    the item on `finish_reason` without reading them. They are worth reading:
-    the picture is lost and the summary is not, and the summary is the part the
-    digest cannot publish an item without.
+    **One path, whatever the decode did.** `summary` is the first property of the
+    reply shape, so the summary object is closed, balanced and sitting at the
+    same place in the bytes whether the decode ran to the end or stopped in the
+    plan behind it. Handing that object to `summarize.to_summary` is what runs
+    every publishability check the single call runs - the length verdict, the
+    copied-source reject, the address reject and the restatement drop - over one
+    implementation rather than two.
 
-    What comes back is shaped exactly like a single-call reply, so every
-    publishability check still runs on it - the length verdict, the copied-source
-    reject, the address reject and the restatement drop all read the recovered
-    words the same way they read any others. Nothing here decides an item is
-    publishable; it only stops one being thrown away unread.
+    **The repair is what makes a cut reply publishable.** The bytes come back on
+    an ordinary HTTP 200 and `to_summary` fails the item on `finish_reason`
+    before reading them. They are worth reading: the picture is lost and the
+    summary is not, and the summary is the part the digest cannot publish an
+    item without. So `finish_reason` becomes `stop` where it was `length` - the
+    one field that would otherwise make a later reader think a closed summary
+    was cut. A reason this call did not repair is carried through untouched, and
+    so are the token counts, because they were really spent.
 
-    The token counts are carried over unchanged, because they were really spent.
-    `finish_reason` becomes `stop`, which is the one field that would otherwise
-    make a reader of the ledger think this reply completed on its own terms.
+    Nothing here decides an item is publishable; it only stops one being thrown
+    away unread.
+
+    Nothing comes back in the two cases where there is nothing to recast: a cut
+    that landed inside the summary itself, which is where there is genuinely
+    nothing to publish, and a reply the reachability gate narrowed to the summary
+    draft alone (`plan=False`), which is already the single-call shape and whose
+    `summary` is a string rather than an object.
     """
-    if not completion.hit_the_budget:
-        return None
     body = summary_object(completion.content)
     if body is None:
         return None
+    if not completion.hit_the_budget:
+        return replace(completion, content=body)
     return replace(completion, content=body, finish_reason="stop")
