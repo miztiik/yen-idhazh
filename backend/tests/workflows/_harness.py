@@ -35,6 +35,7 @@ EXPECTED_WORKFLOWS: Final = {
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
+    "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "pages.yml": (
         "Pages publication",
@@ -164,7 +165,9 @@ PINNED_LLAMA_ASSET: Final = f"llama-{PINNED_LLAMA_BUILD}-bin-ubuntu-x64.tar.gz"
 
 PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c"
 
-LLAMA_RUNTIME_WORKFLOWS: Final = frozenset({"digest.yml", "measure.yml", "validate.yml"})
+LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "validate.yml"}
+)
 
 LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check'
 
@@ -187,6 +190,12 @@ RELEASE_LOOKUP_FORM: Final = "curl -fsS -H"
 # that fetches weights fails the test until it appears here with a check.
 WEIGHTS_CHECKS: Final = {
     ("digest.yml", "work"): (
+        "Fetch runtime and weights",
+        "Verify the weights",
+        "Start the model",
+        '["summarize"]["sha256"]',
+    ),
+    ("idhazh-pipeline-tests.yaml", "arms"): (
         "Fetch runtime and weights",
         "Verify the weights",
         "Start the model",
@@ -342,11 +351,23 @@ LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 # Every step in the repository that stands a llama-server up, and the config
 # root each one reads. Discovery in the test is closed-world, so a new one fails
 # here until it appears with an install ahead of it.
-SERVER_STARTERS: Final = {
-    ("digest.yml", "work"): ("Start the model", "config"),
-    ("measure.yml", "runtime"): ("Measure runtime candidate", None),
-    ("measure.yml", "budgets"): ("Start the tokenizer", "backend/var/candidate-config"),
-    ("validate.yml", "qualify"): ("Start the candidate", "backend/var/candidate-config"),
+#
+# A job may declare more than one, in the order the steps run. One per job was
+# the rule until the pipeline test workflow, and it was an accident of every
+# job so far serving one model for its whole life: a slot count is fixed when
+# the process starts, so an arm that moves it has to restart the server inside
+# the job it shares with the arms it is compared against. What the closed world
+# still buys is unchanged - every starter is discovered by reading and the set
+# is compared by equality, so a server stood up any other way still fails here.
+SERVER_STARTERS: Final[dict[tuple[str, str], tuple[tuple[str, str | None], ...]]] = {
+    ("digest.yml", "work"): (("Start the model", "config"),),
+    ("idhazh-pipeline-tests.yaml", "arms"): (
+        ("Start the model", "backend/var/arms/baseline/config"),
+        ("Restart the model with two slots", "backend/var/arms/parallel-2/config"),
+    ),
+    ("measure.yml", "runtime"): (("Measure runtime candidate", None),),
+    ("measure.yml", "budgets"): (("Start the tokenizer", "backend/var/candidate-config"),),
+    ("validate.yml", "qualify"): (("Start the candidate", "backend/var/candidate-config"),),
 }
 
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
@@ -1876,13 +1897,16 @@ def _starter_shell(step: Mapping[str, object]) -> str:
 
 def _server_starters(
     workflows: Mapping[str, dict[str, object]],
-) -> dict[tuple[str, str], str]:
+) -> dict[tuple[str, str], tuple[str, ...]]:
     """Every step that reaches `server_argv`, found by reading, not by listing.
 
     A step that stands a server up any other way is a second answer to what the
-    run executes, so the set this returns is compared by equality.
+    run executes, so the set this returns is compared by equality. A job's
+    starters come back in the order its steps run, because an arm that restarts
+    a server is comparing itself against the arms before it and the order is
+    what says which start each arm ran under.
     """
-    found: dict[tuple[str, str], str] = {}
+    found: dict[tuple[str, str], tuple[str, ...]] = {}
     for filename, workflow in workflows.items():
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):
@@ -1891,6 +1915,5 @@ def _server_starters(
                 name = step.get("name")
                 assert isinstance(name, str), f"{filename}/{job_name}: name the step"
                 where = (filename, job_name)
-                assert where not in found, f"{filename}/{job_name} starts two servers"
-                found[where] = name
+                found[where] = (*found.get(where, ()), name)
     return found
