@@ -364,13 +364,44 @@ classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,c
 
 **Colour is never the only carrier.** `yes` and `no` sit on labelled arrows out of a diamond, so the meaning survives a monochrome print and a reader who cannot separate the two hues. A diagram that needs its colours to be understood is a diagram with a missing label.
 
+### The third dimension: which part of the system a node belongs to
+
+The classes above say what a node **is** and what an outcome **means**. Neither says **where in the system it lives**, and a diagram that crosses two subsystems without saying so reads as one undifferentiated thing. So a node that belongs to a named part of the system sits inside a `subgraph`, and the subgraph carries that part's accent.
+
+**The accent is the border and the title, never the fill.** Every box keeps the same dark ground. This is the rule that stops the palette lying: a red-bordered box is not a red node, so the outcome colours above keep meaning exactly one thing. Boxes are background, nodes are foreground, and the two never compete.
+
+```
+classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
+classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
+classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
+classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+```
+
+**This project is domain-neutral everywhere else on this page; the table below is the one exception, because an accent that is not the same colour on every page is worth nothing.** A project copying this page replaces the rows and keeps the rule.
+
+| Class | Covers | Where the reader goes next |
+| --- | --- | --- |
+| `sysIngest` | Feeds, first sighting, feed health, scoring and ranking - everything that decides what is a candidate | [../architecture/sources/](../architecture/sources/), the `plan` stage |
+| `sysExtract` | Fetch, extract, sanitize. The trust boundary is inside this one | [../architecture/extraction/](../architecture/extraction/), the `work` stage |
+| `sysModel` | The summariser calls, classification, the visual plan | [../architecture/summarize/](../architecture/summarize/), the `work` stage |
+| `sysPublish` | Assemble, the digest tree, the published site | [../architecture/publishing/](../architecture/publishing/), the `assemble` stage |
+| `sysEval` | Model validation, the bench, drift review, the eval ledger | [github-actions.md](github-actions.md), `validate.yml`, `measure.yml` |
+| `sysOps` | CI, the prune, backfill, the operator console - work that serves the pipeline rather than the reader | [github-actions.md](github-actions.md), `ci.yml`, `prune.yml` |
+
+**Name the box for the thing a reader can go and look at.** `Content refresh - digest.yml` is a box title; `Stage 2` is not. The title is how a reader gets from the picture to the code, so it carries the workflow's own display name or the architecture directory's own name and nothing invented here (CLAUDE.md section 0b).
+
+**One accent per box, and a box only where it earns one.** A diagram entirely inside one subsystem needs no boxes at all - six grey rectangles in a labelled box say less than six grey rectangles. Boxes are for the diagram that crosses a boundary, which is the diagram where a reader asks "wait, which part is doing that?"
+
 ### Checks before a diagram merges
 
 1. The `%%{init...}%%` line is present and names `theme: base`.
 2. Every node is in a class. An unstyled node is the bug this whole rule exists for.
 3. Every arrow out of a diamond has a label.
 4. `yes` and `no` mark outcomes, not subjects.
-5. Read it once with the page on light and once on dark. Both, not one.
+5. Every `subgraph` carries a `sys*` accent, and its title names something a reader can go and open.
+6. Read it once with the page on light and once on dark. Both, not one.
 
 ## See also
 

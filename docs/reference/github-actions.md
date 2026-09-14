@@ -224,20 +224,43 @@ which is the invisibility `if: always()` exists to prevent.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
-flowchart LR
- SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
+flowchart TB
+ SCHEDULE["schedule<br/>five times a day"] --> PLAN
  MANUAL["manual dispatch"] --> PLAN
- PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
- WORK --> ASSEMBLE["assemble"]
- ASSEMBLE --> COMMIT[("commit digest and state")]
- COMMIT --> COMPLETE["Content refresh completed"]
- COMPLETE --> PAGES["Pages publication"]
+
+ subgraph ING["Sources - what is a candidate"]
+  PLAN["plan<br/>read the feeds, score, rank"]
+  PLAN --> SEEN[("first sighting<br/>and feed health")]
+ end
+
+ subgraph EXT["Extraction - the trust boundary"]
+  PLAN --> FETCH["work shards<br/>fetch, extract, sanitize"]
+ end
+
+ subgraph MOD["Summarize - what the model is asked"]
+  FETCH --> CALLS["two calls an item<br/>summary, then the visual plan"]
+  CALLS --> ROWS[("item health, eval rows,<br/>runtime counters")]
+ end
+
+ subgraph PUB["Publishing - what a reader gets"]
+  CALLS --> ASSEMBLE["assemble"]
+  ASSEMBLE --> DAY[("the committed day<br/>plus state")]
+  DAY --> PAGES["Pages publication"]
+ end
 
  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
  classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
+ classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
+ classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
+ classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
 
- class SCHEDULE,MANUAL,PLAN,WORK,ASSEMBLE,COMPLETE,PAGES stage;
- class COMMIT store;
+ class SCHEDULE,MANUAL,PLAN,FETCH,CALLS,ASSEMBLE,PAGES stage;
+ class SEEN,ROWS,DAY store;
+ class ING sysIngest;
+ class EXT sysExtract;
+ class MOD sysModel;
+ class PUB sysPublish;
 ```
 
 The plan job also commits first-sighting and feed-health state before it starts
@@ -501,6 +524,8 @@ flowchart TB
  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
  classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+ classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
 
  class FORM,RAW,SERVER,DOSSIER,SCRATCH,FETCH,REPLAY,DAILY stage;
  class IDENT,PROVE,GATES decision;
@@ -508,6 +533,8 @@ flowchart TB
  class ADOPT yes;
  class STOP,REJECT no;
  class REVERT warn;
+ class NAME sysOps;
+ class BENCH,QUAL sysEval;
 ```
 
 **One form field, because the file already holds the answer.** Both dispatches take `candidate_models_file` and nothing else about the candidate. Every fact a run needs - the repository, the 40-character commit, the GGUF filename, its SHA-256, its byte count, the alias the server answers to, the quantisation - is written in `config/models/<name>.json`, and a form that asked for them again was a second copy that could disagree with the first. It could bench one set of bytes and adopt another with every gate green. Leave the field empty and the run re-measures whatever `config/idhazh.json` currently points at, which is how the bench is checked against the page it reproduces.
