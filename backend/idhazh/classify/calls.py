@@ -373,8 +373,8 @@ def call_one_output_tokens() -> int:
     reads the whole reply as structure and returns 20,229 tokens. Call 1's reply
     is paid twice, once as its own decode and once inside call 2's prompt, so
     that budget puts the pair at 39,927 tokens of reply alone, before the
-    article in front of them - against a window of 49,152 whose sizing already
-    spends 39,284 on the pair at the truncation cap. A ceiling that fits no
+    article in front of them - against a window of 65,536 whose sizing already
+    spends 54,887 on the pair at the truncation cap. A ceiling that fits no
     window is not a ceiling; it is a refusal to answer.
 
     **So the ceiling is converted at the one measured density instead**, which
