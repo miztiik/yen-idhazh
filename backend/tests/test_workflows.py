@@ -80,8 +80,13 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
+    ("measure.yml", "candidate_file"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "candidate_id"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "candidate_quantisation"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "candidate_repo"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "candidate_revision"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "candidate_sha256"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
-    ("measure.yml", "models"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
@@ -189,7 +194,7 @@ WEIGHTS_CHECKS: Final = {
         "Fetch runtime and weights",
         "Verify the weights",
         "Measure runtime candidate",
-        '["summarize"]["sha256"]',
+        "${{ needs.models.outputs.candidate_sha256 }}",
     ),
     ("measure.yml", "batched"): (
         "Download the summarizer weights",
@@ -240,7 +245,32 @@ BROWSER_CACHE_PATH: Final = "~/.cache/ms-playwright"
 # Who reads the pinned browser build: workflow, job, step id, output name. One
 # reader, because a key written twice drifts and a drifted key never hits.
 BROWSER_VERSION_SOURCE: Final = ("ci.yml", "scope", "browsers", "playwright")
-MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime", "batched"})
+MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched"})
+#: The bench is one target and two jobs: raw prefill and decode first, then a
+#: real server doing real work. The raw arm saves the weights cache entry and
+#: the server arm restores it, so a key that differs by one character is a
+#: second multi-gigabyte download inside one dispatch (Guardrail #2).
+BENCH_TARGET: Final = "bench"
+BENCH_RAW_JOB: Final = "llm"
+BENCH_SERVER_JOB: Final = "runtime"
+BENCH_CACHE_KEY: Final = (
+    "bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}"
+)
+BENCH_ARTIFACTS: Final = {
+    BENCH_RAW_JOB: "bench-raw",
+    BENCH_SERVER_JOB: "bench-server-${{ inputs.runtime_candidate }}",
+}
+#: Ninety days, and the number is here rather than only in the file so moving it
+#: is a decision somebody writes down. The sweep used to keep seven, which is
+#: shorter than the gap between benching a model and adopting it - and an
+#: expired artifact is a five-hour job run a second time for numbers that were
+#: already measured.
+BENCH_RETENTION_DAYS: Final = 90
+#: What the bench builds instead of editing the committed config, and the step
+#: that builds it.
+BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
+BENCH_CONFIG_STEP: Final = "Build the candidate config"
+BENCH_EMIT_STEP: Final = "Emit the dossier body"
 # Every job that stands up llama-server, and the log that job writes. Both must
 # name the host, the binary and the weights: a shard's throughput is decided by
 # the host it drew, and a number that cannot name the bytes that produced it is
@@ -4246,6 +4276,147 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
         ), job_name
 
     assert len(set(keys.values())) == len(keys), "one entry cannot hold two sets of weights"
+
+
+def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:
+    """Raw throughput first, then a real server, and the second waits for the first.
+
+    They are two jobs rather than one because the cheap arm has to be able to
+    fail alone: weights that cannot move tokens at all should never cost the
+    server arm a runner hour. They are chained rather than parallel because the
+    server arm restores the weights entry the raw arm wrote, and because the
+    page body needs both halves in one place to be written at all.
+
+    The target list is compared by equality. A sixth measurement path has to be
+    written down here before it can exist, which is what stopped this file
+    growing one arm per question.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    target = _mapping(_declared_dispatch_inputs(workflow)["target"], "measure.yml target")
+    assert set(_string_list(target.get("options"), "target options")) == MEASUREMENT_TARGETS
+
+    for job_name in (BENCH_RAW_JOB, BENCH_SERVER_JOB):
+        condition = _normalize_condition(_job(workflow, job_name).get("if"), f"{job_name} if")
+        assert condition == f"inputs.target == '{BENCH_TARGET}'", job_name
+
+    assert _needs(workflow, BENCH_RAW_JOB) == ["models"]
+    assert _needs(workflow, BENCH_SERVER_JOB) == ["models", BENCH_RAW_JOB], (
+        "the server arm waits for the raw arm, or it downloads the weights again"
+    )
+
+    keys = dict(_runtime_cache_keys(workflow))
+    assert keys == {BENCH_RAW_JOB: BENCH_CACHE_KEY, BENCH_SERVER_JOB: BENCH_CACHE_KEY}, (
+        "one key, written the same way twice, or the restore misses"
+    )
+    composed = BENCH_CACHE_KEY.replace(
+        _expression("needs.models.outputs.candidate_sha256"), "a" * 64
+    ).replace(_expression("env.LLAMA_CPP_BUILD"), PINNED_LLAMA_BUILD)
+    assert "${{" not in composed, "every half of the key must resolve"
+
+
+def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
+    """Both arms, ninety days each.
+
+    The raw arm used to declare no retention at all and the sweep kept seven
+    days. Seven is shorter than the gap between benching a model and deciding
+    to adopt it, and the numbers are what the dossier page is pasted from - so
+    an expired artifact is a five-hour job re-run for a measurement that was
+    already taken. The tree is JSON and text, a few hundred kilobytes against
+    the 500 MB ceiling, so the longer retention costs effectively nothing
+    (Guardrail #2).
+    """
+    workflow = _load_workflows()["measure.yml"]
+    for job_name, artifact in sorted(BENCH_ARTIFACTS.items()):
+        upload = _artifact_upload(workflow, job_name, artifact)
+        with_block = _mapping(upload.get("with"), f"{job_name} upload")
+        assert int(str(with_block["retention-days"])) == BENCH_RETENTION_DAYS, job_name
+
+
+def test_the_bench_measures_a_candidate_without_touching_the_committed_config() -> None:
+    """A scratch copy differs in the active model file and in nothing else.
+
+    Every control the numbers are read under - prompt, schema, sampler, context,
+    threads, truncation cap - is the committed one by construction, because the
+    copy is the committed tree with one entry rewritten. The pointer is left
+    alone and the file it names is rewritten, so a candidate is benched through
+    the same one line a swap would later move.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    script = _script(
+        _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP),
+        f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_CONFIG_STEP}",
+    )
+    assert f"cp -a config {BENCH_CANDIDATE_CONFIG}" in script
+    assert MODELS_POINTER_KEY in script, "through the pointer, never by filename"
+
+    sweep = _script(
+        _step(workflow, BENCH_SERVER_JOB, "name", "Measure runtime candidate"),
+        f"measure.yml/{BENCH_SERVER_JOB}/Measure runtime candidate",
+    )
+    assert f'CANDIDATE = Path("{BENCH_CANDIDATE_CONFIG}")' in sweep
+    assert "shutil.copytree(CANDIDATE, dst)" in sweep, (
+        "the sweep copies the candidate tree; copying `config` would measure the incumbent"
+    )
+
+    for job_name in (BENCH_RAW_JOB, BENCH_SERVER_JOB):
+        for step in _steps(workflow, job_name):
+            body = step.get("run")
+            if not isinstance(body, str):
+                continue
+            where = f"measure.yml/{job_name}/{step.get('name')}"
+            assert not re.search(r">\s*config/", body), f"{where} writes the committed config"
+            assert "docs/reference/models" not in body, f"{where} writes a committed page"
+
+
+def test_the_server_arm_reads_the_raw_arm_and_emits_a_page_to_paste() -> None:
+    """The Oracle for this arm. Two artifacts of numbers are a transcription job.
+
+    Emitting the dossier body with the numbers already in it is what makes
+    adopting a model a paste. The step runs after the sweep, because half the
+    page is what the sweep measured, and it writes under `backend/var` only -
+    nothing about a bench reaches a committed file.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    steps = _steps(workflow, BENCH_SERVER_JOB)
+    names = [str(step.get("name") or step.get("uses")) for step in steps]
+
+    downloads = [
+        step for step in steps if str(step.get("uses", "")).startswith("actions/download-artifact")
+    ]
+    assert len(downloads) == 1, "the server arm reads one artifact: the raw arm's"
+    assert (
+        _mapping(downloads[0].get("with"), "download").get("name")
+        == BENCH_ARTIFACTS[BENCH_RAW_JOB]
+    )
+
+    script = _script(
+        _step(workflow, BENCH_SERVER_JOB, "name", BENCH_EMIT_STEP),
+        f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_EMIT_STEP}",
+    )
+    assert "measure_llm.py emit" in script
+    assert "--raw backend/var/raw-arm/" in script
+    assert "--server backend/var/runtime-sweep/runtime-summary.json" in script
+    assert "--dossier backend/var/" in script
+    assert names.index("Measure runtime candidate") < names.index(BENCH_EMIT_STEP)
+    assert names.index(BENCH_EMIT_STEP) < names.index("Upload runtime sweep")
+
+
+def test_the_raw_arm_refuses_weights_the_dispatch_did_not_declare() -> None:
+    """The raw arm downloads inside Python, so its byte check is a flag not a step.
+
+    `measure_llm.py` resolves the Hub's own digest and compares it with the one
+    the dispatch declared before it benches anything. Without the flag the
+    harness measures whatever the repository holds today and says nothing, and a
+    number filed under a model that never ran is worse than no number
+    (Guardrail #10).
+    """
+    workflow = _load_workflows()["measure.yml"]
+    script = _script(
+        _step(workflow, BENCH_RAW_JOB, "name", "Benchmark the candidate"),
+        f"measure.yml/{BENCH_RAW_JOB}/Benchmark the candidate",
+    )
+    assert "--expect-sha256" in script
+    assert '--expect-sha256 "$CANDIDATE_SHA256"' in script, "read by name, never pasted"
 
 
 def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
