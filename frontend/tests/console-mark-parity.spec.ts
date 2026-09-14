@@ -85,7 +85,7 @@ const CHARTS: Chart[] = [
 	},
 	{
 		name: 'source cut range',
-		route: '/console/',
+		route: '/console/voices/',
 		root: '[data-source-cuts="range"] svg',
 		domainAttr: 'data-source-domain',
 		frame: '[data-source-cuts="range"] svg',

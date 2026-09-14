@@ -166,7 +166,7 @@ async function attr(page: Page, selector: string, name: string): Promise<number>
 }
 
 test('THE ORACLE: the drawn rule stands where the ledger says the cut fell', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const days = await openWindow(page);
 
 	const points = cutPoints(days);
@@ -236,7 +236,7 @@ test('THE ORACLE: the drawn rule stands where the ledger says the cut fell', asy
 test('one row per source the cap cut, worst first, with the count in the label', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const days = await openWindow(page);
 	const { rows, tail } = expectedRows(days);
 
@@ -272,7 +272,7 @@ test('one row per source the cap cut, worst first, with the count in the label',
 });
 
 test('the label counts articles, not rows, and the track reads the right cell', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	await openWindow(page);
 
 	// One of this source's articles was written by two runs. A row count says
@@ -301,7 +301,7 @@ test('the label counts articles, not rows, and the track reads the right cell', 
 });
 
 test('the marks are the three lengths, in the order a length axis puts them', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	await openWindow(page);
 
 	// A track running the wrong way, or a middle mark outside its own range,
@@ -352,7 +352,7 @@ test('the marks are the three lengths, in the order a length axis puts them', as
 });
 
 test('what the cut cost is the first sentence of the section, with its n', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const days = await openWindow(page);
 
 	const losses = windowArticles(days)
@@ -595,7 +595,7 @@ test('THE ORACLE: every state the view holds is drawn, and the states sum to the
 }) => {
 	const published = view();
 	expect(published.sources.length, 'the canary view names no source').toBeGreaterThan(0);
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 
 	for (const [prefix, of] of [
 		['permission', (row: ViewRow) => row.permission],
@@ -633,7 +633,7 @@ test('THE ORACLE: every source held back is named, with what it withholds', asyn
 	);
 	expect(held.length, 'the canary holds nothing back, so this asserts nothing').toBeGreaterThan(0);
 
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	await expect(page.locator('[data-source-health-lead]')).toHaveAttribute(
 		'data-source-health-withheld',
 		String(held.length)
@@ -678,7 +678,7 @@ test('THE ORACLE: the publishing record prints counts, and says when it is too s
 		expect(row.source_failures).toBeLessThanOrEqual(row.opportunities);
 	}
 
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const record = page.locator('[data-source-health-record]');
 	await expect(record).toHaveAttribute(
 		'data-source-health-days',
@@ -702,7 +702,7 @@ test('THE ORACLE: the publishing record prints counts, and says when it is too s
 
 test('the scorecard fits a phone without pushing the page sideways', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
-	await page.goto('/console/');
+	await page.goto('/console/voices/');
 	const overflow = await page
 		.locator('[data-source-health="states"], [data-source-health="notes"]')
 		.evaluateAll((nodes) =>
