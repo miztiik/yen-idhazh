@@ -2925,6 +2925,63 @@ class PlacementConfig(Model):
         return self
 
 
+class LensWeightsConfig(Model):
+    """What a run asks about its own lens weights, and how much of the answer it keeps.
+
+    A lens weight is a number somebody picked, and nothing committed said what a
+    different number would have done. Every run now scores a bounded pool of its
+    candidates twice - once at the committed weights and once at a candidate
+    weight - and writes both to `state/counterfactual-scores/`. Nothing here
+    moves a weight, an item, or a published payload. These knobs decide what the
+    run asks and how many rows it leaves behind.
+
+    The ledger is appended to forever, so every knob here is a bound on ONE
+    run's work rather than on the archive's size (CLAUDE.md Guardrail #12).
+    `window_days` is the other end of the same rule: it is how far back a reader
+    of the ledger may look, and it is what the retention pass keeps.
+    """
+
+    counterfactual_multiplier: float = Field(
+        default=1.25,
+        gt=0.0,
+        description=(
+            "What the counterfactual multiplies each committed lens weight by. Above "
+            "1.0 on purpose: a heavier weight is the question a committed archive "
+            "cannot answer afterwards, because it is the one that would have lifted a "
+            "story the run refused, and a refused story leaves no other trace. 1.25 is "
+            "an ESTIMATE and has not been measured - it is large enough to move a "
+            "story across the cut on a crowded desk and small enough to stay inside "
+            "the step a later tuning loop would allow. Exactly 1.0 asks nothing: both "
+            "scores come out equal and every row is a byte with no question in it."
+        ),
+    )
+    counterfactual_refused_per_desk: int = Field(
+        default=20,
+        ge=0,
+        description=(
+            "How many of each desk's refused candidates the run records, highest score "
+            "first. Everything the run TOOK is recorded whatever this says. 20 keeps "
+            "the band around the cut, where a bonus decides; a candidate further down "
+            "would not cross under any weight this probe asks about, so its row carries "
+            "no question. At about 80 items taken and five desks this is roughly 180 "
+            "rows a run. 0 records the taken items alone."
+        ),
+    )
+    window_days: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "How far back a reader of the counterfactual ledger may look, and so how "
+            "much of it the retention pass keeps. Both ends of one rule, in one knob, "
+            "because a window a reader opens and a window the prune keeps have to be "
+            "the same window or the reader reads a hole. 30 days is an ESTIMATE: long "
+            "enough that a lens firing a few times a day still has a few hundred rows "
+            "in it, short enough that a weight changed last month is not still being "
+            "argued from."
+        ),
+    )
+
+
 class ThemeChoice(StrEnum):
     """The two themes. There is no third member for "follow the device".
 
@@ -4033,6 +4090,24 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T11:00",
+            change=(
+                "lens_weights is new, with three knobs: counterfactual_multiplier, "
+                "counterfactual_refused_per_desk and window_days. Additive and "
+                "optional - the block carries a default for every knob, so a config "
+                "file written before today validates unchanged and a fresh clone runs "
+                "on the defaults."
+            ),
+            why=(
+                "Every run now scores a bounded pool of its candidates a second time at "
+                "a candidate lens weight and writes both scores to "
+                "state/counterfactual-scores/. Nothing moves as a result. The block "
+                "holds what the run asks - the multiplier - and what it costs - how "
+                "many refused candidates a desk records, and how long the rows are "
+                "kept."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14",
             change=(
@@ -6661,6 +6736,7 @@ class AppConfig(Contract):
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     assemble: AssembleConfig = Field(default_factory=AssembleConfig)
     placement: PlacementConfig = Field(default_factory=PlacementConfig)
+    lens_weights: LensWeightsConfig = Field(default_factory=LensWeightsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     assist: AssistConfig = Field(default_factory=AssistConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)

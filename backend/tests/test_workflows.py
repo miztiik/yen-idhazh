@@ -461,7 +461,12 @@ COMMIT_SCRIPT_ENV: Final = {
     "fold": COMMIT_BASE_ENV,
 }
 COMMIT_STAGED_PATHS: Final = {
-    "plan": ["state/seen", "state/feed-health", "state/feed-retirements.csv"],
+    "plan": [
+        "state/seen",
+        "state/feed-health",
+        "state/feed-retirements.csv",
+        "state/counterfactual-scores",
+    ],
     # `state/score-index` is beside `state/scores` because it is the record of
     # what those rows are, and the writer reads it instead of them. A shard
     # committed without its index is a month the next run cannot recognise, so
@@ -3158,11 +3163,18 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     would abort the plan's commit step every other day, and take the sight and
     health ledgers staged beside it.
 
-    The two directories are named rather than derived because `git add` on a
-    directory that does not exist fails the same way, and a fresh clone has both.
+    `state/counterfactual-scores/` joined the step on 2026-09-14 and ships with
+    one header-only day file for the same reason. Every run writes to it, so it
+    is never empty after a run - but a fresh clone has never run, and this is
+    the moment that would fail.
+
+    The directories are named rather than derived because `git add` on a
+    directory that does not exist fails the same way, and a fresh clone has all
+    of them.
     """
     named = COMMIT_STAGED_PATHS["plan"]
     assert ledger.feed_retirements_relpath() in named
+    assert f"{ledger.STATE_DIRNAME}/{ledger.COUNTERFACTUAL_SCORES_DIRNAME}" in named
     for relative in named:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
     tracked = subprocess.run(

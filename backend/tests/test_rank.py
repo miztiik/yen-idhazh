@@ -12,13 +12,15 @@ Guardrail #12 and the section 13 test policy).
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import replace
 from itertools import pairwise
-from typing import Final
+from typing import Any, Final
 
 import pytest
+from conftest import FIXTURES_DIR, read_text
 
 from idhazh.config import REPO_ROOT, load
 from idhazh.contracts.app_config import AssistConfig, CollectConfig
@@ -34,6 +36,7 @@ from idhazh.rank import (
     CROCKFORD_ALPHABET,
     ITEM_ID_BYTES,
     ITEM_ID_SYMBOLS,
+    DeskPlan,
     authority,
     dedup_text,
     desk_of,
@@ -351,14 +354,14 @@ def test_an_aggregators_front_page_no_longer_moves_the_order() -> None:
     """
     voted = _addressed("voted")
     unvoted = _addressed("unvoted")
-    _, items = plan_vertical(
+    items = plan_vertical(
         AI,
         [voted, unvoted],
         config=CONFIG,
         eligible_feeds=2,
         now=ORDER_NOW,
         front_page_keys=frozenset({voted.canonical_url}),
-    )
+    ).items
     by_source = {item.source_id: item for item in items}
     assert by_source["voted"].on_front_page is True, "the vote must still be published"
     assert by_source["unvoted"].on_front_page is False
@@ -519,7 +522,7 @@ def test_no_weight_can_admit_a_story_the_age_gate_refused() -> None:
     stale = "2026-09-11T12:00:00Z"
     assert CONFIG.max_age_hours < 48.0, "the fixture below is only stale under a day-ish gate"
     old = replace(_addressed("old", tier=SourceTier.INSTITUTION), published_at=stale)
-    plan, items = plan_vertical(
+    plan, items, _ = plan_vertical(
         AI,
         [old],
         config=CONFIG,
@@ -531,6 +534,173 @@ def test_no_weight_can_admit_a_story_the_age_gate_refused() -> None:
     )
     assert items == []
     assert plan.too_old == 1
+
+
+# --- the counterfactual: what another lens weight would have scored ----------
+
+TWO_CANDIDATES_ONE_SLOT: Final = FIXTURES_DIR / "rank" / "two-candidates-one-slot.json"
+
+
+def _one_slot_desk() -> tuple[dict[str, Any], list[Candidate]]:
+    """The fixture's two candidates, every `url_key` recomputed on read.
+
+    Built rather than sampled, and deliberately not read from a committed day:
+    the case this needs is a desk where the story carrying the lens is the story
+    that loses, and no archive is guaranteed to hold one (CLAUDE.md section 13).
+    """
+    fixture = json.loads(read_text(TWO_CANDIDATES_ONE_SLOT))
+    built = [
+        Candidate(
+            canonical_url=entry["canonical_url"],
+            source_url=entry["canonical_url"],
+            url_key=derive_url_key(entry["canonical_url"]),
+            source_id=entry["source_id"],
+            vertical=fixture["vertical"],
+            tier=SourceTier(entry["tier"]),
+            source_form=SourceForm(entry["source_form"]),
+            title=entry["title"],
+            published_at=entry["published_at"],
+        )
+        for entry in fixture["candidates"]
+    ]
+    return fixture, built
+
+
+def _one_slot_config(fixture: dict[str, Any]) -> CollectConfig:
+    return CollectConfig(max_per_source=fixture["max_per_source"])
+
+
+def _one_slot_plan(*, ask: bool = True) -> tuple[dict[str, Any], DeskPlan]:
+    """The desk planned once. `ask` is whether the counterfactual weight is supplied.
+
+    The committed lens weights are supplied either way, so the two arms differ
+    in one argument and nothing else - which is what makes "it moved nothing"
+    an assertion rather than a claim.
+    """
+    fixture, built = _one_slot_desk()
+    weight = fixture["lens"]["weight"]
+    multiplier = fixture["lens"]["multiplier"]
+    hits = {
+        candidate.url_key: weight
+        for candidate, entry in zip(built, fixture["candidates"], strict=True)
+        if entry["lens_hit"]
+    }
+    plan = plan_vertical(
+        AI,
+        built,
+        config=_one_slot_config(fixture),
+        eligible_feeds=1,
+        now=fixture["now"],
+        lens_bonuses=hits,
+        counterfactual_lens_bonuses=(
+            {key: value * multiplier for key, value in hits.items()} if ask else None
+        ),
+    )
+    return fixture, plan
+
+
+def _refused_key(fixture: dict[str, Any]) -> str:
+    entry = next(one for one in fixture["candidates"] if one["role"] == "refused")
+    return derive_url_key(entry["canonical_url"])
+
+
+def test_a_candidate_the_slot_went_past_is_still_on_the_record() -> None:
+    """The whole reason the pool comes back at all.
+
+    A story the run takes leaves a payload, a summary and a published row. A
+    story it scores and refuses leaves nothing: the candidate list is rebuilt
+    from the feeds every run, and tomorrow's feeds no longer carry today's
+    stories. So a question about what a different weight would have done can
+    only be answered from what was written down while the day was being
+    planned, and the refused half is the half that would be missing.
+    """
+    fixture, plan = _one_slot_plan()
+    refused = _refused_key(fixture)
+
+    assert len(plan.items) == 1, "the fixture is built so one source holds one slot"
+    assert refused not in {item.url_key for item in plan.items}
+    assert refused in {ranked.candidate.url_key for ranked in plan.pool}
+    assert len(plan.pool) == len(fixture["candidates"]), "the pool is everything scored"
+
+
+def test_the_recorded_score_is_the_one_that_decided_the_day() -> None:
+    """Not a number computed beside the ranker - the ranker's own answer.
+
+    Re-derived here from `score` over the same candidate, and checked against
+    the `rank_score` the taken item carries onto the page. A recorded score that
+    came from anywhere but the call that decided the order would make every
+    later comparison meaningless while still reading like an answer.
+    """
+    fixture, plan = _one_slot_plan()
+    config = _one_slot_config(fixture)
+
+    for ranked in plan.pool:
+        assert ranked.score == score(
+            [ranked.candidate],
+            config=config,
+            watchlist_hit=ranked.watchlist_hit,
+            lens_bonus=ranked.lens_bonus,
+            appeared=ranked.appeared_at,
+            now=fixture["now"],
+        )
+
+    taken = plan.items[0]
+    on_the_page = next(r for r in plan.pool if r.candidate.url_key == taken.url_key)
+    assert taken.rank_score == on_the_page.score
+
+
+def test_the_second_score_differs_by_the_lens_term_and_by_nothing_else() -> None:
+    """Every other term is identical, so the whole difference is the lens.
+
+    Both arms are asserted, and the second one is the one that catches a real
+    mistake: a story matching no lens must come back with the two scores equal
+    to the last decimal place. A counterfactual that moved a story it was not
+    asking about would make the ledger unreadable - nobody could tell which
+    rows a weight change actually explains.
+    """
+    fixture, plan = _one_slot_plan()
+    multiplier = fixture["lens"]["multiplier"]
+    unmoved = 0
+
+    for ranked in plan.pool:
+        assert ranked.score_counterfactual is not None
+        gain = ranked.score_counterfactual - ranked.score
+        assert gain == pytest.approx(ranked.lens_bonus * multiplier - ranked.lens_bonus, abs=2e-6)
+        unmoved += not ranked.lens_bonus
+
+    assert unmoved == 1, "the fixture holds one story carrying no lens at all"
+    assert [r.score_counterfactual for r in plan.pool if not r.lens_bonus] == [
+        r.score for r in plan.pool if not r.lens_bonus
+    ], "a story matching no lens is not moved by a lens weight"
+
+
+def test_a_run_that_asks_no_counterfactual_records_none() -> None:
+    """No stand-in number. `None` says the question was not asked.
+
+    A zero here would read as "the weight would have changed nothing", which is
+    a finding, and a run that asked nothing has no finding to report.
+    """
+    _, plan = _one_slot_plan(ask=False)
+
+    assert plan.pool, "the desk still scores its candidates"
+    assert [ranked.score_counterfactual for ranked in plan.pool] == [None] * len(plan.pool)
+
+
+def test_the_counterfactual_moves_no_item_and_no_order() -> None:
+    """The row's whole promise: it records, and it changes nothing.
+
+    The same desk planned twice, differing in one argument. Every published
+    field of every planned item has to match, because a counterfactual that
+    could move a story would be a second ranker nobody agreed to ship.
+    """
+    _, plain = _one_slot_plan(ask=False)
+    _, asked = _one_slot_plan()
+
+    assert [item.model_dump() for item in asked.items] == [
+        item.model_dump() for item in plain.items
+    ]
+    assert [r.score for r in asked.pool] == [r.score for r in plain.pool]
+    assert asked.summary.model_dump() == plain.summary.model_dump()
 
 
 # --- the plan-stage duplicate pass: same story, two addresses ----------------

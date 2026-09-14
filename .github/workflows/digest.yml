@@ -300,6 +300,17 @@ jobs:
       # costs the two ledgers beside it. The file ships with its header for that
       # reason.
       #
+      # `state/counterfactual-scores` is the fourth, added 2026-09-14. It is the
+      # pair of scores each candidate got - at the committed lens weights and at
+      # a candidate weight - and it is committed here for the same reason as the
+      # sight ledger: the refused half of a run's pool exists nowhere else, and
+      # the next run rebuilds its candidate list from feeds that have moved on.
+      # It ships with one header-only day file, the way the retirement ledger
+      # ships with its header and for the same reason, and
+      # `append_counterfactual_scores` writes the header for its own day even
+      # when the run has no rows - so neither a fresh clone nor a quiet run can
+      # make this the missing path that aborts the step.
+      #
       # `append_health` settles the day file it wrote, but against the checkout,
       # which is frozen at the commit this run was triggered at - so a SECOND
       # ATTEMPT at this same plan cannot see the rows the first attempt pushed
@@ -325,6 +336,7 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/seen state/feed-health state/feed-retirements.csv
+          state/counterfactual-scores
 
       - uses: actions/upload-artifact@v7
         with:
