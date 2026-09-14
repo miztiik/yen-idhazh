@@ -193,6 +193,32 @@ it does not settle - is
 [benchmarks/day-window-read.md](benchmarks/day-window-read.md).
 Re-run it with `python backend/utilities/measure_day_window.py`.
 
+## What the test suite spends its time on, 2026-09-14
+
+**Four-fifths of the suite's time comes from 185 of its 3,407 timed tests - one
+test in nineteen** - and half of it from 46. A fifth of the tests carry 95
+percent, so a pass over the top 200 is the whole of the available win.
+
+The shares travel; the seconds do not. The run was taken on a developer box with
+seven sibling agent processes on it, so an absolute second is high while a
+comparison between two of its own rows cancels the box.
+
+Two findings came out of it. `test_marks.py` was 95.6 s and rank 8, bought with
+a subprocess that collected the whole suite to defend a developer shortcut that
+never gates a merge; it now reads `pytestmark` from source at 1.89 s, held to
+the same 53 unmarked modules. And the `slow` marker, declared as "a module whose
+average test takes over a second", disagrees with the measurement on **36 of the
+74 modules it classifies** - 17 modules over a second carry no mark, and 19
+under a second carry `slow`. Ten of that second group are one module-level mark
+that [#720](https://github.com/miztiik/yen-idhazh/pull/720) copied into 13
+modules when it split `test_workflows.py`.
+
+Every run now ends by naming its own 25 dearest tests: `--durations=25` is in
+`addopts`, and it is free because pytest times every phase either way. The full
+record is
+[benchmarks/what-the-suite-costs.md](benchmarks/what-the-suite-costs.md).
+Re-run it with `pytest backend/tests -q -n auto --durations=0`.
+
 ## What the doubled window and the doubled cap cost, measured 2026-09-09
 
 **The run:** `2026-09-09-34379502244`, `workflow_dispatch`, 4 shards,
