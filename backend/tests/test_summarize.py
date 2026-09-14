@@ -2174,29 +2174,78 @@ def _built_weights(architecture: str) -> bytes:
     )
 
 
+#: What every file under `tests/fixtures/llm/` has to say about itself. Written
+#: honesty decays and a loader that fails does not, so the provenance is read
+#: rather than trusted: a file that does not declare whether it was captured, or
+#: declares it was not and then does not say how to capture it, is refused here.
+PROBE_PROVENANCE: Final = ("recorded", "why_not_recorded", "how_to_record")
+
+
+def probe_fixture(name: str) -> dict[str, Any]:
+    """A probe fixture, refused unless it says where it came from."""
+    loaded: dict[str, Any] = json.loads(read_text(LLM_PROBES / name))
+    missing = [key for key in PROBE_PROVENANCE if key not in loaded]
+    if missing:
+        raise ValueError(f"{name} declares no provenance: it is missing {', '.join(missing)}")
+    if not loaded["recorded"] and not str(loaded["how_to_record"]).strip():
+        raise ValueError(
+            f"{name} says it was not captured and does not say how to capture it, "
+            "so nobody can ever replace it with the real thing"
+        )
+    return loaded
+
+
 class TestTheServerProvesTheEntry:
     """Plan 28 row #5. The entry claims; these five arms make each claim a fact.
 
-    Every arm is driven by a recorded or built value and nothing here touches
+    Every arm is driven by a constructed or built value and nothing here touches
     the network (Guardrail #7). Every arm has both halves: with the agreeing
     value it passes, and with one value changed it refuses and the message names
     both sides. A check nobody has made fail is a check nobody has tested.
+
+    **These fixtures were not captured off a live server** - there are no weights
+    on the machine that wrote them, and each file says so and says how to capture
+    it. So this class proves the comparison rules and the config-derived prompt;
+    tokenizer agreement is proved solely by the live probe on a box with weights.
     """
 
     def render(self, name: str) -> dict[str, list[int]]:
-        recorded: dict[str, Any] = json.loads(read_text(LLM_PROBES / "apply-template-probe.json"))
-        return dict(recorded[name])
+        return dict(probe_fixture("apply-template-probe.json")[name])
 
     def models(self, name: str) -> dict[str, Any]:
-        recorded: dict[str, Any] = json.loads(read_text(LLM_PROBES / "props-probe.json"))
-        return dict(recorded[name])
+        return dict(probe_fixture("props-probe.json")[name])
+
+    def test_a_probe_fixture_that_hides_where_it_came_from_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The provenance is enforced, not requested.
+
+        Both committed fixtures are constructed rather than captured, which is
+        only safe while the next reader can tell. Proved by writing a file that
+        hides it, never by asserting the committed pair are fine - that passes on
+        a tree where the check does not exist.
+        """
+        monkeypatch.setattr("test_summarize.LLM_PROBES", tmp_path)
+        (tmp_path / "silent.json").write_text('{"data": []}\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="declares no provenance"):
+            probe_fixture("silent.json")
+
+        (tmp_path / "mute.json").write_text(
+            json.dumps(
+                {"recorded": False, "why_not_recorded": "no weights", "how_to_record": " "}
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="does not say how to capture it"):
+            probe_fixture("mute.json")
 
     # Arm 1 - the render agrees.
 
     def test_the_committed_markers_render_the_probe_conversation(self) -> None:
         """Ties the fixture to config: the recorded template is what the entry renders."""
         entry = config.load(CONFIG_DIR).models.summarize
-        recorded = json.loads(read_text(LLM_PROBES / "apply-template-probe.json"))
+        recorded = probe_fixture("apply-template-probe.json")
 
         assert (
             render_prompt(

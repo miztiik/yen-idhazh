@@ -676,6 +676,10 @@ def the_render_agrees(*, ours: Sequence[int], theirs: Sequence[int]) -> None:
     marker the runtime then doubles. Comparing ids lets the server's list carry
     one leading token ours does not, and nothing else: a second difference, or a
     difference anywhere but the head, is the envelope disagreeing.
+
+    The committed fixture's token ids are invented, so the test proves the
+    comparison rule and the config-derived prompt only; tokenizer agreement is
+    proved solely by this probe running against a server with weights.
     """
     lead = len(theirs) - len(ours)
     if 0 <= lead <= 1 and list(theirs)[lead:] == list(ours):
