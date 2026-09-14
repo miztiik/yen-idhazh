@@ -14,12 +14,20 @@
 	 * time and no drawing is committed.
 	 *
 	 * **What the reader gives up, stated where it lands.** A reader with
-	 * JavaScript off gets no chart, where a committed SVG used to be markup
-	 * inside the document itself. What they still get is the sentence: the figure
-	 * carries `alt` on every path and that sentence states every figure the bars
-	 * are drawn at. And every day published before 2026-09-13 loses its chart for
-	 * every reader, because no marks file was ever written for one and
-	 * back-filling would mean re-fetching source pages that have since moved.
+	 * JavaScript off gets no chart AND no sentence, where a committed SVG used to
+	 * be markup inside the document itself. The figure below only exists once the
+	 * marks have arrived, so there is no path on which a script-less page carries
+	 * either one - which is a real loss and a different row's to answer. And every
+	 * day published before 2026-09-13 loses its chart for every reader, because no
+	 * marks file was ever written for one and back-filling would mean re-fetching
+	 * source pages that have since moved.
+	 *
+	 * **No fact is left to a pointer.** The figure is one tab stop, and its
+	 * accessible name is written from the same `Drawing` the marks are drawn from
+	 * - so what a keyboard reaches and what an eye reaches are one set by
+	 * construction rather than by two derivations agreeing. One tab stop for a
+	 * chart and never one per bar: a day runs to hundreds of stories, and a bar
+	 * apiece would make the stream something a keyboard cannot get past.
 	 *
 	 * **The drawing is written by Svelte from geometry `$lib/visual/bar`
 	 * computed**, so the marks are ordinary elements in this component's own
@@ -38,7 +46,7 @@
 	import { publishedVisualData, refusedVisualData } from '$lib/payload/drawing';
 	import type { SeededVisual, VisualData } from '$lib/payload/types';
 	import { whenNear } from '$lib/reveal';
-	import { drawBars, type Drawing } from '$lib/visual/bar';
+	import { drawBars, statedBars, type Drawing } from '$lib/visual/bar';
 
 	let { visual }: { visual: SeededVisual | null } = $props();
 
@@ -51,11 +59,13 @@
 	const wanted = $derived(
 		visual?.state === 'rendered' && visual.data_path ? visual.data_path : null
 	);
-	const alt = $derived(visual?.alt ?? '');
 
 	/** What the fetch brought back, or null while it has not run or did not work. */
 	let arrived = $state<VisualData | null>(null);
 	const drawing = $derived<Drawing | null>(arrived ? drawBars(arrived) : null);
+	/** Every figure the bars are drawn at, in one sentence, for a reader who is
+	 * not looking at them. It is the whole of what the tab stop below announces. */
+	const stated = $derived(drawing ? statedBars(drawing) : '');
 
 	/** The marks that file holds, or null when there is nothing safe to draw.
 	 *
@@ -135,11 +145,16 @@
 </script>
 
 {#if drawing}
+	<!-- The figure takes the focus, not the marks inside it: `role="img"` replaces
+	     its whole subtree with one name, so a bar given its own tab stop would be
+	     a stop announcing nothing. It is not a control and it is still focusable,
+	     because the alternative is a chart a keyboard cannot reach at all. -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<figure
 		class="visual my-4 overflow-hidden rounded-md border border-rule bg-surface"
+		tabindex="0"
 		role="img"
-		aria-label={alt}
-		aria-hidden={alt ? undefined : true}
+		aria-label={stated}
 	>
 		<svg
 			viewBox="0 0 {drawing.width} {drawing.height}"
@@ -184,6 +199,14 @@
 		display: block;
 		height: auto;
 		width: 100%;
+	}
+
+	/* The same ring every other focusable surface here draws, on the same token.
+	   A tab stop nobody can see is the reason focus outlines get removed and then
+	   missed. */
+	.visual:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
 	}
 
 	/* Type on the card, read the way the reader note above it is read. The chart
