@@ -90,6 +90,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("prune.yml", "force"): DISPATCH_BOOLEAN,
@@ -202,6 +203,12 @@ WEIGHTS_CHECKS: Final = {
         "Benchmark parallel decode",
         '["summarize"]["sha256"]',
     ),
+    ("measure.yml", "budgets"): (
+        "Fetch runtime and weights",
+        "Verify the weights",
+        "Start the tokenizer",
+        "${{ needs.models.outputs.candidate_sha256 }}",
+    ),
     # The one candidate whose digest is not a config field: the plan job decides
     # it once, from the dispatch input or from config, and republishes it.
     ("validate.yml", "qualify"): (
@@ -245,7 +252,7 @@ BROWSER_CACHE_PATH: Final = "~/.cache/ms-playwright"
 # Who reads the pinned browser build: workflow, job, step id, output name. One
 # reader, because a key written twice drifts and a drifted key never hits.
 BROWSER_VERSION_SOURCE: Final = ("ci.yml", "scope", "browsers", "playwright")
-MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched"})
+MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "budgets"})
 #: The bench is one target and two jobs: raw prefill and decode first, then a
 #: real server doing real work. The raw arm saves the weights cache entry and
 #: the server arm restores it, so a key that differs by one character is a
@@ -271,6 +278,11 @@ BENCH_RETENTION_DAYS: Final = 90
 BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
 BENCH_CONFIG_STEP: Final = "Build the candidate config"
 BENCH_EMIT_STEP: Final = "Emit the dossier body"
+#: Row #13a's arm. Its own target because retaking three token counts is minutes
+#: and the bench is hours, and nobody should have to spend the second to get the
+#: first. It shares the bench's weights cache key, so the bytes are paid for once.
+BUDGETS_JOB: Final = "budgets"
+BUDGETS_EMIT_STEP: Final = "Retake the budgets a vocabulary sizes"
 # Every job that stands up llama-server, and the log that job writes. Both must
 # name the host, the binary and the weights: a shard's throughput is decided by
 # the host it drew, and a number that cannot name the bytes that produced it is
@@ -292,6 +304,7 @@ LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 SERVER_STARTERS: Final = {
     ("digest.yml", "work"): ("Start the model", "config"),
     ("measure.yml", "runtime"): ("Measure runtime candidate", None),
+    ("measure.yml", "budgets"): ("Start the tokenizer", "backend/var/candidate-config"),
     ("validate.yml", "qualify"): ("Start the candidate", "backend/var/candidate-config"),
 }
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
@@ -4305,13 +4318,58 @@ def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:
     )
 
     keys = dict(_runtime_cache_keys(workflow))
-    assert keys == {BENCH_RAW_JOB: BENCH_CACHE_KEY, BENCH_SERVER_JOB: BENCH_CACHE_KEY}, (
-        "one key, written the same way twice, or the restore misses"
-    )
+    assert keys == {
+        BENCH_RAW_JOB: BENCH_CACHE_KEY,
+        BENCH_SERVER_JOB: BENCH_CACHE_KEY,
+        BUDGETS_JOB: BENCH_CACHE_KEY,
+    }, "one key, written the same way twice, or the restore misses"
     composed = BENCH_CACHE_KEY.replace(
         _expression("needs.models.outputs.candidate_sha256"), "a" * 64
     ).replace(_expression("env.LLAMA_CPP_BUILD"), PINNED_LLAMA_BUILD)
     assert "${{" not in composed, "every half of the key must resolve"
+
+
+def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> None:
+    """Row #13a. Minutes rather than the bench's hours, and nothing it writes is committed.
+
+    It shares the bench's weights key, so a dispatch that follows a bench pays
+    nothing for the bytes. It is a separate target because retaking three token
+    counts should not cost a five-hour runner slot, and it waits on `models`
+    alone for the same reason.
+
+    The second half is the one that matters. Row #13's rejected option was a
+    workflow writing a measurement into a commit, and the load-bearing clause
+    was *writing*: this job prints into the run summary and uploads an artifact,
+    and a person decides what lands.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    condition = _normalize_condition(_job(workflow, BUDGETS_JOB).get("if"), "budgets if")
+
+    assert condition == "inputs.target == 'budgets'"
+    assert _needs(workflow, BUDGETS_JOB) == ["models"], (
+        "a retake that waited on the raw bench arm would cost the hours it exists to avoid"
+    )
+
+    names = [step.get("name") for step in _steps(workflow, BUDGETS_JOB)]
+    assert names.index("Start the tokenizer") < names.index(BUDGETS_EMIT_STEP)
+    emit = _step(workflow, BUDGETS_JOB, "name", BUDGETS_EMIT_STEP)
+    body = emit.get("run")
+    assert isinstance(body, str)
+    assert 'cat backend/var/budgets/budgets.md >> "$GITHUB_STEP_SUMMARY"' in body
+
+    for step in _steps(workflow, BUDGETS_JOB):
+        script = step.get("run")
+        if not isinstance(script, str):
+            continue
+        for committed in ("git commit", "git push", COMMIT_SCRIPT.name):
+            assert committed not in script, (
+                f"{BUDGETS_JOB}/{step.get('name')} commits, and a measurement a workflow "
+                "committed would be a number a workflow decided"
+            )
+        for destination in ("docs/", "backend/idhazh/measured.py"):
+            assert f"> {destination}" not in script and f">> {destination}" not in script, (
+                f"{BUDGETS_JOB}/{step.get('name')} writes into {destination}"
+            )
 
 
 def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:

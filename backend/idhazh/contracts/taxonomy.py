@@ -76,10 +76,16 @@ DefinitionText = Annotated[str, StringConstraints(max_length=240)]
 """The sentence a model is asked to choose this entry against.
 
 The bound is a token budget rather than a style rule. Thirty definition
-sentences were measured at 805 tokens together with `llama-tokenize` against
-the pinned `Qwen3-8B-Q4_K_M` on 2026-09-11, which is about 27 tokens each, and
-they ride in every labelling prompt this pipeline sends. 240 characters is
-roughly twice that: room to sharpen a sentence, not room for a paragraph.
+sentences measured 805 tokens together, which is about 27 each, and they ride
+in every labelling prompt this pipeline sends. 240 characters is roughly twice
+that: room to sharpen a sentence, not room for a paragraph.
+
+**The reading is `idhazh.measured.DEFINITION_SENTENCE_TOKENS` and it names
+weights this repository retired.** It is cited rather than imported: this
+package is the bottom of the dependency graph and imports no other subpackage
+(`CLAUDE.md` section 4), so the bound stays a literal here and the record
+carries the provenance. `backend/utilities/measure_budgets.py check` is what
+says the reading is stale; `read` is what retakes it.
 
 Empty is legal and means the entry is offered to no prompt. A proposed entry
 arrives with no definition, because the words that would go in it came off the

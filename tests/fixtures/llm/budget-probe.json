@@ -1,0 +1,16 @@
+{
+  "recorded": false,
+  "why_not_recorded": "Constructed from llama.cpp's documented API shape, not captured from a live server. The machine this was written on has no weights and no llama-server, so nothing here is a capture and it does not claim to be (CLAUDE.md Guardrail #7). The response SHAPE is llama.cpp's own and is documented: /tokenize returns a JSON object with a tokens array of ids when with_pieces is false, which is what tokenize_reply and tokenize_reply_without_tokens below exercise. The counts the arms use are NOT a vocabulary: characters_a_token is a fixed rate, so every count is a deterministic function of the probe text's length. That is deliberate. What the arms prove is the probe construction, the arithmetic over the counts, the paste block and the refusals - all of which are this repository's rules and none of which is the tokenizer's. Tokenizer agreement is proved solely by running `measure_budgets.py read` against a live server on a box with weights, which is what row #13b does. A capture would pin one model's counts and say nothing more about the rules.",
+  "how_to_record": "Start llama-server as digest.yml does, then for each probe string measure_budgets.py builds: curl -s http://127.0.0.1:8080/tokenize -H 'Content-Type: application/json' -d '{\"content\":\"<the probe string>\",\"add_special\":false}' and count the ids in the tokens array. The three probe strings are the joined taxonomy definitions, the empty-role fragment of each committed visual-plan fixture, and each sampled corpus article body.",
+  "characters_a_token": 4.0,
+  "tokenize_reply": {
+    "tokens": [
+      9906,
+      1917,
+      0
+    ]
+  },
+  "tokenize_reply_without_tokens": {
+    "error": "the model has no vocabulary loaded"
+  }
+}

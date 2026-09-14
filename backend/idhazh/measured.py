@@ -42,6 +42,13 @@ inside the weights, and a swap therefore invalidates every such reading at one
 stroke while leaving each one looking fine. So a tokenizer reading is a
 `TokenizerMeasured` and carries the weights digest as `subject`, and
 `refuse_a_reading_taken_against_other_weights` is what says so out loud.
+
+**Three constants shaped by a vocabulary cannot be moved in here, and their
+readings are here anyway.** Two sit in `contracts/`, which may import no other
+subpackage (`CLAUDE.md` section 4), and the third is read by an import-time
+assertion, so none of the three can read a record back at the moment it is
+declared. `SIZED_BY_A_READING_HERE` pairs each site with the reading that sized
+it, so the `subject` is visible to a gate even where the constant is not.
 """
 
 from __future__ import annotations
@@ -98,51 +105,188 @@ class TokenizerMeasured(Measured):
 #: fact about a reading and is a literal for that reason (Guardrail #6).
 QWEN35_9B_Q4_K_M: Final[Sha256] = "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
 
+#: The weights the three readings in `SIZED_BY_A_READING_HERE` were taken against,
+#: retired by the 8B-to-9B swap on 2026-08-27. Read back out of git rather than
+#: remembered: `git show 5d8ba601^:config/idhazh.json` is the last commit that
+#: named it. Here for the same reason as the line above - a reading's subject is
+#: a historical fact and never a knob.
+QWEN3_8B_Q4_K_M: Final[Sha256] = "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+
+
+# --- Three constants that cannot read a record, and the readings that sized them --
+
+
+#: Thirty definition sentences, which is what `VocabularyEntry.definition` bounds.
+DEFINITION_SENTENCE_TOKENS: Final = TokenizerMeasured(
+    value=805,
+    measures="thirty taxonomy definition sentences together, in tokens",
+    taken_on=date(2026, 9, 11),
+    subject=QWEN3_8B_Q4_K_M,
+    method=(
+        "joined the `definition` of every entry in config/taxonomy.json and tokenized "
+        "the join with llama-tokenize; 805 together is about 27 each. They ride in "
+        "every labelling prompt, so the total is the quantity and the per-sentence "
+        "figure is the total divided by the count."
+    ),
+    when_it_fires=(
+        "the weights moved, or a definition was rewritten. Re-tokenize the joined "
+        "definitions and re-derive `DefinitionText`'s character bound from the new "
+        "per-sentence figure - it is about twice it, which is room to sharpen a "
+        "sentence rather than room for a paragraph."
+    ),
+    why_a_number=(
+        "the bound it sizes is a character count on a persisted contract, and a "
+        "character count has to come from somewhere. The property behind it - the "
+        "definitions fit the labelling prompt - is what `classify` already checks "
+        "per run; this is what says the bound was not picked."
+    ),
+)
+
+#: The cost of requiring every encoding role, which is what makes the widest
+#: decoded plan reply the same shape as an ordinary one.
+EMPTY_ROLE_TOKENS: Final = TokenizerMeasured(
+    value=28,
+    measures="the nine empty encoding roles on a visual plan that declines, in tokens",
+    taken_on=date(2026, 9, 9),
+    subject=QWEN3_8B_Q4_K_M,
+    method=(
+        "tokenized the two committed plan fixtures with llama-tokenize. An empty role "
+        "is `\"<name>\":[]` and a comma, so the nine cost 114 characters on the plan "
+        "that declines and the seven a bar leaves empty cost 87 - 28 tokens and 23, "
+        "about 3.1 tokens an empty role."
+    ),
+    when_it_fires=(
+        "the weights moved, or a role was added to or removed from the plan shape. "
+        "Re-tokenize both committed fixtures and divide by the empty roles in each."
+    ),
+    why_a_number=(
+        "it is what bought the decision to require every role, and a price nobody "
+        "wrote down is a decision that gets re-argued. It does not set "
+        "`WORST_CASE_REPLY_CHARACTERS`, which is arithmetic over the schema's own "
+        "bounds - it is what says that arithmetic is worth paying."
+    ),
+)
+
+#: The ratio every truncation point in the pipeline is placed with.
+TOKENS_A_WORD_AT_THE_CUT: Final = TokenizerMeasured(
+    value=1.3,
+    kind="judgement",
+    measures="tokens a word, used to spend a token cap as a word count at the cut",
+    taken_on=date(2026, 8, 21),
+    subject=QWEN3_8B_Q4_K_M,
+    method=(
+        "not taken through a tokenizer at all. It is the received figure for English "
+        "in a BPE vocabulary, written on the day `truncate_to_tokens` landed, and the "
+        "subject is the weights the configuration named that day rather than a "
+        "vocabulary anybody counted with. `WORST_TOKENS_A_WORD` at 1.585 is the same "
+        "quantity measured, on one article, and the gap between the two is the miss."
+    ),
+    when_it_fires=(
+        "the weights moved, or an article was cut shorter than its cap allowed. Take "
+        "it properly: tokenize the article bodies of a bounded sample of corpus rows "
+        "and divide total tokens by total words."
+    ),
+    why_a_number=(
+        "a ratio has to be a number to convert a token cap into a word count. It is a "
+        "judgement rather than a measurement and says so, which is the only reason it "
+        "is allowed to be this old: a design may not lean on it (Guardrail #10)."
+    ),
+)
+
 
 @dataclass(frozen=True)
 class Unreached:
-    """A tokenizer-shaped constant that lives outside this module, so the gate is blind to it."""
+    """A constant that lives outside this module, beside the reading that sized it.
+
+    All three sit where a loaded config cannot reach them. Two are in
+    `contracts/`, which is the bottom of the dependency graph and may import no
+    other subpackage (`CLAUDE.md` section 4), and the third is read by an
+    import-time assertion in `classify/calls.py`, so a config edit that made it
+    move could stop an import rather than change a behaviour. So the constant
+    stays a literal at its site and the reading behind it lives here, where the
+    gate can read its `subject`.
+    """
 
     module: str
     constant: str
-    why: str
+    reading: TokenizerMeasured
+    #: What the reading is called in this module. The reader prints it as the
+    #: heading of a paste block, so a rename that missed this line would hand
+    #: somebody three lines to paste under a name that no longer exists.
+    reading_name: str
+    #: How the constant is derived from the reading, for whoever retakes it.
+    derivation: str
 
 
-#: What the gate cannot see: three constants written as bare literals in other
-#: modules, every one of them shaped by a vocabulary, none of them a record here.
-#: The 8B-to-9B move on 2026-08-27 already left all three behind, so this is a
-#: correction rather than a precaution.
+#: Three constants shaped by a vocabulary, each beside the reading that sized it.
+#: The 8B-to-9B move on 2026-08-27 left all three behind, so every `subject` below
+#: names weights the configuration no longer runs. That is a correction waiting to
+#: be made rather than a precaution, and `readings_awaiting_a_retake` is what says
+#: so out loud.
 #:
-#: **Removal condition:** row #13 of `TODO/20260913-28-model-swap-plan.md` retakes
-#: all three against the configured weights and brings them in here as records.
-#: This tuple goes with them.
-UNREACHED_BY_THIS_GATE: Final = (
+#: **Removal condition:** row #13b of `TODO/20260913-28-model-swap-plan.md` retakes
+#: all three against the configured weights. A reading whose retake moves it gets
+#: the old one deleted rather than kept beside the new one (Guardrail #10). A
+#: reading that stops being tokenizer-shaped leaves this tuple for `EVERY_MEASURED`.
+SIZED_BY_A_READING_HERE: Final = (
     Unreached(
         module="backend/idhazh/contracts/taxonomy.py",
         constant="DefinitionText",
-        why=(
-            "bounded at 240 characters, sized on 30 definition sentences that measured "
-            "805 tokens together against the retired Qwen3-8B-Q4_K_M on 2026-09-11"
+        reading=DEFINITION_SENTENCE_TOKENS,
+        reading_name="DEFINITION_SENTENCE_TOKENS",
+        derivation=(
+            "bounded at 240 characters, about twice the 27 tokens a definition "
+            "sentence costs. Raise or lower the bound with the per-sentence figure"
         ),
     ),
     Unreached(
         module="backend/idhazh/contracts/visual.py",
         constant="WORST_CASE_REPLY_CHARACTERS",
-        why=(
-            "3,767, and the empty-role cost it rests on - 28 tokens on a plan that "
-            "declines and 23 on a four-bar one - tokenized against the retired "
-            "Qwen3-8B-Q4_K_M on 2026-09-09. Both output budgets derive from it"
+        reading=EMPTY_ROLE_TOKENS,
+        reading_name="EMPTY_ROLE_TOKENS",
+        derivation=(
+            "3,767, arithmetic over the schema's own bounds and recomputed at import, "
+            "so the retake does not move it. What the retake settles is whether "
+            "requiring all nine roles is still worth about 3 tokens each"
         ),
     ),
     Unreached(
         module="backend/idhazh/extract.py",
         constant="TOKENS_PER_WORD",
-        why=(
-            "1.3, which places every truncation point in the pipeline. A tokens-a-word "
-            "ratio is a property of the vocabulary and moves when the vocabulary does"
+        reading=TOKENS_A_WORD_AT_THE_CUT,
+        reading_name="TOKENS_A_WORD_AT_THE_CUT",
+        derivation=(
+            "the reading itself, read straight off `TOKENS_A_WORD_AT_THE_CUT.value`. "
+            "This one moves the instant the reading does"
         ),
     ),
 )
+
+
+def readings_awaiting_a_retake(*, configured_sha256: str) -> tuple[Unreached, ...]:
+    """The constants above whose reading names weights the configuration does not.
+
+    A tuple rather than a refusal, because all three are stale on every commit
+    until row #13b retakes them, and a check that is red on a state nobody has
+    fixed yet is a check people learn to scroll past (`CLAUDE.md` section 13).
+    Two surfaces read it: the refusal below, which fires at the one moment a
+    person is provably looking at weights, and `backend/utilities/measure_budgets.py
+    check`, which a person runs and which exits non-zero on what this returns.
+    """
+    return tuple(
+        site for site in SIZED_BY_A_READING_HERE if site.reading.subject != configured_sha256
+    )
+
+
+def describe_a_retake(site: Unreached) -> str:
+    """One constant, its reading and what to do about it, as printable lines."""
+    return (
+        f"  - {site.module} {site.constant}\n"
+        f"    {site.derivation}\n"
+        f"    sized on {site.reading_name} = {site.reading.value:g} - {site.reading.measures}\n"
+        f"    taken {site.reading.taken_on.isoformat()} against {site.reading.subject}\n"
+        f"    to retake it: {site.reading.when_it_fires}"
+    )
 
 
 def refuse_a_reading_taken_against_other_weights(
@@ -157,7 +301,7 @@ def refuse_a_reading_taken_against_other_weights(
     from a built record, which is what the arm proving it bites needs
     (`CLAUDE.md` section 13).
 
-    The refusal carries `UNREACHED_BY_THIS_GATE`. This gate has exactly one
+    The refusal carries `SIZED_BY_A_READING_HERE`. This gate has exactly one
     trigger - the configured digest no longer matching a pinned reading - and
     that same swap is what makes those three stale, so they are the rest of the
     same failure rather than noise on an unrelated one. The person swapping a
@@ -176,17 +320,17 @@ def refuse_a_reading_taken_against_other_weights(
         f"    to retake it: {record.when_it_fires}"
         for record in stale
     )
-    unreached = "\n".join(
-        f"  - {site.module} {site.constant} - {site.why}" for site in UNREACHED_BY_THIS_GATE
-    )
+    elsewhere = readings_awaiting_a_retake(configured_sha256=configured_sha256)
+    unreached = "\n".join(describe_a_retake(site) for site in elsewhere)
     raise ValueError(
         f"{len(stale)} tokenizer reading(s) name weights the configuration does not.\n"
         f"the configured weights are {configured_sha256}\n"
         f"{readings}\n"
         "Retake each one against the configured weights and replace the record. A reading "
         "is a variable and not a log entry, so the old one goes (Guardrail #10).\n"
-        f"{len(UNREACHED_BY_THIS_GATE)} more tokenizer-shaped constants sit outside this "
-        "module and this gate cannot reach them. The same swap made them stale:\n"
+        f"{len(elsewhere)} of {len(SIZED_BY_A_READING_HERE)} constants sized by a reading "
+        "here live in modules that cannot read one back, and are stale for the same "
+        "reason. `python backend/utilities/measure_budgets.py read` retakes them:\n"
         f"{unreached}"
     )
 

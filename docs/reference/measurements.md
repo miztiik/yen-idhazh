@@ -63,6 +63,21 @@ Three rules govern this page:
  `TokenizerMeasured.subject` in
  [`../../backend/idhazh/measured.py`](../../backend/idhazh/measured.py), and
  that module refuses a reading whose weights the configuration no longer names.
+- **Three constants shaped by a vocabulary cannot hold their own reading, so
+ the reading is held for them.** `DefinitionText`'s character bound and
+ `WORST_CASE_REPLY_CHARACTERS` sit in `backend/idhazh/contracts/`, which may
+ import no other subpackage (`CLAUDE.md` section 4), and `TOKENS_PER_WORD` is
+ read by an import-time assertion in `classify.calls`, so none of the three can
+ look a record up at the moment it is declared.
+ `idhazh.measured.SIZED_BY_A_READING_HERE` pairs each site with the reading
+ that sized it, which is what makes the `subject` visible to a gate even where
+ the constant is not. **All three name weights this repository retired on
+ 2026-08-27 and none has been retaken**;
+ `python backend/utilities/measure_budgets.py check` says so and exits 1, and
+ `measure_budgets.py read` retakes them from a running server's own
+ `/tokenize`. Row #13b of
+ [`../../TODO/20260913-28-model-swap-plan.md`](../../TODO/20260913-28-model-swap-plan.md)
+ is where they land.
 
 **This page holds the reading, never the decision.** The value in force lives in
 `config/idhazh.json` and the rule that acts on it lives in the doc it impacts,
