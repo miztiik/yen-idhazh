@@ -51,7 +51,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | DONE | p28-r3 | #691 | worker |
 | 4 | Benchmark records lose the date from their filename | 2, 3 | B | DONE | p28-r4 | #694 | owner |
 | 5 | Five things the server proves before the first item | 2, 6 | D | PENDING | - | - | - |
-| 6 | One complete config file per model, selected by a pointer | 2 | C | DONE | p28-r6 | - | Fowler |
+| 6 | One complete config file per model, selected by a pointer | 2 | C | DONE | p28-r6 | #697 | Fowler |
 | 7 | The model dossier, and the index that points at every one | 3, 4 | D | PENDING | - | - | - |
 | 11 | Where the system text goes, and which keyword the runtime is told | 5, 6 | D | PENDING | - | - | - |
 | 12 | The sanitizer learns the control tokens of the model it guards | 11 | E | PENDING | - | - | - |
