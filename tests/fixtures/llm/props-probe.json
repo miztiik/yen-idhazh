@@ -1,0 +1,61 @@
+{
+  "endpoint": "GET /v1/models",
+  "recorded": false,
+  "why_not_recorded": "Constructed from llama.cpp's documented API shape, not captured from a live server. The machine this was written on has no weights and no llama-server, so nothing here is a capture and it does not claim to be (CLAUDE.md Guardrail #7). The shape is llama.cpp's own: get_res_model_info returns data[0].meta carrying vocab_type, n_vocab, n_ctx, n_ctx_train, n_embd, n_params, size and ftype. Two of the numbers below are real rather than invented. n_ctx_train is 262144, measured and written up in docs/reference/benchmarks/two-call-window-sizing.md. n_ctx is 49152, which is what config/models/qwen3.5-9b-q4km.json declares. The rest are stand-ins and arm 5 reads none of them.",
+  "why_not_props": "The file is named for the row that created it, and the document inside it is the model list rather than /props, because /props does not carry a trained context length. llama.cpp's get_res_props publishes default_generation_settings, total_slots, model_alias, model_ftype, model_path, modalities, media_marker, the endpoint switches, chat_template, chat_template_caps, bos_token, eos_token, build_info and is_sleeping - and nothing about how long a window the weights were trained for. That number is published on /v1/models and only there, so that is where arm 5 reads it.",
+  "how_to_record": "Start the server as digest.yml does, then: curl -s http://127.0.0.1:8080/v1/models",
+  "inside_the_trained_window": {
+    "object": "list",
+    "data": [
+      {
+        "id": "qwen3-5-9b-q4-k-m",
+        "object": "model",
+        "created": 1789000000,
+        "owned_by": "llamacpp",
+        "meta": {
+          "vocab_type": 2,
+          "n_vocab": 151936,
+          "n_ctx": 49152,
+          "n_ctx_train": 262144,
+          "n_embd": 4096,
+          "n_params": 8763000000,
+          "size": 5680000000,
+          "ftype": "Q4_K - Medium"
+        }
+      }
+    ]
+  },
+  "a_short_native_window": {
+    "object": "list",
+    "data": [
+      {
+        "id": "qwen3-5-9b-q4-k-m",
+        "object": "model",
+        "created": 1789000000,
+        "owned_by": "llamacpp",
+        "meta": {
+          "vocab_type": 2,
+          "n_vocab": 151936,
+          "n_ctx": 49152,
+          "n_ctx_train": 32768,
+          "n_embd": 4096,
+          "n_params": 8763000000,
+          "size": 5680000000,
+          "ftype": "Q4_K - Medium"
+        }
+      }
+    ]
+  },
+  "a_model_list_that_names_no_trained_window": {
+    "object": "list",
+    "data": [
+      {
+        "id": "qwen3-5-9b-q4-k-m",
+        "object": "model",
+        "created": 1789000000,
+        "owned_by": "llamacpp",
+        "meta": null
+      }
+    ]
+  }
+}
