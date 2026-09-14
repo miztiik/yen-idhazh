@@ -170,7 +170,7 @@ touched nothing in common still could not run in the same wave. Split on
 2026-09-13: one module a stage, `stages/common.py` for the 31 names two or more
 stages share, and `cli.py` down to 762 lines - the parser, the verb table, five
 routing helpers, and nothing a stage does (CLAUDE.md section 1a, "A router is
-not a worker").
+the sharpest case").
 
 **The router imports stage modules and never the names inside them.** The split
 first shipped with `cli` re-exporting 51 of those names, so 168 call sites in 20
