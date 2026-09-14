@@ -722,13 +722,19 @@
 
 	/* The track is 1.0 wide because the figure cannot exceed 1.0. Two feeds'
 	   bars are therefore on one scale, which is the whole point of drawing a
-	   share as a bar rather than printing it. */
+	   share as a bar rather than printing it.
+	   
+	   The tokens are `TargetBar`'s, not a second set: the track is the sunken
+	   surface and the fill takes the band ramp keyed on the band `targetGeometry`
+	   already decided. A discount is a health fact and the row prints the figure
+	   in words beside the bar, which is the same argument `TargetBar` makes for
+	   using the band ramp on the quarantine bar. */
 	.track {
 		position: relative;
 		display: block;
 		height: 0.75rem;
 		border-radius: var(--radius-sm);
-		background: var(--color-surface-sunken, var(--color-border));
+		background: var(--color-surface-sunken);
 	}
 
 	.track--empty {
@@ -744,16 +750,16 @@
 	.fill {
 		position: absolute;
 		border-radius: var(--radius-sm);
-		background: var(--color-ok);
+		background: var(--band-high);
 		inset: 0 auto 0 0;
 	}
 
 	.track[data-band='near'] .fill {
-		background: var(--color-warn);
+		background: var(--band-medium);
 	}
 
 	.track[data-band='past'] .fill {
-		background: var(--color-bad);
+		background: var(--band-low);
 	}
 
 	.marker {
