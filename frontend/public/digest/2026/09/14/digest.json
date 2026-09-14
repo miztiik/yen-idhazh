@@ -1,0 +1,20 @@
+{
+  "date": "2026-09-14",
+  "embeddings": null,
+  "generated_at": "2026-09-14T08:10:50Z",
+  "items": [],
+  "items_failed": 80,
+  "items_planned": 80,
+  "leads": [],
+  "partial": true,
+  "retention_window_months": 13,
+  "runs": [
+    {
+      "at": "2026-09-14T08:10:50Z",
+      "items_added": 0,
+      "n": 1
+    }
+  ],
+  "version": "2026-09-13T22:30",
+  "verticals": []
+}

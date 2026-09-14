@@ -1,0 +1,36 @@
+{
+  "addresses_considered": null,
+  "bands": {
+    "high": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "date": "2026-09-14",
+  "determinism_violations": 0,
+  "extraction": null,
+  "extraction_suspect": 0,
+  "instruments": [],
+  "items_failed": 80,
+  "items_planned": 80,
+  "items_published": 0,
+  "items_truncated": 0,
+  "label_similarity": null,
+  "model_id": "qwen3-5-9b-q4-k-m",
+  "reasons": {
+    "faithfulness": 0,
+    "hedge_dropped": 0,
+    "lead_missing": 0,
+    "not_scored": 0,
+    "unattributed": 0,
+    "unsupported_number": 0
+  },
+  "revision": 1,
+  "runs": 1,
+  "sources": [],
+  "sources_present": 0,
+  "stage_timing": [],
+  "summaries_scored": 0,
+  "throughput": null,
+  "version": "2026-09-14T01:30",
+  "visuals_rendered": 0
+}

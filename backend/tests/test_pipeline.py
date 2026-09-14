@@ -2129,6 +2129,61 @@ def test_a_desk_keeps_the_strongest_shortfall_any_run_recorded() -> None:
     assert desk.too_old <= desk.considered, "the sentence would name more dropped than offered"
 
 
+def test_a_second_runs_better_story_is_published_below_what_the_day_already_had() -> None:
+    """The crash of 2026-09-13, held at the stage that caused it.
+
+    The fresh story outscores the published one by a hundred to one, which is
+    the ordinary case: a run publishes what the earlier run could not see yet.
+    `DigestDay` refuses a day whose `introduced_by_run` decreases, so an order
+    taken over the whole day fails here exactly as it failed in production -
+    `ValidationError`, not a wrong assertion.
+    """
+    settings = config.load(CONFIG_DIR)
+    seed = digest_item(run_n=1)
+    published = seed.model_copy(
+        update={
+            "item_id": f"{seed.vertical}-01",
+            "title": "The story the morning run published",
+            "source_url": "https://example.test/morning",
+            "rank_score": 1.0,
+        }
+    )
+    fresh = digest_item(run_n=2).model_copy(
+        update={
+            "item_id": f"{seed.vertical}-02",
+            "title": "The story the evening run found",
+            "source_url": "https://example.test/evening",
+            "rank_score": 100.0,
+        }
+    )
+
+    morning = assemble.build_day(
+        plan=plan(),
+        items=[published],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    evening = assemble.build_day(
+        plan=plan(),
+        items=[fresh],
+        previous=morning,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T19:00:00Z",
+        retention_window_months=-1,
+    )
+
+    introduced = [item.introduced_by_run for item in evening.items]
+    assert introduced == [1, 2], "a story a reader read at breakfast moved under them"
+    assert [item.item_id for item in evening.items] == [
+        f"{seed.vertical}-01",
+        f"{seed.vertical}-02",
+    ]
+
+
 def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
     """A desk with items and no entry in today's plan is not a desk with no answer.
 
