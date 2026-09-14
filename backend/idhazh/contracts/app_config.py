@@ -1921,6 +1921,19 @@ class SummarizeConfig(Model):
             "publishes with the least-restating up to the band's key_points_min."
         ),
     )
+    asks_for_a_visual_plan: bool = Field(
+        default=True,
+        description=(
+            "Whether the two-call sequence is sized for a second call that asks for a "
+            "picture. True is what the production run does and what ships. It exists so "
+            "an arm of the pipeline test workflow can run the summary-only path end to "
+            "end: setting `visuals.enabled_kinds` to nothing takes the plan fields off "
+            "call 2's grammar, and this takes the plan's decode budget out of the window "
+            "sizing beside it. The two move together or the sizing is wrong in the "
+            "expensive direction - it reserves room for a decode that never happens, and "
+            "refuses articles that would have fitted."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -4522,6 +4535,25 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T14:00",
+            change=(
+                "summarize gains asks_for_a_visual_plan, default true. It is the value "
+                "the two-call sequence sizes its window with, which classify/dag.py "
+                "wrote out as a literal. Additive and defaulted, so a config file "
+                "written before today validates unchanged and no read-side migration "
+                "is owed. Production is untouched: the default is the literal it "
+                "replaced."
+            ),
+            why=(
+                "The pipeline test workflow runs one arm with no picture reachable, to "
+                "price what the visual decision costs. Turning the picture off is a "
+                "config edit already - an empty visuals.enabled_kinds - but the window "
+                "sizing had no way to follow it, so that arm would reserve room for a "
+                "decode it never makes and refuse articles that fit. One knob, so the "
+                "two cannot disagree (plan 27, row 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T13:00",
             change=(
