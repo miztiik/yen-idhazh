@@ -723,7 +723,7 @@
 	/* The track is 1.0 wide because the figure cannot exceed 1.0. Two feeds'
 	   bars are therefore on one scale, which is the whole point of drawing a
 	   share as a bar rather than printing it.
-	   
+
 	   The tokens are `TargetBar`'s, not a second set: the track is the sunken
 	   surface and the fill takes the band ramp keyed on the band `targetGeometry`
 	   already decided. A discount is a health fact and the row prints the figure
