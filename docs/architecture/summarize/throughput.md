@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
@@ -25,6 +25,50 @@ What the move to 10,000 cost is measured in
 **Read is the end that moves.** A longer article is more prompt to take in;
 write does not move at all, because the summary length asked for comes from
 `article.band_source_words`, which is the count from before the cap cut it.
+
+## What a thinking span costs, and the one part that is still an estimate
+
+A call is decoded as an unconstrained thinking span and then the
+schema-constrained answer whenever `models.<role>.turns.thinking_close` is
+declared. The incumbent declares none, so every figure on this page is a
+no-thinking figure and stays comparable. What follows is what turning it on
+costs.
+
+**Priced from a committed reading.** The thinking budget is 256 tokens, hard
+capped. At the measured decode rate of **6.01 +/- 0.11 tokens a second**
+(2026-08-23, `ubuntu-latest`, EPYC 9V74, llama.cpp build b10598, three repeats)
+that is **42.6 seconds a span**. Against the 900-token answer worst case of
+149.8 seconds, one span is **28 percent more time**, which is the number the
+adoption decision is held to. The digest's own path makes two calls an item, so
+an item pays two spans: **85.2 seconds**.
+
+**One part is an estimate and is labelled one** (Guardrail #10). Whether the
+answer span re-pays prefill on the thinking tokens has not been read. The slot
+should hold - span two's prompt is span one's extended, `cache_prompt` is
+requested, and arm 2 of the start-up probe refuses a run whose second call
+re-read a prompt the first one filled. If it misses, the estimated cost is
+**25.6 seconds an item more**. **What settles it**: the dispatch logs span two's
+evaluated tokens beside its cached tokens on every item, and their difference is
+what the answer span really prefilled. One run with thinking declared answers it.
+
+**A second cost is real, priced and not an estimate.** Call 2 replays call 1's
+answer and never call 1's thinking, because a prompt is the one place a model's
+own words could steer the next decode (Guardrail #11). So call 1's answer tokens
+are prefilled again rather than read from the slot. That is prefill rather than
+decode, and prefill runs at about 2.2 times decode on this page's own ratio; the
+article in front of it is still answered from the slot, because the common
+prefix reaches to the end of call 1's prompt either way.
+
+**The shard bound was re-derived rather than carried forward.** The worst of the
+80 shard rows on 2026-09-02 used 135.4 minutes and carried 40 items, so the
+worst measured item is 203.1 s. A worker now draws 20 items
+(`run.safety_ceiling_per_run` 80 over `run.max_parallel` 4), and two thinking
+spans add 85.2 s, so the derived worst item is **288.3 s** and the derived worst
+shard is **96.1 minutes**. `run.shard_timeout_minutes` stays at 200, which holds
+that with 2.1 times over. `run.shard_size` stays at 5: the fan-out is
+`min(ceil(80 / 5), 4)`, so `max_parallel` binds and the size would have to rise
+above 20 to move anything - and a worker carrying more items is the opposite of
+what a longer item wants.
 
 ## Two rates, not one
 

@@ -12,7 +12,8 @@
       "flash_attention": "on",
       "load_mode": null,
       "log_verbosity": 4,
-      "max_output_tokens": 900,
+      "max_answer_tokens": 900,
+      "max_think_tokens": 256,
       "metrics": true,
       "n_batch": 512,
       "n_ctx": 65536,
@@ -26,7 +27,6 @@
       "seed": 0,
       "startup_warmup": true,
       "temperature": 0.0,
-      "thinking": false,
       "top_p": 1.0
     },
     "quantisation": "Q4_K_M",
@@ -39,6 +39,7 @@
       "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
       "system_joiner": null,
       "system_role": "own_turn",
+      "thinking_close": null,
       "thinking_kwarg": "enable_thinking",
       "turn_closing": "<|im_end|>\n",
       "turn_opening": "<|im_start|>$role\n"

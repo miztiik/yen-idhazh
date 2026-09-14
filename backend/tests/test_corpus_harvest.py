@@ -98,7 +98,7 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
         article,
         model_id=models.summarize.id,
         inference=models.summarize.inference,
-        thinking_kwarg=models.summarize.turns.thinking_kwarg,
+        turns=models.summarize.turns,
         prompt_config=app.summarize,
     )
     harvested = corpus.harvest_rows(

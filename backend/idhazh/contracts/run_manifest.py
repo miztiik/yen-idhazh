@@ -317,6 +317,23 @@ class RunManifest(Contract):
             ),
         ),
         ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "inputs.turn_markers_sha256, optional: the turn envelope the run's "
+                "prompts were rendered through, digested as one string. Optional, and "
+                "the read-side rule is that an absent key means a run written before "
+                "2026-09-14 - never a default digest, because a substituted value "
+                "would say the envelope was recorded and unchanged."
+            ),
+            why=(
+                "Plan 28 row #10. This is the first row that makes a marker move, and "
+                "two envelope facts move an output without moving prompt_sha256: which "
+                "of the two reply openings a call ends on, and the marker the thinking "
+                "span stops at. Without this a marker change moved every output with "
+                "nothing in the stamp saying so. Ruled by Fowler, 2026-09-14."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T23:30",
             change=(
                 "items_prefiltered keeps its shape and gains a sentence: no run writes "

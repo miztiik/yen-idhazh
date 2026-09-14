@@ -211,7 +211,7 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     inference = committed_models().summarize.inference
     cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
     worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
-    return worst_prompt, worst_prompt + inference.max_output_tokens
+    return worst_prompt, worst_prompt + inference.max_answer_tokens
 
 
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
@@ -238,7 +238,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     assert worst_sequence <= inference.n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through is "
-        f"{worst_prompt} prompt tokens, and {inference.max_output_tokens} of answer "
+        f"{worst_prompt} prompt tokens, and {inference.max_answer_tokens} of answer "
         f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
         "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
     )

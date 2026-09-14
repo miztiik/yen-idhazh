@@ -30,6 +30,7 @@ from idhazh.contracts.app_config import (
     InferenceConfig,
     RunConfig,
     SummarizeConfig,
+    TurnsConfig,
 )
 from idhazh.contracts.qualification import (
     CanaryObservation,
@@ -170,27 +171,40 @@ def _outcome(
 # --- the eleven -------------------------------------------------------------
 
 
-def reasoning_leakage(observations: Sequence[ItemObservation]) -> GateOutcome:
+def reasoning_leakage(
+    observations: Sequence[ItemObservation], *, thinking: bool = False
+) -> GateOutcome:
     """No reasoning reached us, by either route.
 
     Two routes, because a runtime can split reasoning into its own channel or
     leave it inline. Row #2 made the inline reader scan every block; before that
     an empty opening block hid a second one that reasoned.
+
+    **The measurement does not change when the entry asks for reasoning; what it
+    means does.** With no closing marker declared, any reasoning is the flag not
+    taking. With one declared, the reasoning is wanted and is discarded before
+    the reply is parsed - so a channel or a block still reaching an observation
+    means the discard did not happen, which is the same zero and a different
+    sentence. A gate that stopped counting on the thinking arm would be a
+    control that fires only on the path nobody runs.
     """
     channel = [o for o in observations if o.reasoning_channel_used]
     inline = [o for o in observations if o.think_block_words > 0]
     leaked = len(channel) + len(inline)
+    if thinking:
+        asked = (
+            "thinking is declared, so reasoning is discarded before the reply is "
+            "parsed and any that survives is a discard that did not happen"
+        )
+    else:
+        asked = "thinking is off, so any reasoning means the flag did not take"
     return _outcome(
         GateName.REASONING_LEAKAGE,
         passed=leaked == 0,
         measured=f"{len(channel)} reasoning channels, {len(inline)} non-empty think blocks",
         threshold="zero of each",
         source=_ANDRE,
-        detail=(
-            "thinking is off, so any reasoning means the flag did not take"
-            if leaked
-            else f"no reasoning in {len(observations)} calls"
-        ),
+        detail=(asked if leaked else f"no reasoning in {len(observations)} calls"),
     )
 
 
@@ -384,7 +398,12 @@ def publishable_length(
     )
 
 
-def context_fit(observations: Sequence[ItemObservation], inference: InferenceConfig) -> GateOutcome:
+def context_fit(
+    observations: Sequence[ItemObservation],
+    inference: InferenceConfig,
+    *,
+    turns: TurnsConfig | None = None,
+) -> GateOutcome:
     """The complete chat-templated request plus the output budget fits, and the
     cheap predictor never says yes when it should have said no.
 
@@ -393,30 +412,31 @@ def context_fit(observations: Sequence[ItemObservation], inference: InferenceCon
     estimate taken from another model family.
 
     **It sizes the single call, and that is correct rather than stale.** The
-    budget it adds is `max_output_tokens`, which sizes one summarize request;
-    the two-call path's budgets are derived in `classify.calls` and are five and
-    twenty-two times larger. This gate reads what the qualification harness
-    actually ran, and the harness sends one summarize request an article - so
-    reaching for a two-call budget here would size a request nothing sent. What
-    sizes the pair the daily run dispatches is
-    `test_the_two_calls_fit_the_window_at_the_cap`, which is a config-level check
-    and needs no observations.
+    budget it adds is `max_answer_tokens`, which sizes one summarize request -
+    plus `max_think_tokens` where the entry declares a closing marker, because a
+    thinking span decodes into the same sequence. The two-call path's budgets
+    are derived in `classify.calls` and are five and twenty-two times larger.
+    This gate reads what the qualification harness actually ran, and the harness
+    sends one summarize request an article - so reaching for a two-call budget
+    here would size a request nothing sent. What sizes the pair the daily run
+    dispatches is `test_the_two_calls_fit_the_window_at_the_cap`, which is a
+    config-level check and needs no observations.
     """
-    overflow = [
-        o for o in observations if o.prompt_tokens + inference.max_output_tokens > inference.n_ctx
-    ]
+    reply = inference.max_answer_tokens + (
+        inference.max_think_tokens if turns is not None and turns.thinks else 0
+    )
+    overflow = [o for o in observations if o.prompt_tokens + reply > inference.n_ctx]
     under_reserved = [
         o
         for o in observations
-        if o.fits_context_predicted
-        and o.prompt_tokens + inference.max_output_tokens > inference.n_ctx
+        if o.fits_context_predicted and o.prompt_tokens + reply > inference.n_ctx
     ]
     widest = max((o.prompt_tokens for o in observations), default=0)
     return _outcome(
         GateName.CONTEXT_FIT,
         passed=bool(observations) and not overflow and not under_reserved,
         measured=(
-            f"widest request {widest} + {inference.max_output_tokens} output tokens; "
+            f"widest request {widest} + {reply} output tokens; "
             f"{len(overflow)} overflowed, {len(under_reserved)} under-reserved"
         ),
         threshold=f"<= n_ctx {inference.n_ctx}; fits_context over-reserves",
@@ -572,17 +592,25 @@ def gates(
     run: RunConfig,
     budget_: Budget,
     required_canaries: int,
+    turns: TurnsConfig | None = None,
 ) -> tuple[Corpus, list[GateOutcome]]:
-    """Every gate, in the order the row registers them."""
+    """Every gate, in the order the row registers them.
+
+    `turns` reaches exactly one gate, and only to name what a leak would mean:
+    reasoning the entry never asked for, or reasoning it asked for and the
+    discard failed to remove.
+    """
     corpus = merge(shards)
     pinned = all(shard.scorer.pinned for shard in shards) and bool(shards)
     return corpus, [
-        reasoning_leakage(corpus.observations),
+        reasoning_leakage(
+            corpus.observations, thinking=turns is not None and turns.thinks
+        ),
         schema_validity(corpus.observations),
         injection_canaries(corpus.canaries, required=required_canaries),
         determinism(corpus.observations, repeats=corpus.repeats),
         publishable_length(corpus.observations, summarize),
-        context_fit(corpus.observations, inference),
+        context_fit(corpus.observations, inference, turns=turns),
         identity(shards),
         budget(budget_),
         scored_denominator(corpus, evaluation=evaluation, run=run),

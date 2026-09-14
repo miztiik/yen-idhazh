@@ -260,6 +260,21 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "inputs gains turn_markers_sha256, optional. Not breaking: a shard is a "
+                "workflow artifact uploaded and merged inside one job, so no payload of "
+                "this shape exists on disk to migrate."
+            ),
+            why=(
+                "Plan 28 row #10 put the turn envelope in the recorded input manifest, "
+                "and a shard embeds that manifest. A qualification that could not say "
+                "which envelope it ran under could not compare an incumbent against the "
+                "same incumbent with thinking on, which is exactly the run that row "
+                "asks for. Ruled by Fowler, 2026-09-14."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:00",
             change="Removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
             why=(
@@ -361,6 +376,20 @@ class QualificationReport(Contract):
 
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "inputs gains turn_markers_sha256, optional. Not breaking: a report is "
+                "merged from shards inside the job that wrote them and none is "
+                "committed, so there is no payload of this shape to migrate."
+            ),
+            why=(
+                "Plan 28 row #10, the same reason the shard beside it moved: the verdict "
+                "has to name the turn envelope the run decoded under, or two "
+                "qualification runs of one model cannot be told apart. Ruled by Fowler, "
+                "2026-09-14."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13T22:00",
             change=(

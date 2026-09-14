@@ -455,6 +455,7 @@ instructions are one set for every model
 | `system_role` | own turn, or folded into the first user turn | `own_turn` |
 | `system_joiner` | what separates the two when they share a turn | `null` - nothing to separate |
 | `thinking_kwarg` | the template variable that turns reasoning off | `enable_thinking` |
+| `thinking_close` | what closes this model's reasoning block, and the whole declaration that reasoning is wanted | `null` - the incumbent does not think |
 
 **Four validators, because each failure is silent.** `turn_opening` must name
 `$role` - a substitution over a string that names nothing returns it unchanged
@@ -471,8 +472,15 @@ template language in config. `system_joiner` is required under
 `fold_into_first_user` and refused under `own_turn`, so it is never set on the
 arm that ignores it. `thinking_kwarg` null means this template reads no
 variables at all, the request then carries no `chat_template_kwargs`, and the
-entry refuses that beside `inference.thinking` true - a claim nothing can
+entry refuses that beside a declared `thinking_close` - a claim nothing can
 satisfy.
+
+**`thinking_close` arrived beside them, and it is a declaration rather than a
+flag.** Not null and a call is decoded as two spans on one slot; null and it is
+one schema-constrained span. It replaced `inference.thinking` on 2026-09-14,
+which is refused by name now: a flag beside a marker is two places to disagree,
+and the flag alone could never have worked. The mechanism is
+[Two spans on one call](#two-spans-on-one-call).
 
 **The wording does not follow them.** A model that needs different
 instructions is a model that failed qualification, not a model that needs a
@@ -772,7 +780,7 @@ after this ordering goes live, this is the first thing to suspect.**
 ### The output budget is derived, not picked
 
 **Each call has one, and neither is the summariser role's
-`max_output_tokens`.** That knob is a crash guard sized for a summary; it still
+`max_answer_tokens`.** That knob is a crash guard sized for a summary; it still
 sizes the single call and it sizes neither of these. `call_one_output_tokens`
 and `call_two_output_tokens` run their arithmetic on every import and raise when
 the recorded number no longer matches, so a bound cannot move without the budget
@@ -969,28 +977,80 @@ existed. The deterministic drop is the control; the prompt sentence is the
 request it now backs, and tuning that sentence is a measured loop this change did
 not open.
 
+## Two spans on one call
+
+**Reasoning during summarization is wanted.** Owner decision, 2026-09-13, under
+`CLAUDE.md` section 0. It overturned the standing position, so what follows is
+the budget rather than the ban.
+
+**Turning a flag on would not have delivered it.** The output schema binds the
+decode from the first token on both transports, so a think opener is not a legal
+token: either the grammar suppresses the thinking and nothing changes, or the
+runtime splits a reasoning channel off and every item fails on shape. So a call
+is decoded as two spans instead, and `models.<role>.turns.thinking_close` is the
+whole of the declaration.
+
+1. **Span one** is the same request body with the grammar taken off,
+   `n_predict` set to `max_think_tokens` and `stop` set to the declared closing
+   marker. It is derived from the answer body rather than rendered again, so
+   both spans open on one string object and the slot span one fills is the slot
+   span two continues.
+2. **Span two** is that body again, with the thinking spliced onto its prompt,
+   the closing marker written by us, and the schema back on. Its budget is
+   `max_answer_tokens` - the declared number, never a share of a combined one.
+
+**The thinking is discarded before anything reads it.** It reaches span two's
+request body and nothing else: no reader-facing surface, no persisted payload,
+and not the reply call 2 replays. It is model-written text, so a prompt is
+exactly the channel Guardrail #11 exists to keep it out of, and it is not
+evidence of anything either.
+
+**Two budgets rather than one**, because one number over two spans cannot say
+whether a long think or a cut answer spent it. `max_think_tokens` is 256 and is
+a hard cap: a model that never closes its block would otherwise eat the window
+and be recorded as a truncated summary, which names the wrong cause.
+
+**The chat route runs one span and the runtime owns the split**, because the
+model's own template writes that prompt and there is nothing of ours to stop and
+continue. Its budget is the two added together. That is the route the
+qualification harness sends.
+
+**Three refusals are conditional on the declaration, and each has both arms.** An
+inline think block and a reasoning channel both fail an item where the entry
+declared no closing marker - the flag did not take - and are discarded where it
+did. The `reasoning_leakage` gate counts the same zero either way and says which
+failure it found: reasoning nobody asked for, or a discard that did not happen.
+
+**What proves thinking helped is the eleven gates on the frozen corpus**,
+incumbent against incumbent-with-thinking. No new instrument: faithfulness alone
+rewards bland copying, and entity survival, compression ratio and source overlap
+are the arms that move. A model judge remains banned
+([../../concepts/evaluation.md](../../concepts/evaluation.md)).
+
 ## Model compatibility is mechanical
 
 The chat route sends `chat_template_kwargs` with one key, and the key is named
 by `models.summarize.turns.thinking_kwarg` rather than spelled in this project's
 source - it is a variable in somebody else's Jinja template, so it moves when
 the model does. On the configured weights it is `enable_thinking`, and its value
-is `models.summarize.inference.thinking`, which is false. An entry may declare
-it null, which means the template reads no variables and the request sends no
-`chat_template_kwargs` at all. The two calls the digest run makes render their
-own prompt bytes and send none either way. The pipeline does not rely on
-`/nothink` or another instruction in the untrusted user turn.
+is whether `models.summarize.turns.thinking_close` is declared, which on the
+incumbent it is not. An entry may declare the keyword null, which means the
+template reads no variables and the request sends no `chat_template_kwargs` at
+all. The two calls the digest run makes render their own prompt bytes and send
+none either way. The pipeline does not rely on `/nothink` or another instruction
+in the untrusted user turn.
 
-The control rejects reasoning in either channel:
+The control reads reasoning in either channel:
 
 - a non-empty inline `<think>...</think>` block; or
 - non-empty `message.reasoning_content`.
 
-Both are rejected today. `split_thinking` reads every inline block, not the
-first. It read only the first until 2026-08-25, and stripped every block
-afterwards, so an empty opening block hid a second block that reasoned and
-nothing downstream could see it. A guard that asserts an absence has to look
-everywhere the thing can be.
+**Where the entry declares no closing marker, both are refused**; where it does,
+both are discarded and neither reaches a payload. `split_thinking` reads every
+inline block, not the first. It read only the first until 2026-08-25, and
+stripped every block afterwards, so an empty opening block hid a second block
+that reasoned and nothing downstream could see it. A guard that asserts an
+absence has to look everywhere the thing can be.
 
 The split-channel check matters because llama.cpp can move reasoning out of
 `message.content`; reading only content would make a thinking model look

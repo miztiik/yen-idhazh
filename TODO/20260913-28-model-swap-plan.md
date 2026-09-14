@@ -58,8 +58,12 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 13a | Ship the budget reader and its dispatch print | 3, 7 | E | DONE | p28-r13a | - | Fowler |
 | 13b | Paste the three readings a dispatch takes | 13a | E | DONE | p28-r13b | #722 | worker |
 | 8 | Both bench arms in one workflow, emitting a page ready to paste | 1, 6, 7 | F | DONE | p28-r8 | - | Carmack |
+<<<<<<< HEAD
 | 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | DONE | p28-r9 | #723 | worker |
-| 10 | Two spans on one call, so the model can think | 5, 6, 11 | H | PENDING | - | - | - |
+=======
+| 9 | The runbook: swap and revert in one line each | 6, 8, 12 | G | PENDING | - | - | - |
+>>>>>>> 67d52d9a (Row #10 is DONE, in PR #726)
+| 10 | Two spans on one call, so the model can think | 5, 6, 11 | H | DONE | p28-r10 | #726 | Andre |
 
 ### Parallel groups, derived
 
@@ -371,7 +375,7 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | --- | --- | --- |
 | 1 | `system_role` is a closed enum read by `render_prompt`, which never reads a model id. Without it a model with no system role cannot be configured at all, which defeats the plan's intent. | Andre, 2026-09-13 |
 | 2 | `system_joiner` is required under `fold_into_first_user` and refused under `own_turn`. A dead field is a field somebody will trust. | Fowler, 2026-09-13 |
-| 3 | `thinking_kwarg` defaults to the incumbent's keyword. Null means send no template keywords at all **and** forces `inference.thinking` false, enforced by a cross-field validator. Null with thinking on claims a channel no template carries, and the reasoning refusal then fails every item on shape. | Andre, 2026-09-13 |
+| 3 | `thinking_kwarg` defaults to the incumbent's keyword. Null means send no template keywords at all **and** forces the entry to declare no `turns.thinking_close`, enforced by a cross-field validator. Null with reasoning asked for claims a channel no template carries, and the reasoning refusal then fails every item on shape. **Row #10 moved that validator onto `TurnsConfig` and repointed it at `thinking_close`**, which retired `inference.thinking`; both halves of the pair are facts about one template, so one block owns it. | Andre, 2026-09-13, amended 2026-09-14 |
 | 4 | The keyword name is a model fact, not a project constant. It is spelled in this project's source today and sent to every model. | Fowler, 2026-09-13 |
 | 5 | Prompt **text** does not move, and section 0.2 rule 2 is the reason, restated in the row that introduces the envelope: `prose_changed_alone` returns nothing whenever `model_sha256` moved, so a prompt edit made because the new model needed it would be hidden inside the swap forever. | Andre, 2026-09-13 |
 | 6 | The two fold strategies are two code paths selected by an enum. A turn topology cannot be a string without inventing a template language, and a template language in config is a second renderer nobody tests. | Fowler, 2026-09-13 |
@@ -565,6 +569,10 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `backend/idhazh/contracts/fingerprint.py`
   - `backend/idhazh/fingerprint.py`
   - `backend/idhazh/evals/qualify.py`
+  - `backend/idhazh/stages/common.py` (**not named by the row**: it holds `_ask_the_model`, which both rendered calls go through, so the two-span dispatch belongs there and nowhere else)
+  - `backend/idhazh/stages/work.py`, `backend/idhazh/stages/validate.py`, `backend/idhazh/stages/qualify_decide.py` (**not named**: they hand the envelope to the call, the stamp and the gate)
+  - `backend/idhazh/contracts/qualification.py` (**not named**: a shard and a report embed `PipelineInputs`, so both schemas moved and both owed a changelog entry)
+  - `backend/utilities/prompt_loop.py`, `backend/utilities/measure_two_calls.py`, `backend/utilities/measure_ledgers.py` (**not named**: three readers of the retired budget or the retired flag)
   - `config/models/qwen3.5-9b-q4km.json`
   - `schemas/app-config.schema.json`
   - `schemas/models-config.schema.json`
@@ -575,12 +583,14 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `backend/tests/test_classify.py`
   - `backend/tests/test_fingerprint.py`
   - `backend/tests/test_qualify.py`
-  - `backend/tests/workflows/`
-  - `.github/workflows/digest.yml`
+  - `backend/tests/contracts/`, `backend/tests/pipeline/`, `backend/tests/workflows/`
+  - `.github/workflows/digest.yml` (**unchanged**: the job reads `run.shard_timeout_minutes` from config, and the re-derivation landed on the number already there)
   - `docs/architecture/summarize/prompt.md`
   - `docs/architecture/summarize/throughput.md`
   - `docs/architecture/contracts/determinism.md`
-- **Acceptance gates:** local - ruff, mypy, contract export plus schema diff, `python -m pytest backend/tests/contracts/ backend/tests/test_summarize.py backend/tests/test_classify.py backend/tests/test_fingerprint.py backend/tests/test_qualify.py backend/tests/workflows/ -q`. CI - `ci.yml` full suite. **Adoption gate: a qualification run comparing the incumbent against the incumbent-with-thinking on the same frozen corpus, same build, interleaved repeats.**
+  - `docs/concepts/config.md`, `docs/how-to/test-models-locally.md`, `docs/how-to/troubleshoot-one-url.md`, `docs/reference/measurements.md` (**not named**: four live pages telling a reader to turn a knob that was renamed)
+  - `tests/fixtures/contracts/run-manifest/two-runs.json`, `tests/fixtures/planner/recorded-call-payloads.json` (**not named**: the first is the round-trip payload, the second declares the inputs the frozen prompts were rendered from. **Neither rendered prompt moved**: `call-one.txt` is `2c5f832c...` and `call-two.txt` is `e9119752...` before and after, and the recorded request bodies are byte-identical)
+- **Acceptance gates:** local - ruff, mypy, contract export plus schema diff, `python -m pytest backend/tests/contracts/ backend/tests/pipeline/ backend/tests/workflows/ backend/tests/test_summarize.py backend/tests/test_classify.py backend/tests/test_fingerprint.py backend/tests/test_qualify.py -q`. CI - `ci.yml` full suite. **Adoption gate: a qualification run comparing the incumbent against the incumbent-with-thinking on the same frozen corpus, same build, interleaved repeats.**
 - **Oracle:** on a recorded thinking reply, the persisted summary contains no part of the think block, the reply replayed into the second call is cut at the answer boundary, and the answer span's budget is the declared answer budget rather than whatever the thinking left over.
 
 | # | Decision | Authority |
@@ -594,6 +604,13 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 7 | What proves thinking helped is the existing eleven gates on the frozen corpus, incumbent against incumbent-with-thinking. **No new instrument.** Faithfulness alone cannot see this because it rewards bland copying; entity survival, compression ratio and source overlap are the arms that move. A model judge remains banned. | Andre, 2026-09-13 |
 | 8 | The markers' digest joins the run stamp in this row. It is the first row that makes the markers move, and today a marker change moves every output with nothing in the stamp saying so. The digest is already computed in `backend/utilities/measure_two_calls.py`; only the stamp lacks it. The reader-side rule is that an absent key means the run predates the knob, never a default value, proved by removing the key from a fixture. | Fowler, 2026-09-13 |
 | 9 | The thinking flag retires into the refused-knob list; the entry declares the closing marker and the two budgets instead. A flag plus a marker is two places to disagree, and one budget over two spans cannot tell a long think from a cut answer. | Fowler, 2026-09-13 |
+| 10 | **`InferenceConfig` is two shapes at once, and the refusal could not sit on it.** `ModelsConfig` reaches the block through `ModelEntry` - a file a person edits - and `run_manifest.ModelUse` reaches the same block through `ModelRef`, which is a payload yesterday's run wrote. A refusal on the block itself made today's build unable to read every committed `run.json`, which is a release blocker (section 11). So the refusal moved onto `ModelEntry` and the recorded shape gets a read-side migration instead: `max_output_tokens` is renamed to `max_answer_tokens`, carrying the number across because the old key sized one call's answer and so does the new one, and `thinking` is dropped because `ModelRef` carries no envelope and every run written under the flag wrote it false. A payload carrying both spellings is refused rather than guessed at, which is what stops the migration turning `extra=forbid` into `extra=ignore`. | Fowler, 2026-09-14 |
+| 11 | **The refusal message names the successor in full, so `refuse_a_removed_knob` gained one rule.** A replacement carrying a dot is already a whole path and is printed as it stands. `models.<role>.inference.thinking` moved block rather than name, and an operator sent to `models.<role>.inference.turns.thinking_close` is sent to a key that does not exist. `SUPERSEDED_MODELS_NAMES["inference"]` becomes the full `models.<role>.inference` under the same rule and renders the same sentence it always did. | Fowler, 2026-09-14 |
+| 12 | **The chat route sends one span and the runtime owns the split.** Two spans need a prompt of ours to stop at a marker and continue under a grammar, and the chat route has none - the model's own template wrote those bytes. So `request_payload` sends `max_answer_tokens + max_think_tokens` where the envelope thinks, and the qualification harness runs that route. It is not a second mechanism: the same declaration drives both, and the three conditional refusals are what let the chat route's own reasoning channel through. | Andre, 2026-09-14 |
+| 13 | **`request_payload` and `summarize.build_request` take the whole envelope rather than `thinking_kwarg`.** The keyword and the declaration are both facts about one template, and handing over one while reading the other off somewhere else is the two-places-to-disagree defect Decision 9 names, one layer down. It also moved `_a_template_that_reads_no_keyword_cannot_be_asked_to_think` from `ModelEntry` onto `TurnsConfig`, where both halves of the pair now live. | Andre, 2026-09-14 |
+| 14 | **The markers' digest covers the whole envelope, not the four strings `measure_two_calls.py` concatenated.** `thinking_close`, `system_role` and `system_joiner` joined it, because the row that makes markers move is the row that makes the closing marker matter. `server.turn_markers_digest` is the one place it is computed and both readers take it from there; a second rendering is a second answer. `thinking_kwarg` stays out for the reason `NOT_DIGESTED` already gives - no published word is decoded under it. | Fowler, 2026-09-14 |
+| 15 | **The shard bound and the shard size were re-derived and both land on the number they already held.** The worst of 80 shard rows on 2026-09-02 used 135.4 minutes carrying 40 items, so the worst measured item is 203.1 s; a worker now draws 20, and two thinking spans add 85.2 s, so the derived worst item is 288.3 s and the derived worst shard is 96.1 minutes against a 200-minute bound. `shard_size` would have to rise above 20 to move the fan-out at all. Both descriptions now carry the derivation rather than the one they were set under, which is what stops this being "carried forward". | Carmack, 2026-09-14 |
+| 16 | **The measured cost per item does not trip ESCALATE trigger 1.** One span is 42.6 s against the 149.8 s answer worst case, which is 28.4 percent - the figure the row priced. The item-level add is two spans because the digest makes two calls, and that is 85.2 s against a 203.1 s measured worst item, or 42 percent of the item - but the trigger is worded against the per-call figure the row itself derived, and the derived worst shard clears its bound with 2.1 times over. Reported rather than treated as a pause. | Carmack and Andre, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |

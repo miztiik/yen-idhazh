@@ -48,6 +48,7 @@ def _summarize_one(
     """
     trace = tracer if tracer is not None else silent_tracer()
     inference = settings.models.summarize.inference
+    turns = settings.models.summarize.turns
     model_id = settings.models.summarize.id
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
@@ -56,7 +57,7 @@ def _summarize_one(
                 article,
                 model_id=model_id,
                 inference=inference,
-                thinking_kwarg=settings.models.summarize.turns.thinking_kwarg,
+                turns=turns,
                 prompt_config=settings.app.summarize,
             )
             rendered = canonical_json(payload)
@@ -82,6 +83,7 @@ def _summarize_one(
                 prompt_config=settings.app.summarize,
                 evaluation=settings.app.evaluation,
                 no_reply=no_reply,
+                thinking=turns.thinks,
             )
             telemetry.summary_attributes(span, summary)
         telemetry.summary_attributes(stage_span, summary)

@@ -229,7 +229,11 @@ class TestThePromptBytes:
         """Recorded from the server that applies them, not written from memory.
 
         Both reply openings, because the one a prompt ends with is chosen by the
-        thinking flag and a wrong pair would be invisible on the default arm.
+        envelope's own closing marker and a wrong pair would be invisible on the
+        arm the incumbent runs. The thinking arm is BUILT from the committed
+        entry - the incumbent declares no closing marker, so that arm has no
+        entry in `config/` and would otherwise be untested until a swap turned
+        it on.
 
         **The recording and the entry name the same weights.** The fixture says
         which bytes the server had loaded and `turns.declared_for` says which
@@ -239,12 +243,13 @@ class TestThePromptBytes:
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
         system, user = recorded["system"], recorded["user"]
         entry = configured()
+        thinking = entry.turns.model_copy(update={"thinking_close": "</think>"})
 
         assert entry.turns.declared_for == recorded["weights_sha256"]
-        assert render_prompt(system=system, user=user, thinking=False, turns=entry.turns) == (
+        assert render_prompt(system=system, user=user, turns=entry.turns) == (
             recorded["generation_prompt"]
         )
-        assert render_prompt(system=system, user=user, thinking=True, turns=entry.turns) == (
+        assert render_prompt(system=system, user=user, turns=thinking) == (
             recorded["generation_prompt_thinking"]
         )
 
@@ -261,9 +266,7 @@ class TestThePromptBytes:
         turns = configured().turns
         opening = recorded["generation_prompt"] + recorded["reply"]
         ours = continued_prompt(
-            render_prompt(
-                system=recorded["system"], user=recorded["user"], thinking=False, turns=turns
-            ),
+            render_prompt(system=recorded["system"], user=recorded["user"], turns=turns),
             reply=recorded["reply"],
             user=recorded["question"],
             turns=turns,
@@ -552,7 +555,7 @@ class TestCallOnesDerivedBudget:
         """
         widest = widest_json_characters(call_one_schema())
 
-        assert widest / CHARS_PER_OUTPUT_TOKEN > InferenceConfig().max_output_tokens
+        assert widest / CHARS_PER_OUTPUT_TOKEN > InferenceConfig().max_answer_tokens
 
     def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
         """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
@@ -580,7 +583,7 @@ class TestCallOnesDerivedBudget:
         payload = call_one_payload(dense)
 
         assert payload["n_predict"] == call_one_output_tokens()
-        assert payload["n_predict"] != InferenceConfig().max_output_tokens
+        assert payload["n_predict"] != InferenceConfig().max_answer_tokens
         assert "max_tokens" not in payload, (
             "two budget keys in one body and the server answers whichever it reads first"
         )
@@ -648,7 +651,7 @@ class TestCallOnePrompting:
         assert payload["json_schema"] == call_one_schema()
         assert payload["prompt"].startswith(markers.turn("system", call_one_system_prompt()))
         assert "4,200 megawatt hours" in payload["prompt"]
-        assert payload["prompt"].endswith(markers.opening(thinking=False))
+        assert payload["prompt"].endswith(markers.opening())
 
 
 class TestLabelling:
@@ -1540,7 +1543,7 @@ class TestCallTwoShape:
         prompt = call_two_payload(dense, '{"labels": []}')["prompt"]
 
         assert prompt[len(first["prompt"]) :].startswith('{"labels": []}' + markers.turn_closing)
-        assert prompt.endswith(markers.opening(thinking=False))
+        assert prompt.endswith(markers.opening())
 
     def test_the_second_question_asks_for_both_halves_in_order(self) -> None:
         turn = call_two_user_turn()
