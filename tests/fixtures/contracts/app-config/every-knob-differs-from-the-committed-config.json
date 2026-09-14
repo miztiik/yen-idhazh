@@ -165,7 +165,12 @@
     "window_days": 7
   },
   "logging": {
-    "level": "DEBUG"
+    "capture_prompts": false,
+    "capture_replies": false,
+    "item_lines": false,
+    "level": "DEBUG",
+    "stage_lines": false,
+    "waiting_heartbeat_seconds": 5
   },
   "models_file": "models/qwen3-8b-q4km.json",
   "observability": {

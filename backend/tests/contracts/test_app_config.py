@@ -19,6 +19,8 @@ from idhazh.contracts.app_config import (
     ConsoleConfig,
     EvaluationConfig,
     InferenceConfig,
+    LoggingConfig,
+    LogLevel,
     ModelsConfig,
     ObservabilityConfig,
     RetentionConfig,
@@ -918,3 +920,99 @@ def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> N
         ).public_telemetry_keep_months
         == 20
     )
+
+
+def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_default() -> None:
+    """A fresh clone logs everything, because the reason the flags exist is silence.
+
+    Built here rather than read from `config/idhazh.json`, so it proves the
+    default and not what somebody happened to commit. The block is absent
+    entirely, which is the shape of every config file written before today.
+
+    It cannot settle whether these defaults are right for a quiet production
+    run; only a run under them says that.
+    """
+    fresh = AppConfig.model_validate({"run": {"max_parallel": 2}}).logging
+    assert fresh.level is LogLevel.INFO
+    assert fresh.item_lines is True
+    assert fresh.stage_lines is True
+    assert fresh.waiting_heartbeat_seconds == 30
+    assert fresh.capture_prompts is True
+    assert fresh.capture_replies is True
+
+
+def test_every_logging_flag_moved_off_its_default_survives_the_round_trip() -> None:
+    """The substitution test: the file says it, the contract carries it back.
+
+    Every knob is moved, so a reader that ignored the block and fell back to a
+    default fails here rather than passing. `waiting_heartbeat_seconds` is moved
+    to 5 rather than to 0, because 0 is the off switch and an off switch that
+    reads the same as an unset knob proves nothing.
+    """
+    payload = {
+        "capture_prompts": False,
+        "capture_replies": False,
+        "item_lines": False,
+        "level": "DEBUG",
+        "stage_lines": False,
+        "waiting_heartbeat_seconds": 5,
+    }
+    fresh = LoggingConfig()
+    for name, moved in payload.items():
+        assert getattr(fresh, name) != moved, f"logging.{name} was already {moved!r}"
+
+    once = LoggingConfig.model_validate(payload).model_dump(mode="json")
+    assert json.dumps(once, sort_keys=True) == json.dumps(payload, sort_keys=True)
+    twice = LoggingConfig.model_validate(once).model_dump(mode="json")
+    assert json.dumps(twice, sort_keys=True) == json.dumps(once, sort_keys=True)
+    assert AppConfig.model_validate({"logging": payload}).logging.waiting_heartbeat_seconds == 5
+
+
+def test_a_negative_heartbeat_is_refused_and_the_error_names_the_field() -> None:
+    """Zero means never and is spelled. A negative number would mean it silently.
+
+    That is the worst shape a misconfiguration of this knob can take: an
+    operator who meant often gets never, and nothing says so. Refused at load,
+    at the block and through the whole config, and the message names the field
+    so a person reading it knows which line to fix.
+    """
+    with pytest.raises(ValidationError, match="waiting_heartbeat_seconds"):
+        LoggingConfig(waiting_heartbeat_seconds=-1)
+    with pytest.raises(ValidationError, match="waiting_heartbeat_seconds"):
+        AppConfig.model_validate({"logging": {"waiting_heartbeat_seconds": -1}})
+    assert LoggingConfig(waiting_heartbeat_seconds=0).waiting_heartbeat_seconds == 0
+
+
+def test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it() -> None:
+    """Guardrail #6: a flag with no removal condition is a second implementation.
+
+    A condition that named a piece of work would be no condition at all, so each
+    one has to name a reading. The guard is the word `week`, which is the span
+    every one of them is measured over. `item_lines` is the declared exception
+    and has to say so; `level` is not a flag and carries no condition either.
+    """
+    flags = {
+        name
+        for name, field in LoggingConfig.model_fields.items()
+        if name != "level"
+    }
+    assert flags == {
+        "item_lines",
+        "stage_lines",
+        "waiting_heartbeat_seconds",
+        "capture_prompts",
+        "capture_replies",
+    }
+    for name in sorted(flags - {"item_lines"}):
+        described = LoggingConfig.model_fields[name].description or ""
+        assert "Retire it" in described or "Set it to 0" in described, (
+            f"logging.{name} has no removal condition on the line that declares it"
+        )
+        assert "week" in described, f"logging.{name} names no reading, only an intent"
+
+    permanent = LoggingConfig.model_fields["item_lines"].description or ""
+    assert "NO REMOVAL CONDITION" in permanent
+    assert "permanent instrument" in permanent
+
+    level = LoggingConfig.model_fields["level"].description or ""
+    assert "Unrelated to the flags" in level, "the level is a volume dial, not a sixth flag"
