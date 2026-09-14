@@ -238,8 +238,8 @@ not, and nobody has.
 | --- | --- |
 | A definition sentence | A config edit. Nothing else, and the next run uses it |
 | A display name | A config edit. The id is what payloads carry, so nothing is orphaned |
-| A vertical | A config edit: the id is an open slug |
-| A lens id or an event id | A config edit: since 2026-09-12 these are open slugs too |
+| A vertical | A config edit, **and an icon**. Every vertical needs `frontend/src/lib/icons/svg/topic-<id>.svg`, because a topic pill builds its icon id from the config - `frontend/tests/icons.spec.ts` resolves the set against this file and fails naming any id nothing draws. Adding `science` and `climate` on 2026-09-14 turned that test red, which is the test working |
+| A lens id or an event id | A config edit: since 2026-09-12 these are open slugs too. A lens needs its display name in `frontend/src/lib/payload/lenses.ts`, which a contract test checks in both directions |
 | Retiring any of them | `status` and `retired_on` in config. The id stays, and so does its name |
 | Deleting one outright | A config edit, and every published day that carries the id starts showing the id itself in place of the name. Retire instead |
 
