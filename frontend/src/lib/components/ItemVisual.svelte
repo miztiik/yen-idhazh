@@ -27,7 +27,10 @@
 	 * - so what a keyboard reaches and what an eye reaches are one set by
 	 * construction rather than by two derivations agreeing. One tab stop for a
 	 * chart and never one per bar: a day runs to hundreds of stories, and a bar
-	 * apiece would make the stream something a keyboard cannot get past.
+	 * apiece would make the stream something a keyboard cannot get past. The ring
+	 * is the scale's own step rather than a rule in the block below, because a px
+	 * size in an authored style block ignores a reader who set their browser text
+	 * larger and `frontend/tests/tokens.spec.ts` refuses one.
 	 *
 	 * **The drawing is written by Svelte from geometry `$lib/visual/bar`
 	 * computed**, so the marks are ordinary elements in this component's own
@@ -151,7 +154,7 @@
 	     because the alternative is a chart a keyboard cannot reach at all. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<figure
-		class="visual my-4 overflow-hidden rounded-md border border-rule bg-surface"
+		class="visual my-4 overflow-hidden rounded-md border border-rule bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 		tabindex="0"
 		role="img"
 		aria-label={stated}
@@ -199,14 +202,6 @@
 		display: block;
 		height: auto;
 		width: 100%;
-	}
-
-	/* The same ring every other focusable surface here draws, on the same token.
-	   A tab stop nobody can see is the reason focus outlines get removed and then
-	   missed. */
-	.visual:focus-visible {
-		outline: 2px solid var(--color-focus);
-		outline-offset: 2px;
 	}
 
 	/* Type on the card, read the way the reader note above it is read. The chart
