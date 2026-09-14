@@ -49,7 +49,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 1 | The runtime sweep reaches for a key that is not there | - | A | DONE | p28-r1 | #693 | owner |
 | 2 | The turn envelope moves onto the model entry | - | A | DONE | p28-r2 | #692 | worker |
 | 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | DONE | p28-r3 | #691 | worker |
-| 4 | Benchmark records lose the date from their filename | 2, 3 | B | PENDING | - | - | - |
+| 4 | Benchmark records lose the date from their filename | 2, 3 | B | DONE | p28-r4 | #694 | owner |
 | 5 | Five things the server proves before the first item | 2, 6 | D | PENDING | - | - | - |
 | 6 | One complete config file per model, selected by a pointer | 2 | C | DONE | p28-r6 | - | Fowler |
 | 7 | The model dossier, and the index that points at every one | 3, 4 | D | PENDING | - | - | - |
@@ -200,8 +200,8 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
   - `TODO/20260910-23-article-classification-plan.md`
   - `TODO/20260910-24-day-sharded-ledgers-plan.md`
   - `TODO/20260911-26-retire-prerender-plan.md`
-- **Acceptance gates:** local - `python backend/utilities/doc_load.py` before and after, and `git grep -c "benchmarks/2026-"` returning nothing. CI - `ci.yml` and the link check.
-- **Oracle:** zero matches for `benchmarks/2026-` anywhere in the tree, and every renamed file reachable from at least one inbound link. Twenty-four inbound lines across ten files were counted on 2026-09-13 by `git grep -c`; the row re-counts rather than trusting that number.
+- **Acceptance gates:** local - `python backend/utilities/doc_load.py` before and after, and the two greps in the Oracle. CI - `ci.yml` and the link check.
+- **Oracle:** from the repository root, `git grep -nE '\]\([^)]*benchmarks/2026-'` returns zero lines - no markdown link points at a dated benchmark path. `git grep -n 'benchmarks/2026-'` returns exactly 8 lines, all of them inside the rename mapping in `TODO/20260913-28-model-swap-plan.md`. Any other count fails the row. Every renamed file is reachable from at least one inbound link.
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -213,6 +213,9 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 6 | The documentation-structure row needs **three cells changed**, not one: the path cell loses the date element; the mutability cell goes from `**Frozen** - a run happened on a date and its conditions do not change` to `Living, one question one answer - a re-run REPLACES the page and moves **Last Updated**; git history holds what it said`; and the forbidden cell gains `a date in the filename`. | Fowler, 2026-09-13 |
 | 7 | The `AGENTS.md` change is exactly `named for what it measured and the date` -> `named for what it measured and nothing else - a re-run replaces that page rather than adding a second one`. The `docs/reference/measurements.md` change is exactly `named for what it measured and the date it` -> `named for what it measured, and it`. | Fowler, 2026-09-13 |
 | 8 | Plan-docs under `TODO/` keep their date prefix. They are a dated sequence of work rather than an answer to a question. | Fowler, 2026-09-13 |
+| 9 | **The oracle is the link form, not bare text.** The stated oracle - zero matches for `benchmarks/2026-` anywhere - cannot pass, because this row's own rename mapping quotes the old names and that mapping is the record of what was renamed. Measured on main before the row ran: 32 bare-text matches across 11 files, 17 link-form matches across 8. The mapping is written with backticks and an arrow, so it drops out of the link form entirely. A first ruling for whole-tree link resolution in `doc_load.py` was overturned: it answers a larger question and drags pre-existing breakage into a row that did not cause it. **Accepted gap:** a link repointed to a wrong NEW spelling carries no `benchmarks/2026-` and neither grep sees it; that is a follow-up row that pays off every broken link at once. | Fowler, 2026-09-14, after a measurement |
+| 10 | **Decision 7's `measurements.md` half was wrong and is corrected here.** Cutting at `the date it` left `and it was taken` stranded, which is not English (section 0b). The replacement consumes the whole clause: `named for what it measured and the date it was taken.` -> `named for what it measured and nothing else - a re-run replaces that record rather than adding a second one.` It says `record` rather than `page` because the sentence has already named the artefact a record. The `AGENTS.md` half of Decision 7 stands unchanged. | Fowler, 2026-09-14 |
+| 11 | **Three files the list omitted were touched, and all three are the same defect.** `docs/reference/benchmarks/instructions-in-front.md`, `two-call-re-read.md` and `two-call-window-sizing.md` cross-link each other by the dated name, so the records pointed at each other's old paths. The six records also each carried `Frozen. This is one run on one day ... A later run gets its own record`, which Decision 3 makes false in both halves; every one of them now states the Living class instead. Leaving them would keep the retired convention alive in the six pages that demonstrate it. | Fowler, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |

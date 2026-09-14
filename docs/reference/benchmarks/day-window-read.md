@@ -2,8 +2,9 @@
 
 **Last Updated**: 2026-09-11
 
-Frozen. This is one run on one day; it is not updated when a later run
-disagrees. A later run gets its own record.
+Living, one question one answer. The reading below was taken on one day and
+the date is in the title; a re-run of this measurement REPLACES this page and
+moves **Last Updated**, and git history holds what it said.
 
 Five `state/` ledgers are moving from one file a month to one file a day
 ([`../../../TODO/20260910-24-day-sharded-ledgers-plan.md`](../../../TODO/20260910-24-day-sharded-ledgers-plan.md)),

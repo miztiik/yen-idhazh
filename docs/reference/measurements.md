@@ -21,9 +21,10 @@ config keys.
 
 **A benchmark run does not get appended to this page.** A run that sweeps a
 setting, prices a candidate or races two arms is written up as its own record
-under `docs/reference/benchmarks/`, named for what it measured and the date it
-was taken. This page then carries **the one figure that is now in force** and a
-link to the record behind it. The reason is the shape this page kept reaching:
+under `docs/reference/benchmarks/`, named for what it measured and nothing else
+- a re-run replaces that record rather than adding a second one. This page then
+carries **the one figure that is now in force** and a link to the record behind
+it. The reason is the shape this page kept reaching:
 several runs of one quantity appended in date order, where only the ordering said
 which governs - and ordering is what a reader arriving by search never sees. The
 naming rule and what a record has to carry are in
@@ -141,7 +142,7 @@ number-dense articles if it is biased at all. The counts are arithmetic over
 committed bytes and travel; the full record - the definition rule by rule, the
 window sweep, what the joining words bought, what the tolerance costs, and the
 worked example of each side - is
-[benchmarks/2026-09-13-articles-that-state-a-whole.md](benchmarks/2026-09-13-articles-that-state-a-whole.md).
+[benchmarks/articles-that-state-a-whole.md](benchmarks/articles-that-state-a-whole.md).
 Re-run it with `python backend/utilities/measure_declared_wholes.py --sweep`.
 
 This **sizes** `pie` and does not gate it: the owner ruled on 2026-09-05 that the
@@ -165,7 +166,7 @@ by the rule above, so they name the box that took them: **Intel Core i7-1265U,
 Windows 11 build 26200**. The two counts are arithmetic and travel, so they name
 only the interpreter. The full record - conditions, method, both arms, and what
 it does not settle - is
-[benchmarks/2026-09-11-day-window-read.md](benchmarks/2026-09-11-day-window-read.md).
+[benchmarks/day-window-read.md](benchmarks/day-window-read.md).
 Re-run it with `python backend/utilities/measure_day_window.py`.
 
 ## What the doubled window and the doubled cap cost, measured 2026-09-09
