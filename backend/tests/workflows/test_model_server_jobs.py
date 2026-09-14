@@ -84,24 +84,27 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     """
     workflows = _load_workflows()
     starters = _server_starters(workflows)
-    assert starters == {where: name for where, (name, _) in SERVER_STARTERS.items()}
+    assert starters == {
+        where: tuple(name for name, _ in declared) for where, declared in SERVER_STARTERS.items()
+    }
 
-    for (filename, job_name), (step_name, config_root) in sorted(SERVER_STARTERS.items()):
-        where = f"{filename}/{job_name}/{step_name}"
-        names = [step.get("name") for step in _steps(workflows[filename], job_name)]
-        assert "Install" in names, f"{where} must install the package it imports"
-        assert names.index("Install") < names.index(step_name), (
-            f"{where} imports idhazh, so the install runs first"
-        )
+    for (filename, job_name), declared in sorted(SERVER_STARTERS.items()):
+        for step_name, config_root in declared:
+            where = f"{filename}/{job_name}/{step_name}"
+            names = [step.get("name") for step in _steps(workflows[filename], job_name)]
+            assert "Install" in names, f"{where} must install the package it imports"
+            assert names.index("Install") < names.index(step_name), (
+                f"{where} imports idhazh, so the install runs first"
+            )
 
-        script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
-        assert "from idhazh.llm.server import server_argv" in script, where
-        if config_root is None:
-            continue
-        assert f'config.load(Path("{config_root}"))' in script, f"{where} reads {config_root}"
-        # NUL-separated, so a flag value carrying a space stays one argument.
-        assert "mapfile -d '' LLAMA_ARGV" in script, where
-        assert 'port=int(os.environ["LLAMA_PORT"])' in script, where
+            script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
+            assert "from idhazh.llm.server import server_argv" in script, where
+            if config_root is None:
+                continue
+            assert f'config.load(Path("{config_root}"))' in script, f"{where} reads {config_root}"
+            # NUL-separated, so a flag value carrying a space stays one argument.
+            assert "mapfile -d '' LLAMA_ARGV" in script, where
+            assert 'port=int(os.environ["LLAMA_PORT"])' in script, where
 
     # The other side of the same Oracle: no command a runner executes renders
     # the list itself. Only `run:` scripts are read, because a dispatch-form
@@ -479,7 +482,7 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
         "a job named here no longer exists in digest.yml"
     )
     for job_name, (log_file, weights_output) in sorted(RUNTIME_IDENTITY_JOBS.items()):
-        start_step, _ = SERVER_STARTERS[("digest.yml", job_name)]
+        ((start_step, _),) = SERVER_STARTERS[("digest.yml", job_name)]
         call = re.search(r"start-llama-server\.sh (\S+) (\S+)", _digest_step(job_name, start_step))
         assert call, f"{job_name} must start its server through the shared script"
         assert f"{call.group(2)}.log" == log_file, (

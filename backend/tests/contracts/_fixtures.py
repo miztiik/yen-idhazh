@@ -14,6 +14,7 @@ from idhazh.contracts import canonical_json
 from idhazh.contracts.app_config import AppConfig, ModelsConfig
 from idhazh.contracts.base import Contract
 from idhazh.contracts.export import CONTRACTS
+from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
@@ -22,6 +23,7 @@ BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
 
 CONFIG_FILES: dict[str, type[Contract]] = {
     "idhazh.json": AppConfig,
+    "pipeline-tests.json": PipelineTestsConfig,
     "sources.json": Sources,
     "taxonomy.json": Taxonomy,
     "watchlist.json": Watchlist,

@@ -92,8 +92,14 @@ def _summary_output_tokens(ask: SummarizeConfig) -> int:
     the conservative read and it does not depend on how often the visual gate
     opens. What the gate saves is a decode, and it is measured where it is spent
     (`docs/architecture/publishing/visuals.md`), not here.
+
+    `ask.asks_for_a_visual_plan` is true in production and is the one arm of the
+    pipeline test workflow that turns it off, beside an empty
+    `visuals.enabled_kinds`. The two move together: sizing for a plan that is
+    never asked for reserves room for a decode that never happens, and refuses
+    articles that would have fitted.
     """
-    return calls.summarize_and_plan_budget_tokens(ask, plan=True)
+    return calls.summarize_and_plan_budget_tokens(ask, plan=ask.asks_for_a_visual_plan)
 
 
 #: The sequence, in order. **This tuple is the contract.** Adding to it is

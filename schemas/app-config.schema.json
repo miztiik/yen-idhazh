@@ -1435,6 +1435,12 @@
       "additionalProperties": false,
       "description": "What the prompt asks the model for, and what the pipeline accepts back.\n\nA prompt is a request and a gate is a rule. Asking for a tighter range than\nwe accept is what stops a two-word miss from losing a story, so the ask\n(`bands`) and the tolerance around it (`length_policy`) both live here,\nwhere an operator editing one can see the other.\n\nUntil 2026-09-09 the tolerance was two integers in `evaluation` that applied\nto all five rungs at once and could not see which band an item was in, and a\nreply outside them deleted the item from that day's digest with no second\nlook. Both defects are gone: the allowance is derived from the band, and no\nlength outcome except `length_policy.absolute_floor_words` drops an item.\n\nEvery band and title number here is substituted into the prompt text at\nrender time, so the prompt cannot drift from the bounds the pipeline enforces\n(Guardrail #6). `key_point_restatement_ceiling` is the one value that is not asked\nfor: it is a post-parse check `to_summary` runs on what the model returned,\nand it lives here because the count it protects - the band's key_points_min -\ndoes too.",
       "properties": {
+        "asks_for_a_visual_plan": {
+          "default": true,
+          "description": "Whether the two-call sequence is sized for a summarize-and-plan call that asks for a picture. True is what the production run does and what ships. It exists so an arm of the pipeline test workflow can run the summary-only path end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields off that call's grammar, and this takes the plan's decode budget out of the window sizing beside it. The two move together or the sizing is wrong in the expensive direction - it reserves room for a decode that never happens, and refuses articles that would have fitted.",
+          "title": "Asks For A Visual Plan",
+          "type": "boolean"
+        },
         "bands": {
           "description": "One length ask per article size, ordered by min_source_words. A release note and a long read asked for the same range gives a padded summary of the first and a thin one of the second.",
           "items": {
@@ -1909,6 +1915,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "summarize gains asks_for_a_visual_plan, default true. It is the value the two-call sequence sizes its window with, which classify/dag.py wrote out as a literal. Additive and defaulted, so a config file written before today validates unchanged and no read-side migration is owed. Production is untouched: the default is the literal it replaced.",
+      "version": "2026-09-14T14:00",
+      "why": "The pipeline test workflow runs one arm with no picture reachable, to price what the visual decision costs. Turning the picture off is a config edit already - an empty visuals.enabled_kinds - but the window sizing had no way to follow it, so that arm would reserve room for a decode it never makes and refuse articles that fit. One knob, so the two cannot disagree (plan 27, row 11)."
+    },
     {
       "change": "logging gains five flags beside level: item_lines, stage_lines, waiting_heartbeat_seconds, capture_prompts and capture_replies. Each defaults on, waiting_heartbeat_seconds to 30 seconds and the four booleans to true, and a negative heartbeat is refused. Additive and defaulted, so a config file written before today validates unchanged and a config file with no logging block at all still loads - no read-side migration is owed. level is untouched at INFO and is unrelated: these flags decide which records exist, level decides how loud the logger that prints them is.",
       "version": "2026-09-14T13:00",
@@ -2637,7 +2648,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-14T13:00",
+      "default": "2026-09-14T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2648,5 +2659,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-14T13:00"
+  "version": "2026-09-14T14:00"
 }

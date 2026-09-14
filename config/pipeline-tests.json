@@ -1,0 +1,36 @@
+{
+  "arms": [
+    {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": false,"id": "no-visual-decision","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 131072,"n_parallel": 2}
+  ],
+  "articles_a_dispatch": 2,
+  "budget_minutes": 45,
+  "candidates": [
+    {"source_id": "ai2-blog","url": "https://allenai.org/blog/goodfire-olmo"},
+    {"source_id": "deepmind-blog","url": "https://deepmind.google/blog/alphagenome-atlas-a-predictive-map-of-every-possible-dna-letter-change-in-the-human-genome"},
+    {"source_id": "huggingface-blog","url": "https://huggingface.co/blog/MultiverseComputingCAI/safety-for-whom"},
+    {"source_id": "techcrunch-ai","url": "https://techcrunch.com/2026/09/08/mistral-raises-e3b-as-sovereign-ai-becomes-big-business"},
+    {"source_id": "simon-willison","url": "https://simonwillison.net/2026/Sep/8/on-navier-stokes"},
+    {"source_id": "ars-technica-ai","url": "https://arstechnica.com/tech-policy/2026/09/six-chinese-ai-firms-accused-of-aggressively-copying-us-frontier-models"},
+    {"source_id": "apnews-world","url": "https://apnews.com/article/kentucky-farm-alphagal-tick-ostrich-steak-allergy-15cedc20aac4f0650e0d24d05a577139"},
+    {"source_id": "abc-au-world","url": "https://abc.net.au/news/2026-09-12/brazil-flavio-bolsonaro-corruption-investigation/107146062"},
+    {"source_id": "npr-world","url": "https://npr.org/2026/09/12/g-s1-143044/yemens-houthis-capture-red-sea-island"},
+    {"source_id": "lemonde-en","url": "https://lemonde.fr/en/international/article/2026/09/12/first-bodies-of-philippines-ferry-fire-victims-land-as-toll-rises-to-35_6757445_4.html"},
+    {"source_id": "japan-times","url": "https://japantimes.co.jp/environment/2026/09/06/earth-science/katsutada-kaminuma-antarctic-research"},
+    {"source_id": "fed-press","url": "https://federalreserve.gov/newsevents/pressreleases/bcreg20260910a.htm"},
+    {"source_id": "fred-blog","url": "https://fredblog.stlouisfed.org/2026/09/a-new-calculation-for-subprime-credit-risk"},
+    {"source_id": "guardian-business","url": "https://theguardian.com/business/2026/sep/09/jp-morgan-boss-jamie-dimon-to-warn-uk-chancellor-against-bank-tax-hike"},
+    {"source_id": "npr-business","url": "https://npr.org/2026/09/04/nx-s1-5958601/labor-department-inspector-general-secretary-chavez-deremer"},
+    {"source_id": "semafor","url": "https://semafor.com/article/09/12/2026/how-the-ai-apocalypse-story-escaped-containment"},
+    {"source_id": "carbon-brief","url": "https://carbonbrief.org/el-nino-indonesia-fire-emissions-in-2026-on-track-to-match-record-for-this-century"},
+    {"source_id": "canary-media","url": "https://canarymedia.com/articles/fossil-fuels/court-rules-against-trump-michigan-coal-plant"},
+    {"source_id": "world-nuclear-news","url": "https://world-nuclear-news.org/articles/google-signs-up-for-electricity-from-finnish-nuclear-power-plant"},
+    {"source_id": "pv-magazine","url": "https://pv-magazine.com/2026/09/04/new-products-emerge-in-southern-africas-renewables-market"},
+    {"source_id": "thehindu-all","url": "https://thehindu.com/business/mule-accounts-the-money-trail-of-cyber-fraudsters/article71454867.ece"},
+    {"source_id": "livemint","url": "https://livemint.com/news/india/how-can-magistrate-issue-notice-why-cji-surya-kant-questioned-notice-to-noida-student-over-jantar-mantar-protest-cjp-11788936471939.html"},
+    {"source_id": "scroll-in","url": "https://scroll.in/article/1095412/has-el-ninos-monsoon-effect-hit-indias-kharif-crops"},
+    {"source_id": "hindustan-times","url": "https://hindustantimes.com/india-news/gauhati-hc-orders-assam-to-pay-rs-2-lakh-to-family-of-woman-pushed-to-bangladesh-101788794423171.html"}
+  ],
+  "version": "2026-09-14"
+}

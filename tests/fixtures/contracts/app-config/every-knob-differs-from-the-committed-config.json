@@ -238,6 +238,7 @@
     "success_floor_pct": 80
   },
   "summarize": {
+    "asks_for_a_visual_plan": false,
     "bands": [
       {
         "key_points_max": 4,
