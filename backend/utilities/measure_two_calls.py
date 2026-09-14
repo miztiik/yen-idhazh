@@ -75,7 +75,15 @@ from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
 from idhazh.elements import element_table
 from idhazh.extract import TOKENS_PER_WORD, approx_tokens, truncate_to_tokens
-from idhazh.llm.server import Completion, completion_url, post, props, server_argv, turn_markers
+from idhazh.llm.server import (
+    Completion,
+    completion_url,
+    post,
+    props,
+    server_argv,
+    turn_markers,
+    turn_markers_digest,
+)
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -337,11 +345,12 @@ def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any
 
     The turn envelope is digested beside it. It is what renders these prompts
     now, so a run whose markers moved is a run whose outputs may have moved, and
-    nothing else here would say so.
+    nothing else here would say so. The digest is `server.turn_markers_digest`,
+    which is also what `PipelineInputs.turn_markers_sha256` carries - a second
+    rendering here would be a second answer to one question.
     """
     said = props(endpoint, timeout=60.0)
     template = said.get("chat_template")
-    markers = turn_markers(turns)
     return {
         "weights_sha256": digest,
         "build": said.get("build_info"),
@@ -350,12 +359,7 @@ def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any
             derive_text_digest(template) if isinstance(template, str) else None
         ),
         "chat_template_characters": len(template) if isinstance(template, str) else None,
-        "turn_markers_sha256": derive_text_digest(
-            markers.turn_opening.template
-            + markers.turn_closing
-            + markers.reply_opening
-            + markers.reply_opening_thinking
-        ),
+        "turn_markers_sha256": turn_markers_digest(turns),
     }
 
 
@@ -934,7 +938,7 @@ def main(argv: list[str] | None = None) -> int:
         system_tokens = tokenizer.count(
             markers.turn("system", call_one_system_prompt(app.summarize))
         )
-        call_one_decode = model.inference.max_output_tokens
+        call_one_decode = model.inference.max_answer_tokens
         call_two_decode = call_two_output_tokens(app.summarize)
         ceiling = model.inference.n_ctx - (call_one_decode + call_two_decode + rendered_turn)
         print(

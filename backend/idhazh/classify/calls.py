@@ -21,7 +21,7 @@ the gate in front of them and the picture they lead to are wired at that same
 call site.
 
 **Each call's output budget is derived from its own grammar.** Neither is the
-summariser role's `max_output_tokens`, which is sized for a summary and knows
+summariser role's `max_answer_tokens`, which is sized for a summary and knows
 nothing about either shape - and which cost one ordinary 346-word article its
 whole item on 2026-09-12, because call 1's reply passed 900 tokens and was cut
 mid-string. Call 1's reply is one flat object, so there is no half to recover
@@ -361,9 +361,9 @@ def call_one_output_tokens() -> int:
     so the longest reply the grammar admits is arithmetic over the bounds, and
     the arithmetic runs again on every import - move a bound and this number
     moves with it, without anybody remembering to. Until 2026-09-13 the budget
-    was `models.summarize.inference.max_output_tokens`, sized for a summary and
-    knowing nothing about this shape, and one ordinary 346-word article lost its
-    whole item to it.
+    was `models.summarize.inference.max_output_tokens` - `max_answer_tokens`
+    since 2026-09-14 - sized for a summary and knowing nothing about this shape,
+    and one ordinary 346-word article lost its whole item to it.
 
     **It is not call 2's rule, and the reason is arithmetic rather than taste.**
     `call_two_output_tokens` spends its prose as words and counts everything
@@ -541,7 +541,7 @@ def build_call_one_request(
     The prompt bytes are rendered here rather than by the model's chat
     template, which is what lets call 2 open with them unchanged. The output
     budget is derived from this call's own grammar, as call 2's is from both
-    replies' bounds together; the role's `max_output_tokens` sizes the single
+    replies' bounds together; the role's `max_answer_tokens` sizes the single
     call and is not this shape's number.
 
     `prompt_config` reaches call 1 because the system turn carries both jobs
@@ -558,7 +558,7 @@ def build_call_one_request(
         output_schema=call_one_schema(),
         inference=inference,
         turns=turns,
-        max_output_tokens=call_one_output_tokens(),
+        max_answer_tokens=call_one_output_tokens(),
     )
 
 
@@ -1382,7 +1382,7 @@ def build_call_two_request(
             prompt_config, source_words=source_words, brief=brief, plan=plan
         ),
         turns=turns,
-        max_output_tokens=call_two_output_tokens(prompt_config, plan=plan),
+        max_answer_tokens=call_two_output_tokens(prompt_config, plan=plan),
     )
 
 
@@ -1390,7 +1390,6 @@ def prompt_inputs(
     prompt_config: SummarizeConfig | None = None,
     *,
     turns: TurnsConfig,
-    inference: InferenceConfig | None = None,
 ) -> str:
     """What the fingerprint hashes to stand for these two prompts.
 
@@ -1409,16 +1408,16 @@ def prompt_inputs(
     visible. Rendering both turns through the same helpers the live requests use
     covers the envelope, all four prompt files and the turn order together.
 
+    It stops short of two envelope facts all the same, and
+    `PipelineInputs.turn_markers_sha256` is where those land: the thinking
+    span's closing marker is spliced into a prompt this never renders, and a
+    reply opening only reaches these bytes as whichever one the envelope chose.
+
     The article and call 1's reply are rendered as empty strings, which is what
     leaves the result the same on every item.
     """
     ask = prompt_config or SummarizeConfig()
-    first = render_prompt(
-        system=call_one_system_prompt(ask),
-        user="",
-        thinking=(inference or InferenceConfig()).thinking,
-        turns=turns,
-    )
+    first = render_prompt(system=call_one_system_prompt(ask), user="", turns=turns)
     rendered = continued_prompt(first, reply="", user=call_two_user_turn(ask), turns=turns)
     return rendered + canonical_json(ask.model_dump(mode="json"))
 

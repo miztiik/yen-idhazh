@@ -238,18 +238,31 @@ class InferenceConfig(Model):
         default=0,
         description="Dead code under greedy decoding. Never cited as the determinism control.",
     )
-    thinking: bool = Field(
-        default=False,
-        description="Off. Reasoning measurably increases hallucination when summarizing.",
+    max_think_tokens: int = Field(
+        default=256,
+        ge=1,
+        description=(
+            "The thinking span's budget, and a hard cap rather than a hint. A model "
+            "that never closes its reasoning block would otherwise eat the whole "
+            "window and be recorded as a truncated summary, which names the wrong "
+            "cause. 256 tokens costs 42.6 s an item at the measured 6.01 +/- 0.11 "
+            "tokens a second (2026-08-23, ubuntu-latest, EPYC 9V74, llama.cpp b10598, "
+            "three repeats). It is read only where the entry declares "
+            "turns.thinking_close; an entry that declares no closing marker spends "
+            "none of it."
+        ),
     )
-    max_output_tokens: int = Field(
+    max_answer_tokens: int = Field(
         default=900,
         ge=1,
         description=(
-            "A crash guard, not a length target. The prompt sets the length; this only "
-            "stops a runaway decode from burning a shard's whole timeout. Sized at 250 "
-            "the reply ran out of budget mid-object and failed as a shape error, which "
-            "named the wrong cause - so it is set well above any summary we want."
+            "The answer span's budget. A crash guard, not a length target: the prompt "
+            "sets the length and this only stops a runaway decode from burning a "
+            "shard's whole timeout. Sized at 250 the reply ran out of budget "
+            "mid-object and failed as a shape error, which named the wrong cause - so "
+            "it is set well above any summary we want. It was max_output_tokens until "
+            "2026-09-14, when one budget stopped being able to say which of two spans "
+            "overran."
         ),
     )
     request_timeout_minutes: float = Field(
@@ -274,6 +287,41 @@ class InferenceConfig(Model):
             "by a validator and a field nothing checks is a comment."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_run_written_before_the_two_spans_still_reads(cls, data: Any) -> Any:
+        """The read-side migration for a block a run record embeds.
+
+        **This shape is two things at once, and that is why the refusal is not
+        here.** `ModelsConfig` reaches it through `ModelEntry`, which is a file a
+        person edits and where a removed knob is refused by name.
+        `run_manifest.ModelUse` reaches it through `ModelRef`, which is a payload
+        yesterday's run wrote - and a build that cannot read yesterday's payload
+        is a release blocker (`CLAUDE.md` section 11).
+
+        `max_output_tokens` is renamed rather than dropped: it sized the answer
+        of a single call, which is what `max_answer_tokens` sizes, so the number
+        a run recorded keeps its meaning. `thinking` is dropped, because reasoning
+        is declared on the turn envelope now and `ModelRef` carries no envelope -
+        and every run written under the old flag wrote it false, so no reading is
+        lost.
+
+        A payload that carries both spellings is left alone, so the shape refuses
+        it: two budgets in one block is not a payload this can read.
+        """
+        if not isinstance(data, dict):
+            return data
+        touched = frozenset(data) & (frozenset(MIGRATED_INFERENCE_NAMES) | RETIRED_INFERENCE_NAMES)
+        if not touched:
+            return data
+        migrated: dict[Any, Any] = {}
+        for name, value in data.items():
+            if name in RETIRED_INFERENCE_NAMES:
+                continue
+            successor = MIGRATED_INFERENCE_NAMES.get(name, name)
+            migrated[name if successor in data else successor] = value
+        return migrated
 
 
 #: The name a turn opening substitutes the role under. `string.Template` renders
@@ -347,6 +395,22 @@ class TurnsConfig(Model):
         min_length=1,
         description="The same, with reasoning on. Recorded from the server that applies it.",
     )
+    thinking_close: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "What this model writes to close its reasoning block, and the whole of the "
+            "declaration that reasoning is wanted. Not null means a call is decoded as "
+            "two spans - one unconstrained span that stops here, then the "
+            "schema-constrained answer on the same slot - and the prompt ends on "
+            "reply_opening_thinking rather than reply_opening. Null means one "
+            "schema-constrained span and no reasoning, which is where the incumbent "
+            "sits. It replaced inference.thinking on 2026-09-14: a flag beside a "
+            "marker is two places to disagree, and the flag alone could not have "
+            "worked - the output schema binds the decode from the first token, so a "
+            "think opener is not a legal token on either transport."
+        ),
+    )
     system_role: SystemPlacement = Field(
         default=SystemPlacement.OWN_TURN,
         description=(
@@ -384,7 +448,7 @@ class TurnsConfig(Model):
             "constant - it was spelled in this project's source and sent to every "
             "model until 2026-09-14. Null means this template reads no keywords at "
             "all, and then the request carries no chat_template_kwargs and "
-            "inference.thinking must be false; ModelEntry refuses the pair."
+            "thinking_close must be null too; this block refuses the pair."
         ),
     )
     declared_for: Sha256 | None = Field(
@@ -443,6 +507,37 @@ class TurnsConfig(Model):
                 f"declare system_role='{SystemPlacement.FOLD_INTO_FIRST_USER.value}'"
             )
         return self
+
+    @model_validator(mode="after")
+    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
+        """Reasoning is asked for through a template keyword, so a null name refuses it.
+
+        Both halves are facts about somebody else's template, so this block owns
+        the pair. A null keyword with a closing marker declared is a claim
+        nothing can satisfy on the chat route: the request carries no
+        `chat_template_kwargs` at all, the template renders its own default, and
+        the only symptom is whatever that default happens to be.
+        """
+        if self.thinking_kwarg is None and self.thinking_close is not None:
+            raise ValueError(
+                f"turns.thinking_kwarg is null, so a chat request sends no "
+                f"chat_template_kwargs at all, and turns.thinking_close is "
+                f"{self.thinking_close!r}, which asks this template to turn reasoning "
+                "on through a keyword nothing sends. Name the keyword this model's "
+                "template reads, or set turns.thinking_close null"
+            )
+        return self
+
+    @property
+    def thinks(self) -> bool:
+        """Whether a call on these weights is decoded as two spans.
+
+        One question with one answer, read off the marker that makes the second
+        span possible. There is no flag beside it: a flag and a marker are two
+        places to disagree, and the disagreement renders a prompt the grammar
+        still accepts.
+        """
+        return self.thinking_close is not None
 
 
 class ModelRef(Model):
@@ -560,26 +655,22 @@ class ModelEntry(ModelRef):
         ),
     )
 
-    @model_validator(mode="after")
-    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
-        """Reasoning is asked for through a template keyword, so a null name refuses it.
+    @model_validator(mode="before")
+    @classmethod
+    def _a_removed_settings_knob_is_refused_by_name(cls, data: Any) -> Any:
+        """A config file is refused by name; a run record is migrated in silence.
 
-        The two halves sit in different blocks - the keyword is a fact about
-        somebody else's template and the switch is a decoding choice - so
-        neither block can see the pair and the entry has to. A null keyword with
-        reasoning on is a claim nothing can satisfy: the request carries no
-        `chat_template_kwargs` at all, the template renders its own default, and
-        the only symptom is whatever that default happens to be.
+        The split is this class against `ModelRef`. Here a person wrote the
+        block, and silent acceptance teaches the wrong spelling - so the removed
+        name is refused and the message says where the knob went. There the
+        block is a payload an earlier run wrote, and refusing it would stop
+        today's build reading yesterday's run.
         """
-        if self.turns.thinking_kwarg is None and self.inference.thinking:
-            raise ValueError(
-                f"models entry {self.id} sets turns.thinking_kwarg null, so the request "
-                "sends no chat_template_kwargs at all, and inference.thinking true, "
-                "which asks this template to turn reasoning on through a keyword "
-                "nothing sends. Name the keyword this model's template reads, or set "
-                "inference.thinking false"
+        if isinstance(data, dict):
+            refuse_a_removed_knob(
+                "models.<role>.inference", data.get("inference"), SUPERSEDED_INFERENCE_NAMES
             )
-        return self
+        return data
 
 
 class TierWeights(Model):
@@ -610,7 +701,17 @@ class RunConfig(Model):
     shard_size: int = Field(
         default=5,
         ge=1,
-        description="URLs per worker VM. Set by measured model-load amortization, not by taste.",
+        description=(
+            "URLs per worker VM. Set by measured model-load amortization, not by "
+            "taste. It does not decide the fan-out on its own and has not since the "
+            "run ceiling came down: the fan-out is "
+            "min(ceil(safety_ceiling_per_run / shard_size), max_parallel), which is "
+            "min(16, 4) at the committed numbers, so max_parallel binds and a worker "
+            "draws 20 items. Re-derived on 2026-09-14 against the two-span item and "
+            "left here: it would have to rise above 20 to move the fan-out at all, "
+            "and a worker carrying more items is the opposite of what a longer item "
+            "wants."
+        ),
     )
     max_parallel: int = Field(
         default=4,
@@ -635,9 +736,16 @@ class RunConfig(Model):
             "work roughly halves. Sized from the worst measured shard, not the median: "
             "over 80 shard rows on 2026-09-02 the worst used 135.4 minutes of the old "
             "150-minute bound and the median used 78.5, and the second model call an "
-            "item spends exactly that margin. 200 is 56 percent of the six-hour platform "
-            "ceiling, well inside Guardrail #2. A slow worker is still answered by lowering "
-            "the ceiling, never by raising this."
+            "item spends exactly that margin. **Re-derived on 2026-09-14 for the "
+            "two-span item and left at 200.** The worst of those 80 rows carried 40 "
+            "items, so the worst measured item is 203.1 s; each of the item's two "
+            "calls now opens with a 256-token thinking span, which is 42.6 s a span at "
+            "the measured 6.01 +/- 0.11 tokens a second (2026-08-23, ubuntu-latest, "
+            "EPYC 9V74, llama.cpp b10598, three repeats), so the derived worst item is "
+            "288.3 s and a 20-item worker's worst shard is 96.1 minutes. 200 is 56 "
+            "percent of the six-hour platform ceiling, well inside Guardrail #2. A "
+            "slow worker is still answered by lowering the ceiling, never by raising "
+            "this."
         ),
     )
     success_floor_pct: int = Field(
@@ -677,13 +785,20 @@ def refuse_a_removed_knob(block: str, data: Any, names: Mapping[str, str]) -> An
     **An empty replacement means the knob is gone rather than renamed**, because
     the thing it tuned is gone. Pointing at a successor that does not exist is
     the same defect one level down.
+
+    **A replacement that carries a dot is already a whole path** and is printed
+    as it stands. A knob does not always land in the block it left - reasoning
+    stopped being a decoding flag and became a marker on the turn envelope - and
+    an operator sent to `models.<role>.inference.turns.thinking_close` is sent
+    to a key that does not exist.
     """
     if not isinstance(data, dict):
         return data
     carried = sorted(name for name in names if name in data)
     if carried:
         spelled = "; ".join(
-            f"{block}.{name} is now {block}.{names[name]}"
+            f"{block}.{name} is now "
+            f"{names[name] if '.' in names[name] else f'{block}.{names[name]}'}"
             if names[name]
             else f"{block}.{name} is gone and nothing replaces it"
             for name in carried
@@ -693,6 +808,40 @@ def refuse_a_removed_knob(block: str, data: Any, names: Mapping[str, str]) -> An
             "a knob nothing reads is a number somebody believes"
         )
     return data
+
+
+#: The `models.<role>.inference` knobs this block used to carry.
+#: `max_output_tokens` was one budget over what is now two spans, so it could not
+#: say whether a long think or a cut answer spent it; it is renamed to the span
+#: it actually sized. `thinking` was a decoding flag that could never have
+#: worked on its own - the output schema binds the decode from the first token,
+#: so a think opener is not a legal token - and reasoning is declared by the
+#: closing marker on the turn envelope instead.
+#:
+#: **This map refuses a config file and never a run record.** `ModelEntry` is
+#: the shape a person edits and is where it is read; the same block inside a
+#: `ModelRef` a run wrote is migrated instead, by the two maps below.
+SUPERSEDED_INFERENCE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "max_output_tokens": "max_answer_tokens",
+        "thinking": "models.<role>.turns.thinking_close",
+    }
+)
+
+#: What a run record written before 2026-09-14 spells its output budget, and the
+#: name that carries the same number now. A rename rather than a drop: the old
+#: key sized the answer of a single call and so does the new one, so the number
+#: the run recorded keeps its meaning (Guardrail #10).
+MIGRATED_INFERENCE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {"max_output_tokens": "max_answer_tokens"}
+)
+
+#: The knob a run record written before 2026-09-14 carried and nothing carries
+#: now. Reasoning is declared by `turns.thinking_close`, and `ModelRef` - the
+#: shape a run records - carries no turn envelope at all. Every run written
+#: under the old flag wrote it false, because the output schema made anything
+#: else fail on shape, so dropping it loses no reading.
+RETIRED_INFERENCE_NAMES: Final[frozenset[str]] = frozenset({"thinking"})
 
 
 #: The `run` knobs this block used to carry. Both sized or switched the visual
@@ -717,7 +866,7 @@ SUPERSEDED_RUN_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 #: older spelling `route` named the small model plan 11 row #6 retired; the two
 #: calls on `summarize` replaced it, so nothing answers for them.
 SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {"inference": "<role>.inference", "route": "", "visual_planner": ""}
+    {"inference": "models.<role>.inference", "route": "", "visual_planner": ""}
 )
 
 
@@ -1332,6 +1481,33 @@ class ModelsConfig(Contract):
                 "called that a check (Guardrail #10). Declared here, the gate compares "
                 "two independent facts, and the dispatch has nothing left to ask for "
                 "but the filename. Ruled by Carmack, 2026-09-13."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "models.<role>.turns gains thinking_close, and "
+                "models.<role>.inference.thinking and max_output_tokens are gone. "
+                "thinking_close is the whole declaration that reasoning is wanted: not "
+                "null and a call is decoded as two spans, one unconstrained span that "
+                "stops at this marker and then the schema-constrained answer on the "
+                "same slot. max_think_tokens and max_answer_tokens replace the one "
+                "budget. Both removed names are refused by name through "
+                "refuse_a_removed_knob, max_output_tokens pointing at "
+                "max_answer_tokens and thinking pointing at turns.thinking_close."
+            ),
+            why=(
+                "Plan 28 row #10. The owner ruled on 2026-09-13 that reasoning during "
+                "summarization is wanted, and the old flag could never have delivered "
+                "it: the output schema binds the decode from the first token on both "
+                "transports, so a think opener is not a legal token - the grammar "
+                "either suppresses the thinking or the runtime splits a reasoning "
+                "channel off and every item fails on shape. A flag beside a marker is "
+                "also two places to disagree, and one budget over two spans cannot say "
+                "whether a long think or a cut answer spent it. Ruled by Andre and "
+                "Fowler, 2026-09-14."
+            ),
+        ),
             ),
         ),
         ChangelogEntry(
@@ -4356,6 +4532,22 @@ class AppConfig(Contract):
                 "and 65536 costs 1,584 MiB more than 16384, against a 6.84 GiB "
                 "low-water free the runner measured - docs/reference/benchmarks/"
                 "two-call-window-sizing.md."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "run.shard_size and run.shard_timeout_minutes carry the derivation "
+                "that produced them rather than the one they were set under. Neither "
+                "number moves: the derived worst shard is 96.1 minutes against a "
+                "200-minute bound, and shard_size would have to rise above 20 to move "
+                "the fan-out at all."
+            ),
+            why=(
+                "Plan 28 row #10. A call is decoded as two spans now, so the worst-case "
+                "item is not the one either number was sized against and carrying them "
+                "forward would leave two backstops nobody could re-derive. Ruled by "
+                "Carmack, 2026-09-14."
             ),
         ),
         ChangelogEntry(
