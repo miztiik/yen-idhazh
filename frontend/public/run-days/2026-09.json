@@ -1032,10 +1032,25 @@
         "started_at": "2026-09-13T07:30:36Z",
         "status": "partial",
         "succeeded": 75
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 80,
+        "n": 2,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-13-34782228986",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-13T21:11:50Z",
+        "status": "partial",
+        "succeeded": 0
       }
     ],
-    "site_bytes": 31031868,
-    "site_files": 542,
+    "site_bytes": 24741672,
+    "site_files": 48,
     "version": "2026-09-09"
   }
 ]
