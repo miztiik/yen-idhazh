@@ -22,10 +22,15 @@ anyone.** That cost was taken on 2026-08-28 and is restated here rather than
 assumed (`CLAUDE.md` section 0a, plan 23 row #P2 decision 8). Nothing renders
 this text, links to it or serves it.
 
-**A model writes no field on this row.** The labels are a person's, taken against
-the committed definition text, and `labelled_by` records whose. That keeps the set
-clear of `CLAUDE.md` section 0a without needing the property it states: there is
-no model verdict here at all.
+**Who wrote the labels is the one fact a number taken on this set depends on, so
+it is written here rather than inferred.** The committed pass of 2026-09-13 was
+produced by agents reading each article in full at the owner's direction and on
+the owner's behalf, and the owner ruled that it records `labelled_by` of
+`human` (owner decision, 2026-09-13, `CLAUDE.md` section 0). The set's datasheet
+carries the same sentence and what it costs. A model verdict here reaches no
+reader and selects nothing to publish, which is the `CLAUDE.md` section 0a
+property; what it does mean is that a figure comparing this project's classifier
+against these labels is not a model measured against a person.
 """
 
 from __future__ import annotations
@@ -66,17 +71,26 @@ class ReferenceSplit(StrEnum):
 
 
 class ReferenceLabels(Model):
-    """One person's reading of one article. Every field is empty when the set is built.
+    """One reading of one article. Every field is empty when the set is built.
 
     The vocabularies are `config/taxonomy.json`, so nothing here enumerates a
     member: a label is a slug the taxonomy names, and adding a word to the
-    taxonomy may not be a schema change (plan 23 section 0.1).
+    taxonomy may not be a schema change (plan 23 section 0.1). Three of the five
+    label fields name a vocabulary `config/taxonomy.json` does not carry yet -
+    `article_kind`, `stances` and `sentiment` - so the 2026-09-13 pass took them
+    from plan 23 rows #8, #10 and #11, and `backend/utilities/
+    label_reference_dataset.py` is where that list sits until those rows land.
 
-    `reference_summary` is the one field with no writer. **The human faithfulness
-    ledger was dropped and its contract kept** (plan 23 row #P2 decision 6, owner,
-    2026-09-10), so the ledger can return without a schema argument. A
-    model-written summary is a legitimate reference for classification labels a
-    person confirmed, and is **never** a faithfulness reference.
+    **`stances` is keyed and valued in slugs, which the plan's own spelling is
+    not.** `Slug` admits the hyphen and refuses the underscore, so the axis is
+    `stance-on-change` and the decline is `not-applicable`. Plan 23 row #10
+    writes both with underscores and row #9's token measurement was taken on
+    that spelling; one of the two has to move, and it is not this one.
+
+    `reference_summary` **has a writer from 2026-09-13** and it is the labeller.
+    It is a reference for classification labels and is **never** a faithfulness
+    reference - the human faithfulness ledger was dropped and only its contract
+    kept (plan 23 row #P2 decision 6, owner, 2026-09-10).
     """
 
     desk: Slug | None = Field(
@@ -98,7 +112,8 @@ class ReferenceLabels(Model):
     reference_summary: str | None = Field(
         default=None,
         description=(
-            "Kept shape with no writer. Never a faithfulness reference - "
+            "The labeller's own summary of the article. A reference for "
+            "classification labels, never a faithfulness reference - "
             "plan 23 row #P2 decision 6."
         ),
     )
@@ -132,6 +147,22 @@ class ReferenceDatasetRow(Contract):
 
     __schema_stem__: ClassVar[str] = "reference-dataset-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14",
+            change=(
+                "Description only, on three sentences the first labelling pass made "
+                "false: `reference_summary` has a writer, `second_labels` holds the "
+                "same labeller's alternative reading rather than an independent second "
+                "rating, and the module no longer claims no model wrote a field here."
+            ),
+            why=(
+                "The pass of 2026-09-13 filled all 641 rows at the owner's direction "
+                "and recorded `labelled_by` of `human` (owner decision, `CLAUDE.md` "
+                "section 0). Who wrote a label is the fact every number taken on this "
+                "set rests on, so a contract asserting the opposite is worse than one "
+                "that says nothing. No field moved, so no payload needs a migration."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change=(
@@ -205,8 +236,9 @@ class ReferenceDatasetRow(Contract):
     second_labels: ReferenceLabels | None = Field(
         default=None,
         description=(
-            "An independent second reading, on the 60 dev items row #P3 double-labels. "
-            "Null everywhere else, and null is not a disagreement."
+            "A second reading of the same article. On the 2026-09-13 pass it is the "
+            "same labeller's alternative reading, which is NOT an independent second "
+            "rating and may not be used for a Cohen's kappa. Null is not a disagreement."
         ),
     )
 

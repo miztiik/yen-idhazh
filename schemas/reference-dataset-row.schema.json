@@ -2,7 +2,7 @@
   "$defs": {
     "ReferenceLabels": {
       "additionalProperties": false,
-      "description": "One person's reading of one article. Every field is empty when the set is built.\n\nThe vocabularies are `config/taxonomy.json`, so nothing here enumerates a\nmember: a label is a slug the taxonomy names, and adding a word to the\ntaxonomy may not be a schema change (plan 23 section 0.1).\n\n`reference_summary` is the one field with no writer. **The human faithfulness\nledger was dropped and its contract kept** (plan 23 row #P2 decision 6, owner,\n2026-09-10), so the ledger can return without a schema argument. A\nmodel-written summary is a legitimate reference for classification labels a\nperson confirmed, and is **never** a faithfulness reference.",
+      "description": "One reading of one article. Every field is empty when the set is built.\n\nThe vocabularies are `config/taxonomy.json`, so nothing here enumerates a\nmember: a label is a slug the taxonomy names, and adding a word to the\ntaxonomy may not be a schema change (plan 23 section 0.1). Three of the five\nlabel fields name a vocabulary `config/taxonomy.json` does not carry yet -\n`article_kind`, `stances` and `sentiment` - so the 2026-09-13 pass took them\nfrom plan 23 rows #8, #10 and #11, and `backend/utilities/\nlabel_reference_dataset.py` is where that list sits until those rows land.\n\n**`stances` is keyed and valued in slugs, which the plan's own spelling is\nnot.** `Slug` admits the hyphen and refuses the underscore, so the axis is\n`stance-on-change` and the decline is `not-applicable`. Plan 23 row #10\nwrites both with underscores and row #9's token measurement was taken on\nthat spelling; one of the two has to move, and it is not this one.\n\n`reference_summary` **has a writer from 2026-09-13** and it is the labeller.\nIt is a reference for classification labels and is **never** a faithfulness\nreference - the human faithfulness ledger was dropped and only its contract\nkept (plan 23 row #P2 decision 6, owner, 2026-09-10).",
       "properties": {
         "article_kind": {
           "anyOf": [
@@ -93,7 +93,7 @@
             }
           ],
           "default": null,
-          "description": "Kept shape with no writer. Never a faithfulness reference - plan 23 row #P2 decision 6.",
+          "description": "The labeller's own summary of the article. A reference for classification labels, never a faithfulness reference - plan 23 row #P2 decision 6.",
           "title": "Reference Summary"
         },
         "sentiment": {
@@ -130,6 +130,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Description only, on three sentences the first labelling pass made false: `reference_summary` has a writer, `second_labels` holds the same labeller's alternative reading rather than an independent second rating, and the module no longer claims no model wrote a field here.",
+      "version": "2026-09-14",
+      "why": "The pass of 2026-09-13 filled all 641 rows at the owner's direction and recorded `labelled_by` of `human` (owner decision, `CLAUDE.md` section 0). Who wrote a label is the fact every number taken on this set rests on, so a contract asserting the opposite is worse than one that says nothing. No field moved, so no payload needs a migration."
+    },
     {
       "change": "Initial shape: the article's identity and provenance, the text file's digest and word count, and two empty label slots - one per rater.",
       "version": "2026-09-13",
@@ -197,7 +202,7 @@
         }
       ],
       "default": null,
-      "description": "An independent second reading, on the 60 dev items row #P3 double-labels. Null everywhere else, and null is not a disagreement."
+      "description": "A second reading of the same article. On the 2026-09-13 pass it is the same labeller's alternative reading, which is NOT an independent second rating and may not be used for a Cohen's kappa. Null is not a disagreement."
     },
     "source_domain": {
       "description": "The registrable domain, which is the unit the split is drawn on. Two articles from one outlet share boilerplate, a house style and often a wire original, so a split that separates rows rather than outlets flatters every number taken on it.",
@@ -233,7 +238,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-13",
+      "default": "2026-09-14",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -262,5 +267,5 @@
   ],
   "title": "ReferenceDatasetRow",
   "type": "object",
-  "version": "2026-09-13"
+  "version": "2026-09-14"
 }

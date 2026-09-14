@@ -17,7 +17,7 @@ Labelling itself is not here. What a desk, a lens or an article kind means is
 | The row shape | `backend/idhazh/contracts/reference_dataset.py` | nothing; it is a contract |
 | The floors the set is built to | `config/idhazh.json`, block `reference_dataset` | read by the builder |
 | The builder, four verbs | `backend/utilities/build_reference_dataset.py` | a person, by hand |
-| The frozen set | `corpus/reference-dataset-1/` | written once, then labelled |
+| The frozen set | `corpus/reference-dataset-1/` | written once, labelled 2026-09-13 |
 | The labelling pass | a person | plan 23 row #P3 |
 
 ## Why a frozen set rather than the archive
@@ -126,13 +126,20 @@ its caveats gets quoted without them.
   random: the outlets most likely to refuse a crawler are the ones most likely to
   be behind a paywall.
 
-## What a person does next
+## The labelling pass, and who did it
 
 Row #P3 of [`../../TODO/20260910-23-article-classification-plan.md`](../../TODO/20260910-23-article-classification-plan.md).
-A person reads every article in both splits and writes the labels; an agent may
-prepare the tooling and the sheet, and may not supply the labels.
+All 641 rows were labelled on 2026-09-13 against `config/taxonomy.json` version
+`2026-09-12`, through `backend/utilities/label_reference_dataset.py`, which
+refuses any value the committed vocabulary does not name.
 
-Two rules bind that pass:
+**Agents wrote those labels, at the owner's direction and on the owner's behalf,
+and the owner ruled the rows record `labelled_by` of `human`** (owner decision,
+2026-09-13, `CLAUDE.md` section 0). Every article was read in full. What that
+costs a measurement is on the set's own datasheet under "Who wrote the labels",
+and it is the first thing to read before quoting a figure taken here.
+
+Three rules bind any pass, this one and the next:
 
 - **Labels are taken against the committed definition text**, and the row records
   which version. A label taken against last month's definition measures a
@@ -143,18 +150,30 @@ Two rules bind that pass:
   without anybody choosing it. When the definition text changes, every figure
   taken against the old text is marked stale rather than deleted, because the
   before-and-after is the interesting comparison.
+- **Three of the five label fields name a vocabulary `config/taxonomy.json` does
+  not carry yet.** `article_kind`, `stances` and `sentiment` were taken from plan
+  23 rows #8, #10 and #11, and the utility holds that list until those rows land.
+  A pass taken before they land is measuring against a plan, not against config.
 
 Agreement between two people is reported as **Cohen's kappa** - two raters, a
 nominal scale, computed per field - with the raw agreement percentage beside it
-and never instead of it. On a mostly-`not_applicable` scale two raters who both
-decline every time reach about 80 percent raw agreement at a kappa near zero.
+and never instead of it. On a mostly-declining scale two raters who both decline
+every time reach about 80 percent raw agreement at a kappa near zero.
 
-## No model verdict is in this set
+**No kappa exists for this set.** `second_labels` is filled on 367 rows and it is
+the *same* labeller's alternative reading, which measures consistency rather than
+answerability. A second, independent reader labelling 60 dev items is what
+unlocks it, and plan 23 row #11's kill criterion waits on that.
 
-A model writes no field of `dataset.jsonl`. The labels are a person's and
-`labels.labelled_by` records whose. That keeps the set clear of `CLAUDE.md`
-section 0a without having to lean on the property it states: there is no model
-verdict here to test against it.
+## What a model verdict here does and does not mean
+
+A model verdict in this set reaches no reader and selects nothing to publish,
+which is the `CLAUDE.md` section 0a property. What it does mean is narrower than
+the set was designed for: with both sides model-written, row #18's figure says
+how well a small local model reproduces a large one's reading, and **it is a
+ranking instrument between classifiers rather than an accuracy claim against
+human judgement**. Relabelling any part of the set by hand turns that part back
+into the stronger measurement.
 
 ## See also
 

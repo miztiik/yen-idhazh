@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence, Set
 from pathlib import Path
 from typing import Any, Final
@@ -317,10 +318,14 @@ def test_there_is_no_train_split() -> None:
     assert [side.value for side in ReferenceSplit] == ["dev", "test"]
 
 
-def test_the_schema_is_stamped_with_a_date_and_a_first_changelog_entry() -> None:
-    assert ReferenceDatasetRow.schema_version() == "2026-09-13"
-    assert ReferenceDatasetRow.__changelog__[0].version == "2026-09-13"
-    assert ReferenceDatasetRow.__changelog__[0].why
+def test_the_schema_is_stamped_with_a_date_and_a_newest_first_changelog() -> None:
+    """The shape, not the date - a literal date makes every legitimate stamp a red build."""
+    entries = ReferenceDatasetRow.__changelog__
+    assert ReferenceDatasetRow.schema_version() == entries[0].version
+    versions = [entry.version for entry in entries]
+    assert versions == sorted(versions, reverse=True), "newest first"
+    assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", version) for version in versions)
+    assert all(entry.why for entry in entries)
 
 
 # --- the supplied-URL collection's shapes -----------------------------------
