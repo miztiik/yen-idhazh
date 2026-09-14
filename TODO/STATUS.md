@@ -34,14 +34,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 12 | 2 | 2 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 13 | 1 | 1 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 22
+## Ready now - 21
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -69,7 +69,6 @@ section 3 is where it is answered.
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3, plan 23 row #21 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
-| #9 | 28 | G | The runbook: swap and revert in one line each | 6, 8, 12 |
 | #10 | 28 | H | Two spans on one call, so the model can think | 5, 6, 11 |
 
 ## Waiting on another row - 48
