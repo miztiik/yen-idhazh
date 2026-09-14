@@ -41,6 +41,64 @@ Three blocks follow: **measure the candidate**, **adopt**, **revert**.
 
 ## Block 1 - Measure the candidate
 
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+ subgraph FACTS["1.1 - read the facts, never recall them"]
+  HUB["the hub's own API<br/>commit, SHA-256, byte count"] --> FILE
+  HDR["a range read of the GGUF header<br/>general.architecture"] --> FILE
+  TMPL["the model's chat template<br/>the four turn markers"] --> FILE
+  FILE[("config/models/NAME.json")]
+ end
+
+ subgraph BENCH["1.3 - Measurements, measure.yml target bench"]
+  FILE --> RAW["arm 1: raw throughput<br/>llama-bench, no server"]
+  RAW --> SERVE["arm 2: a real server<br/>five fixed articles"]
+  SERVE --> DOSSIER["a dossier body,<br/>ready to paste"]
+ end
+
+ subgraph READ["1.4 - retake what the vocabulary sizes"]
+  FILE --> BUDGETS["target budgets<br/>three tokenizer readings"]
+ end
+
+ subgraph QUAL["1.5 - Model validation, validate.yml"]
+  FILE --> SCRATCH["scratch config:<br/>the committed tree,<br/>models_file moved"]
+  SCRATCH --> PROVE{"server proves<br/>five claims?"}
+  PROVE -->|"no"| STOP["stop before the first item"]
+  PROVE -->|"yes"| REPLAY["freeze a corpus,<br/>replay it three times"]
+  REPLAY --> GATES{"every gate green?"}
+ end
+
+ DOSSIER --> DECIDE
+ BUDGETS --> DECIDE
+ GATES -->|"no"| REJECT["not adopted"]
+ GATES -->|"yes"| DECIDE{"a person reads<br/>the gates"}
+ DECIDE -->|"adopt"| ADOPT["Block 2:<br/>move models_file"]
+ DECIDE -->|"no"| REJECT
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+ classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+ classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+ classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,color:#e6e9f0;
+ classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+ classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+
+ class RAW,SERVE,DOSSIER,BUDGETS,SCRATCH,REPLAY stage;
+ class HUB,HDR,TMPL ext;
+ class PROVE,GATES,DECIDE decision;
+ class FILE store;
+ class ADOPT yes;
+ class STOP,REJECT no;
+ class FACTS sysOps;
+ class BENCH,READ,QUAL sysEval;
+```
+
+**The three dashed boxes are somebody else's.** Every fact in 1.1 is read out of
+the model publisher's own bytes rather than out of a model card or a memory, and
+that is the whole reason the first step is not "fill in the form".
+
 ### 1.1 Write the candidate's model file
 
 A candidate is a file under `config/models/` before it is a dispatch. Copy the
@@ -58,6 +116,52 @@ a fact about them.
 | `arch` | the architecture name inside the GGUF |
 | `inference` | every runtime knob, including the window and the sampler |
 | `turns` | where the system text goes, what opens and closes a turn, and which keyword turns thinking off |
+| `draft` | a second, smaller set of weights that guesses ahead. Null unless the publisher ships one |
+
+#### Where each fact comes from
+
+**None of these is recalled or copied off a model card.** A card is prose a
+human wrote; every field below is read out of the bytes the run will open, or
+out of the metadata the hub computed from them.
+
+**The commit, the digest and the byte count** come from the hub's own API. The
+`lfs.oid` a tree listing returns IS the SHA-256, so no download is needed:
+
+```powershell
+$repo = 'publisher/NAME-GGUF'
+(Invoke-RestMethod "https://huggingface.co/api/models/$repo").sha
+Invoke-RestMethod "https://huggingface.co/api/models/$repo/tree/main" |
+  Where-Object { $_.path -like '*.gguf' } |
+  ForEach-Object { '{0}  size={1}  sha256={2}' -f $_.path, $_.size, $_.lfs.oid }
+```
+
+**`arch` is read out of the GGUF itself, not inferred.** `general.architecture`
+is the first key in the header, so a range request for the first megabyte
+answers it - a few kilobytes of transfer against five gigabytes of weights. Read
+it rather than guessing from the family name: Gemma 4's main weights read
+`gemma4` and its MTP head reads `gemma4-assistant`, which are two different
+answers from one repository. Row #5's fourth arm compares this field against the
+file the server opened, so a wrong value fails the run rather than degrading it.
+
+**The four turn markers come from the model's own chat template**, which the
+publisher ships as `chat_template.jinja` in the safetensors repository. Read the
+literals it emits - the strings inside `{{- '...' -}}` - rather than assuming a
+family convention. Two traps, both seen: a model can share an architecture with
+the incumbent and still write different markers, and a template can change
+between major versions of the same model. Gemma 3 had no system role; Gemma 4
+emits `<|turn>system`, so `system_role` is `own_turn` for it and
+`fold_into_first_user` would have been wrong.
+
+**When in doubt, let the start-up probe settle it.** The five claims in 1.5 are
+checked against the running server before the first item, so a marker read wrong
+here refuses the shard with a named cause instead of quietly producing worse
+summaries. That is the difference between a guess that costs a dispatch and a
+guess that costs a month of degraded output.
+
+**`inference` is the one block with no external source.** Nothing about a
+candidate has been measured yet, so start from the incumbent's numbers with the
+window matched - a throughput comparison at two different windows measures the
+window, not the model - and let 1.3 and 1.4 replace them with readings.
 
 **`inference.declared_for` and `turns.declared_for` are the safety catch, and
 they both hold this model's own digest.** Config load refuses an entry whose
