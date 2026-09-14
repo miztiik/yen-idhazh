@@ -217,7 +217,7 @@ of nineteen and looked finished, and its own upkeep grew with the other
 seventeen. Read the rows below to see the three answers in service. Do not read
 them as the set of places the rule applies.
 
-**Twenty-two reads over a collection a run appends to**, each with the cover or
+**Twenty-four reads over a collection a run appends to**, each with the cover or
 the bound its own code declares. A helper that opens one named file is not
 listed: its cover is its argument. These are `backend/`'s;
 [the site's are below](#the-site-reads-the-same-collections-2026-09-09).
@@ -232,14 +232,16 @@ listed: its cover is its argument. These are `backend/`'s;
 | the window refusal count | the same day files, through `load_item_health` | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic inside `load_item_health`, never by a directory walk, so the cost is 30 file opens whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
 | `ledger.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
+| `retention.prune_counterfactual_scores` | day files of `state/counterfactual-scores/` | `lens_weights.window_days`, committed at 30. It walks the tree to find what to delete, so its cost falls as it works - a day it deletes is a day no later run opens. The walk is what bounds the collection: the ledger gains rows on every run and nothing else takes any away |
 
 ### A cover that is not a clock
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
-| `stages.dedupe_ledgers.stage_dedupe_ledgers`, via `ledger.keyed_paths` | six files on the ordinary pass | the files this run staged |
+| `stages.dedupe_ledgers.stage_dedupe_ledgers`, via `ledger.keyed_paths` | seven files on the ordinary pass | the files this run staged |
 | `stages.validate_days.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
+| `ledger.append_counterfactual_scores` | one day file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day file | one date |
 | `ledger.load_source_counts` | one item-health day file | one date |
 | `ledger.load_runtime_counters` | streams `state/runtime-counters.csv` | one run |

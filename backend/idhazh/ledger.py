@@ -106,6 +106,7 @@ from typing import Final
 
 from idhazh import day_partition
 from idhazh.contracts.app_config import UNBOUNDED_WINDOW
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
@@ -123,6 +124,7 @@ TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
 VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
+COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
@@ -171,6 +173,16 @@ SPAN_ROLLUP_KEY: Final = ("date", "run_id", "shard", "span_name")
 #: same counts, so the first row wins and there is nothing for a preference rule
 #: to choose between.
 VISUAL_PRUNE_KEY: Final = ("date", "run_id")
+
+#: What makes two counterfactual rows the same record. One run scores one
+#: address on one desk once, so a second row under the same four cells is a
+#: second attempt at one execution rather than a second answer. Both attempts
+#: score the same candidates against the same committed weights and produce the
+#: same pair of numbers, so the first row wins and there is nothing for a
+#: preference rule to choose between. `vertical` is in the key because a desk is
+#: planned on its own: the same address on two desks is two scores, and dropping
+#: one of them as a repeat would lose a fact.
+COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
@@ -348,6 +360,23 @@ def visual_prunes_path(state_dir: Path, date: str) -> Path:
     exception this makes to the partition rule.
     """
     return state_dir / VISUAL_PRUNES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def counterfactual_scores_relpath(date: str) -> str:
+    """`state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{COUNTERFACTUAL_SCORES_DIRNAME}/{stem}"
+
+
+def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's runs write their two scores per candidate into.
+
+    A day, and here the read asked for it as well as the writer: the only reader
+    of this ledger opens a trailing window of days (`lens_weights.window_days`),
+    and the retention pass deletes by day. A month file would make both of those
+    read or delete weeks nobody asked for.
+    """
+    return state_dir / COUNTERFACTUAL_SCORES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -780,6 +809,37 @@ def append_visual_prunes(state_dir: Path, date: str, rows: Iterable[VisualPruneR
     return landed - drop_repeated_rows(path, VISUAL_PRUNE_KEY)
 
 
+def append_counterfactual_scores(
+    state_dir: Path, date: str, rows: Iterable[CounterfactualScoreRow]
+) -> int:
+    """Append a run's two-scores-per-candidate rows into that day's own file.
+
+    Settled against `COUNTERFACTUAL_SCORE_KEY` straight after the write, the way
+    `append_visual_prunes` is and for the same reason: the only writer that can
+    produce one key twice is a second attempt at one execution, and both
+    attempts scored the same candidates against the same committed weights. The
+    first row wins and there is nothing to choose between them.
+
+    **The day file is created even when the run has no rows for it.** `_append`
+    writes nothing for an empty list, which is right everywhere else and wrong
+    here: the plan job's commit step names this directory, `git add` runs under
+    `set -euo pipefail`, and a path missing from the working tree aborts the
+    whole step and costs the three ledgers committed beside it. A header with no
+    rows under it is also the honest record - the run scored nothing worth
+    asking about, which is a different statement from the run not having run.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    payloads = [row.csv_row() for row in rows]
+    path = counterfactual_scores_path(state_dir, date)
+    columns = CounterfactualScoreRow.csv_columns()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = _append(path, columns, payloads)
+    return landed - drop_repeated_rows(path, COUNTERFACTUAL_SCORE_KEY)
+
+
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     """Every cleanup pass on record, oldest day first. Never windowed.
 
@@ -845,6 +905,11 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
     only its own day, so only its own day can hold the repeat. What that costs is
     stated rather than implied: a repeat the last run of a day leaves behind is
     now settled by the operator's full pass rather than by tomorrow's first run.
+
+    `state/counterfactual-scores/` joined the dated cover on 2026-09-14. Its
+    writer is the plan stage, whose commit step DOES name a settlement command,
+    so its repeats are settled by the run that made them - the same position
+    `state/feed-health/` is in.
     """
     flat: list[tuple[Path, tuple[str, ...]]] = [
         (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
@@ -854,6 +919,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
         return [
             *flat,
             (visual_prunes_path(state_dir, date), VISUAL_PRUNE_KEY),
+            (counterfactual_scores_path(state_dir, date), COUNTERFACTUAL_SCORE_KEY),
             (health_path(state_dir, date), FEED_HEALTH_KEY),
             (item_health_path(state_dir, date), ITEM_HEALTH_KEY),
         ]
@@ -862,6 +928,10 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
         *(
             (path, VISUAL_PRUNE_KEY)
             for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)
+        ),
+        *(
+            (path, COUNTERFACTUAL_SCORE_KEY)
+            for path in day_partition.day_files(state_dir / COUNTERFACTUAL_SCORES_DIRNAME)
         ),
         *((path, FEED_HEALTH_KEY) for path in day_partition.day_files(state_dir / HEALTH_DIRNAME)),
         *(
