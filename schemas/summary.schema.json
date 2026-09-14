@@ -2,7 +2,7 @@
   "$defs": {
     "CallCost": {
       "additionalProperties": false,
-      "description": "One model call's own five numbers.\n\nNested rather than flattened because the same five have to be described once\nand checked once. The two CSV ledgers cannot nest, so they spell these names\nwith a `call_1_`/`call_2_` prefix and `idhazh.telemetry` is the one place\nthat flattens - one translator, against one copy of this validator per\ncontract that would otherwise carry it.",
+      "description": "One model call's own five numbers.\n\nNested rather than flattened because the same five have to be described once\nand checked once. The two CSV ledgers cannot nest, so they spell these names\nwith a `label_`/`summary_` prefix and `idhazh.telemetry` is the one place\nthat flattens - one translator, against one copy of this validator per\ncontract that would otherwise carry it.",
       "properties": {
         "cached_tokens": {
           "default": 0,

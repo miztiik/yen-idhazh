@@ -62,7 +62,7 @@ A second shape of evidence, on by default since 2026-09-06, and the only one tha
 | `model_call` | `summarize` | the generation - see below |
 | `parse_reply` | `summarize` | the verbatim check, which is the longest string comparison in the pipeline |
 | `score` | `item` | - |
-| `visual_planner` | `item` | what the picture's gate, ladder and render cost, after call 2 answered |
+| `visual_planner` | `item` | what the picture's gate, ladder and render cost, after the summarize-and-plan call answered |
 
 **`model_call` is a generation**, the span subtype a tracing tool draws differently. It carries the model reference and the token counts. **Prefill and decode are attributes on it and not child spans**: llama-server reports both as totals in the reply, after the call returned, so nothing can be wrapped around either. A span drawn around a duration reported retrospectively is a shape nobody measured.
 

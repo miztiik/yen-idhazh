@@ -179,7 +179,7 @@ The value is pinned as **text** for the reason a timestamp is: one spelling, and
 no float formatting that can drift underneath a committed file.
 
 Six kinds shipped in one changelog entry and all six have a producer. The two
-pattern passes write `quantity` and `date`; call 1 points at the other four and
+pattern passes write `quantity` and `date`; the label call points at the other four and
 code cuts them.
 
 ## The candidate pass
@@ -297,10 +297,10 @@ equal as strings or pinning the value as text buys nothing. The pass writes the
 plain decimal form with no exponent and no trailing zeros: `4200000000` for
 both. `span_excerpt` still holds whichever of the two the article wrote.
 
-## Call 1: what the model may say about a candidate
+## The label call: what the model may say about a candidate
 
 The candidate pass says where every figure is. It cannot say what any of them
-means, because meaning is not in the bytes. Call 1 is the pass that asks, and it
+means, because meaning is not in the bytes. The label call is the pass that asks, and it
 lives in
 [`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py).
 
@@ -405,7 +405,7 @@ which is what keeps it able to say the cap bit and by how much.
 
 ## The four kinds only a model can find
 
-No pattern reaches an organisation, a place, a quotation or an assertion. Call 1
+No pattern reaches an organisation, a place, a quotation or an assertion. The label call
 points at all four, and code cuts every character. The producers are in
 [`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py)
 beside `proposed`, because they read the same reply.
@@ -462,7 +462,7 @@ claiming one address is settled by keeping the first.
 the one element kind whose excerpt is a paragraph of somebody's page rather than
 a figure or a name.
 
-It may go where the table goes: into the labelled table call 2 reads, into an
+It may go where the table goes: into the labelled table the summarize-and-plan call reads, into an
 eval row, into a log line, into a fixture. **It may not reach a reader-facing
 page**, and neither may a fragment of it. What publishes is the link and our own
 summary. A later row that wants to show a quotation is proposing a change to
@@ -482,7 +482,7 @@ Neither is closed and neither is closable by anchoring. What anchoring buys is
 that a wrong answer is still *a fact the item states*, at a location a reader can
 check, rather than a sentence the model wrote.
 
-### What call 1 is not asked for
+### What the label call is not asked for
 
 An **event** and a **relation** are the next thing this table wants and neither is
 in it. When they arrive, every actor and object in one has to resolve to a
@@ -780,7 +780,7 @@ Authority: **Fowler** (module structure).
 
 ### The mention lists were named, and the tag control was not narrowed
 
-Call 1 could not ask for a named thing until this was settled.
+The label call could not ask for a named thing until this was settled.
 `test_no_prompt_asks_a_model_for_a_tag` refuses any prompt carrying the literal
 words `lens`, `event type` or the plural of `entity`, and its stated reason is
 that a page choosing its own reader-facing tags steers a control. The obvious
@@ -892,7 +892,7 @@ Authority: **Fowler** (module structure).
 
 ### `extractor` is `model`, and the plan spells it `model_proposed`
 
-The plan that specified call 1 asks for a proposed figure to be stamped
+The plan that specified the label call asks for a proposed figure to be stamped
 `extractor="model_proposed"`. The contract already carried the member and calls
 it `model`, with the docstring "a model proposed the location and code cut the
 characters at it" - the same property under a shorter word. It stayed as it is,
@@ -906,13 +906,13 @@ side by side sees two words for one thing until they reach this paragraph. The
 alternative cost was a persisted enum value that four later producers would have
 to contradict.
 
-### Call 1 is built and nothing dispatches it
+### The label call is built and nothing dispatches it
 
 The request, the reply shape, the parser and every anchoring path ship here; no
-stage calls them. That is deliberate rather than unfinished. Call 1 alone
+stage calls them. That is deliberate rather than unfinished. The label call alone
 produces a labelled table and no page: the call that turns it into a summary and
 a visual is the next row, and it appends to **this** call's message array, so the
-article prefills once. Wiring call 1 in on its own would spend a model call per
+article prefills once. Wiring the label call in on its own would spend a model call per
 item for an answer nothing reads yet, and it would do it inside a job with a
 50-minute bound.
 
@@ -927,4 +927,4 @@ on together.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).
 - [../../../TODO/20260905-08-element-table-plan.md](../../../TODO/20260905-08-element-table-plan.md) - the plan this shape was written for, and the producers that follow it.
-- [../../../TODO/20260905-11-two-call-planner-plan.md](../../../TODO/20260905-11-two-call-planner-plan.md) - the plan call 1 belongs to, and the call that reads its table next.
+- [../../../TODO/20260905-11-two-call-planner-plan.md](../../../TODO/20260905-11-two-call-planner-plan.md) - the plan the label call belongs to, and the call that reads its table next.

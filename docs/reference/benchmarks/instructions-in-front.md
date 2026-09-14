@@ -6,7 +6,7 @@ Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
 
-Call 2's question used to sit in a user turn behind the article. It is
+The summarize-and-plan call's question used to sit in a user turn behind the article. It is
 byte-identical on every item, but the text in front of it is not, so a prefix
 cache cannot reach it and every token of it was read again on every item, for
 ever - **687 tokens, measured the same day** in
@@ -17,7 +17,7 @@ article, and leaving three lines behind
 row #3e).
 
 It answers two questions, and the second is the one that made the row risky.
-**What did the move cost and save, in tokens?** And **did it change what call 1
+**What did the move cost and save, in tokens?** And **did it change what the label call
 says about the article?**
 
 ## Conditions
@@ -86,16 +86,16 @@ This corrects a claim that stood in two rows of plan 11 until this run.
 | of which the system turn takes | 1,363 | 2,060 |
 | **left for the article, its addresses and its table** | **8,735** | **8,688** |
 
-**The ceiling widened by 650 and that is not the question.** It bounds call 1's
+**The ceiling widened by 650 and that is not the question.** It bounds the label call's
 whole prompt, and the 697 tokens that moved now sit inside it. The longest
 article the window admits is therefore **47 tokens shorter**, not 597 longer, and
 row #3f's 3,714-token overflow at the truncation cap is 47 tokens worse rather
 than 14 percent closed.
 
-## Did it change what call 1 says?
+## Did it change what the label call says?
 
 This is the arm that made the row risky, and it is the reason the row was not
-just a diff. Call 1's entire output is addresses into the article, so it is the
+just a diff. The label call's entire output is addresses into the article, so it is the
 call least able to absorb instructions it cannot act on - and it now carries the
 summariser's and the planner's.
 
@@ -106,8 +106,8 @@ against the article's own bytes; the own-words rate is a set membership test.
 **Method.** Six real corpus articles were selected, 154 to 354 words, taken as
 the first six by `url_key` in that band - a fixed set chosen by a rule rather
 than by a reading - and **three of them ran** before the box was needed back.
-Each is sent through call 1 twice, once with the system turn at `242a701c` and
-once with the system turn as this row leaves it, with call 1's real 900-token
+Each is sent through the label call twice, once with the system turn at `242a701c` and
+once with the system turn as this row leaves it, with the label call's real 900-token
 output budget both times.
 
 **Three pairs ran and two are clean**, because the third exposed a defect in the
@@ -157,22 +157,22 @@ a second of decode with three other agents working on the box.
 
 ## A defect this run found, and it is not this row's
 
-**Call 1's reply can exceed its own output budget on an ordinary article, and
+**The label call's reply can exceed its own output budget on an ordinary article, and
 when it does the item is lost with no recovery.** On the third article - 346
-words, the BEFORE layout, so the base commit and not this change - call 1 decoded
+words, the BEFORE layout, so the base commit and not this change - the label call decoded
 **900 tokens, hit `models.summarize.inference.max_output_tokens` exactly, and
 stopped with `finish_reason = length`**. The reply was cut mid-string and
-`classify.calls.parse_call_one` raised `Invalid JSON: EOF while parsing a string
+`classify.calls.parse_label` raised `Invalid JSON: EOF while parsing a string
 at line 1 column 2805`.
 
-Nothing rescues it. Call 2 has `recovered_completion`, which spends the
-summary-before-plan field order to salvage a cut reply; **call 1 has no
+Nothing rescues it. The summarize-and-plan call has `recovered_completion`, which spends the
+summary-before-plan field order to salvage a cut reply; **the label call has no
 equivalent**, because its reply is one flat object with no half a caller could
-use. And the budget is not derived from call 1's own grammar the way call 2's is
-from `call_two_output_tokens` - it is the role's `max_output_tokens`, which was
+use. And the budget is not derived from the label call's own grammar the way the summarize-and-plan call's is
+from `summarize_and_plan_budget_tokens` - it is the role's `max_output_tokens`, which was
 sized for a summary.
 
-The arithmetic says it is not a freak: `CallOneReply` admits 16 labels, 4
+The arithmetic says it is not a freak: `LabelReply` admits 16 labels, 4
 proposals, 6 entity groups and 6 place groups of 4 mentions each, 8 quotes, 8
 claims, 8 keyphrases and 2 lede addresses. A dense article filling even half of
 that passes 900 tokens. **This is the same family as plan 11 row #3f** - a bound
@@ -188,7 +188,7 @@ own rather than to this one.
 - **The article set is short.** 154 to 354 words against a truncation cap of
   10,000 tokens. The token arithmetic does not depend on article length at all -
   the trailing turn and the system turn are the same bytes whatever the article
-  is - but what call 1 proposes on a 4,000-word article is unmeasured here.
+  is - but what the label call proposes on a 4,000-word article is unmeasured here.
 - **Two clean articles is a very small set**, and a clean result is a bound
   rather than a zero: the rule of three puts the regression rate below about 78
   percent at 95 percent confidence, which is almost no constraint. The run was

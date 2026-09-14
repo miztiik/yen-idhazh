@@ -51,13 +51,15 @@ re-read a prompt the first one filled. If it misses, the estimated cost is
 evaluated tokens beside its cached tokens on every item, and their difference is
 what the answer span really prefilled. One run with thinking declared answers it.
 
-**A second cost is real, priced and not an estimate.** Call 2 replays call 1's
-answer and never call 1's thinking, because a prompt is the one place a model's
-own words could steer the next decode (Guardrail #11). So call 1's answer tokens
+**A second cost is real, priced and not an estimate.** The summarize-and-plan
+call replays the label call's
+answer and never its thinking, because a prompt is the one place a model's
+own words could steer the next decode (Guardrail #11). So the label call's answer
+tokens
 are prefilled again rather than read from the slot. That is prefill rather than
 decode, and prefill runs at about 2.2 times decode on this page's own ratio; the
 article in front of it is still answered from the slot, because the common
-prefix reaches to the end of call 1's prompt either way.
+prefix reaches to the end of the label call's prompt either way.
 
 **The shard bound was re-derived rather than carried forward.** The worst of the
 80 shard rows on 2026-09-02 used 135.4 minutes and carried 40 items, so the
@@ -123,7 +125,7 @@ one run and no spread, `Qwen3-8B-Q4_K_M.gguf` on llama-server with
 `--threads 4 --ctx-size 16384 --batch-size 512 -np 1 -fa on` - an
 order-of-magnitude check and not a runner reading:
 
-| Quantity | Call 1 (label) | Call 2 (summarize and plan) | Folded |
+| Quantity | The label call (label) | The summarize-and-plan call (summarize and plan) | Folded |
 | --- | --- | --- | --- |
 | `input_tokens` | 1,497 | 2,389 | 3,886 |
 | `cached_tokens` | 0 | 1,493 | 1,493 |
@@ -137,9 +139,9 @@ and it is the number the console printed as the item's. The first call reads the
 article on a cold slot and reuses nothing; the second replays it and is answered
 for almost all of it.
 
-**A per-call `prefill_ms` is a duration and never a rate.** Call 2 read at 4.80
-tok/s against call 1's 6.99 in the same second on the same machine, 31 percent
-apart, because call 2's tokens sit at context positions 1,493 to 2,389 and
+**A per-call `prefill_ms` is a duration and never a rate.** The summarize-and-plan call read at 4.80
+tok/s against the label call's 6.99 in the same second on the same machine, 31 percent
+apart, because the summarize-and-plan call's tokens sit at context positions 1,493 to 2,389 and
 attend to everything before them - a prompt token costs more the deeper into the
 context it sits. The 31 percent is measured; that attribution is an estimate,
 and a sweep of new-turn length against `prefill_ms` at a fixed prefix length
@@ -155,7 +157,7 @@ the two committed shards with every timed row populated, twelve cells cost
 **72.9 and 80.1 percent more gzipped** against **35.3 and 40.8 percent** for the
 seven that ship.
 
-**The picture costs nothing outside these cells.** Call 2 writes the summary and
+**The picture costs nothing outside these cells.** The summarize-and-plan call writes the summary and
 the plan in one reply, so what a picture cost is already inside the call-2
 columns; there is no second model call for an item, and no second job.
 
@@ -242,13 +244,13 @@ So an article is never charged for the article before it.
 
 **Under the two-call design that sentence still holds, and the shared prefix is
 now worth naming.** Measured 2026-09-12 on the configured weights, item 2 of a
-run reused **1,362 tokens** of its call-1 prompt with no work - call 1's system
+run reused **1,362 tokens** of its call-1 prompt with no work - the label call's system
 turn, which is byte-identical on every item - while the article behind it read
-from cold. The run also destroyed the previous item's copy of call 2's question,
+from cold. The run also destroyed the previous item's copy of the summarize-and-plan call's question,
 which is what a one-slot cache is supposed to do
 ([`../../reference/benchmarks/two-call-re-read.md`](../../reference/benchmarks/two-call-re-read.md)).
 
-## What call 2 reads again, and which row owns each part
+## What the summarize-and-plan call reads again, and which row owns each part
 
 The second call opens with the first call's whole message array, so most of its
 prompt is answered from the slot. What is left is three things, and the figure
@@ -260,10 +262,10 @@ and no spread, on the longest article the committed corpus holds.
 | Cause | Tokens an item | At 9.85 tokens a second | Whose |
 | --- | --- | --- | --- |
 | the article changed | the whole call-1 prompt, less the shared system turn | - | irreducible |
-| the chat template broke the prefix | **100** - four, plus call 1's whole 96-token reply behind them | 10.2 s an item, 3.4 min of a 20-item shard | plan 11 row #3c, closed |
+| the chat template broke the prefix | **100** - four, plus the label call's whole 96-token reply behind them | 10.2 s an item, 3.4 min of a 20-item shard | plan 11 row #3c, closed |
 | the trailing turn sits behind the article | **697**, of which 687 is the question's own text, now **47** | **69.7 s an item, 23.2 min of a 20-item shard**, now 4.8 s and 1.6 min | plan 11 row #3e, closed |
 
-**687 was the number to act on, and it was seven times the template's.** Call 2's
+**687 was the number to act on, and it was seven times the template's.** The summarize-and-plan call's
 question names no article and quotes no sentence, so it is the same bytes on
 every item - but the article in front of it is not, so a prefix cache could not
 reach it and all 687 tokens were read again, every item, for ever. The plan
@@ -298,8 +300,8 @@ separate `visuals` job drew the pictures on the small model.
 
 **`work` sends both, adjacently, per item**, and that adjacency is a correctness
 rule rather than a layout taste: `models.summarize.inference` pins `n_parallel`
-to 1, so the server holds one cache slot, and every call 1 first with every call
-2 afterwards would evict the prefix before it was reused - on every item, with
+to 1, so the server holds one cache slot, and every label call first with every the
+summarize-and-plan call afterwards would evict the prefix before it was reused - on every item, with
 nothing in any log to say so.
 
 **There is no flag and no second path.** `run.two_calls_per_item` switched
@@ -313,7 +315,7 @@ hashes the chat template read off `/props`, and the two calls render their own
 bytes, so that template no longer reaches what the model reads and
 `models.summarize.turns` does. `classify.calls.prompt_inputs`
 is what the stamp hashes instead: both turns rendered through the same helpers
-the live requests use, with the article and call 1's reply empty, plus every
+the live requests use, with the article and the label call's reply empty, plus every
 number `summarize` can substitute into them. Editing a marker moves the stamp,
 which is the state `Observation.DETERMINISM_VIOLATION` exists to make visible -
 and it is the only route the envelope takes into a run record, because
@@ -321,15 +323,15 @@ and it is the only route the envelope takes into a run record, because
 declared entry.
 
 **Three prices nobody can read off a token count, and each can fail the design
-on its own. The first has now been read.** The prompt cache: if call 2's
-`cached_tokens` is below call 1's prompt token count, the slot is not answering
+on its own. The first has now been read.** The prompt cache: if the summarize-and-plan call's
+`cached_tokens` is below the label call's prompt token count, the slot is not answering
 for the article and every figure above is wrong. `state/item-health/` carries
-`call_1_input_tokens` and `call_2_cached_tokens` side by side from 2026-09-12,
+`label_input_tokens` and `summary_cached_tokens` side by side from 2026-09-12,
 so the reading is one comparison over that ledger, and
 [the sequence the window holds](#the-sequence-is-declared-once-and-the-window-was-checked-against-it)
-below says what came back. The second is call 2's decode: its output budget is
+below says what came back. The second is the summarize-and-plan call's decode: its output budget is
 4,735 tokens and the one reply ever measured was 327, and a reply at half the
-budget is 144 minutes of call 2 alone on a 20-item shard. The third is the worst
+budget is 144 minutes of the summarize-and-plan call alone on a 20-item shard. The third is the worst
 `work` shard against the 180-minute bar in `state/runtime-counters.csv`.
 
 ## The sequence is declared once, and the window was checked against it
@@ -339,14 +341,14 @@ each one's decode budget beside it, and `work` walks that tuple rather than
 writing the two calls out as two statements. **The reason is the window, not
 tidiness.** Every node's reply is paid twice - once as its own decode, and again
 inside the prompt of every node behind it - so what the window has to hold is
-call 1's prompt plus both budgets plus the seam between the turns. A sequence
+the label call's prompt plus both budgets plus the seam between the turns. A sequence
 assembled a statement at a time is a budget nobody ever checks whole, and
 `dag.sequence_tokens` is that sum in one place: the contract test and the
 production refusal read the same function. A third call raises it by that call's
 budget plus a seam plus the prompt it drags forward, and the import-time guard in
 that module is what makes adding one loud.
 
-**An article the sequence cannot hold is refused before call 1 is sent.**
+**An article the sequence cannot hold is refused before the label call is sent.**
 `dag.fits_the_window` is the check and `FailureCode.CONTEXT_EXCEEDED` is what the
 item lands as. Admitting it is the silent failure: `--no-context-shift` means the
 decode stops at the wall on an ordinary HTTP 200, `recovered_completion` salvages
@@ -354,10 +356,10 @@ the summary, and the item publishes looking finished with its picture quietly
 gone - after both calls have been paid for.
 
 **The cache works, measured on the runner.** Over run `2026-09-13-34762570110`,
-shard 2, three consecutive items on a stock `ubuntu-latest`: call 2 reported
-8,680, 5,570 and 2,851 cached tokens against call 1 prompts of 6,834, 4,271 and
-2,457 - so call 2 read back the whole of call 1's prompt and its reply every
-time, and prefilled only the seam. Call 1 reported 1,755 cached tokens on all
+shard 2, three consecutive items on a stock `ubuntu-latest`: the summarize-and-plan call reported
+8,680, 5,570 and 2,851 cached tokens against the label call prompts of 6,834, 4,271 and
+2,457 - so the summarize-and-plan call read back the whole of the label call's prompt and its reply every
+time, and prefilled only the seam. The label call reported 1,755 cached tokens on all
 three, which is the shared turn in front of the article surviving from one item
 to the next. That is the one comparison the paragraph above asks for, and it is
 the first price answered.
@@ -365,8 +367,8 @@ the first price answered.
 **How many items the window refuses, and it is none.** Over the trailing 30 days
 ending 2026-09-13, 8,938 items carry a recorded prompt: the median is 1,672
 tokens, the 95th percentile 3,378 and the worst 8,741. Behind the prompt the
-sequence spends a fixed 11,284 tokens - 6,491 for call 1's reply, 58 for the seam
-and 4,735 for call 2's. At the committed `n_ctx` of 65,536 **no item of the 8,938
+sequence spends a fixed 11,284 tokens - 6,491 for the label call's reply, 58 for the seam
+and 4,735 for the summarize-and-plan call's. At the committed `n_ctx` of 65,536 **no item of the 8,938
 would have been refused**. That is the number that decides
 whether a later row proposes a raise, and it says the raise has already been
 made and bought the whole tail. Read once from `ledger.load_item_health` with a

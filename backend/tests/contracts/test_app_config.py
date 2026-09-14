@@ -11,7 +11,7 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh.classify import dag
-from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
+from idhazh.classify.calls import label_budget_tokens, summarize_and_plan_budget_tokens
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
     AppConfig,
@@ -32,11 +32,11 @@ from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields
-from idhazh.measured import CALL_ONE_BODY_TOKENS_A_WORD as _CALL_ONE_A_WORD
-from idhazh.measured import CALL_ONE_MENU_TOKENS_A_ROW as _MENU_A_ROW
-from idhazh.measured import CALL_ONE_SCAFFOLD_TOKENS as _CALL_ONE_SCAFFOLD
-from idhazh.measured import CALL_TWO_SEAM_TOKENS as _CALL_TWO_SEAM
+from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD
+from idhazh.measured import LABEL_MENU_TOKENS_A_ROW as _MENU_A_ROW
+from idhazh.measured import LABEL_SCAFFOLD_TOKENS as _LABEL_SCAFFOLD
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
+from idhazh.measured import SUMMARIZE_AND_PLAN_SEAM_TOKENS as _SUMMARIZE_AND_PLAN_SEAM
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 
 from ._fixtures import APP_CONFIG_EVERY_KNOB_DIFFERS, CONFIG_FILES, committed_models
@@ -192,13 +192,13 @@ WORST_TOKENS_A_WORD: Final = _WORST_TOKENS.value
 
 #: The same four things for the two-call path, whose prompt this repository
 #: renders itself. Same module, same reason.
-CALL_ONE_SCAFFOLD_TOKENS: Final = int(_CALL_ONE_SCAFFOLD.value)
+LABEL_SCAFFOLD_TOKENS: Final = int(_LABEL_SCAFFOLD.value)
 
-CALL_ONE_BODY_TOKENS_A_WORD: Final = _CALL_ONE_A_WORD.value
+LABEL_BODY_TOKENS_A_WORD: Final = _LABEL_A_WORD.value
 
-CALL_ONE_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
+LABEL_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
 
-CALL_TWO_SEAM_TOKENS: Final = int(_CALL_TWO_SEAM.value)
+SUMMARIZE_AND_PLAN_SEAM_TOKENS: Final = int(_SUMMARIZE_AND_PLAN_SEAM.value)
 
 
 def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
@@ -247,14 +247,14 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
 
 
 def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """Call 1's prompt at the cap, and the whole sequence behind it.
+    """The label call's prompt at the cap, and the whole sequence behind it.
 
     A second derivation and not a widening of the one above, because the two
     paths render different prompts. The single call sends one system turn and
-    the article. Call 1 sends a system turn that carries both jobs, the article
+    the article. The label call sends a system turn that carries both jobs, the article
     with an address in front of every sentence, and a menu of every quantity and
     date the extractor already cut - then pays for its own reply twice, once as
-    a decode and once again inside call 2's prompt.
+    a decode and once again inside the summarize-and-plan call's prompt.
 
     **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
     It used to be written out here, which put the number the production path
@@ -287,8 +287,8 @@ def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
     so as well, which is the point at which ESCALATE trigger 6 of
     `TODO/20260910-23-article-classification-plan.md` section 12a has fired.
 
-    **A labelling row does not add a node.** It adds a field to call 1's reply
-    shape, and `call_one_output_tokens` re-derives the budget from the shape's
+    **A labelling row does not add a node.** It adds a field to the label call's reply
+    shape, and `label_budget_tokens` re-derives the budget from the shape's
     own bounds on import.
     """
     assert len(dag.NODES) == dag.NODE_COUNT == 2
@@ -304,7 +304,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     The test above sizes the single call this plan is replacing and passes with
     room. That is the trap: a green gate over the path being retired reads as
     coverage of the path replacing it. The two-call sequence is 2.8 times the
-    single call's, because call 1's reply is paid twice and the candidate menu
+    single call's, because the label call's reply is paid twice and the candidate menu
     is paid once, and neither term exists on the single-call path at all.
 
     Both sides come from `config/` (Guardrail #6) and the arithmetic is measured
@@ -337,10 +337,10 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     assert sequence <= inference.n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
-        f"call 1 prompt at elements.max_per_article of "
-        f"{committed.elements.max_per_article}. Call 1's {call_one_output_tokens()}-token "
-        f"reply, the {CALL_TWO_SEAM_TOKENS}-token seam and call 2's "
-        f"{call_two_output_tokens(committed.summarize)}-token reply put the pair at "
+        f"the label call prompt at elements.max_per_article of "
+        f"{committed.elements.max_per_article}. The label call's {label_budget_tokens()}-token "
+        f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
+        f"{summarize_and_plan_budget_tokens(committed.summarize)}-token reply put the pair at "
         f"{sequence} against a window of {inference.n_ctx}, over by "
         f"{sequence - inference.n_ctx}. Raise models.summarize.inference.n_ctx, or "
         "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "

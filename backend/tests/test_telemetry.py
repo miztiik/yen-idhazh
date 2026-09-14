@@ -602,13 +602,13 @@ def test_the_census_row_says_which_call_each_number_came_from() -> None:
     )
 
     assert row.model_calls == 2
-    assert (row.call_1_kind, row.call_2_kind) == (CallKind.LABEL, CallKind.SUMMARIZE_AND_PLAN)
-    assert row.call_1_cached_tokens == 0, "the first call read its prompt cold"
-    assert row.call_2_cached_tokens == 1493
+    assert (row.label_kind, row.summary_kind) == (CallKind.LABEL, CallKind.SUMMARIZE_AND_PLAN)
+    assert row.label_cached_tokens == 0, "the first call read its prompt cold"
+    assert row.summary_cached_tokens == 1493
     assert row.cached_tokens == 1493, "the folded cell is their sum and says neither"
 
     cells = row.csv_row()
-    assert cells["call_1_kind"] == "label"
+    assert cells["label_kind"] == "label"
     assert ItemHealthRow.from_csv_row(cells) == row
 
 
@@ -645,7 +645,7 @@ def test_a_refused_reply_reaches_the_census_row_with_what_it_cost() -> None:
     assert row.prefill_ms == reply.prefill_ms
     assert row.input_tokens == reply.prompt_tokens
     assert row.model_calls == 1
-    assert row.call_1_kind is CallKind.SUMMARIZE
+    assert row.label_kind is CallKind.SUMMARIZE
     cells = row.csv_row()
     assert cells["prefill_ms"] and cells["input_tokens"], "an empty cell is skipped, not pooled"
 

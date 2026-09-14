@@ -37,18 +37,18 @@ pytestmark = pytest.mark.slow
 #: bytes" is asserted after they come off rather than over the whole payload.
 CLOCKS: Final = ("generated_at", "duration_ms", "fetch_ms", "extract_ms", "summarize_ms")
 
-CALL_ONE_REPLY: Final = FIXTURES_DIR / "completions" / "call-one" / "labelled.json"
+LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
 
-CALL_TWO_REPLY: Final = FIXTURES_DIR / "completions" / "call-two" / "summary-and-plan.json"
+SUMMARIZE_AND_PLAN_REPLY: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
 
 
 #: The recorded pair for the one article in the fixture set a bar can be drawn
 #: from. Kept apart from the pair above because that pair's whole job is the
 #: transport - two calls, two costs, one payload - and this pair's whole job is
 #: the picture, which needs four figures in one unit to exist at all.
-DRAWS_CALL_ONE: Final = FIXTURES_DIR / "completions" / "call-one" / "wind-labelled.json"
+DRAWS_LABEL: Final = FIXTURES_DIR / "completions" / "label" / "wind-labelled.json"
 
-DRAWS_CALL_TWO: Final = FIXTURES_DIR / "completions" / "call-two" / "wind-summary-and-plan.json"
+DRAWS_SUMMARIZE_AND_PLAN: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "wind-summary-and-plan.json"
 
 
 def worked_requests(
@@ -96,7 +96,7 @@ class TestTheWorkStageDispatchesBothCalls:
         run_plan, items, served = worked(
             tmp_path,
             monkeypatch,
-            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+            replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         )
 
         assert served == 2 * len(run_plan.items), "the flag on is two calls an item"
@@ -117,7 +117,7 @@ class TestTheWorkStageDispatchesBothCalls:
         run_plan, items, _served = worked(
             tmp_path,
             monkeypatch,
-            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+            replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         )
 
         published = [
@@ -131,7 +131,7 @@ class TestTheWorkStageDispatchesBothCalls:
         for item_id in published:
             decision = VisualDecision.from_json(read_text(items / f"{item_id}{PAYLOAD_SUFFIX}"))
             assert decision.item_id == item_id
-            assert decision.asked_the_model, "call 2 was sent, whatever it answered"
+            assert decision.asked_the_model, "the summarize-and-plan call was sent, whatever it answered"
             assert decision.decision_ms is not None
 
     def test_a_decided_item_leaves_a_drawn_chart_on_disk(
@@ -156,7 +156,7 @@ class TestTheWorkStageDispatchesBothCalls:
         run_plan, items, _served = worked(
             tmp_path,
             monkeypatch,
-            replies=(DRAWS_CALL_ONE.read_bytes(), DRAWS_CALL_TWO.read_bytes()),
+            replies=(DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()),
             fetcher=drawable_article_fetch,
         )
 
@@ -203,7 +203,7 @@ class TestTheWorkStageDispatchesBothCalls:
         _run_plan, items, _served = worked(
             tmp_path,
             monkeypatch,
-            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+            replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         )
 
         stamped = recorded_inputs(items).prompt_sha256
@@ -224,7 +224,7 @@ class TestTheWorkStageDispatchesBothCalls:
         one failure a budget can fix was hiding inside the one it cannot, and
         the only thing separating them was a sentence in a log line.
         """
-        cut = json.loads(read_text(CALL_ONE_REPLY))
+        cut = json.loads(read_text(LABEL_REPLY))
         cut["choices"][0]["message"]["content"] = '{"labels": [{"element_id": "quan'
         cut["choices"][0]["finish_reason"] = "length"
 
@@ -247,13 +247,13 @@ class TestTheWorkStageDispatchesBothCalls:
     ) -> None:
         """The other way a labelling reply is unusable: it finished, and it is wrong.
 
-        Call 2's prompt replays call 1's reply verbatim and the reason that is
+        The summarize-and-plan call's prompt replays the label call's reply verbatim and the reason that is
         safe is that the reply has been held to a closed schema - so a reply that
         did not parse stops the item rather than being sent unchecked. These
         bytes stop mid-string like a cut one and the server says `stop`, which is
         the case a budget cannot fix and a wider grammar can.
         """
-        broken = json.loads(read_text(CALL_ONE_REPLY))
+        broken = json.loads(read_text(LABEL_REPLY))
         broken["choices"][0]["message"]["content"] = '{"labels": [{"element_id": "quan'
 
         run_plan, items, served = worked(
@@ -271,18 +271,18 @@ class TestTheWorkStageDispatchesBothCalls:
         assert {summary.failure_code for summary in written} == {FailureCode.BAD_SHAPE}
         assert not list(items.glob(f"*{PAYLOAD_SUFFIX}")), "a lost item gets no decision"
 
-    def test_an_item_lost_after_call_one_still_reports_what_call_one_spent(
+    def test_an_item_lost_after_the_label_call_still_reports_what_it_spent(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
         """Plan 11 row #3h. The expensive items are the ones that die here.
 
-        Three of the four ways this item can be lost happen after call 1 has
+        Three of the four ways this item can be lost happen after the label call has
         answered and been paid for, and each used to write five zeros. A cut
         labelling reply is the worst of the three to lose: it decoded its whole
         output budget, and it was cut precisely because the article was long -
         so the day that costs the most reads as the day that cost nothing.
 
-        Slot 2 stays empty rather than being stamped with zeros. Call 2 was
+        Slot 2 stays empty rather than being stamped with zeros. The summarize-and-plan call was
         never sent, and an empty slot says that where a zeroed one would say it
         was free.
 
@@ -291,7 +291,7 @@ class TestTheWorkStageDispatchesBothCalls:
         reads a number off it, so a `usage` block committed there would be a
         value nothing checks - and a real llama-server reply carries one.
         """
-        cut = json.loads(read_text(CALL_ONE_REPLY))
+        cut = json.loads(read_text(LABEL_REPLY))
         cut["choices"][0]["message"]["content"] = '{"labels": [{"element_id": "quan'
         cut["choices"][0]["finish_reason"] = "length"
         cut["usage"] = {"prompt_tokens": 2143, "completion_tokens": 6491}
@@ -310,13 +310,13 @@ class TestTheWorkStageDispatchesBothCalls:
         assert written, "the stage summarized nothing, so this asserts nothing"
         for summary in written:
             assert summary.status is SummaryStatus.FAILED
-            assert summary.call_1 is not None, "call 1 ran and the ledger has to say so"
+            assert summary.call_1 is not None, "the label call ran and the ledger has to say so"
             assert summary.call_1.kind is CallKind.LABEL
             assert summary.call_1.input_tokens == spent["prompt_tokens"]
             assert summary.call_1.output_tokens == spent["completion_tokens"]
             assert summary.call_1.prefill_ms == 217_580
             assert summary.call_1.decode_ms == 659_020
-            assert summary.call_2 is None, "call 2 was never sent"
+            assert summary.call_2 is None, "the summarize-and-plan call was never sent"
             assert summary.input_tokens == spent["prompt_tokens"]
             assert summary.output_tokens == spent["completion_tokens"]
 
@@ -324,8 +324,8 @@ class TestTheWorkStageDispatchesBothCalls:
 def _both_replies() -> tuple[bytes, ...]:
     """One recorded pair, replayed in a cycle so every item gets both calls."""
     return (
-        CALL_ONE_REPLY.read_bytes(),
-        CALL_TWO_REPLY.read_bytes(),
+        LABEL_REPLY.read_bytes(),
+        SUMMARIZE_AND_PLAN_REPLY.read_bytes(),
     )
 
 
@@ -344,13 +344,13 @@ class TestTheSequenceIsWalkedItemMajor:
         """The whole prefix cache rests on this, and nothing else would catch it.
 
         `models.summarize.inference` pins `n_parallel` to 1, so the server holds
-        one cache slot. Every call 1 first and every call 2 afterwards would
+        one cache slot. Every label call first and every summarize-and-plan call afterwards would
         evict the prefix before it was reused - on every item, on an ordinary
         HTTP 200, with nothing in any log to say so. The run would get slower and
         stay correct, which is the failure nobody notices.
 
-        The proof is adjacency rather than pairing: call 2's prompt opens with
-        call 1's prompt for the SAME article, so a request whose prompt does not
+        The proof is adjacency rather than pairing: the summarize-and-plan call's prompt opens with
+        the label call's prompt for the SAME article, so a request whose prompt does not
         extend the request before it is a request that was sent out of turn. A
         call-major run pairs up perfectly by index and fails here on the first
         two requests.
@@ -363,7 +363,7 @@ class TestTheSequenceIsWalkedItemMajor:
         )
         for opened in range(0, len(sent), len(dag.NODES)):
             first, second = sent[opened], sent[opened + 1]
-            assert first["n_predict"] == calls.CALL_ONE_BUDGET_TOKENS, (
+            assert first["n_predict"] == calls.LABEL_BUDGET_TOKENS, (
                 f"request {opened} is not a labelling call, so the sequence went "
                 "call-major and every prefix was evicted before it was reused"
             )
@@ -407,7 +407,7 @@ class TestTheSequenceIsWalkedItemMajor:
         sent = worked_requests(tmp_path, monkeypatch, replies=_both_replies())
 
         assert sent
-        opening = str(sent[0]["prompt"])[: len(calls.call_one_system_prompt())]
+        opening = str(sent[0]["prompt"])[: len(calls.label_system_prompt())]
         assert opening.strip(), "the shared opening is empty, so this asserts nothing"
         for index, body in enumerate(sent):
             prompt = str(body["prompt"])

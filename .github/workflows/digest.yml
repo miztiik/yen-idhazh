@@ -608,14 +608,14 @@ jobs:
           from pathlib import Path
 
           from idhazh import config
-          from idhazh.classify.calls import call_two_schema
+          from idhazh.classify.calls import summarize_and_plan_schema
           from idhazh.llm.server import prove_the_entry
 
           entry = config.load(Path("config")).models.summarize
           prove_the_entry(
               model=entry,
               weights=Path(os.environ["LLAMA_WEIGHTS"]),
-              output_schema=call_two_schema(),
+              output_schema=summarize_and_plan_schema(),
               timeout=entry.inference.request_timeout_minutes * 60,
           )
           print("the entry and the server agree on all five")
@@ -916,7 +916,8 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # The pictures this shard drew. Call 2 writes the summary and the plan in
+      # The pictures this shard drew. The summarize-and-plan call writes the
+      # summary and the plan in
       # one reply, so `work` is the only job that renders, and a decision naming
       # an asset whose bytes never left this runner is a broken image on the
       # page - `_picture_faults` calls it "names a picture file that is not
@@ -988,7 +989,8 @@ jobs:
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
-      # The pictures the work shards drew. Call 2 writes the summary and the
+      # The pictures the work shards drew. The summarize-and-plan call writes
+      # the summary and the
       # plan in one reply, so a chart is rendered on the shard that read the
       # article and travels with it - one artifact per shard, and
       # `continue-on-error` because a day where nothing was drawable is a normal
