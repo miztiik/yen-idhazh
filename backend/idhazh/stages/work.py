@@ -10,7 +10,7 @@ import json
 import os
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -376,20 +376,6 @@ def _watchlist_slugs(settings: config.Settings) -> dict[str, str]:
     }
 
 
-def _summary_half_of(completion: Completion) -> Completion | None:
-    """The summarize-and-plan call's reply recast as the single-call reply it contains, or nothing.
-
-    The reply carries the summary first and the plan second, so the summary is a
-    closed object at a known place in the bytes whatever happened behind it.
-    Handing that object to `summarize.to_summary` is what runs every
-    publishability check the single call runs - the length verdict, the
-    copied-source reject, the address reject and the restatement drop - over one
-    implementation rather than two.
-    """
-    body = calls.summary_object(completion.content)
-    return None if body is None else replace(completion, content=body)
-
-
 def _split_the_cost(summary: Summary, one: Completion, two: Completion | None) -> Summary:
     """The item's five numbers, recorded as the calls that really spent them.
 
@@ -537,10 +523,12 @@ def _two_calls_one_item(
     **An article the sequence cannot hold is refused before the label call is sent.**
     `dag.fits_the_window` sizes the label call's prompt, both decode budgets and the
     seam between the turns against `n_ctx`, and an article over it lands as
-    `FailureCode.CONTEXT_EXCEEDED`. Admitting it is the silent failure:
-    `--no-context-shift` means the decode stops at the wall on an ordinary HTTP
-    200, `recovered_completion` salvages the summary, and the item publishes
-    looking finished with its picture quietly gone.
+    `FailureCode.CONTEXT_EXCEEDED`. Admitting it would cost the picture rather
+    than the item: `--no-context-shift` means the decode stops at the wall on an
+    ordinary HTTP 200, `recovered_completion` salvages the summary, and the item
+    publishes with `window_exhausted` recorded where the picture would have been.
+    Refusing it up front is still the better answer, because the whole decode is
+    paid for before that reason can be written.
 
     **Adjacent per item, and that is a correctness rule rather than a layout
     taste.** `models.summarize.inference` pins `n_parallel` to 1, so the server
@@ -724,7 +712,17 @@ def _two_calls_one_item(
             so_far.two = two
 
             with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
-                half = _summary_half_of(two)
+                half = calls.recovered_completion(two)
+                if two.hit_the_budget and half is not None:
+                    # The seatbelt the reply shape's field order buys, spent. The
+                    # picture is gone either way; without this the summary went
+                    # with it.
+                    LOG.warning(
+                        "the summarize-and-plan reply was cut and its summary recovered "
+                        "id=%s tokens=%s",
+                        article.item_id,
+                        two.completion_tokens,
+                    )
                 so_far.summary = _split_the_cost(
                     summarize.to_summary(
                         article,

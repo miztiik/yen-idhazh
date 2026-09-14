@@ -1500,26 +1500,37 @@ def summary_object(raw: str) -> str | None:
 
 
 def recovered_completion(completion: Completion) -> Completion | None:
-    """A reply the output budget cut, recast as the summary reply alone.
+    """The summarize-and-plan reply recast as the single-call reply it contains, or nothing.
 
-    The bytes came back on an ordinary HTTP 200 and `to_summary` used to fail
-    the item on `finish_reason` without reading them. They are worth reading:
-    the picture is lost and the summary is not, and the summary is the part the
-    digest cannot publish an item without.
+    **One path, whatever the decode did.** `summary` is the first property of the
+    reply shape, so the summary object is closed, balanced and sitting at the
+    same place in the bytes whether the decode ran to the end or stopped in the
+    plan behind it. Handing that object to `summarize.to_summary` is what runs
+    every publishability check the single call runs - the length verdict, the
+    copied-source reject, the address reject and the restatement drop - over one
+    implementation rather than two.
 
-    What comes back is shaped exactly like a single-call reply, so every
-    publishability check still runs on it - the length verdict, the copied-source
-    reject, the address reject and the restatement drop all read the recovered
-    words the same way they read any others. Nothing here decides an item is
-    publishable; it only stops one being thrown away unread.
+    **The repair is what makes a cut reply publishable.** The bytes come back on
+    an ordinary HTTP 200 and `to_summary` fails the item on `finish_reason`
+    before reading them. They are worth reading: the picture is lost and the
+    summary is not, and the summary is the part the digest cannot publish an
+    item without. So `finish_reason` becomes `stop` where it was `length` - the
+    one field that would otherwise make a later reader think a closed summary
+    was cut. A reason this call did not repair is carried through untouched, and
+    so are the token counts, because they were really spent.
 
-    The token counts are carried over unchanged, because they were really spent.
-    `finish_reason` becomes `stop`, which is the one field that would otherwise
-    make a reader of the ledger think this reply completed on its own terms.
+    Nothing here decides an item is publishable; it only stops one being thrown
+    away unread.
+
+    Nothing comes back in the two cases where there is nothing to recast: a cut
+    that landed inside the summary itself, which is where there is genuinely
+    nothing to publish, and a reply the reachability gate narrowed to the summary
+    draft alone (`plan=False`), which is already the single-call shape and whose
+    `summary` is a string rather than an object.
     """
-    if not completion.hit_the_budget:
-        return None
     body = summary_object(completion.content)
     if body is None:
         return None
+    if not completion.hit_the_budget:
+        return replace(completion, content=body)
     return replace(completion, content=body, finish_reason="stop")

@@ -1673,11 +1673,25 @@ class TestARepliedCutByTheBudget:
 
         assert recovered_completion(Completion(content=early, finish_reason="length")) is None
 
-    def test_a_reply_that_finished_is_never_recovered(self) -> None:
-        """Recovery is for a cut reply. Anything else parses whole or fails as a shape."""
-        body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))
+    def test_a_reply_that_finished_is_recast_and_never_repaired(self) -> None:
+        """One path for both replies, and the repair fires only where there was a cut.
 
-        assert recovered_completion(Completion(content=body["choices"][0]["message"]["content"])) is None
+        A reply that ran to the end carries the same closed summary object in the
+        same place, so it takes the same recasting - and `finish_reason` is left
+        exactly as the server reported it, because there is nothing to repair. A
+        second path for the ordinary reply is what left the repair out of the
+        live one until 2026-09-15.
+        """
+        body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))
+        content = body["choices"][0]["message"]["content"]
+
+        recast = recovered_completion(Completion(content=content, finish_reason="stop"))
+        exotic = recovered_completion(Completion(content=content, finish_reason="eos"))
+
+        assert recast is not None and exotic is not None
+        assert recast.finish_reason == "stop"
+        assert exotic.finish_reason == "eos", "a reason this call did not repair is carried"
+        assert "visual" not in json.loads(recast.content), "the plan half is not the summary"
 
     def test_a_recovered_reply_publishes_through_every_check_the_summarizer_runs(
         self, article_ok: Article
