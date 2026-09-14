@@ -2,14 +2,15 @@
 
 **Last Updated**: 2026-09-12
 
-Frozen. This is one run on one day; it is not updated when a later run
-disagrees. A later run gets its own record.
+Living, one question one answer. The reading below was taken on one day and
+the date is in the title; a re-run of this measurement REPLACES this page and
+moves **Last Updated**, and git history holds what it said.
 
 Call 2's question used to sit in a user turn behind the article. It is
 byte-identical on every item, but the text in front of it is not, so a prefix
 cache cannot reach it and every token of it was read again on every item, for
 ever - **687 tokens, measured the same day** in
-[`2026-09-12-two-call-re-read.md`](2026-09-12-two-call-re-read.md). This run is
+[`two-call-re-read.md`](two-call-re-read.md). This run is
 the before and after of moving both jobs into the system turn, in front of the
 article, and leaving three lines behind
 ([`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md)
@@ -65,7 +66,7 @@ it in the same turn.
 seconds an item and 22.0 minutes of a 20-item shard**. The 697 the system turn
 took on is paid once a shard, because that turn is byte-identical on every item
 and the server's prefix cache answers for it from item 2 onward - measured on
-this model in [`2026-09-12-two-call-re-read.md`](2026-09-12-two-call-re-read.md),
+this model in [`two-call-re-read.md`](two-call-re-read.md),
 where items 2 and 3 each reused 1,362 tokens with no work. So a 20-item shard is
 **20.8 minutes better off, net**.
 
@@ -200,7 +201,7 @@ own rather than to this one.
 
 ## See also
 
-- [`2026-09-12-two-call-re-read.md`](2026-09-12-two-call-re-read.md) - the run
+- [`two-call-re-read.md`](two-call-re-read.md) - the run
   that found the 687 tokens this one removes.
 - [`../../architecture/summarize/prompt.md`](../../architecture/summarize/prompt.md) -
   the living doc that owns the prompt layout.

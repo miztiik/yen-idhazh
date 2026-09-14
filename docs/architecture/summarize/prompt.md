@@ -399,7 +399,7 @@ saving of **650 tokens on every item**, which is **66.0 seconds an item** and
 [`throughput.md`](throughput.md). The system turn grew by **697 tokens**, paid
 once a shard, so a 20-item shard is **20.8 minutes** better off net. The working
 is in
-[`../../reference/benchmarks/2026-09-12-instructions-in-front.md`](../../reference/benchmarks/2026-09-12-instructions-in-front.md).
+[`../../reference/benchmarks/instructions-in-front.md`](../../reference/benchmarks/instructions-in-front.md).
 
 **It buys the article no room, and takes 47 tokens away from it.** Moving a
 token from behind the article to in front of it changes where it sits, never how
@@ -507,7 +507,7 @@ of what a broken prefix looks like.
 `backend/utilities/measure_two_calls.py` starts a real server, sends the two
 calls adjacent on one slot, and splits every token the server prefilled into
 three causes. The run behind the figures here is
-[`../../reference/benchmarks/2026-09-12-two-call-re-read.md`](../../reference/benchmarks/2026-09-12-two-call-re-read.md).
+[`../../reference/benchmarks/two-call-re-read.md`](../../reference/benchmarks/two-call-re-read.md).
 
 **`Qwen3.5-9B-Q4_K_M.gguf` - the configured weights, sha256 `03b74727...` -
 through `llama-server` build 10444, `n_ctx` 16384, flash attention on, four

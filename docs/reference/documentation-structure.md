@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-14
 
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
@@ -48,7 +48,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 | **How-to doc** | `docs/how-to/<verb>-<slug>.md` | Operator running a procedure | Living runbook | Ordered steps, inputs, validation, failure modes | Rationale prose; concept definitions |
 | **Reference doc** | `docs/reference/*.md` | Someone needing an exact value | Living table | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure |
 | **Agent notes** | `docs/reference/agent-notes.md` (index) + `docs/reference/agent-notes/<tool-family>.md` | Anyone running commands in the repo | Living list | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
-| **Benchmark record** | `docs/reference/benchmarks/<YYYY-MM-DD>-<what-was-measured>.md` | Anyone citing or re-running that run | **Frozen** - a run happened on a date and its conditions do not change | One run: its conditions, method, arms, raw figures, and what it settles and does not | The rule the figures justify; a figure a later run superseded |
+| **Benchmark record** | `docs/reference/benchmarks/<what-was-measured>.md` | Anyone citing or re-running that run | Living, one question one answer - a re-run REPLACES the page and moves **Last Updated**; git history holds what it said | One run: its conditions, method, arms, raw figures, and what it settles and does not | The rule the figures justify; a figure a later run superseded; a date in the filename |
 | **Plan-doc** | `TODO/<YYYYMMDD>-<slug>-plan.md` | Next person picking up work | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers | Rationale prose; decisions; rejected alternatives |
 
 ### Routing rules (decide a new statement's home)

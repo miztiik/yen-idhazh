@@ -2,8 +2,9 @@
 
 **Last Updated**: 2026-09-13
 
-Frozen. This is one run on one day; it is not updated when a later run
-disagrees. A later run gets its own record.
+Living, one question one answer. The reading below was taken on one day and
+the date is in the title; a re-run of this measurement REPLACES this page and
+moves **Last Updated**, and git history holds what it said.
 
 `pie` may only be drawn against a whole the article **declared**, never one the
 planner summed

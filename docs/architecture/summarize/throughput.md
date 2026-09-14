@@ -202,14 +202,14 @@ run reused **1,362 tokens** of its call-1 prompt with no work - call 1's system
 turn, which is byte-identical on every item - while the article behind it read
 from cold. The run also destroyed the previous item's copy of call 2's question,
 which is what a one-slot cache is supposed to do
-([`../../reference/benchmarks/2026-09-12-two-call-re-read.md`](../../reference/benchmarks/2026-09-12-two-call-re-read.md)).
+([`../../reference/benchmarks/two-call-re-read.md`](../../reference/benchmarks/two-call-re-read.md)).
 
 ## What call 2 reads again, and which row owns each part
 
 The second call opens with the first call's whole message array, so most of its
 prompt is answered from the slot. What is left is three things, and the figure
 in force for each is from
-[`../../reference/benchmarks/2026-09-12-two-call-re-read.md`](../../reference/benchmarks/2026-09-12-two-call-re-read.md) -
+[`../../reference/benchmarks/two-call-re-read.md`](../../reference/benchmarks/two-call-re-read.md) -
 `Qwen3.5-9B-Q4_K_M.gguf` through `llama-server` build 10444, 2026-09-12, one run
 and no spread, on the longest article the committed corpus holds.
 
@@ -231,7 +231,7 @@ reply to. The rendered turn went from 692 tokens to 42, so **650 tokens come off
 every item** - 66.0 seconds an item, 22.0 minutes of a 20-item shard - and the
 system turn grew by 697, paid once a shard because it is the same bytes on every
 item. **Net, a 20-item shard is 20.8 minutes better off.** Measured 2026-09-12
-([`../../reference/benchmarks/2026-09-12-instructions-in-front.md`](../../reference/benchmarks/2026-09-12-instructions-in-front.md)).
+([`../../reference/benchmarks/instructions-in-front.md`](../../reference/benchmarks/instructions-in-front.md)).
 
 **What the two calls cost over a single call was 797 tokens an item** - the
 template break plus the trailing turn - which is **80.9 seconds an item, about

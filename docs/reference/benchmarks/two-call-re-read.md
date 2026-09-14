@@ -2,8 +2,9 @@
 
 **Last Updated**: 2026-09-12
 
-Frozen. This is one run on one day; it is not updated when a later run
-disagrees. A later run gets its own record.
+Living, one question one answer. The reading below was taken on one day and
+the date is in the title; a re-run of this measurement REPLACES this page and
+moves **Last Updated**, and git history holds what it said.
 
 The two-call summariser sends call 2 with call 1's whole message array in front
 of it, so most of call 2's prompt should be answered from the server's prefix
@@ -140,7 +141,7 @@ header, a pointer and the band numbers row #3e keeps.
 Both prompts rendered and tokenised, no decode:
 
 **Superseded on 2026-09-13 by
-[`2026-09-13-two-call-window-sizing.md`](2026-09-13-two-call-window-sizing.md),
+[`two-call-window-sizing.md`](two-call-window-sizing.md),
 and the numbers below are left as taken.** Two things moved. Call 1's output
 budget stopped being `max_output_tokens` when row #3g derived it from the
 grammar - 900 to 6,491 - and the 400-token stand-in for call 1's reply was never
@@ -209,4 +210,4 @@ the article length in the same sentence.
 - [`../../architecture/summarize/throughput.md`](../../architecture/summarize/throughput.md) - the rate this reading is priced against, and the figure now in force.
 - [`../../architecture/summarize/prompt.md`](../../architecture/summarize/prompt.md) - why call 2 appends to call 1's message array.
 - [`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md) - rows #3c, #3e and #3f, which this reading prices.
-- [`2026-09-11-day-window-read.md`](2026-09-11-day-window-read.md) - the record that created this directory.
+- [`day-window-read.md`](day-window-read.md) - the record that created this directory.
