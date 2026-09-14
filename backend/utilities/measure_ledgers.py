@@ -41,10 +41,21 @@ against the wrong number.
 **Which rows count as "at the configured cap", and why one instrument.** A run
 qualifies on one proof, and it is committed data:
 
-- **The item ledger itself.** `source_words` is post-cap and cannot exceed
-  `int(truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so a row sitting
-  exactly on that ceiling with a larger `source_words_before_cap` is physical
-  proof the configured cap did the cutting.
+- **The item ledger itself.** A row carries `truncation_cap_tokens`, the cap that
+  cut it, written at the moment of the cut. A run with a row naming the
+  configured cap ran at that cap, and nothing else has to be inferred.
+
+  **The ceiling is not re-derived to check this, and that is deliberate.** The
+  proof used to be `source_words` equal to
+  `int(truncation_cap_tokens / extract.TOKENS_PER_WORD)`, which asks about this
+  morning's config rather than about the run: the ratio is a reading, and when it
+  was retaken on 2026-09-14 the implied ceiling moved from 1,000 words to 953 and
+  every historical row stopped matching at once. What happened to a row is
+  recorded on the row.
+
+  **A run before 2026-09-14 recorded no cap and cannot be admitted.** That is the
+  honest answer rather than a loss: backfilling today's cap onto a run that never
+  used it is how rows of an unknown cap get into one regression.
 
   There were two until 2026-09-12. The second read `pipeline_fingerprint` off
   `state/scores/`, because the cap was one of the inputs that stamp was taken
@@ -106,6 +117,7 @@ class Item:
     input_tokens: int | None
     source_words: int | None
     source_words_before_cap: int | None
+    truncation_cap_tokens: int | None
 
     @property
     def residual_ms(self) -> int | None:
@@ -139,6 +151,7 @@ def read_items(state_dir: Path) -> list[Item]:
                         input_tokens=_cell(row, "input_tokens"),
                         source_words=_cell(row, "source_words"),
                         source_words_before_cap=_cell(row, "source_words_before_cap"),
+                        truncation_cap_tokens=_cell(row, "truncation_cap_tokens"),
                     )
                 )
     return items
@@ -356,17 +369,20 @@ class Admission:
     run_id: str
     rows: int
     widest_words: int
-    cut_at_ceiling: bool
+    cut_by_the_cap: bool
 
     @property
     def admitted(self) -> bool:
-        return self.cut_at_ceiling
+        return self.cut_by_the_cap
 
     @property
     def proof(self) -> str:
-        if self.cut_at_ceiling:
-            return "a row cut exactly on the ceiling the configured cap implies"
-        return "none - no row reached the ceiling the configured cap implies"
+        if self.cut_by_the_cap:
+            return "a row naming the configured cap as the one that cut it"
+        return (
+            "none - no row of this run names the configured cap. A run before "
+            "2026-09-14 recorded no cap at all and cannot be admitted"
+        )
 
 
 def ceiling_words(cap_tokens: int) -> int:
@@ -376,7 +392,6 @@ def ceiling_words(cap_tokens: int) -> int:
 
 def admissions(state_dir: Path, items: Sequence[Item], *, cap_tokens: int) -> list[Admission]:
     """Every run in the item ledger, with the proof it ran at the configured cap."""
-    ceiling = ceiling_words(cap_tokens)
     out: list[Admission] = []
     for run_id in sorted({item.run_id for item in items}):
         sized = [
@@ -386,10 +401,8 @@ def admissions(state_dir: Path, items: Sequence[Item], *, cap_tokens: int) -> li
         ]
         if not sized:
             continue
-        cut_on_ceiling = any(
-            i.source_words == ceiling
-            and i.source_words_before_cap is not None
-            and i.source_words_before_cap > i.source_words
+        cut_by_the_cap = any(
+            i.truncation_cap_tokens == cap_tokens
             for i in items
             if i.run_id == run_id
         )
@@ -398,7 +411,7 @@ def admissions(state_dir: Path, items: Sequence[Item], *, cap_tokens: int) -> li
                 run_id=run_id,
                 rows=len(sized),
                 widest_words=max(i.source_words or 0 for i in sized),
-                cut_at_ceiling=cut_on_ceiling,
+                cut_by_the_cap=cut_by_the_cap,
             )
         )
     return out

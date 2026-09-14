@@ -105,34 +105,31 @@ class TokenizerMeasured(Measured):
 #: fact about a reading and is a literal for that reason (Guardrail #6).
 QWEN35_9B_Q4_K_M: Final[Sha256] = "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
 
-#: The weights the three readings in `SIZED_BY_A_READING_HERE` were taken against,
-#: retired by the 8B-to-9B swap on 2026-08-27. Read back out of git rather than
-#: remembered: `git show 5d8ba601^:config/idhazh.json` is the last commit that
-#: named it. Here for the same reason as the line above - a reading's subject is
-#: a historical fact and never a knob.
-QWEN3_8B_Q4_K_M: Final[Sha256] = "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
-
 
 # --- Three constants that cannot read a record, and the readings that sized them --
 
 
-#: Thirty definition sentences, which is what `VocabularyEntry.definition` bounds.
+#: Every definition sentence, which is what `VocabularyEntry.definition` bounds.
 DEFINITION_SENTENCE_TOKENS: Final = TokenizerMeasured(
-    value=805,
-    measures="thirty taxonomy definition sentences together, in tokens",
-    taken_on=date(2026, 9, 11),
-    subject=QWEN3_8B_Q4_K_M,
+    value=658,
+    measures="every taxonomy definition sentence together, in tokens",
+    taken_on=date(2026, 9, 14),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "joined the `definition` of every entry in config/taxonomy.json and tokenized "
-        "the join with llama-tokenize; 805 together is about 27 each. They ride in "
-        "every labelling prompt, so the total is the quantity and the per-sentence "
-        "figure is the total divided by the count."
+        "the join through the running server's /tokenize. 658 over 23 sentences is "
+        "28.6 each. They ride in every labelling prompt, so the total is the quantity "
+        "and the per-sentence figure is the total divided by the count. **Two things "
+        "moved between this reading and the one before it** - the weights, and the "
+        "vocabulary itself, which went from 30 definitions to 23. The total fell from "
+        "805 because there are fewer sentences; per sentence it rose from 26.8, which "
+        "is the only half of the change the tokenizer is responsible for."
     ),
     when_it_fires=(
-        "the weights moved, or a definition was rewritten. Re-tokenize the joined "
-        "definitions and re-derive `DefinitionText`'s character bound from the new "
-        "per-sentence figure - it is about twice it, which is room to sharpen a "
-        "sentence rather than room for a paragraph."
+        "the weights moved, or a definition was rewritten, or an entry was added or "
+        "retired. Re-tokenize the joined definitions and re-derive `DefinitionText`'s "
+        "character bound from the new per-sentence figure - it is about twice it, "
+        "which is room to sharpen a sentence rather than room for a paragraph."
     ),
     why_a_number=(
         "the bound it sizes is a character count on a persisted contract, and a "
@@ -145,15 +142,16 @@ DEFINITION_SENTENCE_TOKENS: Final = TokenizerMeasured(
 #: The cost of requiring every encoding role, which is what makes the widest
 #: decoded plan reply the same shape as an ordinary one.
 EMPTY_ROLE_TOKENS: Final = TokenizerMeasured(
-    value=28,
+    value=30,
     measures="the nine empty encoding roles on a visual plan that declines, in tokens",
-    taken_on=date(2026, 9, 9),
-    subject=QWEN3_8B_Q4_K_M,
+    taken_on=date(2026, 9, 14),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
-        "tokenized the two committed plan fixtures with llama-tokenize. An empty role "
-        "is `\"<name>\":[]` and a comma, so the nine cost 114 characters on the plan "
-        "that declines and the seven a bar leaves empty cost 87 - 28 tokens and 23, "
-        "about 3.1 tokens an empty role."
+        "tokenized the committed plan fixtures through the running server's "
+        "/tokenize. An empty role is `\"<name>\":[]` and a comma, so the nine cost "
+        "115 characters on the plan that declines - 30 tokens, about 3.3 tokens an "
+        "empty role. It was 28 on the retired 8B, so the denser vocabulary costs two "
+        "tokens more for the same bytes."
     ),
     when_it_fires=(
         "the weights moved, or a role was added to or removed from the plan shape. "
@@ -169,27 +167,28 @@ EMPTY_ROLE_TOKENS: Final = TokenizerMeasured(
 
 #: The ratio every truncation point in the pipeline is placed with.
 TOKENS_A_WORD_AT_THE_CUT: Final = TokenizerMeasured(
-    value=1.3,
-    kind="judgement",
+    value=1.3628,
     measures="tokens a word, used to spend a token cap as a word count at the cut",
-    taken_on=date(2026, 8, 21),
-    subject=QWEN3_8B_Q4_K_M,
+    taken_on=date(2026, 9, 14),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
-        "not taken through a tokenizer at all. It is the received figure for English "
-        "in a BPE vocabulary, written on the day `truncate_to_tokens` landed, and the "
-        "subject is the weights the configuration named that day rather than a "
-        "vocabulary anybody counted with. `WORST_TOKENS_A_WORD` at 1.585 is the same "
-        "quantity measured, on one article, and the gap between the two is the miss."
+        "tokenized the article bodies of the first 200 corpus rows through the running "
+        "server's /tokenize and divided total tokens by total words. **It was a "
+        "judgement until this reading** - 1.3 was the received figure for English in a "
+        "BPE vocabulary, written on the day `truncate_to_tokens` landed and never "
+        "counted. It is a measurement now, and it moved 4.8 percent, so every "
+        "truncation point cuts slightly earlier than it did."
     ),
     when_it_fires=(
-        "the weights moved, or an article was cut shorter than its cap allowed. Take "
-        "it properly: tokenize the article bodies of a bounded sample of corpus rows "
-        "and divide total tokens by total words."
+        "the weights moved, or an article was cut shorter than its cap allowed. "
+        "Re-tokenize a bounded sample of corpus article bodies and divide total tokens "
+        "by total words - `backend/utilities/measure_budgets.py read` is that probe."
     ),
     why_a_number=(
-        "a ratio has to be a number to convert a token cap into a word count. It is a "
-        "judgement rather than a measurement and says so, which is the only reason it "
-        "is allowed to be this old: a design may not lean on it (Guardrail #10)."
+        "a ratio has to be a number to convert a token cap into a word count. "
+        "`WORST_TOKENS_A_WORD` at 1.585 is the same quantity on the single worst "
+        "article rather than over a sample, and the gap between the two is the "
+        "headroom a cap has to carry."
     ),
 )
 

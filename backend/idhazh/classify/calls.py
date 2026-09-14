@@ -1281,10 +1281,13 @@ def call_two_output_tokens(
     the brake and the recovery is the seatbelt. A budget large enough to be an
     unbreakable ceiling would leave no window for the article it is summarising.
 
-    Measured against the committed bounds on 2026-09-10, the whole reply is
-    11,692 characters at its widest: 7,848 of prose, which is 850 tokens at 1.3
-    a word, and 3,844 of structure, of which the plan alone is 3,767. So the
-    budget is 4,694 tokens and it is mostly the picture.
+    Measured against the committed bounds on 2026-09-14, the whole reply is
+    11,692 characters at its widest: 7,848 of prose, which is 891 tokens at
+    1.3628 a word, and 3,844 of structure, of which the plan alone is 3,767. So
+    the budget is 4,735 tokens and it is mostly the picture. **It was 4,694 at
+    1.3 a word** - the ratio stopped being a judgement and became a reading on
+    2026-09-14 (`measured.TOKENS_A_WORD_AT_THE_CUT`), and 41 tokens is what the
+    denser vocabulary costs the ceiling.
 
     **The suppressed budget is the same arithmetic over the narrower shape**,
     not that number minus the plan's. Subtracting would be a second way of
@@ -1304,14 +1307,14 @@ def call_two_output_tokens(
 #: `visual.WORST_CASE_REPLY_CHARACTERS` is the precedent and the reason is the
 #: same: a number that only exists inside a function is a number nobody
 #: re-derives, and a bound can then move without anybody seeing what it cost.
-CALL_TWO_BUDGET_TOKENS: Final = 4694
+CALL_TWO_BUDGET_TOKENS: Final = 4735
 #: The same arithmetic with the plan off the grammar. The gap between the two is
 #: what the reachability gate saves per item, and it is a decode rather than a
-#: call (O43): 3,789 tokens off a 4,694-token ceiling, which is 81 percent of it.
+#: call (O43): 3,789 tokens off a 4,735-token ceiling, which is 80 percent of it.
 #: A ceiling is not a measurement of seconds - an ordinary reply's plan half was
 #: measured at 176 tokens of 327, which is 29.3 s at the summarizer's decode
 #: rate. The working is in `docs/architecture/publishing/visuals.md`.
-SUPPRESSED_BUDGET_TOKENS: Final = 905
+SUPPRESSED_BUDGET_TOKENS: Final = 946
 
 if call_two_output_tokens() != CALL_TWO_BUDGET_TOKENS:
     raise TypeError(
