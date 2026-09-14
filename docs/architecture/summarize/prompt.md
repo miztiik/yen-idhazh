@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -766,8 +766,19 @@ single-call reply - so the length verdict, the copied-source reject, the address
 reject and the restatement drop above all still run on it, unchanged. The item
 publishes with its summary and no picture, at no extra seconds and with no
 second request. Reversed, the same cut would lose the summary, which is the part
-a reader came for. `to_summary` used to fail such an item on `finish_reason`
-without reading the bytes at all.
+a reader came for.
+
+**The recovery clears the `finish_reason` it repaired, and that is the half that
+was missing.** `to_summary` refuses a completion reporting `length` before it
+reads a byte, so a salvaged reply that still claims it was cut is a reply that
+still fails. A cut one that was salvaged is not a truncated one, and the same
+answer is owed to every later reader that asks. The work stage calls the
+recovery on every summarize-and-plan reply rather than only on a cut one, so
+there is one path through the parse and the repair cannot be left out of it. It
+was written with its tests and no caller: between 2026-09-05 and 2026-09-15 a
+second copy in the work stage did the same extraction without the repair, and
+every cut item lost the summary this section exists to save. On run
+`34852763827` that was three items in one day.
 
 **The plan is drafted with the summary already in context, and that is
 conditioning rather than sourcing.** The plan may cite only an element the

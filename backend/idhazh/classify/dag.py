@@ -12,9 +12,11 @@ is the last one - the summarize-and-plan prompt is the label prompt plus the lab
 call's whole reply,
 so every node's decode budget is paid inside the next node's prompt. A sequence
 assembled a row at a time is a budget nobody ever checks whole, and the failure
-is silent: `--no-context-shift` means a decode that runs into the wall stops on
-an ordinary HTTP 200, `recovered_completion` salvages the summary, and the item
-publishes with no picture. `sequence_tokens` is that sum, in one place, read by
+reads as an ordinary day: `--no-context-shift` means a decode that runs into the
+wall stops on an ordinary HTTP 200, `recovered_completion` salvages the summary,
+and the item publishes with no picture and `window_exhausted` recorded beside it.
+One item reading that way is the seatbelt working; a whole shard reading that way
+is a sequence nobody sized. `sequence_tokens` is that sum, in one place, read by
 the production gate and by the contract test together.
 
 **Item-major is a correctness rule, not a layout taste.**

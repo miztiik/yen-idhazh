@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
@@ -350,10 +350,12 @@ that module is what makes adding one loud.
 
 **An article the sequence cannot hold is refused before the label call is sent.**
 `dag.fits_the_window` is the check and `FailureCode.CONTEXT_EXCEEDED` is what the
-item lands as. Admitting it is the silent failure: `--no-context-shift` means the
-decode stops at the wall on an ordinary HTTP 200, `recovered_completion` salvages
-the summary, and the item publishes looking finished with its picture quietly
-gone - after both calls have been paid for.
+item lands as. Admitting it would cost the picture rather than the item:
+`--no-context-shift` means the decode stops at the wall on an ordinary HTTP 200,
+`recovered_completion` salvages the summary, and the item publishes with
+`window_exhausted` recorded where the picture would have been - after both calls
+have been paid for. Refusing it up front is still the better answer, because
+that whole decode is spent before the reason can be written.
 
 **The cache works, measured on the runner.** Over run `2026-09-13-34762570110`,
 shard 2, three consecutive items on a stock `ubuntu-latest`: the summarize-and-plan call reported

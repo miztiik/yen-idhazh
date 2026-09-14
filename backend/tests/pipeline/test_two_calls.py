@@ -17,7 +17,13 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_data import VisualData
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    NoneReason,
+    VisualDecision,
+    VisualKind,
+    VisualState,
+)
 from idhazh.fingerprint import text_digest
 from idhazh.render.write import asset_relpath
 from idhazh.stages import common
@@ -40,6 +46,11 @@ CLOCKS: Final = ("generated_at", "duration_ms", "fetch_ms", "extract_ms", "summa
 LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
 
 SUMMARIZE_AND_PLAN_REPLY: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
+
+#: The same shape, stopped by the output budget part-way through the plan. The
+#: envelope says `length`, which is what the server really reports, so nothing
+#: has to be edited into it to drive the cut path.
+CUT_IN_THE_PLAN_REPLY: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "cut-in-the-plan.json"
 
 
 #: The recorded pair for the one article in the fixture set a bar can be drawn
@@ -319,6 +330,83 @@ class TestTheWorkStageDispatchesBothCalls:
             assert summary.call_2 is None, "the summarize-and-plan call was never sent"
             assert summary.input_tokens == spent["prompt_tokens"]
             assert summary.output_tokens == spent["completion_tokens"]
+
+
+class TestAReplyTheBudgetCutKeepsItsSummary:
+    """Row #9. The recovery had no production caller, so every cut item died whole.
+
+    On run `34852763827` three items decoded exactly the summarize-and-plan
+    budget, hit the cap, and lost their summaries - the half a reader came for -
+    while `calls.recovered_completion` sat beside them tested and uncalled.
+
+    Both arms run the real work stage over a captured page and a recorded reply
+    played back by a loopback server, so what is asserted is what a shard writes
+    to disk (Guardrail #7).
+    """
+
+    def test_a_cut_in_the_plan_publishes_the_summary_and_records_the_missing_picture(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Field order is decode order, and this is that guarantee spent.
+
+        `summary` is declared before `visual`, so a reply the budget cuts is cut
+        in the plan and the summary behind it is closed, balanced and readable.
+        The item publishes; what it does not carry is a picture, and the decision
+        says which of the two walls stopped the decode.
+        """
+        run_plan, items, served = worked(
+            tmp_path,
+            monkeypatch,
+            replies=(LABEL_REPLY.read_bytes(), CUT_IN_THE_PLAN_REPLY.read_bytes()),
+        )
+
+        assert served == 2 * len(run_plan.items), "the cut is in the second call's reply"
+        written = [
+            Summary.from_json(read_text(items / f"{item.item_id}.summary.json"))
+            for item in run_plan.items
+        ]
+        assert written, "the stage summarized nothing, so this asserts nothing"
+        for summary in written:
+            assert summary.status is SummaryStatus.OK
+            assert summary.summary and "34 percent" in summary.summary
+            assert summary.key_points
+        for item in run_plan.items:
+            decision = VisualDecision.from_json(read_text(items / f"{item.item_id}{PAYLOAD_SUFFIX}"))
+            assert decision.kind is VisualKind.NONE
+            assert decision.visual_state is VisualState.ABSENT
+            assert decision.none_reason is NoneReason.OUTPUT_BUDGET_CUT
+            assert decision.rationale and "output budget" in decision.rationale
+
+    def test_a_cut_inside_the_summary_still_loses_the_item(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """The conservative half. Half a sentence published is worse than no item.
+
+        The same recorded reply, stopped before the summary object closes. There
+        is nothing balanced to lift out, so the recovery hands back nothing and
+        the item fails exactly as it did before the caller existed - typed, and
+        with no partial words on the page.
+        """
+        body = json.loads(read_text(CUT_IN_THE_PLAN_REPLY))
+        content = body["choices"][0]["message"]["content"]
+        body["choices"][0]["message"]["content"] = content[: content.index('"key_points"')]
+
+        run_plan, items, _served = worked(
+            tmp_path,
+            monkeypatch,
+            replies=(LABEL_REPLY.read_bytes(), json.dumps(body).encode("utf-8")),
+        )
+
+        written = [
+            Summary.from_json(read_text(items / f"{item.item_id}.summary.json"))
+            for item in run_plan.items
+        ]
+        assert written, "the stage summarized nothing, so this asserts nothing"
+        for summary in written:
+            assert summary.status is SummaryStatus.FAILED
+            assert summary.failure_code is FailureCode.OUTPUT_TRUNCATED
+            assert not summary.summary, "a cut summary is never published in part"
+        assert not list(items.glob(f"*{PAYLOAD_SUFFIX}")), "a lost item gets no decision"
 
 
 def _both_replies() -> tuple[bytes, ...]:
