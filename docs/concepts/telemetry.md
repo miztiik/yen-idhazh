@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -133,9 +133,9 @@ Two stages write that census, and one row identity keeps them from disagreeing.
 
 A worker commits the rows for its own items as soon as each one settles. Until
 it did, a shard's verdicts left the runner only inside a run artifact that
-expires in a day and is skipped entirely when a job is cancelled - so a run
-stopped between the workers and the publish had measured every item and recorded
-none of it. A bad day is exactly the day worth measuring.
+expires and is never committed - so a run stopped between the workers and the
+publish had measured every item and recorded none of it. A bad day is exactly
+the day worth measuring.
 
 Assemble then writes the whole day's census, including a `not_attempted` row for
 every planned item no article payload arrived for. That keeps the denominator in
