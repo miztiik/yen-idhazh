@@ -725,6 +725,7 @@ def classify_item(
             source_chars=len(article.text or "") if article.text is not None else None,
             source_words=article.word_count or None,
             source_words_before_cap=article.source_word_count,
+            truncation_cap_tokens=article.truncated_at_tokens,
             detail=detail,
         )
 
@@ -742,6 +743,7 @@ def classify_item(
                 source_chars=len(article.text or ""),
                 source_words=article.word_count,
                 source_words_before_cap=article.source_word_count,
+                truncation_cap_tokens=article.truncated_at_tokens,
             )
         return _row(
             planned=planned,
@@ -755,6 +757,7 @@ def classify_item(
             source_chars=len(article.text or ""),
             source_words=article.word_count,
             source_words_before_cap=article.source_word_count,
+            truncation_cap_tokens=article.truncated_at_tokens,
             detail=detail_cell("summary payload missing"),
         )
 
@@ -775,6 +778,7 @@ def classify_item(
             source_chars=len(article.text or ""),
             source_words=article.word_count,
             source_words_before_cap=article.source_word_count,
+            truncation_cap_tokens=article.truncated_at_tokens,
             fetch_ms=summary.fetch_ms,
             extract_ms=summary.extract_ms,
             summarize_ms=summary.summarize_ms,
@@ -803,6 +807,7 @@ def classify_item(
         source_chars=len(article.text or ""),
         source_words=article.word_count,
         source_words_before_cap=article.source_word_count,
+        truncation_cap_tokens=article.truncated_at_tokens,
         summary_words=len((summary.summary or "").split()),
         fetch_ms=summary.fetch_ms,
         extract_ms=summary.extract_ms,
@@ -859,6 +864,7 @@ def _row(
     output_tokens: int | None = None,
     cached_tokens: int | None = None,
     source_words_before_cap: int | None = None,
+    truncation_cap_tokens: int | None = None,
     extraction: ExtractionHealth | None = None,
     calls: tuple[CallCost | None, CallCost | None] = (None, None),
 ) -> ItemHealthRow:
@@ -888,6 +894,7 @@ def _row(
         output_tokens=output_tokens,
         cached_tokens=cached_tokens,
         source_words_before_cap=source_words_before_cap,
+        truncation_cap_tokens=truncation_cap_tokens,
         shard=shard,
         span_integrity=extraction.span_integrity if extraction is not None else None,
         elements_found=extraction.elements_found if extraction is not None else None,

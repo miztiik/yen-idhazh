@@ -121,14 +121,12 @@ split.
 a truncation cap of 2,500 tokens no prompt could reach the window the machine
 read with, so the count was zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
-is already being printed. The cap has moved twice since - to 5,000 on 2026-08-29
-and to 10,000 on 2026-09-09 - and the count is still zero by arithmetic. The
-arithmetic tightened and then loosened again: the longest single-call prompt the
-cap can produce is about 14,100 tokens, which was 86 percent of a 16,384 window
-and is 29 percent of the 49,152 the window took on 2026-09-13
+is already being printed. The cap has moved three times since and the count is
+still zero by arithmetic: the longest single-call prompt the committed cap can
+produce sizes at 25,156 tokens, which is 38 percent of the 65,536 window
 ([../reference/measurements.md](../reference/measurements.md)). **What that
-window was raised for is the two-call pair, which the counter does not read** -
-it sizes at 39,284 tokens
+window is held open for is the two-call pair, which the counter does not read**
+- it sizes at 54,887 tokens
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). So
 this counter would catch the next move of the cap going too far for the path it
 watches, and the pair has an assertion of its own.

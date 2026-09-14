@@ -108,14 +108,8 @@ footprint.
 
 So **65,536 costs 1,584 MiB more than 16,384**, against the runner's measured
 low-water free of 6.84 GiB and a 1.0 GiB bar. `n_ctx_train` is 262,144, so none
-of these arms scaled RoPE.
-
-**The window was ruled at 49,152 after this session, and nothing above is
-restated for it.** These are the arms that ran; 49,152 was not one of them. It
-interpolates to 1,536.00 MiB of KV and 9,754.88 MiB all told, 1,056 MiB more
-than 16,384. The `vs 65,536` column further up is what this session compared
-against: against 49,152 the densest build has 11,657 spare, and the sized worst
-case of 39,284 has 9,868. Carmack, 2026-09-13.
+of these arms scaled RoPE. **65,536 is the window `config/` carries**, so the
+reading for it is measured here rather than interpolated.
 
 **Peak working set is the weaker of the two numbers.** It counts the
 memory-mapped weights, which the OS may evict, and it moves with what else the

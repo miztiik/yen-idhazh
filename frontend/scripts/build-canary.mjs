@@ -128,7 +128,8 @@ function writeItemHealthCanary() {
 		'shard', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
 		'call_1_kind', 'call_1_prefill_ms', 'call_1_decode_ms', 'call_1_input_tokens',
 		'call_1_output_tokens', 'call_1_cached_tokens', 'call_2_kind', 'call_2_prefill_ms',
-		'call_2_decode_ms', 'call_2_input_tokens', 'call_2_output_tokens', 'call_2_cached_tokens'
+		'call_2_decode_ms', 'call_2_input_tokens', 'call_2_output_tokens', 'call_2_cached_tokens',
+		'truncation_cap_tokens'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.

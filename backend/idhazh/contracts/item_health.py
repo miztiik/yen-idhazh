@@ -214,6 +214,24 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T02:00",
+            change="Added nullable truncation_cap_tokens at the end of the row.",
+            why=(
+                "source_words_before_cap says a cut happened; nothing said which cap did "
+                "it. So a reader asking which runs shared one cap had to compare "
+                "source_words against int(truncation_cap_tokens / TOKENS_PER_WORD) as "
+                "that ratio stands today - and the ratio is a reading that gets retaken. "
+                "When it moved from 1.3 to 1.3628 on 2026-09-14 the implied ceiling went "
+                "1,000 words to 953 and every historical row stopped matching at once, "
+                "which reads as an empty population rather than as a broken question. "
+                "The cap that cut a row is known at the moment of the cut and is now "
+                "written there, taken from Article.truncated_at_tokens. Appended at the "
+                "end and nullable: a row an earlier run wrote recorded no cap, and an "
+                "empty cell is the honest answer rather than today's cap backfilled onto "
+                "a run that never used it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-14T01:30",
             change=(
                 "ItemStage gained visual. The generated schema lists it because the enum "
@@ -563,6 +581,19 @@ class ItemHealthRow(Contract):
     call_2_input_tokens: int | None = Field(default=None, ge=0)
     call_2_output_tokens: int | None = Field(default=None, ge=0)
     call_2_cached_tokens: int | None = Field(default=None, ge=0)
+    truncation_cap_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "The cap that cut this row, taken from Article.truncated_at_tokens. Filled "
+            "only where the cut happened, so it is non-null exactly where "
+            "source_words_before_cap > source_words. It says which cap did the cutting, "
+            "which the pair of word counts cannot: they say a cut happened and nothing "
+            "about the setting behind it. Never re-derive this from the configured cap "
+            "and the tokens-a-word ratio - both move, and the row was written under the "
+            "pair in force that day. Null before 2026-09-14 and on every uncut row."
+        ),
+    )
 
     @property
     def counts_against_source(self) -> bool:
@@ -666,30 +697,9 @@ class ItemHealthRow(Contract):
     def from_csv_row(cls, row: dict[str, str]) -> Self:
         """The inverse. An empty cell is an absent value, never the empty string."""
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
-        optional_fields = (
-            "code",
-            "http_status",
-            "source_chars",
-            "source_words",
-            "summary_words",
-            "detail",
-            "fetch_ms",
-            "extract_ms",
-            "summarize_ms",
-            "prefill_ms",
-            "decode_ms",
-            "input_tokens",
-            "output_tokens",
-            "cached_tokens",
-            "source_words_before_cap",
-            "shard",
-            "span_integrity",
-            "elements_found",
-            "element_class",
-            "model_calls",
-            *(f"call_{slot}_{field}" for slot in (1, 2) for field in ("kind", *COST_FIELDS)),
-        )
-        for name in optional_fields:
-            if payload[name] == "":
+        # Derived, never listed: a hand-written roll of the nullable columns is one
+        # a new nullable column gets left out of, and the row then refuses to parse.
+        for name, field in cls.model_fields.items():
+            if payload[name] == "" and field.default is None:
                 payload[name] = None
         return cls.model_validate(payload)
