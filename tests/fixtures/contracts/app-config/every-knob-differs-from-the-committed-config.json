@@ -158,6 +158,11 @@
     "teacher": "summarize",
     "train_rows": 1000
   },
+  "lens_weights": {
+    "counterfactual_multiplier": 1.6,
+    "counterfactual_refused_per_desk": 5,
+    "window_days": 7
+  },
   "logging": {
     "level": "DEBUG"
   },

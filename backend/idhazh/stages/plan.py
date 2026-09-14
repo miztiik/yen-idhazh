@@ -497,8 +497,14 @@ def _counterfactual_rows(
     `taken` is read against the run's FINAL items rather than against what each
     desk took, so a story the day-wide duplicate fold or the run's safety
     ceiling removed after ranking reads as refused. That is what happened to it.
+
+    **It is read per desk AND address, never per address alone.** One address
+    can be carried by feeds on two desks, and then it is scored twice - once on
+    each - while the day plans it once. Matching on the address alone marks both
+    rows taken, and the ledger says the run took more stories than it did:
+    measured on 2026-09-14, 87 rows claimed a day of 80 items.
     """
-    taken = {item.url_key for item in items}
+    taken = {(item.vertical, item.url_key) for item in items}
     rows: list[CounterfactualScoreRow] = []
     for vertical, pool in pools.items():
         refused = 0
@@ -506,7 +512,7 @@ def _counterfactual_rows(
             if ranked.score_counterfactual is None:
                 continue
             key = ranked.candidate.url_key
-            was_taken = key in taken
+            was_taken = (vertical, key) in taken
             if not was_taken:
                 if refused >= refused_per_desk:
                     continue

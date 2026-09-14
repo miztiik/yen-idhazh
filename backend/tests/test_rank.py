@@ -25,8 +25,9 @@ from conftest import FIXTURES_DIR, read_text
 from idhazh.config import REPO_ROOT, load
 from idhazh.contracts.app_config import AssistConfig, CollectConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
+from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.run_plan import PlannedItem, VerticalPlan
+from idhazh.contracts.run_plan import PlannedItem, TimeSource, VerticalPlan
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
@@ -37,6 +38,7 @@ from idhazh.rank import (
     ITEM_ID_BYTES,
     ITEM_ID_SYMBOLS,
     DeskPlan,
+    Ranked,
     authority,
     dedup_text,
     desk_of,
@@ -47,7 +49,7 @@ from idhazh.rank import (
     score,
     tier_weight,
 )
-from idhazh.stages.plan import _record_plan_duplicates
+from idhazh.stages.plan import _counterfactual_rows, _record_plan_duplicates
 
 DATE = "2026-08-23"
 RUN = "2026-08-23-1"
@@ -701,6 +703,78 @@ def test_the_counterfactual_moves_no_item_and_no_order() -> None:
     ]
     assert [r.score for r in asked.pool] == [r.score for r in plain.pool]
     assert asked.summary.model_dump() == plain.summary.model_dump()
+
+
+def _scored(name: str, *, at: float = 1.0) -> Ranked:
+    """One entry of a desk's pool, built in memory."""
+    return Ranked(
+        score=at,
+        candidate=_addressed(name),
+        appeared_at=None,
+        time_source=TimeSource.FIRST_SEEN,
+        carried_by=1,
+        watchlist_hit=False,
+        on_front_page=False,
+        score_counterfactual=at,
+    )
+
+
+def _rows(
+    pools: dict[str, list[Ranked]], items: list[PlannedItem], *, per_desk: int = 20
+) -> list[CounterfactualScoreRow]:
+    return _counterfactual_rows(
+        pools,
+        items,
+        date=DATE,
+        run_id=RUN,
+        lens_hits={},
+        multiplier=1.25,
+        refused_per_desk=per_desk,
+    )
+
+
+def test_one_address_on_two_desks_is_taken_only_on_the_desk_that_took_it() -> None:
+    """An address two desks carry is scored twice and planned once.
+
+    Matching the `taken` cell on the address alone marks both rows taken, and
+    the ledger then claims a longer day than the run published: measured on a
+    real run on 2026-09-14, 87 rows said taken over a day of 80 items. The
+    desk has to be half of the match, which is also why it is half of the
+    ledger's key.
+    """
+    ranked = _scored("shared")
+    item = PlannedItem(
+        item_id=item_id("ai", ranked.candidate.url_key),
+        url_key=ranked.candidate.url_key,
+        source_url=ranked.candidate.source_url,
+        canonical_url=ranked.candidate.canonical_url,
+        source_id=ranked.candidate.source_id,
+        tier=ranked.candidate.tier,
+        vertical="ai",
+        title=ranked.candidate.title,
+        rank_score=ranked.score,
+    )
+
+    rows = _rows({"ai": [ranked], "world": [ranked]}, [item])
+
+    assert [(row.vertical, row.taken) for row in rows] == [("ai", True), ("world", False)]
+
+
+def test_a_desk_records_only_its_highest_scoring_refused_candidates() -> None:
+    """The bound, and the reason a run's cost does not grow with the archive.
+
+    The pool arrives in the order the take read it, so the refused candidates a
+    desk keeps are the first it meets - the band around the cut, where a bonus
+    decides. A candidate further down would not cross under any weight the
+    probe asks about.
+    """
+    pool = [_scored(f"feed{n}", at=10.0 - n) for n in range(5)]
+
+    rows = _rows({"ai": pool}, [], per_desk=2)
+
+    assert [row.url_key for row in rows] == [item.candidate.url_key for item in pool[:2]]
+    assert not any(row.taken for row in rows)
+    assert _rows({"ai": pool}, [], per_desk=0) == []
 
 
 # --- the plan-stage duplicate pass: same story, two addresses ----------------
