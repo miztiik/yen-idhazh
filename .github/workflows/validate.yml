@@ -241,10 +241,9 @@ jobs:
           pointer = json.loads((root / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
           path = root / pointer
           models = json.loads(path.read_text(encoding="utf-8"))
-          incumbent = models["summarize"]
-          inference = dict(incumbent["inference"])
+          inference = dict(models["summarize"]["inference"])
           inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          turns = dict(incumbent["turns"])
+          turns = dict(models["summarize"]["turns"])
           turns["declared_for"] = os.environ["CANDIDATE_SHA256"]
           models["summarize"] = {
               "file": os.environ["CANDIDATE_FILE"],
