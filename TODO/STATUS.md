@@ -34,14 +34,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 15 | 13 | 3 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 3 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 5 | 8 | 2 |
+| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 13 | 6 | 7 | 3 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 23
+## Ready now - 24
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -71,9 +71,10 @@ section 3 is where it is answered.
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #5 | 28 | D | Five things the server proves before the first item | 2, 6 |
-| #7 | 28 | D | The model dossier, and the index that points at every one | 3, 4 |
+| #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 3, 7 |
+| #8 | 28 | F | Both bench arms in one workflow, emitting a page ready to paste | 1, 6, 7 |
 
-## Waiting on another row - 55
+## Waiting on another row - 53
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -128,8 +129,6 @@ section 3 is where it is answered.
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #11 | 28 | D | Where the system text goes, and which keyword the runtime is told | 5 is PENDING |
 | #12 | 28 | E | The sanitizer learns the control tokens of the model it guards | 11 is PENDING |
-| #13 | 28 | E | Retake the two budgets that were sized on a retired vocabulary | 7 is PENDING |
-| #8 | 28 | F | Both bench arms in one workflow, emitting a page ready to paste | 7 is PENDING |
 | #9 | 28 | G | The runbook: swap and revert in one line each | 8 is PENDING; 12 is PENDING |
 | #10 | 28 | H | Two spans on one call, so the model can think | 5 is PENDING; 11 is PENDING |
 
