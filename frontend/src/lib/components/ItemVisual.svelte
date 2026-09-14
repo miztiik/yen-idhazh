@@ -37,9 +37,18 @@
 	 * subtree. They take the page's tokens through plain scoped CSS rather than
 	 * through `:global` overrides of a renderer's class vocabulary, and every
 	 * string a model cut out of a stranger's page lands as a text node rather
-	 * than as markup (Guardrail #11). The figure takes the chart's own shape: a
-	 * `viewBox` is an aspect ratio, so the browser reserves the right box before
-	 * a mark is placed and the story cannot shift as it is read.
+	 * than as markup (Guardrail #11).
+	 *
+	 * **The drawing takes the width the card gives it** (plan 12 row #2). The
+	 * figure's content box is measured first and every mark is placed in it, so
+	 * one drawn unit is one CSS pixel and there is no scale factor between what a
+	 * token says and what a reader sees. Before this the drawing was laid out at
+	 * a fixed 720 units and stretched to fit, so a `--text-xs` string resolved at
+	 * 4.8 CSS px on a 390 px phone - the right size in a coordinate space nobody
+	 * reads. The height is a count of bars and does not depend on the width, so
+	 * the figure is its final height from the frame the marks land in and the
+	 * story cannot shift as it is read; that is the promise the `viewBox` used to
+	 * keep by holding an aspect ratio.
 	 *
 	 * **Marks that do not arrive cost the story its picture and nothing else.**
 	 * No broken-image glyph, no grey box, no skeleton: the story is shorter,
@@ -50,6 +59,7 @@
 	import type { SeededVisual, VisualData } from '$lib/payload/types';
 	import { whenNear } from '$lib/reveal';
 	import { drawBars, statedBars, type Drawing } from '$lib/visual/bar';
+	import { whenWide } from '$lib/visual/width';
 
 	let { visual }: { visual: SeededVisual | null } = $props();
 
@@ -65,7 +75,11 @@
 
 	/** What the fetch brought back, or null while it has not run or did not work. */
 	let arrived = $state<VisualData | null>(null);
-	const drawing = $derived<Drawing | null>(arrived ? drawBars(arrived) : null);
+	/** How much room the card gives the drawing, or 0 before it has been measured. */
+	let room = $state(0);
+	const drawing = $derived<Drawing | null>(
+		arrived && room > 0 ? drawBars(arrived, room) : null
+	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
 	 * not looking at them. It is the whole of what the tab stop below announces. */
 	const stated = $derived(drawing ? statedBars(drawing) : '');
@@ -145,9 +159,22 @@
 			}
 		};
 	}
+	/** Follow the card's own content box, and redraw whenever it moves.
+	 *
+	 * The figure is measured rather than the svg inside it, because the figure's
+	 * width does not depend on what it holds - so the reading is stable on the
+	 * frame the marks land in, before a mark is placed. Every chart on the page
+	 * shares one watcher, which lives in `$lib/visual/width`.
+	 */
+	function measured(node: Element): { destroy: () => void } {
+		const forget = whenWide(node, (wide) => {
+			room = wide;
+		});
+		return { destroy: forget };
+	}
 </script>
 
-{#if drawing}
+{#if arrived}
 	<!-- The figure takes the focus, not the marks inside it: `role="img"` replaces
 	     its whole subtree with one name, so a bar given its own tab stop would be
 	     a stop announcing nothing. It is not a control and it is still focusable,
@@ -158,33 +185,26 @@
 		tabindex="0"
 		role="img"
 		aria-label={stated}
+		use:measured
 	>
-		<svg
-			viewBox="0 0 {drawing.width} {drawing.height}"
-			width={drawing.width}
-			height={drawing.height}
-			role="presentation"
-		>
-			{#each drawing.bars as bar (bar.y)}
-				<text class="name" x={drawing.left - 10} y={bar.y + bar.height / 2} text-anchor="end"
-					>{bar.name}</text
-				>
-				<rect class="bar" x={drawing.left} y={bar.y} width={bar.width} height={bar.height} rx="3" />
-				<text class="figure" x={drawing.left + bar.width + 8} y={bar.y + bar.height / 2}
-					>{bar.stated}</text
-				>
-			{/each}
-			<line
-				class="axis"
-				x1={drawing.left}
-				y1={drawing.baseline}
-				x2={drawing.width}
-				y2={drawing.baseline}
-			/>
-			{#if drawing.unit}
-				<text class="unit" x={drawing.left} y={drawing.baseline + 18}>{drawing.unit}</text>
-			{/if}
-		</svg>
+		{#if drawing}
+			<svg
+				viewBox="0 0 {drawing.width} {drawing.height}"
+				width={drawing.width}
+				height={drawing.height}
+				role="presentation"
+			>
+				{#each drawing.bars as bar (bar.y)}
+					<text class="name" x="0" y={bar.label}>{bar.name}</text>
+					<rect class="bar" x="0" y={bar.y} width={bar.width} height={bar.height} rx="3" />
+					<text class="figure" x={bar.figure} y={bar.y + bar.height / 2}>{bar.stated}</text>
+				{/each}
+				<line class="axis" x1="0" y1={drawing.baseline} x2={drawing.width} y2={drawing.baseline} />
+				{#if drawing.unit}
+					<text class="unit" x="0" y={drawing.baseline + 16}>{drawing.unit}</text>
+				{/if}
+			</svg>
+		{/if}
 	</figure>
 {:else if wanted}
 	<!-- Where the drawing will go, and nothing a reader can see: no box, no
@@ -195,13 +215,16 @@
 {/if}
 
 <style>
-	/* The root svg takes the width the card gives it and the view box carries the
-	   aspect ratio, so the browser reserves the right box before a mark is placed
-	   and the story cannot shift as it is read. */
+	/* The svg draws at the width it was measured in, so one drawn unit is one CSS
+	   pixel and the `viewBox` scales nothing. `max-width` rather than `width` is
+	   the guard: the measured room is floored to whole pixels so the drawing
+	   already fits, and this only catches the frame between a card moving and the
+	   watcher reporting it. A `width: 100%` here would stretch the coordinate
+	   space again and undo the whole row. */
 	.visual svg {
 		display: block;
 		height: auto;
-		width: 100%;
+		max-width: 100%;
 	}
 
 	/* Type on the card, read the way the reader note above it is read. The chart
@@ -209,16 +232,10 @@
 
 	   `--text-xs` rather than a px size, for the reason every other type on the
 	   site takes a token: a px size ignores a reader who set their browser text
-	   larger.
-
-	   **It is the token and not yet the floor, and that difference is real.**
-	   The view box is a fixed 720 wide and the figure takes the card's width, so
-	   the browser scales every user unit - and a 12-unit string on a 390 px
-	   screen resolves near 6 CSS px, under the token it was set from. Plan 12
-	   row #2 takes the width the screen actually has, which removes the scale,
-	   and row #4 is the row that then holds the result to the floor. What this
-	   row buys is that the size is a token a later row can move in one place,
-	   and that the drawn strings can be measured at all. */
+	   larger. **And it is now the size a reader gets**, because the drawing is
+	   placed at the card's own width: a 12 px token resolves at 12 CSS px rather
+	   than at the 4.8 the old 720-unit box scaled it to. Row #4 is the row that
+	   holds that to a floor; this row is what makes the token mean what it says. */
 	.name,
 	.figure,
 	.unit {

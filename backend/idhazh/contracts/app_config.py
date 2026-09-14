@@ -2631,6 +2631,14 @@ class FinetuneConfig(Model):
         return self
 
 
+#: The `visuals` knob this block used to carry. `canvas_width` was one fixed
+#: drawing box for every visual, with a 16:10 height derived from it. The
+#: reader's browser draws the chart now and takes the width the reader's screen
+#: actually gives it, so there is no box to size and nothing answers the same
+#: question.
+SUPERSEDED_VISUALS_NAMES: Final[Mapping[str, str]] = MappingProxyType({"canvas_width": ""})
+
+
 class VisualsConfig(Model):
     """Planning, rendering and serving knobs. "Nothing" is the common answer, by design.
 
@@ -2699,11 +2707,6 @@ class VisualsConfig(Model):
             "recording one floor, and the answer is to move these numbers rather than "
             "the mechanism."
         ),
-    )
-    canvas_width: int = Field(
-        default=800,
-        ge=200,
-        description="One fixed canvas for every visual. Height follows the 16:10 ratio.",
     )
     max_output_tokens: int = Field(
         default=400,
@@ -2778,11 +2781,6 @@ class VisualsConfig(Model):
             )
         return value
 
-    @property
-    def canvas_height(self) -> int:
-        """16:10, matching the frontend's fixed figure box exactly."""
-        return round(self.canvas_width * 10 / 16)
-
     @model_validator(mode="after")
     def _bounds_are_orderable(self) -> Self:
         """Each pair of knobs in the right order, the bin count inside the mark window,
@@ -2816,6 +2814,11 @@ class VisualsConfig(Model):
         if VisualKind.NONE in self.enabled_kinds:
             raise ValueError("`none` is always reachable and is never listed as enabled")
         return self
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_removed_knob_is_refused_by_name(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("visuals", data, SUPERSEDED_VISUALS_NAMES)
 
 
 class AssembleConfig(Model):
@@ -4033,6 +4036,33 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T09:30",
+            change=(
+                "visuals.canvas_width is gone and nothing replaces it, and so is the "
+                "VisualsConfig.canvas_height property derived from it. This is a "
+                "contract break and the read-side migration ships with it: a config "
+                "that still carries the knob is refused by name through "
+                "refuse_a_removed_knob rather than through 'extra inputs are not "
+                "permitted'. Refused rather than lifted, because there is no knob left "
+                "that answers the same question - a width the operator sets and a width "
+                "the reader's screen has are not the same number, and carrying the old "
+                "one forward would let somebody keep believing they had set the drawing "
+                "box."
+            ),
+            why=(
+                "Plan 12 row #2. The knob sized one fixed drawing box for every visual, "
+                "back when the pipeline rendered the picture. The reader's browser draws "
+                "it now (owner ruling, 2026-09-13) and takes the width the card actually "
+                "gives it, measured in the browser - so no build-time number can say how "
+                "wide a drawing is, and one that tried would only ever be a scale factor "
+                "shrinking the drawn type. The smallest drawn string read 4.8 CSS px at "
+                "a 390 px viewport against a --text-xs of 12, which is 60 percent under "
+                "the token it was set from, and that scale is what this removal ends. "
+                "canvas_height went with it because it was 16:10 of a number that no "
+                "longer exists and had no caller of its own."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14",
             change=(
