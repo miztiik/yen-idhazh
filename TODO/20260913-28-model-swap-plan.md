@@ -50,7 +50,7 @@ The contract follows intent; code follows the contract (section 0d). Every row b
 | 2 | The turn envelope moves onto the model entry | - | A | DONE | p28-r2 | #692 | worker |
 | 3 | Every tokenizer-shaped constant names the weights it was taken against | - | A | DONE | p28-r3 | #691 | worker |
 | 4 | Benchmark records lose the date from their filename | 2, 3 | B | DONE | p28-r4 | #694 | owner |
-| 5 | Five things the server proves before the first item | 2, 6 | D | PENDING | - | - | - |
+| 5 | Five things the server proves before the first item | 2, 6 | D | DONE | p28-r5 | - | Carmack |
 | 6 | One complete config file per model, selected by a pointer | 2 | C | DONE | p28-r6 | #697 | Fowler |
 | 7 | The model dossier, and the index that points at every one | 3, 4 | D | PENDING | - | - | - |
 | 11 | Where the system text goes, and which keyword the runtime is told | 5, 6 | D | PENDING | - | - | - |
@@ -260,6 +260,10 @@ Derived from the rows' own `Files touched` lists and verified pairwise on 2026-0
 | 5 | The template endpoint is already named in `backend/utilities/measure_two_calls.py`, which is one of two sites in the tree that mention it. That file's caution is against using it to tokenize a prompt the server was never sent - a different use from reconciling a render. | Carmack, 2026-09-13 |
 | 6 | Arm 2 protects the incumbent today, before any swap, and is the cheapest item in this plan. | Carmack, 2026-09-13 |
 | 7 | Row #6's identity-branch test is already in force, so the probe compares nothing whose operand is a model id, repo or filename. Every arm reads what it compares off the entry or off the server. | Fowler, 2026-09-14 |
+| 8 | The field is declared on `ModelEntry`, not on `ModelRef`. Decision 2 named `ModelRef`, and `run_manifest.ModelUse` embeds that shape - so a required field there would stop this build reading every `run.json` already committed (CLAUDE.md section 11). The field name, the value, the file it is written into and the version stamp are exactly as decision 2 wrote them; only the class moved, and it moved to the one `turns` moved to for the same reason. | Carmack, 2026-09-14 |
+| 9 | Arm 4 reads the architecture out of the weights file, not off the server. Decision 2 and the arm table both assumed llama-server reports it. It does not, on any build: `get_res_props` publishes the path, the alias, the file type, the modalities, the template, the tokens, the build and the window, and `get_res_model_info` adds the vocabulary, the embedding width, the parameter count, the size, the file type and the trained length. Neither carries `general.architecture`, and the recorded `/props` reading in `docs/reference/measurements.md` (build b10444, 2026-09-09) lists the same set. So the probe reads that key off the front of the weights file the server was pointed at - a few kilobytes, not a cost that follows the model - which sits beside the `/props` filename assertion `digest.yml` already makes exactly as the arm table asks: the filename says which file, the header says what that file is. | Carmack, 2026-09-14 |
+| 10 | Arm 5 reads the trained length from `/v1/models`, which is the only route that publishes it. `props-probe.json` keeps the name this row gave it and holds that document, and says inside itself why. | Carmack, 2026-09-14 |
+| 11 | `schemas/app-config.schema.json` did not move. Row #6 took the model block out of `AppConfig`, so the new field reaches `schemas/models-config.schema.json` alone. The export was run and the drift gate is clean. | Carmack, 2026-09-14 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
