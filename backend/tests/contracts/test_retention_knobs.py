@@ -12,15 +12,11 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh import cli, ledger
-from idhazh.contracts.app_config import (
-    SUPERSEDED_COLLECT_NAMES,
-    SUPERSEDED_RETENTION_NAMES,
-    AppConfig,
-    CollectConfig,
-    ConsoleConfig,
-    ModelsConfig,
-    ObservabilityConfig,
-)
+from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig
+from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, ObservabilityConfig
 from idhazh.retention import oldest_month_kept
 
 from ._fixtures import APP_CONFIG_EVERY_KNOB_DIFFERS, committed_models_raw

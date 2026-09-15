@@ -32,7 +32,7 @@ from ._harness import (
     _values_keyed,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_content_refresh_has_eight_total_work_shards_at_most() -> None:

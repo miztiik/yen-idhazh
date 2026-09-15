@@ -18,8 +18,6 @@ from ._builders import (
     row,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
     state = tmp_path / "state"

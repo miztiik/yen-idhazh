@@ -22,8 +22,9 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import AppConfig, VisualsConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.element import ElementKind, ElementTable
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import (
     EncodingRole,
     PlanDecision,
@@ -408,8 +409,8 @@ def test_no_check_can_reach_a_model(module: str) -> None:
         "collections.abc",
         "decimal",
         "enum",
-        "idhazh.contracts.app_config",
         "idhazh.contracts.element",
+        "idhazh.contracts.knobs.visuals",
         "idhazh.contracts.visual",
         "idhazh.contracts.visual_telemetry",
         "idhazh.elements",

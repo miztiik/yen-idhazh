@@ -54,11 +54,13 @@ from typing import Final, NamedTuple
 from pydantic import ValidationError
 
 from idhazh import assemble, summarize
-from idhazh.contracts.app_config import EvaluationConfig, FinetuneConfig, SummarizeConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import compact_json, derive_output_digest, derive_text_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.finetune import FinetuneConfig
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals import metrics
 

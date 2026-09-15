@@ -26,9 +26,6 @@ from idhazh.stages.validate_days import (
     stage_validate_days,
 )
 
-pytestmark = pytest.mark.slow
-
-
 #
 # `validate-days` opened every committed day on every publication and on every
 # CI run, parsed it and put it through both contracts a reader holds. A

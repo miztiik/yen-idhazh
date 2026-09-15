@@ -51,8 +51,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from idhazh.config import load
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.evidence import EvidenceItem
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals import archive
 from idhazh.evals.evidence import EVIDENCE_ROOT_RELPATH, index, key_of
 from idhazh.evals.hhem import Scorer, chunks, score_over_chunks

@@ -11,8 +11,8 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.cli import main
-from idhazh.contracts.app_config import UiConfig
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
+from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.stages.validate_days import stage_validate_days
 
 from ._fixtures import (

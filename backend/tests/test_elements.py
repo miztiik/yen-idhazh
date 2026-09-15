@@ -37,11 +37,11 @@ from conftest import CONFIG_DIR, FIXTURES_DIR
 from pydantic import ValidationError
 
 from idhazh import config, extract
-from idhazh.contracts.app_config import ElementsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.element import Element, ElementKind, ElementTable, Extractor
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.elements import Candidates, date_elements, element_table, quantity_elements, settle
