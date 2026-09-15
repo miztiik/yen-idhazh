@@ -788,6 +788,13 @@ jobs:
       # file and one score day file, so those are the only files a repeat can be
       # in, and naming them is what keeps the pass costing the same however many
       # days the archive holds (Guardrail #12).
+      #
+      # `state/span-rollup` is staged here because a shard is the only thing that
+      # writes it. `roll_up_spans` folds the shard's spans and appends the month
+      # file into this runner's checkout; until 2026-09-15 no list named the path,
+      # so the fold died with the runner and assemble published a header row over
+      # an absent directory. Every span this project has ever opened was measured,
+      # folded and thrown away by one missing path.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -800,6 +807,7 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/item-health state/scores state/score-index state/runtime-counters.csv
+          state/span-rollup
 
       - name: Prompt cache log summary
         if: always()
@@ -1172,6 +1180,7 @@ jobs:
             state/score-index
             state/item-health
             state/runtime-counters.csv
+            state/span-rollup
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest

@@ -239,6 +239,33 @@ The distinction that matters operationally: a log line and a span are **evidence
 
 **No page reads a trace and no gate depends on one.** The whole test suite passes with tracing on and with it off, and that is asserted rather than assumed.
 
+## One writer, one grain, one ladder
+
+Thirteen stores under `state/` is not thirteen designs. It is six grains, and the sprawl that is real sits in the writers and the publishers rather than in the stores.
+
+**A store's grain is its key, and a store keeps its own file only when its key is one no other store's key can hold.** That is the whole rule. Six keys qualify.
+
+| Grain | Key | Stores |
+| --- | --- | --- |
+| item | date, run, item | `item-health` - the census |
+| observation | address, output digest, scorer version | `scores`, `score-index` |
+| address | url key | `seen`, `published`, `counterfactual-scores` |
+| feed | run, feed | `feed-health`, `feed-retirements.csv` |
+| shard and run | date, run, shard | `runtime-counters.csv`, `span-rollup`, `visual-prunes` |
+| day | date | `day-metrics`, `day-validations.csv` |
+
+**An item-grain ledger cannot hold a fact about a thing that was never an item.** A feed that returned nothing has no items, so its failure has no item row to sit on - and a feed returning nothing is the case `feed-health` exists for. `seen` holds 76,834 addresses against 12,217 planned items, six times the population, because most addresses were never planned. A candidate the ranker refused is the whole point of `counterfactual-scores` and is never planned either. Those are not sprawl; they are the questions an item row cannot answer.
+
+**Age is the second reason a store keeps its own file.** `item-health` is a fourteen-month census, `seen` is a ninety-day lookup, `published` is an unbounded membership test. Fold stores with different windows together and exactly one window survives: keep ninety days and the census dies, keep fourteen months and a ninety-day lookup pays for fourteen. Estimated 2026-09-15 from today's rate held forward: folding `seen` into the census would take it from a flat 34 MB to about 162 MB, for a read that never looks past day 90.
+
+**What is consolidated is the write path, not the row.** One constructor per grain, one append, one read, one fold, one projector. Where a second constructor already exists for the same grain it is a defect rather than a design: `ItemRecorder` computes about 53 of the census columns and discards them, which is why 70 of item-health's 113 columns are empty on every committed row.
+
+**The ladder is day, month, year, and each rung answers a different question.** Day files, because a day is the unit a prune deletes and the unit a window fetches - both stay cheap only while the file boundary is the day boundary. Month folds at `observability.item_health_full_grain_months`, because a trend over a year does not need every item. Year is unbuilt and stays unbuilt until a month fold is too big to read, which at kilobytes a month it is not.
+
+**The published mirror is a redaction step, not a copy.** `state/` is committed and never published; `frontend/public/` is published and never holds a ledger. Between them sits a projection that drops the columns a reader may not have - `PublicTelemetryRow` exists to strip 77 of them. Calling the published copy pollution mistakes the safety control for the leak. What it costs is 8.8 MB of a 39.2 MB site, under 1 percent of the 1 GB cap, and it is bounded: `public_telemetry_keep_months` deletes a published month in the same pass that folds its source, so the mirror plateaus rather than grows. The site reaches its cap on pictures and stories, not on telemetry.
+
+**A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` are 6.3 MB that no console route fetches. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes.
+
 ## Design rationale
 
 Logging the emitted envelope, rather than a separate hand-written message, exists so a log and a persisted payload can never disagree - the classic debugging failure where the log says one thing and the file on disk says another. The cost is that log lines are structured rather than chatty; the benefit is that they are greppable, replayable, and true. Authority: Fowler.
@@ -259,6 +286,12 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 
 **The flip is a discontinuity, and every panel that plots a span number must name it.** A committed rollup row exists only from 2026-09-06 forward, because no run before that day wrote one. A sub-step series that begins on the flip date is the instrument switching on, not the pipeline slowing down, and a chart that reads the gap as a regression is reading an artefact of the switch. The date is recorded as a discontinuity in [`../reference/measurements.md`](../reference/measurements.md), for the same reason a hardware change is.
 
+**The rollup measured nothing for nine days, and the cause was a path nobody named.** From 2026-09-06 every shard folded its spans and appended `state/span-rollup/<YYYY-MM>.csv` into its own checkout. No commit step staged that path, so each fold died with its runner; assemble, on another machine, projected a directory that had never existed and published a header row. Nothing failed and no test was red - the instrument ran, cost what it cost, and reported nothing. The fix is the path in the work job's commit step, a header-only month file so `git add` under `set -euo pipefail` cannot abort the step on a fresh clone, and the same path in assemble's refresh set so a lost race does not let the union merge double the rows. The lasting part is the test: the ledgers a stage appends to are now read out of the stage and compared against the paths the job stages, so the two lists cannot drift again. Authority: Carmack found it, 2026-09-15.
+
+**One ledger for everything was proposed on 2026-09-15 and narrowed to one write path.** The owner's case was that the sprawl is real and that item-grain, day-filed data is the right shape for this project - which is correct, and is why `item-health` is the census. What the measurement refused was folding the other stores into it: three of them key on something that was never an item, and three more carry a different retention, so a single store would have to keep one window and lose the questions the others answer. The part of the intent that survives whole is the part that was costing something - one constructor per grain instead of two, one publisher instead of seven, and the ladder written down so a later rung is a decision rather than a discovery. Authority: owner set the intent; Fowler ruled the grains; Carmack priced the windows. 2026-09-15.
+
+**A query engine in the browser is a good idea that is not due yet.** A rolling one-month index queried on the reader's machine would replace fetching a month of rows - but the engine is 2 to 10 MB over the wire against a month of projected rows that gzip to about 2 MB, so it costs more than it saves at today's volume. Both figures are estimates. The cheap 80 percent is compressing the projection, which needs no dependency. Revisit when a month passes about 50 MB, which needs roughly four times today's items a day - `run.safety_ceiling_per_run` is 80 and forbids it. Authority: Carmack, 2026-09-15.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -275,6 +308,10 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | Sampling the span collection | The committed rollup is folded from every span to reconcile the shard's wall clock, so dropping any span breaks that reconciliation. The collection cost is negligible in any case - Carmack measured it at about one part in 128,000 of a shard. | owner, 2026-09-06 |
 | Committing a raw span as a record | A fourth account of the same run, free to disagree with the other three. A *derived* fold that restates nothing is the committed rollup above; a raw span stays evidence under `backend/var/`. | Fowler, 2026-08-30 |
 | Reproducing the nesting on the host with the SDK's own context managers | It works, and it costs a second code path for a sink that is opt-in and untestable here (no test touches the network, Guardrail #7). The file sink keeps the exact tree; the host gets one trace per item with the parent named. | Carmack, 2026-08-30 |
+| One ledger at item grain, every other store folded into it | Three stores key on something that was never an item - a feed that returned nothing, an address nobody planned, a candidate the ranker refused - so no item row can hold their facts. Three more carry a different retention, and a merged store keeps one window and loses the rest. The write path consolidates; the row does not. | Fowler and Carmack, 2026-09-15 |
+| Taking telemetry off the published site to save the size budget | It is under 1 percent of the cap and already plateaus at its retention, and there is no server - so removing it leaves the console with nothing to fetch and no month control. The projection is also the redaction step that strips 77 columns from the ledger. What can go is the 6.3 MB no route reads. | Carmack and Susan, 2026-09-15 |
+| A query engine shipped to the browser over a rolling month index | The engine is 2 to 10 MB over the wire against a month that gzips to about 2 MB - both estimates. It costs more than it saves until a month passes about 50 MB, which the per-run item ceiling forbids. Compress the projection instead. | Carmack, 2026-09-15 |
+| A year rung on the fold ladder, built now | A month fold is kilobytes. A rung that folds nothing anybody struggles to read is a store to keep working for no question. | Fowler, 2026-09-15 |
 
 ## See also
 

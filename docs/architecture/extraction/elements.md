@@ -322,13 +322,42 @@ grammar rather than caught by a check downstream. That is the row's oracle and
 it is asserted against the generated schema, beside a shape that fails the same
 assertion so the check is known to be able to go red.
 
-| The reply says | What code does with it |
-| --- | --- |
-| `labels[]` - a candidate's `element_id`, and what it means | Writes the Tier 2 cells onto that element. An address the pass never minted drops **that label**; its siblings stand |
-| `proposed[]` - a sentence address and the words a figure was written in | Searches only the named sentence, demands exactly one hit, and re-reads the value and the unit from the article's own bytes. Stamped `extractor: model` |
-| `entity_mentions[]`, `place_mentions[]` - a group key, and the sentences the item names that thing in | Searches each mention inside its own named sentence. Every hit is one `entity` or `place` element carrying the item's characters |
-| `quotes[]`, `claims[]` - two sentence addresses, no text | Slices the run of sentences between them into one `quote` or `claim` element. Indices only: an exact search over a long quotation rejects a real one over a single changed word, silently |
-| `keyphrases[]`, `lede_sentence_ids[]` | Carried for search and for `lead_coverage`. Nothing draws them |
+Every field the reply may carry, what it is for, and who reads it. Counts are
+from run 34943695821 shard 3, 20 articles, 2026-09-15.
+
+| Field | What we ask for | Why | Who reads it | Found |
+| --- | --- | --- | --- | --- |
+| `labels[].element_id` | the address of a figure the candidate pass found | points rather than types, so a number cannot be invented | element table, then the chart | 60 |
+| `labels[].measure` | what the figure measures, in the article's words | `4,200` is not an axis label; `exports` is | the chart's axis | - |
+| `labels[].dimension` | what it varies over - year, region | what makes a series a series | the chart | - |
+| `labels[].entity` | whose figure it is | two numbers share a chart only if they measure comparable things | the chart's grouping | - |
+| `labels[].time_element_id` | the address of the date this figure belongs to | the whole of a time series | the chart's time axis | - |
+| `labels[].attribution` | named / self_reported / anonymous / unattributed | a figure a company said about itself is not one a regulator published | element table | - |
+| `labels[].hedge` | did the article say "about", "expects", "may" | a hedged figure must not be drawn as a fact | element table | - |
+| `labels[].salience` | primary / supporting / background | which figure the story is about. A word, never a score | the chart's ranking | - |
+| `proposed[]` | a figure in digits the candidate pass missed | the pattern misses figures inside odd punctuation. Model proposes, code re-reads the characters | the chart | **0 of 20** |
+| `entity_mentions[]` | organisations and people, and where each is named | groups "OpenAI", "ChatGPT", "the company" into one thing | **the chart's category axis** - `mention_elements` is the only producer of `ENTITY` | 87 |
+| `place_mentions[]` | the same, for locations | same | **the chart's category axis** - the only producer of `PLACE` | 15 |
+| `quotes[]` | two sentence addresses, no text | indices only: an exact search rejects a real quote over one changed word, silently | **nobody** - no renderer compiles a quote | 24 |
+| `claims[]` | the same, for the article's own assertions | same | **nobody** | 73 |
+| `keyphrases[]` | up to 8 phrases copied from the article | "the only search surface that needs no embedding model" | **nobody** - search uses the embedding vector | 138 |
+| `lede_sentence_ids[]` | the 1-2 sentences carrying the main point | carried for `lead_coverage` | **nobody** - `lead_coverage` is a deterministic function | 20 |
+
+`labels` was empty on 8 of 20 articles and `proposed` on all 20.
+
+**The two mention lists reach a reader, and that was measured rather than
+assumed.** `elements.py` mints only `QUANTITY` and `DATE`; `ENTITY` and `PLACE`
+exist only because these two lists produce them. Over the published archive on
+2026-09-15, 495 bar charts have shipped and 404 of them - 82 percent - open on a
+category a `DATE` cannot supply, so a model-found mention filled it. Deleting
+the two lists takes the picture off four charts in five.
+
+**`quotes` and `claims` are unbuilt, not barred.** Section 0a bars republishing
+article bodies **to a reader**; a `SentenceRange` carries two addresses, a
+speaker, an enum and a boolean, and no text. What is true of them is narrower
+and still fatal: nothing renders a quote or a claim, and `timeline` sits in
+`TYPE_RULES` rather than `UNRULED_TYPES`, so an item with a date and a claim can
+be judged reachable, decode a plan, and be refused at render.
 
 **The two mention lists are named for what code takes from them, and that was a
 ruling rather than a preference.** A prompt in this repository may not ask a
@@ -581,256 +610,122 @@ producer on 2026-09-13, and this contract never carried it.
 
 ## Design rationale
 
-### Which invariants break the build, and which degrade the item
+### Break the build on what our own code gets wrong; degrade the item on what one article's data can
 
-Two invariants were declared build-failing while this subsystem was being
-planned and never ruled on, and a coverage row cited the span invariant's
-softening as though it had settled all three
-([`TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md),
-12.9 G13). It had not. Here is the ruling, one sentence each.
+`derived_provenance_complete` breaks the build. A displayed value tracing to
+neither a Tier 1 element nor a complete provenance chain is a number our own code
+could not follow, so it is already wrong everywhere that path runs.
 
-**`derived_provenance_complete` breaks the build.** A displayed value that
-resolves to neither a Tier 1 element nor a complete provenance chain is a number
-whose origin our own code could not trace, so it is already failing for every
-value that took the same path, and degrading the one item that happened to
-surface it hides the rest.
+`span_integrity_pass` degrades the item. Span drift is a source text moving -
+true of one article, and saying nothing about a sibling. A day of 500 stories
+must not fall to one drifted span.
 
-**`span_integrity_pass` degrades the item.** It is the reporting face of the
-invariant on this page rather than a second rule, so it inherits this page's
-disposition: one article's text moving is one article's problem, and a day of
-500 stories taken down by one drifted span is exactly the corpus-wide refusal
-this row was told not to build.
-
-**The span invariant is the exception because its cause sits outside our code.**
-Every other integrity claim in that document is a claim about arithmetic we
-control, and a claim about our own arithmetic that fails once is failing
-everywhere it runs; span drift is a source text moving, which is true of one
-article and says nothing about a sibling.
-
-That is the whole rule, and it is the same one the write-time and read-time
-halves above already follow: **break the build on what our own code can get
-wrong, degrade the item on what one article's data can.**
-
-`derived_value_rate` is the metric the pseudo-plan puts beneath
-`derived_provenance_complete` (12.11 G21), so this ruling names what it would
-report on; it is not built here and belongs to the plan that ships the derived
-values it counts.
-
-Authority: **Andre** (the trust boundary between what code found and what a
-model said) on `derived_provenance_complete`; **Fowler** (persisted contracts,
-and where an invariant is enforced) on `span_integrity_pass` and on the
-exception rule.
+That asymmetry is the whole rule, and it is why the span invariant is the only
+exception: every other integrity claim here is a claim about arithmetic we
+control.
 
 ### A date takes the characters from any quantity it touches
 
-Two patterns read one string and both match `2026`. One of them has to lose, and
-the rule has no other home than the row that put the second pass in the table.
+Two patterns read one string and both match `2026`. The pass with the **closed
+vocabulary wins**: dates accept a fixed list of calendar shapes and a four-digit
+run inside 1900-2100, numbers accept any run of digits. Specificity is the only
+property of two patterns that compares mechanically - pass order, span length and
+write order are accidents of how code is arranged. A third pass declares its
+place in `KIND_PRECEDENCE` or it does not ship.
 
-**The ruling: on any shared character the date element survives and the quantity
-element is dropped whole.** It covers all four ways two spans can meet - equal,
-the date containing the quantity, the quantity containing the date, and the two
-merely crossing - because a rule that only settled the exact tie would leave
-`15 March` and `2026 hit` both standing beside the date they sit in.
+It covers all four ways two spans can meet, not just the exact tie, or `15 March`
+and `2026 hit` would both stand beside the date they sit in.
 
-The principle behind it is **the pass with the closed vocabulary wins**. The date
-pattern accepts a fixed list of calendar shapes and a four-digit run inside
-1900-2100; the number pattern accepts any run of digits. Specificity is the one
-property of two patterns that can be compared mechanically - which pass ran
-first, which span is longer and which was written first are all accidents of how
-the code is arranged. A third pass has to say where it sits in `KIND_PRECEDENCE`
-or it does not ship.
+Measured 2026-09-08 over the nine bounded fixtures: the rule dropped eight
+quantities and every one was a year. Two were worse than a plain year - `2027
+after` and `2027 only`, where the next word had been read as a unit.
 
-**What the wrong answer costs, measured on the captured pages.** A year
-kept as a quantity is a bar 2,027 units high standing next to a bar 12 units
-high, and a reader cannot see that it is wrong - which is exactly why
-`numeric_facts` drops a bare year before picking bars. On 2026-09-08 the rule
-dropped eight quantities across the nine bounded fixtures and every one of them
-was a year: `2029`, `2031`, `1994` and `2035` in `article.html`, `2027` three
-times in `hostile.html` and the canaries. Two of the eight were worse than a
-plain year - `2027 after` and `2027 only`, where the word following the year had
-been read as its unit.
+**Why not keep a quantity that carries a unit?** Those same two carry one, because
+`after` and `only` are not in the 61-word stop list. The unit reading is itself a
+guess; conditioning precedence on it stacks two guesses.
 
-**The exception that was considered and refused: keep the quantity when it
-carries a unit.** It is the obvious narrowing, and those same two elements are
-why it fails. `after` and `only` are not in the 61-word stop list, so the
-quantity pass gave them a unit and a unit-conditioned rule would have kept both
-as measurements of 2,027. The unit reading is itself a guess; conditioning the
-precedence rule on it stacks two guesses.
+**What it costs, stated:** a real four-digit count written without a separator
+loses - "the survey drew 1994 responses" yields a date and no quantity. Write
+`1,994` and it survives. A missing candidate degrades one chart; a wrong bar
+publishes a figure the article never stated. A test carries the case.
 
-**What the rule costs, stated rather than implied.** A real four-digit count
-written without a thousands separator loses to the year reading: "the survey
-drew 1994 responses" yields a date and no quantity. Write it `1,994` and the
-quantity survives, because the thousands separator takes it out of the
-bare-year shape. The trade is deliberate and it is the same one `CLAUDE.md`
-section 1a asks for everywhere else - a missing candidate degrades one chart,
-and a wrong bar publishes a figure the article never stated. None of the nine
-bounded fixtures hits this case; a test carries it so the cost is visible rather
-than folklore.
+The rule lives in the producer, not the shape: `ElementTable` allows overlap on
+purpose, because a `quote` holding a `quantity` is the shape the model-pointed
+kinds need.
 
-**The rule lives in the producer, not in the shape.** `ElementTable` does not
-refuse overlapping spans, and that is deliberate: a `quote` element carrying a
-`quantity` inside it is the shape plan 11's model-anchored kinds need, and a
-blanket no-overlap validator would refuse it and have to be reversed. What is
-settled here is the narrower thing - two patterns over the same bytes never both
-keep one span.
+### The verbatim slice is `span_excerpt`
 
-Authority: **Andre** (the trust boundary, and which reading of untrusted bytes
-is the defensible one) on the precedence and on refusing the unit exception;
-**Fowler** (persisted contracts) on keeping the rule out of the shape.
+`raw` is whitespace-cleaned and drops the magnitude word and the unit -
+`"$4.5 billion"` becomes `"$4.5"` - so it is not a slice of anything.
 
-### One name for the verbatim slice, and it is `span_excerpt`
+`surface` already means "a place something is shown" in 458 sentences across this
+repository, `CLAUDE.md` section 11 included. A second meaning inside one contract
+is how a word stops carrying information.
 
-Three names were in play for one concept - `raw`, `surface` and `span_excerpt` -
-and a later metric is defined on whichever one wins. One field survives.
+`span_excerpt` binds to `span_start` and `span_end` by name, and the invariant is
+checked rather than promised: `len(span_excerpt)` equals `span_end - span_start`.
+A cleaned string shortens without moving the offsets, so the shape refuses it.
 
-`raw` was never a candidate once it was read. On `NumericFact` it is
-`currency + sign + digits`, whitespace-cleaned: `"$4.5 billion"` in the article
-becomes `"$4.5"` in the field. It drops the magnitude word and the unit, so it
-is not a slice of anything and cannot prove where a figure came from.
+**Why not a slice plus a normalised reading form?** Normalising is a judgement, so
+a normalised string in Tier 1 would be the first Tier 1 field a model could
+plausibly write, and the tier would stop meaning anything. In Tier 2 it already
+exists twice, as `entity` and `measure_canonical`. For a quantity, `value` and
+`unit` are the reading and a display form is derivable.
 
-`surface` is refused because this project already owns the word. Measured
-2026-09-08 by `git grep`: 458 occurrences across 104 files in `docs/`,
-`CLAUDE.md`, `backend/` and `frontend/src/`, every one of them meaning a place
-something is shown or persisted - "the published surface", "a persisted
-surface", `data-surface="operator"` on three console routes. `CLAUDE.md` section
-11 names its subject "the persisted surfaces". Giving the most-used noun in the
-repository a second meaning inside one contract is how a term stops carrying
-information. One word per thing
-([../contracts/schemas.md](../contracts/schemas.md)) rules the other way.
+### `candidates_found` is uncapped, keyed by kind, and required
 
-`span_excerpt` says what it is and binds to the two fields beside it by name. A
-reader meeting `span_start`, `span_end` and `span_excerpt` can state the
-invariant without being told it.
+`elements.max_per_article` bounds what a pass keeps, so `len(elements)` saturates
+and stops measuring the article. `candidates_found` is what the pass matched
+before the bound applied.
 
-**The invariant is checked, not promised.** `len(span_excerpt)` must equal
-`span_end - span_start`. That single comparison refuses a cleaned string
-outright, which is what makes the ruling mechanical: substituting a `raw`-shaped
-value shortens the string without moving the offsets, and the shape says no. A
-contract test asserts it on `"$4.5 billion"`.
+**Required, not defaulted**, because a default of zero cannot be told apart from a
+pass that found nothing. **Keyed by kind**, because a total that mixes dates into
+quantities stops answering the density question the moment the date pass writes
+into the same table, and a total cannot be split back apart. **Checked**: a cap
+only removes, so a table keeping more of a kind than it counted does not load.
 
-Authority: **Fowler** (persisted contracts, identifier discipline) on the name.
+### Shared vocabulary lives in the lower pass
 
-### Two fields with two jobs, rejected
-
-The other coherent answer was a verbatim slice plus a normalised reading form.
-It is refused on the trust argument rather than on bytes.
-
-Tier 1 is defined as what code cut out of the bytes. Normalising is a judgement
-- which words to fold, which magnitude to absorb, which article of speech to
-drop - so a normalised string in Tier 1 would be the first Tier 1 field a model
-could plausibly write, and the tier would stop meaning anything. Put it in
-Tier 2 instead and it already exists there twice: `entity` is the canonical name
-of a named thing, and `measure_canonical` is the canonical name of a measured
-one. A third field would be a second wording of both.
-
-For a quantity there is nothing left to hold either. `value` and `unit` are the
-machine-readable reading, and a reading form assembled from them is derivable,
-not stored.
-
-What the second field would have cost, stated plainly: a metric five plans out
-would be defined on one string and computed on the other by whoever wrote the
-query, and nothing in the shape would catch it. That is the confusion the
-naming decision exists to stop.
-
-Authority: **Andre** (the trust boundary) on why the second field cannot be
-Tier 1.
-
-### The uncapped count is keyed by kind, and it is required
-
-`elements.max_per_article` bounds what a pass keeps, so `len(elements)`
-saturates and stops being a measure of the article. `candidates_found` is what
-the pass matched before that bound applied, and the two together say whether the
-cap bit and by how much.
-
-**Required rather than defaulted.** A default of zero is indistinguishable from
-a pass that genuinely found nothing, which is the same silent failure one level
-down. Nothing had been persisted under the previous shape - row 1 shipped the
-contract with no writer - so the only payloads that had to move were the two
-committed fixtures, and they moved in the same commit.
-
-**Keyed by kind rather than a single total.** The date extractor writes into
-this same table next, and a total that mixes dates into quantities stops
-answering the density question the moment it does. Summing a mapping is free;
-splitting a total is not.
-
-**Checked, not promised.** A cap only ever removes, so a table that kept more of
-a kind than it says it found does not load, and neither does one that kept a
-kind it counted nothing for. Without that, `candidates_found` would be a second
-number nobody reads against anything.
-
-Authority: **Andre** (2026-09-05) on the counter; **Fowler** (persisted
-contracts) on required and on the key.
-
-### The number pattern moved to the pass that is lower
-
-`NUMBER`, the magnitude table, the percent set, the unit stop list and
-`normalise_unit` were `visual_planner` privates. Two passes read the same
-vocabulary and the fact pass is the lower of the two, so the definitions live
-in `backend/idhazh/elements.py`. Nothing about
-its behaviour changed: a duplicated regex would have been a second definition of
-one concept, guaranteed to drift the first time the pattern is fixed. The other
-pass retired on 2026-09-13 and the definitions stayed where they had moved.
+`NUMBER`, the magnitude table, the percent set, the unit stop list,
+`normalise_unit`, `YEAR_MIN` and `YEAR_MAX` moved from `visual_planner` to
+`backend/idhazh/elements.py`. Two passes read the same vocabulary about the same
+bytes, and a duplicated regex is a second definition that drifts the first time
+either is fixed.
 
 `_TRIVIAL_MAX` and the context window stayed with the planner. They are its
 judgements about what makes a bar, and the candidate pass does not share them.
-The year range followed the pattern down in row 3, when a second pass needed the
-same fact.
-
-Authority: **Fowler** (module structure).
 
 ### The mention lists were named, and the tag control was not narrowed
 
-The label call could not ask for a named thing until this was settled.
-`test_no_prompt_asks_a_model_for_a_tag` refuses any prompt carrying the literal
-words `lens`, `event type` or the plural of `entity`, and its stated reason is
-that a page choosing its own reader-facing tags steers a control. The obvious
-field name for a list of organisations trips that check on the third word.
+`test_no_prompt_asks_a_model_for_a_tag` refuses any prompt carrying `lens`,
+`event type` or the plural of `entity`, because a page choosing its own
+reader-facing tags steers a control. The obvious field name trips it.
 
-Two honest routes existed. **Narrow the control** to the tag vocabulary it names,
-so an extraction field is not caught by a bare word. **Or name the field for what
-code takes from it**, if a name exists that a reader of the prompt would not
-misread. The second was taken, for three reasons and one of them decided it.
+The field was renamed rather than the control narrowed. The control protects the
+tag vocabulary and a mention list does not touch that vocabulary, so nothing here
+needs it changed - and the name is better, not merely permitted: the mention is
+Tier 1 and is what draws, while the group key is Tier 2. `entity_mentions` says
+the mentions are the payload.
 
-The control is not ours to weaken. It is Andre's ruling and it protects the tag
-vocabulary; a mention list does not touch that vocabulary at all, so nothing in
-this row needs the ruling changed. **And the name is better, not merely
-permitted.** Decision 1 of this row says the mention is Tier 1 and is what draws,
-while the name is Tier 2 and a grouping key. A field called after the plural of
-`entity` invites the reader to think the named thing is the payload;
-`entity_mentions` says the mentions are. The third reason is that the check is a
-substring match, so a chosen name is a stable answer and a narrowed control is a
-new judgement call on every future prompt.
+**What it costs:** the control now passes on a prompt that does ask about an
+organisation, so silence could later read as approval. This section is the
+record, and `test_the_mention_lists_do_not_reach_the_tag_control` holds the same
+three words out of the reply schema as well - the schema is handed to the decoder,
+so a class docstring is prompt text too.
 
-What that costs, stated rather than hidden: the control now passes on a prompt
-that does ask about an organisation, so a later reader could take the silence as
-approval it never gave. Two things answer that. This section is the record. And
-`test_the_mention_lists_do_not_reach_the_tag_control` holds the same three words
-out of the reply **schema** as well as the prompt, which is one surface more than
-the original control reads - the schema is handed to the decoder in
-`response_format`, so a class docstring is prompt text too.
+### A mention is an element, so the four model-pointed kinds needed no contract change
 
-Authority: **Andre** (the prompt and the schema at the injection boundary),
-consulted by reading [`.github/agents/andre.agent.md`](../../../.github/agents/andre.agent.md).
+A mention's span is its own characters, and several mentions of one organisation
+are several elements. The grouping key is `Element.entity`, which already exists,
+is already a slug, and is filled by matching the watchlist rather than by minting.
+No schema moved and no fixture gained a key.
 
-### The four kinds needed no contract change
+### `extractor` is `model`
 
-The row's own file list did not name `backend/idhazh/contracts/element.py`, and
-after checking it did not need to. A **mention is an element**: its span is the
-mention's own characters, and several mentions of one organisation are several
-elements. The grouping key decision 1 calls the `name` is `Element.entity`, which
-already exists, is already a slug, and is already filled by matching against the
-watchlist rather than by minting. So `schemas/` did not move, no changelog entry
-was owed, and no committed fixture had to gain a key in sorted order.
-
-The one contract file that did move gained no field: `UNTRUSTED_LINE_MAX` is now
-a named number beside the annotation that used it. A producer slicing a run of
-sentences has to refuse a slice the shape will not hold, and the only other way
-to find that out is to let the shape raise part-way through an article. It is the
-same move `VALUE_MAX_LENGTH` and `UNIT_MAX_LENGTH` made one row earlier, and the
-generated schema is byte-identical either way.
-
-Authority: **Fowler** (persisted contracts), consulted by reading
-[`.github/agents/fowler.agent.md`](../../../.github/agents/fowler.agent.md).
+The plan spells it `model_proposed`. The contract already carried `model`, and
+`entity`, `place`, `quote` and `claim` are model-pointed the same way without
+being proposals - so `model_proposed` would be wrong on four of the five paths
+that write it. The field names **who found it**, not what shape was asked for.
 
 ## Rejected alternatives
 
@@ -866,59 +761,18 @@ Authority: **Fowler** (persisted contracts), consulted by reading
 
 ### Why the schema stem is `element-table`
 
-The plan-doc's file list named `schemas/element.schema.json`. The shape it also
-asked for - one `source_text_hash` per article, never per element - needs a
-per-article container, so the contract is `ElementTable` and its stem mirrors
-its class the way every other stem in this repository does. The plan's own prose
-calls the thing "the element table" throughout, so the word was already chosen;
-only the file list predates the shape.
-
-### The year range moved to the pass that is lower
-
-`YEAR_MIN` and `YEAR_MAX` were `visual_planner` privates. Two passes needed
-the same fact about the same bytes - one to claim a bare four-digit run as a
-year, the other to refuse it as a bar height - so the constants live in
-`backend/idhazh/elements.py`. It is the same
-move row 2 made for the number pattern, and for the same reason: two definitions
-of one concept drift the first time either is fixed.
-
-The planner keeps the judgement it makes with them, which is the half that is
-not shared - a year is a label rather than a bar height, so it drops one. That
-sentence moved from the constant to the line that acts on it. `_TRIVIAL_MAX` and
-the context window stayed where they were; the candidate pass does not share
-them.
-
-Authority: **Fowler** (module structure).
-
-### `extractor` is `model`, and the plan spells it `model_proposed`
-
-The plan that specified the label call asks for a proposed figure to be stamped
-`extractor="model_proposed"`. The contract already carried the member and calls
-it `model`, with the docstring "a model proposed the location and code cut the
-characters at it" - the same property under a shorter word. It stayed as it is,
-and the reason is the rows still to come: `entity`, `place`, `quote` and `claim`
-are model-pointed the same way and none of them is a proposal, so a field spelled
-`model_proposed` would be wrong on four of the five paths that will write it. The
-field names **who found it**, not what shape was asked for.
-
-Cost, stated rather than implied: a reader holding the plan-doc and the payload
-side by side sees two words for one thing until they reach this paragraph. The
-alternative cost was a persisted enum value that four later producers would have
-to contradict.
+One `source_text_hash` per article, never per element, needs a per-article
+container. The contract is `ElementTable` and its stem mirrors its class, the way
+every other stem here does.
 
 ### The label call is built and nothing dispatches it
 
-The request, the reply shape, the parser and every anchoring path ship here; no
-stage calls them. That is deliberate rather than unfinished. The label call alone
-produces a labelled table and no page: the call that turns it into a summary and
-a visual is the next row, and it appends to **this** call's message array, so the
-article prefills once. Wiring the label call in on its own would spend a model call per
-item for an answer nothing reads yet, and it would do it inside a job with a
-50-minute bound.
-
-So there is no flag to flip and no dead config knob: production behaviour is
-byte-identical, and the row that adds the second call is the row that turns both
-on together.
+The request, the reply shape, the parser and every anchoring path ship; no stage
+calls them. The label call alone produces a labelled table and no page - the call
+that turns it into a summary and a visual appends to this call's message array,
+so the article prefills once. Wiring it in alone would spend a model call per item
+for an answer nothing reads. There is no flag and no dead knob: production
+behaviour is byte-identical until the second call lands.
 
 ## See also
 
