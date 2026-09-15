@@ -811,6 +811,7 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -1917,6 +1918,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded failure vocabulary gained model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row, where the vocabulary is declared."
+    },
+    {
       "change": "Prose only. No field was added, removed or retyped and no default moved, so every config/idhazh.json that validated before this still validates and no read-side migration is owed. What changed is the `description` text on six blocks, which pydantic lifts from the class docstring and the Field description into the generated schema: page_weight, observability, summarize, turns, models and assist drop the dated incidents, the inline readings and the decision provenance they were carrying. The rule each one states is unchanged.",
       "version": "2026-09-15T09:00",
       "why": "Guardrail #10 says a rule carries its reason, never its evidence - the reason is a clause that stays true, the evidence is a reading and lives in the instrument log. These descriptions are published in schemas/app-config.schema.json, so a measurement inlined here is a second copy of one docs/reference/ already holds (Guardrail #4), and it is the copy nobody re-takes when the subject changes. An operator reading a knob wants the rule, not the post-mortem of the run that produced it."
@@ -2659,7 +2665,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-15T09:00",
+      "default": "2026-09-15T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2670,5 +2676,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-15T09:00"
+  "version": "2026-09-15T20:00"
 }

@@ -40,6 +40,7 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -97,6 +98,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "failure_code may now carry model_refused. Additive: every committed row still reads, and no row already written changes meaning.",
+      "version": "2026-09-15T20:00",
+      "why": "model_unreachable was doing two jobs. A server that never answered and a server that answered with an error are different mornings - the first sends an operator to the process and the port, the second to the request. Gemma named a speculation kind its head could not drive on 2026-09-15 and failed five items of five on a live, healthy server, and every one of them read as a network fault."
+    },
     {
       "change": "Three columns keep their names and change what they mean: queue_wait_ms now subtracts the item's own extract as well as its fetch, item_total_ms now has queue_wait_ms taken out of it, and the two prefill rates now divide by the tokens the server evaluated rather than by the whole prompt.",
       "version": "2026-09-15T19:40",
@@ -1580,7 +1586,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15T19:40",
+      "default": "2026-09-15T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1671,5 +1677,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-15T19:40"
+  "version": "2026-09-15T20:00"
 }
