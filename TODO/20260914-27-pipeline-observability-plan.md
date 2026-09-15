@@ -1,8 +1,10 @@
 # Per-item observability, and the spine that holds it
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 **Level**: 5 (persisted contracts, section 6). Rows 2, 3 and 4 change shapes an earlier run already wrote.
+
+**Every row has landed.** Section 13 records what execution surfaced that the plan did not predict, and the two decisions it handed back.
 
 ## 0. Operating contract
 
@@ -336,5 +338,32 @@
 | 1 | A matrix of three jobs | Three runners, three CPU draws, and only 17 percent of draws land on the fast part - the arms would differ by hardware more than by setting | Nothing to build, and it is faster. It costs the validity of every comparison it produces | Carmack |
 | 2 | Extend `measure.yml` rather than add a workflow | `measure.yml` is 1,427 lines and answers a different question; adding a third arm set to it makes both harder to read | Nothing to build. It costs a clear separation between benchmarking a model and probing the pipeline | Fowler |
 | 3 | Run all twenty articles | 20 articles at roughly 8 minutes each across three arms is most of a working day, which is the slow loop this row exists to escape | Runner minutes. The list exists so that repeated dispatches cover it by rotation instead | Carmack |
+
+## 13. What execution surfaced
+
+The plan predicted eleven rows of work and one census error. It did not predict that building the instrument would find five more defects, three of them live in production. That is the finding worth keeping: **an instrument cannot be built without walking the path it measures, and the walk is what finds the holes.**
+
+| # | What surfaced | How it surfaced | Landed |
+| --- | --- | --- | --- |
+| 1 | An empty headline killed a whole work shard rather than degrading one item. `discover.clean_title` returns `None` for a feed entry with no title, nothing gated it between there and the extractor, and the per-item loop caught nothing. A single headline-less entry from any live feed would have taken down a shard | the test rig's first successful dispatch | #748 |
+| 2 | `state/item-health/2026/09/14.csv` carried two headers and two row widths. A scheduled run on a checkout taken before row 2 merged wrote the retired 43-column shape, and `merge=union` stacked both tables silently. It took `main` red and every open pull request with it | the full suite, after the merge | #747 |
+| 3 | A mechanical substitution over prose broke 14 sentences where the retired phrase was a verb rather than a name, and missed 7 more where a line wrap had split it | a reviewer reading one diff | #744 |
+| 4 | The arm script was committed mode 644 and invoked as a bare command, so the first dispatch died on exit 126. No YAML test, no lint and no shellcheck can see a file mode | the first dispatch | #746 |
+| 5 | One broken arm skipped the two after it, so a rig built to report what happened reported nothing | the first dispatch | #746 |
+
+Two measurements the plan asserted were confirmed rather than assumed. Prompt caching was never broken - the summarize-and-plan call reuses 98.2 percent of its prompt, which is 0.8 percent of a run's model time, so the cost is decode and not prefill. And the census over-reported by 3.5x: 46 items recorded as published on 2026-09-14 against 13 in the committed day.
+
+### Two decisions handed back
+
+Both are the owner's under CLAUDE.md section 0. Neither is an agent's to take.
+
+| # | Decision | Why it is not an agent's |
+| --- | --- | --- |
+| 1 | Three arms over two articles need about 115 minutes; `budget_minutes` and the job bound both say 45. Raising the bound, drawing one article, or dropping an arm each change what a dispatch measures | ESCALATE trigger 5 in section 0 |
+| 2 | Whether a story with no headline should publish untitled or be dropped. Every downstream surface already has an untitled fallback, so publishing is reachable in one line. The row shipped the drop because that is what was asked for | Editor rules what runs, CLAUDE.md section 14 |
+
+### One number, for the plan that follows
+
+The first successful arm measured **2,172,743 ms of model time over two articles - about 18 minutes an article**, on a stock `ubuntu-latest`, 2026-09-15, one run, no spread. The production median on 2026-09-14 was 475,890 ms an item. Two articles is a signal and not a sample, and the runner model was not recorded for this arm. The fix plan starts here.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
