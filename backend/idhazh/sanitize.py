@@ -32,7 +32,7 @@ from typing import Final
 
 #: Bumped whenever the transformation below changes. It is a fingerprint input,
 #: so a silent edit here would otherwise re-summarize nothing and explain less.
-SANITIZER_VERSION: Final = "idhazh-sanitizer-2"
+SANITIZER_VERSION: Final = "idhazh-sanitizer-3"
 
 FENCE_OPEN: Final = "<<<UNTRUSTED_SOURCE_TEXT>>>"
 FENCE_CLOSE: Final = "<<<END_UNTRUSTED_SOURCE_TEXT>>>"
@@ -67,6 +67,14 @@ _CHAT_CONTROL_FAMILIES: Final[tuple[str, ...]] = (
     # vocabulary: it renders as a pipe and is a different codepoint, so an
     # ASCII-only pattern reads `<|User|>` as ordinary words.
     r"<[|\uff5c][^|\uff5c>\n]{0,64}[|\uff5c]>",
+    # The same idea with the delimiter on one side only, which is how Gemma 4
+    # spells a turn: `<|turn>` opens it and `<turn|>` closes it, and the same
+    # pair opens and closes its thinking channel. Neither shape can reach the
+    # family above, which needs a delimiter at both ends, nor the bare-token
+    # family below, which needs a letter immediately after the bracket - so
+    # without this line `<|turn>system` is four ordinary words to the pattern
+    # and an article may write a whole forged turn.
+    r"<(?:[|\uff5c][A-Za-z][A-Za-z0-9_]{0,62}|[A-Za-z][A-Za-z0-9_]{0,62}[|\uff5c])>",
     # Llama 2's system fence, which is two angle brackets rather than one and
     # so has to be tried before the single-bracket family below.
     r"<</?SYS>>",

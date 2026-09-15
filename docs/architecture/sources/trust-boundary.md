@@ -36,7 +36,7 @@ The transformation is **idempotent**, so a defensive second pass at the prompt b
 
 Its bounds are structural, not tunable. A knob that weakens the trust boundary is a knob that gets widened during an incident.
 
-### The control-token pattern knows seven families, and refuses the eighth
+### The control-token pattern knows eight families, and refuses the ninth
 
 A forged turn is written in whatever syntax the attacker picks. An article is fetched once and summarized by whatever model is loaded, and the model is one line in `config/idhazh.json` ([../summarize/model-boundary.md](../summarize/model-boundary.md)) - so the pattern covers the families a configured entry can bring rather than the entry's own markers. Deriving it from the entry would defend the one family nobody was attacking.
 
@@ -48,13 +48,18 @@ A forged turn is written in whatever syntax the attacker picks. An article is fe
 | The fullwidth-pipe spelling | `<\|User\|>` where the pipe is U+FF5C, not the ASCII one | DeepSeek, whole vocabulary |
 | Mistral's bracket directives | `[SYSTEM_PROMPT]`, `[AVAILABLE_TOOLS]`, `[TOOL_CALLS]` | Mistral v3 and later |
 | Bare angle-bracket turn tokens | `<start_of_turn>`, `<extra_id_0>`, `</s>` | Gemma, Nemotron, and the sequence tokens a forged Mistral turn rides in on |
+| The half-delimited spelling, where the pipe sits on one side only | `<\|turn>` opens and `<turn\|>` closes | Gemma 4, for both its turns and its thinking channel |
 | The reasoning channel | `<think>`, `</think>` | Qwen, DeepSeek-R1 - and the weights running here, which open a reply by closing an empty one |
 
 **That list cannot be complete**, because somebody ships a new family every few months. What closes the gap is a refusal rather than a wider pattern: `idhazh.config.load` renders every turn marker the configured entry declares, asks `idhazh.sanitize.why_a_forged_turn_would_survive` whether the pattern strips it, and stops the run naming the marker when it does not. An unknown family is a config error before anything is fetched, not an open turn boundary on the first article.
 
+**The eighth row is there because the refusal fired, and it is worth reading as evidence rather than as a change note.** On 2026-09-14 a Gemma 4 candidate was dispatched at the bench. Its config was correct, its digests matched, and the run stopped before the first article with the marker quoted back: `<|turn>system` reached neither the ChatML family, which needs a delimiter at both ends, nor the bare-token family, which needs a letter straight after the bracket. So the family was three characters away from two the pattern already knew, it was shipped by a publisher whose previous major version used a spelling the pattern did know, and no amount of care reading the model card would have caught it. That is the case the refusal exists for. The repair is the one the message names - teach the family, move `SANITIZER_VERSION` - and it is a repair precisely because the alternative was not a worse summary but an open turn boundary on every article that run fetched.
+
 It asks two questions, because either alone lets a marker through. **Is the marker recognised at all** - one the pattern never matches is one an article may write out in full. **Is anything structural left** - a marker matched only in part leaves behind the delimiters that make a token a token. The first question is what refuses a model whose turn boundary is ordinary words, `USER: `, and refusing it is the right answer rather than a gap: a pattern wide enough to strip that would strip a line of dialogue out of an article.
 
-**What the widening costs a reader**, named rather than assumed: a bracketed all-capital editorial tag like `[UPDATE]` becomes a space. The bracket family is matched case-sensitively and needs three characters, so `[sic]` and `[AP]` read out untouched, and no angle-bracket token may hold a space, so `a < b` stays arithmetic. Against a forged turn, that is the trade Guardrail #11 makes.
+**What the widening costs a reader**, named rather than assumed: a bracketed all-capital editorial tag like `[UPDATE]` becomes a space. The bracket family is matched case-sensitively and needs three characters, so `[sic]` and `[AP]` read out untouched, and no angle-bracket token may hold a space, so `a < b` stays arithmetic. The half-delimited family costs nothing further: it needs a bracket, a pipe and a bare word with no whitespace anywhere in it, so `x <= y | z` and `4 percent | margins held` both read out whole. Against a forged turn, that is the trade Guardrail #11 makes.
+
+**Moving `SANITIZER_VERSION` is what makes a widening visible.** It is a fingerprint input, so text cleaned by the old pattern and text cleaned by the new one are different inputs and the run knows it. An item already summarized is not re-summarized - a published day is frozen - so the cost falls on work in flight, which is re-done against the pattern that actually ran. A widening that left the stamp alone would be the worse outcome by far: two articles cleaned two different ways, both claiming the same provenance.
 
 ## The fence is guaranteed, not requested
 
