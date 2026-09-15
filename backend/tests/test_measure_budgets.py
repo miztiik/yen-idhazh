@@ -30,6 +30,7 @@ from idhazh.measured import (
     SIZED_BY_A_READING_HERE,
     readings_awaiting_a_retake,
 )
+from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from utilities.measure_budgets import (
     PLAN_PROBES,
     ServerSilentError,
@@ -49,6 +50,7 @@ from utilities.measure_budgets import (
 
 PROBE: Final = FIXTURES_DIR / "llm" / "budget-probe.json"
 PLAN_FIXTURES: Final = FIXTURES_DIR / "contracts" / "visual-plan"
+CORPUS_ROW_FIXTURE: Final = FIXTURES_DIR / "contracts" / "corpus-row" / "harvested.json"
 STAMP: Final = {
     "subject": "a" * 64,
     "runner": "a box with no weights on it",
@@ -259,20 +261,53 @@ def test_the_empty_role_reading_takes_the_wider_of_the_two_plans(
 # --- Probe three: the tokens-a-word ratio ------------------------------------
 
 
-def test_the_corpus_probe_is_bounded_by_the_sample_count() -> None:
+def a_corpus(tmp_path: Path, *, rows: int) -> Path:
+    """A corpus file of `rows` harvested rows, built from the committed fixture.
+
+    The template is the real harvested row, so the fenced shape `corpus_bodies`
+    has to find its way through is the shape the harvest writes - a dict composed
+    here would drift from it. Only the body varies, and each body is a different
+    length so a sample of three and a sample of six cannot be confused.
+
+    Built rather than read off `corpus/corpus.jsonl`. The question is whether the
+    sampler samples, and the real corpus made the answer depend on a prune - a
+    schedule nobody sets in a commit (`CLAUDE.md` section 13).
+    """
+    template: dict[str, Any] = json.loads(read_text(CORPUS_ROW_FIXTURE))
+    turn = next(one for one in template["messages"] if one["role"] == "user")["content"]
+    head = turn[: turn.index(FENCE_OPEN) + len(FENCE_OPEN)]
+    tail = turn[turn.index(FENCE_CLOSE) :]
+
+    path = tmp_path / "corpus.jsonl"
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        for n in range(rows):
+            words = " ".join(f"word{n}x{w}" for w in range(20 + n))
+            row = json.loads(json.dumps(template))
+            row["url_key"] = f"{n:064d}"
+            for message in row["messages"]:
+                if message["role"] == "user":
+                    message["content"] = f"{head}\nTitle: Story {n}\n\n{words}\n{tail}"
+            handle.write(json.dumps(row) + "\n")
+    return path
+
+
+def test_the_corpus_probe_is_bounded_by_the_sample_count(tmp_path: Path) -> None:
     """A probe whose cost rises because a run appended is the defect Guardrail #12 names."""
-    few = corpus_bodies(REPO_ROOT / "corpus" / "corpus.jsonl", samples=3)
-    more = corpus_bodies(REPO_ROOT / "corpus" / "corpus.jsonl", samples=6)
+    corpus = a_corpus(tmp_path, rows=10)
+
+    few = corpus_bodies(corpus, samples=3)
+    more = corpus_bodies(corpus, samples=6)
 
     assert len(few) == 3
     assert len(more) == 6
     assert more[:3] == few, "the sample is the first rows in file order, so it is stable"
+    assert len(set(more)) == 6, "six identical bodies would hide a sampler that reread one row"
 
 
 def test_the_ratio_is_the_two_totals_divided_and_not_a_mean_of_ratios(
-    tokenizer: RecordedTokenizer,
+    tokenizer: RecordedTokenizer, tmp_path: Path
 ) -> None:
-    corpus = REPO_ROOT / "corpus" / "corpus.jsonl"
+    corpus = a_corpus(tmp_path, rows=8)
     bodies = corpus_bodies(corpus, samples=5)
     words = sum(len(one.split()) for one in bodies)
     tokens = sum(tokenizer.count(one) for one in bodies)
@@ -283,14 +318,16 @@ def test_the_ratio_is_the_two_totals_divided_and_not_a_mean_of_ratios(
     assert reading.working == {"articles": len(bodies), "words": words, "tokens": tokens}
 
 
-def test_no_article_text_reaches_the_reading(tokenizer: RecordedTokenizer) -> None:
+def test_no_article_text_reaches_the_reading(
+    tokenizer: RecordedTokenizer, tmp_path: Path
+) -> None:
     """The corpus is fetched text, so counts of it may leave and characters of it may not.
 
     Guardrail #11 in one case: every corpus body is checked against the whole
     serialised reading, so a future edit that quoted an article into `probe` or
     into `working` fails here rather than in a published artifact.
     """
-    corpus = REPO_ROOT / "corpus" / "corpus.jsonl"
+    corpus = a_corpus(tmp_path, rows=8)
     bodies = corpus_bodies(corpus, samples=5)
 
     emitted = json.dumps(
@@ -316,14 +353,14 @@ def test_a_corpus_with_no_article_body_yields_no_ratio(
 
 
 def test_every_reading_states_a_spread_rather_than_omitting_it(
-    tokenizer: RecordedTokenizer,
+    tokenizer: RecordedTokenizer, tmp_path: Path
 ) -> None:
     """Zero and present, because a tokenizer over fixed text has no run-to-run variance."""
     readings = take_every_reading(
         tokenizer,
         config_dir=CONFIG_DIR,
         fixtures=PLAN_FIXTURES,
-        corpus=REPO_ROOT / "corpus" / "corpus.jsonl",
+        corpus=a_corpus(tmp_path, rows=8),
         samples=5,
         stamp=STAMP,
     )
@@ -346,14 +383,14 @@ def test_every_reading_states_a_spread_rather_than_omitting_it(
 
 
 def test_the_paste_block_names_the_record_and_stamps_the_configured_weights(
-    tokenizer: RecordedTokenizer,
+    tokenizer: RecordedTokenizer, tmp_path: Path
 ) -> None:
     """Three lines an editor can drop in, and the constant name they belong to."""
     readings = take_every_reading(
         tokenizer,
         config_dir=CONFIG_DIR,
         fixtures=PLAN_FIXTURES,
-        corpus=REPO_ROOT / "corpus" / "corpus.jsonl",
+        corpus=a_corpus(tmp_path, rows=8),
         samples=5,
         stamp=STAMP,
     )

@@ -31,20 +31,6 @@ from idhazh.publish_telemetry import (
 )
 from idhazh.stages.assemble import stage_assemble
 
-COMMITTED_ROOT = REPO_ROOT / "frontend" / "public" / "telemetry"
-
-
-def _newest_committed_shard() -> Path | None:
-    """The newest published shard, or `None` where none is committed yet.
-
-    One directory listing and one name, so this costs the same whatever the
-    projection has accumulated (`CLAUDE.md` section 13). An older shard is
-    frozen and is the producer's to check, not pytest's - `idhazh validate-days`
-    reads every committed shard back through this contract.
-    """
-    shards = sorted(COMMITTED_ROOT.glob("*.csv"))
-    return shards[-1] if shards else None
-
 
 def _row(**overrides: object) -> ItemHealthRow:
     payload: dict[str, object] = {
@@ -298,25 +284,24 @@ def test_the_projection_carries_the_contract_header_and_no_version_cell() -> Non
     assert not FORBIDDEN_COLUMNS & set(PublicTelemetryRow.model_fields)
 
 
-def test_the_newest_committed_shard_reads_back_through_the_contract() -> None:
-    """One published file, opened through the shape that now owns it.
+def test_a_published_shard_is_lf_whatever_wrote_it(tmp_path: Path) -> None:
+    """The browser splits on `\\n`, and a developer box defaults to `\\r\\n`.
 
-    A published shard is the one artifact nobody can re-derive once its source
-    month has been folded away, so "it still parses" is not the question - the
-    question is whether every row loads through the shape that now owns it.
-
-    The newest, and only the newest. Asking that of every committed shard is a
-    walk over a collection the pipeline appends to, which section 13 refuses,
-    and it is answered where the data is: `idhazh validate-days` reads every
-    published shard of all seven series back through its producer's reader.
+    Asked of a shard this test publishes rather than of the newest committed one.
+    The committed read said nothing a widening could not have said first - the
+    read-back is proved two ways above from built shards - and it went red on
+    whichever day the archive happened to end at (`CLAUDE.md` section 13).
     """
-    path = _newest_committed_shard()
-    if path is None:
-        pytest.skip("no telemetry shard is committed yet")
-    rows = read_shard(path)
-    assert rows, f"{path.name} published no rows"
-    assert all(isinstance(row, PublicTelemetryRow) for row in rows)
-    assert b"\r" not in path.read_bytes(), f"{path.name} must be LF"
+    state = tmp_path / "state"
+    public = tmp_path / "telemetry"
+    _write_item_health(state, [_row(date="2026-08-23", run_id="2026-08-23-1", item_id="ai-01")])
+
+    publish(state_root=state, public_root=public)
+
+    raw = (public / "2026-08.csv").read_bytes()
+    assert raw, "the month published nothing, so this proved nothing"
+    assert b"\r" not in raw
+    assert raw.endswith(b"\n")
 
 
 def test_migrating_a_published_projection_changes_no_byte(tmp_path: Path) -> None:

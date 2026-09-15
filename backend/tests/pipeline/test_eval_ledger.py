@@ -1,4 +1,10 @@
-"""When is a measurement new, and what does the ledger do with one it already holds?"""
+"""When is a measurement new, and what does the ledger do with one it already holds?
+
+Every case here is driven from a ledger built in the test. What the committed
+ledger happens to hold is the producer's question - `idhazh validate-days` reads
+it back through this contract - and asking it here timed a red build to the day
+retention rolled a day file out (`CLAUDE.md` section 13).
+"""
 
 from __future__ import annotations
 
@@ -6,13 +12,11 @@ import csv
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT
 
 from idhazh import day_partition
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer
-from idhazh.ledger import STATE_DIRNAME
 
 from ._builders import (
     row,
@@ -136,69 +140,6 @@ def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
 
 def test_the_ledger_columns_match_the_contract() -> None:
     assert writer.columns() == EvalRow.csv_columns()
-
-
-def _newest_committed_day() -> Path | None:
-    """The newest committed score day file, found by three bounded listings.
-
-    Newest year, then newest month, then newest day. That costs at most twelve
-    plus thirty-one directory entries however long the project runs, where
-    `writer.ledger_days` walks every partition on record and gains one a day
-    (`CLAUDE.md` section 13, Guardrail #12).
-    """
-    root = REPO_ROOT / STATE_DIRNAME / writer.LEDGER_DIRNAME
-    at = root
-    for _ in range(2):
-        names = sorted(entry.name for entry in at.iterdir() if entry.is_dir())
-        if not names:
-            return None
-        at = at / names[-1]
-    days = sorted(at.glob("*.csv"))
-    return days[-1] if days else None
-
-
-def test_the_committed_ledger_carries_todays_columns() -> None:
-    """The header is written once, and the file is appended to forever.
-
-    A contract that grew a column while the committed header did not would put
-    more cells on tomorrow's row than the header names, and the dashboard reads
-    cells by position.
-
-    **The newest day and not every day**, because the newest is the one the next
-    run appends to, and `writer.append` checks exactly the days it writes. An
-    older day file nothing writes to cannot be corrupted by a run, and walking
-    all of them would cost one more open a day for ever.
-    """
-    newest = _newest_committed_day()
-    if newest is None:
-        pytest.skip("no ledger committed yet")
-    assert writer.read_header(newest) == writer.columns(), newest.name
-
-
-def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
-    """The migration, run against the real file rather than a copy of its shape.
-
-    `require_matching_header` compares the header tuple exactly, so the commit
-    that gave the contract a `source_digest` column stopped the committed ledger
-    loading until the file was widened by the same column. This appends to a byte
-    copy of the newest committed day, which is the run a release blocker would
-    fail - and it is one file rather than every committed day, for the reason
-    above.
-    """
-    newest = _newest_committed_day()
-    if newest is None:
-        pytest.skip("no ledger committed yet")
-    date = day_partition.date_of(newest)
-    state = tmp_path / "state"
-    copied = writer.ledger_path(state, date)
-    copied.parent.mkdir(parents=True)
-    copied.write_bytes(newest.read_bytes())
-    before = copied.read_text(encoding="utf-8").count("\n")
-
-    assert writer.append(state, [row(url_key="d" * 64, date=date)]) == 1
-
-    assert writer.read_header(copied) == writer.columns()
-    assert copied.read_text(encoding="utf-8").count("\n") == before + 1
 
 
 def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path) -> None:

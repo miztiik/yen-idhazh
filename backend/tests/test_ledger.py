@@ -21,7 +21,6 @@ from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import (
     RETIRED_CELLS,
     FailureCode,
@@ -1399,7 +1398,7 @@ def _scores(**cells: str) -> str:
     return out.getvalue()
 
 
-def test_the_retirement_ledger_exists_in_a_fresh_checkout() -> None:
+def test_the_retirement_ledger_is_named_where_the_commit_step_stages_it() -> None:
     """`git add` on a path that is not there aborts the whole commit step.
 
     The plan job stages its ledgers in one `git add "$@"` under
@@ -1407,12 +1406,16 @@ def test_the_retirement_ledger_exists_in_a_fresh_checkout() -> None:
     that retires something would cost that job the sight and health ledgers
     staged beside it. The header ships with the contract instead, exactly as
     `state/runtime-counters.csv` does.
-    """
-    path = ledger.feed_retirements_path(REPO_ROOT / "state")
 
-    assert path.exists(), "the retirement ledger must exist before the first retirement"
-    assert ledger.read_header(path) == FeedRetirementRow.csv_columns()
+    Whether this checkout carries the file is a question about a working copy,
+    not about code: no commit can make it false, and a short or sparse clone
+    makes it false without anybody changing a line (`CLAUDE.md` section 13). It
+    is asked by `backend/utilities/check_seeded_stores.py`, which pytest does not
+    collect. What stays here is the half a code change can break - the path the
+    commit step has to be handed.
+    """
     assert ledger.feed_retirements_relpath() == "state/feed-retirements.csv"
+    assert ledger.feed_retirements_path(Path("state")) == Path("state/feed-retirements.csv")
 
 
 def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
@@ -1425,14 +1428,12 @@ def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
     stages `state` whole, so a day file a run creates is staged without ever
     being named.
 
-    Three facts, and each one is a fixed cost: the tree is in the checkout, the
-    flat file it replaced is not, and the path helper still names the layout the
-    writer uses. What is deliberately not asserted here is anything about the
-    rows, which grow with every run (Guardrail #12).
+    What is asserted is the layout the writer uses, which is the part a code
+    change can break. Whether this checkout holds the tree is a clone question
+    and is asked by `backend/utilities/check_seeded_stores.py`.
     """
-    assert (REPO_ROOT / "state" / ledger.VISUAL_PRUNES_DIRNAME).is_dir()
-    assert not (REPO_ROOT / "state" / "visual-prunes.csv").exists()
     assert ledger.visual_prunes_relpath("2026-09-06") == "state/visual-prunes/2026/09/06.csv"
+    assert ledger.visual_prunes_relpath("2026-09-06").split("/")[0] == ledger.STATE_DIRNAME
 
 
 # --- The cleanup record, one day at a time ----------------------------------
@@ -2160,7 +2161,7 @@ def counters_row(shard: int, **counters: object) -> RuntimeCountersRow:
     )
 
 
-def test_every_ledger_a_work_shard_stages_exists_in_a_fresh_checkout() -> None:
+def test_every_ledger_a_work_shard_stages_is_named_before_the_first_run() -> None:
     """`git add` on a path that is not there aborts the whole commit step.
 
     The script runs under `set -euo pipefail` and stages all three of the work
@@ -2168,11 +2169,15 @@ def test_every_ledger_a_work_shard_stages_exists_in_a_fresh_checkout() -> None:
     appears once the counters stage has succeeded would let a broken scrape cost
     the shard its item-health rows as well - the exact loss the commit step was
     added to prevent. The header ships with the contract instead.
-    """
-    path = ledger.runtime_counters_path(REPO_ROOT / "state")
 
-    assert path.exists(), "the ledger a work shard stages must exist before the first run"
-    assert ledger.read_header(path) == RuntimeCountersRow.csv_columns()
+    The path and its header come from the contract, so a rename or a widening
+    breaks this. Whether the file is in the working copy does not: that is a
+    clone question and `backend/utilities/check_seeded_stores.py` asks it
+    (`CLAUDE.md` section 13).
+    """
+    assert ledger.runtime_counters_relpath() == "state/runtime-counters.csv"
+    assert ledger.runtime_counters_path(Path("state")) == Path("state/runtime-counters.csv")
+    assert set(ledger.RUNTIME_COUNTERS_KEY) <= set(RuntimeCountersRow.csv_columns())
 
 
 def test_a_re_run_shard_cannot_be_counted_twice(tmp_path: Path) -> None:
@@ -2301,17 +2306,23 @@ def test_loading_one_runs_counters_costs_the_run_and_not_the_file(tmp_path: Path
 
 
 def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None:
-    """The Oracle for row 9, on one real committed run.
+    """The Oracle for row 9, on one real captured run.
 
     `docs/architecture/summarize/throughput.md` and the console both publish a
     read rate derived from the item-health ledger, which sums a field copied out
     of one model reply per item. The server counted the same work for itself.
-    Until the counters were committed the two could not be held against each
+    Until the counters were captured the two could not be held against each
     other at all, which is what Guardrail #10 forbids.
 
-    The tolerance was written down before either side was read. The four
-    `.prom` bodies are real captures from run `2026-08-26-5`'s `runtime-log-*`
-    artifacts; the ledger side is the committed `state/item-health/2026-08.csv`.
+    The tolerance was written down before either side was read. **Both sides are
+    now captures**, and that is the change: the four `.prom` bodies come from run
+    `2026-08-26-5`'s `runtime-log-*` artifacts and the 160 ledger rows are that
+    same run's rows, lifted out of `state/item-health/2026/08/26.csv` byte for
+    byte. Reading the live ledger instead put a fuse on a date nobody chose -
+    the day retention rolled that shard out of `state/`, this test would have
+    gone red on a pull request that did not touch it (`CLAUDE.md` section 13).
+    The pooled rate is identical either way, which is what makes the fixture the
+    same evidence rather than a smaller one.
     """
     rows = [
         RuntimeCountersRow.from_metrics_text(
@@ -2327,23 +2338,30 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None
     assert len(rows) == 4, "all four shards, or the run figure is not the run"
 
     server = pool_counters(rows)
-    committed = pool_ledger(
-        ledger.item_health_path(REPO_ROOT / "state", RECONCILED_DATE), run_id=RECONCILED_RUN
+    captured = pool_ledger(
+        ledger.item_health_path(STATE_FIXTURES / "prefill-oracle", RECONCILED_DATE),
+        run_id=RECONCILED_RUN,
     )
-    assert committed.parts > 100, (
-        "the committed ledger no longer holds this run's rows - the oracle has no input"
+    assert captured.parts == 116, (
+        "the captured run pools 116 of its 160 rows - the rest recorded no timings. "
+        "A different count means the fixture was edited, not that the archive moved"
     )
 
-    gap = abs(committed.rate - server.rate) / server.rate
+    gap = abs(captured.rate - server.rate) / server.rate
     assert gap <= TOLERANCE, (
-        f"ledger {committed.rate:.4f} tok/s against server {server.rate:.4f} tok/s "
+        f"ledger {captured.rate:.4f} tok/s against server {server.rate:.4f} tok/s "
         f"is {gap * 100:.2f} percent apart, outside the {TOLERANCE * 100:.0f} percent bound"
     )
 
 
 def test_a_run_with_no_committed_snapshot_says_so_rather_than_reporting_zero() -> None:
-    """An audit that finds nothing must not read as an audit that found agreement."""
-    result = reconcile(REPO_ROOT / "state", run_id="1970-01-01-1")
+    """An audit that finds nothing must not read as an audit that found agreement.
+
+    Asked of the same captured tree the oracle above reads, which holds no
+    counter snapshot at all - so the empty answer comes from a tree fixed in
+    size rather than from a date the real ledger happens not to carry yet.
+    """
+    result = reconcile(STATE_FIXTURES / "prefill-oracle", run_id="1970-01-01-1")
 
     assert result.server.parts == 0
     assert "nothing to check against" in result.verdict

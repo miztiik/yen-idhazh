@@ -183,15 +183,22 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     so a run now writes a path its own checkout did not carry - and staging
     `state` whole already reaches it, which is why that move needed nothing in
     this step.
+
+    What this no longer asserts is that the two late stores are absent from the
+    checkout. Staging `state` whole is correct whether or not they have appeared
+    yet, so their absence was never the reason the step is written this way -
+    and asserting it put a fuse on a date nobody chose: the first run to fold a
+    month or archive a score creates one, and this test goes red on a pull
+    request that did not touch it (`CLAUDE.md` section 13).
     """
     staged = COMMIT_STAGED_PATHS["fold"]
 
     assert "state" in staged
     assert ledger.visual_prunes_relpath(SUBSTITUTED_DATE).split("/")[0] in staged
     for late in ("telemetry-aggregate", "score-archive"):
-        assert f"state/{late}" not in staged, f"state/{late} is not in a fresh checkout"
-        assert not (REPO_ROOT / "state" / late).exists(), (
-            f"state/{late} is now committed, so this test is asserting the wrong thing"
+        assert f"state/{late}" not in staged, (
+            f"state/{late} appears only once production writes it, so naming it here "
+            "aborts git add on every run before that day"
         )
 
 

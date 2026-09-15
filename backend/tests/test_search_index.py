@@ -202,17 +202,54 @@ class TestTheShape:
 
 
 class TestTheWriter:
-    def test_the_oracle_every_committed_item_appears_once_and_decodes_the_same(
+    def a_month(self, tmp_path: Path) -> tuple[Path, list[DigestDay]]:
+        """Three days under one month, carrying every case the writer has to place.
+
+        One day where every story has a vector, one where a single story has one
+        and its siblings do not, and one with no embeddings block at all. The
+        archive has never held all three in one month, and the month it is
+        currently writing is a collection a run appends to - so reading that
+        month cost one parse per published story and the probe proved nothing at
+        all on a day the tree held only the date still being written
+        (`CLAUDE.md` section 13). What the committed month holds is checked where
+        the data is, by `TestTheCommittedShard` below and by the producer.
+        """
+        digest_root = tmp_path / "digest"
+        template = day()
+        days = [
+            template.model_copy(
+                update={
+                    "date": "2026-08-21",
+                    "embeddings": block(
+                        {
+                            item.item_id: a_vector(0.2 * (n + 1))
+                            for n, item in enumerate(template.items)
+                        }
+                    ),
+                }
+            ),
+            template.model_copy(
+                update={
+                    "date": "2026-08-22",
+                    "embeddings": block({template.items[0].item_id: a_vector(-0.5)}),
+                }
+            ),
+            template.model_copy(update={"date": "2026-08-23", "embeddings": None}),
+        ]
+        for payload in days:
+            write_day(digest_root, payload)
+        return digest_root, days
+
+    def test_the_oracle_every_item_appears_once_and_decodes_the_same(
         self, tmp_path: Path
     ) -> None:
-        """The bijection, over the month the pipeline is currently writing."""
-        month = newest_committed_month()
-        days = committed_days(month)
+        """The bijection, over a month built to hold a vector, a gap and no block."""
+        digest_root, days = self.a_month(tmp_path)
 
         built = assemble.rebuild_search_index(
-            digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
+            digest_root=digest_root, index_root=tmp_path / "index", month="2026-08"
         )
-        raw = (tmp_path / f"{month}.bin").read_bytes()
+        raw = (tmp_path / "index" / "2026-08.bin").read_bytes()
         assert len(raw) == built.vector_bytes
 
         expected = [(payload.date, item) for payload in days for item in payload.items]
@@ -242,28 +279,29 @@ class TestTheWriter:
             assert dequantise(sliced) == from_base64(encoded)
 
         assert seen > 0, "a probe over an empty corpus proves nothing"
+        assert offsets > 0 and nulls > 0, "the month has to carry both cases, or it proves one"
         assert offsets + nulls == seen
 
     def test_rebuilding_twice_produces_identical_bytes(self, tmp_path: Path) -> None:
         """The whole reason there is no incremental path."""
-        month = newest_committed_month()
+        digest_root, _days = self.a_month(tmp_path)
         assemble.rebuild_search_index(
-            digest_root=DIGEST_ROOT, index_root=tmp_path / "once", month=month
+            digest_root=digest_root, index_root=tmp_path / "once", month="2026-08"
         )
         assemble.rebuild_search_index(
-            digest_root=DIGEST_ROOT, index_root=tmp_path / "twice", month=month
+            digest_root=digest_root, index_root=tmp_path / "twice", month="2026-08"
         )
         for suffix in (".json", ".bin"):
-            first = (tmp_path / "once" / f"{month}{suffix}").read_bytes()
-            assert first == (tmp_path / "twice" / f"{month}{suffix}").read_bytes()
+            first = (tmp_path / "once" / f"2026-08{suffix}").read_bytes()
+            assert first == (tmp_path / "twice" / f"2026-08{suffix}").read_bytes()
             assert first, f"{suffix} is empty, so the comparison proved nothing"
 
     def test_the_index_file_is_lf(self, tmp_path: Path) -> None:
-        month = newest_committed_month()
+        digest_root, _days = self.a_month(tmp_path)
         assemble.rebuild_search_index(
-            digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
+            digest_root=digest_root, index_root=tmp_path / "index", month="2026-08"
         )
-        assert b"\r\n" not in (tmp_path / f"{month}.json").read_bytes()
+        assert b"\r\n" not in (tmp_path / "index" / "2026-08.json").read_bytes()
 
     def test_a_deleted_day_leaves_the_shard_correct(self, tmp_path: Path) -> None:
         """The whole retention obligation, discharged by rebuilding from what is there."""
@@ -354,12 +392,13 @@ class TestTheWriter:
         assert built.entries[1].vector == 0
         assert built.vector_bytes == DIMENSIONS
 
-    def test_the_header_names_the_scale_the_committed_bytes_carry(self) -> None:
+    def test_the_header_names_the_scale_the_bytes_carry(self, tmp_path: Path) -> None:
         """The index projects already-quantised bytes, so it states their step."""
-        month = newest_committed_month()
-        built, raw = assemble.build_search_index(month, committed_days(month))
-        if not raw:
-            pytest.skip("no committed vectors in this checkout")
+        _root, days = self.a_month(tmp_path)
+
+        built, raw = assemble.build_search_index("2026-08", days)
+
+        assert raw, "no vector reached the file, so the header states nothing"
         assert built.scale == VECTOR_SCALE
         assert built.dtype == "int8"
         assert built.dimensions == DIMENSIONS
