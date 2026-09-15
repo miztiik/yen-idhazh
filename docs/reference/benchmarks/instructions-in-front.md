@@ -79,7 +79,7 @@ the row asks for it: `692 -> 42, floor 14, pointer 28`.
 
 This corrects a claim that stood in two rows of plan 11 until this run.
 
-| Call-1 prompt budget, tokens | before | after |
+| Label-call prompt budget, tokens | before | after |
 | --- | ---: | ---: |
 | ceiling: `n_ctx` less both decode budgets less the trailing turn | 10,098 | 10,748 |
 | of which the system turn takes | 1,363 | 2,060 |
