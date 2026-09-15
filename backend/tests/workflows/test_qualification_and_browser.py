@@ -49,6 +49,38 @@ def test_the_qualification_uploads_no_article_body() -> None:
     assert "items" not in str(path)
 
 
+def test_both_qualification_pages_survive_the_run_that_needed_them() -> None:
+    """A run that died half way is the one whose counts somebody wants.
+
+    Both summary steps carry `if: always()`, and the verdict's does for a second
+    reason: the step before it exits non-zero on an ESCALATE, which is exactly
+    the verdict a reader opened the page for. Without `always()` the page would
+    be printed only when nobody needed it.
+
+    Neither step measures anything. Each prints a file the stage already wrote
+    beside the payload it is rendered from, so the page and the artifact cannot
+    disagree (Guardrail #10).
+    """
+    workflow = _load_workflows()["validate.yml"]
+
+    shard_page = _step(workflow, "qualify", "name", "What this shard measured")
+    assert shard_page.get("if") == "always()"
+    shard_script = _script(shard_page, "validate.yml/qualify/What this shard measured")
+    assert "$GITHUB_STEP_SUMMARY" in shard_script
+    assert "shard-${{ matrix.shard }}.md" in shard_script
+
+    verdict = _step(workflow, "decide", "name", "The verdict")
+    assert verdict.get("if") == "always()"
+    verdict_script = _script(verdict, "validate.yml/decide/The verdict")
+    assert "$GITHUB_STEP_SUMMARY" in verdict_script
+    assert "report.md" in verdict_script
+
+    names = [step.get("name") for step in _steps(workflow, "decide")]
+    assert names.index("Run the gates") < names.index("The verdict"), (
+        "the verdict is printed after the gates decide it"
+    )
+
+
 def test_the_whole_day_check_gets_its_own_build_and_never_the_canary() -> None:
     """`frontend/build` is one directory, and two builds write it.
 
