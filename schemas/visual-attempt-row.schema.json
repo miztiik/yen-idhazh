@@ -74,9 +74,9 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Initial shape: one row per attempt at a visual, carrying the eight terms the fold groups on and the two columns it keeps a distribution of. No writer yet.",
+      "change": "Initial shape: one row per attempt at a visual, carrying the eight terms.",
       "version": "2026-09-13T23:50",
-      "why": "The fold this store takes at the window edge deletes the full-grain shard, so the group key has to be settled before the first row is written - a key settled narrow cannot be widened later against data that no longer exists. Settling it needs the shape it is a key OVER, so the attempt row is declared here at the grain the fold reads and widened by the row that builds the writer."
+      "why": "The fold this store takes at the window edge deletes the full-grain shard."
     }
   ],
   "description": "One attempt at one picture, on one run: the full grain the fold replaces.\n\n**One row per attempt, never one per published visual.** A per-publication\nledger leaves every refusal uncommitted, so the machine loop stops being\nauditable while still being the gate, and a later run cannot tell a refused\nvisual from one never attempted.\n\nThis is the shape the fold reads. It carries the eight terms of `FOLD_KEY`\nand the two measured columns the folded row keeps a distribution of, and\nnothing else yet: the join key a human label needs, and a typed reason for\nevery one of the six gates, arrive with the row that writes the ledger.\nBoth are additive.",

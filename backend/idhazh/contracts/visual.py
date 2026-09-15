@@ -365,69 +365,18 @@ class VisualPlan(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-15T19:40",
-            change=(
-                "Every element-id field now carries a self-bounding pattern, following "
-                "element.ELEMENT_ID_PATTERN. ELEMENT_ID_MAX_LENGTH moved to element.py "
-                "and is derived there rather than written down; maxLength stays beside "
-                "the pattern as the belt. No bound moved, so the worst-case reply is "
-                "the same 3767 characters."
-            ),
-            why=(
-                "The twelve element-id fields on this shape are every string the "
-                "decoder sees that carried a pattern, and llama.cpp's "
-                "schema-to-grammar converter drops a length bound whenever a pattern "
-                "sits beside it. So the ceiling this module computes was true of the "
-                "contract and false of the grammar the contract generated - and "
-                "unbounded_leaves, which exists to make that arithmetic honest, asks "
-                "whether a maxLength is present and so agreed with it.\n\n"
-                "encodings.category[0] is where it landed: 15,472 characters and 15.8 "
-                "minutes, on an item whose decision field already read none."
-            ),
+            change="Every element-id field now carries a self-bounding pattern.",
+            why="These are every string the constrained decoder sees, and it cannot compile one.",
         ),
         ChangelogEntry(
             version="2026-09-09T03:11",
-            change=(
-                "encodings became one flat object with a field per role, and the schema "
-                "requires every one of them. It was a map whose keys were optional, so a "
-                "reply could name a type and never mention the channel that draws it. An "
-                "inapplicable role is now an empty array. No role was added or removed "
-                "and no bound moved, so the worst-case reply is the same 3767 characters."
-            ),
-            why=(
-                "Optional role keys produced a confident chart with no bars in it, twice, "
-                "on the first live run, and a plan that omits quantity reads as a complete "
-                "answer rather than as a failure. A JSON Schema can require the keys of an "
-                "object it declares and cannot require the keys of a map, so the roles had "
-                "to become fields for the decoder to be held to them. Presence is all this "
-                "shape guarantees: which roles a given type may leave empty needs that "
-                "type's own rule set, which is the validator's and not the schema's. The "
-                "cost is nine keys on every reply and it is measured rather than assumed - "
-                "28 tokens on a plan that declines and 23 on a four-bar one, about 2 "
-                "seconds a plan and 6 to 7 percent of the planner's run budget."
-            ),
+            change="encodings became one flat object with a field per role.",
+            why="Optional role keys produced a confident chart with no bars in it, twice.",
         ),
         ChangelogEntry(
             version="2026-09-09",
-            change=(
-                "Initial shape: the plan a compiler draws from, carrying element "
-                "references and closed vocabularies only. No geometry field, no numeric "
-                "field but a 0..1 confidence, no alt_text, and labels and annotations "
-                "typed as element ids rather than as strings. Every array carries a "
-                "maxItems and every decoded string a maxLength."
-            ),
-            why=(
-                "Contracts before logic - the planner's second call and the compiler are "
-                "both written against a fixed payload (Guardrail #3). The prohibitions are the "
-                "point of the shape rather than a note beside it: a plan that can name a "
-                "pixel is a plan bound to one renderer, and a plan that can state a "
-                "number turns the worst a prompt injection can do from picking the wrong "
-                "bars into drawing the wrong figure. alt_text is left out because the "
-                "compiler assembles it from element values it already holds, where the "
-                "model writing it would be the last prose channel in the system that no "
-                "validator can check. The bounds are what make the worst-case decoded "
-                "reply arithmetic rather than a hope, and the arithmetic is in the module "
-                "docstring so it can be re-derived when a bound moves."
-            ),
+            change="Initial shape: the plan a compiler draws from, carrying element references.",
+            why="Contracts before logic - the planner and the compiler both need a fixed shape.",
         ),
     )
 

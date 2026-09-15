@@ -80,19 +80,8 @@ class CorpusRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-08-28",
-            change=(
-                "Initial shape: the three-turn exchange, plus url_key, date, model_id "
-                "and vertical."
-            ),
-            why=(
-                "The pipeline scores 600-730 articles a day and throws the pairs away. "
-                "They are training data for the exact job we run, so the window that "
-                "keeps them needs a shape before anything writes one (Guardrail #3). Five "
-                "fields and no more: prompt_fingerprint is sha256 of messages[0], "
-                "source_words is a word count of messages[1], and which file a row lives "
-                "in already says whether a human wrote it - a stored copy of a derivable "
-                "value is a second thing that can disagree with the first."
-            ),
+            change="Initial shape: the three-turn exchange, plus url_key, date, model_id.",
+            why="The pipeline scores 600-730 articles a day and throws the pairs away.",
         ),
     )
 
@@ -168,18 +157,8 @@ class CorpusMeta(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-08-28",
-            change=(
-                "Initial shape: the census of the window, plus harvested_date and "
-                "pruned_date."
-            ),
-            why=(
-                "Two schedules need somewhere to remember when they last fired, and a "
-                "cron line cannot be that place - GitHub Actions parses on.schedule "
-                "before any step runs, so no config value reaches it, and 5-field cron "
-                "has no every-N-days field at all. The census beside it answers the "
-                "question a person asks before spending a training session: how many "
-                "rows are there, over what range of days, and is it all one vertical."
-            ),
+            change="Initial shape: the census of the window, plus harvested_date and pruned_date.",
+            why="Two schedules need somewhere to remember when they last fired.",
         ),
     )
 

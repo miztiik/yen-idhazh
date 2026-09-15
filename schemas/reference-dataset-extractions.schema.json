@@ -47,12 +47,12 @@
     {
       "change": "Added quality_flags, defaulting to empty.",
       "version": "2026-09-13T13:05",
-      "why": "The cleaning phase writes the same row shape with its text cleaned, and an article it kept but is unhappy about has to be able to say so. It stays empty on an extraction row: the fetch judges whether a page answered, never whether the prose is worth reading."
+      "why": "The cleaning phase writes the same row shape with its text cleaned."
     },
     {
-      "change": "Initial shape: the manifest identity, the full sanitized text with its digest and word count, the two timestamps, the two tool versions, and the outcome with its typed reason.",
+      "change": "Initial shape: the manifest identity, the full sanitized text with its digest.",
       "version": "2026-09-13",
-      "why": "The extraction needs a declared row before it writes one (Guardrail #3). The text is the untruncated sanitized prose rather than the capped `Article.text`, because a classifier reading a 2,500-token excerpt is reading a different article from the one a person opened."
+      "why": "The extraction needs a declared row before it writes one."
     }
   ],
   "description": "What one manifest identity produced, as one element of `articles.json`.\n\nA failure is a row, not an absence. It carries `text: null` with a typed\nreason, so the count of URLs that were tried and the count that worked are\nboth readable from the file instead of one being inferred from the other.",

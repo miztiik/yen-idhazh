@@ -56,198 +56,27 @@ class Summary(Contract):
         ChangelogEntry(
             version="2026-09-15",
             change="failure_code may now carry no_title.",
-            why=(
-                "Extract gained a refusal for an item whose feed carried no headline, "
-                "and summarize can never write that value. No field on this payload "
-                "changed; the failure vocabulary is inlined into this schema, so the "
-                "generated file's bytes move and the change is stamped here rather than "
-                "left to the drift gate to announce (section 11). Additive: a payload "
-                "written before today names none of the new values and still validates."
-            ),
+            why="Extract gained a refusal for an item whose feed carried no headline.",
         ),
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
-            why=(
-                "It gated a skip nothing was ever wired to, and no writer has filled it "
-                "since 2026-09-12. This payload is written under backend/var/, which is "
-                "gitignored and read only inside the run that wrote it, so nothing it was "
-                "written into survives a build - and a run whose contract moved mid-flight "
-                "is already named by StalePayloadError rather than migrated."
-            ),
+            change="Removed pipeline_fingerprint.",
+            why="It gated a skip nothing was ever wired to, and no writer has filled it since.",
         ),
         ChangelogEntry(
             version="2026-09-13T14:20",
-            change=(
-                "A summary that failed on its reply records call_1 and the five flat cost "
-                "cells, which it left at the model's defaults of zero."
-            ),
-            why=(
-                "Every gate below 'the model never answered' refuses text the server had "
-                "already read a prompt for and written an answer to, so the prefill and "
-                "the decode were spent whatever the verdict was. Recording zero made a day "
-                "that failed many replies read as a cheap day, and reconcile_prefill pooled "
-                "the ledger against the server's own counters with those calls missing from "
-                "one side, so the difference was absorbed as drift rather than named. No "
-                "field moved and no shape broke - both slots were already optional and the "
-                "cells already defaulted to zero - so nothing an earlier run wrote needs "
-                "rewriting. The read-side rule is the reason this entry exists: on a failed "
-                "payload stamped before this version a zero cost cell means never recorded, "
-                "not free, and a reader trending cost across 2026-09-13 sees a step up that "
-                "nothing else in the ledger explains. A call that never returned still "
-                "records nothing, and that null is the real zero."
-            ),
+            change="A summary that failed on its reply records call_1 and the five cost cells.",
+            why="Every gate below 'the model never answered' refuses text already paid for.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
-            why=(
-                "Skip-if-fingerprint-matches was never wired to a caller, so the stamp "
-                "cost every summary a digest and bought no skip. What produced a summary "
-                "is recorded on the run record instead, where it gates nothing."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-12T16:20",
-            change=(
-                "Added optional call_1 and call_2, each a CallCost; the five flat cost "
-                "fields are now the item's total across the calls recorded there."
-            ),
-            why=(
-                "An item is read by more than one model call and this payload kept one "
-                "call's five numbers without saying which. Folded, they stop being "
-                "readable: measured on the one two-call run, cached_tokens of 0 and "
-                "1,493 fold to 1,493 against 3,886 prompt tokens - 38 percent, which is "
-                "neither call's 0 nor its 62. Both slots default to null, so a payload "
-                "an earlier run wrote still validates and its flat five stand alone. "
-                "Where a slot is filled the flat five must equal the sum over the "
-                "filled slots, which is what keeps every aggregate that reads them - "
-                "publish_day_metrics, publish_console_band, reconcile_prefill - correct "
-                "the day a second call starts being recorded, with no edit of their "
-                "own. No read-side migration is owed: this payload is written under "
-                "backend/var/, which is gitignored and read only inside the run that "
-                "wrote it."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-10T00:30",
-            change="length_action added, optional and defaulting to null.",
-            why=(
-                "A reply outside its band's ask no longer deletes the item; it publishes, "
-                "publishes over-length, or is trimmed at the last complete sentence that "
-                "fits. A trimmed summary and a compliant one read identically afterwards, "
-                "because summary_word_count is measured after the trim, so without this "
-                "field there is no way to count how often the tolerance fires. Additive "
-                "with a default, so a payload written by an earlier run still validates "
-                "and reads as null - which is the truth about it, since no verdict was "
-                "recorded when it was written."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-30T20:00",
-            change="attempt says in its description that it is a constant, not a measurement.",
-            why=(
-                "The description read 'A low-band summary is retried on the smaller "
-                "model', which describes a retry the pipeline does not do. summarize "
-                "takes attempt as a keyword defaulting to 1 and no caller passes "
-                "anything else, so the column is 1 everywhere: measured 2026-08-30, "
-                "3,113 of 3,113 rows of state/scores.csv carry 1. A reader who "
-                "believed the old sentence would have read a column of 1s as evidence "
-                "that a retry almost never fires, which is a measurement the data "
-                "cannot support. No field was added, removed or retyped and no payload "
-                "was rewritten; the generated schema moves because a description is "
-                "part of it."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-27",
-            change="failure_code may now carry copied_source or leaked_address.",
-            why=(
-                "Summarize refuses two more replies: one that copies the source instead "
-                "of summarizing it, and one that carries an address into our own words. "
-                "No field on this payload changed, but the failure vocabulary is inlined "
-                "into this schema, so the generated file's bytes move and the change is "
-                "stamped here rather than left to the drift gate to announce. Additive - "
-                "a payload written before today names none of the new values and still "
-                "validates."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-24T18:30",
-            change="Added prefill_ms, decode_ms and cached_tokens.",
-            why=(
-                "summarize_ms is one number covering two costs with different rates: "
-                "reading the article runs about twice as fast per token as writing the "
-                "summary, so a blended figure cannot say whether a slow run was a long "
-                "article or a long reply. The runtime already reports both separately, "
-                "and cached_tokens is what makes a prefill figure comparable between "
-                "items. All three default to zero, so an older payload still validates."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-23T17:36",
-            change="Added optional failure_code for typed summarize failures.",
-            why=(
-                "A dead local model server is infrastructure failure, not a malformed "
-                "model reply. The failure payload now carries model_unreachable as a "
-                "typed value so the item-health classifier can read it without "
-                "pattern-matching failure_detail."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-23",
-            change="Added optional title, and folded it into output_digest when present.",
-            why=(
-                "The digest published the source's own headline, which is written to win "
-                "a click. The summarizer now writes a title from the article's own facts "
-                "and it is published words like the rest, so it belongs in the digest "
-                "that detects drift. Additive both ways: the field is optional, and a "
-                "null title is left out of the digested payload rather than digested as "
-                "null, so every payload written before today still recomputes to the "
-                "same value."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-22",
-            change="Split duration_ms into fetch_ms, extract_ms and summarize_ms.",
-            why=(
-                "One number covering fetch, extract and summarize could not answer the "
-                "question it was there for: a slow item might be a slow host or a slow "
-                "model, and only one of those is ours to fix. Additive - the blended "
-                "field stays, and a payload written before this still validates."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-21T02:00",
-            change="Added required pipeline_fingerprint and output_digest.",
-            why=(
-                "Skip-if-exists becomes skip-if-fingerprint-matches, and a match with unequal "
-                "output has to be detectable. No payload predates this - the pipeline has "
-                "never run - so the read-side migration is the fixtures, restamped here."
-            ),
+            why="Skip-if-fingerprint-matches was never wired to a caller, so the stamp cost bytes.",
         ),
         ChangelogEntry(
             version="2026-08-21",
-            change="Initial shape: summary text, key points, the model, and the cost.",
-            why="Contracts before logic - Summarize is written against a fixed payload.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

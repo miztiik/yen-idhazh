@@ -94,12 +94,12 @@
     {
       "change": "A candidate carries the page's headline, and a blank one is refused.",
       "version": "2026-09-15",
-      "why": "The plan step built its items with no title at all, so every dispatch died in the extractor before it summarized anything. The headline has to come from somewhere, and this file is the only place that knows it: the address is pinned and has fallen out of its feed's window, so reading the feed would find nothing, and having the extractor fall back to the page's own title would put a branch in production code that only the test rig ever takes.\n\nRequired rather than optional, so the refusal lands on the config edit rather than three stages later. The type refuses a whitespace-only headline as well as an empty one - `UntrustedLine` accepts `'   '`, and this file is hand-edited. No payload is migrated: nothing but `config/pipeline-tests.json` uses this shape and it is committed here."
+      "why": "The plan step built items with no title, so every dispatch died downstream."
     },
     {
       "change": "Initial shape: candidate addresses, the draw size and the arms.",
       "version": "2026-09-14",
-      "why": "A production run takes about 200 minutes, so a pipeline change was tested a day after it was written. The test workflow closes that loop in under an hour, and everything it varies is declared here rather than written into the workflow (Guardrail #6)."
+      "why": "A production run is long, so a pipeline change was tested a day at a time."
     }
   ],
   "description": "`config/pipeline-tests.json` - the candidate addresses and the arms.",

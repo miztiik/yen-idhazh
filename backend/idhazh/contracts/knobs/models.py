@@ -296,151 +296,28 @@ class ModelsConfig(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-15T12:30",
-            change=(
-                "models.<role>.draft.spec_type accepts a third value, draft-mtp, "
-                "beside draft-simple and ngram-simple. Additive: nothing that "
-                "validated yesterday stops validating, and the default is unchanged."
-            ),
-            why=(
-                "The closed choice held two values because the other nine either "
-                "needed a draft head nobody had published for our weights or a lookup "
-                "cache nothing here writes. Unsloth now publishes a multi-token "
-                "head for the Gemma entry, so that premise is false for this one "
-                "value. Naming draft-simple for that head is not a slow server, it "
-                "is a dead one - every request failed on 'decode() failed: failed to "
-                "process speculative batch', five of five, on run 34941400155. The "
-                "pinned build accepts the value: .github/workflows/probe.yml read it "
-                "off llama-server --help on 2026-09-15."
-            ),
+            change="models.<role>.draft.spec_type accepts a third value, draft-mtp.",
+            why="A model that predicts its own next tokens needs no second set of weights.",
         ),
         ChangelogEntry(
             version="2026-09-14T07:00",
-            change=(
-                "models.<role>.draft, optional: a second, smaller set of weights that "
-                "drafts tokens this entry's model then verifies. It carries its own "
-                "repo, revision, file, sha256 and byte_count, a closed spec_type of "
-                "draft-simple or ngram-simple, and the three drafting knobs n_max, "
-                "n_min and p_min. Null is the default and means one model and no "
-                "speculation, so every models file written before today still loads "
-                "and every committed run.json still reads."
-            ),
-            why=(
-                "Plan 28 row 2a, returned to scope 2026-09-14. It is the one feature a "
-                "candidate brings that this plan's pointer-swap could not switch on, so "
-                "leaving it out contradicted the plan's own intent. It is priced on "
-                "cost and revert rather than on a quality measurement because "
-                "speculative decoding is output-identical by construction - the target "
-                "verifies every drafted token - so there is no quality to measure "
-                "(Guardrail #10, amended 2026-09-14). The block sits beside inference "
-                "rather than inside it because it names weights to fetch, and a block "
-                "that fetches a file is not a decoding knob."
-            ),
+            change="models.<role>.draft, optional: a smaller set of weights that drafts tokens.",
+            why="Speculative decoding is a property of the model, so it belongs on the entry.",
         ),
         ChangelogEntry(
             version="2026-09-14T06:00",
-            change=(
-                "models.<role>.byte_count, optional: how many bytes the weights are. It "
-                "sits on ModelRef beside sha256, defaults to null, and no reader "
-                "requires it - so a models file written before today still loads and a "
-                "run.json written before today still reads."
-            ),
-            why=(
-                "Plan 28 row #9 decision 3. The qualification dispatch took the byte "
-                "count as a form field, which made it the one fact about a candidate "
-                "that lived outside the file naming that candidate - and its default of "
-                "0 meant the identity gate compared the observed size to itself and "
-                "called that a check (Guardrail #10). Declared here, the gate compares "
-                "two independent facts, and the dispatch has nothing left to ask for "
-                "but the filename. Ruled by Carmack, 2026-09-13."
-            ),
+            change="models.<role>.byte_count, optional: how many bytes the weights are.",
+            why="The size sat on a qualification report, which is not where a swap reads it.",
         ),
         ChangelogEntry(
             version="2026-09-14T04:00",
-            change=(
-                "models.<role>.turns gains thinking_close, and "
-                "models.<role>.inference.thinking and max_output_tokens are gone. "
-                "thinking_close is the whole declaration that reasoning is wanted: not "
-                "null and a call is decoded as two spans, one unconstrained span that "
-                "stops at this marker and then the schema-constrained answer on the "
-                "same slot. max_think_tokens and max_answer_tokens replace the one "
-                "budget. Both removed names are refused by name through "
-                "refuse_a_removed_knob, max_output_tokens pointing at "
-                "max_answer_tokens and thinking pointing at turns.thinking_close."
-            ),
-            why=(
-                "Plan 28 row #10. The owner ruled on 2026-09-13 that reasoning during "
-                "summarization is wanted, and the old flag could never have delivered "
-                "it: the output schema binds the decode from the first token on both "
-                "transports, so a think opener is not a legal token - the grammar "
-                "either suppresses the thinking or the runtime splits a reasoning "
-                "channel off and every item fails on shape. A flag beside a marker is "
-                "also two places to disagree, and one budget over two spans cannot say "
-                "whether a long think or a cut answer spent it. Ruled by Andre and "
-                "Fowler, 2026-09-14."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-14T03:00",
-            change=(
-                "models.<role>.turns gains system_role, system_joiner and "
-                "thinking_kwarg. system_role is a closed choice of own_turn and "
-                "fold_into_first_user; system_joiner is required under the fold and "
-                "refused under own_turn; thinking_kwarg names the template variable "
-                "chat_template_kwargs carries and defaults to the incumbent's "
-                "enable_thinking, with null meaning the request sends no template "
-                "keywords at all and inference.thinking must then be false. All three "
-                "sit on TurnsConfig, which ModelEntry carries and ModelRef does not, so "
-                "a run.json written before today still reads."
-            ),
-            why=(
-                "Plan 28 row #11. Where the system text goes and which keyword turns "
-                "reasoning off are facts about somebody else's chat template, and both "
-                "were spelled in this project's source and sent to every model - so a "
-                "model with no system role could not be configured at all, only coded "
-                "for. The prompt TEXT does not follow them onto the entry and cannot: "
-                "prose_changed_alone reports nothing whenever model_sha256 moved, so "
-                "per-model wording would hide every prompt edit that rode in on a swap. "
-                "Ruled by Andre, 2026-09-14."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-14T02:00",
-            change=(
-                "models.<role>.arch, required: the architecture name inside the GGUF. "
-                "It sits on ModelEntry, not on ModelRef, so a run.json written before "
-                "today still reads - run_manifest.ModelUse embeds ModelRef, and a "
-                "required field there would stop this build reading yesterday's run "
-                "(CLAUDE.md section 11)."
-            ),
-            why=(
-                "Plan 28 row #5. Row #2 moved the turn envelope onto the entry, so the "
-                "entry now claims how a turn opens and closes and nothing checked the "
-                "claim against the running server. The start-up probe checks all five "
-                "claims before the first item, and this is the field the fourth of them "
-                "compares: the weights on disk declare an architecture, and an entry "
-                "that names a different one is serving a repackaged file under a "
-                "familiar name. Ruled by Carmack, 2026-09-14."
-            ),
+            change="models.<role>.turns gains thinking_close.",
+            why="The turn envelope is a fact about somebody else's weights, so it sits with them.",
         ),
         ChangelogEntry(
             version="2026-09-14",
-            change=(
-                "Initial shape, lifted whole out of app-config.models with no field "
-                "renamed, retyped or given a different default. It is the same "
-                "ModelsConfig, now a document of its own under config/models/, and it "
-                "carries a version date-stamp because a persisted document does. "
-                "app-config.models is gone in the same commit and app-config.models_file "
-                "names which of these files is active."
-            ),
-            why=(
-                "Plan 28 row #6. Swapping the summarizer has to cost no source edit, and "
-                "it used to cost eleven lines edited in place in the one file every "
-                "other knob lives in - so a revert had to reconstruct the previous "
-                "model's measured numbers from git rather than read them off disk. One "
-                "file per model makes both directions a pointer, and puts the numbers "
-                "that were measured for a set of weights in the same file that names "
-                "them. Ruled by Fowler, 2026-09-14."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

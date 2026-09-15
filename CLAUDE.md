@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -260,10 +260,11 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 11. Schema Versioning
 
-Every config file and every persisted surface is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. Three rules bind every one of them.
+Every config file and every persisted surface is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. Four rules bind every one of them.
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
 - Every change appends a `changelog` entry, newest first, `{ version, change, why }`, and sets `version`.
+- **A changelog entry is one line. Five entries at most: the four newest changes, then one pointer saying the rest is in git.** `change` says what moved. `why` says the reason in one clause. Neither carries a measurement, a date, an incident, a plan row or a person's name - a reading belongs in the instrument log (Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). **An entry that will not fit one line is the test:** either the reason is worth a `## Design rationale` section in `docs/`, and goes there with one line left here pointing at it, or it was never worth keeping. Older entries are deleted, not archived - git is the archive, and a pointer to the file's history beats a hash that rots.
 - A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
 
 What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).
