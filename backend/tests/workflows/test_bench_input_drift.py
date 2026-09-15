@@ -73,9 +73,10 @@ def test_every_value_the_sweep_needs_reaches_it_as_a_named_argument() -> None:
     ):
         assert f"{flag} " in script, f"the sweep is not told {flag}"
 
-    assert "--port" not in script, (
-        "the port is declared once at workflow level and read back, never spelled"
-    )
+    # The port is not on that list, and is not asserted here either: it reaches
+    # the sweep through `LLAMA_PORT`, and the rule that no executed shell may
+    # spell a llama-server flag is held once, in test_model_server_jobs.py.
+    # Spelling it here would make this file a second speller and fail that rule.
 
 
 def test_the_corpus_is_frozen_by_the_same_module_that_reads_it() -> None:

@@ -709,36 +709,15 @@ jobs:
       # not edit it. The scratch copy differs in the active model file and
       # nothing else, so the taxonomy the definition probe reads is the
       # committed one by construction.
-      - name: Build the candidate config
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var
-          rm -rf backend/var/candidate-config
-          cp -a config backend/var/candidate-config
-          python - <<'PY'
-          import json, os, pathlib
-          root = pathlib.Path("backend/var/candidate-config")
-          pointer = json.loads((root / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
-          path = root / pointer
-          models = json.loads(path.read_text(encoding="utf-8"))
-          entry = dict(models["summarize"])
-          inference = dict(entry["inference"])
-          inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          turns = dict(entry["turns"])
-          turns["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          entry.update({
-              "file": os.environ["CANDIDATE_FILE"],
-              "id": os.environ["CANDIDATE_ID"],
-              "inference": inference,
-              "quantisation": os.environ["CANDIDATE_QUANTISATION"],
-              "repo": os.environ["CANDIDATE_REPO"],
-              "revision": os.environ["CANDIDATE_REVISION"],
-              "sha256": os.environ["CANDIDATE_SHA256"],
-              "turns": turns,
-          })
-          models["summarize"] = entry
-          path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          PY
+      #
+      # This job kept its own copy until 2026-09-15, and that copy still
+      # TRANSPLANTED the candidate's digest, quantisation and revision onto the
+      # incumbent's entry - which asserts that numbers measured for one model
+      # hold for another. The shared action moves the pointer instead, so the
+      # candidate's own file carries its own blocks.
+      - uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ needs.models.outputs.candidate_models_file }}
 
       - name: Start the tokenizer
         env:
@@ -748,24 +727,8 @@ jobs:
           mkdir -p backend/var
           # Every flag comes from the scratch config, so the server this counts
           # with is the server the run would start (Guardrail #6).
-          python - <<'PY' > backend/var/llama-argv
-          import os
-          import sys
-          from pathlib import Path
-
-          from idhazh import config
-          from idhazh.llm.server import server_argv
-
-          settings = config.load(Path("backend/var/candidate-config"))
-          argv = server_argv(
-              binary=Path("backend/bin/llama-server"),
-              weights=Path(os.environ["LLAMA_WEIGHTS"]),
-              model=settings.models.summarize,
-              inference=settings.models.summarize.inference,
-              port=int(os.environ["LLAMA_PORT"]),
-          )
-          sys.stdout.write("\0".join(argv) + "\0")
-          PY
+          python3 backend/utilities/llama_argv.py \
+            --config-root backend/var/candidate-config > backend/var/llama-argv
           mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
           echo "starting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
@@ -987,115 +950,18 @@ jobs:
         # it and exits zero. It fails only when the instrument did.
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          import re
-          import statistics
-          import time
-          from pathlib import Path
-
-          ROOT = Path("backend/var/batched-bench")
-          GATE = float(os.environ["BENCH_GATE_RATIO"])
-          LEVELS = [int(value) for value in os.environ["BENCH_PARALLEL_LEVELS"].split(",")]
-          REPEATS = int(os.environ["BENCH_REPEATS"])
-          DATA_ROW = re.compile(r"^\|\s*\d")
-          COLUMNS = (
-              "prompt_tokens",
-              "generate_tokens",
-              "parallel",
-              "n_kv",
-              "prefill_seconds",
-              "prefill_tok_s",
-              "decode_seconds",
-              "decode_tok_s",
-              "total_seconds",
-              "total_tok_s",
-          )
-
-          def read_table(path):
-              found = {}
-              for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-                  if not DATA_ROW.match(line):
-                      continue
-                  cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-                  if len(cells) != len(COLUMNS):
-                      continue
-                  values = [int(cell) for cell in cells[:4]] + [float(cell) for cell in cells[4:]]
-                  row = dict(zip(COLUMNS, values))
-                  found[row["parallel"]] = row
-              missing = [level for level in LEVELS if level not in found]
-              if missing:
-                  raise SystemExit(f"{path.name} has no row for parallel level(s) {missing}")
-              return found
-
-          def spread(values):
-              return {
-                  "values": values,
-                  "median": statistics.median(values),
-                  "spread": max(values) - min(values),
-              }
-
-          repeats = [read_table(ROOT / f"repeat-{n}.txt") for n in range(1, REPEATS + 1)]
-          base = LEVELS[0]
-          by_level = {
-              str(level): {
-                  "decode_tok_s": spread([table[level]["decode_tok_s"] for table in repeats]),
-                  "prefill_tok_s": spread([table[level]["prefill_tok_s"] for table in repeats]),
-              }
-              for level in LEVELS
-          }
-          # Paired inside a repeat, then taken across repeats. A ratio of two
-          # medians would mix repeats that ran minutes apart.
-          ratios = {
-              f"{level}_over_{base}": spread(
-                  [table[level]["decode_tok_s"] / table[base]["decode_tok_s"] for table in repeats]
-              )
-              for level in LEVELS[1:]
-          }
-          gate_ratio = ratios[f"2_over_{base}"]
-          verdict = "alive" if gate_ratio["median"] >= GATE else "dead"
-
-          summary = {
-              "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-              "llama_cpp_build": os.environ["LLAMA_CPP_BUILD"],
-              "model_file": os.environ["MODEL_FILE"],
-              "prompt_tokens": int(os.environ["BENCH_PROMPT_TOKENS"]),
-              "generate_tokens": int(os.environ["BENCH_GENERATE_TOKENS"]),
-              "n_ctx": int(os.environ["BENCH_N_CTX"]),
-              "n_batch": int(os.environ["BENCH_N_BATCH"]),
-              "n_ubatch": int(os.environ["BENCH_N_UBATCH"]),
-              "n_threads": int(os.environ["BENCH_N_THREADS"]),
-              "parallel_levels": LEVELS,
-              "repeats": REPEATS,
-              "gate_ratio": GATE,
-              "aggregate_by_parallel_level": by_level,
-              "paired_decode_ratios": ratios,
-              "verdict": verdict,
-              "tables": [
-                  {"repeat": index, "rows": [table[level] for level in LEVELS]}
-                  for index, table in enumerate(repeats, start=1)
-              ],
-          }
-          (ROOT / "batched-summary.json").write_text(
-              json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-          )
-
-          print(f"aggregate decode (S_TG t/s), {REPEATS} repeats, one host:")
-          for level in LEVELS:
-              stat = by_level[str(level)]["decode_tok_s"]
-              values = ", ".join(f"{value:.2f}" for value in stat["values"])
-              print(
-                  f"  B={level}: median {stat['median']:.2f} t/s, "
-                  f"spread {stat['spread']:.2f}, values {values}"
-              )
-          paired = ", ".join(f"{value:.3f}" for value in gate_ratio["values"])
-          print(
-              f"gate: S_TG(B=2) / S_TG(B=1) = {gate_ratio['median']:.3f} "
-              f"(spread {gate_ratio['spread']:.3f}, paired {paired}); "
-              f"gate is {GATE}x; parallel decode is {verdict}"
-          )
-          PY
+          python3 backend/utilities/batched_report.py \
+            --levels "$BENCH_PARALLEL_LEVELS" \
+            --repeats "$BENCH_REPEATS" \
+            --gate-ratio "$BENCH_GATE_RATIO" \
+            --llama-build "$LLAMA_CPP_BUILD" \
+            --model-file "$MODEL_FILE" \
+            --prompt-tokens "$BENCH_PROMPT_TOKENS" \
+            --generate-tokens "$BENCH_GENERATE_TOKENS" \
+            --n-ctx "$BENCH_N_CTX" \
+            --n-batch "$BENCH_N_BATCH" \
+            --n-ubatch "$BENCH_N_UBATCH" \
+            --n-threads "$BENCH_N_THREADS"
 
       - name: Upload batched bench
         if: always()

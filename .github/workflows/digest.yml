@@ -177,15 +177,7 @@ jobs:
       - id: bounds
         run: |
           set -euo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-
-          run = json.load(open("config/idhazh.json", encoding="utf-8"))["run"]
-          minutes = run["shard_timeout_minutes"]
-          if type(minutes) is not int or minutes < 1:
-              raise SystemExit("run.shard_timeout_minutes must be a whole number of minutes, 1 or more")
-          print(f"shard_timeout_minutes={minutes}")
-          PY
+          python3 backend/utilities/shard_bound.py >> "$GITHUB_OUTPUT"
 
       # GitHub queues a scheduled workflow by load and silently drops the slots
       # it cannot place. Measured 2026-08-27 to 2026-08-29: 13 slots elapsed, 5
@@ -580,23 +572,7 @@ jobs:
           LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.summarize_file }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import os
-          from pathlib import Path
-
-          from idhazh import config
-          from idhazh.classify.calls import summarize_and_plan_schema
-          from idhazh.llm.server import prove_the_entry
-
-          entry = config.load(Path("config")).models.summarize
-          prove_the_entry(
-              model=entry,
-              weights=Path(os.environ["LLAMA_WEIGHTS"]),
-              output_schema=summarize_and_plan_schema(),
-              timeout=entry.inference.request_timeout_minutes * 60,
-          )
-          print("the entry and the server agree on all five")
-          PY
+          python3 backend/utilities/prove_the_entry.py --config-root config
 
       # A shard's throughput varies with the host it drew, and no run log named
       # the host, the binary or the weights - so no number a shard produced could

@@ -171,9 +171,13 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
 
     script = _composite_action_script(CANDIDATE_CONFIG_ACTION)
     assert f"cp -a config {BENCH_CANDIDATE_CONFIG}" in script
-    assert MODELS_POINTER_KEY in script, "through the pointer, never by filename"
+    assert "backend/utilities/candidate_pointer.py" in script
+    pointer_source = read_text(REPO_ROOT / "backend" / "utilities" / "candidate_pointer.py")
+    assert f'POINTER_KEY = "{MODELS_POINTER_KEY}"' in pointer_source, (
+        "through the pointer, never by filename"
+    )
     for field in ("sha256", "declared_for", "quantisation", "revision"):
-        assert field not in script, (
+        assert field not in script and field not in pointer_source, (
             f"the scratch config writes {field} onto the entry instead of moving the pointer"
         )
 

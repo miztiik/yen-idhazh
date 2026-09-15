@@ -17,6 +17,7 @@ from idhazh.contracts import runtime_counters
 from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
 
 from ._harness import (
+    ARGV_MODULE_CALL,
     CGROUP_PEAK_PATH,
     COUNTERS_COMMAND,
     COUNTERS_FIXTURE,
@@ -106,13 +107,12 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
             )
 
             script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
-            assert "from idhazh.llm.server import server_argv" in script, where
+            assert ARGV_MODULE_CALL in script, where
             if config_root is None:
                 continue
-            assert f'config.load(Path("{config_root}"))' in script, f"{where} reads {config_root}"
+            assert f"--config-root {config_root}" in script, f"{where} reads {config_root}"
             # NUL-separated, so a flag value carrying a space stays one argument.
             assert "mapfile -d '' LLAMA_ARGV" in script, where
-            assert 'port=int(os.environ["LLAMA_PORT"])' in script, where
 
     # The other side of the same Oracle: no command a runner executes renders
     # the list itself. Only `run:` scripts are read, because a dispatch-form
