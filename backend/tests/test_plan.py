@@ -40,9 +40,10 @@ from idhazh.contracts.item_health import (
     ItemHealthRow,
     ItemOutcome,
     ItemStage,
+    TimeSource,
 )
 from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource
+from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef

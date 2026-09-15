@@ -250,7 +250,7 @@ def test_the_constraints_are_declared_before_the_fold_and_the_fold_runs_first() 
 #: two tests below is that the row is built by hand with no helper in the way.
 FOREIGN_CENSUS_CELLS: tuple[str, ...] = (
     "detail",
-    "time_source",
+
     "label_finish_reason",
     "summary_finish_reason",
     "cpu_model",

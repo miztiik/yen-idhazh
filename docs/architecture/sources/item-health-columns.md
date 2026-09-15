@@ -79,15 +79,15 @@ Which item, at which address, from which feed, on which run, and written by whic
 
 | Column | Type | Computed in | Reaches the row | In the archive |
 | --- | --- | --- | --- | --- |
-| `version` | str | `backend/idhazh/contracts/base.py`, `backend/idhazh/contracts/digest_view.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `date` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `run_id` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `item_id` | str | `backend/idhazh/itemrecord.py`, `backend/idhazh/render/write.py`, `backend/idhazh/stages/common.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `url_key` | str | `backend/idhazh/render/write.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `canonical_url` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `vertical` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `source_id` | str | `backend/idhazh/stages/common.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `shard` | int | `backend/idhazh/itemrecord.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
+| `version` | str | `backend/idhazh/contracts/base.py`, `backend/idhazh/contracts/digest_view.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `date` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `run_id` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `item_id` | str | `backend/idhazh/itemrecord.py`, `backend/idhazh/render/write.py`, `backend/idhazh/stages/common.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `url_key` | str | `backend/idhazh/render/write.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `canonical_url` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `vertical` | str | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `source_id` | str | `backend/idhazh/stages/common.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `shard` | int | `backend/idhazh/itemrecord.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
 
 ### What happened to it
 
@@ -95,14 +95,14 @@ Where the item stopped, whether it got there, and what refused it.
 
 | Column | Type | Computed in | Reaches the row | In the archive |
 | --- | --- | --- | --- | --- |
-| `stage` | ItemStage | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `outcome` | ItemOutcome | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `code` | FailureCode | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `http_status` | int | `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `detail` | str | `backend/idhazh/itemrecord.py`, `backend/idhazh/stages/two_calls.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
+| `stage` | ItemStage | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `outcome` | ItemOutcome | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `code` | FailureCode | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `http_status` | int | `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `detail` | str | `backend/idhazh/itemrecord.py`, `backend/idhazh/stages/two_calls.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
 | `failed_field` | str | `backend/idhazh/stages/two_calls.py` | - | no |
 | `failed_rule` | str | `backend/idhazh/stages/two_calls.py` | - | no |
-| `recovered` | bool | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
+| `recovered` | bool | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
 | `on_front_page` | bool | `backend/idhazh/stages/work.py` | - | no |
 
 ### Why it ran at all
@@ -125,7 +125,7 @@ Which term of the score carried this item onto the page. The ranker computes eve
 | `tier` | SourceTier | `backend/idhazh/stages/work.py` | - | no |
 | `source_form` | SourceForm | `backend/idhazh/stages/work.py` | - | no |
 | `published_at` | str | `backend/idhazh/stages/work.py` | - | no |
-| `time_source` | str | `backend/idhazh/stages/work.py` | - | no |
+| `time_source` | TimeSource | `backend/idhazh/stages/work.py` | - | no |
 
 ### The article
 
@@ -133,13 +133,13 @@ How long the fetched body was, whether a cap cut it, and what its own numbers sa
 
 | Column | Type | Computed in | Reaches the row | In the archive |
 | --- | --- | --- | --- | --- |
-| `source_chars` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `source_words` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `source_words_before_cap` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `truncation_cap_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | no |
-| `span_integrity` | bool | `backend/idhazh/elements.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `elements_found` | int | `backend/idhazh/elements.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `element_class` | ElementClass | `backend/idhazh/elements.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
+| `source_chars` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `source_words` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `source_words_before_cap` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `truncation_cap_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | no |
+| `span_integrity` | bool | `backend/idhazh/elements.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `elements_found` | int | `backend/idhazh/elements.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `element_class` | ElementClass | `backend/idhazh/elements.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
 
 ### The two model calls
 
@@ -147,26 +147,26 @@ What each call sent, reused and wrote, how fast, under which budget, and why it 
 
 | Column | Type | Computed in | Reaches the row | In the archive |
 | --- | --- | --- | --- | --- |
-| `summary_words` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `summarize_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `prefill_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `decode_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `input_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `output_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `cached_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `model_calls` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `label_kind` | CallKind | `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `label_prefill_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `label_decode_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `label_input_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `label_output_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `label_cached_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `summary_kind` | CallKind | `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `summary_prefill_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `summary_decode_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `summary_input_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `summary_output_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
-| `summary_cached_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
+| `summary_words` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `summarize_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `prefill_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `decode_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `input_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `output_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `cached_tokens` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `model_calls` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `label_kind` | CallKind | `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `label_prefill_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `label_decode_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `label_input_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `label_output_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `label_cached_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `summary_kind` | CallKind | `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `summary_prefill_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `summary_decode_ms` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `summary_input_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `summary_output_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
+| `summary_cached_tokens` | int | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
 | `label_ms` | int | `backend/idhazh/stages/two_calls.py` | - | no |
 | `summary_ms` | int | `backend/idhazh/stages/two_calls.py` | - | no |
 | `visual_plan_ms` | int | `backend/idhazh/stages/two_calls.py` | - | no |
@@ -195,13 +195,13 @@ Which part of the item got slower, and what none of the named parts claimed. `st
 | `item_index` | int | `backend/idhazh/itemrecord.py`, `backend/idhazh/stages/work.py` | - | no |
 | `shard_item_count` | int | `backend/idhazh/stages/work.py` | - | no |
 | `queue_wait_ms` | int | `backend/idhazh/stages/work.py` | - | no |
-| `fetch_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
+| `fetch_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
 | `fetch_connect_ms` | int | `backend/idhazh/fetch.py` | - | no |
 | `fetch_ttfb_ms` | int | `backend/idhazh/fetch.py` | - | no |
 | `robots_ms` | int | `backend/idhazh/fetch.py` | - | no |
 | `retry_count` | int | `backend/idhazh/fetch.py` | - | no |
 | `retry_total_ms` | int | `backend/idhazh/fetch.py` | - | no |
-| `extract_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry.py` | `backend/idhazh/telemetry.py` | yes |
+| `extract_ms` | int | `backend/idhazh/stages/work.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | yes |
 | `faithfulness_ms` | int | `backend/idhazh/stages/work.py` | - | no |
 | `item_total_ms` | int | `backend/idhazh/itemrecord.py`, `backend/idhazh/stages/work.py` | - | no |
 | `stage_gap_ms` | int | `backend/idhazh/itemrecord.py` | - | no |

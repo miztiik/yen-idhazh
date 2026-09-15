@@ -73,7 +73,7 @@ from idhazh.contracts.base import (
     without_retired_keys,
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
-from idhazh.contracts.run_plan import TimeSource
+from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualKind, VisualState

@@ -138,6 +138,35 @@ class ItemOutcome(StrEnum):
     FAILED = "failed"
 
 
+# Declared here rather than beside the plan contract that first wrote it, for
+# the reason `ElementClass` below states in full: a label a census row persists
+# is declared at or below the row's own level. `run_plan` imports `article` and
+# `article` imports this module, so a census column typed from `run_plan` would
+# close a cycle. `run_plan.PlannedItem`, `digest_day.DigestItem` and
+# `digest_view.DigestViewItem` take the type from here, so there is still one
+# definition and the wire value is unchanged.
+class TimeSource(StrEnum):
+    """Which clock the time on an item came from.
+
+    `rank.appeared_at` prefers the feed's own date and falls back to when we
+    first saw the address. Both answers used to land in one field, so nothing
+    downstream could tell them apart - and the fallback is the one a reader
+    would want flagged, because it is our clock and not the publisher's.
+    """
+
+    #: The feed's own publish date.
+    FEED = "feed"
+    #: When this project first saw the address. The feed gave no usable date.
+    FIRST_SEEN = "first_seen"
+    #: Neither clock gave a time, so the item carries none.
+    UNKNOWN = "unknown"
+
+    @property
+    def names_a_clock(self) -> bool:
+        """`unknown` is the one member that goes with no time at all."""
+        return self is not TimeSource.UNKNOWN
+
+
 class ElementClass(StrEnum):
     """What one article's numbers say it could carry, and nothing else.
 
@@ -154,7 +183,7 @@ class ElementClass(StrEnum):
     `docs/architecture/extraction/elements.md` is the page that owns it.
 
     **It is declared here rather than beside the element contract**, with the
-    three other closed vocabularies this census row carries, because
+    other closed vocabularies this census row carries, because
     `contracts/element.py` sits above `contracts/article.py`, which sits above
     this module. A label a census row persists has to be declared at or below the
     row's own level, and this is the level.
@@ -308,6 +337,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T22:50",
+            change="time_source is typed TimeSource rather than a lowercase token.",
+            why="A closed set the pipeline mints is one a producer selects from, never spells.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T22:10",
             change="FailureCode gained model_timed_out and shard_out_of_time.",
             why="Both were being reported under a name that sends an operator to the wrong place.",
@@ -321,11 +355,6 @@ class ItemHealthRow(Contract):
             version="2026-09-15T19:40",
             change="Three columns keep their names and change what they mean.",
             why="Queue wait now sits outside the item total rather than inside it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T04:15",
-            change="FailureCode gained no_title, an extract-stage member.",
-            why="An item with no headline could not be recorded at all.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -529,15 +558,15 @@ class ItemHealthRow(Contract):
         default=None,
         description="The time the item carries, from whichever clock time_source names.",
     )
-    time_source: Token | None = Field(
+    time_source: TimeSource | None = Field(
         default=None,
         description=(
-            "Which clock published_at came from. The vocabulary is "
-            "`run_plan.TimeSource` - feed, first_seen, unknown - held here as a "
-            "token rather than as that enum because importing it would close a "
-            "cycle: run_plan imports article, and article imports this module. A "
-            "contract test asserts every TimeSource member validates against this "
-            "column, so the vocabulary cannot drift away from the enum unseen."
+            "Which clock published_at came from - feed, first_seen or unknown. A "
+            "closed set the pipeline mints, so the column is the enum and a "
+            "producer selects a member rather than spelling one. A clock name "
+            "nobody declared is refused here rather than folded into a token, "
+            "which is the difference between a value this project can act on and "
+            "one it can only read. Null where no run recorded the choice."
         ),
     )
 

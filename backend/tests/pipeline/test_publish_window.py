@@ -16,9 +16,9 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FetchOutcome
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.run_manifest import RunManifest
-from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
+from idhazh.contracts.run_plan import RunPlan, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier

@@ -13,8 +13,9 @@ from idhazh.contracts import canonical_json
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.digest_view import DigestView
+from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.knobs.ui import UiConfig
-from idhazh.contracts.run_plan import RunPlan, TimeSource
+from idhazh.contracts.run_plan import RunPlan
 
 pytestmark = pytest.mark.contract
 
