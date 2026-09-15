@@ -275,92 +275,28 @@ class QualificationShard(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-15T23:30",
-            change=(
-                "Added calls_per_item, defaulting to 1. Not breaking: a shard is a "
-                "workflow artifact uploaded and merged inside one job, and a shard "
-                "written before today made one call, which is what the default says."
-            ),
-            why=(
-                "The qualification can now run the same call path the digest runs, and "
-                "that path makes two calls per item. Every per-item number moves when "
-                "it does - the token counts become a pair's sum and the prompt is a "
-                "different prompt - so a shard that could not say which path produced "
-                "it would invite a comparison between two numbers that measured "
-                "different work (Guardrail #10)."
-            ),
+            change="Added calls_per_item, defaulting to 1.",
+            why="Qualification can now run the call path the digest runs, which calls twice.",
         ),
         ChangelogEntry(
             version="2026-09-14T04:00",
-            change=(
-                "inputs gains turn_markers_sha256, optional. Not breaking: a shard is a "
-                "workflow artifact uploaded and merged inside one job, so no payload of "
-                "this shape exists on disk to migrate."
-            ),
-            why=(
-                "Plan 28 row #10 put the turn envelope in the recorded input manifest, "
-                "and a shard embeds that manifest. A qualification that could not say "
-                "which envelope it ran under could not compare an incumbent against the "
-                "same incumbent with thinking on, which is exactly the run that row "
-                "asks for. Ruled by Fowler, 2026-09-14."
-            ),
+            change="inputs gains turn_markers_sha256, optional.",
+            why="The turn envelope is a control, so a verdict has to record which one it ran.",
         ),
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
-            why=(
-                "`inputs` beside it records the same facts by name and no writer has built "
-                "a stamp since 2026-09-12. A shard is a workflow artifact uploaded by one "
-                "qualification job and merged by the next; none is committed, so the shape "
-                "moves with no payload of it on disk."
-            ),
+            change="Removed pipeline_fingerprint.",
+            why="`inputs` beside it records the same controls by name.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
-            change=(
-                "A shard and a report carry `inputs`, the recorded input manifest, and "
-                "pipeline_fingerprint is optional on both."
-            ),
-            why=(
-                "A qualification run stamped its controls so two candidates could be shown "
-                "to have run under one pipeline. The stamp stopped being built, so the "
-                "field is recorded when a caller has one and absent otherwise."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-27",
-            change="Added optional failure_code and failure_detail to CanaryObservation.",
-            why=(
-                "A canary that never replied and a canary whose reply carried the attack "
-                "both landed as `replied: false` with nothing to tell them apart, so a "
-                "blank reply was read as a sanitizer breach. Both fields are nullable, so "
-                "a shard written before today still validates."
-            ),
+            change="A shard and a report carry `inputs`, the recorded input manifest.",
+            why="Two candidates are only comparable when the run records what it held still.",
         ),
         ChangelogEntry(
             version="2026-08-26",
-            change="Initial shape: the frozen corpus, every call, every score and the canaries.",
-            why=(
-                "Row #10 qualifies one model on absolute gates, so the evidence a shard "
-                "hands the decider is a persisted contract rather than a log line."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -467,18 +403,8 @@ class QualificationSamples(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-15T21:00",
-            change=(
-                "Initial shape: one row per scored item, carrying the title, the "
-                "summary, the source address, the length band, whether the article was "
-                "truncated, and the two readings a reviewer cross-checks against - "
-                "faithfulness and compression. Sorted worst faithfulness first."
-            ),
-            why=(
-                "Plan 29 T4. Qualification scored the writing into floats and dropped "
-                "the writing, so a reviewer could see that an item scored 0.61 and "
-                "never see what it said. Its own artifact rather than a field on the "
-                "report, because a gate must not learn to read it."
-            ),
+            change="Initial shape: one row per scored item, carrying the title and the summary.",
+            why="A verdict quoting only an average cannot be traced back to the item that set it.",
         ),
     )
 
@@ -501,41 +427,18 @@ class QualificationReport(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-14T04:00",
-            change=(
-                "inputs gains turn_markers_sha256, optional. Not breaking: a report is "
-                "merged from shards inside the job that wrote them and none is "
-                "committed, so there is no payload of this shape to migrate."
-            ),
-            why=(
-                "Plan 28 row #10, the same reason the shard beside it moved: the verdict "
-                "has to name the turn envelope the run decoded under, or two "
-                "qualification runs of one model cannot be told apart. Ruled by Fowler, "
-                "2026-09-14."
-            ),
+            change="inputs gains turn_markers_sha256, optional.",
+            why="The verdict records the same controls the shard beside it does.",
         ),
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change=(
-                "Added inputs, the recorded input manifest, and removed "
-                "pipeline_fingerprint. BREAKING, and nothing to migrate."
-            ),
-            why=(
-                "Both halves land in one entry because the first was never stamped. "
-                "`inputs` and the relaxed stamp arrived here on 2026-09-12 with this "
-                "changelog left at 2026-08-26, so the generated schema has been reporting "
-                "a shape older than itself - found and corrected 2026-09-13 (CLAUDE.md "
-                "section 11). Removing the stamp is breaking and owes no read-side "
-                "migration: a report is a workflow artifact merged from shards in the job "
-                "that wrote them, and none is committed."
-            ),
+            change="Added inputs, the recorded input manifest, and removed pipeline_fingerprint.",
+            why="Both halves land in one entry because the first was never stamped.",
         ),
         ChangelogEntry(
             version="2026-08-26",
             change="Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
-            why=(
-                "An adoption gate that reports a pass without the number that produced it "
-                "cannot be re-read six months later (Guardrail #10)."
-            ),
+            why="An adoption gate reporting a pass without its numbers cannot be re-checked.",
         ),
     )
 

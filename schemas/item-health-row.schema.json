@@ -103,102 +103,27 @@
     {
       "change": "FailureCode gained model_timed_out and shard_out_of_time.",
       "version": "2026-09-15T22:10",
-      "why": "Both were being reported under a name that sends an operator to the wrong place.\n\nA socket timeout is a TimeoutError, which subclasses OSError, so the handler that meant 'nothing answered' caught 'the server answered too slowly' as well. Thirty items across 2026-09-13, 09-14 and 09-15 were filed as a dead model server that was serving their neighbours fine: on one shard nine of the fourteen items after the first such failure published normally. The fix an operator needs is the output budget, and model_unreachable sends them to the process instead.\n\nshard_out_of_time is the worker stopping on its own clock rather than being killed on the platform's. not_attempted already means the run's plan never reached the item; this means the item was planned, fetched, extracted, and the shard declined to start work it could not finish. Filing both under one name would hide a throughput problem inside a supply one.\n\nWidening only. No row an earlier run wrote carries either code, because no run could emit one, and every reader takes the enum by value."
+      "why": "Both were being reported under a name that sends an operator to the wrong place."
     },
     {
-      "change": "failure_code may now carry model_refused. Additive: every committed row still reads, and no row already written changes meaning.",
+      "change": "failure_code may now carry model_refused.",
       "version": "2026-09-15T20:00",
-      "why": "model_unreachable was doing two jobs. A server that never answered and a server that answered with an error are different mornings - the first sends an operator to the process and the port, the second to the request. Gemma named a speculation kind its head could not drive on 2026-09-15 and failed five items of five on a live, healthy server, and every one of them read as a network fault."
+      "why": "model_unreachable was doing two jobs."
     },
     {
-      "change": "Three columns keep their names and change what they mean: queue_wait_ms now subtracts the item's own extract as well as its fetch, item_total_ms now has queue_wait_ms taken out of it, and the two prefill rates now divide by the tokens the server evaluated rather than by the whole prompt.",
+      "change": "Three columns keep their names and change what they mean.",
       "version": "2026-09-15T19:40",
-      "why": "All three read as measurements and none of them could disagree with anything.\n\nqueue_wait_ms declared itself the time before the worker started the item and included the item's own extract, so the column contradicted its own description. item_total_ms counted the whole queue ahead of each item, because the stage fetches every item and then runs the model over them in a different order: on the two-item shard of 2026-09-14 the column summed to 2,786 seconds against a shard that really took 2,196. The error grows with shard size, so the column got worse exactly where it was most used.\n\nThe prefill rates divided the whole prompt by the prefill clock, which counts a cache hit as work done. One item on 2026-09-14 published 787 tokens a second on a call that evaluated 52 real tokens in 6.2 seconds - 8.4 - so the column said the server was fast when what it had measured was the cache beside it in cache_pct (Guardrail #10).\n\nNo field is added or removed and no type moves, so every row an earlier run wrote still loads. What a reader may not do is compare a row written before this stamp with one written after it; the version is what says where the line is."
+      "why": "Queue wait now sits outside the item total rather than inside it."
     },
     {
       "change": "FailureCode gained no_title, an extract-stage member.",
       "version": "2026-09-15T04:15",
-      "why": "An item with no headline could not be recorded at all. The extractor built an ok article carrying the planned item's title, the Article contract refuses an ok article with no title, and nothing caught the refusal - so one headline-less item raised out of the per-item loop and took its whole shard with it. That is reachable from a real feed: discover.clean_title returns None for an absent, empty or whitespace headline and rank.plan_vertical plans the item anyway.\n\nWidening only. Every row an earlier run wrote still reads, and no row carries this code because no run could ever finish an item that would have earned it. It counts against the source, beside no_text: a feed publishing entries with no headline is publishing stories we can never print."
+      "why": "An item with no headline could not be recorded at all."
     },
     {
-      "change": "The twelve per-call cells are named for what each call does - call_1_* became label_*, call_2_* became summary_*. Seventy columns were appended: why the item was selected, where its time went, what the cache and the decoder did, what it ran on, what it ran with, and which field and rule refused it. detail widened from 200 to 2,000 characters and is now allowed on any failed row.",
-      "version": "2026-09-15T00:00",
-      "why": "Two changes with one reason. A slot numbered by its turn says when a call ran and never what it did, so every reader of these cells had to carry the mapping in its head and a reordering of the sequence would have silently relabelled the archive. The names now say which call, and the enum members they are named after already did.\n\nThe widening is the same argument one level up. This row was the only place a per-item question could be asked, and it could answer almost none of them: not why an item was picked, not which part of the model stage got slower, not what the run was configured with, not what machine produced the number. A throughput with no machine beside it is not a measurement (Guardrail #10), and a knob recorded nowhere cannot be shown to have helped. stage_gap_ms is the load-bearing one: it is the only column that can catch a regression in a stage nobody named, and it is signed on purpose because clamping it would hide the overlap it exists to report.\n\nEvery new column is nullable and every one is appended at the end, so the committed header stays a positional prefix of this one and a row an earlier run wrote still parses. from_csv_row reads a retired heading into the column that replaced it, one direction only."
-    },
-    {
-      "change": "Added nullable truncation_cap_tokens at the end of the row.",
-      "version": "2026-09-14T02:00",
-      "why": "source_words_before_cap says a cut happened; nothing said which cap did it. So a reader asking which runs shared one cap had to compare source_words against int(truncation_cap_tokens / TOKENS_PER_WORD) as that ratio stands today - and the ratio is a reading that gets retaken. When it moved from 1.3 to 1.3628 on 2026-09-14 the implied ceiling went 1,000 words to 953 and every historical row stopped matching at once, which reads as an empty population rather than as a broken question. The cap that cut a row is known at the moment of the cut and is now written there, taken from Article.truncated_at_tokens. Appended at the end and nullable: a row an earlier run wrote recorded no cap, and an empty cell is the honest answer rather than today's cap backfilled onto a run that never used it."
-    },
-    {
-      "change": "ItemStage gained visual. The generated schema lists it because the enum is inlined here; the stage column refuses it and no row may carry it.",
-      "version": "2026-09-14T01:30",
-      "why": "The pipeline had no name for the step that draws a picture, so a render failure was silent: render.write caught the OSError, recorded render_failed on the day's own payload and logged nothing at all. The name exists for telemetry.event(src=...), which says which step wrote a line rather than where an item ended, and item.visual.failed is the first event to use it. It is not terminal - an item whose picture failed still publishes - so a visual row here would say the item stopped where it did not, and would shrink the publish count that publish_day_metrics and the console read. TERMINAL_STAGES is what this column accepts and a validator refuses the rest, so the widening is legal in the schema and unreachable in this ledger. No read-side migration is owed: no row an earlier run wrote can carry a value that did not exist."
-    },
-    {
-      "change": "A failed summarize row carries the five cost cells and the call slots, which it left empty whatever the reply had cost.",
-      "version": "2026-09-13T14:20",
-      "why": "This is the ledger a cost question is answered from, and it was the layer that dropped the numbers. The summary payload is where the defect was filed, but reconcile_prefill reads this row, and this branch passed the three stage timings and none of the five model cells - so a reply the stage refused arrived here with the numbers in hand and left as blanks. pool_ledger skips a row whose prefill_ms or input_tokens cell is empty, so the server counted those requests and the ledger pooled none of them, and the gap sat inside the 5 percent tolerance as unnamed drift. No field moved: the cells and the slots have been nullable since 2026-09-12T16:20 and the sum rule already binds them. A row an earlier run wrote keeps its blanks, and on a failed summarize row written before this version an empty cost cell means never recorded rather than free - which is the same reading 'a null is not a zero' already asks for in docs/architecture/sources/item-health.md."
-    },
-    {
-      "change": "Added the labels_truncated summarize failure code, source-neutral like every other code the model owns.",
-      "version": "2026-09-13",
-      "why": "The two-call path's labelling reply can run out of its output budget on an ordinary article - measured 2026-09-12, one article of three, 346 words, 900 tokens decoded and the JSON cut mid-string - and the item is then lost whole, because the call that writes the summary replays that reply and is never sent. It was recorded as bad_shape, which is also what a reply that held valid JSON and violated the schema records, and also what a stray reasoning channel records; the only thing separating them was a sentence in a log line. The same commit derives that budget from the labelling grammar instead of from the summariser's knob, and this counter is how anyone sees whether that worked - folded into output_truncated it would move with the summarize-and-plan call's cuts and answer nothing. It is a separate member rather than a second reading of output_truncated because the two are two derivations over two grammars: two numbers to move, so two counts to read. No read-side migration is owed - the code is additive and no run has written it - but a reader trending bad_shape across 2026-09-13 sees a step down that nothing else in the CSV explains, and this entry is where that is written."
-    },
-    {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
-      "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
-    },
-    {
-      "change": "Added nullable model_calls, label_kind, summary_kind and the five cost cells for each call at the end of the row; the five flat cost cells are now the item's total across the calls the row records.",
-      "version": "2026-09-12T16:20",
-      "why": "This is the only ledger that carries every planned item, so it is where a per-call cost has to land - and it kept one call's five numbers without saying which. Folded, cached_tokens stops answering the question it exists for: measured on the one two-call run, 0 and 1,493 fold to 1,493 against 3,886 prompt tokens, so an item whose first call read its whole prompt reads as an item that cached most of it. The kind is carried beside each slot because the call structure moves under this row rather than beside it, and without it the day a flag flips reads as a regression. Appended at the end and nullable, so a row an earlier run wrote still reads: those runs recorded a total and no split, and their cells stay empty rather than carrying a number invented today. Where a slot is filled the flat cells must equal the sum over the filled slots, which is what keeps reconcile_prefill and every console rate correct with no edit of their own."
-    },
-    {
-      "change": "Added nullable span_integrity, elements_found and element_class at the end of the row.",
-      "version": "2026-09-08T21:00",
-      "why": "The visual planner draws nothing on most items and nothing said whether the article had anything to draw, so a fall in published charts read the same whether the planner stopped choosing them or the extractor stopped finding numbers - and those have different fixes. The class is a query over the element table's Tier 1 fields alone, so it is byte-exact and carries no model judgement. It lands here rather than beside the visual decision because two writers append this ledger and the earlier one runs in the work job, hours before a plan exists: a cell only assemble could fill would be dropped for every item a shard had already recorded. Counts and a class label, never article text - span_excerpt stays inside the process that cut it (CLAUDE.md section 0a). Appended at the end and nullable, so a row an earlier run wrote still reads: those runs measured nothing here and their cells stay empty."
-    },
-    {
-      "change": "Added nullable shard at the end of the row.",
-      "version": "2026-08-30",
-      "why": "A run splits into as many as eight workers on eight different hosts, and they are not alike: over the seven runs in state/runtime-counters.csv on 2026-08-30, the fastest shard of a run read the prompt between 1.10x and 4.19x faster than the slowest shard of the same run. Nothing on this row said which worker produced it, so the only figure available was pooled over the run, which averages away exactly that difference - a slow day and a slow machine looked the same. state/runtime-counters.csv already carries shard at the run grain, so the same cell here is what lets the two ledgers join. Appended at the end and nullable, so a row an earlier run wrote still reads - and an empty cell means no worker claimed the row, never shard 0."
-    },
-    {
-      "change": "Added nullable source_words_before_cap at the end of the row.",
-      "version": "2026-08-28",
-      "why": "Nothing on this row said how long the body was before the truncation cap cut it, so a cut could only be guessed at by comparing source_words against int(extract.truncation_cap_tokens / 1.3) - a constant that moves when the cap moves, and that mislabels an article sitting exactly on the boundary. With the pre-cap count on the row beside the post-cap one, source_words_before_cap > source_words is the cut and nothing else, and the difference says by how much. Appended at the end and nullable, so a row an earlier run wrote still reads: those runs measured nothing here and their cell stays empty rather than carrying a number invented today."
-    },
-    {
-      "change": "Added the copied_source and leaked_address summarize failure codes.",
-      "version": "2026-08-27",
-      "why": "Two things the project forbids outright had no code to record them. A brief published on 2026-08-26 was a 44-word summary of which every word was one unbroken copy of its 53-word source, which republishes an article body (CLAUDE.md section 0a); and nothing on the output side refused an address in our own text, so the sanitizer running before the model was the only control on Guardrail #11. Both codes are source-neutral: a copied brief and a leaked address are the model's failures, and counting either against the feed would quarantine a wire service for a defect we own. Additive and the vocabulary is closed, so a row an earlier run wrote still validates."
-    },
-    {
-      "change": "Added the context_exceeded summarize failure code.",
-      "version": "2026-08-25",
-      "why": "A prompt the server refused for length answered with an HTTP 400, and the worker recorded model_unreachable - so a running server read as a dead one and the fix was sized as an outage instead of a context budget. The code is additive and the vocabulary is closed, so a row an earlier run wrote still validates."
-    },
-    {
-      "change": "Added nullable prefill_ms, decode_ms, input_tokens, output_tokens and cached_tokens at the end of the row.",
-      "version": "2026-08-24T18:30",
-      "why": "This is the only ledger that carries every planned item, so it is the only place a day's model throughput can be read without keeping a runtime log. Reading the prompt and writing the summary run at different rates, and summarize_ms blends them. A rate needs its token count beside its milliseconds, so both land here. Appended at the end and nullable, so a row an earlier run wrote still reads."
-    },
-    {
-      "change": "Added nullable fetch_ms, extract_ms and summarize_ms at the end of the row.",
-      "version": "2026-08-23T18:40",
-      "why": "The console was charting stage timings from the scored subset, which never carried those columns. The per-item census is the row that exists for every planned item, so stage timings belong there."
-    },
-    {
-      "change": "Added not_prose, boilerplate, paywalled and unsupported_form codes; allowed too_short, not_prose and boilerplate as ok-row extract signals.",
-      "version": "2026-08-23T18:15",
-      "why": "Extract now records shape signals separately from paywall and unsupported form drops, so the item-health ledger can group each cause without free text."
-    },
-    {
-      "change": "Initial shape: one census row per planned item per run.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-23",
-      "why": "A run that publishes eight of seventeen items needs a durable row for all seventeen, or the next run and the console cannot explain the rate."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "One item, one run, one terminal outcome.",

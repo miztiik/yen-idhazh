@@ -494,8 +494,8 @@ def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_na
     keys it carried before the split - so where both files name a span, both are
     read here and the pair has to agree.
 
-    Why each number is what it is belongs in the field descriptions and in the
-    changelog entry dated 2026-09-06T14:00. This test only holds them still.
+    Why each number is what it is belongs in the field descriptions. This test
+    only holds them still.
     """
     drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json"))
     legacy = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
