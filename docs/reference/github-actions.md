@@ -15,6 +15,8 @@ times are UTC.
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
+| `probe.yml` | `Runtime probe` | none | yes |
+| `prune.yml` | `Corpus prune` | every `finetune.prune_every_days` | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | yes |
 
@@ -686,7 +688,7 @@ path is being measured for.
 
 A workflow display name is the label shown in the Actions UI. Its filename is
 the stable automation interface for repository paths, API calls, and CLI
-dispatch. Keep the eight filenames stable when a UI label changes.
+dispatch. Keep the ten filenames stable when a UI label changes.
 
 GitHub's `workflow_run.workflows` selector is the exception: it matches a
 display name. `pages.yml` therefore names `Content refresh` in that selector.
@@ -720,9 +722,9 @@ application runtime and is unrelated to the runtime an action itself declares.
 
 ## The inference runtime is pinned, and the cache key says which build
 
-`digest.yml`, `validate.yml` and `measure.yml` run one llama.cpp build. Each
-declares the same three variables, and each checks the archive against its
-digest before it unpacks anything.
+`digest.yml`, `validate.yml`, `measure.yml`, `idhazh-pipeline-tests.yaml` and
+`probe.yml` run one llama.cpp build. Each declares the same three variables, and
+each checks the archive against its digest before it unpacks anything.
 
 | Variable | Value |
 | --- | --- |
@@ -751,6 +753,29 @@ fixed string `llama-server-local`, so the manifest does not yet name the build.
 
 A workflow contract test pins the three variables, the digest check on every
 fetch path, and the build inside every runtime cache key.
+
+### `probe.yml` asks the build what it accepts
+
+The pin says which binary runs. It does not say what that binary understands,
+and a models entry naming a speculation kind the build cannot drive fails late
+and quietly: the server starts, loads the draft head, drafts nothing, and the
+job spends its hour before anybody reads the flag back. `probe.yml` installs the
+same asset the three runtime arms install, runs `llama-server --help`, prints
+the speculation lines to the job summary, and keeps the whole help text as a
+30-day artifact - so the next question about this build is answered by
+downloading that artifact rather than by a second run.
+
+It is a `workflow_dispatch` with no scheduled trigger and it loads no weights,
+so it costs about a minute of runner time. It takes no input for a build,
+either: it reads the same three pinned variables the runtime arms read and is
+held to them by the same test, so its answer cannot describe a binary
+production does not run. Probing a candidate build is a branch that moves the
+pin, dispatched with `--ref` - the same commit somebody would have to make to
+adopt it.
+
+The question that made it was whether `b10598` accepts the kind a Gemma
+multi-token head needs, and that is the shape of every question it answers:
+read the runtime's own answer rather than a release note's.
 
 ## Every download fails loudly, and every weight is checked
 
