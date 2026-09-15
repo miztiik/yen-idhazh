@@ -223,9 +223,10 @@ class Unreached:
 #: be made rather than a precaution, and `readings_awaiting_a_retake` is what says
 #: so out loud.
 #:
-#: **Removal condition:** row #13b of `TODO/20260913-28-model-swap-plan.md` retakes
-#: all three against the configured weights. A reading whose retake moves it gets
-#: the old one deleted rather than kept beside the new one (Guardrail #10). A
+#: **Removal condition:** all three were retaken against the configured weights
+#: on 2026-09-14, so this tuple exists for the NEXT swap rather than for a
+#: backlog. A reading whose retake moves it gets the old one deleted rather than
+#: kept beside the new one (Guardrail #10). A
 #: reading that stops being tokenizer-shaped leaves this tuple for `EVERY_MEASURED`.
 SIZED_BY_A_READING_HERE: Final = (
     Unreached(
