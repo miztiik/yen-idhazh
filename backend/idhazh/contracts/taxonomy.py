@@ -24,7 +24,14 @@ from typing import Annotated, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, Slug
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    DateStamp,
+    Model,
+    Slug,
+    records_json,
+)
 
 
 class LifecycleStatus(StrEnum):
@@ -433,6 +440,15 @@ class Taxonomy(Contract):
         if undefined:
             raise ValueError(f"offered with no definition: {', '.join(undefined)}")
         return self
+
+    def to_json(self) -> str:
+        """One word a line - see `records_json`.
+
+        A person curates this file, and an entry's fields only mean anything
+        together: the id says nothing without the sentence the model reads it
+        by, and the keywords say nothing without the lens they match for.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     def definition_block(self) -> str:
         """The definition sentences a labelling prompt is built from.

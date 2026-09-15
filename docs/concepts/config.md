@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -35,7 +35,7 @@ These are the *surfaces*, not a field list. The field-level truth is `schemas/ap
 
 The knobs are spread across six files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/models/<name>.json` for everything that is a fact about one set of weights, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
 
-**Two of those files are lists rather than settings, and they are written one record a line.** `config/sources.json` holds a feed per line and `config/watchlist.json` an entity per line, keys sorted, every field spelled out even at its default. Adding a feed is one line; changing a tier is a one-line diff. A test holds the layout still, because nothing else can - every layout parses to the same payload, so a record hand-indented across ten lines is invisible to the schema and to every reader. See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
+**Three of those files are lists rather than settings, and they are written one record a line.** `config/sources.json` holds a feed per line, `config/taxonomy.json` a word per line and `config/watchlist.json` an entity per line, keys sorted, every field spelled out even at its default. Adding a feed is one line; changing a tier is a one-line diff; adding a keyword to a lens moves that lens and nothing else. A test holds the layout still, because nothing else can - every layout parses to the same payload, so a record hand-indented across ten lines is invisible to the schema and to every reader. See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
 
 ## `config/models/<name>.json` - one file per model, and a pointer
 

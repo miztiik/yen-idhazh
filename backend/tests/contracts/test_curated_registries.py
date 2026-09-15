@@ -12,16 +12,18 @@ from conftest import CONFIG_DIR, read_text
 from idhazh.contracts import canonical_json
 from idhazh.contracts.base import Contract, records_json
 from idhazh.contracts.sources import Sources
+from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
 
 pytestmark = pytest.mark.contract
 
-#: The two registries a person writes by hand. Both are lists of short records
-#: read together or not at all, so both are written one record a line. Every
+#: The three registries a person writes by hand. Each is lists of short records
+#: read together or not at all, so each is written one record a line. Every
 #: other payload here is written by a program and keeps the field-a-line
 #: layout, which is the right shape for reading down a single record.
 CURATED: dict[str, type[Contract]] = {
     "sources.json": Sources,
+    "taxonomy.json": Taxonomy,
     "watchlist.json": Watchlist,
 }
 
