@@ -98,6 +98,7 @@ jobs:
       candidate_revision: ${{ steps.models.outputs.candidate_revision }}
       candidate_file: ${{ steps.models.outputs.candidate_file }}
       candidate_sha256: ${{ steps.models.outputs.candidate_sha256 }}
+      candidate_byte_count: ${{ steps.models.outputs.candidate_byte_count }}
       candidate_id: ${{ steps.models.outputs.candidate_id }}
       candidate_quantisation: ${{ steps.models.outputs.candidate_quantisation }}
       candidate_ref: ${{ steps.models.outputs.candidate_ref }}
@@ -157,6 +158,11 @@ jobs:
               "candidate_ref="
               f"{candidate['repo']}@{candidate['revision']}:{candidate['file']}"
           )
+
+          # The entry's own declared size. Empty means the entry declares none,
+          # which is an entry nobody has fetched yet - the check below skips
+          # rather than refuses, exactly as the validation arm does.
+          print(f"candidate_byte_count={entry.get('byte_count') or ''}")
 
           # An entry may name a draft head - a small second model the server
           # runs ahead of the big one. It is optional, so all four values are
@@ -557,6 +563,15 @@ jobs:
           if [ -n "${DRAFT_FILE}" ]; then
             echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
           fi
+          OBSERVED=$(stat -c %s "backend/models/${CANDIDATE_FILE}")
+          # The entry's own declared size, cross-checking the DOCUMENT rather
+          # than the file - sha256 above already settles the bytes. Empty means
+          # the entry declares none, which is an entry nobody has fetched yet.
+          DECLARED="${{ needs.models.outputs.candidate_byte_count }}"
+          if [ -n "$DECLARED" ] && [ "$OBSERVED" != "$DECLARED" ]; then
+            echo "candidate is ${OBSERVED} bytes; its entry declares ${DECLARED}" >&2
+            exit 1
+          fi
 
       - name: Record input identity
         env:
@@ -673,6 +688,7 @@ jobs:
           CONFIG_ROOT = ROOT / "configs"
           CANDIDATE_CONFIG = Path("backend/var/candidate-config")
           CANDIDATE_FILE = os.environ["CANDIDATE_FILE"]
+          CANDIDATE_ID = os.environ["CANDIDATE_ID"]
           THREADS = int(os.environ["RUNTIME_THREADS"])
           THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
           MAX_THREADS = 2 * (os.cpu_count() or 1)
@@ -756,6 +772,24 @@ jobs:
                   time.sleep(5)
               raise RuntimeError("llama-server never became healthy")
 
+          def assert_the_candidate_is_serving():
+              """Healthy says a server replied. It does not say which weights replied.
+
+              Every number this job reports is filed under the candidate's id, so a
+              server answering under any other alias makes the whole run a
+              measurement of something else with the candidate's name on it
+              (Guardrail #10). The validation arm has asked this since it was
+              written; this arm did not, and that is the drift.
+              """
+              with urllib.request.urlopen(
+                  f"http://127.0.0.1:{SERVER_PORT}/v1/models", timeout=5
+              ) as response:
+                  served = json.load(response)["data"][0]["id"]
+              if served != CANDIDATE_ID:
+                  raise RuntimeError(
+                      f"the server answers to {served}, not {CANDIDATE_ID}"
+                  )
+
           def parse_server_facts(log_path):
               text = log_path.read_text(encoding="utf-8", errors="replace")
               facts = {}
@@ -837,6 +871,7 @@ jobs:
                   sampler.start()
                   try:
                       wait_for_health()
+                      assert_the_candidate_is_serving()
                       startup_ms = int((time.perf_counter() - t0) * 1000)
                       work_started = time.perf_counter()
                       commands = []
@@ -1111,6 +1146,15 @@ jobs:
           if [ -n "${DRAFT_FILE}" ]; then
             echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
           fi
+          OBSERVED=$(stat -c %s "backend/models/${CANDIDATE_FILE}")
+          # The entry's own declared size, cross-checking the DOCUMENT rather
+          # than the file - sha256 above already settles the bytes. Empty means
+          # the entry declares none, which is an entry nobody has fetched yet.
+          DECLARED="${{ needs.models.outputs.candidate_byte_count }}"
+          if [ -n "$DECLARED" ] && [ "$OBSERVED" != "$DECLARED" ]; then
+            echo "candidate is ${OBSERVED} bytes; its entry declares ${DECLARED}" >&2
+            exit 1
+          fi
 
       # The committed config still names the incumbent and a measurement does
       # not edit it. The scratch copy differs in the active model file and
@@ -1186,6 +1230,14 @@ jobs:
             tail -50 llama-server.log >&2
             exit 1
           }
+          # Healthy says a server replied. It does not say which weights
+          # replied, and every budget below is filed under this alias
+          # (Guardrail #10).
+          SERVED=$(curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[0].id')
+          if [ "$SERVED" != "${CANDIDATE_ID}" ]; then
+            echo "the server answers to ${SERVED}, not ${CANDIDATE_ID}" >&2
+            exit 1
+          fi
 
       # The whole point of the arm. Three artifacts of numbers are a
       # transcription job; a block with the numbers already in it is a paste.
