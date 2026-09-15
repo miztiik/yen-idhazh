@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -22,8 +23,9 @@ from conftest import FIXTURES_DIR
 from pytest import LogCaptureFixture, MonkeyPatch
 
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.fetch import FetchResult, FetchTimings
 
-from ._builders import _work_stage
+from ._builders import _work_stage, captured_article_fetch
 
 pytestmark = pytest.mark.slow
 
@@ -207,6 +209,37 @@ def test_a_passing_item_carries_no_failure_detail(
     for record in named(caplog, "item.done"):
         if record["outcome"] == "ok":
             assert record["detail"] is None
+
+
+def test_the_fetch_split_the_socket_measured_reaches_the_record(
+    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
+) -> None:
+    """Five cells were declared and nothing filled them, so a slow item was one number.
+
+    The reader hands back a result carrying a split no arithmetic in the stage
+    could invent, so a record that shows these values can only have carried
+    them through from the read.
+    """
+    measured = FetchTimings(
+        fetch_connect_ms=13, fetch_ttfb_ms=29, robots_ms=5, retry_count=2, retry_total_ms=310
+    )
+
+    def reader(url: str) -> FetchResult:
+        return replace(captured_article_fetch(url), timings=measured)
+
+    caplog.set_level(logging.INFO, logger="idhazh")
+    _work_stage(
+        tmp_path,
+        monkeypatch,
+        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        fetcher=reader,
+    )
+
+    done = named(caplog, "item.done")
+
+    assert done
+    for record in done:
+        assert {cell: record[cell] for cell in measured.cells()} == measured.cells()
 
 
 def test_every_record_is_one_line_and_parses_as_one_object(

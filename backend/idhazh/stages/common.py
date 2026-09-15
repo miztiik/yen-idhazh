@@ -153,10 +153,11 @@ def live_fetcher(
     function exists for, and policy is what a test has to be able to get wrong
     (Guardrail #7).
 
-    `tracer` is what makes the robots read visible, and it is the sub-step no
-    ledger column can hold. `fetch_ms` is one number covering both reads, so the
-    first item from a host with a slow robots.txt reads as a slow article and
-    the next twenty from that host read as fast ones for no stated reason.
+    `tracer` is what makes the robots read visible, and the same reading now
+    lands on the result as `robots_ms`, so the ledger carries the split the
+    span was already drawing. `fetch_ms` is one number covering both reads, so
+    the first item from a host with a slow robots.txt reads as a slow article
+    and the next twenty from that host read as fast ones for no stated reason.
     """
     rules: dict[str, fetch.RobotsRules] = {}
     trace = tracer if tracer is not None else silent_tracer()
@@ -165,6 +166,7 @@ def live_fetcher(
 
     def read(url: str) -> fetch.FetchResult:
         where = fetch.origin(url)
+        asking = time.monotonic()
         with trace.span(telemetry.SpanName.ROBOTS) as span:
             span.set(telemetry.AttrKey.ROBOTS_CACHED, where in rules)
             if where not in rules:
@@ -173,9 +175,10 @@ def live_fetcher(
                 rules[where] = fetch.robots_rules(read_one(fetch.robots_url(url)))
             permission = rules[where].permits(agent, url)
             span.set(telemetry.AttrKey.ROBOTS_OUTCOME, permission.value)
+        robots_ms = int((time.monotonic() - asking) * 1000)
         if permission is not RobotsOutcome.ALLOWED:
-            return fetch.refused(permission)
-        return read_one(url)
+            return fetch.refused(permission).with_robots_ms(robots_ms)
+        return read_one(url).with_robots_ms(robots_ms)
 
     return read
 
@@ -201,12 +204,28 @@ def shard_of(plan: RunPlan, *, shard: int, shards: int) -> list[PlannedItem]:
     return [item for index, item in enumerate(plan.items) if index % shards == shard]
 
 
+class FetchedItem(NamedTuple):
+    """One item's article, the body it was cut from, and where the time went.
+
+    A shape rather than a widening tuple, because the two stages that want only
+    the article should not have to count placeholders to reach it.
+    """
+
+    article: Article
+    source_text: str
+    fetch_ms: int
+    extract_ms: int
+    #: The fetch's own split - handshake, first byte, robots, retries. Empty on
+    #: a read that reached no socket, which is a state the census can hold.
+    timings: fetch.FetchTimings
+
+
 def _fetch_one(
     item: PlannedItem,
     settings: config.Settings,
     read_url: Fetcher,
     tracer: telemetry.Tracer | None = None,
-) -> tuple[Article, str, int, int]:
+) -> FetchedItem:
     """The article, the body it was cut from, and how long each step took.
 
     The timings are separated because a slow item is either a slow host or a
@@ -218,6 +237,11 @@ def _fetch_one(
     tagger nests inside the extract span, so a taxonomy that grew a hundred
     patterns shows up as its own step rather than as the extractor getting
     slower.
+
+    `timings` is the fetch half broken down further still, and it rides on the
+    result rather than being re-timed here: the handshake and the first byte are
+    facts only the socket knows, and a second stopwatch round this call could
+    only ever restate `fetch_ms`.
     """
     trace = tracer if tracer is not None else silent_tracer()
     started = time.monotonic()
@@ -242,7 +266,13 @@ def _fetch_one(
         telemetry.article_attributes(
             span, article, source_digest=text_digest(source_text) if source_text else None
         )
-    return article, source_text, fetch_ms, int((time.monotonic() - started) * 1000)
+    return FetchedItem(
+        article=article,
+        source_text=source_text,
+        fetch_ms=fetch_ms,
+        extract_ms=int((time.monotonic() - started) * 1000),
+        timings=result.timings,
+    )
 
 
 def _log_no_reply(

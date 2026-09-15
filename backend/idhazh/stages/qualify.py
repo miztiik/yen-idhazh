@@ -158,7 +158,8 @@ def _freeze(
         if len(pool) >= floor and not _unmet(pool, share=share, bands=bands):
             break
         attempted += 1
-        article, source_text, _, _ = _fetch_one(item, settings, read_url)
+        fetched = _fetch_one(item, settings, read_url)
+        article, source_text = fetched.article, fetched.source_text
         if article.status is not ArticleStatus.OK or not article.text:
             LOG.info("corpus item unavailable url=%s", item.canonical_url)
             continue
