@@ -591,11 +591,16 @@ COMMIT_STAGED_PATHS: Final = {
     # what those rows are, and the writer reads it instead of them. A shard
     # committed without its index is a month the next run cannot recognise, so
     # it would append every measurement in it a second time.
+    #
+    # `state/span-rollup` joined on 2026-09-15. A shard is the only thing that
+    # writes it, and until that day nothing staged it, so nine days of folded
+    # spans were measured and then thrown away with the runner.
     "work": [
         "state/item-health",
         "state/scores",
         "state/score-index",
         "state/runtime-counters.csv",
+        "state/span-rollup",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -796,6 +801,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/score-index",
         "state/item-health",
         "state/runtime-counters.csv",
+        "state/span-rollup",
     ],
 }
 
