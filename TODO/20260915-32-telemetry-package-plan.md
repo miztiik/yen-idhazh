@@ -82,7 +82,9 @@ flowchart TB
         events["events.py<br/>one envelope, one log line"]
         record_m["record.py<br/>ItemRecorder -> ItemHealthRow"]
         census["census.py<br/>classify_item, the fallback"]
-        spans["spans.py<br/>the span tree, the file sink"]
+        spans["spans.py<br/>the span tree"]
+        sinks["sinks.py<br/>null, file, fan-out, host"]
+        traces_m["traces.py<br/>where a committed trace lands"]
         rollup["rollup.py<br/>roll_up_spans"]
         host["host.py<br/>cpu, memory, runner"]
         prune_m["prune.py<br/>target + range, atomic"]
@@ -125,7 +127,9 @@ flowchart TB
     assemble_s --> census
     census -->|"prefers persisted,<br/>falls back"| ihr
     ihr --> ih
-    spans --> tr
+    spans --> sinks
+    traces_m -->|"the path"| sinks
+    sinks --> tr
     spans --> rollup
     rollup --> srr --> sr
     host --> rc
@@ -208,8 +212,9 @@ Green is new in this plan. Everything else is a move, not a rewrite.
 
 - **Scope:** `backend/idhazh/telemetry.py` becomes `backend/idhazh/telemetry/`, split by question, with `__init__.py` re-exporting every name the module exported so no caller changes in this row.
 - **Files touched:**
-  - `backend/idhazh/telemetry/__init__.py`, `events.py`, `spans.py`, `census.py`, `rollup.py` (new)
+  - `backend/idhazh/telemetry/__init__.py`, `events.py`, `spans.py`, `sinks.py`, `census.py`, `rollup.py`, `traces.py` (new)
   - `backend/idhazh/telemetry.py` (deleted)
+  - `backend/tests/contracts/test_telemetry_surface.py` (new)
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/test_telemetry.py backend/tests/test_spans.py backend/tests/contracts`. CI runs the full suite.
 - **Oracle:** `set(dir(telemetry))` before and after the split is identical for every public name. It cannot settle whether the split is at the right seam.
 - **Decisions:**
@@ -220,6 +225,7 @@ Green is new in this plan. Everything else is a move, not a rewrite.
 | 2 | `__init__.py` re-exports in this row and the re-exports are deleted in row 10, once every caller is inside the package's own tree. A re-export that outlives its cut-over is a second name for everything | Fowler |
 | 3 | Each module's first sentence names one question (section 1a). `telemetry.py` at 1,267 lines answers four | Fowler |
 | 4 | `ItemHealthRow` stays in `contracts/`. The package owns who fills the row, never what the row is | Fowler |
+| 5 | It landed as six modules, not four. `docs/concepts/telemetry.md` already separates where a span GOES from what a span IS, and where a committed trace LIVES from both, so the page's own sections are the seam. Shipped 2026-09-15 | Fowler |
 
 - **Rejected alternatives:**
 
