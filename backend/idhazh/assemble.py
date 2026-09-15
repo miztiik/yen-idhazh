@@ -729,6 +729,23 @@ def story_key(title: str) -> StoryKey | None:
     return StoryKey(shape=shape, numbers=tuple(numbers))
 
 
+def outlet_of(item: DigestItem) -> str:
+    """Which masthead published this, rather than which feed it arrived on.
+
+    `source_id` is a feed. Four of our feeds are CGTN and two are The Straits
+    Times, so a rule written on `source_id` counts one newsroom as several
+    sources - and `also_covered_by` then prints a corroboration the reader does
+    not have. Measured 2026-09-14 over the twenty-five committed days: 3 of the
+    42 groups the pass had formed were one outlet on two of its own feeds.
+
+    `source_name` is the masthead and separates 143 of our 160 feeds, which is
+    why it is the key. It deliberately does NOT fold two mastheads of one owner:
+    The Hindu and The Hindu BusinessLine are different papers with different
+    desks, and a reader who sees both has two newsrooms, not one.
+    """
+    return item.source_name
+
+
 def _pair_fit(
     left: str,
     right: str,
@@ -869,9 +886,9 @@ def collapse_same_story(
         joined: list[str] | None = None
         best = similarity_min
         for cluster in clusters:
-            # A group is across sources, so one outlet's second piece never
+            # A group is across outlets, so one outlet's second piece never
             # forms a group on its own and never joins a group it is alone in.
-            if all(by_id[member].source_id == item.source_id for member in cluster):
+            if all(outlet_of(by_id[member]) == outlet_of(item) for member in cluster):
                 continue
             fit = _group_fit(cluster, item.item_id, vectors, norms, keys, similarity_min)
             # `>` after the first candidate, so a tie goes to the group that
@@ -887,10 +904,10 @@ def collapse_same_story(
     keeper: dict[str, str | None] = {}
     covered: dict[str, int] = {}
     for cluster in clusters:
-        sources = {by_id[member].source_id for member in cluster}
+        outlets = {outlet_of(by_id[member]) for member in cluster}
         for position, member in enumerate(cluster):
             keeper[member] = None if position == 0 else cluster[0]
-            covered[member] = len(sources - {by_id[member].source_id})
+            covered[member] = len(outlets - {outlet_of(by_id[member])})
 
     return [
         item

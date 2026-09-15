@@ -181,9 +181,13 @@ class DigestViewItem(Model):
         default=None,
         ge=0,
         description=(
-            "How many other sources carried the same story today. 0 is the sentence "
-            "'Only one of our sources carried this.' Null is unknown, and prints "
-            "nothing at all."
+            "How many other OUTLETS carried the same story today - a masthead, not a "
+            "feed, so an outlet with four feeds counts once. 1 or more prints 'Also "
+            "covered by N other sources today.' 0 and null both print nothing: null "
+            "means the day recorded no answer, and 0 stopped printing 'Only one of our "
+            "sources carried this.' on 2026-09-14 because the pass finds far too little "
+            "of the day's duplication for that sentence to be true. See "
+            "docs/architecture/publishing/layout.md."
         ),
     )
     introduced_by_run: int = Field(

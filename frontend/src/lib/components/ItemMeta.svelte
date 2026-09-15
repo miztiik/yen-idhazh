@@ -30,18 +30,28 @@
 
 	/** How many of our sources carried this story, as a sentence.
 	 *
-	 * Both wordings are the Editor's, from row 9 of the reading-page plan. The
-	 * only departure is the singular: the ruling reads `Also covered by N other
+	 * The wording is the Editor's, from row 9 of the reading-page plan. The only
+	 * departure is the singular: the ruling reads `Also covered by N other
 	 * sources today.`, and at N of 1 that sentence is not English.
 	 *
 	 * It is a fact about our feed set and never a claim about the world - we
 	 * cannot know who else covered a story, only who we read. Null prints
 	 * nothing at all, because a day published before the pass existed recorded
 	 * no answer and 0 would be a different claim.
+	 *
+	 * **Zero also prints nothing, and that is a ruling rather than an oversight.**
+	 * It used to print `Only one of our sources carried this.` The Editor read
+	 * 2026-09-12 by hand on 2026-09-14 and counted about 95 of 356 items in a
+	 * cross-source cluster - 27 percent - where the pass had found 8. So roughly
+	 * a quarter of the items carrying that sentence were on the page more than
+	 * once and the sentence was false. 2026-09-03 printed it on five cards about
+	 * one acquisition while another card on the same page said the story was
+	 * covered twice. What the reader loses is the genuine signal that a story is
+	 * an exclusive; that is a real loss, and a signal wrong a quarter of the time
+	 * is not one. It comes back when recall is measured.
 	 */
 	function coverage(count: number | null | undefined): string | null {
-		if (count === null || count === undefined) return null;
-		if (count === 0) return 'Only one of our sources carried this.';
+		if (count === null || count === undefined || count === 0) return null;
 		if (count === 1) return 'Also covered by 1 other source today.';
 		return `Also covered by ${count} other sources today.`;
 	}
