@@ -890,22 +890,29 @@ def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() ->
     assert RuntimeCountersRow.from_csv_row(cells) == row
 
 
-def test_a_host_name_that_could_split_a_row_is_refused() -> None:
+def test_a_host_name_that_could_split_a_row_is_folded_onto_one_line() -> None:
     """`state/runtime-counters.csv` merges with the union driver, which is line-based.
 
     Eight shards append to one branch, and the merge keeps lines rather than
     parsing CSV. A cell holding a newline would be quoted correctly by the writer
     and still split one row in two the first time two shards raced.
+
+    The column refused such a value until 2026-09-15 and now folds it. Refusing
+    kept the file safe by losing the row - a whole run's counters thrown away
+    over a processor name nobody chose, read out of a kernel file. Folding keeps
+    both: the row lands, and it is one physical line.
     """
     for hostile in ("AMD EPYC\n7763", "AMD EPYC\r7763"):
-        with pytest.raises(ValueError, match="cpu_model"):
-            RuntimeCountersRow.model_validate(
-                {
-                    "date": "2026-08-26",
-                    "run_id": "2026-08-26-5",
-                    "shard": 0,
-                    "shards": 4,
-                    "scraped_at": "2026-08-26T21:32:30Z",
-                    "cpu_model": hostile,
-                }
-            )
+        row = RuntimeCountersRow.model_validate(
+            {
+                "date": "2026-08-26",
+                "run_id": "2026-08-26-5",
+                "shard": 0,
+                "shards": 4,
+                "scraped_at": "2026-08-26T21:32:30Z",
+                "cpu_model": hostile,
+            }
+        )
+
+        assert row.cpu_model == "AMD EPYC 7763"
+        assert len(row.csv_row()["cpu_model"].splitlines()) == 1

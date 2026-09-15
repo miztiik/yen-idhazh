@@ -84,6 +84,11 @@ class SeenRow(Contract):
         """One definition, so a writer and a reader cannot disagree about the shape."""
         return tuple(cls.model_fields)
 
+    def csv_row(self) -> dict[str, str]:
+        """Every cell a string. An absent optional is an empty cell."""
+        payload = self.model_dump(mode="json")
+        return {name: "" if payload[name] is None else str(payload[name]) for name in payload}
+
 
 class PublishedRow(Contract):
     """One row of `state/published/YYYY/MM/DD.csv`, appended when an item reaches a
@@ -153,3 +158,8 @@ class PublishedRow(Contract):
     def csv_columns(cls) -> tuple[str, ...]:
         """One definition, so a writer and a reader cannot disagree about the shape."""
         return tuple(cls.model_fields)
+
+    def csv_row(self) -> dict[str, str]:
+        """Every cell a string. An absent optional is an empty cell."""
+        payload = self.model_dump(mode="json")
+        return {name: "" if payload[name] is None else str(payload[name]) for name in payload}

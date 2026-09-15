@@ -27,6 +27,7 @@ from idhazh.contracts.base import (
     Timestamp,
     Url,
     UrlKey,
+    fits_its_column,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.sources import SourceForm
@@ -37,30 +38,40 @@ from idhazh.contracts.taxonomy import SourceTier
 #: them needs one list and not two.
 CALL_SLOTS: Final = ("label", "summary")
 
+#: What a failure detail that folded away to nothing records, and what any other
+#: recorded cell that did the same records. Neither is an empty string: a cell
+#: that reached the fold had something to say, and a column with `min_length=1`
+#: would refuse the emptiness and take the row reporting the fault with it.
+UNSPECIFIED: Final = "unspecified failure"
+UNPRINTABLE: Final = "unprintable"
+
 #: One line of printable ASCII. A newline would break `merge=union` on the day
 #: file, and a control character would break the CSV, so the shape is the
-#: control rather than a promise in a docstring. The class is declared once in
-#: `contracts.base` and `base.fit_cell` folds a value into it, so a producer
-#: cannot hand this column something the column refuses.
-OneLine = Annotated[
-    str, StringConstraints(min_length=1, max_length=200, pattern=PRINTABLE_LINE_PATTERN)
-]
+#: control rather than a promise in a docstring. The column folds its own cell,
+#: so there is no door a producer can miss: a value this class cannot hold is
+#: made to fit inside validation, whoever built the row.
+_ONE_LINE: Final = StringConstraints(
+    min_length=1, max_length=200, pattern=PRINTABLE_LINE_PATTERN
+)
+OneLine = Annotated[str, _ONE_LINE, fits_its_column(_ONE_LINE, absent=UNPRINTABLE)]
 
 #: A whole exception message, which is what a person debugging a failure
-#: actually needs. Longer than a label and still one line for the same reason.
-ItemHealthDetail = Annotated[
-    str, StringConstraints(min_length=1, max_length=2000, pattern=PRINTABLE_LINE_PATTERN)
-]
+#: actually needs. Longer than a label and still one line for the same reason,
+#: and folding for the same reason too - the message quotes the value that was
+#: refused, so a stranger's headline arrives inside it.
+_DETAIL: Final = StringConstraints(
+    min_length=1, max_length=2000, pattern=PRINTABLE_LINE_PATTERN
+)
+ItemHealthDetail = Annotated[str, _DETAIL, fits_its_column(_DETAIL, absent=UNSPECIFIED)]
 
 #: A lowercase token the pipeline, the runtime or the config minted - a model id,
 #: a finish reason, a clock name. Never fetched prose (Guardrail #11): the
 #: pattern is what makes that true rather than the comment. It is not a promise
 #: that the value arrives in the class either - `llama-server` mints its own
-#: finish reasons and the config spells a quantisation `Q4_K_M` - so a producer
-#: folds through `base.fit_cell` rather than hoping.
-Token = Annotated[
-    str, StringConstraints(min_length=1, max_length=64, pattern=LOWER_TOKEN_PATTERN)
-]
+#: finish reasons and the config spells a quantisation `Q4_K_M` - so the column
+#: folds rather than hoping.
+_TOKEN: Final = StringConstraints(min_length=1, max_length=64, pattern=LOWER_TOKEN_PATTERN)
+Token = Annotated[str, _TOKEN, fits_its_column(_TOKEN, absent=UNPRINTABLE)]
 
 #: Headings a day file an earlier run wrote still carries, and the column each
 #: one is read into now. Derived from CALL_SLOTS so a seventh cost quantity
