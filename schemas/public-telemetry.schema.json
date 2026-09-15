@@ -70,6 +70,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "queue_wait_ms, item_total_ms and the two prefill rates keep their names and change what they mean, following the census columns they are projected from.",
+      "version": "2026-09-15T19:40",
+      "why": "queue_wait_ms now sits outside item_total_ms rather than inside it, so the stages still tile the item and the console's own check still holds. The wait was never work, and counting it made each item carry the queue ahead of it: a two-item shard published 2,786 seconds of item time over a shard that took 2,196.\n\nThe prefill rates now divide by the tokens the server evaluated. The old cell said a warm slot was a fast machine, which is the one conclusion the number must not support - the cache share is published beside it and was already saying that.\n\nNo cell is added or removed and no type moves, so every published row still parses. A page comparing a run from before this stamp with one from after it is comparing two different questions."
+    },
+    {
       "change": "Appended seventeen nullable cells: queue_wait_ms, label_ms, summary_ms, visual_plan_ms, visual_plan_ms_is_estimate, faithfulness_ms, model_wait_ms, item_total_ms, stage_gap_ms, visual_plan_tokens_written, the four per-call prefill and decode rates, cpu_model, cpu_busy_pct and load_1m.",
       "version": "2026-09-15T08:20",
       "why": "The census records 113 columns and this projection published 32, so three questions an operator asks had no answer on any page.\n\nWhere did an item's time go? The published row carried fetch, extract and summarize and nothing else, so the queue wait, the faithfulness scorers, the wait on the model server and the split of the summarize stage between its two calls were all invisible - and so was the remainder. stage_gap_ms is the one that matters most and it is the reason the other eight come with it: it is item_total_ms minus every named stage, so it is the only cell that can catch a regression in a step nobody has thought to time, and it is worth nothing without the named stages beside it to subtract from.\n\nIs the model getting slower, or is there just more to write? A total cannot say. The four rates and visual_plan_tokens_written can: a decode rate that fell while the wall clock held still is a regression, and a wall clock that rose while the rate held still is a longer summary. The row already carried the tokens written per call, so the rates are what completes the pair.\n\nWas it the machine? cpu_busy_pct and load_1m are per item and vary item to item, so a slow row can be read as a busy box. cpu_model is constant inside a shard and is carried anyway, because a throughput number with no machine beside it is not a measurement (Guardrail #10) and the shard-grain counters that hold it are not published to a browser.\n\nMeasured 2026-09-15 on the 12,037 committed rows of the two published shards, with every new cell filled the way its producer writes it (durations from the row's own recorded milliseconds, rates at round(x, 2), one 31-character processor string): a row goes from 142.7 to 219.5 raw bytes and from 32.12 to 54.50 gzipped. Fourteen months of retention at the busiest committed day goes from 5.58 to 8.59 percent of the 1 GB published cap. cpu_model is 32.00 of the 76.8 raw bytes and 1.54 of the 22.4 gzipped, so it is the one cell to drop first if the cap ever binds.\n\nAppended at the end and nullable, because the browser reads this header by position (parseTelemetryCsv compares a prefix). Every committed row is empty in all seventeen, so from_csv_row reads an absent cell as null and a shard published before today still loads. stage_gap_ms carries no lower bound: it is signed on purpose, and clamping it would hide the overlapping clocks it exists to show."
@@ -255,7 +260,7 @@
         }
       ],
       "default": null,
-      "description": "Wall time from the item starting to the item ending. The denominator every stage share on the page is taken against.",
+      "description": "What the item cost, from the item starting to the item ending with queue_wait_ms taken out. The denominator every stage share on the page is taken against, and the reason the wait is excluded: the stage runs its fetch loop and its model loop in different orders, so the raw clock counts the whole queue ahead of each item and a column summed across a shard reported the shard's own duration once per item.",
       "title": "Item Total Ms"
     },
     "label_cached_tokens": {
@@ -376,7 +381,7 @@
         }
       ],
       "default": null,
-      "description": "Prefill throughput of the label call.",
+      "description": "Prefill throughput of the label call, over the tokens the server really evaluated - the input minus whatever the cache already held.",
       "title": "Label Prefill Tokens Per S"
     },
     "load_1m": {
@@ -463,7 +468,7 @@
         }
       ],
       "default": null,
-      "description": "How long the item waited before its worker started it.",
+      "description": "How long the item waited before its worker started it - its own fetch and extract subtracted, because both are work rather than waiting. It sits outside item_total_ms rather than inside it.",
       "title": "Queue Wait Ms"
     },
     "run_id": {
@@ -650,7 +655,7 @@
         }
       ],
       "default": null,
-      "description": "Prefill throughput of the summarize-and-plan call. High on a warm slot, because the shared head of the prompt is answered from the cache.",
+      "description": "Prefill throughput of the summarize-and-plan call, over the tokens the server really evaluated. A warm slot answers almost the whole prompt from the cache, and that shows up in summary_cache_pct rather than here: this cell is about the machine, so counting the skipped tokens as work would make a cache hit read as a fast server.",
       "title": "Summary Prefill Tokens Per S"
     },
     "summary_words": {
@@ -667,7 +672,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-15T08:20",
+      "default": "2026-09-15T19:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -730,5 +735,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-15T08:20"
+  "version": "2026-09-15T19:40"
 }

@@ -319,7 +319,7 @@
               "description": "The discrete axis: what each mark is.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -330,7 +330,7 @@
               "description": "The measured axis: how big each mark is.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -341,7 +341,7 @@
               "description": "The second measured axis, where a type has two.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -352,7 +352,7 @@
               "description": "The temporal axis.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -363,7 +363,7 @@
               "description": "What splits the marks into groups.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -374,7 +374,7 @@
               "description": "The third channel, drawn as area.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -385,7 +385,7 @@
               "description": "The quantity that is binned rather than plotted.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -396,7 +396,7 @@
               "description": "Who or what a mark is about.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -407,7 +407,7 @@
               "description": "What names one dated event.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 8,
@@ -501,7 +501,7 @@
               "description": "Every element this plan draws from, so the validator has one list to check existence against rather than nine.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 32,
@@ -512,7 +512,7 @@
               "description": "The elements whose own characters name the marks and the axes. A reference and never a string: code cuts every character a reader sees, and the model points at which characters.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 10,
@@ -523,7 +523,7 @@
               "description": "The elements to mark first, so one mark lands before its siblings. A reference for the same reason a label is.",
               "items": {
                 "maxLength": 22,
-                "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+                "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
                 "type": "string"
               },
               "maxItems": 4,

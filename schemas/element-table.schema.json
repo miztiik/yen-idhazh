@@ -35,7 +35,7 @@
         },
         "element_id": {
           "description": "<kind>-<span_start>-<span_end>, recomputed on read, never trusted.",
-          "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+          "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
           "title": "Element Id",
           "type": "string"
         },
@@ -255,6 +255,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "element_id's pattern bounds every one of its own quantifiers: ^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$ in place of ^[a-z]+-[0-9]+-[0-9]+$. The kind bound is derived from ElementKind and the offset bound from the extract stage's truncation cap, so neither is a number written down here.",
+      "version": "2026-09-15T19:40",
+      "why": "This pattern reaches a constrained decoder, and llama.cpp's schema-to-grammar converter honours a pattern or a length bound and never both. The maxLength of 22 that the visual plan declares beside it was therefore dropped, and the decoder was handed [a-z]+ - a state with no space token, no capital and no exit except a hyphen followed by a digit, which is never the argmax once the model is inside an English phrase.\n\nOn 2026-09-14 one reply wrote 15,472 lowercase characters into that 22-character field, 15.8 minutes of a 4 vCPU runner, after the same reply had already decided the article should carry no picture. Twenty-one such pages would exhaust a six-hour job, which makes a loose quantifier in a decoder schema an availability surface reachable from anybody's web page (Guardrail #11).\n\nNarrowing, and no committed payload moves: the kind comes from a six-member enum whose longest member is eight characters, and the offsets index a body the extract stage truncates at 10,000 tokens, so six digits covers an article of 999,999 characters. backend/tests/contracts/test_decoder_grammar.py now holds every schema this pipeline sends a decoder to the same rule."
+    },
+    {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
       "version": "2026-09-12T18:40",
       "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
@@ -327,7 +332,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-12T18:40",
+      "default": "2026-09-15T19:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -343,5 +348,5 @@
   ],
   "title": "ElementTable",
   "type": "object",
-  "version": "2026-09-12T18:40"
+  "version": "2026-09-15T19:40"
 }

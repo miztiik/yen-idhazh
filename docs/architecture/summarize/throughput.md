@@ -105,6 +105,20 @@ subtraction. Counting the cached half in would report 19.96 tok/s on a run whose
 real rate was 11.09 - a rate the machine never ran at. Whenever this page or the
 console prints a read rate, that is the one it means.
 
+**The two per-call columns said that and did the other thing, from 2026-09-12 to
+2026-09-15.** `label_prefill_tokens_per_s` and `summary_prefill_tokens_per_s`
+divided the whole prompt by the prefill clock. On the label call the error is
+small, because that call caches little. On the summarize-and-plan call it is
+enormous, because that call reuses the label prompt almost whole: one item on
+2026-09-14 published **787.46 tokens a second** on a prefill that evaluated 52
+new tokens in 6,206 ms, which is **8.4**. A reader comparing the two calls read
+a server that was 93 times faster on the second one. Corrected in the same
+commit as the element-id bound; both columns carry a `2026-09-15T19:40` stamp,
+and a row from before it may not be put on the same axis as a row from after.
+Nothing needs re-deriving from the committed rows: `cache_pct` and the token
+counts are on the same row, so an old rate can be recomputed from its own
+neighbours.
+
 Read is about 2.2x write. That ratio is a property of how the two phases work,
 not of this model, and it is why `summarize_ms` was split: one blended number
 cannot say whether a slow day was long articles or long summaries.

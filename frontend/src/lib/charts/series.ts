@@ -122,7 +122,10 @@ export interface TelemetryRow {
 	summary_input_tokens: number | null;
 	summary_output_tokens: number | null;
 	summary_cached_tokens: number | null;
-	/** How long the item waited before its worker started it. */
+	/** How long the item waited before its worker started it, its own fetch and
+	 * extract subtracted. Outside `item_total_ms`, so it is not a band: the stage
+	 * fetches every item and then runs the model over them in a different order,
+	 * and counting the wait would charge each item for the queue ahead of it. */
 	queue_wait_ms: number | null;
 	/** Wall time of the label call. A slice of `summarize_ms`, never an addition
 	 * to it - which is why neither this nor `summary_ms` is one of the stages
@@ -141,8 +144,9 @@ export interface TelemetryRow {
 	/** Time spent waiting on the model server rather than being served. Inside
 	 * `summarize_ms`, so a rising wait with a flat decode rate is a queue. */
 	model_wait_ms: number | null;
-	/** Wall time from the item starting to the item ending. The denominator every
-	 * stage share is taken against. */
+	/** What the item cost, from the item starting to the item ending with
+	 * `queue_wait_ms` taken out. The denominator every stage share is taken
+	 * against. */
 	item_total_ms: number | null;
 	/** `item_total_ms` minus fetch, extract, summarize and faithfulness. The only
 	 * cell that can catch a regression in a step nobody named, and signed on

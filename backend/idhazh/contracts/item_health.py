@@ -265,6 +265,37 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T19:40",
+            change=(
+                "Three columns keep their names and change what they mean: "
+                "queue_wait_ms now subtracts the item's own extract as well as its "
+                "fetch, item_total_ms now has queue_wait_ms taken out of it, and the "
+                "two prefill rates now divide by the tokens the server evaluated "
+                "rather than by the whole prompt."
+            ),
+            why=(
+                "All three read as measurements and none of them could disagree with "
+                "anything.\n\n"
+                "queue_wait_ms declared itself the time before the worker started the "
+                "item and included the item's own extract, so the column contradicted "
+                "its own description. item_total_ms counted the whole queue ahead of "
+                "each item, because the stage fetches every item and then runs the "
+                "model over them in a different order: on the two-item shard of "
+                "2026-09-14 the column summed to 2,786 seconds against a shard that "
+                "really took 2,196. The error grows with shard size, so the column got "
+                "worse exactly where it was most used.\n\n"
+                "The prefill rates divided the whole prompt by the prefill clock, which "
+                "counts a cache hit as work done. One item on 2026-09-14 published 787 "
+                "tokens a second on a call that evaluated 52 real tokens in 6.2 "
+                "seconds - 8.4 - so the column said the server was fast when what it "
+                "had measured was the cache beside it in cache_pct (Guardrail #10).\n\n"
+                "No field is added or removed and no type moves, so every row an "
+                "earlier run wrote still loads. What a reader may not do is compare a "
+                "row written before this stamp with one written after it; the "
+                "version is what says where the line is."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T04:15",
             change="FailureCode gained no_title, an extract-stage member.",
             why=(
@@ -802,7 +833,14 @@ class ItemHealthRow(Contract):
         default=None, ge=0, description="How many items that shard was given."
     )
     queue_wait_ms: int | None = Field(
-        default=None, ge=0, description="How long the item waited before its worker started it."
+        default=None,
+        ge=0,
+        description=(
+            "How long the item waited before its worker started it - its own fetch "
+            "and extract subtracted, because both are work rather than waiting. "
+            "Discounted from item_total_ms, so a shard's items do not each count "
+            "the queue ahead of them."
+        ),
     )
     fetch_connect_ms: int | None = Field(
         default=None, ge=0, description="The connect half of fetch_ms."
@@ -853,7 +891,15 @@ class ItemHealthRow(Contract):
         description="Time the item spent waiting on the model server rather than being served.",
     )
     item_total_ms: int | None = Field(
-        default=None, ge=0, description="Wall time from item_started_at to item_ended_at."
+        default=None,
+        ge=0,
+        description=(
+            "What the item cost, from item_started_at to item_ended_at with "
+            "queue_wait_ms taken out. The stage fetches every item and then runs the "
+            "model over them in a different order, so the raw wall clock counts the "
+            "whole queue ahead of each item and the column summed to the shard's own "
+            "duration once per item."
+        ),
     )
     stage_gap_ms: int | None = Field(
         default=None,
@@ -907,13 +953,28 @@ class ItemHealthRow(Contract):
         description="Did this item's prompt share a prefix with the item before it in the shard?",
     )
     label_prefill_tokens_per_s: float | None = Field(
-        default=None, ge=0.0, description="Prefill throughput of the label call."
+        default=None,
+        ge=0.0,
+        description=(
+            "Prefill throughput of the label call, over the tokens the server really "
+            "evaluated - label_input_tokens minus label_cached_tokens. Counting the "
+            "cached ones as work makes this and label_cache_pct the same number "
+            "twice, and reads as a fast server rather than as a cache hit."
+        ),
     )
     label_decode_tokens_per_s: float | None = Field(
         default=None, ge=0.0, description="Decode throughput of the label call."
     )
     summary_prefill_tokens_per_s: float | None = Field(
-        default=None, ge=0.0, description="Prefill throughput of the summarize-and-plan call."
+        default=None,
+        ge=0.0,
+        description=(
+            "Prefill throughput of the summarize-and-plan call, over the tokens the "
+            "server really evaluated. This call reuses the label call's prompt almost "
+            "whole, so the two readings differ by two orders of magnitude: on "
+            "2026-09-14 one item read 787 tokens a second over the whole prompt and "
+            "8.4 over the 52 tokens that were new."
+        ),
     )
     summary_decode_tokens_per_s: float | None = Field(
         default=None, ge=0.0, description="Decode throughput of the summarize-and-plan call."

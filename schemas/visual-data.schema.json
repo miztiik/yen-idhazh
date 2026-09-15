@@ -50,7 +50,7 @@
         "inputs": {
           "description": "Every Tier 1 element this value read, in the order the function reads them. Element ids and never another derived value: a chain that nests can be complete at each hop and still name no element at the bottom.",
           "items": {
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 9,
@@ -254,7 +254,7 @@
         "element_id": {
           "anyOf": [
             {
-              "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+              "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
               "type": "string"
             },
             {

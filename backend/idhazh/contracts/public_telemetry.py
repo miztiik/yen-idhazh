@@ -75,6 +75,28 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T19:40",
+            change=(
+                "queue_wait_ms, item_total_ms and the two prefill rates keep their "
+                "names and change what they mean, following the census columns they "
+                "are projected from."
+            ),
+            why=(
+                "queue_wait_ms now sits outside item_total_ms rather than inside it, so "
+                "the stages still tile the item and the console's own check still "
+                "holds. The wait was never work, and counting it made each item carry "
+                "the queue ahead of it: a two-item shard published 2,786 seconds of "
+                "item time over a shard that took 2,196.\n\n"
+                "The prefill rates now divide by the tokens the server evaluated. The "
+                "old cell said a warm slot was a fast machine, which is the one "
+                "conclusion the number must not support - the cache share is published "
+                "beside it and was already saying that.\n\n"
+                "No cell is added or removed and no type moves, so every published row "
+                "still parses. A page comparing a run from before this stamp with one "
+                "from after it is comparing two different questions."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T08:20",
             change=(
                 "Appended seventeen nullable cells: queue_wait_ms, label_ms, summary_ms, "
@@ -380,7 +402,11 @@ class PublicTelemetryRow(Contract):
     queue_wait_ms: int | None = Field(
         default=None,
         ge=0,
-        description="How long the item waited before its worker started it.",
+        description=(
+            "How long the item waited before its worker started it - its own fetch "
+            "and extract subtracted, because both are work rather than waiting. It "
+            "sits outside item_total_ms rather than inside it."
+        ),
     )
     label_ms: int | None = Field(
         default=None,
@@ -434,8 +460,12 @@ class PublicTelemetryRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Wall time from the item starting to the item ending. The denominator every "
-            "stage share on the page is taken against."
+            "What the item cost, from the item starting to the item ending with "
+            "queue_wait_ms taken out. The denominator every stage share on the page is "
+            "taken against, and the reason the wait is excluded: the stage runs its "
+            "fetch loop and its model loop in different orders, so the raw clock "
+            "counts the whole queue ahead of each item and a column summed across a "
+            "shard reported the shard's own duration once per item."
         ),
     )
     stage_gap_ms: int | None = Field(
@@ -462,7 +492,12 @@ class PublicTelemetryRow(Contract):
         ),
     )
     label_prefill_tokens_per_s: float | None = Field(
-        default=None, ge=0.0, description="Prefill throughput of the label call."
+        default=None,
+        ge=0.0,
+        description=(
+            "Prefill throughput of the label call, over the tokens the server really "
+            "evaluated - the input minus whatever the cache already held."
+        ),
     )
     label_decode_tokens_per_s: float | None = Field(
         default=None, ge=0.0, description="Decode throughput of the label call."
@@ -471,8 +506,11 @@ class PublicTelemetryRow(Contract):
         default=None,
         ge=0.0,
         description=(
-            "Prefill throughput of the summarize-and-plan call. High on a warm slot, "
-            "because the shared head of the prompt is answered from the cache."
+            "Prefill throughput of the summarize-and-plan call, over the tokens the "
+            "server really evaluated. A warm slot answers almost the whole prompt from "
+            "the cache, and that shows up in summary_cache_pct rather than here: this "
+            "cell is about the machine, so counting the skipped tokens as work would "
+            "make a cache hit read as a fast server."
         ),
     )
     summary_decode_tokens_per_s: float | None = Field(
