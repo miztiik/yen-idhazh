@@ -599,13 +599,15 @@ COMMIT_STAGED_PATHS: Final = {
     #
     # `state/span-rollup` joined on 2026-09-15. A shard is the only thing that
     # writes it, and until that day nothing staged it, so nine days of folded
-    # spans were measured and then thrown away with the runner.
+    # spans were measured and then thrown away with the runner. `state/traces`
+    # is the raw evidence the fold is taken from and was missed the same way.
     "work": [
         "state/item-health",
         "state/scores",
         "state/score-index",
         "state/runtime-counters.csv",
         "state/span-rollup",
+        "state/traces",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -807,6 +809,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/item-health",
         "state/runtime-counters.csv",
         "state/span-rollup",
+        "state/traces",
     ],
 }
 

@@ -266,6 +266,47 @@ Thirteen stores under `state/` is not thirteen designs. It is six grains, and th
 
 **A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` are 6.3 MB that no console route fetches. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes.
 
+### What folds, what does not, and the test that decides
+
+Read this table before proposing a merge. A store folds only when it fails **every** one of three tests: it must key on something that is always an item, keep the same window as the census, and hold no fact the census could not have recorded at write time.
+
+| Store | Keys on | Window | Verdict |
+| --- | --- | --- | --- |
+| `item-health` | an item | 14 months | **the census.** Whatever folds, folds here |
+| `visual-prunes` | a run | with the pictures | **FOLD** into a run-grain ledger beside `runtime-counters`. 41 rows, and a run is not an item |
+| `validation-<date>.csv` | a model | never | **RETIRE.** Four rows with a date in the filename. The numbers belong in the measurement record |
+| `day-validations.csv` | a day | with the day | **KEEP**, move to day files. A receipt is not an item |
+| `scores` | an observation | 14 months | **KEEP.** One item holds several rows - re-measurement is the point, and an item key allows only one |
+| `score-index` | a digest | with the scores | **KEEP.** 76 bytes an observation against 819 for a census row. Reading the wide store to answer a narrow question costs 10.8 times more |
+| `seen` | an address | 90 days | **KEEP.** 76,834 addresses against 12,217 planned items. Most were never planned, so most can never have a row |
+| `counterfactual-scores` | a candidate | with the scores | **KEEP.** The refused candidates are the point, and a refused candidate is never planned |
+| `feed-health` | a feed | with the feeds | **KEEP.** A feed that returned nothing has no items, and that is the case it exists for |
+| `feed-retirements.csv` | a feed | never | **KEEP flat.** A fact with no day does not belong in a day tree |
+| `runtime-counters.csv` | a shard | 14 months | **KEEP**, move to day files. It is the independent check on the census's own timings, and a check folded into the thing it checks stops being one (Guardrail #10) |
+| `span-rollup` | a shard and a span | 14 months | **KEEP.** Its columns are held disjoint from every ledger's by a contract test, which is what lets a fold of spans be committed at all |
+| `traces` | a shard | 7 days | **KEEP.** Evidence, not a record. Deleted rather than folded |
+| `published` | an address | never | **KEEP - see below.** The one that looks foldable and is not |
+
+**`published` is derivable from the census for fourteen months and undecidable after that, so it stays.** A `stage=publish, outcome=ok` row carries the same fact, so the derivation is real - but the census folds to month grain at `observability.item_health_full_grain_months` and the item rows are deleted, while `published` has no window at all (`collect.published_window_days` is `-1`). A store that forgets cannot be the guard against publishing something twice. A surgical prune keyed on the row's own date does not rescue it: the question is not which rows to delete, it is which rows must never be deleted, and that set is all of them.
+
+There is a second reason, and it bites in production rather than in year two. A run that dies after the workers and before assemble leaves rows reading `stage=publish, outcome=ok` for a day that never published. `published` records what the digest actually carried. Derive one from the other and a resumed run republishes a story a reader has already seen.
+
+## Telemetry optimisation options
+
+**None of these is decided, and each names what is not yet known.** They are recorded together so the next pass starts from a list rather than from a rediscovery.
+
+| Option | What it would buy | What is not known yet |
+| --- | --- | --- |
+| Fill the census columns the run already computes | 58 of the 70 empty columns, from values the process holds and discards | Nothing blocking. The cost is one commit, not a measurement |
+| Fold `visual-prunes` and `runtime-counters` into one run-grain ledger | one store and one writer instead of three | whether the month fold can carry two row shapes without a second fold path |
+| Move the three flat files to day trees | a prune that deletes a day instead of rewriting a file | the one-time migration's cost, and whether any reader assumes a single file |
+| Compress the published projections | about 80 percent of 8.8 MB, with no new dependency | whether every console fetch path handles the encoding. One build settles it |
+| Retire the two published mirrors nothing reads | 6.3 MB and two projections to keep working | whether anything outside this repository fetches them. Unknowable; the cost of being wrong is one re-publish |
+| A query engine over a rolling month index, in the browser | one fetch instead of a month of rows | the engine's wire size against the compressed month. Both are estimates today, and one compression run plus one directory listing would replace both |
+| A year rung on the fold ladder | a shape for year-over-year | nothing, until a month fold is too big to read. At kilobytes a month it is not |
+
+**Further research is needed before the last four land.** Each is a design with a price nobody has paid to find out, and an unmeasured number may not justify a design (Guardrail #10).
+
 ## Design rationale
 
 Logging the emitted envelope, rather than a separate hand-written message, exists so a log and a persisted payload can never disagree - the classic debugging failure where the log says one thing and the file on disk says another. The cost is that log lines are structured rather than chatty; the benefit is that they are greppable, replayable, and true. Authority: Fowler.
@@ -286,7 +327,7 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 
 **The flip is a discontinuity, and every panel that plots a span number must name it.** A committed rollup row exists only from 2026-09-06 forward, because no run before that day wrote one. A sub-step series that begins on the flip date is the instrument switching on, not the pipeline slowing down, and a chart that reads the gap as a regression is reading an artefact of the switch. The date is recorded as a discontinuity in [`../reference/measurements.md`](../reference/measurements.md), for the same reason a hardware change is.
 
-**The rollup measured nothing for nine days, and the cause was a path nobody named.** From 2026-09-06 every shard folded its spans and appended `state/span-rollup/<YYYY-MM>.csv` into its own checkout. No commit step staged that path, so each fold died with its runner; assemble, on another machine, projected a directory that had never existed and published a header row. Nothing failed and no test was red - the instrument ran, cost what it cost, and reported nothing. The fix is the path in the work job's commit step, a header-only month file so `git add` under `set -euo pipefail` cannot abort the step on a fresh clone, and the same path in assemble's refresh set so a lost race does not let the union merge double the rows. The lasting part is the test: the ledgers a stage appends to are now read out of the stage and compared against the paths the job stages, so the two lists cannot drift again. Authority: Carmack found it, 2026-09-15.
+**The rollup measured nothing for nine days, and the cause was a path nobody named.** From 2026-09-06 every shard folded its spans and appended `state/span-rollup/<YYYY-MM>.csv` into its own checkout. No commit step staged that path, so each fold died with its runner; assemble, on another machine, projected a directory that had never existed and published a header row. Nothing failed and no test was red - the instrument ran, cost what it cost, and reported nothing. `state/traces/` was missed the same way and by the same list: `stage_work` opens a file sink onto it whenever tracing is on, and nothing staged it either, so the raw evidence the fold is taken from never survived its runner. The fix is both paths in the work job's commit step, a seed in each so `git add` under `set -euo pipefail` cannot abort the step on a fresh clone, and both in assemble's refresh set so a lost race does not let the union merge double the rows. The lasting part is the test: the stores a stage writes are now read out of the stage and compared against the paths the job stages, so the two lists cannot drift again. Authority: Carmack found the rollup, 2026-09-15.
 
 **One ledger for everything was proposed on 2026-09-15 and narrowed to one write path.** The owner's case was that the sprawl is real and that item-grain, day-filed data is the right shape for this project - which is correct, and is why `item-health` is the census. What the measurement refused was folding the other stores into it: three of them key on something that was never an item, and three more carry a different retention, so a single store would have to keep one window and lose the questions the others answer. The part of the intent that survives whole is the part that was costing something - one constructor per grain instead of two, one publisher instead of seven, and the ladder written down so a later rung is a decision rather than a discovery. Authority: owner set the intent; Fowler ruled the grains; Carmack priced the windows. 2026-09-15.
 
