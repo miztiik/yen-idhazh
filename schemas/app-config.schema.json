@@ -811,6 +811,7 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_timed_out",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -818,6 +819,7 @@
         "length_out_of_range",
         "copied_source",
         "leaked_address",
+        "shard_out_of_time",
         "unknown"
       ],
       "title": "FailureCode",
@@ -1420,6 +1422,13 @@
           "title": "Shard Timeout Minutes",
           "type": "integer"
         },
+        "shard_wrap_up_minutes": {
+          "default": 12,
+          "description": "How much of shard_timeout_minutes the worker keeps back for itself, so it stops on its own clock instead of being killed on the platform's. A worker killed at shard_timeout_minutes uploads nothing, so every item it had already finished dies with the ones it had not started: on 2026-09-15 two of four shards went that way and the day published 66 stories against a plan of 80.\n\nWhat the worker does with it: once the time left is less than the slowest item this shard has already finished, it starts no more. That needs no estimate and calibrates itself to whichever processor the shard drew, which is worth 24 percent between an EPYC and a Xeon. This reserve covers what happens after the last item - writing the records, the manifest, and the artifact upload. It is the one number here that is not derived: raise it if an upload is ever cut off, and never lower it to fit one more story.",
+          "minimum": 0,
+          "title": "Shard Wrap Up Minutes",
+          "type": "integer"
+        },
         "success_floor_pct": {
           "default": 70,
           "description": "Below this, the run additionally opens an issue.",
@@ -1916,6 +1925,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
+      "version": "2026-09-15T22:10",
+      "why": "A worker killed at run.shard_timeout_minutes uploads nothing, so the items it had already finished die with the ones it had not started. On 2026-09-15 two of four shards ended that way and the day published 66 stories against a plan of 80 - and 75.5 minutes of one of those shards had gone to four decoder stalls that produced nothing.\n\nThis knob is how much of the platform's timeout the worker keeps back so it can stop itself, write its records and upload them. It stops starting items once the time left is less than the slowest item it has already finished, which needs no estimate and calibrates itself to whichever processor the shard drew.\n\nAdditive with a default, so a config file that omits it loads unchanged."
+    },
     {
       "change": "Prose only. No field was added, removed or retyped and no default moved, so every config/idhazh.json that validated before this still validates and no read-side migration is owed. What changed is the `description` text on six blocks, which pydantic lifts from the class docstring and the Field description into the generated schema: page_weight, observability, summarize, turns, models and assist drop the dated incidents, the inline readings and the decision provenance they were carrying. The rule each one states is unchanged.",
       "version": "2026-09-15T09:00",
@@ -2659,7 +2673,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-15T09:00",
+      "default": "2026-09-15T22:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2670,5 +2684,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-15T09:00"
+  "version": "2026-09-15T22:10"
 }

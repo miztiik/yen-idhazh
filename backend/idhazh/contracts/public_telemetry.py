@@ -75,6 +75,28 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T22:10",
+            change=(
+                "FailureCode gained model_timed_out and shard_out_of_time."
+            ),
+            why=(
+                "Both were being reported under a name that sends an operator to the wrong "
+                "place.\n\nA socket timeout is a TimeoutError, which subclasses OSError, so the "
+                "handler that meant 'nothing answered' caught 'the server answered too slowly' as "
+                "well. Thirty items across 2026-09-13, 09-14 and 09-15 were filed as a dead model "
+                "server that was serving their neighbours fine: on one shard nine of the fourteen "
+                "items after the first such failure published normally. The fix an operator needs "
+                "is the output budget, and model_unreachable sends them to the process "
+                "instead.\n\nshard_out_of_time is the worker stopping on its own clock rather than "
+                "being killed on the platform's. not_attempted already means the run's plan never "
+                "reached the item; this means the item was planned, fetched, extracted, and the "
+                "shard declined to start work it could not finish. Filing both under one name "
+                "would hide a throughput problem inside a supply one.\n\nWidening only. No row an "
+                "earlier run wrote carries either code, because no run could emit one, and every "
+                "reader takes the enum by value."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T19:40",
             change=(
                 "queue_wait_ms, item_total_ms and the two prefill rates keep their "

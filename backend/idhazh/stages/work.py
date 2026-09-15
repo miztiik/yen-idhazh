@@ -435,7 +435,32 @@ def stage_work(
             )
         )
 
+    # The worker's own clock. `run.shard_timeout_minutes` is the platform's, and
+    # a job killed on that one uploads nothing - so every item this shard had
+    # already finished dies with the ones it never started. Stopping here
+    # instead means the shard writes what it has and says what it skipped.
+    #
+    # The gate is the slowest item this shard has already finished, which needs
+    # no estimate and calibrates itself to whichever processor the shard drew.
+    # Before the first item finishes it is zero, so the first item always runs.
+    deadline = shard_started + max(
+        settings.app.run.shard_timeout_minutes - settings.app.run.shard_wrap_up_minutes, 0
+    ) * 60
+    slowest_item_s = 0.0
+
     for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
+        left_s = deadline - time.monotonic()
+        if left_s < slowest_item_s:
+            LOG.warning(
+                "the shard stopped starting items shard=%s left_s=%.0f slowest_item_s=%.0f "
+                "not_started=%s",
+                shard,
+                left_s,
+                slowest_item_s,
+                sum(1 for rest in ready if rest.recorder.get("item_ended_at") is None),
+            )
+            break
+        item_started = time.monotonic()
         item = work.item
         article = work.article
         recorder = work.recorder
@@ -582,13 +607,15 @@ def stage_work(
             )
             recorder.note(**watch.close().cells())
             finished.append(recorder.done())
-    # Every item that was fetched, never reached by the loop above and therefore
-    # never closed. Today the loop cannot exit early, so this is empty on every
-    # run - and it is what makes an early exit added later say so rather than
-    # dropping the items silently.
+        slowest_item_s = max(slowest_item_s, time.monotonic() - item_started)
+    # Every item that was fetched and never reached by the loop above, because
+    # the worker's clock ran out before it could start work it could finish.
     for work in ready:
         if work.recorder.get("item_ended_at") is None:
-            work.recorder.abandoned("the shard ended before this item ran")
+            work.recorder.note(
+                code=FailureCode.SHARD_OUT_OF_TIME.value, outcome=ItemOutcome.FAILED.value
+            )
+            work.recorder.abandoned("the shard ran out of its own clock before this item ran")
             failures["abandoned"] = failures.get("abandoned", 0) + 1
     itemrecord.shard_done(
         run_id=plan.run_id,
