@@ -78,7 +78,7 @@ cd $w; $env:PYTHONPATH="$w\backend"
 | id | Failing test | What closed it |
 | --- | --- | --- |
 | B1 | `test_telemetry.py::test_every_failure_code_has_a_real_fixture_writer[shard_out_of_time]` | **The code had no `ItemHealthRow` writer at all, so adding it to `_NO_REPLY_DETAIL` alone would have been a fixture nothing produces.** A skipped item wrote the code into its log record and no summary payload, and the census row is built from the payloads - so `telemetry.classify_item` filed it `unknown` carrying "summary payload missing", a throughput problem reported as a mystery. `stage_work` now writes the refusal as a summary payload as well, which is what makes `shard_out_of_time` reach the ledger the code was minted for. The new test's "no `.summary.json` was written" assertion was a proxy for "nothing was asked of the model"; it now asserts that directly, on `call_1 is None` |
-| B2 | `test_taxonomy_and_prompts.py::test_recorded_item_health_codes_never_count_against_a_source` | The second counter was the test's own `== 16` literal; `docs/architecture/sources/item-health.md` already said "Eighteen". Now 18 |
+| B2 | `test_taxonomy_and_prompts.py::test_recorded_item_health_codes_never_count_against_a_source` | The second counter was the test's own literal. `docs/architecture/sources/item-health.md` already carried the word. The set is 19 with `model_refused` merged in from `main` |
 | B3 | `test_taxonomy_and_prompts.py::test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum` | `docs/how-to/troubleshoot-one-url.md` gained a row for each code, each naming the knob an operator should read next |
 
 Also done: the app-config fixture (`shard_wrap_up_minutes: 7`), the

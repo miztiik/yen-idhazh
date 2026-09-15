@@ -262,7 +262,7 @@ def field_column(field: FieldInfo) -> Any:
 
     Pydantic moves a required field's `StringConstraints` into `field.metadata`
     and leaves `field.annotation` as a bare `str`, while an optional field keeps
-    them in the annotation because they belong to one arm of the union. Reading
+    them in the annotation because they belong to one member of the union. Reading
     either half alone therefore answers differently for two columns declared the
     same way, and the half that goes quiet is the one that says `url_key` is a
     digest. Re-attaching gives one shape to read.

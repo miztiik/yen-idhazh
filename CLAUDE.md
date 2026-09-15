@@ -216,7 +216,7 @@ Commit messages describe the change. **No AI co-author / attribution tags.**
 The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
 - [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Guardrail #7.
-- [ ] Full suite green **on the merge candidate, once**. CI is the authoritative arm and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required. A candidate that is already green does not re-run the suite because the trunk moved under it.
+- [ ] Full suite green **on the merge candidate, once**. CI is authoritative and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required. A candidate that is already green does not re-run the suite because the trunk moved under it.
 - [ ] Applicable local lint, type checks and selected tests pass before the push, per [docs/how-to/run-the-gates.md](docs/how-to/run-the-gates.md). Use the shared test selector. Keep full-suite checks in CI unless local full coverage is explicitly needed. Verify a worker's unchanged test record instead of repeating its check; documentation-only closure needs no local application suite.
 - [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.

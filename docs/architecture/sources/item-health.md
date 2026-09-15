@@ -1,12 +1,19 @@
 # Item Health
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
 source-grain evidence. The
 [source lifecycle flow](health.md#from-item-outcome-to-feed-rest-or-retirement)
 shows where item evidence stops and feed quarantine or retirement begins.
+
+**This ledger is the pipeline's spine.** It is the most granular record the
+pipeline keeps, and every other telemetry surface is derived from it - the
+browser's month mirror under `frontend/public/telemetry/`, the day aggregate in
+`state/day-metrics/`, and the operator console. Owner decision, 2026-09-14: new
+telemetry lands here first and is projected outward, rather than each surface
+growing its own store.
 
 ## Every item, every run, one row
 
@@ -15,9 +22,43 @@ item on each run, whether the item succeeds or fails. Two stages write it: a
 worker commits the rows for its own items as each one settles, and Assemble
 writes the whole day's census afterwards.
 
-The row carries:
+The row carries 113 columns. `ItemHealthRow.csv_columns` in
+`backend/idhazh/contracts/item_health.py` is the list, and this page does not
+restate it - a second copy of 113 names is a second thing to keep in step, and
+it drifts. What each group answers is below; the columns a reader asks about
+most are described one by one further down.
 
-`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard, span_integrity, elements_found, element_class, model_calls, label_kind, label_prefill_ms, label_decode_ms, label_input_tokens, label_output_tokens, label_cached_tokens, summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens`
+| Group | Answers |
+| --- | --- |
+| identity and placement | which item, which address, which feed, which desk, which run, which shard, and where in the shard |
+| why it was chosen | the total selection score and the eight terms it is made of |
+| time | a millisecond count for each of fetch, extract, label, summarize, the picture, and faithfulness, plus queue wait, model wait, retries, the item total, and `stage_gap_ms` for time the named stages do not account for |
+| tokens and cache | sent, reused and written for each model call, the cache share, and four prefill and decode rates |
+| the machine | the CPU model and its busy share, load, and the resident and peak memory of the model server and of this process |
+| what produced it | the model, its quantisation, the window, the slot count, the thread count, the budgets, and whether the picture was asked for |
+| what went wrong | the outcome, the stage, the failure code, the full message, and the field and rule that refused it |
+
+**`stage_gap_ms` is the one to watch.** It is `item_total_ms` minus every named
+stage. Unattributed time is the only column that can catch a regression in a
+stage nobody has thought to name yet, which is how a five-fold slowdown ran for
+six days in September 2026 without any surface reporting it.
+
+### What actually fills today
+
+**The contract declares 113 columns and the writer fills 31 of them.**
+`telemetry._row` is the only production construction site, and it names 31
+fields. Measured over the committed archive on 2026-09-15: 12,197 rows, and
+**70 columns are empty in every single one**.
+
+That is not a defect in the contract. The columns landed with the instrument
+that logs them; the producer wiring that carries the same values into the ledger
+row did not land with it. `failed_field`, `failed_rule`, `model_quantisation`,
+`runner_name`, `cpu_model` and both finish reasons are filled in zero rows.
+
+Read a column's absence as "nothing writes this yet" rather than "this item had
+no value", until that wiring lands. The count above is a reading and will be
+wrong the day it does; re-take it rather than trusting this paragraph
+(Guardrail #10).
 
 The file is append-only inside its own day. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
@@ -74,7 +115,8 @@ place is how it starts missing rows.
 `from_csv_row` reads `""` back as `None`. There is no sentinel number and no
 `NULL` literal, because both of those get averaged by accident one day.
 
-The 113 columns, in file order:
+The columns a reader asks about most, in file order. This is a subset, not the
+whole list - 33 of the 113. `ItemHealthRow.csv_columns` is the list:
 
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
@@ -281,7 +323,7 @@ stage that did the work.
 | `plan` | `not_attempted` |
 | `fetch` | `robots_denied`, `robots_unreachable`, `blocked_address`, `http_client_error`, `http_rate_limited`, `http_server_error`, `network_error` |
 | `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
-| `summarize` | `model_unreachable`, `model_timed_out`, `shard_out_of_time`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
+| `summarize` | `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
 
 `detail` is `str | None`, max 200 characters, and is populated only when
@@ -333,11 +375,11 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Eighteen codes never count against a source:
+Nineteen codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
 `http_rate_limited`, `too_short`, `not_prose`, `boilerplate`,
-`model_unreachable`, `model_timed_out`, `shard_out_of_time`,
+`model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`,
 `context_exceeded`, `output_truncated`,
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
@@ -369,6 +411,14 @@ item's model work began. The item was planned, fetched and extracted, and the
 shard declined to start work it could not finish. Distinct from `not_attempted`,
 which is the run's plan never reaching the item at all: one is a supply problem
 and the other is a throughput problem.
+
+`model_refused` records the server answering with an error it could not explain
+as a context overflow. The server is up; the request is what it would not take -
+a flag the entry declares, a grammar, a body. It was `model_unreachable` until
+2026-09-15, which sent an operator to a process that was running: Gemma named a
+speculation kind its draft head could not drive, and five items of five reported
+a network fault against a healthy server. It never counts against a source
+either.
 
 `context_exceeded` records the served context window refusing a prompt. The
 article was long, and the window, the truncation cap and the prompt overhead are

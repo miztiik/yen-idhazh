@@ -1,7 +1,6 @@
 # Moving the instructions in front of the article, 2026-09-12
 
-**Last Updated**: 2026-09-12
-
+**Last Updated**: 2026-09-15
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
@@ -26,8 +25,8 @@ says about the article?**
 | --- | --- |
 | Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarize` declares |
 | Runtime | `llama-server` from `backend/bin/`, started by `server_argv` from `config/` |
-| Token counts | The running server's own `/tokenize`. **Both arms were tokenised in one server session**, so the before and the after are read by one instrument |
-| The before arm | Reconstructed from the prompt files at `242a701c`, the commit this row was cut from, rather than quoted from an earlier run |
+| Token counts | The running server's own `/tokenize`. **Both cases were tokenised in one server session**, so the before and the after are read by one instrument |
+| The before case | Reconstructed from the prompt files at `242a701c`, the commit this row was cut from, rather than quoted from an earlier run |
 | Box | A developer laptop with three other agents working on it, not a runner. **Every token count here is a property of the prompts and the tokenizer and holds anywhere. No seconds are measured here at all** - the seconds below are token counts priced at the read rate in [`../../architecture/summarize/throughput.md`](../../architecture/summarize/throughput.md), 9.85 tokens a second, median, measured 2026-09-09 on GitHub-hosted `ubuntu-latest` |
 | Runs | **One, and no spread.** Nothing here is a distribution |
 
@@ -80,7 +79,7 @@ the row asks for it: `692 -> 42, floor 14, pointer 28`.
 
 This corrects a claim that stood in two rows of plan 11 until this run.
 
-| Call-1 prompt budget, tokens | before | after |
+| Label-call prompt budget, tokens | before | after |
 | --- | ---: | ---: |
 | ceiling: `n_ctx` less both decode budgets less the trailing turn | 10,098 | 10,748 |
 | of which the system turn takes | 1,363 | 2,060 |
@@ -94,7 +93,7 @@ than 14 percent closed.
 
 ## Did it change what the label call says?
 
-This is the arm that made the row risky, and it is the reason the row was not
+This is the case that made the row risky, and it is the reason the row was not
 just a diff. The label call's entire output is addresses into the article, so it is the
 call least able to absorb instructions it cannot act on - and it now carries the
 summariser's and the planner's.
@@ -111,10 +110,10 @@ once with the system turn as this row leaves it, with the label call's real 900-
 output budget both times.
 
 **Three pairs ran and two are clean**, because the third exposed a defect in the
-BEFORE arm that has nothing to do with this row - see the section below. The
-clean result is over the two articles both arms answered in full.
+BEFORE case that has nothing to do with this row - see the section below. The
+clean result is over the two articles both cases answered in full.
 
-| Over 2 articles both arms answered | before | after |
+| Over 2 articles both cases answered | before | after |
 | --- | ---: | ---: |
 | labels | 1 | 1 |
 | labels naming an id the pass minted | 1 | 1 |
@@ -132,11 +131,11 @@ clean result is over the two articles both arms answered in full.
 | anchoring, proposed figures | 1/1 | 1/1 |
 | **own words** | 14/16, **87.5 percent** | 13/14, **92.9 percent** |
 
-**No dilution is visible, and what moved moved the right way.** The after arm
+**No dilution is visible, and what moved moved the right way.** The after case
 proposes a little less - 7 named-thing groups against 8, 13 keyphrases against
 15, and 2 place groups against 5 - and a **higher share of what it does propose
 resolves to characters in the article**: 85.7 percent against 74.2. The
-own-words rate, the arm that watches the four free-text channels nothing
+own-words rate, the case that watches the four free-text channels nothing
 downstream re-resolves, went up rather than down. Every count that feeds the
 picture is identical: the same labels, all on ids the pass minted, the same
 proposed figure, the same quotes, claims and lede sentences.
@@ -148,10 +147,10 @@ run worth having anyway is the shape of the failure it looks for: a prompt the
 model reads on every item would show up as a systematic shift, not a rare event,
 and the shift that did appear is in the safe direction on both rates.
 
-**The arms were run one article at a time through both layouts**, so a run cut
-short by box load leaves whole pairs rather than one whole arm; and eight
+**The cases were run one article at a time through both layouts**, so a run cut
+short by box load leaves whole pairs rather than one whole case; and eight
 threads were used rather than the configured four, because every number here is
-a count and the thread count only moves the clock. Both arms ran at the same
+a count and the thread count only moves the clock. Both cases ran at the same
 setting. The whole run took 36 minutes for three articles, at 2.3 to 3.5 tokens
 a second of decode with three other agents working on the box.
 

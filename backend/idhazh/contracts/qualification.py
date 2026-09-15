@@ -1,6 +1,6 @@
 """The evidence one model qualification leaves behind.
 
-A qualification runs one model. There is no incumbent arm and no paired replay:
+A qualification runs one model. There is no incumbent case and no paired replay:
 the owner ruled on 2026-08-26 that the candidate is judged alone, and Andre
 ruled that re-basing the dropped comparisons on the committed 8B history would
 be confounded - those rows span two run-days, the articles differ every day, and
@@ -371,9 +371,91 @@ class QualificationShard(Contract):
         return self
 
 
+class SummarySample(Model):
+    """One summary as a person would read it, beside the two numbers that judged it.
+
+    Self-contained on purpose. A reviewer opening this file to ask whether a
+    score is believable should not have to join it against the shard to learn
+    whether the item was a brief or a long read, or open a third file to find
+    the address that would settle a claim.
+    """
+
+    item_id: ItemId
+    title: UntrustedLine | None = Field(
+        default=None, description="Null where the drafted title missed its range and was dropped."
+    )
+    summary: str = Field(min_length=1, description="The writing under judgement. Our text.")
+    source_url: Url = Field(description="The only way to check a claim.")
+    band_index: int = Field(ge=0, description="Which length tier the extracted article fell in.")
+    truncated: bool = Field(
+        description="The same words are good or bad depending on how much was shown."
+    )
+    hhem: float = Field(ge=0.0, le=1.0)
+    compression: float = Field(ge=0.0)
+
+
+class QualificationSamples(Contract):
+    """The writing one shard produced, for a person to read.
+
+    **Nothing here reaches a gate, and nothing here reaches a reader of the
+    site.** `QualificationReport` does not embed it and no scorer opens it: a
+    gate that learned to read this would be a gate reading text it also scored.
+    It is uploaded as its own artifact and thrown away with it, never committed
+    and never written under `frontend/public/`.
+
+    Why it exists at all: a qualification run recorded what the writing measured
+    and never the writing. `output_digest` says two runs wrote the same words
+    and cannot say whether the words were any good, and `ItemScore` is eleven
+    floats over text nobody kept. Andre's ruling, 2026-09-15: what qualification
+    measured was everything except the writing.
+
+    **This is our summary, not the publisher's text.** Section 0a bans
+    republishing an article body to a reader; the article is still only hashed,
+    and the prompt that contains it is still behind its own flag. What is here
+    is the model's output.
+
+    Two objections, recorded rather than resolved. A human reading these is a
+    selector nobody logs, and somebody sorting by faithfulness, reading ten and
+    quietly re-running is re-rolling the corpus by hand - which the frozen
+    corpus exists to stop. And seven fields is a taste panel with no rubric, no
+    second rater and no agreement number; it will be cited as evidence and it is
+    not.
+    """
+
+    __schema_stem__: ClassVar[str] = "qualification-samples"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T21:00",
+            change=(
+                "Initial shape: one row per scored item, carrying the title, the "
+                "summary, the source address, the length band, whether the article was "
+                "truncated, and the two readings a reviewer cross-checks against - "
+                "faithfulness and compression. Sorted worst faithfulness first."
+            ),
+            why=(
+                "Plan 29 T4. Qualification scored the writing into floats and dropped "
+                "the writing, so a reviewer could see that an item scored 0.61 and "
+                "never see what it said. Its own artifact rather than a field on the "
+                "report, because a gate must not learn to read it."
+            ),
+        ),
+    )
+
+    date: DateStamp
+    shard: int = Field(ge=0)
+    candidate: CandidateIdentity
+    samples: list[SummarySample] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _the_worst_is_first(self) -> Self:
+        scores = [sample.hhem for sample in self.samples]
+        if scores != sorted(scores):
+            raise ValueError("samples are read worst-first, so they are stored worst-first")
+        return self
+
+
 class QualificationReport(Contract):
     """The merged verdict: every gate, every diagnostic, one answer."""
-
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(

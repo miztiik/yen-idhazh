@@ -267,15 +267,15 @@ A failing run now reads `4/5 neutralised; exfiltration-via-url not exercised (le
 
 It is still one gate and still fail-closed. **A control test that did not run is not a control test that passed**, so a canary that never answered fails exactly as it did before - it just says which of the two happened.
 
-### The live arm builds the article extraction would have built
+### The live case builds the article extraction would have built
 
 The fixture is handed to the prompt as raw bytes on purpose, because `untrusted_block` sanitizes what it is given rather than trusting a caller, and this is the only live assertion of that. Everything else about the article is derived the way [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)'s extract stage derives it, from the sanitized body: the length counts, the truncation flag, the shape signal, and the brief flag.
 
 That matters because the counts choose the prompt. The adapter used to count the raw bytes and hardcode `brief=False`, so a 41-word attack arrived in the long prompt band that no page of that length is ever given. One fixture settles which count is right: `fake-system-delimiter` is 67 words raw and 58 words after sanitization, so the raw count clears `extract.min_source_words` and the surviving count does not. The words that do not survive are not words the model is shown, so they cannot decide its prompt.
 
-### The arm runs on its own
+### The case runs on its own
 
-`idhazh qualify-canaries` runs the planted attacks against the configured model, writes what it saw to `backend/var/qualification/<date>/canaries.json`, and exits non-zero when the gate fails. The arm used to be reachable only from inside a whole qualification at shard zero, which meant the only way to read what a canary did was a job that runs for hours (`CLAUDE.md` section 4).
+`idhazh qualify-canaries` runs the planted attacks against the configured model, writes what it saw to `backend/var/qualification/<date>/canaries.json`, and exits non-zero when the gate fails. The case used to be reachable only from inside a whole qualification at shard zero, which meant the only way to read what a canary did was a job that runs for hours (`CLAUDE.md` section 4).
 
 ## Design rationale
 
@@ -284,6 +284,12 @@ Splitting the sanitizer into its own module rather than burying it in the extrac
 Accepting that prose instructions survive - and saying so - is the honest position. A sanitizer that tried to detect and remove instructions would be a classifier with no ground truth, would delete legitimate quoted text, and would create exactly the false confidence that makes the fence feel optional. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
 
 Making the canary gate say why it failed is a Guardrail #10 fix, not a reporting nicety. The old string carried no measurement - it named a canary and left the reason to be guessed - and the guess that got written down turned a blank reply into a security breach. A control that reports a failure nobody can diagnose is a control that gets re-interpreted by whoever reads it next. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
+
+**Qualification keeps our summary and still keeps no article body, 2026-09-15.** A qualification run scored the writing into eleven floats and dropped the writing, so a reviewer could see that an item scored 0.61 and never see what it said. `backend/var/qualification/samples-<shard>.json` now holds the title, the summary, the source address, the length band, the truncation flag and the two readings a reviewer cross-checks against - its own artifact at 30 days, never committed, never under `frontend/public/`.
+
+**The non-goal this does not touch** is republishing an **article body** to a reader ([../../../CLAUDE.md](../../../CLAUDE.md) section 0a). The article is still only hashed, the prompt that contains it is still behind its own flag, and the source is a link. What this file holds is our own output. It is the same argument the visual review tree already won: a qualification artifact reaches no reader.
+
+**Two objections are recorded rather than resolved**, because both are real. A human reading these is a selector nobody logs, and somebody who sorts by faithfulness, reads ten and quietly re-runs is re-rolling the corpus by hand - which the frozen corpus exists to stop. And seven fields is a taste panel with no rubric, no second rater and no agreement number; it will be cited as evidence and it is not. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
 
 ## Rejected alternatives
 
@@ -302,6 +308,8 @@ Making the canary gate say why it failed is a Guardrail #10 fix, not a reporting
 | Record the outcome on the observation as a stored enum | A second answer to a question the conditions already answer. The two drift the first time one of them changes, and the stored one is the one a reader trusts. | Andre |
 | Split the non-reply into a second, softer gate | A control test that did not run is not a control test that passed. A separate gate is a place to lower a bar during an incident, which is the moment the bar exists for. | Andre |
 | Shorten the fixtures so the old `brief=False` becomes true | Fixing the measurement to match the instrument. The fixtures describe attacks; the adapter describes a page, and it was the adapter that described one extraction cannot produce. | Andre |
+| Put the kept summaries on `QualificationReport` | The report is what the gates are computed from, so a field there is a gate that can learn to read text it also scored. Its own file and its own artifact makes that a contract change somebody has to argue for. | Andre |
+| Keep the prompt beside the summary | The prompt contains the article body, and that non-goal is the one still standing. It stays behind its own flag, default off. | Guardrail #11 |
 
 ## See also
 

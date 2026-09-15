@@ -88,7 +88,7 @@ def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:
 
 
 def test_the_config_takes_a_pages_cap_below_the_platforms_own() -> None:
-    """The other arm, and the reason the field is here at all.
+    """The other case, and the reason the field is here at all.
 
     A bound only tested in the direction it permits is not a bound - it is a
     default nobody has pushed on. Lowering is the whole use: it buys an earlier
@@ -129,7 +129,7 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     Off by default would mean the number exists on the runs nobody thought to
     switch it on for, which is every ordinary day.
 
-    The fresh-clone arm drops the settings block and the weights digest
+    The fresh-clone case drops the settings block and the weights digest
     together. Those two move as a pair now: an entry that names measured bytes
     under a block declared for nothing is refused - and the turn envelope obeys
     the same rule, so its digest goes with them. The markers themselves stay,
@@ -445,7 +445,7 @@ def test_a_preset_list_that_is_out_of_order_or_out_of_bounds_is_refused() -> Non
     So `min_window_days` and `max_window_days` have no other reader, and a
     preset outside them would make both knobs decorative.
 
-    The out-of-bounds arm names its own `min_window_days` rather than leaning on
+    The out-of-bounds case names its own `min_window_days` rather than leaning on
     the default. The default was 7 until 2026-09-06 and is 1 now, so a case
     written as `[3, 30]` against the default stopped being out of bounds without
     anything about the rule changing - a test that reads as a bound check and

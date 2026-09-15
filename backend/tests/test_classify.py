@@ -228,8 +228,8 @@ class TestThePromptBytes:
 
         Both reply openings, because the one a prompt ends with is chosen by the
         envelope's own closing marker and a wrong pair would be invisible on the
-        arm the incumbent runs. The thinking arm is BUILT from the committed
-        entry - the incumbent declares no closing marker, so that arm has no
+        case the incumbent runs. The thinking case is BUILT from the committed
+        entry - the incumbent declares no closing marker, so that case has no
         entry in `config/` and would otherwise be untested until a swap turned
         it on.
 
@@ -1755,11 +1755,11 @@ class TestARepliedCutByTheBudget:
         Under `--no-context-shift` a decode that reaches the end of the window
         stops exactly as one that spends its output budget does, so
         `hit_the_budget` is true either way and the reply is the same reply. What
-        differs is how much room was left in front of it. Both arms below are
+        differs is how much room was left in front of it. Both cases below are
         driven from the one recorded cut reply, and the only thing changed
         between them is the prompt the server counted.
 
-        Plan 11 row #3f. Before it, both arms wrote `output_budget_cut`, so a
+        Plan 11 row #3f. Before it, both cases wrote `output_budget_cut`, so a
         window too narrow for `extract.truncation_cap_tokens` was reported as a
         reply shape too wide for its budget - and the fix for one is not the fix
         for the other.

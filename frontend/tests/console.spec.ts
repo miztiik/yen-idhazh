@@ -1254,7 +1254,7 @@ test('the failed-item list is capped, states its scope, and offers the rest', as
 });
 
 test('an unplaceable row is counted and never silently dropped', () => {
-	// The browser arm above cannot reach this state on the committed fixture, so
+	// The browser case above cannot reach this state on the committed fixture, so
 	// the decision is driven here instead of left to a sentence that never
 	// prints. Three rows, one of each outcome, and the two outputs come out of
 	// one pass - a plot and a sentence that disagree about the same row is the
@@ -1580,7 +1580,7 @@ function chartCells(date: string): Record<string, string> {
 		asked: String(sum((run) => run.items_routed ?? 0)),
 		drafted: String(sum((run) => run.charts_drafted ?? 0)),
 		published: String(published),
-		// The denominator of the arm's coverage rule, and the reason a share of no
+		// The denominator of the chart coverage rule, and the reason a share of no
 		// articles is printed as an absence rather than as zero percent.
 		items: String(items.length),
 		minutes: printed(minutes),
@@ -1596,7 +1596,7 @@ test('every chart cell equals what the day committed', async ({ page }) => {
 		.locator('[data-chart-day]')
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-chart-day') ?? ''));
 	// Newest first, and every day inside the open window that the manifest covers
-	// - so a day the visual planner never reached still counts towards the arm's
+	// - so a day the visual planner never reached still counts towards chart drawing's
 	// fourteen-day rule. Days older than the window are the section's own answer
 	// to a preset the reader picked, not rows that went missing.
 	const committed = manifestDays().map((day) => day.date);
@@ -1659,7 +1659,7 @@ test('a visual that never drew is a visual and is not a published chart', async 
 	// The fixture publishes two charts and plans a third the renderer refused. The
 	// column is headed `Visuals published` since 2026-08-31 but still counts only
 	// rendered charts, because counting every visual would put a picture nobody
-	// can see on the arm's bill and the arm would look more productive than it is.
+	// can see on chart drawing's bill and chart drawing would look more productive than it is.
 	// Every visual on the committed days is a rendered chart, so the two numbers
 	// agree there; the fixture is the only place they can be told apart.
 	expect(visuals).toBeGreaterThan(charts);
@@ -1703,8 +1703,8 @@ test('the renamed section draws what it drew before, figure for figure', async (
 	// its own source: two figures, each a target bar over a sparkline, and one
 	// flow diagram beside them.
 	await page.goto('/console/');
-	const section = page.locator('[data-windowed="chart-arm"]');
-	await expect(section.locator('[data-arm-figure]')).toHaveCount(2);
+	const section = page.locator('[data-windowed="chart-drawing"]');
+	await expect(section.locator('[data-rule-figure]')).toHaveCount(2);
 	await expect(section.locator('[data-target-bar]')).toHaveCount(2);
 	await expect(section.locator('[data-sparkline]')).toHaveCount(2);
 	await expect(page.locator('[data-flow]')).toHaveCount(1);

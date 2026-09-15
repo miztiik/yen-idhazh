@@ -1,7 +1,6 @@
 # What the two calls cost at the truncation cap, 2026-09-13
 
 **Last Updated**: 2026-09-15
-
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
@@ -19,9 +18,9 @@ re-read findings stand and are not touched here.
 | | |
 | --- | --- |
 | Weights | `backend/models/Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes, hashed against `models.summarize.inference.declared_for` |
-| Server flags | From `server_argv` and `config/` alone: `--ctx-size <arm> --no-context-shift --batch-size 512 --ubatch-size 512 --threads 4 -np 1 -fa on -lv 4 --metrics` |
+| Server flags | From `server_argv` and `config/` alone: `--ctx-size <case> --no-context-shift --batch-size 512 --ubatch-size 512 --threads 4 -np 1 -fa on -lv 4 --metrics` |
 | Instrument | The server's own `POST /tokenize`. No decode ran in this session at all |
-| Hardware | A developer laptop: i7-1265U, 12 logical CPUs, 32 GiB, Windows, with four other agents live and 2.0 to 3.1 GB free at each arm's start |
+| Hardware | A developer laptop: i7-1265U, 12 logical CPUs, 32 GiB, Windows, with four other agents live and 2.0 to 3.1 GB free at each case's start |
 | Prose | The 1,444 rows of `corpus/corpus.jsonl`, which is the only committed source text (`CLAUDE.md` section 0a) |
 | Config read | `extract.truncation_cap_tokens` 10,000, `elements.max_per_article` 256, `models.summarize.inference.n_ctx` 16,384 at the start |
 
@@ -108,7 +107,7 @@ footprint.
 
 So **65,536 costs 1,584 MiB more than 16,384**, against the runner's measured
 low-water free of 6.84 GiB and a 1.0 GiB bar. `n_ctx_train` is 262,144, so none
-of these arms scaled RoPE. **65,536 is the window `config/` carries**, so the
+of these cases scaled RoPE. **65,536 is the window `config/` carries**, so the
 reading for it is measured here rather than interpolated.
 
 **Peak working set is the weaker of the two numbers.** It counts the

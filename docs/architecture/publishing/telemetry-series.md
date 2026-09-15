@@ -18,7 +18,7 @@ and what a removal takes away, the mirror from what a browser fetches - and
 [../../concepts/partitions.md](../../concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains)
 owns both rules. This module is the bridge: `day_partition.days_by_month` groups
 the day files, and a month is projected whole from at most 31 of them. What it
-cost, stated rather than implied: the unbounded arm opens about thirty times as
+cost, stated rather than implied: the unbounded case opens about thirty times as
 many file handles for the same rows, and the count is asserted in
 `backend/tests/test_publish_telemetry.py` rather than described here.
 
@@ -153,7 +153,7 @@ with their real values, the eight cost 176,753 more gzipped bytes on `/console/`
 - 198,624 to 375,377, an 89 percent page, and 98,182 over the recorded ceiling.
 Seeded as nulls the page is 214,985, which is 16,361 more and 62,210 under.
 Measured 2026-09-05 on a developer machine / / node 24, one build per
-arm; the eight untouched routes moved -2 to +5 bytes between them, so the figure
+case; the eight untouched routes moved -2 to +5 bytes between them, so the figure
 is the columns and not the build.
 
 So the seed carries nulls. A ceiling is re-recorded by the change that grows it,
@@ -220,15 +220,15 @@ published for a browser to join against.
 
 **What it costs, measured 2026-09-15 on this checkout.** Every one of the 12,037
 committed rows is empty in all seventeen, so the file on disk is the floor and
-not the answer. Both arms:
+not the answer. Both cases:
 
-| Arm | Raw bytes a row | Gzipped bytes a row |
+| Case | Raw bytes a row | Gzipped bytes a row |
 | --- | ---: | ---: |
 | Today, 32 columns | 142.7 | 32.12 |
 | Committed shards rewritten, all seventeen empty | 159.8 | 32.52 |
 | Every cell filled the way its producer writes it | 219.5 | 54.50 |
 
-The filled arm is the one to plan against. Durations were taken from each row's
+The filled case is the one to plan against. Durations were taken from each row's
 own recorded milliseconds, rates written at `round(x, 2)` as `stages/work.py`
 writes them, and one 31-character processor string repeated. Fourteen months of
 retention at the busiest committed day - 1,000 rows - goes from 59.9 MB to

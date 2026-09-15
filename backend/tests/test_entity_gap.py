@@ -3,7 +3,7 @@
 The fixture is four published days with one deliberate hole in the middle, so a
 gap in calendar days cannot be confused with a gap in published days, and one
 item whose summary names an entity its own run did not write - which is the only
-way to tell the two arms apart.
+way to tell the two cases apart.
 
 The registry is the committed one. The vocabulary a gap is measured against is
 the thing under test, and a hand-written stand-in would measure the stand-in.
@@ -64,7 +64,7 @@ NETWORK_MODULES: Final = frozenset(
 
 #: One fixture item: the entity ids the run wrote, and the words a reader is
 #: served. They differ on the last day, which is the only way to tell the two
-#: arms apart.
+#: cases apart.
 Spec = tuple[list[str], str]
 
 FIXTURE_DAYS: Final[tuple[tuple[str, tuple[Spec, ...]], ...]] = (
@@ -190,8 +190,8 @@ def test_an_entry_mentioned_once_or_never_has_no_gap_and_is_counted_apart(tree: 
     assert [row.entity_id for row in rows] == sorted(ENTITY_IDS), "id order, so a re-run agrees"
 
 
-def test_the_two_arms_read_different_words_and_the_gap_moves_with_them(tree: Path) -> None:
-    """The last day names Nvidia in the summary only. One arm sees it; the other does not."""
+def test_the_two_cases_read_different_words_and_the_gap_moves_with_them(tree: Path) -> None:
+    """The last day names Nvidia in the summary only. One case sees it; the other does not."""
     days = read_days(tree)
     written = row_for(appearances(days, ENTITY_IDS, as_published), "nvidia")
     served = row_for(appearances(days, ENTITY_IDS, MATCHER), "nvidia")
@@ -201,12 +201,12 @@ def test_the_two_arms_read_different_words_and_the_gap_moves_with_them(tree: Pat
     assert served.days == (date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 8))
     assert served.gaps == (1, 6)
 
-    # Seven pairs both arms found, one the run wrote and the summary dropped,
+    # Seven pairs both cases found, one the run wrote and the summary dropped,
     # one the summary carries and the run did not write.
     assert agreement(days, WATCHLIST.entity_terms()) == (7, 1, 1)
 
 
-def test_the_rematched_arm_can_only_name_an_entity_the_registry_holds(tree: Path) -> None:
+def test_the_rematched_case_can_only_name_an_entity_the_registry_holds(tree: Path) -> None:
     """The vocabulary is closed, so a hostile page wins a name we already track and no other."""
     found = {slug for day in read_days(tree) for item in day.items for slug in MATCHER(item)}
     assert found <= set(ENTITY_IDS)

@@ -12,10 +12,10 @@ import { archiveCalendar, dayDate, type ArchiveDay } from '../src/lib/archive-ca
  * row per prior year, and every one of those 700 days is still reachable with
  * no script at all.
  *
- * The 700-day arm is driven in Node rather than in a page, for the reason
+ * The 700-day case is driven in Node rather than in a page, for the reason
  * `archive-scope.spec.ts` is: the canary build publishes twenty days in one
  * month, and a rule about two years of months cannot show up in it. The
- * browser arms below hold the parts only a real document can answer - that the
+ * browser cases below hold the parts only a real document can answer - that the
  * rows are there, that a month is shut at rest, and that a `<details>` opens
  * and its links navigate with scripting switched off.
  *

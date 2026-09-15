@@ -31,7 +31,7 @@ import { dayReady } from './support/day-ready';
  * with one desk of eight stories, under a seed of fifteen, so its topic
  * document is complete and correctly asks for nothing. The loader's own failure
  * path is held by `payload-state.spec.ts`, which drives the shipped module with
- * every request intercepted; the route's degraded arm is driven by hand against
+ * every request intercepted; the route's degraded case is driven by hand against
  * the real corpus in the section 12 smoke, with its interception count printed.
  */
 

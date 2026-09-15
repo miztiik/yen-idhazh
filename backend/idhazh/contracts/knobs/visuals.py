@@ -38,7 +38,7 @@ class VisualsConfig(Model):
         default_factory=lambda: [VisualKind.CHART],
         description=(
             "Kinds the planner may choose. `none` is always available and never listed. "
-            "Chart is the only one left: the diagram arm shipped off - the model drafted "
+            "Chart is the only one left: diagram drawing shipped off - the model drafted "
             "it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, "
             "2026-08-24/25), while its presence made the planner's own pre-filter "
             "unfireable, because a diagram's steps come from prose and nothing about it "

@@ -638,11 +638,11 @@ def _partitions_opened(source_dir: Path) -> Iterator[list[str]]:
 
 
 def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
-    """The two arms of the cover, counted in file handles rather than timed.
+    """The two cases of the cover, counted in file handles rather than timed.
 
     The daily caller passes the one month it appended to, so the ordinary pass
     opens that month's days and nothing else - one day file here, out of twelve
-    months of them. `months=None` opens all twelve, which is the unbounded arm the
+    months of them. `months=None` opens all twelve, which is the unbounded case the
     module's own docstring declares, and it is unbounded on purpose: a fresh clone
     has to rebuild a mirror it never published.
 

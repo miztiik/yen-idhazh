@@ -220,7 +220,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
 
     models = _committed_models()
     # The draft refs are published empty while no entry declares a draft head,
-    # which is the arm that matters: a guard that refused the absent case would
+    # which is the case that matters: a guard that refused an absent ref would
     # take down every run this repository makes, and `"".split()` is `[]`
     # rather than `[""]`, so the obvious shape check does exactly that.
     assert _run_the_inline_program(script, REPO_ROOT) == {
@@ -243,6 +243,44 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
         json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
+        _run_the_inline_program(script, tmp_path)
+
+
+def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
+    tmp_path: Path,
+) -> None:
+    """Four fields or none. A head with three is a file fetched against a blank.
+
+    The guard read `if value and value.split() != [value]`, so an empty field
+    passed it. An entry naming a draft `file` with no `sha256` therefore reached
+    the fetch step, downloaded the head, and only then failed inside
+    `sha256sum --check` on a line with nothing to check - which reports "no
+    properly formatted checksum lines found" and names neither the entry nor
+    the field. The two measurement arms have always used `if draft and`.
+
+    The absent case is the one this must not break: no committed entry declares
+    a head today, and a guard that refused `{}` would take down every run this
+    repository makes.
+    """
+    script = _script(
+        _step(_load_workflows()["digest.yml"], "plan", "id", "models"),
+        "digest.yml/plan/models",
+    )
+    pointer = "models/probe.json"
+    (tmp_path / "config" / "models").mkdir(parents=True)
+    models = _committed_models()
+    models["summarize"]["draft"] = {
+        "repo": "publisher/head-GGUF",
+        "revision": "8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265",
+        "file": "head.gguf",
+        "sha256": "",
+    }
+    (tmp_path / "config" / pointer).write_text(json.dumps(models), encoding="utf-8")
+    (tmp_path / "config" / "idhazh.json").write_text(
+        json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
+    )
+
+    with pytest.raises(AssertionError, match=re.escape("models.summarize.draft.sha256")):
         _run_the_inline_program(script, tmp_path)
 
 

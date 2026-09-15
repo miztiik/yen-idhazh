@@ -3,7 +3,7 @@ name: Model validation
 # Row #10: qualify one candidate summarizer on absolute machine gates.
 #
 # One model runs. The owner ruled on 2026-08-26 that the candidate is judged
-# alone, so there is no incumbent arm, no paired replay and no second set of
+# alone, so there is no incumbent case, no paired replay and no second set of
 # weights on this runner. Andre ruled the consequence: re-basing the dropped
 # comparisons on the committed 8B history would be confounded, so the gates
 # that survived read their thresholds from config, from the adoption target in
@@ -231,35 +231,15 @@ jobs:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
-      # The committed config still names the incumbent, and an experiment does
-      # not edit it. The scratch copy differs in ONE LINE - `models_file` - and
-      # nothing else, so every control the gates hold fixed (prompt, schema,
-      # sampler, context, threads, truncation cap) is the committed one by
-      # construction, and a candidate is qualified through the exact line a swap
-      # would later move. Move that line and you have run the swap; move it back
-      # and you have run the revert.
-      #
-      # Nothing is transplanted onto the entry any more. This step used to build
-      # the candidate field by field and copy the incumbent's `inference` and
-      # `turns` blocks across with the digests overwritten, which asserted that
-      # numbers measured for one model held for another. The candidate's own
-      # file carries its own blocks, already declared for its own digest, and
-      # `ModelsConfig` refuses the file at load if they are not.
+      # Why the copy differs in one line and nothing else is written down once,
+      # in the action. What it means HERE is the part worth repeating: move that
+      # line and you have run the swap; move it back and you have run the
+      # revert, so a candidate is qualified through the exact line an adoption
+      # would later touch.
       - name: Build the candidate config
-        env:
-          CANDIDATE_MODELS_FILE: ${{ needs.plan.outputs.candidate_models_file }}
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var
-          rm -rf backend/var/candidate-config
-          cp -a config backend/var/candidate-config
-          python - <<'PY'
-          import json, os, pathlib
-          path = pathlib.Path("backend/var/candidate-config/idhazh.json")
-          settings = json.loads(path.read_text(encoding="utf-8"))
-          settings["models_file"] = os.environ["CANDIDATE_MODELS_FILE"]
-          path.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          PY
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ needs.plan.outputs.candidate_models_file }}
 
       # Keyed on the candidate bytes, not on its filename: two builds of one
       # model share a name, and a key that cannot tell them apart serves the
@@ -348,7 +328,7 @@ jobs:
           mkdir -p backend/var
           # The scratch config's `models.summarize` IS the candidate, so the
           # alias and every flag come from the same place the run is judged
-          # against. This arm used to render the flag list from a second copy,
+          # against. This step used to render the flag list from a second copy,
           # which is how it went two changes without the context-shift refusal
           # the daily run has had since PR #88.
           python - <<'PY' > backend/var/llama-argv
@@ -414,6 +394,13 @@ jobs:
             --commit "${GITHUB_SHA}" \
             --runner ubuntu-latest
 
+      # `if: always()` buys the record of a bad shard. A run that died mid-way
+      # is exactly the one whose counts a reader wants, and the stage writes
+      # this file before it returns.
+      - name: What this shard measured
+        if: always()
+        run: cat backend/var/qualification/shard-${{ matrix.shard }}.md >> "$GITHUB_STEP_SUMMARY" || true
+
       - name: Runtime log on failure
         if: failure()
         run: tail -80 llama-server.log || true
@@ -426,6 +413,16 @@ jobs:
         with:
           name: qualification-${{ matrix.shard }}
           path: backend/var/qualification/shard-*.json
+          retention-days: 30
+
+      # Our own summaries, so a person can read the writing the scores judged.
+      # Its own artifact rather than a field on the shard, because a gate must
+      # not learn to read it. Still no article body: the source is a link
+      # (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qualification-samples-${{ matrix.shard }}
+          path: backend/var/qualification/samples-*.json
           retention-days: 30
 
   decide:
@@ -464,6 +461,13 @@ jobs:
             --date "${{ needs.plan.outputs.date }}" \
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
+
+      # The eleven gates, failures first. `if: always()` because the step above
+      # exits non-zero on an ESCALATE, and that is precisely the verdict a
+      # reader opened this page for.
+      - name: The verdict
+        if: always()
+        run: cat backend/var/qualification/report.md >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Commit the validation ledger
         env:

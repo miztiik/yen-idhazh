@@ -37,7 +37,11 @@ from idhazh.contracts.public_eval import PublicEvalRow
 from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
-from idhazh.contracts.qualification import QualificationReport, QualificationShard
+from idhazh.contracts.qualification import (
+    QualificationReport,
+    QualificationSamples,
+    QualificationShard,
+)
 from idhazh.contracts.reference_dataset import (
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
@@ -95,6 +99,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublicRunDay,
     PublicTelemetryRow,
     QualificationReport,
+    QualificationSamples,
     QualificationShard,
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,

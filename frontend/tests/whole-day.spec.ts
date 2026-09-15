@@ -31,7 +31,7 @@
  * **The scroll is stepped, and that is not a stylistic choice.** A story past
  * the seed asks for its drawing through an `IntersectionObserver` with a one
  * screen margin, so a jump to the bottom of the page fires the observers at the
- * bottom and none of the ones it flew past - and the arm then reports zero
+ * bottom and none of the ones it flew past - and the case then reports zero
  * fetches on a page whose fetching is fine. One viewport at a time is the step
  * that cannot skip a slot, and the count of drawings that arrived by fetch is
  * asserted rather than assumed, because a zero there is a null result and not a
@@ -41,7 +41,7 @@
  * A probe element is given the same custom property the stylesheet routes each
  * mark to, and what the document computed for it is compared against what the
  * document painted. The two themes give those properties different values, so
- * no baked hex can satisfy both arms - which is what makes this an oracle
+ * no baked hex can satisfy both cases - which is what makes this an oracle
  * rather than a restatement of the stylesheet.
  *
  * **Which marks it looks for is read off the day's own drawings.** That is not
@@ -333,7 +333,7 @@ async function stepDown(page: Page): Promise<number> {
 		let at = 0;
 		let steps = 0;
 		// A bound rather than `while (true)`: a page whose height grows faster than
-		// the walk climbs would otherwise never end, and a hung arm says nothing.
+		// the walk climbs would otherwise never end, and a hung case says nothing.
 		while (at < document.documentElement.scrollHeight && steps < 2000) {
 			at += step;
 			steps += 1;
@@ -369,7 +369,7 @@ async function openTheWholeDay(page: Page, width: number): Promise<void> {
  * moved. So every committed day declares no chart, and the next daily run is
  * what gives this file a subject again.
  *
- * The whole suite is skipped rather than allowed to pass, because every arm
+ * The whole suite is skipped rather than allowed to pass, because every case
  * below counts against `DRAWN.length` and would return a vacuous green on zero
  * - which is the one outcome worse than a red. It is not the quiet skip this
  * file's header refuses either: that one is about being handed the canary,
@@ -389,7 +389,7 @@ test.describe('what the day has to be for any of this to mean anything', () => {
 	test.skip(() => NOTHING_TO_MEASURE !== '', NOTHING_TO_MEASURE);
 
 	test('the day is longer than the seed and draws more than one thing', () => {
-		// Without these two facts every arm below is vacuous: a day inside the seed
+		// Without these two facts every case below is vacuous: a day inside the seed
 		// never fetches, and a day with one drawing is a per-visual check wearing a
 		// page-level name.
 		expect(
@@ -598,7 +598,7 @@ for (const width of WIDTHS) {
 			// file has been measuring the stylesheet against itself.
 			expect(
 				seen.light,
-				'the two themes paint the drawing the same, so a baked colour would pass every arm above'
+				'the two themes paint the drawing the same, so a baked colour would pass every case above'
 			).not.toBe(seen.dark);
 		});
 	});

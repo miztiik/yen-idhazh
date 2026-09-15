@@ -1,7 +1,6 @@
 # Where the summarize-and-plan call's re-read tokens go, 2026-09-12
 
 **Last Updated**: 2026-09-15
-
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
@@ -30,10 +29,10 @@ rows #3c and #3e).
 
 ## Method
 
-Two arms, because the committed corpus cannot supply the article this reading
+Two cases, because the committed corpus cannot supply the article this reading
 was asked for.
 
-**The corpus arm is the corpus's longest article.** `corpus/corpus.jsonl` holds
+**The corpus case is the corpus's longest article.** `corpus/corpus.jsonl` holds
 1,444 rows spanning 2026-08-23 to 2026-09-10, and its longest body is **3,846
 words** - exactly `int(5000 / 1.3)`, because `extract.truncation_cap_tokens` was
 5,000 until it doubled to 10,000 on 2026-09-09T21:30. So the archive's worst
@@ -41,9 +40,9 @@ case is a fossil of a retired setting and reaches **50.0 percent of the current
 cap**. Three rows sit at that ceiling, dated 2026-08-23, 2026-08-27 and
 2026-09-03.
 
-**The cap arm is BUILT, it is never called a real article, and it is a rendering
+**The cap case is BUILT, it is never called a real article, and it is a rendering
 measurement rather than a run.** Corpus bodies are joined longest first and cut
-by `truncate_to_tokens` itself, so the arm is the cap's worst case by
+by `truncate_to_tokens` itself, so it is the cap's worst case by
 construction and follows the cap the next time it moves. Real prose, so the
 tokenizer sees real vocabulary and real punctuation; the length is the only part
 that is ours. `CLAUDE.md` section 13 rules this: where the awkward shape is the
@@ -64,7 +63,7 @@ cached)`. It divides three ways:
 | the chat template broke the prefix | what the label call left in the slot, less what the summarize-and-plan call reused | row #3c |
 | the trailing turn sits behind the article | what the summarize-and-plan call carries beyond anything the slot held | row #3e |
 
-**The sum is an identity and is not the oracle.** The two call-2 causes always
+**The sum is an identity and is not the oracle.** The summarize-and-plan call's two causes always
 come to `the summarize-and-plan prompt - what that call cached`, whatever the numbers are, so a
 check that they add up cannot fail. What the run checks per item is that the
 label call's rendered prompt is the length the server charged for, that the cache stopped
@@ -76,7 +75,7 @@ trailing turn are prefill facts and are cap-invariant. The template cause is the
 divergence plus the label call's whole reply behind it, so it shrinks with the cap -
 which is why one item runs the label call on its real 900-token budget.
 
-## The corpus arm
+## The corpus case
 
 Three items on one slot, adjacent, in one process.
 
@@ -89,7 +88,7 @@ Three items on one slot, adjacent, in one process.
 Item 3's label call stopped because it was finished, not because it ran out of
 budget, so **96 tokens is the label call's real reply length** on a 3,430-word article.
 Two of the three articles sit at the corpus ceiling of 3,846 words and the third
-is 3,430, and their call-1 prompts still differ by 2,043 tokens - sentence
+is 3,430, and their label-call prompts still differ by 2,043 tokens - sentence
 addressing and the candidate table are not a function of the word count.
 
 ### Where the re-prefilled tokens went
@@ -125,7 +124,7 @@ and the rest is the chat-template header around the turn, which no row moves.
 **687 tokens is 69.7 seconds an item, about 23.2 minutes of a 20-item shard.**
 
 **The steady state is one, and nobody had seen it before.** Items 2 and 3 each
-reused **1,362 tokens** of their call-1 prompt with no work - the label call's system
+reused **1,362 tokens** of the label call's prompt with no work - its system
 turn, which is byte-identical on every item - and the server erased the previous
 item's copy of the summarize-and-plan call's question as invalidated. Row #3d decision 3's alarm does
 not fire.
@@ -183,8 +182,8 @@ was an estimate, and it is withdrawn. At the measured 9.85 tokens a second
 The same turn renders to 698 tokens with its chat-template headers, and the
 difference between the two is the floor no prompt edit goes below.
 
-**A share of what.** 687 tokens is 9.3 percent of the corpus arm's 7,419-token
-prompt and 4.8 percent of the cap arm's 14,306. Same waste, two numbers a reader
+**A share of what.** 687 tokens is 9.3 percent of the corpus case's 7,419-token
+prompt and 4.8 percent of the cap case's 14,306. Same waste, two numbers a reader
 would take for two different problems, so no share appears on this page without
 the article length in the same sentence.
 
@@ -197,12 +196,12 @@ the article length in the same sentence.
 - **Nothing about a distribution.** One run, no spread, three articles.
 - **Nothing about what the replies said.** Only item 3's label call ran to a stop;
   every other decode was cut at 16 tokens.
-- **Nothing live at the cap.** The cap arm was rendered, not run, so the label call's
+- **Nothing live at the cap.** The cap case was rendered, not run, so the label call's
   reply length on a cap-length article is unmeasured - and with a denser
   candidate table it may be longer than 96, which would make the template cause
   larger there than the 100 measured here. `--at-cap` settles it in one run, and
   it costs about 45 minutes of prefill on this box.
-- **Nothing about how often a long article arrives.** The cap arm says what one
+- **Nothing about how often a long article arrives.** The cap case says what one
   would cost, never how many there are.
 
 ## See also

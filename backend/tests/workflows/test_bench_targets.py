@@ -18,11 +18,13 @@ from ._harness import (
     BENCH_TARGET,
     BUDGETS_EMIT_STEP,
     BUDGETS_JOB,
+    CANDIDATE_CONFIG_ACTION,
     COMMIT_SCRIPT,
     MEASUREMENT_TARGETS,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
     _artifact_upload,
+    _composite_action_script,
     _declared_dispatch_inputs,
     _expression,
     _job,
@@ -40,18 +42,18 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 
-def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:
+def test_the_bench_is_one_target_that_runs_two_cases_in_order() -> None:
     """Raw throughput first, then a real server, and the second waits for the first.
 
-    They are two jobs rather than one because the cheap arm has to be able to
+    They are two jobs rather than one because the cheap case has to be able to
     fail alone: weights that cannot move tokens at all should never cost the
-    server arm a runner hour. They are chained rather than parallel because the
-    server arm restores the weights entry the raw arm wrote, and because the
+    server case a runner hour. They are chained rather than parallel because the
+    server case restores the weights entry the raw case wrote, and because the
     page body needs both halves in one place to be written at all.
 
     The target list is compared by equality. A sixth measurement path has to be
     written down here before it can exist, which is what stopped this file
-    growing one arm per question.
+    growing one case per question.
     """
     workflow = _load_workflows()["measure.yml"]
     target = _mapping(_declared_dispatch_inputs(workflow)["target"], "measure.yml target")
@@ -63,7 +65,7 @@ def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:
 
     assert _needs(workflow, BENCH_RAW_JOB) == ["models"]
     assert _needs(workflow, BENCH_SERVER_JOB) == ["models", BENCH_RAW_JOB], (
-        "the server arm waits for the raw arm, or it downloads the weights again"
+        "the server case waits for the raw case, or it downloads the weights again"
     )
 
     keys = dict(_runtime_cache_keys(workflow))
@@ -96,7 +98,7 @@ def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> N
 
     assert condition == "inputs.target == 'budgets'"
     assert _needs(workflow, BUDGETS_JOB) == ["models"], (
-        "a retake that waited on the raw bench arm would cost the hours it exists to avoid"
+        "a retake that waited on the raw bench case would cost the hours it exists to avoid"
     )
 
     names = [step.get("name") for step in _steps(workflow, BUDGETS_JOB)]
@@ -122,9 +124,9 @@ def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> N
 
 
 def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
-    """Both arms, ninety days each.
+    """Both cases, ninety days each.
 
-    The raw arm used to declare no retention at all and the sweep kept seven
+    The raw case used to declare no retention at all and the sweep kept seven
     days. Seven is shorter than the gap between benching a model and deciding
     to adopt it, and the numbers are what the dossier page is pasted from - so
     an expired artifact is a five-hour job re-run for a measurement that was
@@ -152,12 +154,18 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
     `repo`, `revision`, `file`, `id` and `quantisation` onto the copied entry
     and overwrite both `declared_for` digests, which asserted that numbers
     measured for one model held for another.
+
+    The shell moved into a composite action on 2026-09-15, because the bench and
+    the validation arm carried byte-identical copies of it. This reads the
+    action, and the call site is asserted below.
     """
     workflow = _load_workflows()["measure.yml"]
-    script = _script(
-        _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP),
-        f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_CONFIG_STEP}",
+    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP)
+    assert step.get("uses") == f"./.github/actions/{CANDIDATE_CONFIG_ACTION}", (
+        "the bench builds its scratch config through the shared action"
     )
+
+    script = _composite_action_script(CANDIDATE_CONFIG_ACTION)
     assert f"cp -a config {BENCH_CANDIDATE_CONFIG}" in script
     assert MODELS_POINTER_KEY in script, "through the pointer, never by filename"
     for field in ("sha256", "declared_for", "quantisation", "revision"):
@@ -192,8 +200,8 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
             assert "docs/reference/models" not in body, f"{where} writes a committed page"
 
 
-def test_the_server_arm_reads_the_raw_arm_and_emits_a_page_to_paste() -> None:
-    """The Oracle for this arm. Two artifacts of numbers are a transcription job.
+def test_the_server_case_reads_the_raw_case_and_emits_a_page_to_paste() -> None:
+    """The Oracle for this case. Two artifacts of numbers are a transcription job.
 
     Emitting the dossier body with the numbers already in it is what makes
     adopting a model a paste. The step runs after the sweep, because half the
@@ -207,7 +215,7 @@ def test_the_server_arm_reads_the_raw_arm_and_emits_a_page_to_paste() -> None:
     downloads = [
         step for step in steps if str(step.get("uses", "")).startswith("actions/download-artifact")
     ]
-    assert len(downloads) == 1, "the server arm reads one artifact: the raw arm's"
+    assert len(downloads) == 1, "the server case reads one artifact: the raw case's"
     assert (
         _mapping(downloads[0].get("with"), "download").get("name")
         == BENCH_ARTIFACTS[BENCH_RAW_JOB]
@@ -218,15 +226,15 @@ def test_the_server_arm_reads_the_raw_arm_and_emits_a_page_to_paste() -> None:
         f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_EMIT_STEP}",
     )
     assert "measure_llm.py emit" in script
-    assert "--raw backend/var/raw-arm/" in script
+    assert "--raw backend/var/raw-case/" in script
     assert "--server backend/var/runtime-sweep/runtime-summary.json" in script
     assert "--dossier backend/var/" in script
     assert names.index("Measure runtime candidate") < names.index(BENCH_EMIT_STEP)
     assert names.index(BENCH_EMIT_STEP) < names.index("Upload runtime sweep")
 
 
-def test_the_raw_arm_refuses_weights_the_dispatch_did_not_declare() -> None:
-    """The raw arm downloads inside Python, so its byte check is a flag not a step.
+def test_the_raw_case_refuses_weights_the_dispatch_did_not_declare() -> None:
+    """The raw case downloads inside Python, so its byte check is a flag not a step.
 
     `measure_llm.py` resolves the Hub's own digest and compares it with the one
     the dispatch declared before it benches anything. Without the flag the

@@ -76,7 +76,7 @@ def a_ledger(state: Path, rows: list[dict[str, object]]) -> Path:
     Filed by each row's own `date` through `evals.writer.ledger_path`, which is
     what the pipeline files by - a fixture that spelled the layout itself would
     be a second writer, and the two could disagree without either being wrong.
-    An empty ledger still writes one day file, so the no-rows arm reads a store
+    An empty ledger still writes one day file, so the no-rows case reads a store
     that exists and holds nothing rather than a store that is not there.
     """
     names = EvalRow.csv_columns()

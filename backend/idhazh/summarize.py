@@ -97,6 +97,9 @@ _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
         "was ever asked. The article was fetched and extracted; the shard ran out "
         "of its own clock"
     ),
+    FailureCode.MODEL_REFUSED: (
+        "the model server answered with an error, so there was no reply to parse"
+    ),
     FailureCode.CONTEXT_EXCEEDED: (
         "the prompt did not fit the served context window, so the server refused it"
     ),
@@ -423,7 +426,7 @@ def parse_draft(
     curiosity. With `thinking` true the block is what the entry asked for: it is
     stripped here and never returned, so nothing downstream can read a word of
     it. A refusal that fires on the normal path is not a control, which is why
-    this arm is conditional rather than deleted.
+    this case is conditional rather than deleted.
 
     `source_words` and `brief` pick the same band the reply was asked under, so
     the decoder validates a key-point count against the band that requested it.

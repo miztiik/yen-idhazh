@@ -77,7 +77,7 @@ def test_the_three_causes_always_sum_and_that_is_why_they_are_not_the_oracle(
 ) -> None:
     """The sum holds for every input, so a check on it proves nothing.
 
-    `boundary` cancels out of the two call-2 causes in both branches of the
+    `boundary` cancels out of the summarize-and-plan call's two causes in both branches of the
     `max`, so they come to `two.prompt_tokens - two.cached_tokens` whatever the
     numbers are. It is here as documentation: a reader who takes the printed
     total for a verification would trust a number they should not. What the run
@@ -267,7 +267,7 @@ def a_sample(key: str, words: int) -> Sample:
     )
 
 
-def test_the_cap_arm_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
+def test_the_cap_case_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
     """The corpus cannot supply an article at the cap, so one is built.
 
     The cap is read from `config/` and the word count derived from the measured
@@ -291,8 +291,8 @@ def test_the_cap_arm_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
     assert built.url_key == "built from first+second"
 
 
-def test_the_cap_arm_stops_joining_once_it_has_enough() -> None:
-    """A row past the cap is not read, so the arm names only what it used."""
+def test_the_cap_case_stops_joining_once_it_has_enough() -> None:
+    """A row past the cap is not read, so the case names only what it used."""
     cap = config.load(CONFIG_DIR).app.extract.truncation_cap_tokens
     past_the_cap = int(cap / TOKENS_PER_WORD) + 1
 
@@ -346,7 +346,7 @@ def declaring(models: ModelsConfig, digest: str) -> ModelsConfig:
 
 
 def test_the_harness_accepts_the_weights_config_declares(tmp_path: Path) -> None:
-    """The accepting arm, so the refusal below is not a function that always raises."""
+    """The accepting case, so the refusal below is not a function that always raises."""
     weights = tmp_path / "declared.gguf"
     weights.write_bytes(b"GGUF the config names")
     digest = hashlib.sha256(weights.read_bytes()).hexdigest()

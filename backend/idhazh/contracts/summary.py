@@ -76,6 +76,15 @@ class Summary(Contract):
             ),
         ),
         ChangelogEntry(
+            version="2026-09-15T20:00",
+            change="failure_code may now carry model_refused.",
+            why=(
+                "It follows item-health-row. A failed summary that says the server "
+                "was unreachable, when the server answered and refused, sends the "
+                "reader to the wrong thing."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15",
             change="failure_code may now carry no_title.",
             why=(

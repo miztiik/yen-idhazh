@@ -1,7 +1,6 @@
 # Model throughput and why it drifts inside a run
 
 **Last Updated**: 2026-09-15
-
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -45,7 +44,7 @@ an item pays two spans: **85.2 seconds**.
 **One part is an estimate and is labelled one** (Guardrail #10). Whether the
 answer span re-pays prefill on the thinking tokens has not been read. The slot
 should hold - span two's prompt is span one's extended, `cache_prompt` is
-requested, and arm 2 of the start-up probe refuses a run whose second call
+requested, and case 2 of the start-up probe refuses a run whose second call
 re-read a prompt the first one filled. If it misses, the estimated cost is
 **25.6 seconds an item more**. **What settles it**: the dispatch logs span two's
 evaluated tokens beside its cached tokens on every item, and their difference is
@@ -172,7 +171,7 @@ the two committed shards with every timed row populated, twelve cells cost
 seven that ship.
 
 **The picture costs nothing outside these cells.** The summarize-and-plan call writes the summary and
-the plan in one reply, so what a picture cost is already inside the call-2
+the plan in one reply, so what a picture cost is already inside that call's
 columns; there is no second model call for an item, and no second job.
 
 **The split accounts for all but 0.066 percent of the call.** `summarize_ms` is
@@ -258,7 +257,7 @@ So an article is never charged for the article before it.
 
 **Under the two-call design that sentence still holds, and the shared prefix is
 now worth naming.** Measured 2026-09-12 on the configured weights, item 2 of a
-run reused **1,362 tokens** of its call-1 prompt with no work - the label call's system
+run reused **1,362 tokens** of the label call's prompt with no work - its system
 turn, which is byte-identical on every item - while the article behind it read
 from cold. The run also destroyed the previous item's copy of the summarize-and-plan call's question,
 which is what a one-slot cache is supposed to do
@@ -275,7 +274,7 @@ and no spread, on the longest article the committed corpus holds.
 
 | Cause | Tokens an item | At 9.85 tokens a second | Whose |
 | --- | --- | --- | --- |
-| the article changed | the whole call-1 prompt, less the shared system turn | - | irreducible |
+| the article changed | the whole label-call prompt, less the shared system turn | - | irreducible |
 | the chat template broke the prefix | **100** - four, plus the label call's whole 96-token reply behind them | 10.2 s an item, 3.4 min of a 20-item shard | plan 11 row #3c, closed |
 | the trailing turn sits behind the article | **697**, of which 687 is the question's own text, now **47** | **69.7 s an item, 23.2 min of a 20-item shard**, now 4.8 s and 1.6 min | plan 11 row #3e, closed |
 
