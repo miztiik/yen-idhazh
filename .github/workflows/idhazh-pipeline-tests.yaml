@@ -369,6 +369,17 @@ jobs:
             tail -50 llama-server.log >&2
             exit 1
           }
+          # Healthy says a server answers. It does not say which weights it
+          # answers for, and every arm's numbers are read against arm one's
+          # alias whether or not the server agrees. The alias comes from the
+          # same config the flags came from, so the two cannot disagree.
+          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/arms/baseline/config") / json.load(open("backend/var/arms/baseline/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
+            | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
+            echo "the server does not serve ${MODEL_ALIAS}" >&2
+            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
+            exit 1
+          }
 
       # Arm one. The production path exactly as the daily run walks it: both
       # calls, the visual decision on, one slot on the server. Every other arm is
@@ -453,6 +464,16 @@ jobs:
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
             echo "the model never became healthy on the second start" >&2
             tail -50 llama-server.log >&2
+            exit 1
+          }
+          # The same question the first start asks, and it matters more on a
+          # restart: a second server can come up on stale flags or stale weights
+          # and still answer 200.
+          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/arms/parallel-2/config") / json.load(open("backend/var/arms/parallel-2/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
+            | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
+            echo "the server does not serve ${MODEL_ALIAS}" >&2
+            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
             exit 1
           }
 
