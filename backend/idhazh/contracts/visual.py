@@ -149,7 +149,11 @@ from typing import Annotated, Any, ClassVar, Final, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model, SchemaVersion
-from idhazh.contracts.element import ELEMENT_ID_PATTERN, ElementId
+from idhazh.contracts.element import (
+    ELEMENT_ID_MAX_LENGTH,
+    ELEMENT_ID_PATTERN,
+    ElementId,
+)
 
 #: The field this contract may never grow, and the reason it is spelled as a
 #: name rather than left as an absence. Alt text assembled by the compiler is
@@ -179,14 +183,12 @@ _NUMBER_MAX_CHARACTERS: Final = 20
 #: a number nobody can read off the module is a number nobody re-derives.
 WORST_CASE_REPLY_CHARACTERS: Final = 3767
 
-#: `<kind>-<span_start>-<span_end>` at its longest: `quantity` is the longest
-#: element kind at 8 characters, and six digits an offset. `extract` truncates a
-#: body at `truncation_cap_tokens` (10000), which `truncate_to_tokens` spends as
-#: `int(10000 / 1.3)` = 7,692 words, so six digits covers an article of 999,999
-#: characters and is an upper bound with room in it. The ceiling is here rather
-#: than on `ElementId` itself because it is a decoder bound, not an identity
-#: rule: the pattern, and so the identity, stays element.py's.
-ELEMENT_ID_MAX_LENGTH: Final = 22
+#: `<kind>-<span_start>-<span_end>` at its longest, and `ELEMENT_ID_PATTERN`
+#: already admits no more than that - the pattern bounds every one of its own
+#: quantifiers, because a `maxLength` beside an unbounded quantifier is the one
+#: the schema-to-grammar converter drops. So `max_length` here is the belt and
+#: the pattern is the braces; the number is element.py's because the identity
+#: rule and the decoder bound are now the same bound.
 _PlanElementId = Annotated[
     ElementId, StringConstraints(pattern=ELEMENT_ID_PATTERN, max_length=ELEMENT_ID_MAX_LENGTH)
 ]
@@ -361,6 +363,27 @@ class VisualPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T19:40",
+            change=(
+                "Every element-id field now carries a self-bounding pattern, following "
+                "element.ELEMENT_ID_PATTERN. ELEMENT_ID_MAX_LENGTH moved to element.py "
+                "and is derived there rather than written down; maxLength stays beside "
+                "the pattern as the belt. No bound moved, so the worst-case reply is "
+                "the same 3767 characters."
+            ),
+            why=(
+                "The twelve element-id fields on this shape are every string the "
+                "decoder sees that carried a pattern, and llama.cpp's "
+                "schema-to-grammar converter drops a length bound whenever a pattern "
+                "sits beside it. So the ceiling this module computes was true of the "
+                "contract and false of the grammar the contract generated - and "
+                "unbounded_leaves, which exists to make that arithmetic honest, asks "
+                "whether a maxLength is present and so agreed with it.\n\n"
+                "encodings.category[0] is where it landed: 15,472 characters and 15.8 "
+                "minutes, on an item whose decision field already read none."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T03:11",
             change=(
