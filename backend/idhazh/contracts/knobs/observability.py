@@ -206,7 +206,7 @@ class ObservabilityConfig(Model):
     tracing_enabled: bool = Field(
         default=True,
         description=(
-            "Whether a work shard builds a span tree. On by default (2026-09-06): a "
+            "Whether a work shard builds a span tree. On by default: a "
             "span tree is the one thing the three ledgers cannot hold - a start "
             "instant, a parent, and a step too small to earn a column, the robots "
             "read inside the fetch and the prompt render and reply parse either side "
@@ -227,11 +227,9 @@ class ObservabilityConfig(Model):
             "evidence an operator opens to see one recent run step by step; the "
             "committed record is the span rollup, so a trace has a short life and a "
             "file past this window is deleted whole rather than folded - a fold would "
-            "invent a total nobody reads. Seven days covers a week of runs. Measured at "
-            "about 0.6 MB a run at the run.safety_ceiling_per_run item ceiling over the "
-            "five scheduled runs a day (2026-09-06), so the window bounds state/traces/ "
-            "at about 21 MB whatever the project's age - constant (Guardrail #12), and a "
-            "fraction of the 1 GB Pages reference it is not even part of. It does "
+            "invent a total nobody reads. Seven days covers a week of runs, and the "
+            "window is what keeps state/traces/ a constant size whatever the project's "
+            "age rather than one that grows with it (Guardrail #12). It does "
             "nothing until observability.tracing_enabled is true: before that no trace "
             "is written and the prune walks an empty tree."
         ),
@@ -256,9 +254,8 @@ class ObservabilityConfig(Model):
         ge=1,
         description=(
             "Months after which the folded item-health month is removed outright. Null "
-            "means never, and never is the default: the aggregate costs a measured "
-            "63.8 bytes a row over four stages - about 93 KB a year against the "
-            "shard's 77 MB - and deleting it would make a year-over-year comparison "
+            "means never, and never is the default: the fold is a small fraction of the "
+            "shard it summarises, and deleting it would make a year-over-year comparison "
             "unanswerable, which Guardrail #10 then forbids citing at all. Set, it must sit "
             "ABOVE item_health_full_grain_months, or a month would be deleted before "
             "it was ever folded."
@@ -395,8 +392,7 @@ class ObservabilityConfig(Model):
         ge=1,
         description=(
             "How long frontend/public/span-rollup/ keeps a published shard. Fourteen "
-            "on the same argument, and the record starts on 2026-09-06, so for its "
-            "first year this knob deletes nothing at all."
+            "on the same argument as the item-health copy above."
         ),
     )
     cost_currency: str = Field(

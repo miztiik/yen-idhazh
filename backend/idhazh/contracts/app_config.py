@@ -78,6 +78,29 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T09:00",
+            change=(
+                "Prose only. No field was added, removed or retyped and no default "
+                "moved, so every config/idhazh.json that validated before this still "
+                "validates and no read-side migration is owed. What changed is the "
+                "`description` text on six blocks, which pydantic lifts from the class "
+                "docstring and the Field description into the generated schema: "
+                "page_weight, observability, summarize, turns, models and assist drop "
+                "the dated incidents, the inline readings and the decision provenance "
+                "they were carrying. The rule each one states is unchanged."
+            ),
+            why=(
+                "Guardrail #10 says a rule carries its reason, never its evidence - the "
+                "reason is a clause that stays true, the evidence is a reading and "
+                "lives in the instrument log. These descriptions are published in "
+                "schemas/app-config.schema.json, so a measurement inlined here is a "
+                "second copy of one docs/reference/ already holds (Guardrail #4), and "
+                "it is the copy nobody re-takes when the subject changes. An operator "
+                "reading a knob wants the rule, not the post-mortem of the run that "
+                "produced it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15",
             change="The failure vocabulary this config names gained no_title.",
             why=(
