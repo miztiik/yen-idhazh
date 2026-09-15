@@ -96,11 +96,20 @@ def read_shard(path: Path) -> list[PublicTelemetryRow]:
     A published shard is the one artifact here nobody can re-derive once its
     source month has been folded away, so reading it back is what says it still
     loads rather than merely still parses.
+
+    **The header is checked as a prefix, the way the browser checks it.** The
+    projection grows by appending, so a shard published before the last widening
+    is the current header cut short - and refusing it would make every widening a
+    release blocker for exactly the file this function exists to prove still
+    loads (`CLAUDE.md` section 11). The cells behind the cut come back null,
+    which is what `from_csv_row` already does with an empty one. A header that
+    disagrees inside the prefix is still refused: that is a shard from a
+    different shape, not an older one.
     """
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         header = tuple(reader.fieldnames or ())
-        if header != PUBLIC_COLUMNS:
+        if header != PUBLIC_COLUMNS[: len(header)]:
             raise ValueError(
                 f"{path.as_posix()} header is {list(header)}, the contract writes "
                 f"{list(PUBLIC_COLUMNS)}"
