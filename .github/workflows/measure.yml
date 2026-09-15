@@ -126,72 +126,10 @@ jobs:
           CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import pathlib
-
-          root = pathlib.Path("config").resolve()
-          config = json.load(open("config/idhazh.json", encoding="utf-8"))
-          models_file = pathlib.Path("config") / config["models_file"]
-          models = json.load(open(models_file, encoding="utf-8"))
-          for role in ("summarize",):
-              for field in ("repo", "revision", "file"):
-                  value = models[role].get(field) or ""
-                  if value.split() != [value]:
-                      raise SystemExit(f"models.{role}.{field} is empty or not one word")
-                  print(f"{role}_{field}={value}")
-
-          named = os.environ.get("CANDIDATE_MODELS_FILE", "").strip()
-          candidate_file = named or config["models_file"]
-          if candidate_file.split() != [candidate_file]:
-              raise SystemExit("candidate_models_file is not one bare word")
-          path = (root / candidate_file).resolve()
-          if not path.is_relative_to(root) or path.suffix != ".json" or not path.is_file():
-              raise SystemExit(f"candidate_models_file is not a models file under config/: {candidate_file}")
-          print(f"candidate_models_file={candidate_file}")
-          entry = json.load(open(path, encoding="utf-8"))["summarize"]
-          candidate = {}
-          for field in ("repo", "revision", "file", "sha256", "id", "quantisation"):
-              value = entry.get(field) or ""
-              if value.split() != [value]:
-                  raise SystemExit(f"{candidate_file} summarize.{field} is empty or not one word")
-              candidate[field] = value
-              print(f"candidate_{field}={value}")
-          print(
-              "candidate_ref="
-              f"{candidate['repo']}@{candidate['revision']}:{candidate['file']}"
-          )
-
-          # The entry's own declared size. Empty means the entry declares none,
-          # which is an entry nobody has fetched yet - the check below skips
-          # rather than refuses, exactly as the validation case does.
-          print(f"candidate_byte_count={entry.get('byte_count') or ''}")
-
-          # An entry may name a draft head - a small second model the server
-          # runs ahead of the big one. It is optional, so all four values are
-          # empty when there is none, and each is held to the same one-bare-word
-          # rule as the target because it reaches a shell the same way.
-          draft = entry.get("draft") or {}
-          for field in ("repo", "revision", "file", "sha256"):
-              value = draft.get(field) or ""
-              if draft and value.split() != [value]:
-                  raise SystemExit(
-                      f"{candidate_file} summarize.draft.{field} is empty or not one word"
-                  )
-              print(f"candidate_draft_{field}={value}")
-
-          # The cache holds every file the candidate needs, so the key names
-          # every file's digest. A key that named only the target would serve a
-          # complete-looking entry with the draft head missing, and the server
-          # case would fail to start on a cache hit it could not see into. An
-          # entry with no draft keeps the key it already had, so adding this
-          # does not throw away what earlier runs paid to download.
-          key = candidate["sha256"]
-          if draft:
-              key = f"{key}-{draft['sha256']}"
-          print(f"candidate_cache_key={key}")
-          PY
+          python3 backend/utilities/model_refs.py candidate \
+            --prefix candidate_ \
+            --also-configured \
+            --models-file "$CANDIDATE_MODELS_FILE" >> "$GITHUB_OUTPUT"
 
   # The bench, case one: raw prefill and decode throughput with nothing else in
   # the process. This is the case that says whether the weights can move tokens

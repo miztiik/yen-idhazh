@@ -163,32 +163,7 @@ jobs:
       - id: models
         run: |
           set -euo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import pathlib
-
-          config = json.load(open("config/idhazh.json", encoding="utf-8"))
-          models_file = pathlib.Path("config") / config["models_file"]
-          models = json.load(open(models_file, encoding="utf-8"))
-          for role in ("summarize",):
-              for field in ("repo", "revision", "file"):
-                  value = models[role].get(field) or ""
-                  if value.split() != [value]:
-                      raise SystemExit(f"models.{role}.{field} is empty or not one word")
-                  print(f"{role}_{field}={value}")
-          # The draft head, or four empty strings where the entry declares none.
-          # Published here for the same reason the target's refs are: `needs`
-          # resolves before a job's first step, and the fetch step downstream
-          # must not open config a second time and disagree with this one.
-          draft = models["summarize"].get("draft") or {}
-          for field in ("repo", "revision", "file", "sha256"):
-              value = draft.get(field) or ""
-              # `draft and`, not `value and`: an entry that declares a head must
-              # declare all four, or the fetch downstream runs on a blank.
-              if draft and value.split() != [value]:
-                  raise SystemExit(f"models.summarize.draft.{field} is empty or not one word")
-              print(f"draft_{field}={value}")
-          PY
+          python3 backend/utilities/model_refs.py configured >> "$GITHUB_OUTPUT"
 
       # How long a worker may take, read from the one file that says so. It
       # travels as a job OUTPUT for the same reason the model refs do: a job's

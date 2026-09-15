@@ -124,50 +124,8 @@ jobs:
           CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os, pathlib
-
-          root = pathlib.Path("config").resolve()
-          config = json.load(open("config/idhazh.json", encoding="utf-8"))
-          named = os.environ.get("CANDIDATE_MODELS_FILE", "").strip()
-          models_file = named or config["models_file"]
-          if models_file.split() != [models_file]:
-              raise SystemExit("candidate_models_file is not one bare word")
-          path = (root / models_file).resolve()
-          if not path.is_relative_to(root) or path.suffix != ".json" or not path.is_file():
-              raise SystemExit(f"candidate_models_file is not a models file under config/: {models_file}")
-          models = json.load(open(path, encoding="utf-8"))
-          print(f"models_file={models_file}")
-          for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
-              value = models["summarize"].get(field) or ""
-              if value.split() != [value]:
-                  raise SystemExit(f"{models_file} summarize.{field} is empty or not one word")
-              print(f"{field}={value}")
-          # Optional, so an entry nobody has fetched yet publishes the empty
-          # string and the check below is skipped rather than passed.
-          print(f"byte_count={models['summarize'].get('byte_count') or ''}")
-
-          # The draft head, or four empty strings where the entry declares none.
-          # It is held to the same one-bare-word rule as the target because it
-          # reaches a shell and a download URL the same way, and a declared head
-          # with a missing digest is refused rather than fetched unchecked.
-          draft = models["summarize"].get("draft") or {}
-          for field in ("repo", "revision", "file", "sha256"):
-              value = draft.get(field) or ""
-              if draft and value.split() != [value]:
-                  raise SystemExit(
-                      f"{models_file} summarize.draft.{field} is empty or not one word"
-                  )
-              print(f"draft_{field}={value}")
-
-          # The cache holds every file the candidate needs, so the key names
-          # every file's digest. An entry with no draft keeps the key it already
-          # had, so this does not throw away what earlier runs paid to download.
-          key = models["summarize"]["sha256"]
-          if draft:
-              key = f"{key}-{draft['sha256']}"
-          print(f"cache_key={key}")
-          PY
+          python3 backend/utilities/model_refs.py candidate \
+            --models-file "$CANDIDATE_MODELS_FILE" >> "$GITHUB_OUTPUT"
 
       # Every number this dispatch carries, shaped once, here. `plan` is the job
       # every other job needs, so "before its first use" is anywhere after this
