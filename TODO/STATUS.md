@@ -36,14 +36,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 4 | 13 | 10 |
-| [20260915-32-telemetry-package-plan.md](20260915-32-telemetry-package-plan.md) | 16 | 0 | 16 | 4 |
+| [20260915-32-telemetry-package-plan.md](20260915-32-telemetry-package-plan.md) | 16 | 1 | 15 | 3 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 45
+## Ready now - 44
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -95,7 +95,6 @@ section 3 is where it is answered.
 | #1 | 32 | A | The shape the timeline reads, settled first | - |
 | #2 | 32 | A | Where every one of the 113 columns comes from | - |
 | #3 | 32 | A | The package exists and re-exports | - |
-| #16 | 32 | A | Does the server answer `/slots`, and the ordinal encoding priced | - |
 
 ## Waiting on another row - 63
 
