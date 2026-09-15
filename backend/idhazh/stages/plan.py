@@ -33,6 +33,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, PublishedAgeBand, RunPlan, VerticalPlan
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.sources import FeedDef
+from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.embed import Embedder
 from idhazh.stages import common
 from idhazh.stages.common import LOG, Fetcher, _load_day, _load_manifest
@@ -464,6 +465,15 @@ def _plan_desks(
         )
         summaries.append(summary)
         pools[vertical.id] = pool
+        # A desk under its floor plans nothing and raises nothing, so without this
+        # line the run succeeds, the digest publishes, and one section is absent.
+        if summary.below_feed_floor and vertical.status is LifecycleStatus.ACTIVE:
+            LOG.warning(
+                "desk silent on its feed floor vertical=%s askable=%s floor=%s",
+                vertical.id,
+                summary.eligible_feeds,
+                summary.feed_floor,
+            )
         if cap is not None and len(planned) > cap:
             LOG.info("cap applied vertical=%s planned=%s cap=%s", vertical.id, len(planned), cap)
             planned = planned[:cap]

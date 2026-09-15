@@ -409,12 +409,20 @@ wrong number for a lower gate that reads the same wrong number. What would fix i
 is a floor read from the health ledger rather than from config, and that is a
 contract change nobody has costed - recorded here rather than done.
 
-**What the floor does have is a merge gate.**
-`backend/tests/contracts/test_run_plan.py::test_every_vertical_clears_its_own_feed_floor`
-reads the committed `config/sources.json` against the committed
-`config/taxonomy.json` and fails the build when any vertical's active feed count
-drops under `min_feeds`. It says what a failing vertical would cost:
-`ai has 6 active feeds against a floor of 35, so it would publish nothing`.
+**What the floor does have is the run's own report.** `stages/plan._plan_desks`
+writes one `WARNING` per active desk that goes silent on its floor, naming the
+desk, the feeds it may ask and the floor it was asked against:
+`desk silent on its feed floor vertical=ai askable=6 floor=35`.
+`backend/tests/test_plan.py::test_a_desk_that_goes_silent_on_its_floor_says_so_in_the_run`
+holds it to that, from a built config.
+
+It used to be a merge gate instead - a test reading the committed
+`config/sources.json` and `config/taxonomy.json` and failing the build when a
+desk dropped under `min_feeds`. That gate could not be fired by a code change,
+only by a source outage, a retirement or a curator's edit, so it went red on pull
+requests that had touched neither file (`CLAUDE.md` section 13). The report is
+weaker in one way and stronger in another: it cannot stop a bad config reaching
+`main`, and it does see a desk that goes dark for a reason no config records.
 
 The run-time floor is silent by design - the run succeeds, the digest publishes,
 and one section is simply absent - so a config edit that emptied a desk would
