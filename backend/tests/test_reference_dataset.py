@@ -27,10 +27,10 @@ from typing import Any, Final
 import pytest
 from conftest import REPO_ROOT
 
-from idhazh.contracts.app_config import ReferenceDatasetConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_text_digest, derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
+from idhazh.contracts.knobs.finetune import ReferenceDatasetConfig
 from idhazh.contracts.reference_dataset import (
     ReferenceCleaningSettings,
     ReferenceCollectionMetadata,

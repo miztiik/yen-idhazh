@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
 from idhazh.evals.validation import Measurement, decide, to_rows
 

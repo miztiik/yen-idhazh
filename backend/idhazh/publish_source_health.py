@@ -31,9 +31,9 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, day_partition, ledger
-from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.source_health_view import (
     SourceAvailability,
     SourceHealthRow,

@@ -13,13 +13,9 @@ from pydantic import ValidationError
 
 from idhazh import config
 from idhazh.contracts import canonical_json
-from idhazh.contracts.app_config import (
-    SUPERSEDED_APP_NAMES,
-    SUPERSEDED_MODELS_NAMES,
-    AppConfig,
-    ModelsConfig,
-    SystemPlacement,
-)
+from idhazh.contracts.app_config import SUPERSEDED_APP_NAMES, AppConfig
+from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
+from idhazh.contracts.knobs.turns import SystemPlacement
 from idhazh.contracts.run_manifest import RunManifest
 
 from ._fixtures import (

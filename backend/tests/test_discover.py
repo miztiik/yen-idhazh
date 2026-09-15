@@ -23,9 +23,9 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
-from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome, RobotsOutcome
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
