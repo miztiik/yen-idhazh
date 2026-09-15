@@ -1,6 +1,6 @@
 # Where the summarize-and-plan call's re-read tokens go, 2026-09-12
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-15
 
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
@@ -86,7 +86,7 @@ Three items on one slot, adjacent, in one process.
 | item 2, steady state | 8,211 | **1,362** | 16 | 8,924 | 8,207 |
 | item 3, the label call uncapped | 6,168 | **1,362** | **96** | 6,960 | 6,164 |
 
-Item 3's the label call stopped because it was finished, not because it ran out of
+Item 3's label call stopped because it was finished, not because it ran out of
 budget, so **96 tokens is the label call's real reply length** on a 3,430-word article.
 Two of the three articles sit at the corpus ceiling of 3,846 words and the third
 is 3,430, and their call-1 prompts still differ by 2,043 tokens - sentence
@@ -195,7 +195,7 @@ the article length in the same sentence.
   ([`../measurements.md`](../measurements.md)). The token counts name the runtime
   and the date and do travel.
 - **Nothing about a distribution.** One run, no spread, three articles.
-- **Nothing about what the replies said.** Only item 3's the label call ran to a stop;
+- **Nothing about what the replies said.** Only item 3's label call ran to a stop;
   every other decode was cut at 16 tokens.
 - **Nothing live at the cap.** The cap arm was rendered, not run, so the label call's
   reply length on a cap-length article is unmeasured - and with a denser

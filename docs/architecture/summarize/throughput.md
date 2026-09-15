@@ -125,7 +125,7 @@ one run and no spread, `Qwen3-8B-Q4_K_M.gguf` on llama-server with
 `--threads 4 --ctx-size 16384 --batch-size 512 -np 1 -fa on` - an
 order-of-magnitude check and not a runner reading:
 
-| Quantity | The label call (label) | The summarize-and-plan call (summarize and plan) | Folded |
+| Quantity | The label call | The summarize-and-plan call | Folded |
 | --- | --- | --- | --- |
 | `input_tokens` | 1,497 | 2,389 | 3,886 |
 | `cached_tokens` | 0 | 1,493 | 1,493 |
@@ -300,9 +300,9 @@ separate `visuals` job drew the pictures on the small model.
 
 **`work` sends both, adjacently, per item**, and that adjacency is a correctness
 rule rather than a layout taste: `models.summarize.inference` pins `n_parallel`
-to 1, so the server holds one cache slot, and every label call first with every the
-summarize-and-plan call afterwards would evict the prefix before it was reused - on every item, with
-nothing in any log to say so.
+to 1, so the server holds one cache slot, and every label call first with every
+summarize-and-plan call afterwards would evict the prefix before it was reused -
+on every item, with nothing in any log to say so.
 
 **There is no flag and no second path.** `run.two_calls_per_item` switched
 between the two for one day. Plan 11 row #6 deleted the knob, the small model,
