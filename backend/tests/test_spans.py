@@ -18,7 +18,7 @@ Two sentinels, because one of them alone would be a weaker test:
   there so the test measures the structural control - that no code path reads
   article text into an attribute - and not the regex.
 
-The same sweep runs over all five committed injection canaries in
+The same sweep runs over all six committed injection canaries in
 `backend/tests/test_canaries.py`, which owns those fixtures.
 
 No mocks and no network (Guardrail #7): the fetcher reads a page this file builds,

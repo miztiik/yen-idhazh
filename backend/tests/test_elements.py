@@ -2,8 +2,8 @@
 
 The oracle is one comparison and it is asserted over every element the pass
 emits: `article.text[span_start:span_end] == span_excerpt`. It runs over the
-five committed injection canaries and the four captured pages - nine bounded
-fixtures, none of which a run appends to (Guardrail #12) - because a span that only
+committed injection canaries and the captured pages - a fixed set of fixtures,
+none of which a run appends to (Guardrail #12) - because a span that only
 holds on a hand-written string proves the string, not the pass.
 
 The second half of the oracle is that the candidate table is not a deduplicated
@@ -170,7 +170,7 @@ def test_the_corpus_the_oracle_runs_over_actually_carries_quantities() -> None:
         emitted += len(element_table(canary_article(canary), config=ELEMENTS).elements)
     for path in PAGES:
         emitted += len(element_table(page_article(path), config=ELEMENTS).elements)
-    assert emitted == 22, "the ten bounded fixtures carried 22 elements on 2026-09-13"
+    assert emitted == 24, "the bounded fixtures carried 24 elements on 2026-09-15"
 
 
 # --- The Oracle: two passes never hold the same character ------------------
@@ -182,7 +182,7 @@ def overlaps(left: Element, right: Element) -> bool:
 
 
 def bounded_articles() -> list[tuple[str, Article]]:
-    """The ten fixtures no run appends to: five canaries and five captured pages."""
+    """The fixtures no run appends to: the committed canaries and the captured pages."""
     articles = [(canary.name, canary_article(canary)) for canary in canaries.ALL]
     return articles + [(path.name, page_article(path)) for path in PAGES]
 
@@ -201,7 +201,7 @@ def test_a_bare_year_is_claimed_as_a_date_and_never_as_a_quantity() -> None:
 
 
 def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
-    """Every pair of spans on the ten bounded fixtures, checked for overlap.
+    """Every pair of spans on the bounded fixtures, checked for overlap.
 
     Pairwise is quadratic in one article's elements and bounded by
     `elements.max_per_article`, so it cannot grow with the archive (Guardrail #12).
@@ -219,8 +219,8 @@ def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
 def test_the_bounded_fixtures_carry_both_kinds_so_the_pair_check_can_fail() -> None:
     """The counter-oracle. One pass emitting nothing makes every pair disjoint."""
     kinds = Counter(element.kind for _, table in bounded_tables() for element in table.elements)
-    assert kinds == {ElementKind.QUANTITY: 13, ElementKind.DATE: 9}, (
-        "the ten bounded fixtures carried 13 quantities and 9 years on 2026-09-13"
+    assert kinds == {ElementKind.QUANTITY: 15, ElementKind.DATE: 9}, (
+        "the bounded fixtures carried 15 quantities and 9 years on 2026-09-15"
     )
 
 
