@@ -394,6 +394,13 @@ jobs:
             --commit "${GITHUB_SHA}" \
             --runner ubuntu-latest
 
+      # `if: always()` buys the record of a bad shard. A run that died mid-way
+      # is exactly the one whose counts a reader wants, and the stage writes
+      # this file before it returns.
+      - name: What this shard measured
+        if: always()
+        run: cat backend/var/qualification/shard-${{ matrix.shard }}.md >> "$GITHUB_STEP_SUMMARY" || true
+
       - name: Runtime log on failure
         if: failure()
         run: tail -80 llama-server.log || true
@@ -444,6 +451,13 @@ jobs:
             --date "${{ needs.plan.outputs.date }}" \
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
+
+      # The eleven gates, failures first. `if: always()` because the step above
+      # exits non-zero on an ESCALATE, and that is precisely the verdict a
+      # reader opened this page for.
+      - name: The verdict
+        if: always()
+        run: cat backend/var/qualification/report.md >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Commit the validation ledger
         env:
