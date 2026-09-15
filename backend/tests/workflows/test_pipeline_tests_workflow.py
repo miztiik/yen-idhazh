@@ -23,12 +23,10 @@ from ._harness import (
     WORKFLOWS_DIR,
     _bash,
     _declared_dispatch_inputs,
-    _inline_programs,
     _isolated_env,
     _job,
     _load_workflows,
     _normalize_condition,
-    _run_the_inline_program,
     _script,
     _step,
     _steps,
@@ -48,6 +46,33 @@ JOB: str = "cases"
 PICK_STEP: str = "Pick the two articles"
 
 PLAN_STEP: str = "Plan the two articles"
+
+#: The modules the steps call, and the call each step must still carry. Reading
+#: the step and running the module is what keeps this a test of the shipped
+#: bytes rather than of a copy (Guardrail #7).
+DRAW_MODULE: str = "backend/utilities/pipeline_draw.py"
+CASE_CONFIG_MODULE: str = "backend/utilities/pipeline_case_config.py"
+REPORT_MODULE: str = "backend/utilities/pipeline_case_report.py"
+PICK_CALL: str = f"{DRAW_MODULE} pick"
+PLAN_CALL: str = f"{DRAW_MODULE} plan"
+CASE_CONFIG_CALL: str = CASE_CONFIG_MODULE
+REPORT_CALL: str = REPORT_MODULE
+
+
+def _module_outputs(
+    argv: list[str], *, cwd: Path, module: str = DRAW_MODULE
+) -> dict[str, str]:
+    """The `KEY=value` lines a step appends to `$GITHUB_OUTPUT`, as a mapping."""
+    done = subprocess.run(
+        [sys.executable, str(REPO_ROOT / module), *argv],
+        cwd=cwd,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    return dict(line.split("=", 1) for line in done.stdout.splitlines() if "=" in line)
 
 #: The step that restarts the server with two slots, and the step that reads its
 #: outcome. Case three is the only case guarded on a step rather than only on the
@@ -71,19 +96,18 @@ def _recorded(root: Path, case: str, item_ids: Sequence[str]) -> None:
 
 
 def _report(root: Path, expected: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    """Run the report step's own program over a tree of case results.
+    """Run the report the step runs, over a tree of case results.
 
     The shipped bytes, not a copy of them (Guardrail #7). It prints a markdown
-    table rather than `key=value` lines, so it is run here rather than through
-    `_run_the_inline_program`, which reads a step's output.
+    table rather than `key=value` lines, so it is run rather than read.
     """
-    body = _script(_step(_load_workflows()[WORKFLOW], JOB, "name", REPORT_STEP), REPORT_STEP)
-    programs = _inline_programs(body)
-    assert len(programs) == 1, "the report carries one inline program"
+    assert REPORT_CALL in _script(
+        _step(_load_workflows()[WORKFLOW], JOB, "name", REPORT_STEP), REPORT_STEP
+    ), "the report step no longer calls the module this drives"
     return subprocess.run(
-        [sys.executable, "-c", programs[0]],
+        [sys.executable, str(REPO_ROOT / REPORT_MODULE), "--expected", " ".join(expected)],
         cwd=root,
-        env={**os.environ, "EXPECTED_ITEM_IDS": " ".join(expected)},
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},
         capture_output=True,
         text=True,
         check=False,
@@ -160,16 +184,15 @@ def test_the_draw_happens_once_and_every_case_reads_it() -> None:
     """
     workflow = _load_workflows()[WORKFLOW]
     steps = _steps(workflow, JOB)
-    drawing = [step.get("name") for step in steps if ".draw(" in str(step.get("run") or "")]
+    drawing = [step.get("name") for step in steps if PICK_CALL in str(step.get("run") or "")]
     assert drawing == [PICK_STEP], f"one step draws the pair, and it is {PICK_STEP!r}"
 
     pick = _script(_step(workflow, JOB, "name", PICK_STEP), f"{WORKFLOW}/{JOB}/{PICK_STEP}")
-    assert 'os.environ["PICK_SEED"]' in pick, "the draw is seeded, never arbitrary"
+    assert '--seed "$PICK_SEED"' in pick, "the draw is seeded, never arbitrary"
     assert "github.run_id" in str(_step(workflow, JOB, "name", PICK_STEP).get("env")), (
         "the seed is the run id GitHub allocated, which nothing in the run can compute"
     )
-    assert 'print(f"seed={seed}")' in pick, "a dispatch says which seed it drew on"
-    assert '>> "$GITHUB_OUTPUT"' in pick or '"$GITHUB_OUTPUT"' in pick
+    assert '"$GITHUB_OUTPUT"' in pick, "a dispatch publishes the seed it drew on"
 
     plan = _step(workflow, JOB, "name", PLAN_STEP)
     plan_env = str(plan.get("env"))
@@ -207,9 +230,9 @@ def test_every_case_runs_the_one_plan_and_nothing_else_writes_one() -> None:
         assert "steps.plan.outputs.date" in str(step.get("env")), (
             "a case reads the day the one plan was written for"
         )
-        assert ".draw(" not in body, "a case never draws its own pair"
+        assert PICK_CALL not in body, "a case never draws its own pair"
 
-    written = [step.get("name") for step in steps if "plan.to_json()" in str(step.get("run") or "")]
+    written = [step.get("name") for step in steps if PLAN_CALL in str(step.get("run") or "")]
     assert written == [PLAN_STEP], "one step mints the plan the cases share"
 
 
@@ -226,8 +249,10 @@ def test_the_report_holds_the_cases_to_the_two_items_the_draw_chose() -> None:
     report = _step(workflow, JOB, "name", REPORT_STEP)
     body = _script(report, f"{WORKFLOW}/{JOB}/report")
     assert "steps.plan.outputs.item_ids" in str(report.get("env"))
-    assert "landed != sorted(expected)" in body, "the cases are compared against the plan"
-    assert "raise SystemExit(" in body, "a disagreement fails the job"
+    assert REPORT_CALL in body, "the report the step runs"
+    source = read_text(REPO_ROOT / REPORT_MODULE)
+    assert "landed != expected" in source, "the cases are compared against the plan"
+    assert "raise SystemExit(" in source, "a disagreement fails the job"
     assert report.get("if") == "always()", (
         "the case that failed is the one whose census is worth printing"
     )
@@ -398,11 +423,9 @@ def test_the_pick_step_publishes_the_pair_the_plan_step_asks_for() -> None:
     """
     workflow = _load_workflows()[WORKFLOW]
     seed = "34852763827"
-    published = _run_the_inline_program(
-        _script(_step(workflow, JOB, "name", PICK_STEP), PICK_STEP),
-        REPO_ROOT,
-        {"PICK_SEED": seed},
-    )
+    assert PICK_CALL in _script(_step(workflow, JOB, "name", PICK_STEP), PICK_STEP)
+    published = _module_outputs(["pick", "--seed", seed], cwd=REPO_ROOT)
+
     assert published["seed"] == seed
     drawn = _settings().draw(seed)
     assert published["addresses"] == " ".join(candidate.url for candidate in drawn)
@@ -419,10 +442,10 @@ def test_the_case_configs_the_workflow_writes_all_load(tmp_path: Path) -> None:
     """
     shutil.copytree(CONFIG_DIR, tmp_path / "config")
     workflow = _load_workflows()[WORKFLOW]
-    written = _run_the_inline_program(
-        _script(_step(workflow, JOB, "name", "Write each case's config"), "case config"),
-        tmp_path,
+    assert CASE_CONFIG_CALL in _script(
+        _step(workflow, JOB, "name", "Write each case's config"), "case config"
     )
+    written = _module_outputs([], cwd=tmp_path, module=CASE_CONFIG_MODULE)
 
     settings = _settings()
     assert sorted(written) == sorted(case.id for case in settings.cases)
@@ -463,18 +486,20 @@ def test_the_plan_step_writes_a_plan_the_work_stage_can_open(tmp_path: Path) -> 
     the shape by eye is how that is found on the runner instead of here.
     """
     shutil.copytree(CONFIG_DIR, tmp_path / "config")
-    workflow = _load_workflows()[WORKFLOW]
     seed = "34852763827"
     drawn = _settings().draw(seed)
 
-    published = _run_the_inline_program(
-        _script(_step(workflow, JOB, "name", PLAN_STEP), PLAN_STEP),
-        tmp_path,
-        {
-            "PICKED_ADDRESSES": " ".join(candidate.url for candidate in drawn),
-            "PICKED_FEEDS": " ".join(candidate.source_id for candidate in drawn),
-            "RUN_EXECUTION": seed,
-        },
+    published = _module_outputs(
+        [
+            "plan",
+            "--addresses",
+            " ".join(candidate.url for candidate in drawn),
+            "--feeds",
+            " ".join(candidate.source_id for candidate in drawn),
+            "--execution",
+            seed,
+        ],
+        cwd=tmp_path,
     )
 
     written = tmp_path / "backend" / "var" / "pipeline-tests" / "plan.json"
