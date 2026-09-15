@@ -78,26 +78,67 @@ which is the same family.
 | 1 | Stop printing "Only one of our sources carried this" | - | A | DONE | - | #782 | - |
 | 2 | Two feeds of one outlet are one source | - | A | DONE | - | #782 | - |
 | 3 | Measure: title signal against the committed days | - | A | DONE | - | #782 | - |
-| 4 | Correct the token-share number defect 22 shipped | - | A | PENDING | - | - | p29-plan |
+| 4 | Correct the token-share number defect 22 shipped | - | A | DONE | - | #785 | - |
 | 5 | Draw the collapse, with a publisher stack that links | - | B | PENDING | - | - | - |
-| 6 | An article we could not read never becomes a card | - | B | PENDING | - | - | - |
+| 6 | Retire the four hosts that serve one page | - | B | PENDING | - | - | - |
 | 7 | One outlet never runs the identical piece twice | - | B | PENDING | - | - | - |
 | 8 | A ceiling on the day, beside the ceiling on a run | - | B | PENDING | - | - | - |
 | 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
 | 10 | A story that has been running ranks below one that broke today | - | C | PENDING | - | - | - |
 | 11 | The lead is a weighted score, and the page says how | 10 | C | PENDING | - | - | - |
-| 12 | Label the sheet, then set the floor | 9 | D | PENDING | - | - | - |
+| 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
+| 13 | The chrome ledger: a host that repeats itself is caught | - | C | PENDING | - | - | - |
+| 14 | The composite score, proving it changed nothing | - | C | PENDING | - | - | - |
+| 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
+| 16 | Refuse boilerplate, on a week of evidence | 13 | D | PENDING | - | - | - |
+| 17 | Does a short extraction publish at all | - | D | PENDING | - | - | - |
 
-**Owner decisions, 2026-09-15.** Rows 5 to 12 are approved with the contracts
-below. The contracts are the owner's; a worker implements them and decides
-nothing. Five candidates were refused and are recorded under `Rejected` so
-nobody re-proposes them.
+**Owner decisions, 2026-09-15.** Every row carries its contract. The contracts
+are the owner's and Fowler's; a worker implements them and decides nothing.
+Six candidates were refused and are recorded under `Rejected` so nobody
+re-proposes them.
 
 **The comparison is over our own summary, and that is a bet the owner is
 making on purpose.** "Assuming the summariser has done the job properly, that
 is the premise of the app - let us bet it did and compare on that." Every row
-below reads `title. summary`, which is what the pass already encodes. No row
-reads an article body.
+below reads `title. summary` and `key_points`, which the pass already has. No
+row reads an article body at assemble.
+
+**Two contracts were ruled by Fowler on 2026-09-15**, under the owner's standing
+instruction that the domain authority leads on a contract question and rules in
+alignment with intent even where that means scope expansion. Rows 13 and 14
+carry those rulings verbatim, including the expansions and the refusals.
+
+### The whole rule, on one picture
+
+```mermaid
+flowchart TD
+  fetch["extract: a page is fetched"] --> chrome{"Do this host's own pages<br/>repeat these lines?"}
+  chrome -- "yes, over boilerplate_ratio_max" --> flag["record FailureCode.BOILERPLATE<br/>(row 13 records; row 16 refuses)"]
+  chrome -- no --> sum["summarize: our headline<br/>and our summary"]
+  flag --> sum
+  sum --> vec["assemble: encode title. summary"]
+  vec --> pairs["every cross-outlet pair<br/>inside the window (row 9, 36 h)"]
+  pairs --> veto{"Do their numbers clash?"}
+  veto -- yes --> apart["Two stories"]
+  veto -- no --> head{"Do the reduced headlines match?"}
+  head -- yes --> one["One story"]
+  head -- no --> comp["composite = w_cosine x cosine<br/>+ w_points x key-point overlap<br/>(weights sum to 1.0)"]
+  comp --> floor{"At or above<br/>same_story.floor_min?"}
+  floor -- yes --> one
+  floor -- no --> apart
+  one --> all{"Does it clear against<br/>EVERY member of the group?"}
+  all -- no --> apart
+  all -- yes --> group["One group. The strongest is drawn;<br/>the rest become publisher pills (row 5)"]
+  group --> lead["leading_stories: a weighted score over<br/>rank_score, also_covered_by, freshness (row 11)"]
+```
+
+**Three things the picture is deliberate about.** The numbers veto sits
+**before** everything, because a clashing figure is evidence of difference and
+no amount of similarity outvotes it. The headline rule stays a threshold-free
+joiner **above** the composite rather than a term inside it, so the rule that
+landed on 2026-09-14 cannot regress. And the composite's weights sum to 1.0, so
+a floor is a number on the cosine's own scale rather than a coincidence.
 
 ## Row #1 - stop printing the sentence we cannot support
 
@@ -240,27 +281,44 @@ resolves, and every member appears in the month index. A second arm with
 **What the reader loses, stated.** On a false merge, a story is one click away
 instead of on the page. That is the trade the owner took on 2026-09-14.
 
-## Row #6 - an article we could not read never becomes a card
+## Row #6 - retire the four hosts that serve one page
 
-**Intent.** A card whose headline is `Article fails to load due to technical
-issues` is not a story. It should never have cost a summarize call either.
+**Intent.** Four feeds do not publish articles. They publish one template with a
+different URL each time, and we have been summarising it.
+
+**What was measured, 2026-09-15.** Found from recorded outcomes only -
+`source_id` and body length - never by matching words in a body.
+
+| Feed | Body chars | Items | Words | Signal recorded today |
+| --- | ---: | ---: | ---: | --- |
+| `lemonde-en` | 209 | 166 | ~32 | `too_short` |
+| `offshore-wind` | 18 | 40 | ~3 | `not_prose` |
+| `climate-home` | 331 | 12 | ~51 | `not_prose` |
+| `energymonitor` | 398 | 6 | 61 | **none** - one word over `min_source_words` |
+
+206 of those 224 items became published cards, 2.2 percent of the 9,478 items
+published. The word counts for the first three are **estimates** derived from
+characters at Energy Monitor's own 6.5 characters a word; the reading that
+settles them is a count of `code` cells on `state/item-health/**` for those four
+`source_id` values, and the row takes it.
 
 **Contract.**
 
-- The refusal reads **our own recorded extraction outcome**, never the fetched
-  text. Matching on phrases inside the body would be a rule driven by untrusted
-  input (Guardrail #11) and a source could steer it.
-- The refusal lands **before summarize**, so the run does not pay to write prose
-  about an error page. Measured: about 83 s of decode per item.
-- The item is recorded as refused with its reason, exactly as other refusals
-  are, so the operator surfaces can still count it.
+- Each of the four moves from `feeds` to `retired` in `config/sources.json`,
+  with `status: retired` and `retired_on` set to the date the row lands. That is
+  the tombstone shelf the contract already describes - read by nobody who
+  fetches and by everybody who has to put a name on an id.
+- **Nothing published is touched.** Their committed items keep their addresses,
+  their archive entries and their search entries. A retired feed stops costing a
+  request; it does not un-publish a story.
 
-**Oracle.** A built fixture whose extraction failed never reaches summarize and
-never reaches the day. A second arm with a successful extraction of the same
-shape publishes normally.
+**What the reader loses, stated.** Three of these are energy feeds and the desk
+is already thin. What the reader loses is nothing, because these four never
+delivered an article - but the coverage gap they were filling on paper is real
+and the row says so rather than letting it disappear quietly.
 
-**What the reader loses.** A link to an article we could not read and had no
-summary for.
+**Oracle.** The four ids appear in `retired` and not in `feeds`; a collect run
+asks them for nothing. The existing retirement tests cover the shape.
 
 ## Row #7 - one outlet never runs the identical piece twice
 
@@ -419,7 +477,180 @@ labels at no extra cost: the summary alone, the title alone, and the item's
 `key_points` joined. If one separates better than what ships, that is a free
 improvement and the measurement is already paid for.
 
-## Rejected, 2026-09-15
+## Row #13 - the chrome ledger: a host that repeats itself is caught
+
+**Ruled by Fowler, 2026-09-15. Correction level 4.** The scope expansions below
+are his, under the owner's standing instruction that structure fixes matter.
+
+**Intent.** A publisher that serves one template for every article is caught the
+third time, not the 166th. No length rule can see a 400-word template; only
+comparing a host's pages against each other can.
+
+**The defect.** `boilerplate_ratio(lines, seen_elsewhere)` in
+`backend/idhazh/extract.py` has existed, with an enum value, two config knobs,
+tests and documentation on three pages, and **has never fired**: nothing in
+production passes `seen_elsewhere`, so it divides by an empty set and returns
+0.0. Measured: **zero `boilerplate` cells in 12,277 committed item-health rows.**
+
+**Contract.**
+
+| What | Ruling |
+| --- | --- |
+| Grain | **One row per (host, line hash)**, keyed on the registrable host of `canonical_url` - **not `source_id`**. Chrome belongs to the server template, and keying on the feed both fragments the evidence and re-makes the mistake row #2 repaired |
+| Store | **`state/chrome.csv`, one file, unsharded.** The read carries no time window - chrome learned in August is chrome in September - so a partition would open every file anyway |
+| Contract file | `backend/idhazh/contracts/chrome_line.py`, plus the import and tuple entry in `contracts/export.py` |
+| Schema stem | `chrome-line-row` |
+| Fields | `version, host, line_rule, line_hash, pages_seen, first_seen, last_seen`. `line_hash` uses the existing `Sha256` type |
+| `line_rule` | **A column, not a comment.** It versions the normaliser (NFKC, whitespace collapsed, casefolded, then sha256) and a read filters to the current rule. Without it a changed normaliser makes every row dead weight that silently never matches |
+| Writer | **`assemble`, not `extract`.** Only assemble has the day's whole item set, so only assemble can count distinct pages a host served. A work shard sees `index % shards` of the day, and eight shards incrementing one key through a `merge=union` CSV is a race this repository has already paid for twice |
+| Reader | `stages/common._fetch_one`, passing the host's line set into the `seen_elsewhere` parameter that already exists. **`extract.py` does not change at all** |
+| Bound | Two config caps **and an eviction order**, and the order is load-bearing: evict by `pages_seen` **ascending**, then `last_seen` ascending. Recency eviction would evict the chrome using the very articles you compare against |
+| Knobs | `extract.chrome_lines_per_host_max`, `extract.chrome_forget_days`, `extract.chrome_pages_min` (default 3), on `ExtractConfig` |
+| Guardrail #12 | **A declaration is required**, and the shape is a cover enforced on the store rather than on the read - `state/traces/` is the precedent. It says: the read is one streaming scan filtered to the hosts this shard's plan names; the file is bounded by hosts times `chrome_lines_per_host_max`, so it grows with the source registry and stops, never with the archive |
+| The pruner | **Ships in the same commit as the writer**, in `stages/prune_state.py` beside `prune_seen`. A store bound with no pruner is prose |
+| Read-side migration | **None.** The ledger is new, so no earlier run wrote a shape to migrate. `line_rule` is a forward provision, not a migration |
+| `reject_boilerplate` | **Stays false in this commit.** The signal has never fired once, so flipping the refusal in the commit that first makes it fire means nobody can tell a correct refusal from 12,000 wrong ones. That is row #16 |
+
+**What the bodies never do.** Only hashes persist. A chrome line is fetched text,
+and a sha256 of it cannot carry an instruction (Guardrail #11). Nothing on the
+row is free text, by construction.
+
+**Removals in this row.** `FailureCode.BOILERPLATE` leaves
+`SOURCE_NEUTRAL_FAILURE_CODES` in `backend/idhazh/telemetry.py`, and the count
+stated in words in `docs/architecture/sources/item-health.md` moves with it.
+That set means "a failure that says nothing about the source", and the moment
+this fires, `boilerplate` says the host serves a template - the most
+source-specific thing a failure can say. Leaving it in credits a host that
+served nothing.
+
+**Corrections, not deletions.** Three pages describe the signal as inert and
+each becomes wrong when this lands:
+`docs/architecture/sources/trust-boundary.md`, `docs/concepts/config.md`,
+`docs/concepts/pipeline-loop.md`. **No test is deleted** - the unit tests in
+`backend/tests/test_extract.py` cover a function that is about to run for real;
+any docstring in them calling the path theoretical is corrected.
+
+**Tests.** Unit: the line normaliser, the eviction order, the fold. Contract:
+the new schema, a fixture under `tests/fixtures/contracts/chrome-line-row/`, the
+export entry, and the three new keys in **both**
+`every-knob-differs-from-the-committed-config.json` and `tuned.json` - only the
+full suite catches those. Integration: `to_article_with_source` driven with a
+`seen_elsewhere` set built by the real fold from two captured pages under
+`tests/fixtures/pages/`, no mocks. End-to-end: one canary arm proving a refused
+item still writes an honest item-health row. No test walks `state/` or the
+committed days.
+
+**The number this row does NOT claim.** The 5.2 hours of summarize time those
+four hosts consumed are **not** this row's to save - row #6 retires them, and
+three of the four already carry a length signal. What this row uniquely catches
+is the Energy Monitor shape: a host whose template is long enough that no length
+rule will ever see it.
+
+## Row #14 - the composite score, proving it changed nothing
+
+**Ruled by Fowler, 2026-09-15. Correction level 4.** This is the structural half
+of the owner's composite ruling; row #15 is the behavioural half.
+
+**Intent.** Replace one cosine and one floor with a weighted score over several
+signals, so no signal is traded away for another - and prove the machinery
+changed nothing before any weight moves.
+
+**Contract.**
+
+| What | Ruling |
+| --- | --- |
+| Shape | **An extension of `AssembleConfig`, as a nested `SameStoryConfig`** in `backend/idhazh/contracts/knobs/placement.py`. Nothing new is persisted and no boundary is crossed, so a new contract would be ceremony with no beneficiary. Nested because the weights carry an invariant across them |
+| Schema stem | None new. It lands in `schemas/app-config.schema.json` |
+| **The invariant** | **The positive weights sum to exactly 1.0, enforced by a `model_validator`, and every term is itself on 0 to 1.** Without it, "floor 0.88" answers nothing - 0.88 of what? With it the composite is on the cosine's own scale, so every threshold already recorded in the docs stays readable |
+| Terms | **Two: the cosine over `title. summary`, and key-point overlap.** Cosine separates 100 percent; key-point overlap separates 97.0 percent and is the only other term whose different-pair p99 (0.0962) sits below its same-pair median (0.2419) |
+| The numbers clash | **A hard veto, not a negative weight.** It fires on 0.0 percent of same-story pairs - zero of 67 - and a term with no false positives is a rule, not evidence. In a sum, a large enough cosine outvotes it, which is the one case it exists to refuse. A negative weight would also break the sum-to-one invariant |
+| The headline rule | **Stays a threshold-free joiner above the composite**, not a term inside it. Inside a sum, a matching-headline pair with a weak cosine could fall below the floor - a regression against the rule that took one-headline groups still apart from 27 of 42 down to 1 |
+| Order | numbers clash refuses; identical reduced headlines join; otherwise the composite scores; then complete-link, unchanged |
+| `duplicate_similarity_min` | **Retired and refused, not aliased.** `refuse_a_removed_knob("duplicate_similarity_min" -> "same_story.floor_min")`. 0.94 of a cosine and 0.94 of a composite are different quantities, so a silent alias would carry a stale number forward as if it still meant the same thing |
+| Interpretability | The weights sum to 1.0; every term is on 0 to 1, validated; **the pass logs the terms that carried each group** at INFO through the existing `telemetry.event` path - about 84 groups a day, no contract needed; and the published field is a **count**, not the score, so the score never reaches a reader |
+| Payloads written under the old rule | **Untouched, and nothing re-derives them.** `_validator_identity()` does not hash `collapse_same_story`, so **no day-validation receipt is re-earned** |
+
+**The oracle is the whole point of this row.** It ships with cosine weight 1.0,
+key-point weight 0.0 and floor 0.94, and its acceptance is a replay over the
+committed days producing the **identical groups**. That proves the machinery
+moved nothing. Mixing the mechanism with the weights means a group that moves
+cannot be attributed to either.
+
+**Refused from the composite: shared rare title tokens.** Its different-pair p99
+is 1.0000, so about one in a hundred different pairs scores a perfect 1.0 - over
+9,055 pairs that is roughly 90 wrong pairs each handed a full weight. Its
+separation, 35.8 percent, is the weakest of the three and its top end is
+actively misleading. What reopens it: the same distribution measured
+**conditioned on the cosine already being near the floor**, rather than over
+9,055 random pairs of which 99.9 percent are nowhere near the decision.
+
+**Removals in this row.** `assemble.duplicate_similarity_min` from
+`config/idhazh.json` and from `contracts/knobs/placement.py`, with its long
+`Field(description=...)`; the module constant `DUPLICATE_SIMILARITY_MIN` in
+`backend/idhazh/assemble.py`; and the prose in
+`docs/architecture/publishing/layout.md` that calls 0.94 a cosine floor. The
+labelled table under `What chose 0.94` **stays** as the evidence it is, retitled
+to what it measured.
+
+## Row #15 - the weights and the 0.88 floor
+
+**Intent.** The owner's ruling, 2026-09-15: "drop to 0.88, the world is full of
+regurgitated stuff, then originality wins on merit."
+
+**Contract.**
+
+- `same_story.floor_min` moves to **0.88**, and the weights move off
+  `1.0 / 0.0` to values fitted on the labels row #12 produces. Fitting weights
+  against unlabelled marginal distributions is fitting to noise.
+- Nothing else changes. Row #14 has already proved the machinery.
+
+**The price, stated once so nobody has to rediscover it.** At floor 0.88 the
+cosine admits **7 of 9,055** random cross-outlet pairs, and the pair a person
+labelled TWO STORIES scores **0.9317**, so 0.88 merges it. Whether the composite
+pulls that pair back under the floor is **unknown** - the measured numbers are
+marginal distributions over all pairs, and 99.9 percent of those are nowhere
+near the decision. Row #12's labels are what answer it.
+
+**Why now is the cheapest moment.** `same_story_as` is recorded and not drawn, so
+today a false merge costs exactly one wrong corroboration count. The day row #5
+draws the collapse, a false merge starts costing a story nobody can see is
+missing. **Today a false merge is cheap and it will never be this cheap again.**
+
+## Row #16 - refuse boilerplate, on a week of evidence
+
+**Intent.** Turn the chrome signal from a recording into a refusal, once there
+are real rows to read.
+
+**Contract.** After row #13 has run for a week, read the `boilerplate` cells it
+wrote. If they name hosts that genuinely serve templates, flip
+`extract.reject_boilerplate` to true and land the refusal **before summarize**.
+If they name genuine articles, tune `boilerplate_ratio_max` instead and say what
+the reading was.
+
+**This is a reading, not a design question.** Correction level 3, and it needs a
+person because it changes what publishes.
+
+## Row #17 - does a short extraction publish at all
+
+**Surfaced by Fowler and explicitly NOT ruled by him**, because it decides what a
+reader gets, which is the Editor's and the owner's altitude (section 14).
+
+**The situation.** `extract.reject_too_short` does not exist. Roughly 200 of the
+206 cards in row #6's table were `too_short` and published anyway, because
+**Owner override O3** says a shape signal records and lets the item continue.
+The structural half is already clean: an abstract-form feed gets `brief=True,
+failure_code=None` while an article-form feed with 35 words gets `brief=True,
+failure_code=TOO_SHORT`, so the two facts are already distinguishable and no
+contract change is needed. It is one knob and one branch beside two that exist.
+
+**What it costs to take.** It overturns O3, which must be amended in the same
+commit (section 0). Row #6 has already removed the measured benefit by retiring
+the four hosts, so what remains is a rule for the next host that does it - and a
+cost of roughly **386 genuine short items** dropped.
+
+**This row is a decision request, not an implementation.** It does not start
+until the Editor and the owner rule.
+
 
 Recorded so nobody proposes them again. Each is a dated decision, not a law
 (section 0a) - what would reopen it is named.
@@ -431,9 +662,32 @@ Recorded so nobody proposes them again. Each is a dated decision, not a law
 
 | A canonical "what happened" line from the summariser | Cannot be backfilled, so no committed day can measure it | A measured failure that only a rewritten summary could reach |
 | Encode the article's lede and compare that | Proposed on 2026-09-15 and refused the same day. It serves no purpose the summary does not already serve, and the premise of this project is that the summariser did its job - so the comparison is over what the summariser wrote. The encoder's 256-token window meant it was never the whole article either | A measurement showing our summaries of one story diverge in a way the articles do not |
+| Shared rare title tokens as a term in the composite | Its different-pair p99 is 1.0000 - about one different pair in a hundred scores a perfect match, which over 9,055 pairs is roughly 90 wrong pairs each handed a full weight. Separation 35.8 percent, the weakest of the three | The same distribution measured conditioned on the cosine already being near the floor, rather than over random pairs 99.9 percent of which are nowhere near the decision |
+| Writing the chrome ledger from the work shards | A shard sees `index % shards` of the day, so it cannot count distinct pages a host served, and eight shards incrementing one key through a `merge=union` CSV is a race already paid for twice | Sharding changing so one host's items land in one shard - which `stages/common.py` deliberately refuses, because it would concentrate long articles on one worker |
+| Keying the chrome ledger on `source_id` | Chrome belongs to the server template, not the feed. Keying on the feed fragments the evidence and re-makes the mistake row #2 repaired | A measurement showing two feeds on one host serve different templates |
 | Rebalance which desks get space | Same ruling as the day size: content chooses its position | Nothing on the present design |
 | Let the cross-source count pick the day's leads | Not refused - **taken**, as row #11, with the count gated behind a recall floor so it cannot feed noise into the most valuable slots on the page | - |
 
+
+## Which page owns which question
+
+Ruled by Fowler, 2026-09-15. One page answers one question; a page that would
+end up holding two gets a split rather than a section.
+
+| Question a person arrives holding | Page | New? |
+| --- | --- | --- |
+| Why did two items become one story, and on what score? | `docs/architecture/publishing/layout.md`, the same-story section and its flowchart | Existing. `docs/agents/bootstrap.md` already routes here. The flowchart gains the veto box and the composite box |
+| What are the weights, and what did the labels say? | Same page, the `What chose 0.94` section, retitled to what it now decides | Existing |
+| **Why does a host serve chrome instead of an article, and what do we do about it?** | **`docs/architecture/extraction/chrome.md`** | **New.** That directory holds only `elements.md` today. The question stands alone - somebody arrives holding "why did this host publish 200 empty cards" without needing another page's title in the sentence |
+| Where does `state/chrome.csv` live, what is its grain, does its read carry a window? | `docs/architecture/contracts/schemas.md` | Existing - one row |
+| Does this read cost more as the repository grows? | `docs/concepts/growing-reads.md`, under `A cover that is not a clock` | Existing - one paragraph beside `state/traces/` |
+| What do the three new knobs do? | `docs/concepts/config.md` | Existing |
+| What does a `boilerplate` cell in item-health mean now? | `docs/architecture/sources/item-health.md` | Existing |
+| What ages out of `state/`, and on what age? | `docs/architecture/publishing/retention.md` | Existing - the chrome prune joins the inventory |
+
+**The chrome rule does not go in `item-health.md` or `trust-boundary.md`.** Both
+already answer their own question, and a chrome subsystem inside either makes a
+page hold two answers.
 
 ## Limits nobody trades
 
