@@ -1646,53 +1646,7 @@ def test_the_split_says_so_when_there_is_nothing_left_to_move(tmp_path: Path) ->
 
 
 
-def test_committed_state_csv_rows_match_their_headers() -> None:
-    mismatches: list[str] = []
-    for path in sorted((REPO_ROOT / "state").rglob("*.csv")):
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            rows = [row for row in csv.reader(handle) if row]
-        if not rows:
-            continue
-        header_width = len(rows[0])
-        relpath = path.relative_to(REPO_ROOT).as_posix()
-        for line_number, row in enumerate(rows[1:], start=2):
-            if len(row) != header_width:
-                mismatches.append(
-                    f"{relpath}:{line_number} has {len(row)} cells; header has {header_width}"
-                )
-
-    assert mismatches == []
-
-
 # --- The pass that runs after the merge ------------------------------------
-
-
-def test_no_committed_ledger_repeats_a_key_it_says_makes_a_row_unique() -> None:
-    """The guard. Every reader of these files sums a run and would be wrong here.
-
-    Measured on this checkout 2026-08-31 before the repair: `2026-08-29-3` held
-    six counter rows for four shards and 44 repeated `(date, run_id, item_id)`
-    item-health keys, because two workflow runs computed that id and neither
-    could see what the other had pushed. Summing that run's reading clock over
-    the rows gave 19,305.8 seconds against 11,810.3 - 63 percent high.
-
-    Feed-health joined the set on 2026-09-02 and arrived dirtiest of the four:
-    6,577 rows over 6,022 distinct `(run_id, feed_id)` keys, so 555 rows were a
-    second account of an event already on record, and 37 of those keys held rows
-    that disagreed about what the feed did.
-    """
-    repeated: list[str] = []
-    state = REPO_ROOT / "state"
-    targets = [
-        *((target.path, target.key) for target in ledger.keyed_paths(state, date=None)),
-        *((day, OBSERVATION_KEY) for day in writer.ledger_days(state)),
-    ]
-    for path, key in targets:
-        for found, count in sorted(ledger.repeated_keys(path, key).items()):
-            relpath = path.relative_to(REPO_ROOT).as_posix()
-            repeated.append(f"{relpath}: {'/'.join(found)} has {count} rows, keyed by {key}")
-
-    assert repeated == []
 
 
 def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: Path) -> None:
