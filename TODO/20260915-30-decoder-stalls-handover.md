@@ -18,7 +18,7 @@ it is given, so you can re-take it rather than trust it.
 | L4 | The heartbeat names the call in flight instead of saying `summarize` for both | `backend/idhazh/itemrecord.py` |
 | L5 | The prefill rates divide by tokens the server really evaluated | `backend/idhazh/stages/work.py` |
 | L6 | The item clock stops across the queue; `queue_wait_ms` subtracts `extract_ms` | `backend/idhazh/itemrecord.py` |
-| L7 | `backend/utilities/read_captures.py` prints an item's two calls in order | new utility |
+| L7 | `backend/utilities/pipeline_artifact_analyzer.py` reads an item's calls as a report | new utility, `docs/how-to/analyze-a-pipeline-artifact.md` |
 | L8 | The seed-gate test builds the day it needs instead of borrowing the newest | merged, #758, by another agent |
 
 ### The bug L1 fixed, because everything else is downstream of it
@@ -304,8 +304,8 @@ rendered prompt carries the article body and republishing one is a non-goal
 
 ```powershell
 gh run download <run-id> --repo miztiik/yen-idhazh --name captures-<shard> --dir cap
-python backend/utilities/read_captures.py cap
-python backend/utilities/read_captures.py cap --item <part-of-an-id> --full --out out.md
+python backend/utilities/pipeline_artifact_analyzer.py cap
+python backend/utilities/pipeline_artifact_analyzer.py cap --item <part-of-an-id> --out out.md
 ```
 
 Without `--item` it lists every item with four sizes. With `--item` it prints
