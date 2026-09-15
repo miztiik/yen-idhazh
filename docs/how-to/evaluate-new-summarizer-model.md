@@ -51,8 +51,8 @@ flowchart TB
  end
 
  subgraph BENCH["1.3 - Measurements, measure.yml target bench"]
-  FILE --> RAW["arm 1: raw throughput<br/>llama-bench, no server"]
-  RAW --> SERVE["arm 2: a real server<br/>five fixed articles"]
+  FILE --> RAW["case one: raw throughput<br/>llama-bench, no server"]
+  RAW --> SERVE["case two: a real server<br/>five fixed articles"]
   SERVE --> DOSSIER["a dossier body,<br/>ready to paste"]
  end
 
@@ -126,7 +126,7 @@ a fact about them.
 | `draft` | a second, smaller set of weights that guesses ahead. Null unless the publisher ships one |
 
 Declaring a `draft` block is all a candidate has to do to be measured with one.
-The bench and the qualification arm read it from the same entry, download it,
+The bench and the qualification case read it from the same entry, download it,
 check its digest and name that digest in the weights cache key. Nothing else in
 this runbook changes, and an entry that declares none is unaffected -
 [`model-boundary.md`](../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead)
@@ -154,7 +154,7 @@ is the first key in the header, so a range request for the first megabyte
 answers it - a few kilobytes of transfer against five gigabytes of weights. Read
 it rather than guessing from the family name: Gemma 4's main weights read
 `gemma4` and its MTP head reads `gemma4-assistant`, which are two different
-answers from one repository. Row #5's fourth arm compares this field against the
+answers from one repository. Row #5's fourth case compares this field against the
 file the server opened, so a wrong value fails the run rather than degrading it.
 
 **The four turn markers come from the model's own chat template**, which the
@@ -308,6 +308,36 @@ python backend/utilities/measure_llm.py compare \
 
 A quantity reproduces when the two values are closer than the two spreads added.
 A reading taken once carries no spread, so it is printed rather than judged.
+
+**Two dispatches are two machines, and that is usually the larger effect.**
+GitHub puts each job where it likes. On 2026-09-15 two dispatches of the same
+weights differed by 8.8 percent on the same `llama-bench` decode test, on
+machines both reporting EPYC 7763 - so a 5 percent difference read across two
+runs says nothing at all. **When the question is what one setting is worth,
+dispatch a paired case instead**: `runtime_candidate` alternates a baseline
+against a named variant inside one job, on one machine, which cancels the
+machine.
+
+```bash
+gh workflow run measure.yml --ref <branch> \
+ -f target=bench \
+ -f candidate_models_file='models/<name>.json' \
+ -f runtime_candidate=no_draft \
+ -f runtime_repeats=2
+```
+
+`runtime_repeats` is 2 here and not 3 on purpose. A named case runs two cases, so
+three repeats is roughly twice the 330-minute job timeout (Guardrail #2 - the
+limit is GitHub's, so the design is what gives).
+
+**A repeat whose article a publisher edited is dropped, not fatal.** Every
+repeat refetches, and a news page moving inside a multi-hour job is ordinary: on
+2026-09-15 it happened to two of five articles on both of two dispatches. The
+bench times the largest set of repeats that read the same text, names the rest
+in `problems` as `input_drift_dropped`, and records `repeats_timed` beside
+`repeats` so the dossier says which denominator it had. It refuses the run only
+when an case has fewer than two agreeing repeats left, because a median over one
+reading is not a reading.
 
 A laptop result is a laptop result. It can reject a candidate quickly and cannot
 select production.

@@ -77,6 +77,10 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
+    # Read by name, and the floor is checked where it is used rather than by a
+    # pattern here: "at least 2" is a statement about a spread, and a regex that
+    # said it would be a second copy of the rule.
+    ("measure.yml", "runtime_repeats"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
@@ -528,6 +532,7 @@ RUNTIME_CANDIDATES: Final = frozenset(
         "threads",
         "threads_batch",
         "np2_inflight",
+        "no_draft",
     }
 )
 

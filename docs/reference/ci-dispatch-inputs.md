@@ -49,14 +49,15 @@ evidence in the file.
 | Shape | What it means | Count |
 | --- | --- | --- |
 | Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 5 |
-| Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 9 |
+| Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 10 |
 | Matched | The workflow matches the value against an anchored pattern before anything acts on it. | 10 |
 
 The named inputs:
 
 - **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
  `measure.target`, `measure.runtime_candidate`.
-- **Read by name** - `measure.models`, `measure.runtime_threads`,
+- **Read by name** - `measure.models`, `measure.runtime_repeats`,
+ `measure.runtime_threads`,
  `measure.runtime_threads_batch`, and `candidate_models_file` on both
  `measure.yml` and `validate.yml`. That one becomes a file path, so the step
  resolves it and proves it sits inside `config/` rather than matching its

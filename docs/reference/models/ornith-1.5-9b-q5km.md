@@ -13,7 +13,7 @@ each figure is the one the instrument recorded, moved rather than restated.
 
 **This page says how fast, and it does not say how good.** The bench reads
 throughput, memory and wall-clock. It does not grade a summary and it does not
-decide whether this model publishes - that is the qualification arm, which runs
+decide whether this model publishes - that is the qualification case, which runs
 separately and has not run against these weights. Read every number here as a
 cost, never as a recommendation.
 
@@ -89,7 +89,7 @@ Five articles, 3 repeats, on `ubuntu-latest`, **AMD EPYC 9V74 80-Core
 Processor**. There is no 95th percentile here: five articles cannot carry one.
 The published ledger over a real day is what gives that number.
 
-**This section's processor is not the one above it.** The two arms are separate
+**This section's processor is not the one above it.** The two cases are separate
 jobs and GitHub places each where it likes, so the throughput readings and these
 wall-clock readings were taken on different silicon. That is recorded rather than
 smoothed over, because a reader who assumes one machine would divide one by the
@@ -104,7 +104,7 @@ other.
 ## What this page still owes
 
 - **The qualification verdict.** Nothing here says the model writes a faithful
-  summary. Until the qualification arm has run, this model may not be adopted.
+  summary. Until the qualification case has run, this model may not be adopted.
 - **The licence row.** Every other dossier carries an SPDX identifier. This one
   does not, because nobody has read the repository's licence file yet.
 - **The tokenizer cost.** Tokens a word decides how much article fits the

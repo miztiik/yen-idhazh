@@ -1014,8 +1014,13 @@ def run_emit(args: argparse.Namespace) -> int:
     summary = json.loads(args.server.read_text(encoding="utf-8"))
     server = BenchReadings(
         identity={},
+        # What the timing was taken over, which is not always what was asked
+        # for. The bench refetches every repeat, and a repeat whose article a
+        # publisher edited mid-job is dropped from the median rather than
+        # failing the run - so the page says the number it was really given
+        # (CLAUDE.md Guardrail #10).
         context={
-            "server_repeats": str(summary.get("repeats") or ""),
+            "server_repeats": str(summary.get("repeats_timed") or summary.get("repeats") or ""),
             "corpus": args.corpus,
         },
         readings=server_readings(summary),
