@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import subprocess
+import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -18,9 +22,11 @@ from ._harness import (
     WORKFLOWS_DIR,
     _bash,
     _declared_dispatch_inputs,
+    _inline_programs,
     _isolated_env,
     _job,
     _load_workflows,
+    _normalize_condition,
     _run_the_inline_program,
     _script,
     _step,
@@ -42,7 +48,45 @@ PICK_STEP: str = "Pick the two articles"
 
 PLAN_STEP: str = "Plan the two articles"
 
+#: The step that restarts the server with two slots, and the step that reads its
+#: outcome. Arm three is the only arm guarded on a step rather than only on the
+#: job not being cancelled.
+RESTART_STEP: str = "Restart the model with two slots"
+
+REPORT_STEP: str = "Say what the three arms measured"
+
 ARM_SCRIPT: Path = SCRIPTS_DIR / "run-pipeline-test-arm.sh"
+
+
+def _recorded(root: Path, arm: str, item_ids: Sequence[str]) -> None:
+    """Write what one arm's work stage would have left under `backend/var/arms/`."""
+    items = root / "backend" / "var" / "arms" / arm / "run" / "items"
+    items.mkdir(parents=True, exist_ok=True)
+    for item_id in item_ids:
+        (items / f"{item_id}.article.json").write_text("{}", encoding="utf-8")
+        (items / f"{item_id}.summary.json").write_text(
+            json.dumps({"status": "ok", "summarize_ms": 1000}), encoding="utf-8"
+        )
+
+
+def _report(root: Path, expected: Sequence[str]) -> subprocess.CompletedProcess[str]:
+    """Run the report step's own program over a tree of arm results.
+
+    The shipped bytes, not a copy of them (Guardrail #7). It prints a markdown
+    table rather than `key=value` lines, so it is run here rather than through
+    `_run_the_inline_program`, which reads a step's output.
+    """
+    body = _script(_step(_load_workflows()[WORKFLOW], JOB, "name", REPORT_STEP), REPORT_STEP)
+    programs = _inline_programs(body)
+    assert len(programs) == 1, "the report carries one inline program"
+    return subprocess.run(
+        [sys.executable, "-c", programs[0]],
+        cwd=root,
+        env={**os.environ, "EXPECTED_ITEM_IDS": " ".join(expected)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def _settings() -> PipelineTestsConfig:
@@ -178,7 +222,7 @@ def test_the_report_holds_the_arms_to_the_two_items_the_draw_chose() -> None:
     asked for, and raises.
     """
     workflow = _load_workflows()[WORKFLOW]
-    report = _step(workflow, JOB, "name", "Say what the three arms measured")
+    report = _step(workflow, JOB, "name", REPORT_STEP)
     body = _script(report, f"{WORKFLOW}/{JOB}/report")
     assert "steps.plan.outputs.item_ids" in str(report.get("env"))
     assert "landed != sorted(expected)" in body, "the arms are compared against the plan"
@@ -186,6 +230,88 @@ def test_the_report_holds_the_arms_to_the_two_items_the_draw_chose() -> None:
     assert report.get("if") == "always()", (
         "the arm that failed is the one whose census is worth printing"
     )
+
+
+def test_a_failed_arm_costs_the_run_that_arm_and_nothing_else() -> None:
+    """Three arms are three readings, and one broken arm may not take the other two.
+
+    The first dispatch failed exactly that way. The baseline step could not
+    start, the two arms behind it never ran, and the run reported one failure
+    where it had three to report - which read as a problem with the baseline
+    rather than as a problem with the call all three share. An arm is read
+    against the arms beside it, so an arm that did not run is evidence lost.
+
+    `parallel-2` is the one arm that reads a step as well, and the reason is
+    what a failed restart leaves behind: a healthy ONE-slot server. The arm
+    would run against it and file that reading under two slots.
+    """
+    workflow = _load_workflows()[WORKFLOW]
+    for arm in _settings().arms:
+        step = _step(workflow, JOB, "name", f"Arm {arm.id}")
+        condition = _normalize_condition(step.get("if"), f"arm {arm.id} condition")
+        assert "!cancelled()" in condition, (
+            f"arm {arm.id} stops when a sibling arm fails, and its reading is lost with it"
+        )
+
+    restart = _step(workflow, JOB, "name", RESTART_STEP)
+    assert restart.get("id") == "restart", "the arm that needs the restart has to name it"
+    assert "!cancelled()" in _normalize_condition(restart.get("if"), "restart condition"), (
+        "the restart runs after a failed arm, or the arm behind it is lost too"
+    )
+    parallel = _normalize_condition(
+        _step(workflow, JOB, "name", "Arm parallel-2").get("if"), "parallel-2 condition"
+    )
+    assert "steps.restart.conclusion == 'success'" in parallel, (
+        "the two-slot arm runs only where the two-slot server started"
+    )
+
+
+def test_the_report_names_an_arm_that_recorded_nothing_and_prints_the_rest(
+    tmp_path: Path,
+) -> None:
+    """An arm that produced nothing is a census line, not a broken comparison.
+
+    It has already failed or been skipped, its own step is red and the job is
+    red with it. What the report owes is the name: a table that quietly dropped
+    the row would leave a reader counting arms to notice one was missing, and
+    raising on it would hide the failure that really matters underneath a
+    sentence about articles.
+    """
+    shutil.copytree(CONFIG_DIR, tmp_path / "config")
+    expected = ["ai-0000000001", "world-0000000002"]
+    arms = [arm.id for arm in _settings().arms]
+    for arm in arms[:-1]:
+        _recorded(tmp_path, arm, expected)
+
+    completed = _report(tmp_path, expected)
+    assert completed.returncode == 0, completed.stderr.strip()
+    assert f"these arms produced nothing: {arms[-1]}" in completed.stdout
+    assert f"| {arms[-1]} | 0 | 0 | 0 | nothing recorded |" in completed.stdout
+    for arm in arms[:-1]:
+        assert f"| {arm} | 2 | 2 | 2000 | - |" in completed.stdout, (
+            "an arm that ran is still measured beside the one that did not"
+        )
+
+
+def test_the_report_refuses_a_comparison_across_different_articles(tmp_path: Path) -> None:
+    """The half that still raises, and the reason it has to.
+
+    Two arms that read different articles produce two numbers nobody may
+    subtract, and the table is three rows of plausible milliseconds either way.
+    This is the one thing the report fails the job over, and an arm that
+    recorded nothing must not be able to trip it.
+    """
+    shutil.copytree(CONFIG_DIR, tmp_path / "config")
+    expected = ["ai-0000000001", "world-0000000002"]
+    arms = [arm.id for arm in _settings().arms]
+    for arm in arms[:-1]:
+        _recorded(tmp_path, arm, expected)
+    _recorded(tmp_path, arms[-1], ["ai-0000000001", "world-0000000003"])
+
+    completed = _report(tmp_path, expected)
+    assert completed.returncode != 0, "a disagreement about the articles fails the job"
+    assert "did not all read the same two articles" in completed.stderr
+    assert arms[-1] in completed.stderr, "the arm that disagreed is named"
 
 
 def test_it_publishes_nothing_and_commits_nothing() -> None:
