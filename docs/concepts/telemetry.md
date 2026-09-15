@@ -6,6 +6,8 @@ The structured-event vocabulary: the envelope every event carries, the event nam
 
 This page is the concept-tier statement of the logging doctrine in `CLAUDE.md` section 1b.
 
+The code is [`backend/idhazh/telemetry/`](../../backend/idhazh/telemetry/), and its modules are this page's sections: `events.py` for the log line, `spans.py` for the span tree, `sinks.py` for where a span goes, `rollup.py` for the committed fold, `traces.py` for where a committed trace lands, and `census.py` for the item-level census.
+
 ## One event, one payload, one log line
 
 The pipeline is event-driven: a stage consumes one validated payload and emits another ([pipeline-loop.md](pipeline-loop.md)). The logging rule falls straight out of that - **a stage logs the same structured envelope it emits.** There is no second, prettier, human-oriented log format that can disagree with the persisted record about what happened.
