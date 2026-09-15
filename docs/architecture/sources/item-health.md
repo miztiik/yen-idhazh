@@ -25,18 +25,11 @@ writes the whole day's census afterwards.
 The row carries 113 columns. `ItemHealthRow.csv_columns` in
 `backend/idhazh/contracts/item_health.py` is the list, and this page does not
 restate it - a second copy of 113 names is a second thing to keep in step, and
-it drifts. What each group answers is below; the columns a reader asks about
-most are described one by one further down.
-
-| Group | Answers |
-| --- | --- |
-| identity and placement | which item, which address, which feed, which desk, which run, which shard, and where in the shard |
-| why it was chosen | the total selection score and the eight terms it is made of |
-| time | a millisecond count for each of fetch, extract, label, summarize, the picture, and faithfulness, plus queue wait, model wait, retries, the item total, and `stage_gap_ms` for time the named stages do not account for |
-| tokens and cache | sent, reused and written for each model call, the cache share, and four prefill and decode rates |
-| the machine | the CPU model and its busy share, load, and the resident and peak memory of the model server and of this process |
-| what produced it | the model, its quantisation, the window, the slot count, the thread count, the budgets, and whether the picture was asked for |
-| what went wrong | the outcome, the stage, the failure code, the full message, and the field and rule that refused it |
+it drifts. [item-health-columns.md](item-health-columns.md) is the generated
+answer to "where does this cell come from": every column, the eight questions
+they group into, which module puts a value under each name, whether that value
+reaches this row, and whether any committed row carries it. The columns a
+reader asks about most are described one by one further down.
 
 **`stage_gap_ms` is the one to watch.** It is `item_total_ms` minus every named
 stage. Unattributed time is the only column that can catch a regression in a
@@ -45,20 +38,13 @@ six days in September 2026 without any surface reporting it.
 
 ### What actually fills today
 
-**The contract declares 113 columns and the writer fills 31 of them.**
-`telemetry._row` is the only production construction site, and it names 31
-fields. Measured over the committed archive on 2026-09-15: 12,197 rows, and
-**70 columns are empty in every single one**.
-
-That is not a defect in the contract. The columns landed with the instrument
-that logs them; the producer wiring that carries the same values into the ledger
-row did not land with it. `failed_field`, `failed_rule`, `model_quantisation`,
-`runner_name`, `cpu_model` and both finish reasons are filled in zero rows.
-
-Read a column's absence as "nothing writes this yet" rather than "this item had
-no value", until that wiring lands. The count above is a reading and will be
-wrong the day it does; re-take it rather than trusting this paragraph
-(Guardrail #10).
+**Most of these columns are empty on every committed row**, and the count is on
+[item-health-columns.md](item-health-columns.md) beside the column it is about,
+so it moves when the wiring does rather than needing this paragraph edited.
+Read an absence as "nothing carries this into the row" rather than "this item
+had no value": the columns landed with the instrument that measures them, and
+the producer wiring that carries the same value into the ledger row did not
+land with them.
 
 The file is append-only inside its own day. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
@@ -115,8 +101,11 @@ place is how it starts missing rows.
 `from_csv_row` reads `""` back as `None`. There is no sentinel number and no
 `NULL` literal, because both of those get averaged by accident one day.
 
-The columns a reader asks about most, in file order. This is a subset, not the
-whole list - 33 of the 113. `ItemHealthRow.csv_columns` is the list:
+The columns a reader asks about most, in file order. This is the subset the
+prose below turns on, not the whole list, and nothing here counts them - a
+count of a subset is one more number to keep in step.
+[item-health-columns.md](item-health-columns.md) is every column, grouped by
+the question it answers:
 
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
@@ -156,21 +145,13 @@ whole list - 33 of the 113. `ItemHealthRow.csv_columns` is the list:
 | `summary_*` | int | a second call ran, from 2026-09-12 | the second call's own five |
 | `truncation_cap_tokens` | int | the body was cut, from 2026-09-14 | which cap did the cutting |
 
-Seventy more columns landed on 2026-09-15, in five groups. Every one is
-nullable, every one is empty on a row an earlier run wrote, and each one's own
-description is on the field in
+Seventy more columns landed on 2026-09-15. Every one is nullable, every one is
+empty on a row an earlier run wrote, and each one's own description is on the
+field in
 [`backend/idhazh/contracts/item_health.py`](../../../backend/idhazh/contracts/item_health.py)
 rather than repeated here - the table above is long enough that a second copy of
-it would be the thing that goes stale.
-
-| Group | Columns | What the group answers |
-| --- | --- | --- |
-| Why this item ran | `selection_score`, `authority_score`, `tier_score`, `feed_weight`, `feed_reliability`, `lens_bonus`, `recency_bonus`, `carriage_step`, `watchlist_bonus`, `carried_by`, `watchlist_hit`, `on_front_page`, `tier`, `source_form`, `published_at`, `time_source` | which term carried it onto the page. The ranker records each term on the plan ([discovery.md](discovery.md#ranking-is-arithmetic-not-judgement)), but the plan artifact expires in a day, so without this copy the only surviving answer to "why did this publish" is "the score said so" |
-| Where the time went | `item_started_at`, `item_ended_at`, `item_index`, `shard_item_count`, `queue_wait_ms`, `fetch_connect_ms`, `fetch_ttfb_ms`, `robots_ms`, `retry_count`, `retry_total_ms`, `label_ms`, `summary_ms`, `visual_plan_ms`, `visual_plan_ms_is_estimate`, `faithfulness_ms`, `model_wait_ms`, `item_total_ms`, `stage_gap_ms` | which part of a stage got slower. `summarize_ms` said the stage took longer and never which half |
-| What the cache and the decoder did | `visual_plan_tokens_written`, `label_cache_pct`, `summary_cache_pct`, `slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous`, `label_prefill_tokens_per_s`, `label_decode_tokens_per_s`, `summary_prefill_tokens_per_s`, `summary_decode_tokens_per_s`, `label_finish_reason`, `summary_finish_reason`, `recovered` | whether the prefix cache answered, and whether a decode was cut |
-| What it ran on | `cpu_model`, `runner_name`, `cpu_busy_pct`, `cpu_busy_max`, `cpu_busy_min`, `load_1m`, `llama_rss_bytes`, `llama_rss_peak_bytes`, `python_rss_bytes`, `cgroup_peak_bytes` | whether a slower row was a slower runner. A throughput with no machine beside it is not a measurement (Guardrail #10) |
-| What it ran with | `model_id`, `model_quantisation`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `max_output_tokens`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `temperature` | whether changing a knob helped. Config is committed, but a run reads its own day's config and git history is not a join key |
-| What broke | `failed_field`, `failed_rule` | which field a schema refusal named, and which rule refused it |
+it would be the thing that goes stale. Which question each of them answers, and
+what fills it, is [item-health-columns.md](item-health-columns.md).
 
 **`stage_gap_ms` is the load-bearing one.** It is `item_total_ms` minus every
 named stage, and it is the only column that can catch a regression in a stage
@@ -326,11 +307,14 @@ stage that did the work.
 | `summarize` | `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
 
-`detail` is `str | None`, max 200 characters, and is populated only when
-`code = unknown`. It is written by the classifier, never copied from an article
-or summary payload. The write path sanitizes it, strips any spreadsheet formula
-prefix, collapses whitespace, and truncates it. A non-empty `detail` means "mint
-a better enum member".
+`detail` is `str | None`, at most 2,000 characters of printable ASCII on one
+line, and belongs on any failed row. A row coded `unknown` must carry one and
+an `ok` row may not. It is written by the classifier, never copied from an
+article or summary payload: the write path sanitizes it, strips any spreadsheet
+formula prefix, collapses whitespace, and truncates it. Two hundred characters
+was the cap until 2026-09-15, which cut an exception message off before the
+part that said what broke. A non-empty `detail` beside `unknown` means "mint a
+better enum member".
 
 `http_status` belongs only on `fetch` rows.
 
@@ -705,6 +689,9 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 
 ## See also
 
+- [item-health-columns.md](item-health-columns.md) - every column, the eight
+  questions they group into, which module fills each one, and whether anything
+  carries it into this row.
 - [health.md](health.md) - the feed-grain ledger.
 - [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
 - [../publishing/visuals.md](../publishing/visuals.md) - what the picture costs, which this ledger deliberately does not carry.
