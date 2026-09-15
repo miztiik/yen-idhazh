@@ -17,31 +17,41 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import NamedTuple
+import socket
+import threading
+import time
+from dataclasses import replace
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, NamedTuple
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
-from idhazh.contracts.article import ArticleStatus
+from idhazh import fetch as fetch_module
+from idhazh.contracts.article import ArticleStatus, TitleSource
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
-from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
+from idhazh.discover import TITLE_MAX_CHARS, clean_title
 from idhazh.extract import (
     EXTRACTOR_VERSION,
+    PAGE_TITLE_MAX_CHARS,
     boilerplate_ratio,
     declares_paywall,
     extract_text,
+    page_headline,
     to_article,
     truncate_to_tokens,
 )
 from idhazh.fetch import (
     ROBOTS_REFUSALS,
     FetchResult,
+    FetchTimings,
     RobotsRules,
     address_is_dialable,
     backoff_delays,
@@ -478,6 +488,178 @@ def test_a_zero_retry_budget_is_honoured() -> None:
     assert backoff_delays(ExtractConfig(max_retries=0)) == []
 
 
+# --- Where the milliseconds went -------------------------------------------
+
+
+class _LoopbackSite:
+    """A real HTTP server on 127.0.0.1, answering on a schedule the test sets.
+
+    A server rather than a recorded response, because the numbers under test
+    belong to a socket: a handshake that never happened cannot be timed, and a
+    playback would leave both cells reading zero however the code split them.
+    Nothing here reaches the network - the address is the loopback and the port
+    is whatever the kernel handed out (Guardrail #7).
+    """
+
+    def __init__(self, *, first_byte_delay: float = 0.0, failures: int = 0) -> None:
+        self.first_byte_delay = first_byte_delay
+        self.failures = failures
+        self.served = 0
+        site = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                site.served += 1
+                time.sleep(site.first_byte_delay)
+                if site.served <= site.failures:
+                    self.send_response(503)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                body = b"<html><body><p>the article body</p></body></html>"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+                return
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    def __enter__(self) -> _LoopbackSite:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._server.server_port}/article"
+
+
+def _let_the_loopback_be_dialled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand the two address guards aside so a test server can be the host.
+
+    They exist to stop a hostile feed aiming the fetcher inward, and refusing
+    127.0.0.1 is exactly the job they do (Guardrail #11). Both are pure
+    predicates with their own tests above; what these tests are about is the
+    clock, and a clock needs a real socket.
+    """
+    monkeypatch.setattr(fetch_module, "address_is_dialable", lambda url: (True, None))
+    monkeypatch.setattr(fetch_module, "resolves_to_public", lambda host: True)
+
+
+def _delay_the_handshake(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
+    """Make a real connect take real time, without touching the code under test.
+
+    `http.client` opens its socket through `socket.create_connection`, so a
+    delay there lands inside `connect` - which is the half the connect cell is
+    supposed to hold.
+    """
+    real = socket.create_connection
+
+    def slow(*args: Any, **kwargs: Any) -> socket.socket:
+        time.sleep(seconds)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(socket, "create_connection", slow)
+
+
+def test_every_timing_names_a_census_column() -> None:
+    """The cells go straight into the item record, which refuses an unknown key."""
+    assert set(FetchTimings().cells()) <= set(ItemHealthRow.csv_columns())
+
+
+def test_the_handshake_and_the_wait_land_in_different_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The two halves a slow item is made of, told apart.
+
+    One delay is injected inside the connect and one inside the server before
+    it answers. A stopwatch round the whole call would put both in one number,
+    so these assertions fail if either delay lands in the other's cell.
+    """
+    with _LoopbackSite(first_byte_delay=0.25) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        _delay_the_handshake(monkeypatch, 0.25)
+        started = time.monotonic()
+        result = fetch(site.url, config=ExtractConfig(), permission=RobotsOutcome.ALLOWED)
+        fetch_ms = int((time.monotonic() - started) * 1000)
+
+    assert result.ok
+    connect_ms = result.timings.fetch_connect_ms
+    ttfb_ms = result.timings.fetch_ttfb_ms
+    assert connect_ms is not None and ttfb_ms is not None
+    assert connect_ms >= 200, "the injected handshake belongs to the connect cell"
+    assert ttfb_ms >= 200, "the injected wait belongs to the first-byte cell"
+    assert connect_ms + ttfb_ms <= fetch_ms
+    assert result.timings.retry_count == 0
+
+
+def test_a_host_that_fails_twice_says_what_the_retries_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The count and the cost come from the loop, not from a counter beside it."""
+    budget = ExtractConfig(max_retries=3, backoff_initial_seconds=0.01, backoff_multiplier=2.0)
+    with _LoopbackSite(first_byte_delay=0.1, failures=2) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        result = fetch(site.url, config=budget, permission=RobotsOutcome.ALLOWED)
+
+    assert result.ok
+    assert site.served == 3, "two refusals and the answer"
+    assert result.timings.retry_count == 2
+    retry_total_ms = result.timings.retry_total_ms
+    assert retry_total_ms is not None
+    assert retry_total_ms >= 200, "the two failed attempts are inside it"
+
+
+def test_a_read_that_reached_no_socket_records_nothing_rather_than_zero() -> None:
+    """A blocked address opened no connection, and zero would claim one had."""
+    result = fetch(
+        "http://127.0.0.1:8080/admin",
+        config=ExtractConfig(),
+        permission=RobotsOutcome.ALLOWED,
+    )
+
+    assert result.outcome is FetchOutcome.BLOCKED
+    assert all(value is None for value in result.timings.cells().values())
+
+
+def test_the_permission_check_is_priced_on_the_read_that_paid_for_it() -> None:
+    """Both a refusal and a success carry what establishing permission cost."""
+    settings = config.load(CONFIG_DIR)
+
+    refusing = Recorder(served(read_text(ROBOTS / "crawler-specific-group.txt")))
+    refusal = common.live_fetcher(settings, read_address=refusing)(f"{HOST}/private/a")
+    assert refusal.outcome is FetchOutcome.ROBOTS_DENIED
+    assert refusal.timings.robots_ms is not None
+
+    permitting = Recorder(served(read_text(ROBOTS / "no-rules.txt")))
+    allowed = common.live_fetcher(settings, read_address=permitting)(f"{HOST}/a")
+    assert allowed.outcome is FetchOutcome.OK
+    assert allowed.timings.robots_ms is not None
+
+
+def test_the_fetch_split_travels_with_the_item_it_was_measured_for() -> None:
+    """`_fetch_one` hands the socket's own numbers on rather than re-timing them."""
+    measured = FetchTimings(
+        fetch_connect_ms=7, fetch_ttfb_ms=11, robots_ms=3, retry_count=1, retry_total_ms=90
+    )
+
+    def reader(_url: str) -> FetchResult:
+        return replace(ok("article.html"), timings=measured)
+
+    fetched = common._fetch_one(ITEM, config.load(CONFIG_DIR), reader)
+
+    assert fetched.article.url_key == ITEM.url_key
+    assert fetched.timings == measured
+
+
 # --- Bodies -----------------------------------------------------------------
 
 
@@ -597,6 +779,23 @@ def test_every_failure_is_a_state_of_the_payload(
     )
     assert article.status is expected
     assert article.failure_detail == "recorded reason"
+
+
+def test_a_headline_of_one_character_is_enough_to_publish() -> None:
+    """The guard tests for a printable character, not for a good headline.
+
+    Editorial quality is not the extractor's question, and a rule that refused a
+    thin headline would refuse a real one - `Ida`, `Q3`, `Fire`.
+    """
+    article = to_article(
+        ITEM.model_copy(update={"title": "x"}),
+        ok("article.html"),
+        config=ExtractConfig(),
+        fetched_at=FETCHED_AT,
+    )
+
+    assert article.status is ArticleStatus.OK
+    assert article.title == "x"
 
 
 def test_a_short_extraction_publishes_as_brief() -> None:
@@ -754,3 +953,377 @@ def test_the_labelled_short_source_oracle_matches_disposition_and_reason() -> No
 
         assert disposition(article.status, article.brief, article.failure_code) == meta["label"]
         assert observed_reason == expected_reason
+
+
+# --- The headline: the feed's first, then the page's own --------------------
+
+#: Enough prose that every other refusal declines and the headline is the only
+#: question left on the payload.
+_PAGE_BODY = (
+    "<article>"
+    "<p>The regulator cleared the interconnector for 2027, and construction "
+    "starts next spring. The link is expected to carry two gigawatts between "
+    "the two grids once it is energised.</p>"
+    "<p>The developer said the cost estimate has not moved since the last "
+    "filing, and that the schedule assumes no further consultation rounds.</p>"
+    "</article>"
+)
+
+#: A page headline that carries the two things a cleaner has to take out: a tag
+#: and a line break. Built rather than captured, because no committed capture
+#: carries either and a test that waits for a publisher to write one is a test
+#: that never runs (`CLAUDE.md` section 13). Length is the other thing a page
+#: headline can be wrong about, and it is now a refusal rather than a cut, so it
+#: has its own constant below and its own tests.
+_HOSTILE_HEADLINE = (
+    "Interconnector cleared " + "for the 2027 link " * 5 + "<script>alert(1)</script>\nand more"
+)
+
+#: 250 characters of ordinary prose: inside a feed headline's bound and outside
+#: a page headline's. One string, read down both paths, is what makes the two
+#: bounds assertable against each other rather than each against itself.
+_LONG_HEADLINE = ("Interconnector cleared for the 2027 link and the operator said so. " * 4)[:250]
+
+
+def built_page(title: str | None) -> str:
+    """A page that names itself, or one that does not."""
+    if title is None:
+        return f"<html><head></head><body>{_PAGE_BODY}</body></html>"
+    escaped = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return f"<html><head><title>{escaped}</title></head><body>{_PAGE_BODY}</body></html>"
+
+
+class _TitleSite:
+    """A real HTTP server on 127.0.0.1 answering with one built page per path.
+
+    A server rather than a hand-made `FetchResult`, because the fallback reads
+    the same bytes the fetch returned and a constructed payload could agree with
+    the extractor while the socket disagreed with both. The address is the
+    loopback and the port is whatever the kernel handed out, so nothing here
+    reaches the network (Guardrail #7).
+    """
+
+    def __init__(self, pages: dict[str, str]) -> None:
+        self.pages = pages
+        site = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                html = site.pages.get(self.path)
+                if html is None:
+                    self.send_response(404)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                body = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+                return
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    def __enter__(self) -> _TitleSite:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5)
+
+    def url(self, path: str) -> str:
+        return f"http://127.0.0.1:{self._server.server_port}{path}"
+
+
+def planned_at(url: str, *, item_id: str = "energy-01", title: str | None = None) -> PlannedItem:
+    """The same planned item, aimed at whichever port the kernel handed out."""
+    return ITEM.model_copy(
+        update={
+            "item_id": item_id,
+            "title": title,
+            "source_url": url,
+            "canonical_url": url,
+            "url_key": derive_url_key(url),
+        }
+    )
+
+
+def read_over_the_loopback(url: str) -> FetchResult:
+    return fetch(url, config=ExtractConfig(), permission=RobotsOutcome.ALLOWED)
+
+
+def test_the_feed_headline_wins_when_the_feed_carried_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The page is asked second, so a page can never displace a headline we were given.
+
+    The order is the control. A page title is the more attacker-controlled of
+    the two strings, and this is what keeps it from overwriting the headline a
+    source we chose put on the item (Guardrail #11).
+    """
+    with _TitleSite({"/a": built_page("The page says something else entirely")}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title="Interconnector cleared for 2027")
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.OK
+    assert article.title == "Interconnector cleared for 2027"
+    assert article.title_source is TitleSource.FEED
+
+
+def test_a_feed_that_named_nothing_publishes_under_the_page_s_own_headline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The degradation this fixes: the headline was parsed and then thrown away.
+
+    The page had already been fetched and already been parsed for its body. The
+    item was refused beside the very string that answers it.
+    """
+    with _TitleSite({"/a": built_page("Interconnector cleared for 2027")}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=None)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.OK, "the page named it, so there is a headline"
+    assert article.title == "Interconnector cleared for 2027"
+    assert article.title_source is TitleSource.PAGE
+
+
+@pytest.mark.parametrize(
+    ("headline", "what"),
+    [(None, "carried no title element"), ("   ", "carried a title of three spaces")],
+    ids=["absent", "whitespace"],
+)
+def test_an_item_no_one_named_degrades_rather_than_raising(
+    headline: str | None, what: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A feed entry with no headline used to kill the whole shard, not one item.
+
+    `Article` refuses an ok payload whose title is None, and this function used
+    to build one - so the refusal came out of the extractor as a ValueError, and
+    the per-item loop above it does not catch one. Both feed shapes reach here
+    from a real feed: `discover.clean_title` returns None for an absent headline
+    and for one that is only whitespace, and nothing between it and here fills
+    the gap.
+
+    The page is silent too, which is what is left once the fallback has asked
+    it. The body extracts and every other refusal has already declined, so the
+    missing headline is the only reason on the payload.
+    """
+    with _TitleSite({"/a": built_page(None)}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=headline)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.EXTRACT_FAILED, what
+    assert article.failure_code is FailureCode.NO_TITLE
+    assert (
+        article.failure_detail == "neither the feed nor the page carries a headline we will publish"
+    )
+    assert article.text is None
+    assert article.title_source is None, "nothing was published, so nothing is sourced"
+
+
+def test_a_headless_item_degrades_while_its_sibling_in_the_same_batch_publishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Degrade, do not fail - through the real per-item path, not around it.
+
+    Both items reach extraction with no feed headline. One page names itself and
+    one does not, so the batch carries both outcomes of the fallback at once, and
+    the refusal has to stay inside its own item.
+    """
+    settings = config.load(CONFIG_DIR)
+    pages = {
+        "/silent": built_page(None),
+        "/named": built_page("Four countries approve offshore wind capacity"),
+    }
+    with _TitleSite(pages) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        items = [
+            planned_at(site.url("/silent"), item_id="energy-01"),
+            planned_at(site.url("/named"), item_id="energy-02"),
+        ]
+        fetched = [common._fetch_one(item, settings, read_over_the_loopback) for item in items]
+
+    silent, named = (one.article for one in fetched)
+    assert silent.status is ArticleStatus.EXTRACT_FAILED
+    assert silent.failure_code is FailureCode.NO_TITLE
+    assert named.status is ArticleStatus.OK, "a sibling's thin data is not this item's failure"
+    assert named.title == "Four countries approve offshore wind capacity"
+    assert named.title_source is TitleSource.PAGE
+
+
+def test_a_page_headline_is_cleaned_by_the_rule_a_feed_headline_is_cleaned_by(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One cleaner, not two (Guardrail #5), and the equality is the whole claim.
+
+    `clean_title` is what a feed headline passes through, so asserting the
+    published title equals `clean_title` of what the page actually said is the
+    same-shape claim stated exactly rather than approximated by three property
+    checks. The property checks are here as well, because they name what the
+    equality is buying: no tag machinery, one line, and inside the width the
+    payload will hold.
+
+    The bound is the caller's and this caller asks for its own, so the equality
+    is stated at the page's bound rather than the feed's. That is the whole of
+    the difference between the two paths: same function, same sanitizer, same
+    whitespace rule, a tighter number and a refusal instead of a cut.
+    """
+    with _TitleSite({"/a": built_page(_HOSTILE_HEADLINE)}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=None)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.OK
+    assert article.title == clean_title(
+        _HOSTILE_HEADLINE, max_chars=PAGE_TITLE_MAX_CHARS, over_bound="refuse"
+    )
+
+    title = article.title
+    assert title is not None
+    assert "<script>" not in title and "</script>" not in title
+    assert title == " ".join(title.split()), "one line, and no run of spaces"
+    assert len(title) <= PAGE_TITLE_MAX_CHARS
+    assert clean_title(title) == title, "already clean, so the cleaner is a fixed point"
+
+    assert article.item_id == item.item_id, "identity is the plan's, never the page's"
+    assert article.url_key == derive_url_key(item.canonical_url)
+
+
+def test_a_page_headline_past_its_bound_is_refused_rather_than_cut(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The page path's bound, and the thing it refuses to do at it.
+
+    Nothing bounds a page `<title>` but whoever wrote the page, so a title far
+    past a headline's length is a payload rather than a headline. Cutting it
+    would publish the first 200 characters of whatever it is and call that a
+    headline, and would put those 200 characters in front of a model. The item
+    is refused instead, with the reason on the payload (Guardrail #11).
+
+    The published headline is asserted absent as well as the status, because a
+    status check alone passes a build that refused the item and published the
+    string anyway.
+    """
+    assert len(_LONG_HEADLINE) == 250, "this headline has to be past the page bound to prove it"
+    assert len(_LONG_HEADLINE) > PAGE_TITLE_MAX_CHARS
+
+    with _TitleSite({"/a": built_page(_LONG_HEADLINE)}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=None)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.EXTRACT_FAILED
+    assert article.failure_code is FailureCode.NO_TITLE
+    assert (
+        article.failure_detail == "neither the feed nor the page carries a headline we will publish"
+    )
+    assert article.title is None, "refused, so nothing was published under it"
+    assert article.title_source is None
+
+
+def test_the_same_headline_from_a_feed_still_publishes_whole(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bite proof for the test above: the refusal is the page path's, not the string's.
+
+    Without this, a cleaner that had simply started refusing every long headline
+    would pass the refusal test and lose every long feed headline in the
+    archive. The same 250 characters arrive down the feed path here and publish
+    whole - inside `TITLE_MAX_CHARS`, so there is nothing to cut either.
+    """
+    with _TitleSite({"/a": built_page(None)}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=_LONG_HEADLINE)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.OK
+    assert article.title == _LONG_HEADLINE
+    assert article.title_source is TitleSource.FEED
+    assert len(_LONG_HEADLINE) <= TITLE_MAX_CHARS, "a feed headline is cut at 500, not at 250"
+
+
+def test_a_page_whose_headline_is_only_whitespace_is_refused_rather_than_published(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty headline is not a headline, whichever of the two said it."""
+    with _TitleSite({"/a": built_page("   ")}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=None)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.EXTRACT_FAILED
+    assert article.failure_code is FailureCode.NO_TITLE
+
+
+def test_the_page_is_only_read_for_a_headline_and_never_for_a_body() -> None:
+    """The body still comes from `extract_text`, so `EXTRACTOR_VERSION` holds.
+
+    `bare_extraction` can hand back a title beside a body in one pass, but that
+    body is not the one `extract` returns and the body is a model input stamped
+    by this version. The fallback takes the title and leaves the body alone.
+    """
+    html = built_page("Interconnector cleared for 2027")
+
+    assert page_headline(html) == "Interconnector cleared for 2027"
+    body = extract_text(html)
+    assert body is not None
+    assert "Interconnector cleared for 2027" not in body, "the headline is not article text"
+    assert "two gigawatts" in body
+
+
+def test_the_headline_read_does_not_go_looking_for_a_date() -> None:
+    """A stranger's title may not decide how much runner time we spend.
+
+    trafilatura's default metadata read asks htmldate for a publication date,
+    which hands the page's own text to `dateparser` and walks 205 locales
+    compiling about 950 regexes. Measured 2026-09-15 on a developer machine /
+    Python 3.14.2, trafilatura 2.2.0, one cold call a process: the 121-character
+    title below costs 8.9 to 36.7 s that way and 5.9 ms with the date search
+    off, and returns the same string either way. On a 4 vCPU runner that is a
+    stranger choosing our bill (Guardrail #2), which is why the read passes
+    `extensive=False`.
+
+    The bound sits between the two populations with room on both sides. It is a
+    tripwire for the date hunt coming back, not a throughput measurement, and it
+    can only see a cold one: once a locale has been compiled in this process the
+    same regression reads about 109 ms and would pass.
+    """
+    html = built_page("Interconnector cleared " + "for the 2027 link " * 5 + "and more")
+
+    started = time.monotonic()
+    title = page_headline(html)
+    took = time.monotonic() - started
+
+    assert title is not None
+    assert title.startswith("Interconnector cleared for the 2027 link")
+    assert took < 2.0, "the headline read is asking for a publication date again"

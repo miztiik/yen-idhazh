@@ -33,6 +33,7 @@
         "http_server_error",
         "network_error",
         "no_text",
+        "no_title",
         "too_short",
         "not_prose",
         "boilerplate",
@@ -72,12 +73,45 @@
       ],
       "title": "ItemStage",
       "type": "string"
+    },
+    "SourceForm": {
+      "enum": [
+        "article",
+        "abstract"
+      ],
+      "title": "SourceForm",
+      "type": "string"
+    },
+    "SourceTier": {
+      "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "SourceTier",
+      "type": "integer"
     }
   },
   "$id": "item-health-row.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "FailureCode gained no_title, an extract-stage member.",
+      "version": "2026-09-15T04:15",
+      "why": "An item with no headline could not be recorded at all. The extractor built an ok article carrying the planned item's title, the Article contract refuses an ok article with no title, and nothing caught the refusal - so one headline-less item raised out of the per-item loop and took its whole shard with it. That is reachable from a real feed: discover.clean_title returns None for an absent, empty or whitespace headline and rank.plan_vertical plans the item anyway.\n\nWidening only. Every row an earlier run wrote still reads, and no row carries this code because no run could ever finish an item that would have earned it. It counts against the source, beside no_text: a feed publishing entries with no headline is publishing stories we can never print."
+    },
+    {
+      "change": "The twelve per-call cells are named for what each call does - call_1_* became label_*, call_2_* became summary_*. Seventy columns were appended: why the item was selected, where its time went, what the cache and the decoder did, what it ran on, what it ran with, and which field and rule refused it. detail widened from 200 to 2,000 characters and is now allowed on any failed row.",
+      "version": "2026-09-15T00:00",
+      "why": "Two changes with one reason. A slot numbered by its turn says when a call ran and never what it did, so every reader of these cells had to carry the mapping in its head and a reordering of the sequence would have silently relabelled the archive. The names now say which call, and the enum members they are named after already did.\n\nThe widening is the same argument one level up. This row was the only place a per-item question could be asked, and it could answer almost none of them: not why an item was picked, not which part of the model stage got slower, not what the run was configured with, not what machine produced the number. A throughput with no machine beside it is not a measurement (Guardrail #10), and a knob recorded nowhere cannot be shown to have helped. stage_gap_ms is the load-bearing one: it is the only column that can catch a regression in a stage nobody named, and it is signed on purpose because clamping it would hide the overlap it exists to report.\n\nEvery new column is nullable and every one is appended at the end, so the committed header stays a positional prefix of this one and a row an earlier run wrote still parses. from_csv_row reads a retired heading into the column that replaced it, one direction only."
+    },
+    {
+      "change": "Added nullable truncation_cap_tokens at the end of the row.",
+      "version": "2026-09-14T02:00",
+      "why": "source_words_before_cap says a cut happened; nothing said which cap did it. So a reader asking which runs shared one cap had to compare source_words against int(truncation_cap_tokens / TOKENS_PER_WORD) as that ratio stands today - and the ratio is a reading that gets retaken. When it moved from 1.3 to 1.3628 on 2026-09-14 the implied ceiling went 1,000 words to 953 and every historical row stopped matching at once, which reads as an empty population rather than as a broken question. The cap that cut a row is known at the moment of the cut and is now written there, taken from Article.truncated_at_tokens. Appended at the end and nullable: a row an earlier run wrote recorded no cap, and an empty cell is the honest answer rather than today's cap backfilled onto a run that never used it."
+    },
     {
       "change": "ItemStage gained visual. The generated schema lists it because the enum is inlined here; the stage column refuses it and no row may carry it.",
       "version": "2026-09-14T01:30",
@@ -91,7 +125,7 @@
     {
       "change": "Added the labels_truncated summarize failure code, source-neutral like every other code the model owns.",
       "version": "2026-09-13",
-      "why": "The two-call path's labelling reply can run out of its output budget on an ordinary article - measured 2026-09-12, one article of three, 346 words, 900 tokens decoded and the JSON cut mid-string - and the item is then lost whole, because the call that writes the summary replays that reply and is never sent. It was recorded as bad_shape, which is also what a reply that held valid JSON and violated the schema records, and also what a stray reasoning channel records; the only thing separating them was a sentence in a log line. The same commit derives that budget from the labelling grammar instead of from the summariser's knob, and this counter is how anyone sees whether that worked - folded into output_truncated it would move with call 2's cuts and answer nothing. It is a separate member rather than a second reading of output_truncated because the two are two derivations over two grammars: two numbers to move, so two counts to read. No read-side migration is owed - the code is additive and no run has written it - but a reader trending bad_shape across 2026-09-13 sees a step down that nothing else in the CSV explains, and this entry is where that is written."
+      "why": "The two-call path's labelling reply can run out of its output budget on an ordinary article - measured 2026-09-12, one article of three, 346 words, 900 tokens decoded and the JSON cut mid-string - and the item is then lost whole, because the call that writes the summary replays that reply and is never sent. It was recorded as bad_shape, which is also what a reply that held valid JSON and violated the schema records, and also what a stray reasoning channel records; the only thing separating them was a sentence in a log line. The same commit derives that budget from the labelling grammar instead of from the summariser's knob, and this counter is how anyone sees whether that worked - folded into output_truncated it would move with the summarize-and-plan call's cuts and answer nothing. It is a separate member rather than a second reading of output_truncated because the two are two derivations over two grammars: two numbers to move, so two counts to read. No read-side migration is owed - the code is additive and no run has written it - but a reader trending bad_shape across 2026-09-13 sees a step down that nothing else in the CSV explains, and this entry is where that is written."
     },
     {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
@@ -99,7 +133,7 @@
       "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
     },
     {
-      "change": "Added nullable model_calls, call_1_kind, call_2_kind and the five cost cells for each call at the end of the row; the five flat cost cells are now the item's total across the calls the row records.",
+      "change": "Added nullable model_calls, label_kind, summary_kind and the five cost cells for each call at the end of the row; the five flat cost cells are now the item's total across the calls the row records.",
       "version": "2026-09-12T16:20",
       "why": "This is the only ledger that carries every planned item, so it is where a per-call cost has to land - and it kept one call's five numbers without saying which. Folded, cached_tokens stops answering the question it exists for: measured on the one two-call run, 0 and 1,493 fold to 1,493 against 3,886 prompt tokens, so an item whose first call read its whole prompt reads as an item that cached most of it. The kind is carried beside each slot because the call structure moves under this row rather than beside it, and without it the day a flag flips reads as a regression. Appended at the end and nullable, so a row an earlier run wrote still reads: those runs recorded a total and no split, and their cells stay empty rather than carrying a number invented today. Where a slot is filled the flat cells must equal the sum over the filled slots, which is what keeps reconcile_prefill and every console rate correct with no edit of their own."
     },
@@ -151,6 +185,19 @@
   ],
   "description": "One item, one run, one terminal outcome.",
   "properties": {
+    "authority_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The source-authority term of selection_score.",
+      "title": "Authority Score"
+    },
     "cached_tokens": {
       "anyOf": [
         {
@@ -164,166 +211,52 @@
       "default": null,
       "title": "Cached Tokens"
     },
-    "call_1_cached_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Prompt tokens the first call reused. Zero here is the cold-slot answer and is a measurement; empty means no split was recorded at all.",
-      "title": "Call 1 Cached Tokens"
-    },
-    "call_1_decode_ms": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 1 Decode Ms"
-    },
-    "call_1_input_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 1 Input Tokens"
-    },
-    "call_1_kind": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/CallKind"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Which call the stage made first. Empty where no split was recorded."
-    },
-    "call_1_output_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 1 Output Tokens"
-    },
-    "call_1_prefill_ms": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 1 Prefill Ms"
-    },
-    "call_2_cached_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 2 Cached Tokens"
-    },
-    "call_2_decode_ms": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 2 Decode Ms"
-    },
-    "call_2_input_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 2 Input Tokens"
-    },
-    "call_2_kind": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/CallKind"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Which call the stage made second, or empty where it made one."
-    },
-    "call_2_output_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 2 Output Tokens"
-    },
-    "call_2_prefill_ms": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 2 Prefill Ms"
-    },
     "canonical_url": {
       "maxLength": 2048,
       "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
       "title": "Canonical Url",
       "type": "string"
+    },
+    "carriage_step": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The carriage term of selection_score.",
+      "title": "Carriage Step"
+    },
+    "carried_by": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many runs have carried this item forward without publishing it.",
+      "title": "Carried By"
+    },
+    "cgroup_peak_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Peak memory the job's cgroup reported. This is the number the runner kills the job over, so it is the one that answers whether a bigger model would have fitted (Guardrail #2).",
+      "title": "Cgroup Peak Bytes"
     },
     "code": {
       "anyOf": [
@@ -335,6 +268,67 @@
         }
       ],
       "default": null
+    },
+    "cpu_busy_max": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Peak CPU busy over the item.",
+      "title": "Cpu Busy Max"
+    },
+    "cpu_busy_min": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Trough CPU busy over the item.",
+      "title": "Cpu Busy Min"
+    },
+    "cpu_busy_pct": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Mean CPU busy over the item.",
+      "title": "Cpu Busy Pct"
+    },
+    "cpu_model": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The CPU the runner reported, verbatim.",
+      "title": "Cpu Model"
     },
     "date": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -357,8 +351,9 @@
     "detail": {
       "anyOf": [
         {
-          "maxLength": 200,
+          "maxLength": 2000,
           "minLength": 1,
+          "pattern": "^[ -~]+$",
           "type": "string"
         },
         {
@@ -366,7 +361,7 @@
         }
       ],
       "default": null,
-      "description": "Our own one-line reason, only for unknown. Never source text.",
+      "description": "Our own one-line reason, on any failed row. Never source text (Guardrail #11). Two hundred characters used to be the cap and it cut the exception message off before the part that said what broke, so a person debugging a failure had to reproduce it to read it.",
       "title": "Detail"
     },
     "element_class": {
@@ -408,6 +403,94 @@
       "default": null,
       "title": "Extract Ms"
     },
+    "failed_field": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The field a schema refusal named, where the failure was a refusal. Our own field name and never fetched text (Guardrail #11).",
+      "title": "Failed Field"
+    },
+    "failed_rule": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The rule that refused it, named by our own validator.",
+      "title": "Failed Rule"
+    },
+    "faithfulness_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time of the model-free faithfulness scorers.",
+      "title": "Faithfulness Ms"
+    },
+    "feed_reliability": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The feed's own recorded reliability at the moment of the run, 0 to 1. Read from feed health, so a later read of feed health cannot answer what the ranker actually used on the day.",
+      "title": "Feed Reliability"
+    },
+    "feed_weight": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The configured weight of the feed this item came from.",
+      "title": "Feed Weight"
+    },
+    "fetch_connect_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The connect half of fetch_ms.",
+      "title": "Fetch Connect Ms"
+    },
     "fetch_ms": {
       "anyOf": [
         {
@@ -420,6 +503,20 @@
       ],
       "default": null,
       "title": "Fetch Ms"
+    },
+    "fetch_ttfb_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Time to the first byte of the response body.",
+      "title": "Fetch Ttfb Ms"
     },
     "http_status": {
       "anyOf": [
@@ -448,10 +545,314 @@
       "default": null,
       "title": "Input Tokens"
     },
+    "item_ended_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the worker wrote this row.",
+      "title": "Item Ended At"
+    },
     "item_id": {
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
       "title": "Item Id",
       "type": "string"
+    },
+    "item_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "This item's position inside its shard, counting from zero. It is what makes a cold first item legible as a cold first item rather than as a slow one, because the prefix cache is empty only at index 0.",
+      "title": "Item Index"
+    },
+    "item_started_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the worker picked this item up.",
+      "title": "Item Started At"
+    },
+    "item_total_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time from item_started_at to item_ended_at.",
+      "title": "Item Total Ms"
+    },
+    "kv_tokens_at_start": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many tokens that slot already held when the item began.",
+      "title": "Kv Tokens At Start"
+    },
+    "label_budget_tokens": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The output budget the label call ran under.",
+      "title": "Label Budget Tokens"
+    },
+    "label_cache_pct": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "label_cached_tokens as a percentage of label_input_tokens. Recorded rather than derived so a reader pooling rows does not have to weight the ratio itself and get it wrong.",
+      "title": "Label Cache Pct"
+    },
+    "label_cached_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prompt tokens the first call reused. Zero here is the cold-slot answer and is a measurement; empty means no split was recorded at all.",
+      "title": "Label Cached Tokens"
+    },
+    "label_decode_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Decode Ms"
+    },
+    "label_decode_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Decode throughput of the label call.",
+      "title": "Label Decode Tokens Per S"
+    },
+    "label_finish_reason": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_.+-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Why the label decode stopped, as the server reported it - stop, length, and whatever else the runtime mints. A token and not an enum: the vocabulary belongs to llama-server rather than to this project, and a row that could not be written because the runtime added a reason would lose the whole item over a label.",
+      "title": "Label Finish Reason"
+    },
+    "label_input_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Input Tokens"
+    },
+    "label_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which call the stage made first. Empty where no split was recorded."
+    },
+    "label_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time of the label call, prefill and decode together.",
+      "title": "Label Ms"
+    },
+    "label_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Output Tokens"
+    },
+    "label_prefill_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Prefill Ms"
+    },
+    "label_prefill_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prefill throughput of the label call.",
+      "title": "Label Prefill Tokens Per S"
+    },
+    "lens_bonus": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The lens term of selection_score.",
+      "title": "Lens Bonus"
+    },
+    "llama_rss_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Resident memory of the model server when the item ended.",
+      "title": "Llama Rss Bytes"
+    },
+    "llama_rss_peak_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Peak resident memory of the model server over the item.",
+      "title": "Llama Rss Peak Bytes"
+    },
+    "load_1m": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One-minute load average when the item ended.",
+      "title": "Load 1M"
+    },
+    "max_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The configured ceiling on any one decode.",
+      "title": "Max Output Tokens"
     },
     "model_calls": {
       "anyOf": [
@@ -466,6 +867,121 @@
       "default": null,
       "description": "How many model calls this row records the cost of. Empty on every row written before 2026-09-12, which recorded a total and no split. It is the count of filled call slots below, so a reader of the narrower published projection can tell what the remainder it derives covers.",
       "title": "Model Calls"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_.+-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The model this run summarised with.",
+      "title": "Model Id"
+    },
+    "model_quantisation": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_.+-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The quantisation of those weights.",
+      "title": "Model Quantisation"
+    },
+    "model_wait_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Time the item spent waiting on the model server rather than being served.",
+      "title": "Model Wait Ms"
+    },
+    "n_batch": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The server's prefill batch size.",
+      "title": "N Batch"
+    },
+    "n_ctx_configured": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The context window the server was started with.",
+      "title": "N Ctx Configured"
+    },
+    "n_parallel": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many prefix-cache slots the server was started with.",
+      "title": "N Parallel"
+    },
+    "n_threads": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Threads the server was given.",
+      "title": "N Threads"
+    },
+    "on_front_page": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did this item reach the published front page?",
+      "title": "On Front Page"
     },
     "outcome": {
       "$ref": "#/$defs/ItemOutcome"
@@ -496,10 +1012,175 @@
       "default": null,
       "title": "Prefill Ms"
     },
+    "prefix_shared_with_previous": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did this item's prompt share a prefix with the item before it in the shard?",
+      "title": "Prefix Shared With Previous"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The time the item carries, from whichever clock time_source names.",
+      "title": "Published At"
+    },
+    "python_rss_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Resident memory of the worker process when the item ended.",
+      "title": "Python Rss Bytes"
+    },
+    "queue_wait_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How long the item waited before its worker started it.",
+      "title": "Queue Wait Ms"
+    },
+    "recency_bonus": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The recency term of selection_score.",
+      "title": "Recency Bonus"
+    },
+    "recovered": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did a cut reply have to be recovered before it parsed? A run where this turns true across many items is a budget that no longer fits.",
+      "title": "Recovered"
+    },
+    "retry_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many times the fetch was retried.",
+      "title": "Retry Count"
+    },
+    "retry_total_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Total wall time spent inside retries and their backoff.",
+      "title": "Retry Total Ms"
+    },
+    "robots_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Time spent fetching or waiting on robots.txt.",
+      "title": "Robots Ms"
+    },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
       "title": "Run Id",
       "type": "string"
+    },
+    "run_visual_decision": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did this run ask the second call for a visual plan?",
+      "title": "Run Visual Decision"
+    },
+    "runner_name": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The runner label the job ran on.",
+      "title": "Runner Name"
+    },
+    "selection_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The total the ranker ordered this item by. Empty on a row written before 2026-09-15 and on any item the ranker never scored.",
+      "title": "Selection Score"
     },
     "shard": {
       "anyOf": [
@@ -515,6 +1196,34 @@
       "description": "Which worker of the run produced this row, numbered the way stages.common.shard_of numbers them. state/runtime-counters.csv carries the same number at the run grain, so a per-shard rate can be read against the machine that ran it. Null means no worker claimed the row: assemble writes the day's census from one job and cannot know which machine an item was for, and every row written before 2026-08-30 predates the column. Never read an empty cell as shard 0.",
       "title": "Shard"
     },
+    "shard_item_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many items that shard was given.",
+      "title": "Shard Item Count"
+    },
+    "slot_id": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which llama-server prefix-cache slot served this item.",
+      "title": "Slot Id"
+    },
     "source_chars": {
       "anyOf": [
         {
@@ -527,6 +1236,18 @@
       ],
       "default": null,
       "title": "Source Chars"
+    },
+    "source_form": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SourceForm"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The source's form at the moment of the run."
     },
     "source_id": {
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -576,6 +1297,19 @@
     "stage": {
       "$ref": "#/$defs/ItemStage"
     },
+    "stage_gap_ms": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "item_total_ms minus every named stage. **This is the one column that can catch a regression in a stage nobody named**, which is why it is recorded rather than derived at read time by a reader who would have to know the list. It is signed on purpose: a negative value means two named stages overlapped, or two clocks disagreed, and silently clamping it to zero would hide exactly that.",
+      "title": "Stage Gap Ms"
+    },
     "summarize_ms": {
       "anyOf": [
         {
@@ -588,6 +1322,170 @@
       ],
       "default": null,
       "title": "Summarize Ms"
+    },
+    "summary_budget_tokens": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The output budget the summarize-and-plan call ran under.",
+      "title": "Summary Budget Tokens"
+    },
+    "summary_cache_pct": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "summary_cached_tokens as a percentage of summary_input_tokens.",
+      "title": "Summary Cache Pct"
+    },
+    "summary_cached_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Cached Tokens"
+    },
+    "summary_decode_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Decode Ms"
+    },
+    "summary_decode_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Decode throughput of the summarize-and-plan call.",
+      "title": "Summary Decode Tokens Per S"
+    },
+    "summary_finish_reason": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_.+-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Why the summarize-and-plan decode stopped.",
+      "title": "Summary Finish Reason"
+    },
+    "summary_input_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Input Tokens"
+    },
+    "summary_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which call the stage made second, or empty where it made one."
+    },
+    "summary_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time of the summarize-and-plan call, prefill and decode together.",
+      "title": "Summary Ms"
+    },
+    "summary_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Output Tokens"
+    },
+    "summary_prefill_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Prefill Ms"
+    },
+    "summary_prefill_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prefill throughput of the summarize-and-plan call.",
+      "title": "Summary Prefill Tokens Per S"
     },
     "summary_words": {
       "anyOf": [
@@ -602,13 +1500,82 @@
       "default": null,
       "title": "Summary Words"
     },
+    "temperature": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The sampling temperature both calls ran at.",
+      "title": "Temperature"
+    },
+    "tier": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SourceTier"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The source's tier at the moment of the run."
+    },
+    "tier_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The tier term of selection_score.",
+      "title": "Tier Score"
+    },
+    "time_source": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_.+-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which clock published_at came from. The vocabulary is `run_plan.TimeSource` - feed, first_seen, unknown - held here as a token rather than as that enum because importing it would close a cycle: run_plan imports article, and article imports this module. A contract test asserts every TimeSource member validates against this column, so the vocabulary cannot drift away from the enum unseen.",
+      "title": "Time Source"
+    },
+    "truncation_cap_tokens": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The cap that cut this row, taken from Article.truncated_at_tokens. Filled only where the cut happened, so it is non-null exactly where source_words_before_cap > source_words. It says which cap did the cutting, which the pair of word counts cannot: they say a cut happened and nothing about the setting behind it. Never re-derive this from the configured cap and the tokens-a-word ratio - both move, and the row was written under the pair in force that day. Null before 2026-09-14 and on every uncut row.",
+      "title": "Truncation Cap Tokens"
+    },
     "url_key": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Url Key",
       "type": "string"
     },
     "version": {
-      "default": "2026-09-14T01:30",
+      "default": "2026-09-15T04:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -617,6 +1584,73 @@
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "title": "Vertical",
       "type": "string"
+    },
+    "visual_plan_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time attributed to producing the visual plan. The plan is decoded inside the summarize-and-plan call, so this is an apportionment and not a separate clock - visual_plan_ms_is_estimate says which.",
+      "title": "Visual Plan Ms"
+    },
+    "visual_plan_ms_is_estimate": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "True where visual_plan_ms was apportioned out of the second call rather than timed on its own. An estimate that does not say it is one is the failure this column exists to prevent (Guardrail #10).",
+      "title": "Visual Plan Ms Is Estimate"
+    },
+    "visual_plan_tokens_written": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Output tokens of the second call that belong to the visual plan rather than to the summary. Null where the run asked for no plan.",
+      "title": "Visual Plan Tokens Written"
+    },
+    "watchlist_bonus": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The watchlist term of selection_score.",
+      "title": "Watchlist Bonus"
+    },
+    "watchlist_hit": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did a watchlist entry match this item?",
+      "title": "Watchlist Hit"
     }
   },
   "required": [
@@ -632,5 +1666,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-14T01:30"
+  "version": "2026-09-15T04:15"
 }

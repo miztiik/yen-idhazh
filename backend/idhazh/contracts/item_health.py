@@ -16,18 +16,62 @@ from typing import Annotated, Any, ClassVar, Final, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
+    LOWER_TOKEN_PATTERN,
+    PRINTABLE_LINE_PATTERN,
     ChangelogEntry,
     Contract,
     DateStamp,
     ItemId,
     RunId,
     Slug,
+    Timestamp,
     Url,
     UrlKey,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
+from idhazh.contracts.sources import SourceForm
+from idhazh.contracts.taxonomy import SourceTier
 
-ItemHealthDetail = Annotated[str, StringConstraints(min_length=1, max_length=200)]
+#: The two call slots, named for what each call does rather than for its turn.
+#: Every per-call cell is this prefix plus the quantity, so a reader that pools
+#: them needs one list and not two.
+CALL_SLOTS: Final = ("label", "summary")
+
+#: One line of printable ASCII. A newline would break `merge=union` on the day
+#: file, and a control character would break the CSV, so the shape is the
+#: control rather than a promise in a docstring. The class is declared once in
+#: `contracts.base` and `base.fit_cell` folds a value into it, so a producer
+#: cannot hand this column something the column refuses.
+OneLine = Annotated[
+    str, StringConstraints(min_length=1, max_length=200, pattern=PRINTABLE_LINE_PATTERN)
+]
+
+#: A whole exception message, which is what a person debugging a failure
+#: actually needs. Longer than a label and still one line for the same reason.
+ItemHealthDetail = Annotated[
+    str, StringConstraints(min_length=1, max_length=2000, pattern=PRINTABLE_LINE_PATTERN)
+]
+
+#: A lowercase token the pipeline, the runtime or the config minted - a model id,
+#: a finish reason, a clock name. Never fetched prose (Guardrail #11): the
+#: pattern is what makes that true rather than the comment. It is not a promise
+#: that the value arrives in the class either - `llama-server` mints its own
+#: finish reasons and the config spells a quantisation `Q4_K_M` - so a producer
+#: folds through `base.fit_cell` rather than hoping.
+Token = Annotated[
+    str, StringConstraints(min_length=1, max_length=64, pattern=LOWER_TOKEN_PATTERN)
+]
+
+#: Headings a day file an earlier run wrote still carries, and the column each
+#: one is read into now. Derived from CALL_SLOTS so a seventh cost quantity
+#: cannot be added to one side and forgotten on the other.
+RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        f"call_{turn}_{field}": f"{slot}_{field}"
+        for turn, slot in enumerate(CALL_SLOTS, start=1)
+        for field in ("kind", *COST_FIELDS)
+    }
+)
 
 
 class ItemStage(StrEnum):
@@ -133,6 +177,12 @@ class FailureCode(StrEnum):
     HTTP_SERVER_ERROR = "http_server_error"
     NETWORK_ERROR = "network_error"
     NO_TEXT = "no_text"
+    #: The item reached extract with no headline - the feed carried none, or the
+    #: one it carried was whitespace. Separate from `no_text` because the fix is
+    #: a different one: `no_text` sends an operator to the extractor or the page,
+    #: and this sends them to the feed. Reusing `no_text` would also file a feed
+    #: metadata fault under the extractor in the source-health yield.
+    NO_TITLE = "no_title"
     TOO_SHORT = "too_short"
     NOT_PROSE = "not_prose"
     BOILERPLATE = "boilerplate"
@@ -165,6 +215,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.HTTP_SERVER_ERROR: frozenset({ItemStage.FETCH}),
         FailureCode.NETWORK_ERROR: frozenset({ItemStage.FETCH}),
         FailureCode.NO_TEXT: frozenset({ItemStage.EXTRACT}),
+        FailureCode.NO_TITLE: frozenset({ItemStage.EXTRACT}),
         FailureCode.TOO_SHORT: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
         FailureCode.NOT_PROSE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
         FailureCode.BOILERPLATE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
@@ -213,6 +264,74 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T04:15",
+            change="FailureCode gained no_title, an extract-stage member.",
+            why=(
+                "An item with no headline could not be recorded at all. The extractor "
+                "built an ok article carrying the planned item's title, the Article "
+                "contract refuses an ok article with no title, and nothing caught the "
+                "refusal - so one headline-less item raised out of the per-item loop "
+                "and took its whole shard with it. That is reachable from a real feed: "
+                "discover.clean_title returns None for an absent, empty or "
+                "whitespace headline and rank.plan_vertical plans the item anyway.\n\n"
+                "Widening only. Every row an earlier run wrote still reads, and no row "
+                "carries this code because no run could ever finish an item that would "
+                "have earned it. It counts against the source, beside no_text: a feed "
+                "publishing entries with no headline is publishing stories we can never "
+                "print."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-15T00:00",
+            change=(
+                "The twelve per-call cells are named for what each call does - "
+                "call_1_* became label_*, call_2_* became summary_*. Seventy columns "
+                "were appended: why the item was selected, where its time went, what "
+                "the cache and the decoder did, what it ran on, what it ran with, and "
+                "which field and rule refused it. detail widened from 200 to 2,000 "
+                "characters and is now allowed on any failed row."
+            ),
+            why=(
+                "Two changes with one reason. A slot numbered by its turn says when a "
+                "call ran and never what it did, so every reader of these cells had to "
+                "carry the mapping in its head and a reordering of the sequence would "
+                "have silently relabelled the archive. The names now say which call, "
+                "and the enum members they are named after already did.\n\n"
+                "The widening is the same argument one level up. This row was the only "
+                "place a per-item question could be asked, and it could answer almost "
+                "none of them: not why an item was picked, not which part of the model "
+                "stage got slower, not what the run was configured with, not what "
+                "machine produced the number. A throughput with no machine beside it "
+                "is not a measurement (Guardrail #10), and a knob recorded nowhere "
+                "cannot be shown to have helped. stage_gap_ms is the load-bearing one: "
+                "it is the only column that can catch a regression in a stage nobody "
+                "named, and it is signed on purpose because clamping it would hide the "
+                "overlap it exists to report.\n\n"
+                "Every new column is nullable and every one is appended at the end, so "
+                "the committed header stays a positional prefix of this one and a row "
+                "an earlier run wrote still parses. from_csv_row reads a retired "
+                "heading into the column that replaced it, one direction only."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T02:00",
+            change="Added nullable truncation_cap_tokens at the end of the row.",
+            why=(
+                "source_words_before_cap says a cut happened; nothing said which cap did "
+                "it. So a reader asking which runs shared one cap had to compare "
+                "source_words against int(truncation_cap_tokens / TOKENS_PER_WORD) as "
+                "that ratio stands today - and the ratio is a reading that gets retaken. "
+                "When it moved from 1.3 to 1.3628 on 2026-09-14 the implied ceiling went "
+                "1,000 words to 953 and every historical row stopped matching at once, "
+                "which reads as an empty population rather than as a broken question. "
+                "The cap that cut a row is known at the moment of the cut and is now "
+                "written there, taken from Article.truncated_at_tokens. Appended at the "
+                "end and nullable: a row an earlier run wrote recorded no cap, and an "
+                "empty cell is the honest answer rather than today's cap backfilled onto "
+                "a run that never used it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T01:30",
             change=(
@@ -274,8 +393,8 @@ class ItemHealthRow(Contract):
                 "them was a sentence in a log line. The same commit derives that budget "
                 "from the labelling grammar instead of from the summariser's knob, and "
                 "this counter is how anyone sees whether that worked - folded into "
-                "output_truncated it would move with call 2's cuts and answer nothing. "
-                "It is a separate member rather than a second reading of output_truncated "
+                "output_truncated it would move with the summarize-and-plan call's cuts and answer "
+                "nothing. It is a separate member rather than a second reading of output_truncated "
                 "because the two are two derivations over two grammars: two numbers to "
                 "move, so two counts to read. No read-side migration is owed - the code "
                 "is additive and no run has written it - but a reader trending bad_shape "
@@ -304,7 +423,7 @@ class ItemHealthRow(Contract):
         ChangelogEntry(
             version="2026-09-12T16:20",
             change=(
-                "Added nullable model_calls, call_1_kind, call_2_kind and the five cost "
+                "Added nullable model_calls, label_kind, summary_kind and the five cost "
                 "cells for each call at the end of the row; the five flat cost cells are "
                 "now the item's total across the calls the row records."
             ),
@@ -468,7 +587,12 @@ class ItemHealthRow(Contract):
     summary_words: int | None = Field(default=None, ge=0)
     detail: ItemHealthDetail | None = Field(
         default=None,
-        description="Our own one-line reason, only for unknown. Never source text.",
+        description=(
+            "Our own one-line reason, on any failed row. Never source text "
+            "(Guardrail #11). Two hundred characters used to be the cap and it cut "
+            "the exception message off before the part that said what broke, so a "
+            "person debugging a failure had to reproduce it to read it."
+        ),
     )
     fetch_ms: int | None = Field(default=None, ge=0)
     extract_ms: int | None = Field(default=None, ge=0)
@@ -539,15 +663,15 @@ class ItemHealthRow(Contract):
             "projection can tell what the remainder it derives covers."
         ),
     )
-    call_1_kind: CallKind | None = Field(
+    label_kind: CallKind | None = Field(
         default=None,
         description="Which call the stage made first. Empty where no split was recorded.",
     )
-    call_1_prefill_ms: int | None = Field(default=None, ge=0)
-    call_1_decode_ms: int | None = Field(default=None, ge=0)
-    call_1_input_tokens: int | None = Field(default=None, ge=0)
-    call_1_output_tokens: int | None = Field(default=None, ge=0)
-    call_1_cached_tokens: int | None = Field(
+    label_prefill_ms: int | None = Field(default=None, ge=0)
+    label_decode_ms: int | None = Field(default=None, ge=0)
+    label_input_tokens: int | None = Field(default=None, ge=0)
+    label_output_tokens: int | None = Field(default=None, ge=0)
+    label_cached_tokens: int | None = Field(
         default=None,
         ge=0,
         description=(
@@ -555,14 +679,355 @@ class ItemHealthRow(Contract):
             "is a measurement; empty means no split was recorded at all."
         ),
     )
-    call_2_kind: CallKind | None = Field(
+    summary_kind: CallKind | None = Field(
         default=None, description="Which call the stage made second, or empty where it made one."
     )
-    call_2_prefill_ms: int | None = Field(default=None, ge=0)
-    call_2_decode_ms: int | None = Field(default=None, ge=0)
-    call_2_input_tokens: int | None = Field(default=None, ge=0)
-    call_2_output_tokens: int | None = Field(default=None, ge=0)
-    call_2_cached_tokens: int | None = Field(default=None, ge=0)
+    summary_prefill_ms: int | None = Field(default=None, ge=0)
+    summary_decode_ms: int | None = Field(default=None, ge=0)
+    summary_input_tokens: int | None = Field(default=None, ge=0)
+    summary_output_tokens: int | None = Field(default=None, ge=0)
+    summary_cached_tokens: int | None = Field(default=None, ge=0)
+    truncation_cap_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "The cap that cut this row, taken from Article.truncated_at_tokens. Filled "
+            "only where the cut happened, so it is non-null exactly where "
+            "source_words_before_cap > source_words. It says which cap did the cutting, "
+            "which the pair of word counts cannot: they say a cut happened and nothing "
+            "about the setting behind it. Never re-derive this from the configured cap "
+            "and the tokens-a-word ratio - both move, and the row was written under the "
+            "pair in force that day. Null before 2026-09-14 and on every uncut row."
+        ),
+    )
+
+    # --- Why this item was in the run at all ---------------------------------
+    #
+    # The ranker computes each of these and then throws all but the total away.
+    # Recorded here, a person can ask which term carried an item onto the page
+    # and what the runner-up was; without them the only honest answer to "why
+    # did this publish" is "the score said so", which is not an answer.
+    selection_score: float | None = Field(
+        default=None,
+        description=(
+            "The total the ranker ordered this item by. Empty on a row written "
+            "before 2026-09-15 and on any item the ranker never scored."
+        ),
+    )
+    authority_score: float | None = Field(
+        default=None, description="The source-authority term of selection_score."
+    )
+    tier_score: float | None = Field(
+        default=None, description="The tier term of selection_score."
+    )
+    feed_weight: float | None = Field(
+        default=None, description="The configured weight of the feed this item came from."
+    )
+    feed_reliability: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "The feed's own recorded reliability at the moment of the run, 0 to 1. "
+            "Read from feed health, so a later read of feed health cannot answer "
+            "what the ranker actually used on the day."
+        ),
+    )
+    lens_bonus: float | None = Field(
+        default=None, description="The lens term of selection_score."
+    )
+    recency_bonus: float | None = Field(
+        default=None, description="The recency term of selection_score."
+    )
+    carriage_step: float | None = Field(
+        default=None, description="The carriage term of selection_score."
+    )
+    watchlist_bonus: float | None = Field(
+        default=None, description="The watchlist term of selection_score."
+    )
+    carried_by: int | None = Field(
+        default=None,
+        ge=0,
+        description="How many runs have carried this item forward without publishing it.",
+    )
+    watchlist_hit: bool | None = Field(
+        default=None, description="Did a watchlist entry match this item?"
+    )
+    on_front_page: bool | None = Field(
+        default=None, description="Did this item reach the published front page?"
+    )
+    tier: SourceTier | None = Field(
+        default=None, description="The source's tier at the moment of the run."
+    )
+    source_form: SourceForm | None = Field(
+        default=None, description="The source's form at the moment of the run."
+    )
+    published_at: Timestamp | None = Field(
+        default=None,
+        description="The time the item carries, from whichever clock time_source names.",
+    )
+    time_source: Token | None = Field(
+        default=None,
+        description=(
+            "Which clock published_at came from. The vocabulary is "
+            "`run_plan.TimeSource` - feed, first_seen, unknown - held here as a "
+            "token rather than as that enum because importing it would close a "
+            "cycle: run_plan imports article, and article imports this module. A "
+            "contract test asserts every TimeSource member validates against this "
+            "column, so the vocabulary cannot drift away from the enum unseen."
+        ),
+    )
+
+    # --- Where the time went -------------------------------------------------
+    #
+    # `summarize_ms` already said how long the model stage took whole. A stage
+    # that got slower says nothing about which of its parts did, so these split
+    # it, and `stage_gap_ms` holds what none of the named parts claimed.
+    item_started_at: Timestamp | None = Field(
+        default=None, description="When the worker picked this item up."
+    )
+    item_ended_at: Timestamp | None = Field(
+        default=None, description="When the worker wrote this row."
+    )
+    item_index: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "This item's position inside its shard, counting from zero. It is what "
+            "makes a cold first item legible as a cold first item rather than as a "
+            "slow one, because the prefix cache is empty only at index 0."
+        ),
+    )
+    shard_item_count: int | None = Field(
+        default=None, ge=0, description="How many items that shard was given."
+    )
+    queue_wait_ms: int | None = Field(
+        default=None, ge=0, description="How long the item waited before its worker started it."
+    )
+    fetch_connect_ms: int | None = Field(
+        default=None, ge=0, description="The connect half of fetch_ms."
+    )
+    fetch_ttfb_ms: int | None = Field(
+        default=None, ge=0, description="Time to the first byte of the response body."
+    )
+    robots_ms: int | None = Field(
+        default=None, ge=0, description="Time spent fetching or waiting on robots.txt."
+    )
+    retry_count: int | None = Field(
+        default=None, ge=0, description="How many times the fetch was retried."
+    )
+    retry_total_ms: int | None = Field(
+        default=None, ge=0, description="Total wall time spent inside retries and their backoff."
+    )
+    label_ms: int | None = Field(
+        default=None, ge=0, description="Wall time of the label call, prefill and decode together."
+    )
+    summary_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Wall time of the summarize-and-plan call, prefill and decode together.",
+    )
+    visual_plan_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time attributed to producing the visual plan. The plan is decoded "
+            "inside the summarize-and-plan call, so this is an apportionment and not "
+            "a separate clock - visual_plan_ms_is_estimate says which."
+        ),
+    )
+    visual_plan_ms_is_estimate: bool | None = Field(
+        default=None,
+        description=(
+            "True where visual_plan_ms was apportioned out of the second call rather "
+            "than timed on its own. An estimate that does not say it is one is the "
+            "failure this column exists to prevent (Guardrail #10)."
+        ),
+    )
+    faithfulness_ms: int | None = Field(
+        default=None, ge=0, description="Wall time of the model-free faithfulness scorers."
+    )
+    model_wait_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Time the item spent waiting on the model server rather than being served.",
+    )
+    item_total_ms: int | None = Field(
+        default=None, ge=0, description="Wall time from item_started_at to item_ended_at."
+    )
+    stage_gap_ms: int | None = Field(
+        default=None,
+        description=(
+            "item_total_ms minus every named stage. **This is the one column that can "
+            "catch a regression in a stage nobody named**, which is why it is recorded "
+            "rather than derived at read time by a reader who would have to know the "
+            "list. It is signed on purpose: a negative value means two named stages "
+            "overlapped, or two clocks disagreed, and silently clamping it to zero "
+            "would hide exactly that."
+        ),
+    )
+
+    # --- What the cache and the decoder did ----------------------------------
+    visual_plan_tokens_written: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Output tokens of the second call that belong to the visual plan rather "
+            "than to the summary. Null where the run asked for no plan."
+        ),
+    )
+    label_cache_pct: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "label_cached_tokens as a percentage of label_input_tokens. Recorded "
+            "rather than derived so a reader pooling rows does not have to weight "
+            "the ratio itself and get it wrong."
+        ),
+    )
+    summary_cache_pct: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description="summary_cached_tokens as a percentage of summary_input_tokens.",
+    )
+    slot_id: int | None = Field(
+        default=None,
+        ge=0,
+        description="Which llama-server prefix-cache slot served this item.",
+    )
+    kv_tokens_at_start: int | None = Field(
+        default=None,
+        ge=0,
+        description="How many tokens that slot already held when the item began.",
+    )
+    prefix_shared_with_previous: bool | None = Field(
+        default=None,
+        description="Did this item's prompt share a prefix with the item before it in the shard?",
+    )
+    label_prefill_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Prefill throughput of the label call."
+    )
+    label_decode_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Decode throughput of the label call."
+    )
+    summary_prefill_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Prefill throughput of the summarize-and-plan call."
+    )
+    summary_decode_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Decode throughput of the summarize-and-plan call."
+    )
+    label_finish_reason: Token | None = Field(
+        default=None,
+        description=(
+            "Why the label decode stopped, as the server reported it - stop, length, "
+            "and whatever else the runtime mints. A token and not an enum: the "
+            "vocabulary belongs to llama-server rather than to this project, and a "
+            "row that could not be written because the runtime added a reason would "
+            "lose the whole item over a label."
+        ),
+    )
+    summary_finish_reason: Token | None = Field(
+        default=None, description="Why the summarize-and-plan decode stopped."
+    )
+    recovered: bool | None = Field(
+        default=None,
+        description=(
+            "Did a cut reply have to be recovered before it parsed? A run where this "
+            "turns true across many items is a budget that no longer fits."
+        ),
+    )
+
+    # --- What it ran on ------------------------------------------------------
+    #
+    # A throughput number with no machine beside it is not a measurement
+    # (Guardrail #10). These are what let a row from a slower runner be read as
+    # a slower runner rather than as a regression.
+    cpu_model: OneLine | None = Field(
+        default=None, description="The CPU the runner reported, verbatim."
+    )
+    runner_name: OneLine | None = Field(
+        default=None, description="The runner label the job ran on."
+    )
+    cpu_busy_pct: float | None = Field(
+        default=None, ge=0.0, le=100.0, description="Mean CPU busy over the item."
+    )
+    cpu_busy_max: float | None = Field(
+        default=None, ge=0.0, le=100.0, description="Peak CPU busy over the item."
+    )
+    cpu_busy_min: float | None = Field(
+        default=None, ge=0.0, le=100.0, description="Trough CPU busy over the item."
+    )
+    load_1m: float | None = Field(
+        default=None, ge=0.0, description="One-minute load average when the item ended."
+    )
+    llama_rss_bytes: int | None = Field(
+        default=None, ge=0, description="Resident memory of the model server when the item ended."
+    )
+    llama_rss_peak_bytes: int | None = Field(
+        default=None, ge=0, description="Peak resident memory of the model server over the item."
+    )
+    python_rss_bytes: int | None = Field(
+        default=None, ge=0, description="Resident memory of the worker process when the item ended."
+    )
+    cgroup_peak_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Peak memory the job's cgroup reported. This is the number the runner "
+            "kills the job over, so it is the one that answers whether a bigger "
+            "model would have fitted (Guardrail #2)."
+        ),
+    )
+
+    # --- What it ran with ----------------------------------------------------
+    #
+    # A row that records what a knob produced without recording the knob cannot
+    # answer the only question worth asking of an archive: did changing this
+    # help? Config is committed, but a run reads the config of its own day, and
+    # git history is not a join key.
+    model_id: Token | None = Field(
+        default=None, description="The model this run summarised with."
+    )
+    model_quantisation: Token | None = Field(
+        default=None, description="The quantisation of those weights."
+    )
+    n_ctx_configured: int | None = Field(
+        default=None, ge=1, description="The context window the server was started with."
+    )
+    n_parallel: int | None = Field(
+        default=None, ge=1, description="How many prefix-cache slots the server was started with."
+    )
+    n_threads: int | None = Field(default=None, ge=1, description="Threads the server was given.")
+    n_batch: int | None = Field(default=None, ge=1, description="The server's prefill batch size.")
+    max_output_tokens: int | None = Field(
+        default=None, ge=1, description="The configured ceiling on any one decode."
+    )
+    label_budget_tokens: int | None = Field(
+        default=None, ge=1, description="The output budget the label call ran under."
+    )
+    summary_budget_tokens: int | None = Field(
+        default=None, ge=1, description="The output budget the summarize-and-plan call ran under."
+    )
+    run_visual_decision: bool | None = Field(
+        default=None, description="Did this run ask the second call for a visual plan?"
+    )
+    temperature: float | None = Field(
+        default=None, ge=0.0, description="The sampling temperature both calls ran at."
+    )
+
+    # --- What broke --------------------------------------------------------
+    failed_field: OneLine | None = Field(
+        default=None,
+        description=(
+            "The field a schema refusal named, where the failure was a refusal. Our "
+            "own field name and never fetched text (Guardrail #11)."
+        ),
+    )
+    failed_rule: OneLine | None = Field(
+        default=None, description="The rule that refused it, named by our own validator."
+    )
 
     @property
     def counts_against_source(self) -> bool:
@@ -590,11 +1055,8 @@ class ItemHealthRow(Contract):
             raise ValueError("failure code does not belong to item stage")
         if self.http_status is not None and self.stage is not ItemStage.FETCH:
             raise ValueError("http_status belongs only on fetch item-health rows")
-        if self.code is FailureCode.UNKNOWN:
-            if self.detail is None:
-                raise ValueError("unknown item-health failure must carry detail")
-        elif self.detail is not None:
-            raise ValueError("detail belongs only to unknown item-health failures")
+        if self.code is FailureCode.UNKNOWN and self.detail is None:
+            raise ValueError("unknown item-health failure must carry detail")
         return self
 
     @model_validator(mode="after")
@@ -622,31 +1084,29 @@ class ItemHealthRow(Contract):
         the total at that call's numbers would send all four quietly wrong.
         """
         filled = 0
-        for slot in (1, 2):
-            cells = [getattr(self, f"call_{slot}_{field}") for field in COST_FIELDS]
-            kind = getattr(self, f"call_{slot}_kind")
+        for slot in CALL_SLOTS:
+            cells = [getattr(self, f"{slot}_{field}") for field in COST_FIELDS]
+            kind = getattr(self, f"{slot}_kind")
             if kind is None and all(cell is None for cell in cells):
                 continue
             if kind is None or any(cell is None for cell in cells):
-                raise ValueError(f"call {slot} is recorded whole or not at all")
-            if getattr(self, f"call_{slot}_cached_tokens") > getattr(
-                self, f"call_{slot}_input_tokens"
-            ):
-                raise ValueError(f"call {slot} cached_tokens cannot exceed its input_tokens")
+                raise ValueError(f"the {slot} call is recorded whole or not at all")
+            if getattr(self, f"{slot}_cached_tokens") > getattr(self, f"{slot}_input_tokens"):
+                raise ValueError(f"{slot}_cached_tokens cannot exceed {slot}_input_tokens")
             filled += 1
         if filled == 0:
             if self.model_calls is not None:
                 raise ValueError("model_calls is recorded only beside the calls it counts")
             return self
-        if self.call_1_kind is None:
+        if self.label_kind is None:
             raise ValueError("a second call is recorded only after a first")
         if self.model_calls != filled:
             raise ValueError("model_calls must equal the number of recorded calls")
         for field in COST_FIELDS:
             total = sum(
-                getattr(self, f"call_{slot}_{field}")
-                for slot in (1, 2)
-                if getattr(self, f"call_{slot}_kind") is not None
+                getattr(self, f"{slot}_{field}")
+                for slot in CALL_SLOTS
+                if getattr(self, f"{slot}_kind") is not None
             )
             if getattr(self, field) != total:
                 raise ValueError(f"{field} must equal the sum over the recorded calls")
@@ -664,32 +1124,22 @@ class ItemHealthRow(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
-        """The inverse. An empty cell is an absent value, never the empty string."""
+        """The inverse. An empty cell is an absent value, never the empty string.
+
+        **A cell under a retired heading is read into the column that replaced
+        it.** Every day file an earlier run wrote heads its six first-call cells
+        `call_1_*` and its six second-call cells `call_2_*`, and those files are
+        the archive - a reader that cannot open them has not migrated the
+        ledger, it has abandoned it. The map is one direction only: nothing
+        writes a retired heading again.
+        """
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
-        optional_fields = (
-            "code",
-            "http_status",
-            "source_chars",
-            "source_words",
-            "summary_words",
-            "detail",
-            "fetch_ms",
-            "extract_ms",
-            "summarize_ms",
-            "prefill_ms",
-            "decode_ms",
-            "input_tokens",
-            "output_tokens",
-            "cached_tokens",
-            "source_words_before_cap",
-            "shard",
-            "span_integrity",
-            "elements_found",
-            "element_class",
-            "model_calls",
-            *(f"call_{slot}_{field}" for slot in (1, 2) for field in ("kind", *COST_FIELDS)),
-        )
-        for name in optional_fields:
-            if payload[name] == "":
+        for retired, current in RETIRED_CELLS.items():
+            if payload[current] == "":
+                payload[current] = row.get(retired, "")
+        # Derived, never listed: a hand-written roll of the nullable columns is one
+        # a new nullable column gets left out of, and the row then refuses to parse.
+        for name, field in cls.model_fields.items():
+            if payload[name] == "" and field.default is None:
                 payload[name] = None
         return cls.model_validate(payload)

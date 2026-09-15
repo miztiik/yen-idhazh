@@ -1,4 +1,4 @@
-"""Say where every token call 2 had to read again went.
+"""Say where every token the summarize-and-plan call had to read again went.
 
 Row 3's first reading printed `FLOOR BROKEN - 4 tokens` while 670 tokens an item
 burned with no reading at all. The floor was a boolean watching the smaller of
@@ -8,9 +8,10 @@ can act on**, so this reports three numbers that sum to the total instead.
 
 **The three causes, and each one belongs to somebody.**
 
-- **The article changed.** Call 1 on a new item reads a new article. Irreducible:
+- **The article changed.** The label call on a new item reads a new article. Irreducible:
   no prompt layout removes it, and it is the cost the design exists to pay.
-- **The chat template broke the prefix.** It used to: call 2 replayed call 1's
+- **The chat template broke the prefix.** It used to: the second call replayed the
+  label call's
   turns as history, the template rendered them differently, and everything
   behind the divergence prefilled again. Row #3c renders the prompt bytes
   itself, so what is left here is a token seam rather than a layout - measured
@@ -18,7 +19,7 @@ can act on**, so this reports three numbers that sum to the total instead.
   page reading about zero** - a cause that is printed is a cause a build change
   or a prompt edit cannot reintroduce quietly, and a deleted row catches
   nothing.
-- **The trailing turn sits behind the article.** Call 2's question is the same
+- **The trailing turn sits behind the article.** The summarize-and-plan call's question is the same
   bytes on every item, but the article in front of it is not, so a prefix cache
   cannot reach it and every token of it is read again, for ever. Row #3e moved
   both jobs into the system turn and left three lines behind - measured at 42
@@ -28,9 +29,10 @@ can act on**, so this reports three numbers that sum to the total instead.
 
 **Two items, not one.** One item is a cold cache slot and a cold slot is not the
 steady state a shard spends its life in. On item 2 the system turn should be
-served from cache and item 1's copy of call 2's question should be gone. A third
-item runs call 1 on its real output budget, because the template cause is call
-1's reply length plus the divergence, and a decode cap hides it.
+served from cache and item 1's copy of the summarize-and-plan question should be
+gone. A third
+item runs the label call on its real output budget, because the template cause is the
+label call's reply length plus the divergence, and a decode cap hides it.
 
 **It refuses a weights file `config/` does not name.** The reading this replaces
 was taken on a retired model and nobody noticed, because the tool read the
@@ -63,11 +65,11 @@ from typing import Any, Final
 
 from idhazh import config
 from idhazh.classify.calls import (
-    build_call_one_request,
-    build_call_two_request,
-    call_one_system_prompt,
-    call_two_output_tokens,
-    call_two_user_turn,
+    build_label_request,
+    build_summarize_and_plan_request,
+    label_system_prompt,
+    summarize_and_plan_budget_tokens,
+    summarize_and_plan_user_turn,
 )
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
@@ -77,7 +79,15 @@ from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.elements import element_table
 from idhazh.extract import TOKENS_PER_WORD, approx_tokens, truncate_to_tokens
-from idhazh.llm.server import Completion, completion_url, post, props, server_argv, turn_markers
+from idhazh.llm.server import (
+    Completion,
+    completion_url,
+    post,
+    props,
+    server_argv,
+    turn_markers,
+    turn_markers_digest,
+)
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -339,11 +349,12 @@ def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any
 
     The turn envelope is digested beside it. It is what renders these prompts
     now, so a run whose markers moved is a run whose outputs may have moved, and
-    nothing else here would say so.
+    nothing else here would say so. The digest is `server.turn_markers_digest`,
+    which is also what `PipelineInputs.turn_markers_sha256` carries - a second
+    rendering here would be a second answer to one question.
     """
     said = props(endpoint, timeout=60.0)
     template = said.get("chat_template")
-    markers = turn_markers(turns)
     return {
         "weights_sha256": digest,
         "build": said.get("build_info"),
@@ -352,12 +363,7 @@ def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any
             derive_text_digest(template) if isinstance(template, str) else None
         ),
         "chat_template_characters": len(template) if isinstance(template, str) else None,
-        "turn_markers_sha256": derive_text_digest(
-            markers.turn_opening.template
-            + markers.turn_closing
-            + markers.reply_opening
-            + markers.reply_opening_thinking
-        ),
+        "turn_markers_sha256": turn_markers_digest(turns),
     }
 
 
@@ -380,9 +386,9 @@ class Spend:
 def decompose(one: Completion, two: Completion) -> Spend:
     """Split an item's re-prefill three ways, by cause.
 
-    `boundary` is how many entries call 1 left in the slot: its whole prompt
-    plus the tokens it generated, both of which the runtime keeps. What call 2
-    cached short of that is the template breaking the prefix; what call 2
+    `boundary` is how many entries the label call left in the slot: its whole prompt
+    plus the tokens it generated, both of which the runtime keeps. What the summarize-and-plan call
+    cached short of that is the template breaking the prefix; what the summarize-and-plan call
     carries beyond it is the trailing turn, which is new bytes and always
     prefills.
 
@@ -415,35 +421,35 @@ class Checks:
     code is theirs.
     """
 
-    #: The renderer and the live request agree on how long call 1's prompt is.
+    #: The renderer and the live request agree on how long the label call's prompt is.
     #: False means the diagnostic is describing a prompt the server was not
     #: sent - a wrong reply opening does exactly that.
     prompt_renders_the_same: bool
-    #: The two prompts do not diverge before the end of call 1's. **This is row
+    #: The two prompts do not diverge before the end of the label call's. **This is row
     #: #3c's oracle taken live**, and it is the exact statement rather than a
-    #: tolerant one: call 2's prompt IS call 1's extended, so they cannot
-    #: disagree anywhere inside it. Under the chat template this came out 1,493
+    #: tolerant one: the summarize-and-plan call's prompt IS the label call's extended, so they
+    #: cannot disagree anywhere inside it. Under the chat template this came out 1,493
     #: against 1,497 and was the whole reason for the row.
-    prompts_agree_to_the_end_of_call_one: bool
+    prompts_agree_to_the_end_of_the_label_call: bool
     #: The cache reached at least as far as the two prompts agree. Reaching
     #: FURTHER is the good news - it means the slot also answered for the reply -
     #: so this is a floor and not an equality. False means the runtime is doing
     #: something this split does not model, and every share below it is then
     #: unexplained rather than wrong.
     cache_reached_the_shared_prefix: bool
-    #: Call 2 carries at least everything call 1 left in the slot. False makes
-    #: `trailing_turn` negative, which is not a share of anything.
+    #: The summarize-and-plan call carries at least everything the label call left in the slot.
+    #: False makes `trailing_turn` negative, which is not a share of anything.
     trailing_turn_is_positive: bool
     #: What was replayed is what was generated. False means the runtime returned
-    #: less than it decoded, so the assistant turn call 2 sends is shorter than
-    #: the reply call 1 wrote, and `boundary` overstates the depth.
+    #: less than it decoded, so the assistant turn the summarize-and-plan call sends is shorter than
+    #: the reply the label call wrote, and `boundary` overstates the depth.
     replay_is_the_whole_reply: bool
 
     @property
     def hold(self) -> bool:
         return (
             self.prompt_renders_the_same
-            and self.prompts_agree_to_the_end_of_call_one
+            and self.prompts_agree_to_the_end_of_the_label_call
             and self.cache_reached_the_shared_prefix
             and self.trailing_turn_is_positive
             and self.replay_is_the_whole_reply
@@ -451,19 +457,19 @@ class Checks:
 
     def failures(self) -> list[str]:
         named = {
-            "call 1's rendered prompt is not the length the server charged for": (
+            "the label call's rendered prompt is not the length the server charged for": (
                 self.prompt_renders_the_same
             ),
-            "the two prompts diverge before the end of call 1's": (
-                self.prompts_agree_to_the_end_of_call_one
+            "the two prompts diverge before the end of the label call's": (
+                self.prompts_agree_to_the_end_of_the_label_call
             ),
             "the cache stopped short of where the two prompts still agree": (
                 self.cache_reached_the_shared_prefix
             ),
-            "call 2 carries fewer tokens than call 1 left in the slot": (
+            "the second call carries fewer tokens than the label call left in the slot": (
                 self.trailing_turn_is_positive
             ),
-            "call 1's replayed turn is shorter than the reply it generated": (
+            "the label call's replayed turn is shorter than the reply it generated": (
                 self.replay_is_the_whole_reply
             ),
         }
@@ -520,7 +526,7 @@ class Reading:
     label: str
     url_key: str
     article_words: int
-    call_one_prompt: int
+    label_prompt: int
     one: Completion
     two: Completion
     spend: Spend
@@ -537,14 +543,14 @@ class Reading:
             "label": self.label,
             "url_key": self.url_key,
             "article_words": self.article_words,
-            "call_one_prompt_tokens": self.call_one_prompt,
-            "call_one": asdict(self.one),
-            "call_two": asdict(self.two),
+            "label_prompt_tokens": self.label_prompt,
+            "label_call": asdict(self.one),
+            "summarize_and_plan_call": asdict(self.two),
             "spend": asdict(self.spend),
             "re_prefilled": prefilled(self.one, self.two),
             "question_tokens": self.question_tokens,
-            "rendered_call_one_tokens": self.rendered_one,
-            "rendered_call_two_tokens": self.rendered_two,
+            "rendered_label_tokens": self.rendered_one,
+            "rendered_summarize_and_plan_tokens": self.rendered_two,
             "prefix_broke_at": self.broke_at,
             "divergence": self.divergence,
             "replay_tokens": self.replay_tokens,
@@ -569,13 +575,13 @@ def prefix_break(
     """Where the two prompts stop agreeing, in this model's own tokens.
 
     The live `cached_tokens` says how far the cache reached. This says why, and
-    since row #3c the expected answer is "they do not stop agreeing until call
-    1's prompt and reply are both behind us". It is still measured rather than
+    since row #3c the expected answer is "they do not stop agreeing until the
+    label call's prompt and reply are both behind us". It is still measured rather than
     asserted, because a byte prefix is only a token prefix when the seam sits
     where the tokenizer cannot merge across - which is a property of the
     vocabulary and not of our arithmetic. It also tokenises the reply on its
     own: a runtime that splits reasoning out of `content` replays a shorter
-    assistant turn than call 1 wrote, and nothing else here would show it.
+    assistant turn than the label call wrote, and nothing else here would show it.
     """
     one_tokens = tokenizer.tokenize(str(first["prompt"]))
     two_tokens = tokenizer.tokenize(str(second["prompt"]))
@@ -586,12 +592,13 @@ def prefix_break(
     tail = tokenizer.detokenize(one_tokens[at:])
     replay = tokenizer.tokenize(reply)
     print(
-        f"  rendered: call 1 is {len(one_tokens)} tokens, call 2 is {len(two_tokens)},"
+        f"  rendered: the label call is {len(one_tokens)} tokens, the"
+        f" summarize-and-plan call is {len(two_tokens)},"
         f" and they diverge at token {at} -"
-        f" call 1 carries {len(one_tokens) - at} token(s) the replay drops"
+        f" the label call carries {len(one_tokens) - at} token(s) the replay drops"
     )
     if tail is not None:
-        print(f"  what call 1 has there, verbatim: {tail!r}")
+        print(f"  what the label call has there, verbatim: {tail!r}")
     return Break(
         at=at,
         rendered_one=len(one_tokens),
@@ -614,11 +621,11 @@ def check(one: Completion, two: Completion, spend: Spend, broke: Break) -> Check
     token shorter when it is read back as part of a prompt than it was when it
     was decoded, which is a property of the vocabulary and not of the prompt
     layout. The statement that IS exact is that the two prompts do not diverge
-    inside call 1's, and that is the check above.
+    inside the label call's, and that is the check above.
     """
     return Checks(
         prompt_renders_the_same=broke.rendered_one in (None, one.prompt_tokens),
-        prompts_agree_to_the_end_of_call_one=(
+        prompts_agree_to_the_end_of_the_label_call=(
             broke.at is None or broke.at == broke.rendered_one
         ),
         cache_reached_the_shared_prefix=broke.at is None or two.cached_tokens >= broke.at,
@@ -638,14 +645,14 @@ def run_item(
     endpoint: str,
     tokenizer: Tokenizer,
     timeout: float,
-    call_one_cap: int,
-    call_two_cap: int,
+    label_cap: int,
+    summarize_and_plan_cap: int,
     question_tokens: int | None,
 ) -> Reading:
     article = sample.article
     model = models.summarize
     table = element_table(article, config=app.elements)
-    first = build_call_one_request(
+    first = build_label_request(
         article,
         table,
         model_id=model.id,
@@ -653,22 +660,22 @@ def run_item(
         turns=model.turns,
         prompt_config=app.summarize,
     )
-    if call_one_cap:
-        first["n_predict"] = call_one_cap
+    if label_cap:
+        first["n_predict"] = label_cap
     one = post(first, endpoint=endpoint, timeout=timeout)
-    report_call("call 1", one)
+    report_call("the label call", one)
 
-    second = build_call_two_request(
+    second = build_summarize_and_plan_request(
         first,
         one.content,
         turns=model.turns,
         source_words=article.band_source_words,
         brief=article.brief,
     )
-    if call_two_cap:
-        second["n_predict"] = call_two_cap
+    if summarize_and_plan_cap:
+        second["n_predict"] = summarize_and_plan_cap
     two = post(second, endpoint=endpoint, timeout=timeout)
-    report_call("call 2", two)
+    report_call("the summarize-and-plan call", two)
 
     broke = prefix_break(first, second, one.content, tokenizer)
     spend = decompose(one, two)
@@ -680,7 +687,7 @@ def run_item(
         label=label,
         url_key=sample.url_key,
         article_words=article.word_count,
-        call_one_prompt=one.prompt_tokens,
+        label_prompt=one.prompt_tokens,
         one=one,
         two=two,
         spend=spend,
@@ -714,7 +721,7 @@ def pick_samples(
     chosen: list[tuple[Sample, int]] = []
     for seen, sample in enumerate(samples, start=1):
         table = element_table(sample.article, config=app.elements)
-        request = build_call_one_request(
+        request = build_label_request(
             sample.article,
             table,
             model_id=model.id,
@@ -764,11 +771,11 @@ def finish(
     )
     for reading in readings:
         print(
-            f"{reading.label:<28}{reading.article_words:>7}{reading.call_one_prompt:>8}"
+            f"{reading.label:<28}{reading.article_words:>7}{reading.label_prompt:>8}"
             f"{reading.spend.total:>8}{reading.spend.article_changed:>9}"
             f"{reading.spend.template_broke:>10}{reading.spend.trailing_turn:>10}"
         )
-    print("`prompt` is call 1's own prompt, so two rows with equal words can still differ")
+    print("`prompt` is the label call's own prompt, so two rows with equal words can still differ")
 
     steady = list(readings[1:])
     cold = []
@@ -778,15 +785,16 @@ def finish(
         for reading in steady:
             reused = reading.one.cached_tokens
             print(
-                f"  {reading.label}: call 1 reused {reused} of its "
-                f"{reading.one.prompt_tokens}-token prompt, and call 2 reused "
+                f"  {reading.label}: the label call reused {reused} of its "
+                f"{reading.one.prompt_tokens}-token prompt, and the summarize-and-plan call reused "
                 f"{reading.two.cached_tokens} of its {reading.two.prompt_tokens}"
             )
             if system_tokens is not None and reused < system_tokens:
                 cold.append(reading.label)
         if system_tokens is not None:
             print(
-                f"  call 1's system turn is {system_tokens} tokens and is the same bytes on "
+                f"  the label call's system turn is {system_tokens} tokens and is the "
+                "same bytes on "
                 "every item, so a later item reusing fewer than that is the finding"
             )
 
@@ -797,7 +805,7 @@ def finish(
         "weights": weights.name,
         "sha256": digest,
         "server": server,
-        "call_one_system_tokens": system_tokens,
+        "label_system_tokens": system_tokens,
         "items": [reading.as_json() for reading in readings],
     }
     text = json.dumps(payload, default=str, indent=2)
@@ -810,7 +818,7 @@ def finish(
     failed = [
         f"{reading.label}: {what}" for reading in readings for what in reading.checks.failures()
     ]
-    failed += [f"{label}: call 1 did not reuse the shared system turn" for label in cold]
+    failed += [f"{label}: the label call did not reuse the shared system turn" for label in cold]
     if failed:
         print("INSTRUMENT BROKEN:", file=sys.stderr)
         for line in failed:
@@ -841,7 +849,7 @@ def main(argv: list[str] | None = None) -> int:
             "Stop each capped decode after this many tokens. Every cause here is a "
             "prefill fact that lands before a token is decoded, so a cap answers the "
             "same question in minutes instead of hours - except the template cause, "
-            "which is call 1's reply length plus the divergence, and that is what the "
+            "which is the label call's reply length plus the divergence, and that is what the "
             "extra uncapped item is for. Zero uses the real budgets."
         ),
     )
@@ -849,7 +857,7 @@ def main(argv: list[str] | None = None) -> int:
         "--uncapped-item",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Run one more item with call 1 on its real output budget.",
+        help="Run one more item with the label call on its real output budget.",
     )
     parser.add_argument(
         "--at-cap",
@@ -915,10 +923,10 @@ def main(argv: list[str] | None = None) -> int:
         tokenizer = Tokenizer(base=base, timeout=60.0)
         described = describe(endpoint, digest=digest, turns=model.turns)
 
-        # What one item needs after call 1's prompt: call 1's decode, the
-        # trailing turn and call 2's decode. Call 2's prompt is call 1's plus
-        # those, so one ceiling on call 1's prompt covers both calls. The decode
-        # cap is a clock knob and has no place in a context budget, so the
+        # What one item needs after the label call's prompt: the label call's decode, the
+        # trailing turn and the summarize-and-plan call's decode. The summarize-and-plan call's
+        # prompt is the label call's plus those, so one ceiling on the label call's prompt covers
+        # both calls. The decode cap is a clock knob and has no place in a context budget, so the
         # budget reads the real one whatever the cap is.
         #
         # **Two counts, and they are not the same question.** The budget wants
@@ -927,22 +935,23 @@ def main(argv: list[str] | None = None) -> int:
         # marker floor row #3e cannot go below - and measuring the report with
         # the rendered number makes that floor come out negative.
         markers = turn_markers(model.turns)
-        question = call_two_user_turn(app.summarize)
+        question = summarize_and_plan_user_turn(app.summarize)
         rendered_turn = tokenizer.count(markers.turn("user", question))
         question_tokens = tokenizer.tokenize(question)
         if rendered_turn is None or question_tokens is None:
-            raise RuntimeError("the server would not tokenise call 2's question")
+            raise RuntimeError("the server would not tokenise the second call's question")
         trailing = len(question_tokens)
         system_tokens = tokenizer.count(
-            markers.turn("system", call_one_system_prompt(app.summarize))
+            markers.turn("system", label_system_prompt(app.summarize))
         )
-        call_one_decode = model.inference.max_output_tokens
-        call_two_decode = call_two_output_tokens(app.summarize)
-        ceiling = model.inference.n_ctx - (call_one_decode + call_two_decode + rendered_turn)
+        label_decode = model.inference.max_answer_tokens
+        summarize_and_plan_decode = summarize_and_plan_budget_tokens(app.summarize)
+        ceiling = model.inference.n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
         print(
-            f"call 2's question is {trailing} tokens of text and {rendered_turn} as a "
-            f"rendered turn; with {call_one_decode} for call 1's decode and "
-            f"{call_two_decode} for call 2's, call 1's prompt may reach {ceiling} of "
+            f"the summarize-and-plan call's question is {trailing} tokens of text and "
+            f"{rendered_turn} as a rendered turn; with {label_decode} for the label call's decode "
+            f"and {summarize_and_plan_decode} for the second call's, the label "
+            f"call's prompt may reach {ceiling} of "
             f"{model.inference.n_ctx} in production",
             flush=True,
         )
@@ -966,7 +975,7 @@ def main(argv: list[str] | None = None) -> int:
         built = sample_at_the_cap(samples, cap_tokens=app.extract.truncation_cap_tokens)
         at_cap_tokens = tokenizer.count(
             str(
-                build_call_one_request(
+                build_label_request(
                     built.article,
                     element_table(built.article, config=app.elements),
                     model_id=model.id,
@@ -992,7 +1001,7 @@ def main(argv: list[str] | None = None) -> int:
             if built_arm:
                 label += " - at the cap, BUILT"
             elif uncapped:
-                label += " - call 1 uncapped"
+                label += " - the label call uncapped"
             print()
             print(
                 f"--- {label}: {sample.article.word_count} words, {prompt_tokens} prompt "
@@ -1008,8 +1017,8 @@ def main(argv: list[str] | None = None) -> int:
                     endpoint=endpoint,
                     tokenizer=tokenizer,
                     timeout=timeout,
-                    call_one_cap=0 if uncapped else args.decode_cap,
-                    call_two_cap=args.decode_cap,
+                    label_cap=0 if uncapped else args.decode_cap,
+                    summarize_and_plan_cap=args.decode_cap,
                     question_tokens=trailing,
                 )
             )

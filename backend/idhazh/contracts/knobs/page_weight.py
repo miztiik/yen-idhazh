@@ -20,35 +20,53 @@ class PageWeightConfig(Model):
     and the validation (Guardrail #6).
 
     **A number may live here only if it does not have to move when a run
-    publishes.** A weight that rises when the pipeline appends a day cannot be
-    bounded by a constant: the only way past a firing is to type a bigger one,
-    and a number too loose reads as green exactly like a number that is right.
-    A route whose weight moves at publish speed takes no number here, and the
-    property it stood in for is asserted directly instead -
+    publishes.** That is the test, and on 2026-09-10 four of the six keys failed
+    it and were deleted: `/archive/` and the three `/console/` routes. Their
+    weight rises when the pipeline appends a day, so the number had to rise too,
+    and the only way past a firing was to type a bigger one - `/archive/` was
+    raised twice in one day on 2026-08-26 and then removed. The same instrument
+    failed the other way at the same time: `/console/` stood at 7.2 times the
+    page it bounded for four days and nothing went red, because a number too
+    loose is as green as a number too tight. A check that cannot tell correct
+    from far-too-loose is not an instrument, and no value of the constant fixes
+    that. Owner ruling, 2026-09-10.
+
+    **What replaced them asserts the property instead of a proxy for it.** The
+    one regression this surface has ever had is a layout inlining a day payload -
+    313,300 gzipped bytes on 2026-08-26 - and that is a yes-or-no fact about a
+    document rather than a size with a middle value to threshold.
     `frontend/tests/payload-weight.spec.ts` looks for a day-payload marker in
-    every document that does not render a day, so it returns the same verdict
-    whatever the archive holds.
+    every document that does not render a day. It has no number in it, so it
+    returns the same verdict whatever the archive holds.
 
-    A route that takes a number moves only when a person edits source. A number
-    that changes at review speed is a design statement; a number that changes at
-    publish speed is the defect above. A page that renders a day is never named,
-    for the neighbouring reason: the only way under such a number is to publish
-    fewer items, which caps the news rather than catching a regression. Those
-    pages are counted, reported and never failed.
+    **`/404` and `/evals/` stay, and they pass the test rather than being spared
+    it.** They move only when a person edits source. A number that changes at
+    review speed is a design statement; a number that changes at publish speed is
+    the defect above.
 
-    **Every number here is gzip -5, because that is what the reader pays.** The
-    reading behind that choice is in
-    `docs/reference/measurements-site.md`.
+    A page that renders a day never took a number at all, for the neighbouring
+    reason: the only way under one is to publish fewer items, which caps the news
+    rather than catching a regression. `/` and `/<date>/` are counted, reported
+    and never failed.
+
+    **Every number here is gzip -5, because that is what the reader pays.**
+    Measured 2026-09-10 against the live Pages origin: it served `/console/` in
+    46,917 bytes where a local gzip -5 makes 46,787 and a gzip -9 makes 45,077,
+    and `/archive/` in 5,760 where -5 makes 5,755. So -5 lands within 0.3 pct of
+    the wire on a document and -9 understates it by 3.9 pct. On a large CSV -5 is
+    2.2 pct low rather than high (168,438 served against 164,742), which is the
+    one place these numbers flatter the payload rather than the page.
 
     **A document is capped and a payload is capped, and they are different
     jobs.** A document number catches a page that took on bytes it does not
     render. A payload number catches a file a browser fetches growing past what
     somebody priced, which no document number can see because the bytes are not
-    in the document at all. Every payload number survives the test above by
-    construction rather than by luck: each is derived from a bounded knob, so
-    publishing more cannot move one. `console/band.json` is bounded by
+    in the document at all - that is exactly what moving the console's telemetry
+    out of its HTML did. The payload numbers all survive the test above, and not
+    by luck: each is derived from a bounded knob rather than chosen, so publishing
+    more cannot move one. `console/band.json` is bounded by
     `observability.public_*_keep_months`, and `telemetry/` by the longest month
-    at the heaviest day a run can produce.
+    at the heaviest day ever run.
     """
 
     ceilings_bytes: dict[str, int] = Field(
@@ -60,10 +78,11 @@ class PageWeightConfig(Model):
             "they could drift from the file the gate enforces (Guardrail #6). A route the "
             "object does not name is measured and reported by the gate but not failed. "
             "**A route may be named here only if its weight does not move when a run "
-            "publishes** - a weight that rises as the pipeline appends a day cannot be "
-            "bounded by a constant, and the property is asserted directly by "
-            "frontend/tests/payload-weight.spec.ts instead. A page that renders a day is "
-            "never named, because the only way under such a number is to publish less."
+            "publishes** - /archive/ and the three /console/ routes were deleted on "
+            "2026-09-10 for failing that test, and the property they stood in for is "
+            "asserted directly by frontend/tests/payload-weight.spec.ts (owner, "
+            "2026-09-10). A page that renders a day is never named, because the only "
+            "way under such a number is to publish less."
         ),
     )
 
@@ -79,7 +98,7 @@ class PageWeightConfig(Model):
             "build fails the gate - a guardrail over nothing still reads as a bound "
             "somebody checked. Each number is a guardrail on the same rule the routes "
             "follow: at least twice the heaviest the file can realistically reach, so "
-            "only a change of a different order fires it."
+            "only a change of a different order fires it (owner, 2026-09-10)."
         ),
     )
 

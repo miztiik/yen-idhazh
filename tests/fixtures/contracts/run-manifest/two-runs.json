@@ -25,6 +25,8 @@
       "models": [
         {
           "model_ref": {
+            "byte_count": null,
+            "draft": null,
             "file": "Qwen3-8B-Q4_K_M.gguf",
             "hf_base_repo": null,
             "id": "qwen3-8b-q4-k-m",
@@ -35,7 +37,8 @@
               "flash_attention": null,
               "load_mode": null,
               "log_verbosity": null,
-              "max_output_tokens": 900,
+              "max_answer_tokens": 900,
+              "max_think_tokens": 256,
               "metrics": true,
               "n_batch": 512,
               "n_ctx": 8192,
@@ -49,7 +52,6 @@
               "seed": 0,
               "startup_warmup": true,
               "temperature": 0.0,
-              "thinking": false,
               "top_p": 1.0
             },
             "quantisation": "Q4_K_M",
@@ -61,6 +63,8 @@
         },
         {
           "model_ref": {
+            "byte_count": null,
+            "draft": null,
             "file": "Qwen3-4B-Q4_K_M.gguf",
             "hf_base_repo": null,
             "id": "qwen3-4b-q4-k-m",
@@ -71,7 +75,8 @@
               "flash_attention": null,
               "load_mode": null,
               "log_verbosity": null,
-              "max_output_tokens": 900,
+              "max_answer_tokens": 900,
+              "max_think_tokens": 256,
               "metrics": true,
               "n_batch": 512,
               "n_ctx": 8192,
@@ -85,7 +90,6 @@
               "seed": 0,
               "startup_warmup": true,
               "temperature": 0.0,
-              "thinking": false,
               "top_p": 1.0
             },
             "quantisation": "Q4_K_M",
@@ -159,6 +163,8 @@
       "models": [
         {
           "model_ref": {
+            "byte_count": null,
+            "draft": null,
             "file": "Qwen3-8B-Q4_K_M.gguf",
             "hf_base_repo": null,
             "id": "qwen3-8b-q4-k-m",
@@ -169,7 +175,8 @@
               "flash_attention": null,
               "load_mode": null,
               "log_verbosity": null,
-              "max_output_tokens": 900,
+              "max_answer_tokens": 900,
+              "max_think_tokens": 256,
               "metrics": true,
               "n_batch": 512,
               "n_ctx": 8192,
@@ -183,7 +190,6 @@
               "seed": 0,
               "startup_warmup": true,
               "temperature": 0.0,
-              "thinking": false,
               "top_p": 1.0
             },
             "quantisation": "Q4_K_M",

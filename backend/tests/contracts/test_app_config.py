@@ -11,7 +11,7 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh.classify import dag
-from idhazh.classify.calls import call_one_output_tokens, call_two_output_tokens
+from idhazh.classify.calls import label_budget_tokens, summarize_and_plan_budget_tokens
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
@@ -20,17 +20,17 @@ from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields
-from idhazh.measured import CALL_ONE_BODY_TOKENS_A_WORD as _CALL_ONE_A_WORD
-from idhazh.measured import CALL_ONE_MENU_TOKENS_A_ROW as _MENU_A_ROW
-from idhazh.measured import CALL_ONE_SCAFFOLD_TOKENS as _CALL_ONE_SCAFFOLD
-from idhazh.measured import CALL_TWO_SEAM_TOKENS as _CALL_TWO_SEAM
+from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD
+from idhazh.measured import LABEL_MENU_TOKENS_A_ROW as _MENU_A_ROW
+from idhazh.measured import LABEL_SCAFFOLD_TOKENS as _LABEL_SCAFFOLD
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
+from idhazh.measured import SUMMARIZE_AND_PLAN_SEAM_TOKENS as _SUMMARIZE_AND_PLAN_SEAM
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 
 from ._fixtures import APP_CONFIG_EVERY_KNOB_DIFFERS, CONFIG_FILES, committed_models
@@ -152,9 +152,14 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """Row 3 raised one role, because one role is what was measured.
 
     The visual planner is different weights with its own settings block, and
-    nothing has put a 49,152 window in front of them - so it keeps 8,192. That
-    is the whole reason the block sits on the entry rather than on `models`:
-    a number measured against one model may not be inherited by another.
+    nothing has measured a wider window in front of them - so it keeps the
+    conservative default. That is the whole reason the block sits on the entry
+    rather than on `models`: a number measured against one model may not be
+    inherited by another.
+
+    The assertion is the relationship and not either number, so raising the
+    summarizer's window beside the truncation cap does not need an edit here
+    (Guardrail #6).
 
     Attention is pinned in the same file. `auto` is a runtime autodetect that
     may resolve differently on other silicon, and a run that cannot name the
@@ -162,7 +167,9 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """
     models = committed_models()
 
-    assert models.summarize.inference.n_ctx == 49152
+    assert models.summarize.inference.n_ctx > InferenceConfig().n_ctx, (
+        "the summarizer is the one role a measurement widened"
+    )
     assert models.summarize.inference.flash_attention == "on"
     assert InferenceConfig().n_ctx == 8192, (
         "the default is the conservative window for weights nobody has measured"
@@ -179,13 +186,13 @@ WORST_TOKENS_A_WORD: Final = _WORST_TOKENS.value
 
 #: The same four things for the two-call path, whose prompt this repository
 #: renders itself. Same module, same reason.
-CALL_ONE_SCAFFOLD_TOKENS: Final = int(_CALL_ONE_SCAFFOLD.value)
+LABEL_SCAFFOLD_TOKENS: Final = int(_LABEL_SCAFFOLD.value)
 
-CALL_ONE_BODY_TOKENS_A_WORD: Final = _CALL_ONE_A_WORD.value
+LABEL_BODY_TOKENS_A_WORD: Final = _LABEL_A_WORD.value
 
-CALL_ONE_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
+LABEL_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
 
-CALL_TWO_SEAM_TOKENS: Final = int(_CALL_TWO_SEAM.value)
+SUMMARIZE_AND_PLAN_SEAM_TOKENS: Final = int(_SUMMARIZE_AND_PLAN_SEAM.value)
 
 
 def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
@@ -200,7 +207,7 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     inference = committed_models().summarize.inference
     cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
     worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
-    return worst_prompt, worst_prompt + inference.max_output_tokens
+    return worst_prompt, worst_prompt + inference.max_answer_tokens
 
 
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
@@ -213,11 +220,12 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     of it. Nothing in the tree said so. A doc said so, and a doc does not fail.
 
     The worst case is built from the measured expansion rather than from
-    `TOKENS_PER_WORD`. At the committed cap of 10,000 that is 997 + 12,191 + 900
-    = 14,088 tokens of 49,152, which is 29 percent. **It is the smaller of the
-    two sums this file now holds and it is the one that is retiring**, so read
-    `test_the_two_calls_fit_the_window_at_the_cap` before concluding the window
-    has room: that one sizes 39,284 over the same cap.
+    `TOKENS_PER_WORD`. At the committed cap of 20,000 that is a 24,256-token
+    prompt and a 25,156-token sequence, which is 38 percent of a 65,536 window.
+    **It is the smaller of the two sums this file now holds and it is the one
+    that is retiring**, so read `test_the_two_calls_fit_the_window_at_the_cap`
+    before concluding the window has room: that one sizes 54,887 over the same
+    cap, which is 84 percent.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     inference = committed_models().summarize.inference
@@ -226,21 +234,21 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     assert worst_sequence <= inference.n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through is "
-        f"{worst_prompt} prompt tokens, and {inference.max_output_tokens} of answer "
+        f"{worst_prompt} prompt tokens, and {inference.max_answer_tokens} of answer "
         f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
         "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
     )
 
 
 def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """Call 1's prompt at the cap, and the whole sequence behind it.
+    """The label call's prompt at the cap, and the whole sequence behind it.
 
     A second derivation and not a widening of the one above, because the two
     paths render different prompts. The single call sends one system turn and
-    the article. Call 1 sends a system turn that carries both jobs, the article
+    the article. The label call sends a system turn that carries both jobs, the article
     with an address in front of every sentence, and a menu of every quantity and
     date the extractor already cut - then pays for its own reply twice, once as
-    a decode and once again inside call 2's prompt.
+    a decode and once again inside the summarize-and-plan call's prompt.
 
     **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
     It used to be written out here, which put the number the production path
@@ -273,8 +281,8 @@ def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
     so as well, which is the point at which ESCALATE trigger 6 of
     `TODO/20260910-23-article-classification-plan.md` section 12a has fired.
 
-    **A labelling row does not add a node.** It adds a field to call 1's reply
-    shape, and `call_one_output_tokens` re-derives the budget from the shape's
+    **A labelling row does not add a node.** It adds a field to the label call's reply
+    shape, and `label_budget_tokens` re-derives the budget from the shape's
     own bounds on import.
     """
     assert len(dag.NODES) == dag.NODE_COUNT == 2
@@ -290,22 +298,21 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     The test above sizes the single call this plan is replacing and passes with
     room. That is the trap: a green gate over the path being retired reads as
     coverage of the path replacing it. The two-call sequence is 2.8 times the
-    single call's, because call 1's reply is paid twice and the candidate menu
+    single call's, because the label call's reply is paid twice and the candidate menu
     is paid once, and neither term exists on the single-call path at all.
 
     Both sides come from `config/` (Guardrail #6) and the arithmetic is measured
-    rather than assumed: at the committed cap of 10,000 tokens and a menu of 256
-    rows the prompt sizes at 28,041 and the sequence at 39,284 tokens, which is
-    80 percent of a 49,152 window with 9,868 spare.
+    rather than assumed: at the committed cap of 20,000 tokens and a menu of 256
+    rows the prompt sizes at 43,603 and the sequence at 54,887 tokens, which is
+    84 percent of a 65,536 window with 10,649 spare.
 
-    **The 9,868 is a margin with a derivation, which is why it is not wider.**
-    It is 25 percent, the size of the one tokenizer miss on record - `measured`
-    says 1.585 tokens a word and the densest cap-length build delivered 1.952 -
-    rounded up to a whole multiple of 16,384 and of the 512-token batch. A wider
-    window costs almost nothing in memory and costs this assertion its reach:
-    the gate is the product on this path, and it cannot report a sequence that
-    grew until the sequence has outgrown the window. Ruled by Carmack,
-    2026-09-13, over the 65,536 this branch first carried.
+    **The 10,649 is what the first whole multiple of 16,384 and of the 512-token
+    batch above the sum leaves over, and that is the rule.** A wider window costs
+    almost nothing in memory and costs this assertion its reach: the gate is the
+    product on this path, and it cannot report a sequence that grew until the
+    sequence has outgrown the window. Ruled by Carmack, 2026-09-13, over the
+    65,536 that branch first carried at a 10,000 cap; the cap doubled on
+    2026-09-14 and 65,536 is what that cap needs rather than slack it was given.
 
     **At 32,768 this failed by 6,516 tokens and the failure was not theoretical.**
     Of eight cap-length articles built from committed corpus prose on 2026-09-13,
@@ -324,10 +331,10 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     assert sequence <= inference.n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
-        f"call 1 prompt at elements.max_per_article of "
-        f"{committed.elements.max_per_article}. Call 1's {call_one_output_tokens()}-token "
-        f"reply, the {CALL_TWO_SEAM_TOKENS}-token seam and call 2's "
-        f"{call_two_output_tokens(committed.summarize)}-token reply put the pair at "
+        f"the label call prompt at elements.max_per_article of "
+        f"{committed.elements.max_per_article}. The label call's {label_budget_tokens()}-token "
+        f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
+        f"{summarize_and_plan_budget_tokens(committed.summarize)}-token reply put the pair at "
         f"{sequence} against a window of {inference.n_ctx}, over by "
         f"{sequence - inference.n_ctx}. Raise models.summarize.inference.n_ctx, or "
         "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "
@@ -907,3 +914,99 @@ def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> N
         ).public_telemetry_keep_months
         == 20
     )
+
+
+def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_default() -> None:
+    """A fresh clone logs everything, because the reason the flags exist is silence.
+
+    Built here rather than read from `config/idhazh.json`, so it proves the
+    default and not what somebody happened to commit. The block is absent
+    entirely, which is the shape of every config file written before today.
+
+    It cannot settle whether these defaults are right for a quiet production
+    run; only a run under them says that.
+    """
+    fresh = AppConfig.model_validate({"run": {"max_parallel": 2}}).logging
+    assert fresh.level is LogLevel.INFO
+    assert fresh.item_lines is True
+    assert fresh.stage_lines is True
+    assert fresh.waiting_heartbeat_seconds == 30
+    assert fresh.capture_prompts is True
+    assert fresh.capture_replies is True
+
+
+def test_every_logging_flag_moved_off_its_default_survives_the_round_trip() -> None:
+    """The substitution test: the file says it, the contract carries it back.
+
+    Every knob is moved, so a reader that ignored the block and fell back to a
+    default fails here rather than passing. `waiting_heartbeat_seconds` is moved
+    to 5 rather than to 0, because 0 is the off switch and an off switch that
+    reads the same as an unset knob proves nothing.
+    """
+    payload = {
+        "capture_prompts": False,
+        "capture_replies": False,
+        "item_lines": False,
+        "level": "DEBUG",
+        "stage_lines": False,
+        "waiting_heartbeat_seconds": 5,
+    }
+    fresh = LoggingConfig()
+    for name, moved in payload.items():
+        assert getattr(fresh, name) != moved, f"logging.{name} was already {moved!r}"
+
+    once = LoggingConfig.model_validate(payload).model_dump(mode="json")
+    assert json.dumps(once, sort_keys=True) == json.dumps(payload, sort_keys=True)
+    twice = LoggingConfig.model_validate(once).model_dump(mode="json")
+    assert json.dumps(twice, sort_keys=True) == json.dumps(once, sort_keys=True)
+    assert AppConfig.model_validate({"logging": payload}).logging.waiting_heartbeat_seconds == 5
+
+
+def test_a_negative_heartbeat_is_refused_and_the_error_names_the_field() -> None:
+    """Zero means never and is spelled. A negative number would mean it silently.
+
+    That is the worst shape a misconfiguration of this knob can take: an
+    operator who meant often gets never, and nothing says so. Refused at load,
+    at the block and through the whole config, and the message names the field
+    so a person reading it knows which line to fix.
+    """
+    with pytest.raises(ValidationError, match="waiting_heartbeat_seconds"):
+        LoggingConfig(waiting_heartbeat_seconds=-1)
+    with pytest.raises(ValidationError, match="waiting_heartbeat_seconds"):
+        AppConfig.model_validate({"logging": {"waiting_heartbeat_seconds": -1}})
+    assert LoggingConfig(waiting_heartbeat_seconds=0).waiting_heartbeat_seconds == 0
+
+
+def test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it() -> None:
+    """Guardrail #6: a flag with no removal condition is a second implementation.
+
+    A condition that named a piece of work would be no condition at all, so each
+    one has to name a reading. The guard is the word `week`, which is the span
+    every one of them is measured over. `item_lines` is the declared exception
+    and has to say so; `level` is not a flag and carries no condition either.
+    """
+    flags = {
+        name
+        for name, field in LoggingConfig.model_fields.items()
+        if name != "level"
+    }
+    assert flags == {
+        "item_lines",
+        "stage_lines",
+        "waiting_heartbeat_seconds",
+        "capture_prompts",
+        "capture_replies",
+    }
+    for name in sorted(flags - {"item_lines"}):
+        described = LoggingConfig.model_fields[name].description or ""
+        assert "Retire it" in described or "Set it to 0" in described, (
+            f"logging.{name} has no removal condition on the line that declares it"
+        )
+        assert "week" in described, f"logging.{name} names no reading, only an intent"
+
+    permanent = LoggingConfig.model_fields["item_lines"].description or ""
+    assert "NO REMOVAL CONDITION" in permanent
+    assert "permanent instrument" in permanent
+
+    level = LoggingConfig.model_fields["level"].description or ""
+    assert "Unrelated to the flags" in level, "the level is a volume dial, not a sixth flag"

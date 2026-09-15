@@ -1,7 +1,7 @@
 """Freeze this shard's slice of the corpus, then replay it N times.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
     CorpusItem,
@@ -155,7 +156,8 @@ def _freeze(
         if len(pool) >= floor and not _unmet(pool, share=share, bands=bands):
             break
         attempted += 1
-        article, source_text, _, _ = _fetch_one(item, settings, read_url)
+        fetched = _fetch_one(item, settings, read_url)
+        article, source_text = fetched.article, fetched.source_text
         if article.status is not ArticleStatus.OK or not article.text:
             LOG.info("corpus item unavailable url=%s", item.canonical_url)
             continue
@@ -238,6 +240,7 @@ def _observe(
     *,
     repeat: int,
     inference: InferenceConfig,
+    turns: TurnsConfig,
     seconds: float,
 ) -> ItemObservation:
     reply = completion or Completion(content="")
@@ -258,7 +261,7 @@ def _observe(
         summary_word_count=len((summary.summary or "").split()),
         prompt_tokens=reply.prompt_tokens,
         completion_tokens=reply.completion_tokens,
-        fits_context_predicted=summarize.fits_context(article, inference),
+        fits_context_predicted=summarize.fits_context(article, inference, turns=turns),
         summarize_seconds=seconds,
     )
 
@@ -336,6 +339,7 @@ def stage_qualify(
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
+        turns=model.turns,
     )
 
     plan = _load_plan(date)
@@ -398,6 +402,7 @@ def stage_qualify(
                     completion,
                     repeat=repeat,
                     inference=inference,
+                    turns=model.turns,
                     seconds=seconds,
                 )
             )

@@ -1,5 +1,82 @@
 {
   "$defs": {
+    "DraftConfig": {
+      "additionalProperties": false,
+      "description": "A second, much smaller set of weights that guesses ahead of the first.\n\n**Speculative decoding is output-identical by construction.** The target\nmodel verifies every drafted token and rejects any it would not have\nproduced, so the text is the text the target would have written alone. That\nis why this block is priced on cost and on how hard it is to revert rather\nthan waiting on a quality measurement: there is no quality to measure\n(Guardrail #10, and plan 28's row 2a).\n\nWhat it can do is waste time. A draft the target keeps rejecting costs a\nforward pass per rejected token and returns nothing, so the acceptance rate\nis the number that says whether it paid. `llama-server` publishes it:\n`llamacpp:spec_decode_num_accepted_tokens_total` over\n`llamacpp:spec_decode_num_draft_tokens_total`, both already in the\n`/metrics` body a shard reads at job end.",
+      "properties": {
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Byte Count"
+        },
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "n_max": {
+          "default": 3,
+          "description": "How many tokens are drafted before the target verifies. The runtime's own default. Higher drafts further ahead and wastes more when the draft is wrong, so it is a bet on how predictable the text is.",
+          "maximum": 64,
+          "minimum": 1,
+          "title": "N Max",
+          "type": "integer"
+        },
+        "n_min": {
+          "default": 0,
+          "maximum": 64,
+          "minimum": 0,
+          "title": "N Min",
+          "type": "integer"
+        },
+        "p_min": {
+          "default": 0.0,
+          "description": "Below this probability the draft stops guessing and lets the target decode. 0.0 is the runtime default and means never stop early.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "P Min",
+          "type": "number"
+        },
+        "repo": {
+          "description": "Hugging Face repository the draft GGUF is in.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The hub commit. Required here and optional on ModelRef: a block somebody added by hand is a block that can pin properly from the start.",
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Refused before the server starts, like the target's.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "spec_type": {
+          "$ref": "#/$defs/SpeculationType",
+          "default": "draft-simple"
+        }
+      },
+      "required": [
+        "repo",
+        "revision",
+        "file",
+        "sha256"
+      ],
+      "title": "DraftConfig",
+      "type": "object"
+    },
     "InferenceConfig": {
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
@@ -91,11 +168,18 @@
           "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
           "title": "Log Verbosity"
         },
-        "max_output_tokens": {
+        "max_answer_tokens": {
           "default": 900,
-          "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
+          "description": "The answer span's budget. A crash guard, not a length target: the prompt sets the length and this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want. It was max_output_tokens until 2026-09-14, when one budget stopped being able to say which of two spans overran.",
           "minimum": 1,
-          "title": "Max Output Tokens",
+          "title": "Max Answer Tokens",
+          "type": "integer"
+        },
+        "max_think_tokens": {
+          "default": 256,
+          "description": "The thinking span's budget, and a hard cap rather than a hint. A model that never closes its reasoning block would otherwise eat the whole window and be recorded as a truncated summary, which names the wrong cause. 256 tokens costs 42.6 s an item at the measured 6.01 +/- 0.11 tokens a second (2026-08-23, ubuntu-latest, EPYC 9V74, llama.cpp b10598, three repeats). It is read only where the entry declares turns.thinking_close; an entry that declares no closing marker spends none of it.",
+          "minimum": 1,
+          "title": "Max Think Tokens",
           "type": "integer"
         },
         "metrics": {
@@ -112,7 +196,7 @@
         },
         "n_ctx": {
           "default": 8192,
-          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 49152, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for 16384, 1024.00 for 32768 and 2048.00 for 65536, which interpolates to 1536.00 MiB at the pinned 49152, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
+          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 65536, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, which is 2048.00 MiB at the pinned 65536 against 512.00 MiB at 16384, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
           "minimum": 512,
           "title": "N Ctx",
           "type": "integer"
@@ -211,12 +295,6 @@
           "title": "Temperature",
           "type": "number"
         },
-        "thinking": {
-          "default": false,
-          "description": "Off. Reasoning measurably increases hallucination when summarizing.",
-          "title": "Thinking",
-          "type": "boolean"
-        },
         "top_p": {
           "default": 1.0,
           "exclusiveMinimum": 0.0,
@@ -237,6 +315,32 @@
           "minLength": 1,
           "title": "Arch",
           "type": "string"
+        },
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
+          "title": "Byte Count"
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DraftConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A second, smaller set of weights that drafts tokens this entry's model then verifies. Null is the default and means one model and no speculation. It sits beside `inference` rather than inside it because it names weights of its own - a repository, a commit, a filename and a digest - and a block that fetches a file is not a decoding knob. On `ModelRef` rather than `ModelEntry` so a run record says whether the day was drafted; a run that cannot answer that cannot explain its own throughput."
         },
         "file": {
           "minLength": 1,
@@ -321,6 +425,15 @@
       "title": "ModelEntry",
       "type": "object"
     },
+    "SpeculationType": {
+      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the two this project can actually stand up. `llama-server` accepts a\nlonger list - eagle3, mtp, dflash, dspark and five ngram variants - and each\nof those either needs a purpose-built draft head we do not have or a lookup\ncache nothing here writes. A closed choice is what stops an operator naming\none of them and getting a server that starts and drafts nothing.",
+      "enum": [
+        "draft-simple",
+        "ngram-simple"
+      ],
+      "title": "SpeculationType",
+      "type": "string"
+    },
     "SystemPlacement": {
       "description": "Where this model's template takes the system text. Two, and no third.\n\nA turn topology, so it is an enum rather than a free-form string: what\n\"folded into the first user turn\" MEANS is a code path, and expressing it as\ndata would need a template language in config - a second renderer nobody\ntests (docs/architecture/summarize/model-boundary.md).",
       "enum": [
@@ -332,7 +445,7 @@
     },
     "TurnsConfig": {
       "additionalProperties": false,
-      "description": "How one turn is written for the weights this entry names.\n\nIt is the envelope, never the content. These strings decide where a turn\nopens and closes, where the system text goes and how a reply begins; what\nthe turns SAY is `backend/idhazh/prompts/*.txt` and is the same set for\nevery model (docs/architecture/summarize/model-boundary.md).\n\nThey belong beside the entry that names the weights, not in this project's\nprompt directory: a marker is a fact about somebody else's weights, and\nholding it apart from the entry lets a model swap move one and leave the\nother. Nothing raises when that happens - a wrong\nmarker renders a prompt with no turn structure that the decoder's grammar\nstill accepts - worse summaries and no error anywhere.\n\n**The trailing newlines are load-bearing and invisible.** They survive here\nbecause JSON spells them `\\n` rather than leaving them at the end of a line\nfor an editor or a line-ending pass to rewrite.",
+      "description": "How one turn is written for the weights this entry names.\n\nIt is the envelope, never the content. These strings decide where a turn\nopens and closes, where the system text goes and how a reply begins; what\nthe turns SAY is `backend/idhazh/prompts/*.txt` and is the same set for\nevery model (docs/architecture/summarize/model-boundary.md).\n\nThey sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,\nwhich put a fact about somebody else's weights in a package this project\nwrites and held it apart from the entry that names those weights. A swap\nthen moved the entry and left the markers, and nothing raised: a wrong\nmarker renders a prompt with no turn structure that the decoder's grammar\nstill accepts - worse summaries and no error anywhere.\n\n**The trailing newlines are load-bearing and invisible.** They survive here\nbecause JSON spells them `\\n` rather than leaving them at the end of a line\nfor an editor or a line-ending pass to rewrite.",
       "properties": {
         "declared_for": {
           "anyOf": [
@@ -379,6 +492,20 @@
           "default": "own_turn",
           "description": "Where this model's template takes the system text - its own turn, or folded into the first user turn. It is read by idhazh.llm.server.render_prompt, which never reads a model id: without this field a model with no system role could not be configured at all, only coded for. It has a default where the markers beside it have none, because the default is the topology of every template that HAS a system role rather than the incumbent's own string, and because arm 1 of idhazh.llm.server.prove_the_entry refuses a run whose render disagrees with the server's own render of the same turns - so a placement declared wrong is caught before the first item rather than inherited in silence."
         },
+        "thinking_close": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What this model writes to close its reasoning block, and the whole of the declaration that reasoning is wanted. Not null means a call is decoded as two spans - one unconstrained span that stops here, then the schema-constrained answer on the same slot - and the prompt ends on reply_opening_thinking rather than reply_opening. Null means one schema-constrained span and no reasoning, which is where the incumbent sits. It replaced inference.thinking on 2026-09-14: a flag beside a marker is two places to disagree, and the flag alone could not have worked - the output schema binds the decode from the first token, so a think opener is not a legal token on either transport.",
+          "title": "Thinking Close"
+        },
         "thinking_kwarg": {
           "anyOf": [
             {
@@ -390,7 +517,7 @@
             }
           ],
           "default": "enable_thinking",
-          "description": "The template variable that turns this model's reasoning on and off, sent as the one key of chat_template_kwargs. It is a name belonging to somebody else's Jinja template, so it is a model fact and not a project constant. Null means this template reads no keywords at all, and then the request carries no chat_template_kwargs and inference.thinking must be false; ModelEntry refuses the pair.",
+          "description": "The template variable that turns this model's reasoning on and off, sent as the one key of chat_template_kwargs. It is a name belonging to somebody else's Jinja template, so it is a model fact and not a project constant - it was spelled in this project's source and sent to every model until 2026-09-14. Null means this template reads no keywords at all, and then the request carries no chat_template_kwargs and thinking_close must be null too; this block refuses the pair.",
           "title": "Thinking Kwarg"
         },
         "turn_closing": {
@@ -421,6 +548,21 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "models.<role>.draft, optional: a second, smaller set of weights that drafts tokens this entry's model then verifies. It carries its own repo, revision, file, sha256 and byte_count, a closed spec_type of draft-simple or ngram-simple, and the three drafting knobs n_max, n_min and p_min. Null is the default and means one model and no speculation, so every models file written before today still loads and every committed run.json still reads.",
+      "version": "2026-09-14T07:00",
+      "why": "Plan 28 row 2a, returned to scope 2026-09-14. It is the one feature a candidate brings that this plan's pointer-swap could not switch on, so leaving it out contradicted the plan's own intent. It is priced on cost and revert rather than on a quality measurement because speculative decoding is output-identical by construction - the target verifies every drafted token - so there is no quality to measure (Guardrail #10, amended 2026-09-14). The block sits beside inference rather than inside it because it names weights to fetch, and a block that fetches a file is not a decoding knob."
+    },
+    {
+      "change": "models.<role>.byte_count, optional: how many bytes the weights are. It sits on ModelRef beside sha256, defaults to null, and no reader requires it - so a models file written before today still loads and a run.json written before today still reads.",
+      "version": "2026-09-14T06:00",
+      "why": "Plan 28 row #9 decision 3. The qualification dispatch took the byte count as a form field, which made it the one fact about a candidate that lived outside the file naming that candidate - and its default of 0 meant the identity gate compared the observed size to itself and called that a check (Guardrail #10). Declared here, the gate compares two independent facts, and the dispatch has nothing left to ask for but the filename. Ruled by Carmack, 2026-09-13."
+    },
+    {
+      "change": "models.<role>.turns gains thinking_close, and models.<role>.inference.thinking and max_output_tokens are gone. thinking_close is the whole declaration that reasoning is wanted: not null and a call is decoded as two spans, one unconstrained span that stops at this marker and then the schema-constrained answer on the same slot. max_think_tokens and max_answer_tokens replace the one budget. Both removed names are refused by name through refuse_a_removed_knob, max_output_tokens pointing at max_answer_tokens and thinking pointing at turns.thinking_close.",
+      "version": "2026-09-14T04:00",
+      "why": "Plan 28 row #10. The owner ruled on 2026-09-13 that reasoning during summarization is wanted, and the old flag could never have delivered it: the output schema binds the decode from the first token on both transports, so a think opener is not a legal token - the grammar either suppresses the thinking or the runtime splits a reasoning channel off and every item fails on shape. A flag beside a marker is also two places to disagree, and one budget over two spans cannot say whether a long think or a cut answer spent it. Ruled by Andre and Fowler, 2026-09-14."
+    },
+    {
       "change": "models.<role>.turns gains system_role, system_joiner and thinking_kwarg. system_role is a closed choice of own_turn and fold_into_first_user; system_joiner is required under the fold and refused under own_turn; thinking_kwarg names the template variable chat_template_kwargs carries and defaults to the incumbent's enable_thinking, with null meaning the request sends no template keywords at all and inference.thinking must then be false. All three sit on TurnsConfig, which ModelEntry carries and ModelRef does not, so a run.json written before today still reads.",
       "version": "2026-09-14T03:00",
       "why": "Plan 28 row #11. Where the system text goes and which keyword turns reasoning off are facts about somebody else's chat template, and both were spelled in this project's source and sent to every model - so a model with no system role could not be configured at all, only coded for. The prompt TEXT does not follow them onto the entry and cannot: prose_changed_alone reports nothing whenever model_sha256 moved, so per-model wording would hide every prompt edit that rode in on a swap. Ruled by Andre, 2026-09-14."
@@ -442,7 +584,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-14T03:00",
+      "default": "2026-09-14T07:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -453,5 +595,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-14T03:00"
+  "version": "2026-09-14T07:00"
 }

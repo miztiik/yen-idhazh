@@ -2,7 +2,7 @@
   "$defs": {
     "CallCost": {
       "additionalProperties": false,
-      "description": "One model call's own five numbers.\n\nNested rather than flattened because the same five have to be described once\nand checked once. The two CSV ledgers cannot nest, so they spell these names\nwith a `call_1_`/`call_2_` prefix and `idhazh.telemetry` is the one place\nthat flattens - one translator, against one copy of this validator per\ncontract that would otherwise carry it.",
+      "description": "One model call's own five numbers.\n\nNested rather than flattened because the same five have to be described once\nand checked once. The two CSV ledgers cannot nest, so they spell these names\nwith a `label_`/`summary_` prefix and `idhazh.telemetry` is the one place\nthat flattens - one translator, against one copy of this validator per\ncontract that would otherwise carry it.",
       "properties": {
         "cached_tokens": {
           "default": 0,
@@ -72,6 +72,7 @@
         "http_server_error",
         "network_error",
         "no_text",
+        "no_title",
         "too_short",
         "not_prose",
         "boilerplate",
@@ -115,6 +116,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "failure_code may now carry no_title.",
+      "version": "2026-09-15",
+      "why": "Extract gained a refusal for an item whose feed carried no headline, and summarize can never write that value. No field on this payload changed; the failure vocabulary is inlined into this schema, so the generated file's bytes move and the change is stamped here rather than left to the drift gate to announce (section 11). Additive: a payload written before today names none of the new values and still validates."
+    },
     {
       "change": "Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
       "version": "2026-09-13T22:00",
@@ -390,7 +396,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-13T22:00",
+      "default": "2026-09-15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -406,5 +412,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-09-13T22:00"
+  "version": "2026-09-15"
 }

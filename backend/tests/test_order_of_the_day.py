@@ -126,19 +126,21 @@ def scored() -> list[tuple[str, rank.Ranked]]:
     for story in _stories():
         carried = _carriers(story)
         reliability = story["reliability"] or None
+        terms = rank.score_terms(
+            carried,
+            config=collect,
+            watchlist_hit=story["watchlist_hit"],
+            lens_bonus=story["lens_bonus"],
+            appeared=story["appeared"],
+            now=now,
+            reliability=reliability,
+        )
         out.append(
             (
                 str(story["name"]),
                 rank.Ranked(
-                    score=rank.score(
-                        carried,
-                        config=collect,
-                        watchlist_hit=story["watchlist_hit"],
-                        lens_bonus=story["lens_bonus"],
-                        appeared=story["appeared"],
-                        now=now,
-                        reliability=reliability,
-                    ),
+                    score=terms.total,
+                    terms=terms,
                     candidate=carried[0],
                     appeared_at=story["appeared"],
                     time_source=TimeSource.FEED,

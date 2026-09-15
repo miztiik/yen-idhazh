@@ -1,6 +1,6 @@
 # What the two calls cost at the truncation cap, 2026-09-13
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-15
 
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
@@ -9,7 +9,7 @@ moves **Last Updated**, and git history holds what it said.
 Plan 11 row #3f had to raise `models.summarize.inference.n_ctx` so both calls
 fit at the truncation cap, and it was dispatched with a table measured on one
 cap-length article. This session re-measured the whole sequence on eight, took
-the memory reading at three windows, and decomposed call 1's prompt into the
+the memory reading at three windows, and decomposed the label call's prompt into the
 three things that pay for it. It supersedes the sizing half of
 [`two-call-re-read.md`](two-call-re-read.md); that record's
 re-read findings stand and are not touched here.
@@ -41,7 +41,7 @@ has never produced.
 
 ## The sequence, and which build you measure decides the answer
 
-| Build, all 7,692 words | Menu rows | Call 1's prompt | The pair | vs 32,768 | vs 65,536 |
+| Build, all 7,692 words | Menu rows | The label call's prompt | The pair | vs 32,768 | vs 65,536 |
 | --- | --- | --- | --- | --- | --- |
 | densest first | 256 | 26,252 | **37,495** | over by 4,727 | 28,041 spare |
 | shuffled, seed 2 | 254 | 23,954 | **35,197** | over by 2,429 | 30,339 spare |
@@ -52,9 +52,9 @@ has never produced.
 | longest first | 35 | 15,007 | 26,250 | 6,518 spare | 39,286 spare |
 | densest first, reversed | 0 | 13,422 | 24,665 | 8,103 spare | 40,871 spare |
 
-The pair is `call 1's prompt + 6,491 + 58 + 4,694`: call 1's own output budget
-from `call_one_output_tokens()`, the seam call 2 adds in front of its reply, and
-the reply call 2's grammar may write from `call_two_output_tokens()`.
+The pair is `the label prompt + 6,491 + 58 + 4,694`: the label call's own output budget
+from `label_budget_tokens()`, the seam the summarize-and-plan call adds in front of its reply, and
+the reply the summarize-and-plan call's grammar may write from `summarize_and_plan_budget_tokens()`.
 
 **Three of eight exceed 32,768, and two of those three are seeded shuffles.**
 That is the finding. The table plan 11 row #3f carried until this session said
@@ -67,7 +67,7 @@ sized worst case is 28,041 of prompt and **39,284 for the pair** - 245 tokens
 past the worst single build, which is the price of not assuming one article is
 worst at everything.
 
-## Where call 1's prompt goes
+## Where the label call's prompt goes
 
 | Build | Elements | Body | Sentence addresses | Menu | Tokens a menu row | Body tokens a word |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -79,7 +79,7 @@ worst at everything.
 | shuffled, seed 4 | 237 | 10,062 | 1,963 | 7,751 | 32.70 | 1.308 |
 | shuffled, seed 5 | 178 | 10,118 | 1,869 | 5,639 | 31.68 | 1.315 |
 
-Call 1's system turn is **2,055 tokens** on its own, and the whole prompt over a
+The label call's system turn is **2,055 tokens** on its own, and the whole prompt over a
 seven-word article with an empty menu is **2,167** - so the title line, the two
 section headers and the fences are the other 112.
 
@@ -108,14 +108,8 @@ footprint.
 
 So **65,536 costs 1,584 MiB more than 16,384**, against the runner's measured
 low-water free of 6.84 GiB and a 1.0 GiB bar. `n_ctx_train` is 262,144, so none
-of these arms scaled RoPE.
-
-**The window was ruled at 49,152 after this session, and nothing above is
-restated for it.** These are the arms that ran; 49,152 was not one of them. It
-interpolates to 1,536.00 MiB of KV and 9,754.88 MiB all told, 1,056 MiB more
-than 16,384. The `vs 65,536` column further up is what this session compared
-against: against 49,152 the densest build has 11,657 spare, and the sized worst
-case of 39,284 has 9,868. Carmack, 2026-09-13.
+of these arms scaled RoPE. **65,536 is the window `config/` carries**, so the
+reading for it is measured here rather than interpolated.
 
 **Peak working set is the weaker of the two numbers.** It counts the
 memory-mapped weights, which the OS may evict, and it moves with what else the
@@ -133,30 +127,30 @@ the cap or change the extractor.
 
 **And a cap-length prompt may not be affordable at all.** The one 8,741-token
 prompt the pipeline has actually sent cost 927 s of prefill on the runner
-([`../measurements.md`](../measurements.md)). A 28,041-token call 1 prompt is 3.2
-times that. The window costs memory; the tokens cost time, and the same tokens
-cost the same time at any window - so this is plan 11 row #5b's question and the
-cap's, not the window's.
+([`../measurements.md`](../measurements.md)). A 28,041-token label-call prompt is
+3.2 times that. The window costs memory; the tokens cost time, and the same
+tokens cost the same time at any window - so this is plan 11 row #5b's question
+and the cap's, not the window's.
 
 ## What was taken with
 
 Three throwaway scripts, gitignored under `.tmp_*` and not committed, built on
 `backend/utilities/measure_two_calls.py`'s own `corpus_samples`,
 `sample_at_the_cap` and `Tokenizer`. The four numbers that outlive them are
-`CALL_ONE_SCAFFOLD_TOKENS`, `CALL_ONE_BODY_TOKENS_A_WORD`,
-`CALL_ONE_MENU_TOKENS_A_ROW` and `CALL_TWO_SEAM_TOKENS` in
+`LABEL_SCAFFOLD_TOKENS`, `LABEL_BODY_TOKENS_A_WORD`,
+`LABEL_MENU_TOKENS_A_ROW` and `SUMMARIZE_AND_PLAN_SEAM_TOKENS` in
 [`../../../backend/idhazh/measured.py`](../../../backend/idhazh/measured.py),
 each carrying its own method and what to do when it moves.
 
 **One defect found in `measure_two_calls.py` and not fixed here.** Its printed
-ceiling subtracts `models.summarize.inference.max_output_tokens` as call 1's
-decode budget, which stopped being call 1's budget when row #3g derived it from
+ceiling subtracts `models.summarize.inference.max_output_tokens` as the label call's
+decode budget, which stopped being the label call's budget when row #3g derived it from
 the grammar on 2026-09-12: 900 against 6,491. The ceiling it prints is therefore
 5,591 tokens too generous. It is an operator tool that nothing in CI calls, and
 the row that owns it is row #3d's.
 
 ## See also
 
-- [`two-call-re-read.md`](two-call-re-read.md) - where call 2's re-read tokens go. Its sizing table is superseded by this record; its re-read findings are not.
+- [`two-call-re-read.md`](two-call-re-read.md) - where the summarize-and-plan call's re-read tokens go. Its sizing table is superseded by this record; its re-read findings are not.
 - [`../../architecture/summarize/prompt.md`](../../architecture/summarize/prompt.md) - the page that owns the window, and what the assertion reads.
 - [`../measurements.md`](../measurements.md) - the instrument log, which carries the memory table above.

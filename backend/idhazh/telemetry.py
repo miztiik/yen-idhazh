@@ -18,9 +18,17 @@ from pathlib import Path
 from typing import Any, Final, Protocol
 
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.base import CHARACTER_CLASS_PATTERNS, column_bounds, field_column, fit_cell
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    CALL_SLOTS,
+    FailureCode,
+    ItemHealthDetail,
+    ItemHealthRow,
+    ItemOutcome,
+    ItemStage,
+)
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -53,9 +61,15 @@ DEGRADED_BUT_DONE: Final = frozenset(
 class EventName(StrEnum):
     """Every event name a stage may emit.
 
-    Two members, because two stages emit. A name with no emitter cannot be told
-    apart from one that fires, so a name is added here in the commit that emits
-    it.
+    A name with no emitter cannot be told apart from one that fires, so a name is
+    added here in the commit that emits it.
+
+    **Two shapes carry these names and the shape is a property of the name.** The
+    two `*.failed` members are warnings and ride the nested envelope `event`
+    builds. The six below them are the work stage's instrument and ride the flat
+    record `record` builds, because the common operation on them is grepping one
+    field across a whole shard and a nested envelope makes that harder than it
+    needs to be (owner, 2026-09-14).
     """
 
     ITEM_SUMMARIZE_FAILED = "item.summarize.failed"
@@ -65,6 +79,107 @@ class EventName(StrEnum):
     #: no reader can tell a refusal from a broken writer by looking at a picture
     #: that is not there. The item publishes either way, shorter.
     ITEM_VISUAL_FAILED = "item.visual.failed"
+    #: An item was picked up. It exists so a killed shard names the item it died
+    #: on: before it, a timeout left no trace of the in-flight item at all.
+    ITEM_START = "item.start"
+    #: One named stage of one item ended. The completion record arrives only for
+    #: an item that finished, and a shard that dies on a timeout finishes none.
+    STAGE_DONE = "stage.done"
+    #: A model call is still in flight. The slowest single call this project has
+    #: measured returned after 22 minutes having printed nothing at all.
+    MODEL_WAITING = "model.waiting"
+    #: An item ended, and it is emitted for failures as well as successes - the
+    #: expensive failures were the least visible thing in the log.
+    ITEM_DONE = "item.done"
+    #: The shard bound killed an item mid-flight. Distinct from a failure,
+    #: because nothing about the item was refused.
+    ITEM_ABANDONED = "item.abandoned"
+    #: The shard ended: its totals, its failures by code, and its slowest item.
+    SHARD_DONE = "shard.done"
+
+
+#: The names that ride the flat record rather than the nested envelope. Declared
+#: as a set rather than left to a reader's eye, so `refuse_the_wrong_shape` can
+#: hold each emitter to the shape its own name chose.
+FLAT_RECORDS: Final[frozenset[EventName]] = frozenset(
+    {
+        EventName.ITEM_START,
+        EventName.STAGE_DONE,
+        EventName.MODEL_WAITING,
+        EventName.ITEM_DONE,
+        EventName.ITEM_ABANDONED,
+        EventName.SHARD_DONE,
+    }
+)
+
+
+#: What a flat record may say beyond the census row's own columns. Ten keys, and
+#: each one is a fact about the record or about the text that crossed the wire
+#: rather than about the item: which stage ended, how long a call has been in
+#: flight, what the shard totalled, what the prompt hashed to. An eleventh key
+#: that is a property of the ITEM belongs in `ItemHealthRow` first, because a
+#: field the log carries and the ledger does not is the drift this instrument
+#: exists to end.
+#:
+#: **`prompt_sha256` is the exception and it is a deliberate one.** It says
+#: which bytes the model was sent, and `ItemHealthRow` has no column for it
+#: because putting one there needs `Summary` widened too - the assemble stage
+#: builds the row from the summary payload and the summary carries no prompt
+#: digest. That is a two-contract change and it is priced in the pull request
+#: rather than taken here. Until it lands the digest reaches a person through
+#: the job log alone, which keeps it for about as long as the capture artifact
+#: does.
+INSTRUMENT_CELLS: Final[frozenset[str]] = frozenset(
+    {
+        #: Which named stage `stage.done` is reporting.
+        "stage",
+        #: Which call `model.waiting` is waiting on.
+        "call",
+        #: How long that call has been in flight, in seconds.
+        "waited_s",
+        #: The shard's own totals on `shard.done`, as a flat count map.
+        "items",
+        "failures",
+        "slowest",
+        #: What the model was sent and what came back, recorded whether or not
+        #: the text itself was captured. Two runs whose prompts differ are two
+        #: different measurements, and this is the cheapest way to see that.
+        "prompt_sha256",
+        "prompt_chars",
+        "reply_chars",
+        #: Whether the text behind those numbers was written to the artifact.
+        "captured",
+    }
+)
+
+#: Every census column, in the row's own order. One tuple rather than a call at
+#: each site, so a record and a ledger row read down the same way and a reader
+#: comparing the two is comparing the same sequence.
+CENSUS_CELLS: Final[tuple[str, ...]] = ItemHealthRow.csv_columns()
+
+#: The whole annotated type behind each census column, by column name. Read off
+#: `model_fields` rather than written out: a column added to the ledger is folded
+#: into its own class the day it is declared, and a column whose bound moves
+#: takes the fold with it (Guardrail #6). `field_column` is what makes that true
+#: for a required column as well as an optional one - Pydantic lifts a required
+#: field's constraints out of its annotation, and a column read without them
+#: looks like a column that declared nothing.
+_CENSUS_COLUMN_TYPES: Final[Mapping[str, Any]] = {
+    name: field_column(field) for name, field in ItemHealthRow.model_fields.items()
+}
+
+#: What a failure detail that folded away to nothing records, and what a recorded
+#: cell that did the same records. Neither is an empty string: a cell that
+#: reached the fold had something to say, and a column with `min_length=1` would
+#: refuse the emptiness and take the row reporting the fault with it.
+UNSPECIFIED: Final = "unspecified failure"
+UNPRINTABLE: Final = "unprintable"
+
+#: Every key a flat record may carry. The census row's columns, plus the ten
+#: above. Derived rather than written out, so a column added to the ledger is
+#: loggable the same day and a typo at a call site is refused rather than
+#: minting a field nobody reads.
+RECORD_CELLS: Final[frozenset[str]] = frozenset(CENSUS_CELLS) | INSTRUMENT_CELLS
 
 
 class EventLevel(StrEnum):
@@ -89,6 +204,8 @@ def event(
     around them does not, and building it here rather than at the call site is
     what stops a second emitter shipping a second shape.
     """
+    if name in FLAT_RECORDS:
+        raise ValueError(f"{name.value} is a flat record; call telemetry.record")
     return json.dumps(
         {
             "ts": ts,
@@ -102,6 +219,46 @@ def event(
         },
         sort_keys=True,
         separators=(",", ":"),
+    )
+
+
+def record(
+    *,
+    ts: str,
+    src: ItemStage,
+    run: str | None,
+    name: EventName,
+    cells: Mapping[str, object],
+) -> str:
+    """Serialize one instrument record as the single flat line a stage logs.
+
+    **Flat, and that is the whole design.** The common operation on these lines
+    is `grep '"summary_decode_ms":' | ...` across a 200-minute shard, and a
+    nested `ctx`/`data` envelope puts every interesting field one level down
+    where no line-oriented tool can reach it (owner, 2026-09-14). The four
+    envelope fields sit beside the cells rather than above them, and a cell may
+    not be called `ts`, `src`, `v`, `run` or `name` for that reason.
+
+    **Every key is a column name `ItemHealthRow` already declares**, apart from
+    the handful this module names below. A field called one thing in the log and
+    another in the ledger is the drift this instrument exists to end, so the
+    caller builds its cells through `idhazh.itemrecord` and this function refuses
+    a key neither vocabulary holds.
+
+    Values are JSON scalars. Nothing fetched reaches here: the keys are a closed
+    set and none of them is the article's own words (Guardrail #11).
+    """
+    if name not in FLAT_RECORDS:
+        raise ValueError(f"{name.value} is a nested event; call telemetry.event")
+    unknown = sorted(set(cells) - RECORD_CELLS)
+    if unknown:
+        raise ValueError(f"a record cell names no column: {', '.join(unknown)}")
+    return json.dumps(
+        {"ts": ts, "src": src.value, "v": ENVELOPE_VERSION, "run": run, "name": name.value}
+        | dict(cells),
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
     )
 
 
@@ -666,12 +823,59 @@ def is_final(article: Article | None, summary: Summary | None) -> bool:
 
 
 def detail_cell(text: str) -> str:
-    """Sanitize an unknown-failure detail for a CSV cell."""
+    """Sanitize an unknown-failure detail for a CSV cell.
+
+    Two controls, composed, and they answer different questions (Guardrail #11).
+    `sanitize` is the trust boundary: this text can be a stranger's page, and it
+    reaches here whenever a failure quotes what failed - a Pydantic
+    `ValidationError` embeds `input_value=...`, so a page title with a curly
+    quote in it arrives inside the message that says the title was refused.
+    `fit_cell` is the column: it reads the class and the length off
+    `ItemHealthDetail` itself, so the cut is the column's own 2,000 rather than a
+    number restated here, and the result is a value the column accepts.
+
+    **A failure that cannot be printed is still a failure that happened.** A
+    detail that folds away to nothing becomes `UNSPECIFIED`, never an empty
+    string: the column has `min_length=1`, so an empty cell would raise and lose
+    the row that was reporting the fault.
+    """
     cleaned = sanitize(text)
     while cleaned.startswith(_FORMULA_PREFIXES):
         cleaned = cleaned[1:].lstrip()
-    collapsed = " ".join(cleaned.split())
-    return collapsed[:200] or "unspecified failure"
+    return fit_cell(cleaned, column=ItemHealthDetail, absent=UNSPECIFIED)
+
+
+def fit_record_cells(cells: Mapping[str, object]) -> dict[str, object]:
+    """Every recorded string cell, folded into the census column that will hold it.
+
+    **One door and no list.** The cells a stage records are keyed by the column
+    they land in, so the column's own annotation is reachable from the key - and
+    that is what makes this structural rather than a table somebody maintains. A
+    column declared tomorrow is folded the day it is declared, and a column whose
+    bound moves takes its folder with it.
+
+    A pattern `fit_cell` cannot fold is left alone, and that is the load-bearing
+    half: `item_id`, `url_key`, `canonical_url`, `vertical` and `source_id` name
+    an identity the pipeline minted rather than a class of characters, so a fold
+    there would invent an address. So does every enum column. Those keep the
+    refusal they already had.
+
+    An empty string stays empty. A cell that arrived with nothing in it is a
+    reading nobody took, which is a different fact from a reading that could not
+    be printed, and the census columns are nullable for exactly that reason.
+    """
+    fitted: dict[str, object] = {}
+    for name, value in cells.items():
+        column = _CENSUS_COLUMN_TYPES.get(name)
+        if column is None or not isinstance(value, str) or not value:
+            fitted[name] = value
+            continue
+        pattern, _, _ = column_bounds(column)
+        if pattern not in CHARACTER_CLASS_PATTERNS:
+            fitted[name] = value
+            continue
+        fitted[name] = fit_cell(value, column=column, absent=UNPRINTABLE)
+    return fitted
 
 
 def classify_item(
@@ -683,6 +887,7 @@ def classify_item(
     run_id: str,
     shard: int | None = None,
     extraction: ExtractionHealth | None = None,
+    recovered: bool | None = None,
 ) -> ItemHealthRow:
     """Return the one terminal row for this planned item in this run.
 
@@ -697,6 +902,13 @@ def classify_item(
     the summarizer never reached still had text a pattern could read, and a class
     recorded only for the items that published would make the extractor look
     healthiest on the days it failed most.
+
+    `recovered` says whether a cut reply had to be repaired before it parsed, and
+    it arrives as an argument for the same reason: the fact is recorded on the
+    visual decision, which is a third payload this function is not handed. It
+    rides every branch that could carry one, because a recovery that saved the
+    summary and a recovery that saved nothing are both readings of the same
+    budget - and only the caller knows which payload it opened.
     """
     if article is None:
         return _row(
@@ -705,6 +917,7 @@ def classify_item(
             run_id=run_id,
             shard=shard,
             extraction=extraction,
+            recovered=recovered,
             stage=ItemStage.PLAN,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.NOT_ATTEMPTED,
@@ -718,6 +931,7 @@ def classify_item(
             run_id=run_id,
             shard=shard,
             extraction=extraction,
+            recovered=recovered,
             stage=stage,
             outcome=ItemOutcome.FAILED,
             code=code,
@@ -725,6 +939,7 @@ def classify_item(
             source_chars=len(article.text or "") if article.text is not None else None,
             source_words=article.word_count or None,
             source_words_before_cap=article.source_word_count,
+            truncation_cap_tokens=article.truncated_at_tokens,
             detail=detail,
         )
 
@@ -736,12 +951,14 @@ def classify_item(
                 run_id=run_id,
                 shard=shard,
                 extraction=extraction,
+                recovered=recovered,
                 stage=ItemStage.PUBLISH,
                 outcome=ItemOutcome.OK,
                 code=article.failure_code,
                 source_chars=len(article.text or ""),
                 source_words=article.word_count,
                 source_words_before_cap=article.source_word_count,
+                truncation_cap_tokens=article.truncated_at_tokens,
             )
         return _row(
             planned=planned,
@@ -749,12 +966,14 @@ def classify_item(
             run_id=run_id,
             shard=shard,
             extraction=extraction,
+            recovered=recovered,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.UNKNOWN,
             source_chars=len(article.text or ""),
             source_words=article.word_count,
             source_words_before_cap=article.source_word_count,
+            truncation_cap_tokens=article.truncated_at_tokens,
             detail=detail_cell("summary payload missing"),
         )
 
@@ -769,12 +988,14 @@ def classify_item(
             run_id=run_id,
             shard=shard,
             extraction=extraction,
+            recovered=recovered,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=code,
             source_chars=len(article.text or ""),
             source_words=article.word_count,
             source_words_before_cap=article.source_word_count,
+            truncation_cap_tokens=article.truncated_at_tokens,
             fetch_ms=summary.fetch_ms,
             extract_ms=summary.extract_ms,
             summarize_ms=summary.summarize_ms,
@@ -797,12 +1018,14 @@ def classify_item(
         run_id=run_id,
         shard=shard,
         extraction=extraction,
+        recovered=recovered,
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
         code=article.failure_code,
         source_chars=len(article.text or ""),
         source_words=article.word_count,
         source_words_before_cap=article.source_word_count,
+        truncation_cap_tokens=article.truncated_at_tokens,
         summary_words=len((summary.summary or "").split()),
         fetch_ms=summary.fetch_ms,
         extract_ms=summary.extract_ms,
@@ -826,10 +1049,10 @@ def _flatten_calls(calls: tuple[CallCost | None, CallCost | None]) -> dict[str, 
     """
     cells: dict[str, Any] = {"model_calls": None}
     recorded = 0
-    for slot, call in enumerate(calls, start=1):
-        cells[f"call_{slot}_kind"] = None if call is None else call.kind
+    for slot, call in zip(CALL_SLOTS, calls, strict=True):
+        cells[f"{slot}_kind"] = None if call is None else call.kind
         for field in COST_FIELDS:
-            cells[f"call_{slot}_{field}"] = None if call is None else getattr(call, field)
+            cells[f"{slot}_{field}"] = None if call is None else getattr(call, field)
         recorded += call is not None
     if recorded:
         cells["model_calls"] = recorded
@@ -859,7 +1082,9 @@ def _row(
     output_tokens: int | None = None,
     cached_tokens: int | None = None,
     source_words_before_cap: int | None = None,
+    truncation_cap_tokens: int | None = None,
     extraction: ExtractionHealth | None = None,
+    recovered: bool | None = None,
     calls: tuple[CallCost | None, CallCost | None] = (None, None),
 ) -> ItemHealthRow:
     return ItemHealthRow(
@@ -888,10 +1113,12 @@ def _row(
         output_tokens=output_tokens,
         cached_tokens=cached_tokens,
         source_words_before_cap=source_words_before_cap,
+        truncation_cap_tokens=truncation_cap_tokens,
         shard=shard,
         span_integrity=extraction.span_integrity if extraction is not None else None,
         elements_found=extraction.elements_found if extraction is not None else None,
         element_class=extraction.element_class if extraction is not None else None,
+        recovered=recovered,
         **_flatten_calls(calls),
     )
 

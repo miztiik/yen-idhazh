@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -16,6 +16,7 @@ times are UTC.
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
+| `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | yes |
 
 An ordinary pull request starts CI only. A merge or direct push to `main` starts
 CI, and **publication follows CI's verdict rather than the push**: a push reaches
@@ -112,6 +113,7 @@ cancelled queued runs on this repository (2026-08-24 and 2026-08-25 carry six
 how many runs happen, and this page is where that is written down.
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart LR
  PR["ordinary pull request"] --> CI["CI<br/>ci.yml"]
  PUSH["merge or push to main"] --> CI
@@ -122,6 +124,16 @@ flowchart LR
  FILTER -->|"no"| NO_PAGES
  REFRESH_DONE["Content refresh completed"] --> PAGES
  PAGES --> STATIC["static GitHub Pages bundle"]
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+ classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+ classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+
+ class PR,PUSH,CI,REFRESH_DONE,STATIC stage;
+ class VERDICT,FILTER decision;
+ class PAGES yes;
+ class NO_PAGES no;
 ```
 
 ## Content refresh
@@ -212,22 +224,51 @@ does not exit non-zero: failing there would skip the steps that commit the day,
 which is the invisibility `if: always()` exists to prevent.
 
 ```mermaid
-flowchart LR
- SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+ SCHEDULE["schedule<br/>five times a day"] --> PLAN
  MANUAL["manual dispatch"] --> PLAN
- PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
-  WORK --> ASSEMBLE["assemble"]
- ASSEMBLE --> COMMIT["commit digest and state"]
- COMMIT --> COMPLETE["Content refresh completed"]
- COMPLETE --> PAGES["Pages publication"]
+
+ subgraph ING["Sources - what is a candidate"]
+  PLAN["plan<br/>read the feeds, score, rank"]
+  PLAN --> SEEN[("first sighting<br/>and feed health")]
+ end
+
+ subgraph EXT["Extraction - the trust boundary"]
+  PLAN --> FETCH["work shards<br/>fetch, extract, sanitize"]
+ end
+
+ subgraph MOD["Summarize - what the model is asked"]
+  FETCH --> CALLS["two calls an item<br/>summary, then the visual plan"]
+  CALLS --> ROWS[("item health, eval rows,<br/>runtime counters")]
+ end
+
+ subgraph PUB["Publishing - what a reader gets"]
+  CALLS --> ASSEMBLE["assemble"]
+  ASSEMBLE --> DAY[("the committed day<br/>plus state")]
+  DAY --> PAGES["Pages publication"]
+ end
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
+ classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
+ classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
+ classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+
+ class SCHEDULE,MANUAL,PLAN,FETCH,CALLS,ASSEMBLE,PAGES stage;
+ class SEEN,ROWS,DAY store;
+ class ING sysIngest;
+ class EXT sysExtract;
+ class MOD sysModel;
+ class PUB sysPublish;
 ```
 
 The plan job also commits first-sighting and feed-health state before it starts
 the workers. This keeps observations from a failed refresh. Each worker then
 commits the item-health and eval rows for the items its own shard settled, for
 the same reason: those rows otherwise ride only in that shard's `items-<shard>`
-artifact, which is kept for one day and is not uploaded at all when a job is
-cancelled.
+artifact, which expires and is never committed.
 
 A worker commits a third row in the same step: what its model server counted for
 the whole shard, read once from `/metrics` at job end and filed in
@@ -434,13 +475,71 @@ too, and the reason it is never scheduled is in
 [Vector backfill](#vector-backfill).
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart LR
  PERSON["manual dispatch"] --> VALIDATE["Model validation"]
  PERSON --> MEASURE["Measurements"]
  PERSON --> DRIFT["Drift review"]
  PERSON --> BACKFILL["Vector backfill"]
  WEEKLY["Sunday 08:00 UTC"] --> DRIFT
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ class PERSON,WEEKLY,VALIDATE,MEASURE,DRIFT,BACKFILL stage;
 ```
+
+### Testing a candidate model, end to end
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+ subgraph NAME["What a person types"]
+  FORM["one form field<br/>candidate_models_file"] --> FILE[("config/models/NAME.json<br/>repo, commit, filename, digest,<br/>byte count, alias, quantisation")]
+ end
+
+ subgraph BENCH["Measure - measure.yml, target llm"]
+  FILE --> RAW["raw throughput<br/>llama-bench"]
+  RAW --> SERVER["real server<br/>five fixed articles"]
+  SERVER --> DOSSIER["dossier body,<br/>ready to paste"]
+ end
+
+ subgraph QUAL["Qualify - validate.yml"]
+  FILE --> SCRATCH["scratch config<br/>the committed tree,<br/>models_file moved"]
+  SCRATCH --> FETCH["fetch the weights"]
+  FETCH --> IDENT{"digest and declared<br/>size both match?"}
+  IDENT -->|"no"| STOP["stop before the server starts"]
+  IDENT -->|"yes"| PROVE{"server proves<br/>five claims?"}
+  PROVE -->|"no"| STOP
+  PROVE -->|"yes"| REPLAY["freeze a corpus,<br/>replay it three times"]
+  REPLAY --> GATES{"every gate green?"}
+ end
+
+ GATES -->|"no"| REJECT["not adopted"]
+ GATES -->|"yes"| ADOPT["adopt: move models_file<br/>in config/idhazh.json"]
+ ADOPT --> DAILY["the daily run uses it"]
+ DAILY --> REVERT["revert: move that line back"]
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+ classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+ classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+ classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
+ classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+ classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+
+ class FORM,RAW,SERVER,DOSSIER,SCRATCH,FETCH,REPLAY,DAILY stage;
+ class IDENT,PROVE,GATES decision;
+ class FILE store;
+ class ADOPT yes;
+ class STOP,REJECT no;
+ class REVERT warn;
+ class NAME sysOps;
+ class BENCH,QUAL sysEval;
+```
+
+**One form field, because the file already holds the answer.** Both dispatches take `candidate_models_file` and nothing else about the candidate. Every fact a run needs - the repository, the 40-character commit, the GGUF filename, its SHA-256, its byte count, the alias the server answers to, the quantisation - is written in `config/models/<name>.json`, and a form that asked for them again was a second copy that could disagree with the first. It could bench one set of bytes and adopt another with every gate green. Leave the field empty and the run re-measures whatever `config/idhazh.json` currently points at, which is how the bench is checked against the page it reproduces.
+
+**The scratch config differs from the committed tree in one line.** Both workflows copy `config/`, move `models_file`, and change nothing else - so every control the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
 
 Each Measurements dispatch selects exactly one target:
 
@@ -456,13 +555,10 @@ The form keeps all target-specific inputs visible. A job reads only the inputs
 for its selected target. The default target is `llm`; the default runtime
 candidate is `baseline`.
 
-`Model validation` predates the qualification harness. It names an incumbent of
-its own rather than reading `config/idhazh.json`, downloads and caches two models
-together, and refetches each planned URL for each model. It is an exploratory
-dispatch, not a controlled adoption gate, and the 2026-08-26 qualification did
-not use it.
-[Evaluate and Adopt a New Summarizer Model](../how-to/evaluate-new-summarizer-model.md)
-owns the repair and acceptance requirements.
+`Model validation` reads `config/idhazh.json`, follows its pointer to the model
+file, and takes every candidate fact from there. It names no model of its own.
+[Swap the Summarizer Model](../how-to/evaluate-new-summarizer-model.md) owns the
+procedure and the acceptance requirements.
 
 ### The cache across the model swap, measured 2026-08-27
 
@@ -528,11 +624,69 @@ there because the build stopped answering for it**: a reading document has
 carried a seed rather than its whole day since 2026-09-01, so a build never
 opens the stories past it.
 
+## Pipeline tests
+
+A production run takes about 200 minutes and has been cancelling shards, so a
+change to the pipeline was tested the next day, against a day of eighty articles
+whose spread hid whatever the change did. `idhazh-pipeline-tests.yaml` closes
+that loop inside `pipeline-tests.budget_minutes`, which is 45. It runs the real
+path - the real fetcher, the real extractor, the real two calls, the real model
+server - over two articles, three times over, and reports what each pass cost.
+It publishes nothing: no step writes `frontend/public/`, no step commits, and
+what the passes produced leaves as a 90-day artifact.
+
+**The two articles are drawn, not fixed.** `config/pipeline-tests.json` holds at
+least twenty candidate addresses, each one an article this pipeline has really
+fetched and summarized, and each naming the feed in `config/sources.json` that
+carried it. The dispatch draws two, seeded from the run id GitHub allocated, and
+prints the seed beside the pair. A fixed pair would pass for as long as those
+two pages stayed up and say nothing about anything else the extractor meets; a
+draw with no seed printed could not be replayed.
+
+**The draw happens once, before any arm starts.** One step draws, one step turns
+the pair into a run plan, and all three arms run that one plan - so the three
+record the same two item ids and the numbers between them can be subtracted. The
+final step compares what each arm recorded against what the plan asked for and
+fails the job when they disagree, because an address that 404s would otherwise
+leave one arm with one item and three rows of plausible numbers.
+
+**Three arms, in sequence, on one runner, and never a matrix.** Prefill spans
+4.2x between GitHub-hosted runners ([measurements.md](measurements.md)), which
+is larger than anything an arm here is looking for, so three jobs would report
+the three hosts they drew. Sequential on one box cancels the host.
+
+| Arm | What it changes | What the difference prices |
+| --- | --- | --- |
+| `baseline` | nothing - the production path exactly | the number the other two are read against |
+| `no-visual-decision` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
+| `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
+
+Each arm is a step rather than an iteration of a loop, so the run page shows
+each arm's own wall clock. Every arm setting is in config (Guardrail #6): the
+addresses, the draw size, the job bound, the slot counts and the windows. One
+step writes a config root per arm from the committed `config/`, differing only
+in what that arm changes, and the committed config is never edited - an arm that
+edited it would leave the next arm reading whatever the last one wrote.
+
+**The parallel arm doubles `n_ctx` because llama-server divides the window it is
+given between its slots.** Two slots on the committed 65,536 is a 32,768-token
+slot, and the worst article the truncation cap admits needs 54,887 - so leaving
+the window alone would make that arm a test of a smaller window wearing a
+concurrency arm's name. The slot count is fixed when the process starts, which
+is why that arm costs a restart and a second model load.
+
+Two things one dispatch cannot settle. **Whether two articles are representative
+of the eighty a production day carries - they are not**, and the draw is what
+stops them being representative of nothing instead. And the faithfulness scorer,
+which every arm skips: it is a second model download, it is identical across the
+arms so it cancels from every comparison here, and it is not what the two-call
+path is being measured for.
+
 ## Display names and files
 
 A workflow display name is the label shown in the Actions UI. Its filename is
 the stable automation interface for repository paths, API calls, and CLI
-dispatch. Keep the seven filenames stable when a UI label changes.
+dispatch. Keep the eight filenames stable when a UI label changes.
 
 GitHub's `workflow_run.workflows` selector is the exception: it matches a
 display name. `pages.yml` therefore names `Content refresh` in that selector.
@@ -784,18 +938,20 @@ The named inputs:
 - **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
  `measure.target`, `measure.runtime_candidate`.
 - **Read by name** - `measure.models`, `measure.runtime_threads`,
- `measure.runtime_threads_batch`, and the six `validate.candidate_*` fields,
- which the `candidate` step asserts are one bare word each before it
- republishes them.
+ `measure.runtime_threads_batch`, and `candidate_models_file` on both
+ `measure.yml` and `validate.yml`. That one becomes a file path, so the step
+ resolves it and proves it sits inside `config/` rather than matching its
+ spelling, then asserts every field it republishes is one bare word.
 - **Matched** - `digest.date`, `drift.recent_days`, `drift.baseline_days`,
  `measure.corpus_links`, `measure.threads`, `validate.shards`,
  `validate.repeats`, `validate.corpus_per_shard`,
- `validate.job_budget_minutes`, `validate.candidate_bytes`.
+ `validate.job_budget_minutes`.
 
-`validate.yml` shapes its five numbers in one step of the `plan` job, which is
+`validate.yml` shapes its four numbers in one step of the `plan` job, which is
 the job every other job needs, so "before its first use" is anywhere after that
-step - the qualify matrix, the job bound, the byte check and the gate all read
-them later.
+step - the qualify matrix, the job bound and the gate all read them later. The
+byte check reads the size the candidate's own entry declares, not a number the
+form carried.
 
 `drift.yml` was the other one worth fixing. Its two window sizes were pasted
 into a Python program inside the step, so a value that is not a number was a
@@ -921,28 +1077,35 @@ Verified 2026-08-20.
  **`skipped`**.
  88 planning decisions and 9 rendered charts existed on that runner and none of
  them left it. **Any upload step that carries a job's only copy of its output
- needs `if: always`.**
-- **A pipeline intermediate is gone within two days, so "re-render the day from
- its decisions" is not a repair option for any day older than 24 hours.** Verified
- 2026-08-27. `digest.yml` sets `retention-days: 1` on `plan`, `items-<shard>`
- and `shard-visuals-<shard>` - the last of which carries this run's rendered
- charts - and 2 on `runtime-log-<shard>`. Nothing under `backend/var/` is
- committed either: `.gitignore` line 47 is `backend/var/`, and
- `git ls-files backend/var` returns no files. **The committed record of a run
- is the digest under `frontend/public/digest/` plus the rows under `state/`,
- and never the intermediates.** Repairing an older day therefore means reading
- its articles again and paying the whole work stage again - there is no cheaper
- path, and a
+ needs `if: always`.** The rule was written and three sibling steps in the same
+ file never got it: on 2026-09-14, run `34852763827`, the `work` job's three
+ uploads still carried no condition, three of four shards were cancelled at
+ `run.shard_timeout_minutes`, and 33 items their ledger steps had already
+ recorded as published never reached `assemble`. **Fixing one step in a file is
+ not fixing the file.**
+- **Every `digest.yml` artifact a re-render needs is gone within one day, so "re-render the day from its decisions" is not a repair option for any day older than 24 hours.** Read off `digest.yml` on 2026-09-15, it keeps seven: `plan` 1 day, `shard-visuals-<shard>` 1 - that one
+ carries this run's rendered charts - `runtime-log-<shard>` 2, `items-<shard>`
+ 7, `review` 7, `evidence-<shard>` 14, and `captures-<shard>` 90. **The re-render window is set by the
+ shortest of those and never by the longest**, which is the trap in reading the
+ list: `assemble` downloads `plan`, `items-*` and `shard-visuals-*` and needs
+ all three, so a week-old `items-*` repairs nothing once the other two have
+ gone - and a 90-day `captures-*` repairs nothing at all, because it holds what the model was asked rather than what the day published. Nothing under `backend/var/` is committed either: `.gitignore` line 52
+ is `backend/var/`, and `git ls-files backend/var` returns no files. **The
+ committed record of a run is the digest under `frontend/public/digest/` plus
+ the rows under `state/`, and never the intermediates.** Repairing an older day
+ therefore means reading its articles again and paying the whole work stage
+ again - there is no cheaper path, and a
  plan that assumes one is proposing something that cannot be done. Job *logs*
  are the exception: they outlive every artifact here, which is why a question
- about what a past run did is asked with `gh run view --job <id> --log`.
+ about what a past run did is asked with `gh run view --job <id> --log`. **`captures-<shard>` is the one artifact that outlives the day it describes**, and it is the odd one on purpose: a regression is found by comparing today with a run from weeks ago, so a window shorter than the comparison is a window that closes exactly when it is wanted. It holds each call's rendered prompt and raw reply behind `logging.capture_prompts` and `logging.capture_replies`; with both off the directory is empty and the upload is a green no-op. It is never committed and is named in no `commit-and-push.sh` call, because a rendered prompt carries the article body inside it ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
 - **A re-run is per job, never per step, and it reuses the original commit.**
  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
  again from its first step; there is no way to resume at the step that failed.
  That is survivable here only because the expensive jobs are separate: a failed
  `assemble` re-runs alone - 82 s in run `33270983446` - while `plan` and the
  `work` shards keep their results and are not repeated. It works
- for one day, because the artifacts it downloads carry
+ for one day, because `plan` and `shard-visuals-*`, two of the three artifacts
+ `assemble` downloads, carry
  `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
  workflow file as the original event**, so it cannot pick up a fix that landed
  afterwards, and a job that failed against a `main` which has since moved will

@@ -41,10 +41,10 @@ class TurnsConfig(Model):
     the turns SAY is `backend/idhazh/prompts/*.txt` and is the same set for
     every model (docs/architecture/summarize/model-boundary.md).
 
-    They belong beside the entry that names the weights, not in this project's
-    prompt directory: a marker is a fact about somebody else's weights, and
-    holding it apart from the entry lets a model swap move one and leave the
-    other. Nothing raises when that happens - a wrong
+    They sat in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13,
+    which put a fact about somebody else's weights in a package this project
+    writes and held it apart from the entry that names those weights. A swap
+    then moved the entry and left the markers, and nothing raised: a wrong
     marker renders a prompt with no turn structure that the decoder's grammar
     still accepts - worse summaries and no error anywhere.
 
@@ -81,6 +81,22 @@ class TurnsConfig(Model):
         min_length=1,
         description="The same, with reasoning on. Recorded from the server that applies it.",
     )
+    thinking_close: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "What this model writes to close its reasoning block, and the whole of the "
+            "declaration that reasoning is wanted. Not null means a call is decoded as "
+            "two spans - one unconstrained span that stops here, then the "
+            "schema-constrained answer on the same slot - and the prompt ends on "
+            "reply_opening_thinking rather than reply_opening. Null means one "
+            "schema-constrained span and no reasoning, which is where the incumbent "
+            "sits. It replaced inference.thinking on 2026-09-14: a flag beside a "
+            "marker is two places to disagree, and the flag alone could not have "
+            "worked - the output schema binds the decode from the first token, so a "
+            "think opener is not a legal token on either transport."
+        ),
+    )
     system_role: SystemPlacement = Field(
         default=SystemPlacement.OWN_TURN,
         description=(
@@ -115,9 +131,10 @@ class TurnsConfig(Model):
             "The template variable that turns this model's reasoning on and off, sent "
             "as the one key of chat_template_kwargs. It is a name belonging to "
             "somebody else's Jinja template, so it is a model fact and not a project "
-            "constant. Null means this template reads no keywords at "
+            "constant - it was spelled in this project's source and sent to every "
+            "model until 2026-09-14. Null means this template reads no keywords at "
             "all, and then the request carries no chat_template_kwargs and "
-            "inference.thinking must be false; ModelEntry refuses the pair."
+            "thinking_close must be null too; this block refuses the pair."
         ),
     )
     declared_for: Sha256 | None = Field(
@@ -176,3 +193,34 @@ class TurnsConfig(Model):
                 f"declare system_role='{SystemPlacement.FOLD_INTO_FIRST_USER.value}'"
             )
         return self
+
+    @model_validator(mode="after")
+    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
+        """Reasoning is asked for through a template keyword, so a null name refuses it.
+
+        Both halves are facts about somebody else's template, so this block owns
+        the pair. A null keyword with a closing marker declared is a claim
+        nothing can satisfy on the chat route: the request carries no
+        `chat_template_kwargs` at all, the template renders its own default, and
+        the only symptom is whatever that default happens to be.
+        """
+        if self.thinking_kwarg is None and self.thinking_close is not None:
+            raise ValueError(
+                f"turns.thinking_kwarg is null, so a chat request sends no "
+                f"chat_template_kwargs at all, and turns.thinking_close is "
+                f"{self.thinking_close!r}, which asks this template to turn reasoning "
+                "on through a keyword nothing sends. Name the keyword this model's "
+                "template reads, or set turns.thinking_close null"
+            )
+        return self
+
+    @property
+    def thinks(self) -> bool:
+        """Whether a call on these weights is decoded as two spans.
+
+        One question with one answer, read off the marker that makes the second
+        span possible. There is no flag beside it: a flag and a marker are two
+        places to disagree, and the disagreement renders a prompt the grammar
+        still accepts.
+        """
+        return self.thinking_close is not None

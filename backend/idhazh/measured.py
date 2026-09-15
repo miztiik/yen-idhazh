@@ -105,34 +105,31 @@ class TokenizerMeasured(Measured):
 #: fact about a reading and is a literal for that reason (Guardrail #6).
 QWEN35_9B_Q4_K_M: Final[Sha256] = "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
 
-#: The weights the three readings in `SIZED_BY_A_READING_HERE` were taken against,
-#: retired by the 8B-to-9B swap on 2026-08-27. Read back out of git rather than
-#: remembered: `git show 5d8ba601^:config/idhazh.json` is the last commit that
-#: named it. Here for the same reason as the line above - a reading's subject is
-#: a historical fact and never a knob.
-QWEN3_8B_Q4_K_M: Final[Sha256] = "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
-
 
 # --- Three constants that cannot read a record, and the readings that sized them --
 
 
-#: Thirty definition sentences, which is what `VocabularyEntry.definition` bounds.
+#: Every definition sentence, which is what `VocabularyEntry.definition` bounds.
 DEFINITION_SENTENCE_TOKENS: Final = TokenizerMeasured(
-    value=805,
-    measures="thirty taxonomy definition sentences together, in tokens",
-    taken_on=date(2026, 9, 11),
-    subject=QWEN3_8B_Q4_K_M,
+    value=658,
+    measures="every taxonomy definition sentence together, in tokens",
+    taken_on=date(2026, 9, 14),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
         "joined the `definition` of every entry in config/taxonomy.json and tokenized "
-        "the join with llama-tokenize; 805 together is about 27 each. They ride in "
-        "every labelling prompt, so the total is the quantity and the per-sentence "
-        "figure is the total divided by the count."
+        "the join through the running server's /tokenize. 658 over 23 sentences is "
+        "28.6 each. They ride in every labelling prompt, so the total is the quantity "
+        "and the per-sentence figure is the total divided by the count. **Two things "
+        "moved between this reading and the one before it** - the weights, and the "
+        "vocabulary itself, which went from 30 definitions to 23. The total fell from "
+        "805 because there are fewer sentences; per sentence it rose from 26.8, which "
+        "is the only half of the change the tokenizer is responsible for."
     ),
     when_it_fires=(
-        "the weights moved, or a definition was rewritten. Re-tokenize the joined "
-        "definitions and re-derive `DefinitionText`'s character bound from the new "
-        "per-sentence figure - it is about twice it, which is room to sharpen a "
-        "sentence rather than room for a paragraph."
+        "the weights moved, or a definition was rewritten, or an entry was added or "
+        "retired. Re-tokenize the joined definitions and re-derive `DefinitionText`'s "
+        "character bound from the new per-sentence figure - it is about twice it, "
+        "which is room to sharpen a sentence rather than room for a paragraph."
     ),
     why_a_number=(
         "the bound it sizes is a character count on a persisted contract, and a "
@@ -145,15 +142,16 @@ DEFINITION_SENTENCE_TOKENS: Final = TokenizerMeasured(
 #: The cost of requiring every encoding role, which is what makes the widest
 #: decoded plan reply the same shape as an ordinary one.
 EMPTY_ROLE_TOKENS: Final = TokenizerMeasured(
-    value=28,
+    value=30,
     measures="the nine empty encoding roles on a visual plan that declines, in tokens",
-    taken_on=date(2026, 9, 9),
-    subject=QWEN3_8B_Q4_K_M,
+    taken_on=date(2026, 9, 14),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
-        "tokenized the two committed plan fixtures with llama-tokenize. An empty role "
-        "is `\"<name>\":[]` and a comma, so the nine cost 114 characters on the plan "
-        "that declines and the seven a bar leaves empty cost 87 - 28 tokens and 23, "
-        "about 3.1 tokens an empty role."
+        "tokenized the committed plan fixtures through the running server's "
+        "/tokenize. An empty role is `\"<name>\":[]` and a comma, so the nine cost "
+        "115 characters on the plan that declines - 30 tokens, about 3.3 tokens an "
+        "empty role. It was 28 on the retired 8B, so the denser vocabulary costs two "
+        "tokens more for the same bytes."
     ),
     when_it_fires=(
         "the weights moved, or a role was added to or removed from the plan shape. "
@@ -169,27 +167,28 @@ EMPTY_ROLE_TOKENS: Final = TokenizerMeasured(
 
 #: The ratio every truncation point in the pipeline is placed with.
 TOKENS_A_WORD_AT_THE_CUT: Final = TokenizerMeasured(
-    value=1.3,
-    kind="judgement",
+    value=1.3628,
     measures="tokens a word, used to spend a token cap as a word count at the cut",
-    taken_on=date(2026, 8, 21),
-    subject=QWEN3_8B_Q4_K_M,
+    taken_on=date(2026, 9, 14),
+    subject=QWEN35_9B_Q4_K_M,
     method=(
-        "not taken through a tokenizer at all. It is the received figure for English "
-        "in a BPE vocabulary, written on the day `truncate_to_tokens` landed, and the "
-        "subject is the weights the configuration named that day rather than a "
-        "vocabulary anybody counted with. `WORST_TOKENS_A_WORD` at 1.585 is the same "
-        "quantity measured, on one article, and the gap between the two is the miss."
+        "tokenized the article bodies of the first 200 corpus rows through the running "
+        "server's /tokenize and divided total tokens by total words. **It was a "
+        "judgement until this reading** - 1.3 was the received figure for English in a "
+        "BPE vocabulary, written on the day `truncate_to_tokens` landed and never "
+        "counted. It is a measurement now, and it moved 4.8 percent, so every "
+        "truncation point cuts slightly earlier than it did."
     ),
     when_it_fires=(
-        "the weights moved, or an article was cut shorter than its cap allowed. Take "
-        "it properly: tokenize the article bodies of a bounded sample of corpus rows "
-        "and divide total tokens by total words."
+        "the weights moved, or an article was cut shorter than its cap allowed. "
+        "Re-tokenize a bounded sample of corpus article bodies and divide total tokens "
+        "by total words - `backend/utilities/measure_budgets.py read` is that probe."
     ),
     why_a_number=(
-        "a ratio has to be a number to convert a token cap into a word count. It is a "
-        "judgement rather than a measurement and says so, which is the only reason it "
-        "is allowed to be this old: a design may not lean on it (Guardrail #10)."
+        "a ratio has to be a number to convert a token cap into a word count. "
+        "`WORST_TOKENS_A_WORD` at 1.585 is the same quantity on the single worst "
+        "article rather than over a sample, and the gap between the two is the "
+        "headroom a cap has to carry."
     ),
 )
 
@@ -224,9 +223,10 @@ class Unreached:
 #: be made rather than a precaution, and `readings_awaiting_a_retake` is what says
 #: so out loud.
 #:
-#: **Removal condition:** row #13b of `TODO/20260913-28-model-swap-plan.md` retakes
-#: all three against the configured weights. A reading whose retake moves it gets
-#: the old one deleted rather than kept beside the new one (Guardrail #10). A
+#: **Removal condition:** all three were retaken against the configured weights
+#: on 2026-09-14, so this tuple exists for the NEXT swap rather than for a
+#: backlog. A reading whose retake moves it gets the old one deleted rather than
+#: kept beside the new one (Guardrail #10). A
 #: reading that stops being tokenizer-shaped leaves this tuple for `EVERY_MEASURED`.
 SIZED_BY_A_READING_HERE: Final = (
     Unreached(
@@ -416,10 +416,10 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
     subject=QWEN35_9B_Q4_K_M,
     method=(
         "(7,093 - 997) / 3,846 over the same shard. extract.truncate_to_tokens spends "
-        "the cap at 1.3 tokens a word, so a body tokenizing above that overruns the "
-        "budget its own cap gave it. The spread is the point: the median item runs "
-        "1.306, so a window sized on the median is sized on the article that never "
-        "causes trouble."
+        "the cap at TOKENS_A_WORD_AT_THE_CUT, so a body tokenizing above that ratio "
+        "overruns the budget its own cap gave it. The spread is the point: the median "
+        "item runs 1.306, so a window sized on the median is sized on the article that "
+        "never causes trouble."
     ),
     when_it_fires=(
         "an article tokenized harder than any before it, or the weights moved. Raise "
@@ -435,11 +435,11 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
 )
 
-#: Everything below is call 1's prompt, which the two-call path renders itself.
+#: Everything below is the label call's prompt, which the two-call path renders itself.
 #: Four numbers rather than one, because they move for different reasons: the
 #: scaffold moves when a prompt file is edited, the per-word rate when an article
 #: tokenizes harder, the per-row rate when the menu's layout changes, and the
-#: seam when call 2's trailing turn is reworded. One number would hide which.
+#: seam when the summarize-and-plan call's trailing turn is reworded. One number would hide which.
 #:
 #: All four were taken together on 2026-09-13 through `llama-server`'s own
 #: `/tokenize`, on a laptop (i7-1265U, 32 GiB, four other agents live). A
@@ -454,17 +454,17 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
 #: `CLAUDE.md` section 13 is the rule: where the awkward shape is the point, the
 #: shape is built, because a built one carries the case the archive never produced.
 
-CALL_ONE_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
+LABEL_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     value=2167,
-    measures="what call 1's prompt costs before a word of the article or a menu row lands",
+    measures="what the label call's prompt costs before a word of the article or a menu row lands",
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
-        "rendered `build_call_one_request` over a seven-word article with an empty "
+        "rendered `build_label_request` over a seven-word article with an empty "
         "candidate menu and tokenized the whole prompt. The system turn alone is "
         "2,055 of it, measured separately, so the remaining 112 is the title line, "
         "the two section headers and the fences. It is bigger than the single call's "
-        "997 because call 1's system turn carries both jobs since row #3e."
+        "997 because the label call's system turn carries both jobs since row #3e."
     ),
     when_it_fires=(
         "a prompt file under backend/idhazh/prompts/ changed, a turn marker moved, or "
@@ -477,7 +477,7 @@ CALL_ONE_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     ),
 )
 
-CALL_ONE_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
+LABEL_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     value=2.2285,
     measures="the article and its sentence addresses, per word of the cut article",
     taken_on=date(2026, 9, 13),
@@ -500,9 +500,9 @@ CALL_ONE_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
 )
 
-CALL_ONE_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
+LABEL_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
     value=34.115,
-    measures="one row of call 1's candidate menu, in tokens",
+    measures="one row of the label call's candidate menu, in tokens",
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
@@ -527,19 +527,22 @@ CALL_ONE_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
     ),
 )
 
-CALL_TWO_SEAM_TOKENS: Final = TokenizerMeasured(
+SUMMARIZE_AND_PLAN_SEAM_TOKENS: Final = TokenizerMeasured(
     value=58,
-    measures="what call 2 adds in front of its own reply, beyond call 1's prompt and reply",
+    measures=(
+        "what the summarize-and-plan call adds in front of its own reply, beyond the "
+        "label call's prompt and reply"
+    ),
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
-        "tokenized call 2's whole prompt and subtracted call 1's prompt and the reply "
-        "between them, over both plan states and two reply strings. 53 with the plan "
-        "asked for, 58 with it suppressed - the wider of the two, because the "
+        "tokenized the summarize-and-plan call's whole prompt and subtracted the label call's "
+        "prompt and the reply between them, over both plan states and two reply strings. 53 with "
+        "the plan asked for, 58 with it suppressed - the wider of the two, because the "
         "suppressed shape is the one that has to fit when the window is tightest."
     ),
     when_it_fires=(
-        "`call_two_user_turn` was reworded, a turn marker moved, or the weights moved. "
+        "`summarize_and_plan_user_turn` was reworded, a turn marker moved, or the weights moved. "
         "Re-tokenize both prompts on the same build and subtract again."
     ),
     why_a_number=(
@@ -555,8 +558,8 @@ EVERY_MEASURED: Final = (
     WARNING_DAYS_REQUIRED,
     PROMPT_OVERHEAD_TOKENS,
     WORST_TOKENS_A_WORD,
-    CALL_ONE_SCAFFOLD_TOKENS,
-    CALL_ONE_BODY_TOKENS_A_WORD,
-    CALL_ONE_MENU_TOKENS_A_ROW,
-    CALL_TWO_SEAM_TOKENS,
+    LABEL_SCAFFOLD_TOKENS,
+    LABEL_BODY_TOKENS_A_WORD,
+    LABEL_MENU_TOKENS_A_ROW,
+    SUMMARIZE_AND_PLAN_SEAM_TOKENS,
 )

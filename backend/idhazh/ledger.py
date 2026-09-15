@@ -98,6 +98,7 @@ fact, and it lives here.
 from __future__ import annotations
 
 import csv
+import io
 from collections.abc import Callable, Collection, Iterable, Iterator
 from datetime import date as date_type
 from datetime import timedelta
@@ -420,6 +421,94 @@ def require_matching_header(path: Path, columns: tuple[str, ...]) -> None:
         )
 
 
+def _csv_line(columns: tuple[str, ...], payload: dict[str, str]) -> str:
+    """One row, written the way `_append` writes one.
+
+    A re-filed row and an appended row have to be the same bytes, or the file a
+    migration leaves behind is a file the next append disagrees with.
+    """
+    buffer = io.StringIO()
+    csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n").writerow(
+        {name: payload[name] for name in columns}
+    )
+    return buffer.getvalue()
+
+
+def migrate_header(
+    path: Path,
+    columns: tuple[str, ...],
+    read: Callable[[dict[str, str]], dict[str, str]],
+) -> int:
+    """Re-file every row of `path` under `columns`, and say how many rows moved.
+
+    A file that already holds one header, on line 1, and it is the contract's, is
+    left byte-identical - so a pass with nothing to do leaves no diff.
+
+    This is the half of a widening `require_matching_header` cannot give. A
+    schema change ships a read-side migration, so a file an earlier run wrote
+    stays readable; it does not stay appendable, because the header on disk no
+    longer names the columns the writer holds. That comes out in two shapes and
+    both are here:
+
+    - **One retired header.** The next run to append raises, and the raise costs
+      it the whole commit step, every ledger staged beside this one included.
+    - **Two headers in one file.** `state/**/*.csv` is `merge=union`, which is
+      the right answer for two runs appending different rows and no answer at
+      all for two runs appending under different headings - git keeps both
+      blocks and calls the merge clean. Measured on this repository 2026-09-15:
+      `state/item-health/2026/09/14.csv` held 394 rows under the current header
+      and 71 under the one before it, written by a run whose checkout predated
+      the widening. Line 1 there still matched the contract, so the header check
+      passed and the file stayed split.
+
+    `read` is the contract's own reader. `from_csv_row` knows every heading the
+    file has ever carried and `csv_row` writes the one it carries now, so the
+    map between the two is never written down a second time.
+
+    **What this does not cover.** A run on an older checkout, which cannot know
+    about a change that had not merged when it started - the next run on new
+    code repairs what it left. A day nobody appends to again, because this runs
+    on the append: a run that stacks the last file of a day leaves the stack for
+    an operator's pass. And a rename of the FIRST column, because that name is
+    how a header line is told from a row - every contract here opens on
+    `version`, whose values are date stamps and never the word.
+
+    Rewriting the file makes the next union merge repeat rows rather than
+    headers, and a repeated row is a question this ledger already answers:
+    `drop_repeated_rows` settles it after the merge, from the commit step, first
+    row winning. Trading a shape nothing settles for a shape something does is
+    the whole of what this buys.
+    """
+    if not path.exists():
+        return 0
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        lines = handle.readlines()
+    if not lines:
+        return 0
+    sentinel = columns[0] + ","
+    header = tuple(next(csv.reader(lines[:1]), []))
+    if header == columns and not any(line.startswith(sentinel) for line in lines[1:]):
+        return 0
+
+    kept = [",".join(columns) + "\n"]
+    block = list(header)
+    moved = 0
+    for line in lines[1:]:
+        if line.startswith(sentinel):
+            block = next(csv.reader([line]), [])
+            continue
+        if not line.strip():
+            continue
+        if tuple(block) == columns:
+            kept.append(line if line.endswith("\n") else line + "\n")
+            continue
+        cells = next(csv.reader([line]), [])
+        kept.append(_csv_line(columns, read(dict(zip(block, cells, strict=False)))))
+        moved += 1
+    path.write_text("".join(kept), encoding="utf-8", newline="")
+    return moved
+
+
 def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]) -> int:
     """Write every row it is handed. This path does not deduplicate, on purpose.
 
@@ -654,6 +743,16 @@ def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> 
     return landed - drop_repeated_rows(path, FEED_HEALTH_KEY)
 
 
+def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
+    """The contract's own reader, used as a row-to-row migration.
+
+    `from_csv_row` reads a row under any heading this ledger has ever carried and
+    `csv_row` writes it under the heading it carries now, so the map between the
+    two lives once, in `contracts.item_health.RETIRED_CELLS`.
+    """
+    return ItemHealthRow.from_csv_row(raw).csv_row()
+
+
 def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
     """Append this run's verdict on every planned item it has not already recorded.
 
@@ -669,9 +768,18 @@ def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]
     two writers appending the same one. The filter runs before the write, on the
     committed file each writer can see.
 
+    **The day file is re-filed under the current header first.** This is the one
+    contract here that has retired a heading, so it is the one whose day file can
+    arrive carrying a generation this writer does not name. `migrate_header` says
+    what that covers and what it does not; it costs one read of a file this
+    caller is about to read anyway, and returns without writing when the header
+    is already the contract's.
+
     Returns how many landed, so a caller can log the count.
     """
-    already = recorded_item_health(item_health_path(state_dir, date))
+    path = item_health_path(state_dir, date)
+    migrate_header(path, ItemHealthRow.csv_columns(), _as_item_health_row)
+    already = recorded_item_health(path)
     payloads = []
     for row in rows:
         payload = row.csv_row()
@@ -680,7 +788,7 @@ def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]
             continue
         already.add(key)
         payloads.append(payload)
-    return _append(item_health_path(state_dir, date), ItemHealthRow.csv_columns(), payloads)
+    return _append(path, ItemHealthRow.csv_columns(), payloads)
 
 
 def recorded_item_health(path: Path) -> set[tuple[str, ...]]:

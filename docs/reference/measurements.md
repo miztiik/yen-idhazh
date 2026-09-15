@@ -71,13 +71,13 @@ Three rules govern this page:
  look a record up at the moment it is declared.
  `idhazh.measured.SIZED_BY_A_READING_HERE` pairs each site with the reading
  that sized it, which is what makes the `subject` visible to a gate even where
- the constant is not. **All three name weights this repository retired on
- 2026-08-27 and none has been retaken**;
- `python backend/utilities/measure_budgets.py check` says so and exits 1, and
+ the constant is not. **All three were retaken against the configured weights on
+ 2026-09-14 and all three name them**;
+ `python backend/utilities/measure_budgets.py check` is what says so, and it
+ exits 1 naming any constant whose subject has drifted -
  `measure_budgets.py read` retakes them from a running server's own
- `/tokenize`. Row #13b of
- [`../../TODO/20260913-28-model-swap-plan.md`](../../TODO/20260913-28-model-swap-plan.md)
- is where they land.
+ `/tokenize`. After a swap it is red until the new readings are pasted in, which
+ is the point of it.
 
 **This page holds the reading, never the decision.** The value in force lives in
 `config/idhazh.json` and the rule that acts on it lives in the doc it impacts,
@@ -192,6 +192,32 @@ only the interpreter. The full record - conditions, method, both arms, and what
 it does not settle - is
 [benchmarks/day-window-read.md](benchmarks/day-window-read.md).
 Re-run it with `python backend/utilities/measure_day_window.py`.
+
+## What the test suite spends its time on, 2026-09-14
+
+**Four-fifths of the suite's time comes from 185 of its 3,407 timed tests - one
+test in nineteen** - and half of it from 46. A fifth of the tests carry 95
+percent, so a pass over the top 200 is the whole of the available win.
+
+The shares travel; the seconds do not. The run was taken on a developer box with
+seven sibling agent processes on it, so an absolute second is high while a
+comparison between two of its own rows cancels the box.
+
+Two findings came out of it. `test_marks.py` was 95.6 s and rank 8, bought with
+a subprocess that collected the whole suite to defend a developer shortcut that
+never gates a merge; it now reads `pytestmark` from source at 1.89 s, held to
+the same 53 unmarked modules. And the `slow` marker, declared as "a module whose
+average test takes over a second", disagrees with the measurement on **36 of the
+74 modules it classifies** - 17 modules over a second carry no mark, and 19
+under a second carry `slow`. Ten of that second group are one module-level mark
+that [#720](https://github.com/miztiik/yen-idhazh/pull/720) copied into 13
+modules when it split `test_workflows.py`.
+
+Every run now ends by naming its own 25 dearest tests: `--durations=25` is in
+`addopts`, and it is free because pytest times every phase either way. The full
+record is
+[benchmarks/what-the-suite-costs.md](benchmarks/what-the-suite-costs.md).
+Re-run it with `pytest backend/tests -q -n auto --durations=0`.
 
 ## What the doubled window and the doubled cap cost, measured 2026-09-09
 
@@ -374,37 +400,31 @@ needs it, and that objection is now the only one.
 
 **The projection above was exact at 32,768 and stays linear to 65,536.** Three
 arms, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
-own flags, read off the load log at `log_verbosity` 4. The fourth row is the
-configured window and is interpolated between them.
+own flags, read off the load log at `log_verbosity` 4.
 
 | `n_ctx` | KV buffer | Recurrent state | Compute buffer | Model buffers | Total |
 | --- | --- | --- | --- | --- | --- |
 | 16,384 | 512.00 MiB | 50.25 MiB | 112.02 MiB | 8,024.61 MiB | 8,698.88 MiB = 8.49 GiB |
 | 32,768 | 1,024.00 MiB | 50.25 MiB | 128.02 MiB | 8,024.61 MiB | 9,226.88 MiB = 9.01 GiB |
-| 49,152 | 1,536.00 MiB | 50.25 MiB | 144.02 MiB | 8,024.61 MiB | 9,754.88 MiB = 9.53 GiB |
 | 65,536 | 2,048.00 MiB | 50.25 MiB | 160.02 MiB | 8,024.61 MiB | 10,282.88 MiB = 10.04 GiB |
 
-**The 49,152 row is interpolated and the other three are measured.** KV is exact
-arithmetic at 32 KiB a token, and the compute buffer grows 16.00 MiB per 16,384
-tokens across the measured arms, so 144.02 MiB is the step between 128.02 and
-160.02. Nothing else in the row moves with the window.
+**KV is exact arithmetic at 32 KiB a token**, and the compute buffer grows 16.00
+MiB per 16,384 tokens across the arms. Nothing else in the row moves with the
+window.
 
-So **49,152 costs 1,056 MiB more than 16,384**, and 65,536 would cost 1,584,
-against the 6.84 GiB low-water mark above and a 1.0 GiB bar.
-`config/idhazh.json` took **49,152** on 2026-09-13 and this is the reading that
-says it fits.
+So **65,536 costs 1,584 MiB more than 16,384**, against the 6.84 GiB low-water
+mark above and a 1.0 GiB bar. `config/idhazh.json` carries **65,536** and this is
+the reading that says it fits.
 
-**The margin is 25 percent and that number has a derivation, which is the point
-of it.** The two-call sequence sizes at 39,284 tokens, so 49,152 leaves 9,868
-spare. The 25 percent is the size of the one tokenizer miss on record -
-`idhazh.measured.WORST_TOKENS_A_WORD` says 1.585 tokens a word and the densest
-cap-length build delivered 1.952, 23 percent over - rounded up to the next whole
-multiple of 16,384 and of the 512-token batch. **Memory did not choose it**:
-every candidate from 32,768 to 65,536 clears the 1.0 GiB bar by more than four
-times, so 528 MiB either way is noise. What a wider window costs is the
-assertion's reach - at 65,536 the sequence could grow 67 percent before the gate
-said so, and at 49,152 it can grow 25. Ruled by Carmack, 2026-09-13.
-**Re-derive it when `extract.truncation_cap_tokens` is fixed or
+**What the window holds is the two-call pair, and that is what sized it.** The
+pair sizes at 54,887 tokens at the committed truncation cap, so 65,536 - the
+first whole multiple of both 16,384 and the 512-token batch that holds it -
+leaves 10,649 spare. **Memory did not choose it**: every candidate from 32,768
+to 65,536 clears the 1.0 GiB bar by more than four times, so half a gigabyte
+either way is noise. What a wider window costs is the assertion's reach - the
+gate cannot report a sequence that grew until the sequence has outgrown the
+window. Ruled by Carmack, 2026-09-13.
+**Re-derive it when `extract.truncation_cap_tokens` or
 `elements.max_per_article` moves.**
 
 **Only 8 of the model's 32 layers hold a KV cache.** The other 24 are recurrent
@@ -497,46 +517,32 @@ the day the active model file names different weights.
 cover.** Over the 36 rows the cap cut, where the word count is fixed at 3,846,
 `input_tokens` ran 5,582 to 7,093. Take off the 997-token constant and the
 article itself measured **4,585 to 6,096 tokens - 1.192 to 1.585 tokens a
-word**. `extract.truncate_to_tokens` spends the cap as `int(cap / 1.3)` words,
-so an article that tokenizes harder than 1.3 overruns the budget its own cap
-gave it. **The worst one overran by 21.9 percent**: 3,846 words at 1.585 is
-6,096 tokens against a cap that asked for 5,000, and `(6096 - 5000) / 5000` is
-0.219. The ratio is a property of the prose, not of the cap, so the same article
-at the 10,000-token cap gives 7,692 x 1.585 = 12,192 tokens, over by the same
-21.9 percent - which is where the 14,089 in the table below comes from.
+word**. `extract.truncate_to_tokens` spends the cap as
+`int(cap / TOKENS_PER_WORD)` words, at a rate taken from the configured weights
+and currently 1.3628, so an article that tokenizes harder than that rate
+overruns the budget its own cap gave it. **The worst one overruns by 16.3
+percent**: the committed cap of 20,000 cuts at 14,675 words, which at 1.585
+tokens a word is 23,259 tokens. The ratio is a property of the prose and not of
+the cap, which is why what is recorded is the ratio and what follows it is the
+overrun at whatever cap is committed.
 
-**This paragraph said 16.8 percent until 2026-09-09, and that figure was
-irreproducible from the numbers beside it.** It came from subtracting a
-1,255-token constant instead of the 997 this same section derives, which lowers
-the worst ratio to 1.518 and the overrun to 16.8 percent - while the worst-case
-table two paragraphs down used 1.585 and 14,089. One section, two constants, two
-worst-case ratios. 997 is the one the evidence supports: this section's own
-least-squares intercept, corroborated by 3-word items measuring 980 to 985
-tokens. So 21.9 percent stands and 14,089 was right all along. Re-derived from
-the same 36 rows on 2026-09-09.
+**Worst case at the committed cap of 20,000, against the committed window of
+65,536:**
 
-**Worst case at the committed cap of 10,000, against the committed window of
-16,384:**
-
-| | tokens | share of 16,384 |
+| | tokens | share of 65,536 |
 | --- | --- | --- |
-| Typical article (1.306 a word) | 997 + 10,046 + 900 = **11,943** | 73 percent |
-| Worst article this shard produced (1.585 a word) | 997 + 12,192 + 900 = **14,089** | 86 percent |
+| Typical article (1.306 a word) | 997 + 19,165 + 900 = **21,062** | 32 percent |
+| Worst article this shard produced (1.585 a word) | 997 + 23,259 + 900 = **25,156** | 38 percent |
 
-The margin falls from 1.9x to **1.16x**. At the 8,192 window committed the day
-before, 14,089 tokens is 172 percent of the window: this cap raise was not
-possible until that window raise landed, and the two are one decision.
+**The cap and the window are one decision**, and the worked example is the pair
+that could not have shipped apart: at the 8,192 window in force on 2026-09-08 a
+10,000-token cap sizes at 172 percent of the window.
 `test_the_longest_article_the_cap_allows_still_fits_the_window` in
 [../../backend/tests/contracts/](../../backend/tests/contracts/)
 reads both sides from `config/` and fails on any later pair that does not fit.
-
-**A two-call design has almost nothing left.** The pseudo-plan's second call
-adds about 1,200 tokens of first answer, about 300 of second instruction and
-about 1,200 of second answer. On the typical article that is 13,580 tokens, 83
-percent, a margin of 1.21x. On the worst article this shard produced it is
-**15,889 tokens, 97 percent of the window, a margin of 1.03x**. Write that down:
-the next cap raise needs a window raise beside it, and a second call at this cap
-needs one too.
+**It sizes the single call, which is the path being retired** - the two-call
+pair sizes at 54,887 of the same window
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
 
 ### What the wall clock pays
 
@@ -1731,7 +1737,7 @@ two-call summariser change, whose second model call an item costs about 87
 minutes at 20 items. Sized from the worst case, never the median, because a
 worker killed at the bound uploads nothing:
 
-| At 20 items | Base work | Call 2 needs | At 150 | At 200 |
+| At 20 items | Base work | The summarize-and-plan call needs | At 150 | At 200 |
 | --- | --- | --- | --- | --- |
 | Median | ~39 min | 87 min | fits, 24 min spare | fits, 74 min spare |
 | p90 | ~51 min | 87 min | fits, 12 min spare | fits, 62 min spare |
@@ -2109,7 +2115,8 @@ to justify a design decision.
 | **What a sharded `route` job would cost** | **void: the job retired on 2026-09-13** | four shards would have divided the stage while each paid the fixed cost. Plan 11 row #6 took the whole job away instead: the picture is decided inside the `work` shard that read the article, so the day's pictures are already spread over four to eight runners and there is nothing left to shard. |
 | **What the two calls cost a work shard, measured rather than estimated** | **owed: the first scheduled runs after 2026-09-13** | the design was landed on an estimate of 182 to 185 minutes for the worst shard against a 200-minute timeout and a 180-minute escalation bar, built from a cap-length call-1 prompt at the slowest recorded prefill. Read `job_seconds` for the worst `work` shard out of `state/runtime-counters.csv` over seven scheduled days, and report the worst and the median against 180. If the worst passes 180, the plan's own escalation trigger has fired and the next move is the design that fits, not a raised bound (Guardrail #2). |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
-| **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record)). |
+| **`max_answer_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. It was `max_output_tokens` until 2026-09-14. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record)). |
+| **What the answer span really prefills when a call thinks** | **estimated, not read** | a call decoded as two spans splices the thinking onto the answer span's prompt, so the slot should hold it and the answer span should prefill only the closing marker. If it misses, the estimated cost is 25.6 s an item on top of the 42.6 s a span the thinking itself costs. **The reading already ships**: `stages/common._two_spans` logs the answer span's evaluated tokens beside its cached tokens on every item, and their difference is what it prefilled. One scheduled run with `models.<role>.turns.thinking_close` declared answers it; nothing declares one today. |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |

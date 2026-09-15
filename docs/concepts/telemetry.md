@@ -1,8 +1,8 @@
 # Telemetry
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-15
 
-The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
+The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
 This page is the concept-tier statement of the logging doctrine in `CLAUDE.md` section 1b.
 
@@ -33,10 +33,29 @@ Every event is one flat, serializable payload with a fixed envelope:
 
 ## Event names
 
-Two names are emitted:
+**Two shapes, one vocabulary.** Every name below is an `EventName`, and which shape a name takes is fixed: `telemetry.FLAT_RECORDS` holds the six that are flat records and `telemetry.event` refuses any of them. A reader never has to guess which shape a line is, because the name decides it.
+
+### The two nested events
+
+These carry the `{ ctx, data }` envelope above.
 
 - `item.summarize.failed` - the model was asked and did not answer. `ctx` carries the item, the source and the model reference; `data` carries the typed failure code and the exception type.
 - `item.visual.failed` - the marks compiled and the file did not land. `ctx` carries the item, its content address and the model reference; `data` carries the visual state and the exception type. The item publishes without its picture, so nothing else records this: a planner that correctly found nothing to draw and a disk that would not take the file look identical on the page, and `VisualDecision.none_reason` only separates them for a reader who already has the day's payload open.
+
+### The six flat records
+
+Added 2026-09-15. A 5x model-time regression ran for six days unnoticed: nothing printed during a 200-minute shard, and the one line that did fire per item fired only for items that passed. These are what a shard says while it is still running.
+
+- `item.start` - which item is in flight. A shard killed on its timeout names the item it died on.
+- `stage.done` - one named stage ended. `stage` says which; a model call also carries `call`, the prompt's SHA-256 and the character counts of what crossed the wire.
+- `model.waiting` - a model call is still in flight, and for how long. Every `logging.waiting_heartbeat_seconds`; `0` turns it off.
+- `item.done` - the item ended, for a failure exactly as for a success.
+- `item.abandoned` - the shard ended before this item ran.
+- `shard.done` - the shard's totals, its failures counted by code, and its slowest item.
+
+**A flat record is one line of `{ envelope } | { cells }` with no nesting, and the cells are `ItemHealthRow`'s own column names.** That is the whole design: `grep` and `jq` both work on it without a path expression, and a field called one thing in the log and another in the census is impossible because the vocabulary is derived from the row rather than restated. `telemetry.record` refuses a cell name the row does not declare, so a typo fails the run rather than minting a field nobody reads.
+
+Ten cells are not census columns: `stage`, `call` and `waited_s` say which record this is, `items`, `failures` and `slowest` are the shard's totals, and `prompt_sha256`, `prompt_chars`, `reply_chars` and `captured` say what crossed the wire. **`prompt_sha256` is the one fact here the census row cannot hold**, because putting it there needs `Summary` widened too - the assemble stage builds the row from the summary payload and the summary carries no prompt digest.
 
 `telemetry.EventName` holds those names and nothing else, and a test fails when this list and that vocabulary disagree in either direction. A name is added in the commit that emits it.
 
@@ -62,7 +81,7 @@ A second shape of evidence, on by default since 2026-09-06, and the only one tha
 | `model_call` | `summarize` | the generation - see below |
 | `parse_reply` | `summarize` | the verbatim check, which is the longest string comparison in the pipeline |
 | `score` | `item` | - |
-| `visual_planner` | `item` | what the picture's gate, ladder and render cost, after call 2 answered |
+| `visual_planner` | `item` | what the picture's gate, ladder and render cost, after the summarize-and-plan call answered |
 
 **`model_call` is a generation**, the span subtype a tracing tool draws differently. It carries the model reference and the token counts. **Prefill and decode are attributes on it and not child spans**: llama-server reports both as totals in the reply, after the call returned, so nothing can be wrapped around either. A span drawn around a duration reported retrospectively is a shape nobody measured.
 
@@ -133,9 +152,9 @@ Two stages write that census, and one row identity keeps them from disagreeing.
 
 A worker commits the rows for its own items as soon as each one settles. Until
 it did, a shard's verdicts left the runner only inside a run artifact that
-expires in a day and is skipped entirely when a job is cancelled - so a run
-stopped between the workers and the publish had measured every item and recorded
-none of it. A bad day is exactly the day worth measuring.
+expires and is never committed - so a run stopped between the workers and the
+publish had measured every item and recorded none of it. A bad day is exactly
+the day worth measuring.
 
 Assemble then writes the whole day's census, including a `not_attempted` row for
 every planned item no article payload arrived for. That keeps the denominator in

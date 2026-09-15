@@ -17,13 +17,20 @@ def refuse_a_removed_knob(block: str, data: Any, names: Mapping[str, str]) -> An
     **An empty replacement means the knob is gone rather than renamed**, because
     the thing it tuned is gone. Pointing at a successor that does not exist is
     the same defect one level down.
+
+    **A replacement that carries a dot is already a whole path** and is printed
+    as it stands. A knob does not always land in the block it left - reasoning
+    stopped being a decoding flag and became a marker on the turn envelope - and
+    an operator sent to `models.<role>.inference.turns.thinking_close` is sent
+    to a key that does not exist.
     """
     if not isinstance(data, dict):
         return data
     carried = sorted(name for name in names if name in data)
     if carried:
         spelled = "; ".join(
-            f"{block}.{name} is now {block}.{names[name]}"
+            f"{block}.{name} is now "
+            f"{names[name] if '.' in names[name] else f'{block}.{names[name]}'}"
             if names[name]
             else f"{block}.{name} is gone and nothing replaces it"
             for name in carried

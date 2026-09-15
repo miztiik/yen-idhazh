@@ -104,7 +104,7 @@ def plan_lost_to_the_window(
 
     Both arrive as one thing - a reply that stopped because it hit a wall - and
     the server reports them identically, so only arithmetic tells them apart:
-    a prompt with less room left in front of it than call 2's grammar may write
+    a prompt with less room left in front of it than the summarize-and-plan call's grammar may write
     ran into the window. The caller does that comparison; this writes the answer.
 
     It is a separate member because it asks an operator for different work. A
@@ -214,8 +214,8 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
 def plan_is_reachable(table: ElementTable, *, visuals: VisualsConfig) -> bool:
     """Could this article carry any picture at all?
 
-    False suppresses the plan fields inside call 2 and never skips the call,
-    because call 2 is the call that writes the summary (O43). What is saved is
+    False suppresses the plan fields inside the summarize-and-plan call and never skips the call,
+    because the summarize-and-plan call is the call that writes the summary (O43). What is saved is
     the plan's decode, not the request.
     """
     return bool(reachable_types(table, visuals=visuals))
@@ -300,7 +300,7 @@ def not_drawable_here(
 
     Its sibling above is for a plan the validator refused by name. This one is
     for the two ways a drafted plan reaches no picture with no rejection to
-    quote, and both are reachable only from a stage that dispatches call 2:
+    quote, and both are reachable only from a stage that dispatches the summarize-and-plan call:
 
     - the reply's plan half will not hold `VisualPlan`'s own rules, which a
       grammar cannot enforce because they read one field against another;

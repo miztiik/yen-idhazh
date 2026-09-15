@@ -3,15 +3,89 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
-from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.inference import SUPERSEDED_INFERENCE_NAMES, InferenceConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.turns import TurnsConfig
+
+
+class SpeculationType(StrEnum):
+    """Which kind of speculation the runtime is told to use.
+
+    Only the two this project can actually stand up. `llama-server` accepts a
+    longer list - eagle3, mtp, dflash, dspark and five ngram variants - and each
+    of those either needs a purpose-built draft head we do not have or a lookup
+    cache nothing here writes. A closed choice is what stops an operator naming
+    one of them and getting a server that starts and drafts nothing.
+    """
+
+    DRAFT_SIMPLE = "draft-simple"
+    NGRAM_SIMPLE = "ngram-simple"
+
+
+class DraftConfig(Model):
+    """A second, much smaller set of weights that guesses ahead of the first.
+
+    **Speculative decoding is output-identical by construction.** The target
+    model verifies every drafted token and rejects any it would not have
+    produced, so the text is the text the target would have written alone. That
+    is why this block is priced on cost and on how hard it is to revert rather
+    than waiting on a quality measurement: there is no quality to measure
+    (Guardrail #10, and plan 28's row 2a).
+
+    What it can do is waste time. A draft the target keeps rejecting costs a
+    forward pass per rejected token and returns nothing, so the acceptance rate
+    is the number that says whether it paid. `llama-server` publishes it:
+    `llamacpp:spec_decode_num_accepted_tokens_total` over
+    `llamacpp:spec_decode_num_draft_tokens_total`, both already in the
+    `/metrics` body a shard reads at job end.
+    """
+
+    repo: str = Field(min_length=1, description="Hugging Face repository the draft GGUF is in.")
+    revision: CommitSha = Field(
+        description="The hub commit. Required here and optional on ModelRef: a block "
+        "somebody added by hand is a block that can pin properly from the start."
+    )
+    file: str = Field(min_length=1)
+    sha256: Sha256 = Field(description="Refused before the server starts, like the target's.")
+    byte_count: int | None = Field(default=None, ge=1)
+    spec_type: SpeculationType = Field(default=SpeculationType.DRAFT_SIMPLE)
+    n_max: int = Field(
+        default=3,
+        ge=1,
+        le=64,
+        description=(
+            "How many tokens are drafted before the target verifies. The runtime's own "
+            "default. Higher drafts further ahead and wastes more when the draft is "
+            "wrong, so it is a bet on how predictable the text is."
+        ),
+    )
+    n_min: int = Field(default=0, ge=0, le=64)
+    p_min: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Below this probability the draft stops guessing and lets the target "
+            "decode. 0.0 is the runtime default and means never stop early."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _a_minimum_above_the_maximum_drafts_nothing(self) -> Self:
+        if self.n_min > self.n_max:
+            raise ValueError(
+                f"draft.n_min is {self.n_min} and draft.n_max is {self.n_max}. A minimum "
+                "above the maximum asks the runtime for a draft length that cannot "
+                "exist, and it starts anyway and drafts nothing"
+            )
+        return self
 
 
 class ModelRef(Model):
@@ -40,6 +114,19 @@ class ModelRef(Model):
         default=None,
         description="Recorded once measured. A weight that changes silently changes every output.",
     )
+    byte_count: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many bytes those weights are, as the hub reports them. Optional: an "
+            "entry nobody has fetched yet declares none, and the run then records the "
+            "size it opened on both sides rather than comparing a number to itself. It "
+            "sits beside sha256 because it is the same kind of fact and has the same "
+            "source, and because a qualification that had to be told it on the command "
+            "line was a fact about these weights living somewhere other than the file "
+            "that names them."
+        ),
+    )
     hf_base_repo: str | None = Field(
         default=None,
         min_length=1,
@@ -61,6 +148,19 @@ class ModelRef(Model):
             "raising. `ModelsConfig` refuses a block whose declared_for is not this "
             "entry's sha256, so a default block under measured weights is refused "
             "rather than inherited."
+        ),
+    )
+    draft: DraftConfig | None = Field(
+        default=None,
+        description=(
+            "A second, smaller set of weights that drafts tokens this entry's model "
+            "then verifies. Null is the default and means one model and no "
+            "speculation. It sits beside `inference` rather than inside it because it "
+            "names weights of its own - a repository, a commit, a filename and a "
+            "digest - and a block that fetches a file is not a decoding knob. On "
+            "`ModelRef` rather than `ModelEntry` so a run record says whether the day "
+            "was drafted; a run that cannot answer that cannot explain its own "
+            "throughput."
         ),
     )
 
@@ -103,26 +203,22 @@ class ModelEntry(ModelRef):
         ),
     )
 
-    @model_validator(mode="after")
-    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
-        """Reasoning is asked for through a template keyword, so a null name refuses it.
+    @model_validator(mode="before")
+    @classmethod
+    def _a_removed_settings_knob_is_refused_by_name(cls, data: Any) -> Any:
+        """A config file is refused by name; a run record is migrated in silence.
 
-        The two halves sit in different blocks - the keyword is a fact about
-        somebody else's template and the switch is a decoding choice - so
-        neither block can see the pair and the entry has to. A null keyword with
-        reasoning on is a claim nothing can satisfy: the request carries no
-        `chat_template_kwargs` at all, the template renders its own default, and
-        the only symptom is whatever that default happens to be.
+        The split is this class against `ModelRef`. Here a person wrote the
+        block, and silent acceptance teaches the wrong spelling - so the removed
+        name is refused and the message says where the knob went. There the
+        block is a payload an earlier run wrote, and refusing it would stop
+        today's build reading yesterday's run.
         """
-        if self.turns.thinking_kwarg is None and self.inference.thinking:
-            raise ValueError(
-                f"models entry {self.id} sets turns.thinking_kwarg null, so the request "
-                "sends no chat_template_kwargs at all, and inference.thinking true, "
-                "which asks this template to turn reasoning on through a keyword "
-                "nothing sends. Name the keyword this model's template reads, or set "
-                "inference.thinking false"
+        if isinstance(data, dict):
+            refuse_a_removed_knob(
+                "models.<role>.inference", data.get("inference"), SUPERSEDED_INFERENCE_NAMES
             )
-        return self
+        return data
 
 
 #: The `models` keys this block used to carry. `inference` held a single
@@ -133,7 +229,7 @@ class ModelEntry(ModelRef):
 #: older spelling `route` named the small model plan 11 row #6 retired; the two
 #: calls on `summarize` replaced it, so nothing answers for them.
 SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {"inference": "<role>.inference", "route": "", "visual_planner": ""}
+    {"inference": "models.<role>.inference", "route": "", "visual_planner": ""}
 )
 
 
@@ -187,6 +283,72 @@ class ModelsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14T07:00",
+            change=(
+                "models.<role>.draft, optional: a second, smaller set of weights that "
+                "drafts tokens this entry's model then verifies. It carries its own "
+                "repo, revision, file, sha256 and byte_count, a closed spec_type of "
+                "draft-simple or ngram-simple, and the three drafting knobs n_max, "
+                "n_min and p_min. Null is the default and means one model and no "
+                "speculation, so every models file written before today still loads "
+                "and every committed run.json still reads."
+            ),
+            why=(
+                "Plan 28 row 2a, returned to scope 2026-09-14. It is the one feature a "
+                "candidate brings that this plan's pointer-swap could not switch on, so "
+                "leaving it out contradicted the plan's own intent. It is priced on "
+                "cost and revert rather than on a quality measurement because "
+                "speculative decoding is output-identical by construction - the target "
+                "verifies every drafted token - so there is no quality to measure "
+                "(Guardrail #10, amended 2026-09-14). The block sits beside inference "
+                "rather than inside it because it names weights to fetch, and a block "
+                "that fetches a file is not a decoding knob."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T06:00",
+            change=(
+                "models.<role>.byte_count, optional: how many bytes the weights are. It "
+                "sits on ModelRef beside sha256, defaults to null, and no reader "
+                "requires it - so a models file written before today still loads and a "
+                "run.json written before today still reads."
+            ),
+            why=(
+                "Plan 28 row #9 decision 3. The qualification dispatch took the byte "
+                "count as a form field, which made it the one fact about a candidate "
+                "that lived outside the file naming that candidate - and its default of "
+                "0 meant the identity gate compared the observed size to itself and "
+                "called that a check (Guardrail #10). Declared here, the gate compares "
+                "two independent facts, and the dispatch has nothing left to ask for "
+                "but the filename. Ruled by Carmack, 2026-09-13."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "models.<role>.turns gains thinking_close, and "
+                "models.<role>.inference.thinking and max_output_tokens are gone. "
+                "thinking_close is the whole declaration that reasoning is wanted: not "
+                "null and a call is decoded as two spans, one unconstrained span that "
+                "stops at this marker and then the schema-constrained answer on the "
+                "same slot. max_think_tokens and max_answer_tokens replace the one "
+                "budget. Both removed names are refused by name through "
+                "refuse_a_removed_knob, max_output_tokens pointing at "
+                "max_answer_tokens and thinking pointing at turns.thinking_close."
+            ),
+            why=(
+                "Plan 28 row #10. The owner ruled on 2026-09-13 that reasoning during "
+                "summarization is wanted, and the old flag could never have delivered "
+                "it: the output schema binds the decode from the first token on both "
+                "transports, so a think opener is not a legal token - the grammar "
+                "either suppresses the thinking or the runtime splits a reasoning "
+                "channel off and every item fails on shape. A flag beside a marker is "
+                "also two places to disagree, and one budget over two spans cannot say "
+                "whether a long think or a cut answer spent it. Ruled by Andre and "
+                "Fowler, 2026-09-14."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T03:00",
             change=(
@@ -282,8 +444,10 @@ class ModelsConfig(Contract):
 
         The swap this refuses is five strings edited in place: repo, file,
         revision, digest and id, with the blocks underneath them untouched. That
-        raises nothing on its own, and the run then stands a server up on numbers
-        derived for weights it never opened.
+        used to raise nothing, and the run then stood a server up on numbers
+        derived for weights it never opened. It is not hypothetical - the
+        summarizer moved from the 8B to the 9B on 2026-08-27 and the settings
+        block did not move with it.
 
         **Two blocks, one rule, one loop.** `inference` and `turns` are both
         measurements about one model, so the check is the same for both and only

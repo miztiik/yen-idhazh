@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, Final, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import Model, Sha256
 
@@ -18,12 +20,11 @@ class InferenceConfig(Model):
         description=(
             "The window one sequence gets. The default stays 8192 because it is the "
             "conservative window for weights nobody has put in front of a runner; "
-            "models.summarize pins 49152, and the "
+            "models.summarize pins 65536, and the "
             "measurement that earns the raise is about the 9B on a GitHub-hosted "
             "runner rather than about this field. Doubling buys nothing but KV cache: "
-            "32 KiB a token on those weights, measured 2026-09-13 at 512.00 MiB for "
-            "16384, 1024.00 for 32768 and 2048.00 for 65536, which interpolates to "
-            "1536.00 MiB at the pinned 49152, over the 8 attention "
+            "32 KiB a token on those weights, which is 2048.00 MiB at the pinned "
+            "65536 against 512.00 MiB at 16384, over the 8 attention "
             "layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB "
             "whatever the window is. Whether that fits is decided by what the machine "
             "had free and never by what the processes held - "
@@ -104,18 +105,31 @@ class InferenceConfig(Model):
         default=0,
         description="Dead code under greedy decoding. Never cited as the determinism control.",
     )
-    thinking: bool = Field(
-        default=False,
-        description="Off. Reasoning measurably increases hallucination when summarizing.",
+    max_think_tokens: int = Field(
+        default=256,
+        ge=1,
+        description=(
+            "The thinking span's budget, and a hard cap rather than a hint. A model "
+            "that never closes its reasoning block would otherwise eat the whole "
+            "window and be recorded as a truncated summary, which names the wrong "
+            "cause. 256 tokens costs 42.6 s an item at the measured 6.01 +/- 0.11 "
+            "tokens a second (2026-08-23, ubuntu-latest, EPYC 9V74, llama.cpp b10598, "
+            "three repeats). It is read only where the entry declares "
+            "turns.thinking_close; an entry that declares no closing marker spends "
+            "none of it."
+        ),
     )
-    max_output_tokens: int = Field(
+    max_answer_tokens: int = Field(
         default=900,
         ge=1,
         description=(
-            "A crash guard, not a length target. The prompt sets the length; this only "
-            "stops a runaway decode from burning a shard's whole timeout. Sized at 250 "
-            "the reply ran out of budget mid-object and failed as a shape error, which "
-            "named the wrong cause - so it is set well above any summary we want."
+            "The answer span's budget. A crash guard, not a length target: the prompt "
+            "sets the length and this only stops a runaway decode from burning a "
+            "shard's whole timeout. Sized at 250 the reply ran out of budget "
+            "mid-object and failed as a shape error, which named the wrong cause - so "
+            "it is set well above any summary we want. It was max_output_tokens until "
+            "2026-09-14, when one budget stopped being able to say which of two spans "
+            "overran."
         ),
     )
     request_timeout_minutes: float = Field(
@@ -140,3 +154,74 @@ class InferenceConfig(Model):
             "by a validator and a field nothing checks is a comment."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_run_written_before_the_two_spans_still_reads(cls, data: Any) -> Any:
+        """The read-side migration for a block a run record embeds.
+
+        **This shape is two things at once, and that is why the refusal is not
+        here.** `ModelsConfig` reaches it through `ModelEntry`, which is a file a
+        person edits and where a removed knob is refused by name.
+        `run_manifest.ModelUse` reaches it through `ModelRef`, which is a payload
+        yesterday's run wrote - and a build that cannot read yesterday's payload
+        is a release blocker (`CLAUDE.md` section 11).
+
+        `max_output_tokens` is renamed rather than dropped: it sized the answer
+        of a single call, which is what `max_answer_tokens` sizes, so the number
+        a run recorded keeps its meaning. `thinking` is dropped, because reasoning
+        is declared on the turn envelope now and `ModelRef` carries no envelope -
+        and every run written under the old flag wrote it false, so no reading is
+        lost.
+
+        A payload that carries both spellings is left alone, so the shape refuses
+        it: two budgets in one block is not a payload this can read.
+        """
+        if not isinstance(data, dict):
+            return data
+        touched = frozenset(data) & (frozenset(MIGRATED_INFERENCE_NAMES) | RETIRED_INFERENCE_NAMES)
+        if not touched:
+            return data
+        migrated: dict[Any, Any] = {}
+        for name, value in data.items():
+            if name in RETIRED_INFERENCE_NAMES:
+                continue
+            successor = MIGRATED_INFERENCE_NAMES.get(name, name)
+            migrated[name if successor in data else successor] = value
+        return migrated
+
+
+#: The `models.<role>.inference` knobs this block used to carry.
+#: `max_output_tokens` was one budget over what is now two spans, so it could not
+#: say whether a long think or a cut answer spent it; it is renamed to the span
+#: it actually sized. `thinking` was a decoding flag that could never have
+#: worked on its own - the output schema binds the decode from the first token,
+#: so a think opener is not a legal token - and reasoning is declared by the
+#: closing marker on the turn envelope instead.
+#:
+#: **This map refuses a config file and never a run record.** `ModelEntry` is
+#: the shape a person edits and is where it is read; the same block inside a
+#: `ModelRef` a run wrote is migrated instead, by the two maps below.
+SUPERSEDED_INFERENCE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "max_output_tokens": "max_answer_tokens",
+        "thinking": "models.<role>.turns.thinking_close",
+    }
+)
+
+
+#: What a run record written before 2026-09-14 spells its output budget, and the
+#: name that carries the same number now. A rename rather than a drop: the old
+#: key sized the answer of a single call and so does the new one, so the number
+#: the run recorded keeps its meaning (Guardrail #10).
+MIGRATED_INFERENCE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {"max_output_tokens": "max_answer_tokens"}
+)
+
+
+#: The knob a run record written before 2026-09-14 carried and nothing carries
+#: now. Reasoning is declared by `turns.thinking_close`, and `ModelRef` - the
+#: shape a run records - carries no turn envelope at all. Every run written
+#: under the old flag wrote it false, because the output schema made anything
+#: else fail on shape, so dropping it loses no reading.
+RETIRED_INFERENCE_NAMES: Final[frozenset[str]] = frozenset({"thinking"})

@@ -32,7 +32,17 @@ class RunConfig(Model):
     shard_size: int = Field(
         default=5,
         ge=1,
-        description="URLs per worker VM. Set by measured model-load amortization, not by taste.",
+        description=(
+            "URLs per worker VM. Set by measured model-load amortization, not by "
+            "taste. It does not decide the fan-out on its own and has not since the "
+            "run ceiling came down: the fan-out is "
+            "min(ceil(safety_ceiling_per_run / shard_size), max_parallel), which is "
+            "min(16, 4) at the committed numbers, so max_parallel binds and a worker "
+            "draws 20 items. Re-derived on 2026-09-14 against the two-span item and "
+            "left here: it would have to rise above 20 to move the fan-out at all, "
+            "and a worker carrying more items is the opposite of what a longer item "
+            "wants."
+        ),
     )
     max_parallel: int = Field(
         default=4,
@@ -57,9 +67,16 @@ class RunConfig(Model):
             "work roughly halves. Sized from the worst measured shard, not the median: "
             "over 80 shard rows on 2026-09-02 the worst used 135.4 minutes of the old "
             "150-minute bound and the median used 78.5, and the second model call an "
-            "item spends exactly that margin. 200 is 56 percent of the six-hour platform "
-            "ceiling, well inside Guardrail #2. A slow worker is still answered by lowering "
-            "the ceiling, never by raising this."
+            "item spends exactly that margin. **Re-derived on 2026-09-14 for the "
+            "two-span item and left at 200.** The worst of those 80 rows carried 40 "
+            "items, so the worst measured item is 203.1 s; each of the item's two "
+            "calls now opens with a 256-token thinking span, which is 42.6 s a span at "
+            "the measured 6.01 +/- 0.11 tokens a second (2026-08-23, ubuntu-latest, "
+            "EPYC 9V74, llama.cpp b10598, three repeats), so the derived worst item is "
+            "288.3 s and a 20-item worker's worst shard is 96.1 minutes. 200 is 56 "
+            "percent of the six-hour platform ceiling, well inside Guardrail #2. A "
+            "slow worker is still answered by lowering the ceiling, never by raising "
+            "this."
         ),
     )
     success_floor_pct: int = Field(

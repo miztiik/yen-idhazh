@@ -1,7 +1,7 @@
 """Read every live feed, rank the pool, and write down what it saw. No model.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from idhazh import (
     source_health,
     tag,
 )
+from idhazh.contracts.base import fit_field
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -50,6 +51,11 @@ RETIRED_DETAIL: Final = "address retired after repeated 410 Gone"
 _NEVER_ASKED: Final[frozenset[FetchOutcome]] = frozenset(
     {FetchOutcome.ROBOTS_DENIED, FetchOutcome.SKIPPED, FetchOutcome.BLOCKED}
 )
+
+#: What a failure detail that folded away to nothing records. Never an empty
+#: string: the outcome column already says the fetch failed, so a blank detail
+#: beside it reads as a fetch nobody could describe rather than one nobody did.
+_UNSTATED: Final = "detail could not be printed"
 
 
 Clock = Callable[[], str]
@@ -592,7 +598,11 @@ def _health_row(
         outcome=result.outcome,
         status=result.status,
         items=found,
-        detail=result.detail[:200] if result.detail else None,
+        detail=(
+            fit_field(result.detail, model=FeedHealthRow, field="detail", absent=_UNSTATED)
+            if result.detail
+            else None
+        ),
         endpoint_key=derive_endpoint_key(feed.url),
         robots_outcome=result.robots,
         target_attempted=result.outcome not in _NEVER_ASKED,

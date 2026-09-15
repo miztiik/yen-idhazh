@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -202,6 +202,8 @@ Three details in that carry weight:
 The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
 
 **Three of those terms and the score itself reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is). `on_front_page` is a published fact and not a term, so a reader can still be told another desk led with a story that our own arithmetic placed on its own merits.
+
+**The plan records every term, not just the total.** `PlannedItem` carries `authority_score`, `tier_score`, `feed_weight`, `feed_reliability`, `carriage_step`, `watchlist_bonus`, `lens_bonus` and `recency_bonus` beside `rank_score`, so an operator asking why a story ran gets the part of the score that carried it rather than only that it scored 1.84. `rank.score_terms` returns all eight from the one pass of arithmetic `score` already ran, so a term cannot disagree with the total it is part of, and the three authority factors all come from the single carrier that won the maximum rather than from different feeds. What each field holds, and what a null one means on a plan an earlier run wrote, is on [`backend/idhazh/contracts/run_plan.py`](../../../backend/idhazh/contracts/run_plan.py).
 
 **The run manifest records which shape produced the order.** `rank.RANK_VERSION` is bumped whenever the scoring shape changes and lands in `RunRecord.rank_version`. A bump nothing records is a bump nobody can read, so the field and the constant have to ship together. It is null on a manifest written before the field existed, which reads as unknown.
 

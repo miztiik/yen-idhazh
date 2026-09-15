@@ -227,6 +227,7 @@ def _work_stage(
     *,
     replies: tuple[bytes, ...],
     fetcher: Callable[[str], FetchResult] = captured_article_fetch,
+    run_plan: RunPlan | None = None,
 ) -> tuple[RunPlan, Path, RecordedEndpoint]:
     """One real work stage over captured pages and recorded replies.
 
@@ -234,8 +235,12 @@ def _work_stage(
     played back by a real loopback server (Guardrail #7). The endpoint comes back
     with it because it holds two different readings of the same run - how many
     requests were sent, and what was in them - and a test wants one or the other.
+
+    `run_plan` is how a caller asks for a shape the committed fixture does not
+    carry - an item the day's feeds never produced. Default is the fixture, so
+    every existing caller reads the same plan it always did.
     """
-    run_plan = plan()
+    run_plan = run_plan if run_plan is not None else plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     with RecordedEndpoint(200, *replies) as server:

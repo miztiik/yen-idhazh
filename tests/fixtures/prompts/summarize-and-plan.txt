@@ -163,7 +163,10 @@ The plan, when the question below asks for one.
   dropped things the table still holds.
 <|im_end|>
 <|im_start|>user
-Title: Example Lab releases a smaller model
+Title:
+<<<UNTRUSTED_SOURCE_TEXT>>>
+Example Lab releases a smaller model
+<<<END_UNTRUSTED_SOURCE_TEXT>>>
 
 The item, one sentence per line:
 <<<UNTRUSTED_SOURCE_TEXT>>>
@@ -176,5 +179,13 @@ Quantities and dates already found in it:
 [quantity-149-159] 34 percent = 34 % (sentence s1)
 [quantity-197-201] 2.1x = 2.1 x (sentence s1)
 <<<END_UNTRUSTED_SOURCE_TEXT>>><|im_end|>
+<|im_start|>assistant
+<think>
+{"labels": [{"element_id": "quantity-149-159", "measure": "cost per million tokens", "dimension": "model", "entity": "Example Lab", "time_element_id": "", "attribution": "self_reported", "hedge": false, "salience": "primary"}, {"element_id": "quantity-197-201", "measure": "throughput on commodity CPUs", "dimension": "model", "entity": "Example Lab", "time_element_id": "", "attribution": "self_reported", "hedge": false, "salience": "supporting"}, {"element_id": "quantity-500-512", "measure": "an address no pass minted", "dimension": "", "entity": "", "time_element_id": "", "attribution": "unattributed", "hedge": false, "salience": "background"}], "proposed": [{"sentence_id": "s0", "surface": "fell by about a third"}], "entity_mentions": [{"mentions": [{"sentence_id": "s0", "surface": "Example Lab"}], "name": "Example Lab", "salience": "primary"}], "place_mentions": [{"mentions": [{"sentence_id": "s0", "surface": "Denmark"}], "name": "Denmark", "salience": "background"}], "quotes": [{"sentence_start_id": "s0", "sentence_end_id": "s0", "speaker": "Example Lab", "attribution": "self_reported", "hedge": true}], "claims": [{"sentence_start_id": "s1", "sentence_end_id": "s1", "speaker": "", "attribution": "unattributed", "hedge": false}], "keyphrases": ["inference cost", "throughput"], "lede_sentence_ids": ["s0"]}<|im_end|>
+<|im_start|>user
+Now write about the item above.
+Summary: 70 to 130 words, 2 to 3 key points.
+Write "summary", then "visual".
+<|im_end|>
 <|im_start|>assistant
 <think>

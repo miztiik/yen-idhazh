@@ -223,7 +223,8 @@ class _Measured(NamedTuple):
 #: hold two any more. That is what the sixth rung cost this fixture: until
 #: 2026-09-09 the 60-to-700-word zone carried a second mark, and the row that
 #: carried it is the one moved up to fill the new 5000-word seam. Restoring it
-#: needs a ninth canary, because the day publishes one item per canary file.
+#: needs a ninth entry in `DAY_CANARIES` and a ninth row here, because the day
+#: publishes one item per named canary.
 SCORED: Final[tuple[_Measured, ...]] = (
     # A release note. Under the shortest target zone, and left of the 100-word
     # floor the plot seeds its axis with - the one mark that can say whether the
@@ -291,9 +292,44 @@ SCORED: Final[tuple[_Measured, ...]] = (
 )
 
 
+#: The canary files this day is built from, in the digest's own order.
+#:
+#: **Named rather than globbed, and the naming is the point.** Every row of
+#: `SCORED` is engineered against the article at its own index, and so are
+#: `ABSTRACT_AT`, `RELABELLED_AT`, `APPEARED` and three of the visuals. The day's
+#: shape is a fixture somebody designed, not a census of a directory. While this
+#: globbed, that shape depended on how many injection attacks
+#: `tests/fixtures/canaries/` happened to hold - so adding one to the boundary
+#: suite moved the console's fixture day, its item count, its desk counts and
+#: every browser assertion that reads them. On 2026-09-15 a sixth attack landed
+#: and broke this file rather than the boundary it was defending.
+#:
+#: An attack is added to the boundary suite on its own. It joins this day only
+#: when somebody writes it a `SCORED` row, a time, and whatever else its index
+#: owns.
+DAY_CANARIES: Final = (
+    "direct-instruction-override.json",
+    "encoded-payload.json",
+    "exfiltration-via-url.json",
+    "fake-system-delimiter.json",
+    "tool-call-injection.json",
+    "browser/exfiltration-via-image-source.json",
+    "browser/instruction-to-the-browser-model.json",
+    "browser/markup-into-the-page.json",
+)
+
+
 def canaries(directory: Path = CANARY_DIR) -> list[dict[str, object]]:
-    """Every canary, build-time and browser, in a stable order."""
-    paths = sorted(directory.glob("*.json")) + sorted((directory / "browser").glob("*.json"))
+    """The canaries this day publishes, build-time then browser, in a stable order.
+
+    A missing file raises here rather than shortening the day, because a day one
+    item shorter is a fixture the browser suite still runs against and reads
+    different numbers from.
+    """
+    paths = [directory / name for name in DAY_CANARIES]
+    missing = [path.name for path in paths if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"the canary day names files that are not there: {missing}")
     return [json.loads(path.read_text(encoding="utf-8")) for path in paths]
 
 

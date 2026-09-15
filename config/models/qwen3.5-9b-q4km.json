@@ -1,6 +1,7 @@
 {
   "summarize": {
     "arch": "qwen35",
+    "byte_count": 5680522464,
     "file": "Qwen3.5-9B-Q4_K_M.gguf",
     "hf_base_repo": "Qwen/Qwen3.5-9B",
     "id": "qwen3-5-9b-q4-k-m",
@@ -11,10 +12,11 @@
       "flash_attention": "on",
       "load_mode": null,
       "log_verbosity": 4,
-      "max_output_tokens": 900,
+      "max_answer_tokens": 900,
+      "max_think_tokens": 256,
       "metrics": true,
       "n_batch": 512,
-      "n_ctx": 49152,
+      "n_ctx": 65536,
       "n_parallel": 1,
       "n_threads": 4,
       "n_threads_batch": null,
@@ -25,7 +27,6 @@
       "seed": 0,
       "startup_warmup": true,
       "temperature": 0.0,
-      "thinking": false,
       "top_p": 1.0
     },
     "quantisation": "Q4_K_M",
@@ -38,10 +39,11 @@
       "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
       "system_joiner": null,
       "system_role": "own_turn",
+      "thinking_close": null,
       "thinking_kwarg": "enable_thinking",
       "turn_closing": "<|im_end|>\n",
       "turn_opening": "<|im_start|>$role\n"
     }
   },
-  "version": "2026-09-14T03:00"
+  "version": "2026-09-14T06:00"
 }

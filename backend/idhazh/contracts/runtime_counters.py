@@ -59,8 +59,8 @@ where it can only be done the one correct way.
 enough. The grain is wrong - a manifest run record is one run and this is one
 shard, so the manifest would grow a variable-length list. The producer is wrong
 - the manifest is written by `assemble`, in another job hours later, so these
-numbers would have to travel inside the items artifact, which expires in a day
-and is not uploaded at all when a job is cancelled. The audience is wrong -
+numbers would have to travel inside the items artifact, which expires and is
+never committed. The audience is wrong -
 `run.json` is a published payload a reader's browser fetches, and this is
 measurement evidence that belongs under `state/`, which is never served. And the
 timing is wrong - a concurrent branch was also opening `RunManifest`, and two
@@ -77,11 +77,14 @@ from typing import Annotated, Any, ClassVar, Final, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
+    JOB_NAME_PATTERN,
+    PRINTABLE_LINE_PATTERN,
     ChangelogEntry,
     Contract,
     DateStamp,
     RunId,
     Timestamp,
+    fit_cell,
 )
 
 #: The one spelling a payload timestamp leaves the process in, as `strptime`
@@ -91,13 +94,20 @@ _SCRAPED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
 
 #: One line of printable ASCII. `state/runtime-counters.csv` is merged with the
 #: union driver, which works line by line, so a cell that could hold a newline
-#: could split one row across a merge.
-CpuModel = Annotated[str, StringConstraints(pattern=r"^[ -~]+$", max_length=120)]
+#: could split one row across a merge. The value is a kernel file read with
+#: `errors="replace"` on one platform and `platform.processor()` on another, so
+#: `from_metrics_text` folds it through `base.fit_cell` rather than trusting it.
+CpuModel = Annotated[str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=120)]
+
+#: What a `cpu_model` that folded away to nothing records. A processor name the
+#: host printed in bytes nothing could read is still the fact that a probe ran,
+#: and an empty cell would say the probe did not.
+UNPRINTABLE_CPU: Final = "unprintable"
 
 #: The workflow job that wrote a row. Lowercase, because it is the job's own id
 #: in `.github/workflows/digest.yml` rather than a display name - a display name
 #: would drift from the thing it is supposed to identify.
-JobName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]*$", max_length=40)]
+JobName = Annotated[str, StringConstraints(pattern=JOB_NAME_PATTERN, max_length=40)]
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
 #: one step in the repository ran `idhazh counters`, and it is in the `work` job,
@@ -572,8 +582,8 @@ class RuntimeCountersRow(Contract):
                 "scraped_at": scraped_at,
                 "job": job,
                 "job_seconds": _elapsed(scraped_at, job_started_at),
-                "cpu_model": (cpu_model or "").strip() or None,
-                "cpu_busy_pct": _cpu_busy_pct(cpu_stat_at_start, cpu_stat_at_end),
+                "cpu_model": _cpu_model_cell(cpu_model),
+                "cpu_busy_pct": cpu_busy_pct_between(cpu_stat_at_start, cpu_stat_at_end),
                 "peak_rss_bytes": _peak_bytes(rss_samples, _RSS_PEAK_COLUMN),
                 "model_load_ms": _model_load_ms(server_log),
                 "n_ctx_configured": _n_ctx_configured(server_log),
@@ -584,13 +594,20 @@ class RuntimeCountersRow(Contract):
         )
 
 
-def _cpu_ticks(text: str | None) -> dict[str, int] | None:
+def cpu_ticks(text: str | None) -> dict[str, int] | None:
     """The aggregate `cpu` line of `/proc/stat`, by field name.
 
     Reads the line out of whatever it is handed - the workflow passes that one
     line, and a whole capture of the file is the same fact with the per-processor
     lines still attached. Anything else - an empty variable, a truncated read -
     is absent rather than a zero reading.
+
+    **Public because the work stage reads the same file per item.** The shard
+    grain cannot attribute a slow item to a noisy neighbour, so `idhazh.machine`
+    takes the same two readings around one item - and a second copy of this
+    parsing would be a second thing to keep in step (Guardrail #5). Nothing
+    below `contracts/` is imported to do it: this stays a pure function over
+    text the caller opened.
     """
     if not text:
         return None
@@ -607,16 +624,19 @@ def _cpu_ticks(text: str | None) -> dict[str, int] | None:
     return None
 
 
-def _cpu_busy_pct(at_start: str | None, at_end: str | None) -> float | None:
+def cpu_busy_pct_between(at_start: str | None, at_end: str | None) -> float | None:
     """Busy processor time as a share of processor time available, between two reads.
 
     Differencing two reads is what makes this the job's number rather than the
     host's: `/proc/stat` counts since boot, and a runner boots minutes of mostly
     idle time before the job starts. The denominator is every processor's time,
     so nothing here needs to know how many there are.
+
+    Public for the same reason `cpu_ticks` is: the work stage differences the
+    same two readings around one item rather than around a whole shard.
     """
-    start = _cpu_ticks(at_start)
-    end = _cpu_ticks(at_end)
+    start = cpu_ticks(at_start)
+    end = cpu_ticks(at_end)
     if start is None or end is None:
         return None
     totals = []
@@ -728,6 +748,25 @@ def _elapsed(scraped_at: str, job_started_at: int | None) -> int | None:
         return None
     scraped = datetime.strptime(scraped_at, _SCRAPED_AT_FORMAT).replace(tzinfo=UTC)
     return int(scraped.timestamp()) - job_started_at
+
+
+def _cpu_model_cell(cpu_model: str | None) -> str | None:
+    """The processor name, folded into the column that has to hold it.
+
+    Nothing about this value is ours. The workflow reads it out of
+    `/proc/cpuinfo`, `fingerprint.host_cpu` reads the same file with
+    `errors="replace"` so an unreadable byte arrives as `U+FFFD`, and a developer
+    machine answers with whatever `platform.processor()` returns. Any of those
+    can be longer than the column or outside its class, and a refusal here would
+    cost the whole runtime-counters row over a processor name.
+
+    A probe that reported nothing still records nothing: an empty cell means the
+    reading was not taken, which is a different fact from a reading that could
+    not be printed.
+    """
+    if not (cpu_model or "").strip():
+        return None
+    return fit_cell(cpu_model or "", column=CpuModel, absent=UNPRINTABLE_CPU)
 
 
 def _number(series: str, field: str, raw: str) -> float | int:

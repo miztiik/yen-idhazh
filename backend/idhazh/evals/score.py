@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Final, NamedTuple
 
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import fit_field
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
@@ -181,7 +182,15 @@ def to_eval_row(
         # identifies its article after the day is pruned from the site, and
         # identity has to be the thing that does not vary: our title is
         # rewritten per run and is absent whenever the rewrite missed its range.
-        title=(item.title or article.title or _UNTITLED),
+        # Fitted, because a headline is a stranger's text: it arrives with the
+        # length, the punctuation and the script the page chose, and this column
+        # has its own opinion about all three.
+        title=fit_field(
+            item.title or article.title or _UNTITLED,
+            model=EvalRow,
+            field="title",
+            absent=_UNTITLED,
+        ),
         vertical=item.vertical,
         model_id=summary.model_id,
         attempt=summary.attempt,

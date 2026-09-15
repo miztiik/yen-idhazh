@@ -175,8 +175,8 @@ export function itemCost(rows: readonly Record<string, string>[], window: CostWi
 		// took two, the total says yes on every item, because the second call reuses
 		// the first call's prompt - so the four figures below read the first call
 		// wherever the projection publishes it, and the totals only where it does not.
-		const firstCached = cell(row, 'call_1_cached_tokens');
-		const firstInput = cell(row, 'call_1_input_tokens');
+		const firstCached = cell(row, 'label_cached_tokens');
+		const firstInput = cell(row, 'label_input_tokens');
 		const split = firstCached !== null && firstInput !== null;
 		if (split) perCall += 1;
 		const cacheOf = split ? firstCached : cached;

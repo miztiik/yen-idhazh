@@ -27,7 +27,7 @@ import json
 import os
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -36,6 +36,7 @@ from typing import IO, Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
+from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef
 from idhazh.contracts.knobs.turns import SystemPlacement, TurnsConfig
@@ -132,6 +133,10 @@ class TurnMarkers:
     #: fold that declares no joiner, so the empty string is unreachable on the
     #: arm that does read it.
     system_joiner: str
+    #: What closes this model's reasoning block, and the whole declaration that
+    #: reasoning is wanted. `None` is one schema-constrained span and no
+    #: reasoning; a string is two spans on one slot.
+    thinking_close: str | None
 
     def turn(self, role: str, content: str) -> str:
         """One whole turn. `substitute` rather than `safe_substitute`: a renamed
@@ -152,8 +157,20 @@ class TurnMarkers:
             return self.turn("user", system + self.system_joiner + user)
         return self.turn("system", system) + self.turn("user", user)
 
-    def opening(self, *, thinking: bool) -> str:
-        return self.reply_opening_thinking if thinking else self.reply_opening
+    @property
+    def thinks(self) -> bool:
+        """Whether a call on these markers is decoded as two spans."""
+        return self.thinking_close is not None
+
+    def opening(self) -> str:
+        """Where the model starts writing, on the arm this envelope declares.
+
+        It takes no argument. A flag handed in beside the markers is a second
+        answer to a question the markers already answer, and the two disagreeing
+        renders a prompt that opens a reasoning block the decode is then held to
+        close somewhere else.
+        """
+        return self.reply_opening_thinking if self.thinks else self.reply_opening
 
     def opening_of(self, prompt: str) -> str:
         """The reply opening a rendered prompt already ends with.
@@ -185,6 +202,7 @@ def _markers(
     reply_opening_thinking: str,
     system_role: SystemPlacement,
     system_joiner: str,
+    thinking_close: str | None,
 ) -> TurnMarkers:
     return TurnMarkers(
         turn_opening=Template(turn_opening),
@@ -193,6 +211,7 @@ def _markers(
         reply_opening_thinking=reply_opening_thinking,
         system_role=system_role,
         system_joiner=system_joiner,
+        thinking_close=thinking_close,
     )
 
 
@@ -213,13 +232,43 @@ def turn_markers(turns: TurnsConfig) -> TurnMarkers:
         # Null only under `own_turn`, where the fold never runs and nothing reads
         # it. The contract refuses a fold whose joiner is absent or empty.
         turns.system_joiner or "",
+        turns.thinking_close,
     )
 
 
-def render_prompt(*, system: str, user: str, thinking: bool, turns: TurnsConfig) -> str:
+def turn_markers_digest(turns: TurnsConfig) -> str:
+    """One digest over the whole envelope, for the stamp and for the bench.
+
+    `prompt_sha256` moves when a marker moves and stops short of two envelope
+    facts that move an output without moving a rendered prompt: which of the two
+    reply openings a call ends on, and the marker the thinking span stops at. So
+    the envelope is digested whole, in one place, and both readers take it from
+    here - a second rendering is a second answer.
+
+    `thinking_kwarg` is out, and `declared_for` with it. The first is a name in
+    somebody else's template that no published word is decoded under; the second
+    is the weights, which `model_sha256` already carries.
+    """
+    markers = turn_markers(turns)
+    return derive_text_digest(
+        "\n".join(
+            (
+                markers.turn_opening.template,
+                markers.turn_closing,
+                markers.reply_opening,
+                markers.reply_opening_thinking,
+                markers.system_role.value,
+                markers.system_joiner,
+                markers.thinking_close or "",
+            )
+        )
+    )
+
+
+def render_prompt(*, system: str, user: str, turns: TurnsConfig) -> str:
     """The prompt bytes a rendered completion is sent, from the turns it is made of."""
     markers = turn_markers(turns)
-    return markers.conversation(system=system, user=user) + markers.opening(thinking=thinking)
+    return markers.conversation(system=system, user=user) + markers.opening()
 
 
 def continued_prompt(prompt: str, *, reply: str, user: str, turns: TurnsConfig) -> str:
@@ -230,6 +279,12 @@ def continued_prompt(prompt: str, *, reply: str, user: str, turns: TurnsConfig) 
     expression says. The seam sits on the turn-closing marker, which tokenises
     as one entry of the model's own vocabulary, so the byte prefix survives as a
     token prefix rather than re-splitting at the join.
+
+    **`reply` is the answer, never the thinking.** Under a thinking envelope the
+    slot behind this prompt also holds what span one wrote, and none of it is
+    replayed here: it is model-written text, and a prompt is exactly the channel
+    Guardrail #11 exists to keep model-written text out of. What that costs is
+    the answer's own tokens re-prefilled, which is prefill rather than decode.
     """
     markers = turn_markers(turns)
     opening = markers.opening_of(prompt)
@@ -381,6 +436,30 @@ def server_argv(
         argv.append("--metrics")
     if not inference.startup_warmup:
         argv.append("--no-warmup")
+    # The draft head, when the entry declares one. Its path is the target's own
+    # directory, because one fetch step writes both files and a second way of
+    # saying where weights live is a second way to be wrong.
+    #
+    # Every flag here is spelled the way build b10598 spells it, which is not
+    # the way most of the internet spells it: `--draft-max` and `--draft-min`
+    # were REMOVED and the binary now exits telling you to use
+    # `--spec-draft-n-max` and `--spec-draft-n-min`. A spelling taken from an
+    # older page is a server that will not start.
+    if model.draft is not None:
+        argv.extend(
+            (
+                "--spec-draft-model",
+                str(weights.parent / model.draft.file),
+                "--spec-type",
+                model.draft.spec_type.value,
+                "--spec-draft-n-max",
+                str(model.draft.n_max),
+                "--spec-draft-n-min",
+                str(model.draft.n_min),
+                "--spec-draft-p-min",
+                str(model.draft.p_min),
+            )
+        )
     return argv
 
 
@@ -391,7 +470,7 @@ def request_payload(
     user: str,
     output_schema: dict[str, Any],
     inference: InferenceConfig,
-    thinking_kwarg: str | None,
+    turns: TurnsConfig,
     schema_name: str = "summary",
 ) -> dict[str, Any]:
     """The request body, with the output shape enforced by the decoder.
@@ -399,12 +478,20 @@ def request_payload(
     `response_format` is the control that survives an injection: text inside the
     user turn can change the words, and cannot change the shape.
 
-    `thinking_kwarg` is handed in and has no default here. The name is a
-    variable in somebody else's Jinja template, so it belongs to the entry that
-    names the weights (`models.<role>.turns.thinking_kwarg`) - a default in this
-    signature would be a project constant sent to every model, which is what
-    this argument replaced.
+    `turns` is handed in and has no default here. Both the keyword that turns
+    reasoning on and the marker that declares it wanted are variables in
+    somebody else's chat template, so they belong to the entry that names the
+    weights - a default in this signature would be a project constant sent to
+    every model, which is what this argument replaced.
+
+    **This route decodes one span and the runtime owns the split.** The prompt
+    is rendered by the model's own template, so a caller cannot stop the decode
+    at a marker and restart it under a grammar; what it can do is size the
+    budget for both spans, which is why a thinking envelope sends the two
+    budgets added together. The digest's own path renders its bytes and gets the
+    two spans separately (`thinking_span`, `answer_span`).
     """
+    thinking = turns.thinks
     payload: dict[str, Any] = {
         "model": model_id,
         "messages": [
@@ -414,20 +501,22 @@ def request_payload(
         "temperature": inference.temperature,
         "top_p": inference.top_p,
         "seed": inference.seed,
-        "max_tokens": inference.max_output_tokens,
+        "max_tokens": (
+            inference.max_answer_tokens + inference.max_think_tokens
+            if thinking
+            else inference.max_answer_tokens
+        ),
         "stream": False,
         "response_format": {
             "type": "json_schema",
             "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
         },
     }
-    # Reasoning measurably increases hallucination when summarizing, and
-    # summarization is compression - every reasoning token is a chance to leave
-    # the source. A null keyword is a template that reads none, so the key is
-    # absent rather than carrying a name no template answers to; the entry
-    # refuses that pair with reasoning asked for.
-    if thinking_kwarg is not None:
-        payload["chat_template_kwargs"] = {thinking_kwarg: inference.thinking}
+    # A null keyword is a template that reads none, so the key is absent rather
+    # than carrying a name no template answers to; the entry refuses that pair
+    # with a closing marker declared.
+    if turns.thinking_kwarg is not None:
+        payload["chat_template_kwargs"] = {turns.thinking_kwarg: thinking}
     return payload
 
 
@@ -439,7 +528,7 @@ def completion_payload(
     output_schema: dict[str, Any],
     inference: InferenceConfig,
     turns: TurnsConfig,
-    max_output_tokens: int,
+    max_answer_tokens: int,
 ) -> dict[str, Any]:
     """The request body for a prompt we rendered ourselves.
 
@@ -452,8 +541,13 @@ def completion_payload(
     **The budget is handed in rather than read off `inference`**, for the same
     reason `continued_completion_payload` takes one: a rendered call is held to
     a shape of its own, and a budget sized for some other shape cuts a reply
-    that did exactly what the grammar allowed. `inference.max_output_tokens` is
+    that did exactly what the grammar allowed. `inference.max_answer_tokens` is
     the summariser role's number and sizes the single call that still reads it.
+
+    **This is the answer span, whether or not one is thought in front of it.**
+    Under a thinking envelope `thinking_span` derives span one from this body
+    and `answer_span` puts this body's own shape back on the same slot, so the
+    budget here is never a share of a combined number.
 
     `cache_prompt` is stated rather than inherited. The whole point of a
     rendered prompt is that the next call reuses this one, the build's own
@@ -467,17 +561,102 @@ def completion_payload(
     """
     return {
         "model": model_id,
-        "prompt": render_prompt(
-            system=system, user=user, thinking=inference.thinking, turns=turns
-        ),
+        "prompt": render_prompt(system=system, user=user, turns=turns),
         "temperature": inference.temperature,
         "top_p": inference.top_p,
         "seed": inference.seed,
-        "n_predict": max_output_tokens,
+        "n_predict": max_answer_tokens,
         "stream": False,
         "cache_prompt": True,
         "json_schema": output_schema,
     }
+
+
+def thinking_span(
+    answer: Mapping[str, Any], *, turns: TurnsConfig, max_think_tokens: int
+) -> dict[str, Any]:
+    """Span one: this call's own prompt, decoded unconstrained and stopped at the marker.
+
+    Derived from the answer body rather than built beside it, so the two spans
+    open on the same string object and the slot the first one filled is the slot
+    the second one continues. A prompt rendered twice is a prefix that holds by
+    agreement between two call sites, which is the property this whole design
+    exists to stop depending on.
+
+    Two things move and nothing else: the grammar comes off, because a schema
+    binds the decode from the first token and a think opener is not a legal
+    token under it; and the budget becomes the thinking budget, hard-capped. The
+    stop is the entry's own closing marker, so a model that would run on is cut
+    where its reasoning block would have ended - and llama-server excludes the
+    stop string from what it returns, which is why `answer_span` writes the
+    marker itself rather than trusting the reply to carry it.
+
+    **A budget alone would not do.** A model that never closes the block would
+    spend the whole cap and the failure would be recorded as a truncated
+    summary, which names the wrong cause. A stop alone would not do either: a
+    block that never closes would eat the window.
+    """
+    close = turns.thinking_close
+    if close is None:
+        raise ValueError(
+            "these turns declare no thinking_close, so there is no span to think in - "
+            "a caller reached for one on an envelope that does not think"
+        )
+    span = {name: value for name, value in answer.items() if name != "json_schema"}
+    span["n_predict"] = max_think_tokens
+    span["stop"] = [close]
+    return span
+
+
+def answer_span(
+    answer: Mapping[str, Any], *, thought: str, turns: TurnsConfig
+) -> dict[str, Any]:
+    """Span two: the same body, with the thinking behind it and the shape back on.
+
+    The prompt is span one's prompt extended by what span one wrote, so the KV
+    slot holds everything in front of it and only the closing marker is new.
+    That is the same property `continued_completion_payload` keeps between two
+    calls, one level down.
+
+    **The thinking goes into this request body and nowhere else.** It is
+    model-written text, so it is trusted exactly as far as a fetched page is: it
+    reaches no reader, no persisted payload and no replayed prompt, and the
+    schema on this span binds the decode from its first token, so nothing
+    written in span one can change what comes back (Guardrail #11).
+
+    The closing marker is written here rather than taken from the reply.
+    llama-server excludes a stop string from the content it returns, so a reply
+    that stopped at the marker does not carry it - and a span that ran to its
+    budget never wrote one at all. Writing it closes both.
+    """
+    close = turns.thinking_close
+    if close is None:
+        raise ValueError(
+            "these turns declare no thinking_close, so nothing may be spliced into this "
+            "prompt - a caller reached for a second span on an envelope that does not think"
+        )
+    return {**answer, "prompt": str(answer["prompt"]) + thought + close}
+
+
+def one_reply(*, thought: Completion, answer: Completion) -> Completion:
+    """Two spans of one call, as the single reply the rest of the pipeline reads.
+
+    **The thinking span contributes its cost and not one character of its
+    content.** What comes out carries span two's words, span two's finish reason
+    and span two's prompt accounting; the token counts and the clocks are the
+    pair's, because one item made one call and a ledger that recorded only the
+    answer would under-report every thinking run.
+
+    `prompt_tokens` and `cached_tokens` are span two's own. Their difference is
+    what span two really had to prefill, which is the one number that settles
+    whether the slot held the thinking or re-read it.
+    """
+    return replace(
+        answer,
+        completion_tokens=thought.completion_tokens + answer.completion_tokens,
+        prefill_ms=thought.prefill_ms + answer.prefill_ms,
+        decode_ms=thought.decode_ms + answer.decode_ms,
+    )
 
 
 def continued_completion_payload(
@@ -487,7 +666,7 @@ def continued_completion_payload(
     user: str,
     output_schema: dict[str, Any],
     turns: TurnsConfig,
-    max_output_tokens: int,
+    max_answer_tokens: int,
 ) -> dict[str, Any]:
     """A second request whose prompt IS the first one's, plus what it returned.
 
@@ -507,15 +686,19 @@ def continued_completion_payload(
     budget to a reply sized for the second - a cut plan on every item, recovered
     into a summary with no picture, and no counter saying why.
 
-    `reply` is the first call's own content, replayed verbatim. It is a string
-    the model wrote and it is not trusted any further here than a fetched page
-    would be - it has already been parsed against a closed schema, and what it
-    can reach downstream is bounded by that schema and not by this turn.
+    `first` is the first call's ANSWER body, never its thinking span. The
+    thinking span carries no grammar and a budget of its own, and building a
+    continuation on it would send the second call unconstrained.
+
+    `reply` is the first call's own answer content, replayed verbatim. It is a
+    string the model wrote and it is not trusted any further here than a fetched
+    page would be - it has already been parsed against a closed schema, and what
+    it can reach downstream is bounded by that schema and not by this turn.
     """
     return {
         **first,
         "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user, turns=turns),
-        "n_predict": max_output_tokens,
+        "n_predict": max_answer_tokens,
         "json_schema": output_schema,
     }
 
@@ -965,15 +1148,13 @@ def _ask(url: str, payload: Mapping[str, Any] | None, *, timeout: float) -> Any:
         ) from unreachable
 
 
-def _rendered_by_the_server(
-    endpoint: str, *, thinking: bool, thinking_kwarg: str | None, timeout: float
-) -> str:
+def _rendered_by_the_server(endpoint: str, *, turns: TurnsConfig, timeout: float) -> str:
     """The server's own render of the probe conversation, asked for the same way.
 
-    The keyword comes from the entry rather than from a literal here. Arm 1
-    compares our render against this one, so a keyword spelled in source would
-    make the probe agree with itself while both sides asked the template a
-    question it does not answer.
+    Both the keyword and whether reasoning is asked for come from the entry
+    rather than from a literal here. Arm 1 compares our render against this one,
+    so either of them spelled in source would make the probe agree with itself
+    while both sides asked the template a question it does not answer.
     """
     body = _ask(
         apply_template_url(endpoint),
@@ -983,8 +1164,8 @@ def _rendered_by_the_server(
                 {"role": "user", "content": PROBE_USER},
             ],
             **(
-                {"chat_template_kwargs": {thinking_kwarg: thinking}}
-                if thinking_kwarg is not None
+                {"chat_template_kwargs": {turns.thinking_kwarg: turns.thinks}}
+                if turns.thinking_kwarg is not None
                 else {}
             ),
         },
@@ -1045,15 +1226,8 @@ def prove_the_entry(
     the caller really uses rather than to a copy of it.
     """
     inference = model.inference
-    ours = render_prompt(
-        system=PROBE_SYSTEM, user=PROBE_USER, thinking=inference.thinking, turns=model.turns
-    )
-    theirs = _rendered_by_the_server(
-        endpoint,
-        thinking=inference.thinking,
-        thinking_kwarg=model.turns.thinking_kwarg,
-        timeout=timeout,
-    )
+    ours = render_prompt(system=PROBE_SYSTEM, user=PROBE_USER, turns=model.turns)
+    theirs = _rendered_by_the_server(endpoint, turns=model.turns, timeout=timeout)
     the_render_agrees(
         ours=_token_ids(endpoint, ours, timeout=timeout),
         theirs=_token_ids(endpoint, theirs, timeout=timeout),
@@ -1068,7 +1242,7 @@ def prove_the_entry(
         output_schema=schema,
         inference=inference,
         turns=model.turns,
-        max_output_tokens=PROBE_OUTPUT_TOKENS,
+        max_answer_tokens=PROBE_OUTPUT_TOKENS,
     )
     first = post(first_payload, endpoint=address, timeout=timeout)
     decoding_still_constrains(reply=first.content, only=only)
@@ -1079,7 +1253,7 @@ def prove_the_entry(
             user=PROBE_FOLLOW_UP,
             output_schema=schema,
             turns=model.turns,
-            max_output_tokens=PROBE_OUTPUT_TOKENS,
+            max_answer_tokens=PROBE_OUTPUT_TOKENS,
         ),
         endpoint=address,
         timeout=timeout,

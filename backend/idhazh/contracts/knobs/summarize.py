@@ -22,8 +22,8 @@ class LengthPolicy(Model):
 
     The ask lives on the band; this is the tolerance around it. Both are here
     rather than in `evaluation` because a length miss is not a quality finding -
-    it is the model rounding a request - and a tolerance that cannot see which
-    band an item is in cannot be right for more than one of them.
+    it is the model rounding a request - and the two were one pair of global
+    integers until 2026-09-09, which could not see which band an item was in.
 
     Every number is a starting point rather than a measurement (Guardrail #10). Our
     own length figures describe a pipeline mid-repair - the prompt is being
@@ -197,11 +197,11 @@ class SummarizeConfig(Model):
     (`bands`) and the tolerance around it (`length_policy`) both live here,
     where an operator editing one can see the other.
 
-    The allowance is derived from the band rather than applied flat to all five
-    rungs, so it can see which band an item is in. No length outcome except
-    `length_policy.absolute_floor_words` drops an item: a reply outside the
-    tolerance is still a story, and deleting it would cost the day a story to
-    punish the model for rounding.
+    Until 2026-09-09 the tolerance was two integers in `evaluation` that applied
+    to all five rungs at once and could not see which band an item was in, and a
+    reply outside them deleted the item from that day's digest with no second
+    look. Both defects are gone: the allowance is derived from the band, and no
+    length outcome except `length_policy.absolute_floor_words` drops an item.
 
     Every band and title number here is substituted into the prompt text at
     render time, so the prompt cannot drift from the bounds the pipeline enforces
@@ -272,8 +272,10 @@ class SummarizeConfig(Model):
             "next to it. Deliberately above anything observed rather than tight to it - "
             "a maxLength is a hard grammar stop that truncates mid-word, so a rail set "
             "at the observed maximum turns a slightly long key point into a parse "
-            "failure for the whole item. It sits well above the longest key point the "
-            "pipeline has published, so only a reply of a different order reaches it."
+            "failure for the whole item. Measured 2026-09-10 over the 32,353 key points "
+            "in the committed digest days: the longest is 66 words and 418 characters "
+            "and the mean is 16.7 words, so this sits at 1.2 times the longest one the "
+            "pipeline has ever published and its character rail at 2.3 times."
         ),
     )
     key_point_restatement_ceiling: float = Field(
@@ -286,11 +288,25 @@ class SummarizeConfig(Model):
             "item with the rest. A distinctness floor, not a word ban: only the overlap "
             "ratio counts, never a single shared word, so a key point may reuse the "
             "summary's words and still add a fact. A starting point, not a calibrated "
-            "threshold (Guardrail #10): it sits in the wide gap between a key point that "
-            "adds a fact and one that is a verbatim slice of the summary. The drop never "
-            "removes the last key point - "
+            "threshold (Guardrail #10): measured 2026-09-07 on the one well-formed reply "
+            "fixture, its three distinct key points score 0.00, 0.11 and 0.14 while a "
+            "verbatim slice of the summary scores 1.00, so 0.5 sits in the wide gap "
+            "between a new fact and a copy. The drop never removes the last key point - "
             "the payload requires one - so a reply whose every key point restates still "
             "publishes with the least-restating up to the band's key_points_min."
+        ),
+    )
+    asks_for_a_visual_plan: bool = Field(
+        default=True,
+        description=(
+            "Whether the two-call sequence is sized for a summarize-and-plan call that "
+            "asks for a picture. True is what the production run does and what ships. It "
+            "exists so an arm of the pipeline test workflow can run the summary-only path "
+            "end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields "
+            "off that call's grammar, and this takes the plan's decode budget out of the "
+            "window sizing beside it. The two move together or the sizing is wrong in the "
+            "expensive direction - it reserves room for a decode that never happens, and "
+            "refuses articles that would have fitted."
         ),
     )
 

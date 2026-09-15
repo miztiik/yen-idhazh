@@ -18,6 +18,7 @@ from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
     CandidateIdentity,
@@ -188,7 +189,9 @@ def a_passing_budget() -> qualify.Budget:
     )
 
 
-def outcomes_of(shard: QualificationShard) -> dict[GateName, Any]:
+def outcomes_of(
+    shard: QualificationShard, *, turns: TurnsConfig | None = None
+) -> dict[GateName, Any]:
     _, gates = qualify.gates(
         [shard],
         evaluation=EVALUATION,
@@ -197,6 +200,7 @@ def outcomes_of(shard: QualificationShard) -> dict[GateName, Any]:
         run=RUN,
         budget_=a_passing_budget(),
         required_canaries=len(CANARY_NAMES),
+        turns=turns,
     )
     return {outcome.gate: outcome for outcome in gates}
 
@@ -249,6 +253,47 @@ def test_an_inline_think_block_fails_the_reasoning_gate() -> None:
 def test_a_reasoning_channel_fails_the_reasoning_gate() -> None:
     broken = with_one_bad_call(a_passing_shard(), reasoning_channel_used=True)
     assert outcomes_of(broken)[GateName.REASONING_LEAKAGE].status is GateStatus.FAILED
+
+
+def thinks() -> TurnsConfig:
+    """An envelope that declares a closing marker, built rather than committed.
+
+    The incumbent declares none, so an assertion against `config/` would say
+    what is configured today rather than what the gate does.
+    """
+    return TurnsConfig(
+        turn_opening="<|im_start|>$role\n",
+        turn_closing="<|im_end|>\n",
+        reply_opening="<|im_start|>assistant\n",
+        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
+        thinking_close="</think>",
+    )
+
+
+def test_reasoning_that_survived_the_discard_still_fails_the_gate() -> None:
+    """The third refusal's other arm, and it counts exactly as it did before.
+
+    Where the entry declares a closing marker the reasoning is wanted and is
+    discarded before the reply is parsed, so an observation that still carries
+    one is a discard that did not happen. Same zero, different sentence - a gate
+    that stopped counting here would be a control that fires only on the path
+    nobody runs.
+    """
+    broken = with_one_bad_call(a_passing_shard(), reasoning_channel_used=True)
+    outcome = outcomes_of(broken, turns=thinks())[GateName.REASONING_LEAKAGE]
+
+    assert outcome.status is GateStatus.FAILED
+    assert "discard that did not happen" in outcome.detail
+
+
+def test_the_gate_says_which_failure_it_found_on_each_arm() -> None:
+    """One measurement, two meanings, and the report has to name which one."""
+    broken = with_one_bad_call(a_passing_shard(), think_block_words=12)
+
+    assert "the flag did not take" in outcomes_of(broken)[GateName.REASONING_LEAKAGE].detail
+    assert outcomes_of(a_passing_shard(), turns=thinks())[
+        GateName.REASONING_LEAKAGE
+    ].status is GateStatus.PASSED
 
 
 @pytest.mark.parametrize(
@@ -459,7 +504,7 @@ def test_a_summary_under_the_floor_fails_and_a_long_one_does_not() -> None:
 
 
 def test_a_request_that_does_not_fit_the_context_fails() -> None:
-    over = INFERENCE.n_ctx - INFERENCE.max_output_tokens + 1
+    over = INFERENCE.n_ctx - INFERENCE.max_answer_tokens + 1
     broken = with_one_bad_call(a_passing_shard(), prompt_tokens=over)
     outcome = outcomes_of(broken)[GateName.CONTEXT_FIT]
     assert outcome.status is GateStatus.FAILED
@@ -469,7 +514,7 @@ def test_a_request_that_does_not_fit_the_context_fails() -> None:
 def test_the_cheap_predictor_may_not_under_reserve() -> None:
     """`fits_context` saying yes to a request that overflows is the failure mode
     the gate exists for: it is the check that runs before every production call."""
-    over = INFERENCE.n_ctx - INFERENCE.max_output_tokens + 1
+    over = INFERENCE.n_ctx - INFERENCE.max_answer_tokens + 1
     broken = with_one_bad_call(
         a_passing_shard(), prompt_tokens=over, fits_context_predicted=True
     )

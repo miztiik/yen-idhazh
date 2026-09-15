@@ -122,6 +122,13 @@ class PlannedItem(Model):
     the feed's own date, unless it claimed a future too far ahead to be true,
     in which case it is when we first saw the address. `time_source` says which
     of the two it is.
+
+    `rank_score` is the number the day is ordered on, and the eight terms under
+    it are what it was built from: `authority_score` plus `carriage_step` plus
+    `watchlist_bonus` plus `lens_bonus` plus `recency_bonus` is `rank_score`,
+    and `tier_score` times `feed_weight` times `feed_reliability` is
+    `authority_score`. Every one of the thirteen score fields is null on a plan
+    written before 2026-09-14 - unknown, and never a term worth nothing.
     """
 
     item_id: ItemId
@@ -153,6 +160,103 @@ class PlannedItem(Model):
         default=False, description="A salience feed voted for it. A vote, never a discovery."
     )
     rank_score: float = Field(ge=0.0)
+
+    authority_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "The best-trusted feed that carried this story, scored: its tier score "
+            "times its own weight times its reliability. The largest term of the "
+            "score, and the only one that is a product rather than a step."
+        ),
+    )
+    tier_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "collect.tier_weights for that feed's tier. From the same feed that won "
+            "authority_score, never from another carrier of the story."
+        ),
+    )
+    feed_weight: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="That feed's own weight from config/sources.json. Soft retirement.",
+    )
+    feed_reliability: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "That feed's factor from the trailing feed-health window, built once per "
+            "run by ledger.reliability. 1.0 means no recent evidence against it."
+        ),
+    )
+    carriage_step: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "collect.carriage_step when more than one feed carried this address, and "
+            "0.0 when one did. A flat step that fires once, never a count."
+        ),
+    )
+    watchlist_bonus: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="collect.watchlist_bonus when watchlist_hit, and 0.0 when not.",
+    )
+    lens_bonus: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "The weight of the one lens this story earned most from, matched on the "
+            "headline. Never the sum of several, and 0.0 when no lens matched."
+        ),
+    )
+    recency_bonus: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "collect.recency_weight decayed by age at plan time. Orders what the age "
+            "gate already admitted; it never admits anything itself."
+        ),
+    )
+
+    label_confidence: float | None = Field(
+        default=None,
+        description=(
+            "How sure the label call was of what this article is about. No producer "
+            "yet - declared so the row shape stops moving, and null until the "
+            "article-classification work writes it."
+        ),
+    )
+    relationship_score: float | None = Field(
+        default=None,
+        description=(
+            "How well the picture a run planned matches the relationship the article "
+            "states. No producer yet - null until the visual planning work writes it."
+        ),
+    )
+    fit_weight: float | None = Field(
+        default=None,
+        description=(
+            "How well the chosen chart form fits the data it draws. No producer yet - "
+            "null until the visual planning work writes it."
+        ),
+    )
+    dual_score: float | None = Field(
+        default=None,
+        description=(
+            "The pair of readings a two-axis story is scored on. No producer yet - "
+            "null until the known-defects work writes it."
+        ),
+    )
+    null_score: float | None = Field(
+        default=None,
+        description=(
+            "What this story scores against the no-visual baseline. No producer yet - "
+            "null until the known-defects work writes it."
+        ),
+    )
 
     @model_validator(mode="after")
     def _identity_is_rebuilt_not_trusted(self) -> Self:
@@ -248,6 +352,34 @@ class RunPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-14",
+            change=(
+                "A planned item carries the eight terms that add up to rank_score - "
+                "authority_score, tier_score, feed_weight, feed_reliability, "
+                "carriage_step, watchlist_bonus, lens_bonus and recency_bonus - and "
+                "five empty slots for scores a later producer will write: "
+                "label_confidence, relationship_score, fit_weight, dual_score and "
+                "null_score."
+            ),
+            why=(
+                "Only the total survived the plan stage, so an operator could read "
+                "what a story scored and never which part of the score admitted it - "
+                "the same blindness one level down from the run that regressed for "
+                "six days with no surface naming it. rank.score already computes "
+                "every one of these terms and threw them away on the next line, so "
+                "the terms are extracted from that one computation rather than "
+                "recomputed: a second copy of the ranker's arithmetic is a second "
+                "thing to keep in step (Guardrail #5), and feed_reliability is built "
+                "once per run from the feed-health ledger and is not in a worker's "
+                "hands at all. The three authority factors come from the carrier that "
+                "won the maximum, never from another carrier of the same address. The "
+                "five empty slots are declared now so the row shape stops moving every "
+                "time another plan lands. Additive, and all thirteen default to null, "
+                "so a plan an earlier run wrote still validates and reads every one of "
+                "them as unknown rather than as a score of zero (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T18:40",
             change=(

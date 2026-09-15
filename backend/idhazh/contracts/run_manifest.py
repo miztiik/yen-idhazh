@@ -144,8 +144,8 @@ class RunRecord(Model):
             "Items the retired visual planner decided without asking the model, because "
             "no enabled visual kind could survive the checks. Counted separately so a "
             "chart rate is never quoted against items_routed alone. **Zero on every run "
-            "since plan 11 row #6**: call 2 writes the summary and the plan in one "
-            "reply, so the model is asked on every item and the gate then decides what "
+            "since plan 11 row #6**: the summarize-and-plan call writes the summary and the plan "
+            "in one reply, so the model is asked on every item and the gate then decides what "
             "to do with the plan. Kept because the committed archive carries non-zero "
             "values a reader of an older day still needs."
         ),
@@ -288,6 +288,52 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T07:00",
+            change=(
+                "The embedded ModelRef gained an optional draft block. It defaults to "
+                "null and nothing here requires it, so every committed run.json still "
+                "reads and no migration is needed."
+            ),
+            why=(
+                "Plan 28 row 2a. A run that was decoded with a draft head and a run "
+                "that was not took different times to write the same words, and a "
+                "manifest that could not say which one it was could not explain its "
+                "own throughput. It is on ModelRef rather than ModelEntry for exactly "
+                "that reason - the recorded shape is the one a later reader has."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T06:00",
+            change=(
+                "The embedded ModelRef gained an optional byte_count. It defaults to "
+                "null and nothing here requires it, so every committed run.json still "
+                "reads and no migration is needed."
+            ),
+            why=(
+                "Plan 28 row #9 decision 3 moved the candidate byte count off the "
+                "qualification form and onto the model entry. ModelUse embeds ModelRef, "
+                "so the field arrives here as well - recorded rather than read, which is "
+                "what this manifest does with every other fact about the weights."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "inputs.turn_markers_sha256, optional: the turn envelope the run's "
+                "prompts were rendered through, digested as one string. Optional, and "
+                "the read-side rule is that an absent key means a run written before "
+                "2026-09-14 - never a default digest, because a substituted value "
+                "would say the envelope was recorded and unchanged."
+            ),
+            why=(
+                "Plan 28 row #10. This is the first row that makes a marker move, and "
+                "two envelope facts move an output without moving prompt_sha256: which "
+                "of the two reply openings a call ends on, and the marker the thinking "
+                "span stops at. Without this a marker change moved every output with "
+                "nothing in the stamp saying so. Ruled by Fowler, 2026-09-14."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T23:30",
             change=(
                 "items_prefiltered keeps its shape and gains a sentence: no run writes "
@@ -296,8 +342,8 @@ class RunManifest(Contract):
             ),
             why=(
                 "Plan 11 row #6 retired the visual planner stage, which was the only "
-                "producer of a decision made without asking a model. Call 2 writes the "
-                "summary and the plan in one reply, so every item's model is asked. The "
+                "producer of a decision made without asking a model. The summarize-and-plan call "
+                "writes the summary and the plan in one reply, so every item's model is asked. The "
                 "column stays because the committed archive carries non-zero values, "
                 "and a reader of one of those days needs the field to mean what it "
                 "meant then - but a field that can only read zero from here on has to "

@@ -7,9 +7,11 @@ reason a specific failure cannot happen:
   system prompt. An instruction inside it is data about a web page.
 - The response shape is enforced by the decoder, so an injection can change the
   words and cannot change the shape.
-- Every `<think>` block is asserted empty rather than assumed. A flag that
-  silently stopped taking effect would otherwise cost faithfulness for months
-  before anyone noticed.
+- Every `<think>` block is asserted empty where nothing asked for one, rather
+  than assumed. A flag that silently stopped taking effect would otherwise cost
+  faithfulness for months before anyone noticed. Where the entry DOES declare a
+  closing marker, the block is what was asked for and is discarded here instead
+  - a refusal that fires on the normal path is not a control.
 - A reply that copies the source instead of summarizing it is refused, because
   republishing an article body is a non-goal (CLAUDE.md section 0a) and not a
   quality score to be tuned.
@@ -48,6 +50,7 @@ from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import restates_summary, verbatim_run
 from idhazh.llm.server import Completion, request_payload
@@ -321,6 +324,8 @@ def fits_context(
     article: Article,
     inference: InferenceConfig,
     prompt_config: SummarizeConfig | None = None,
+    *,
+    turns: TurnsConfig | None = None,
 ) -> bool:
     """Prompt plus reply has to fit, or the reply is silently cut off mid-sentence.
 
@@ -328,15 +333,23 @@ def fits_context(
     One system turn, one article, one reply - which is what the qualification
     harness sends a candidate model, and it is the only caller. The digest's own
     path is two calls and `classify.dag.fits_the_window` sizes that one: 2.8
-    times this sum at the same cap, because call 1's reply is paid twice and the
+    times this sum at the same cap, because the label call's reply is paid twice and the
     candidate menu is paid once, and neither term exists here at all. Sizing the
     two-call path with this function would admit articles it cannot hold.
+
+    **The thinking span is inside the window too.** An envelope that declares a
+    closing marker spends its thinking budget in the same sequence as the
+    answer, so the sum carries both. `turns` is optional because the number it
+    adds is zero on an envelope that does not think, which is where a caller
+    with no entry in hand sits.
     """
     rendered = system_prompt(
         prompt_config, source_words=article.band_source_words, brief=article.brief
     )
     overhead = len(rendered.split()) * 2
-    return article.token_count + inference.max_output_tokens + overhead <= inference.n_ctx
+    thinking = inference.max_think_tokens if turns is not None and turns.thinks else 0
+    reply = inference.max_answer_tokens + thinking
+    return article.token_count + reply + overhead <= inference.n_ctx
 
 
 def build_request(
@@ -344,14 +357,15 @@ def build_request(
     *,
     model_id: str,
     inference: InferenceConfig,
-    thinking_kwarg: str | None,
+    turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
-    """One chat-route body. `thinking_kwarg` is the entry's, never a literal here.
+    """One chat-route body. `turns` is the entry's, never a literal here.
 
-    It carries no default for the reason `request_payload` gives: the name is a
-    variable in the model's own chat template, so a default here would send one
-    model's keyword to every model.
+    It carries no default for the reason `request_payload` gives: the keyword
+    that turns reasoning on and the marker that declares it wanted are both
+    variables in the model's own chat template, so a default here would send one
+    model's envelope to every model.
     """
     return request_payload(
         model_id=model_id,
@@ -365,7 +379,7 @@ def build_request(
             brief=article.brief,
         ),
         inference=inference,
-        thinking_kwarg=thinking_kwarg,
+        turns=turns,
     )
 
 
@@ -389,18 +403,23 @@ def parse_draft(
     prompt_config: SummarizeConfig | None = None,
     source_words: int | None = None,
     brief: bool = False,
+    thinking: bool = False,
 ) -> SummaryDraft:
     """Believe the response only after it has proved its shape.
 
-    A thinking block with content in it is a failure, not a curiosity: the flag
-    that was supposed to disable reasoning did not take, and reasoning
-    measurably costs faithfulness when summarizing.
+    **A thinking block is a failure where nothing asked for one, and discarded
+    where something did.** With `thinking` false the flag that was supposed to
+    disable reasoning did not take, and that is a refusal rather than a
+    curiosity. With `thinking` true the block is what the entry asked for: it is
+    stripped here and never returned, so nothing downstream can read a word of
+    it. A refusal that fires on the normal path is not a control, which is why
+    this arm is conditional rather than deleted.
 
     `source_words` and `brief` pick the same band the reply was asked under, so
     the decoder validates a key-point count against the band that requested it.
     """
     content, thought = split_thinking(raw)
-    if thought is not None and thought.strip():
+    if not thinking and thought is not None and thought.strip():
         raise ValueError("thinking was disabled and the model reasoned anyway")
     fenced = _FENCED_JSON.match(content)
     if fenced:
@@ -621,8 +640,18 @@ def to_summary(
     duration_ms: int = 0,
     attempt: int = 1,
     no_reply: FailureCode = FailureCode.MODEL_UNREACHABLE,
+    thinking: bool = False,
 ) -> Summary:
-    """One article plus one completion becomes exactly one payload, valid or failed."""
+    """One article plus one completion becomes exactly one payload, valid or failed.
+
+    `thinking` is the entry's own declaration, and it decides two of the
+    refusals below rather than softening them. Where nothing asked for
+    reasoning, reasoning arriving by either route is the flag not taking and the
+    item fails. Where the entry asked for it, the reasoning is discarded here
+    and never reaches the payload - it is model-written text, so a summary that
+    carried it would be publishing a stranger's page's influence in our own
+    words (Guardrail #11).
+    """
     ask = prompt_config or SummarizeConfig()
     bounds = evaluation or EvaluationConfig()
     if article.status is not ArticleStatus.OK:
@@ -649,7 +678,7 @@ def to_summary(
             completion=completion,
             failure_code=FailureCode.OUTPUT_TRUNCATED,
         )
-    if completion.reasoned:
+    if not thinking and completion.reasoned:
         return _failed(
             article,
             model_id=model_id,
@@ -667,6 +696,7 @@ def to_summary(
             prompt_config=prompt_config,
             source_words=article.band_source_words,
             brief=article.brief,
+            thinking=thinking,
         )
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         return _failed(

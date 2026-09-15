@@ -17,7 +17,7 @@ writes the whole day's census afterwards.
 
 The row carries:
 
-`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard, span_integrity, elements_found, element_class, model_calls, call_1_kind, call_1_prefill_ms, call_1_decode_ms, call_1_input_tokens, call_1_output_tokens, call_1_cached_tokens, call_2_kind, call_2_prefill_ms, call_2_decode_ms, call_2_input_tokens, call_2_output_tokens, call_2_cached_tokens`
+`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard, span_integrity, elements_found, element_class, model_calls, label_kind, label_prefill_ms, label_decode_ms, label_input_tokens, label_output_tokens, label_cached_tokens, summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens`
 
 The file is append-only inside its own day. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
@@ -74,7 +74,7 @@ place is how it starts missing rows.
 `from_csv_row` reads `""` back as `None`. There is no sentinel number and no
 `NULL` literal, because both of those get averaged by accident one day.
 
-The 42 columns, in file order:
+The 113 columns, in file order:
 
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
@@ -93,7 +93,7 @@ The 42 columns, in file order:
 | `source_chars` | int | once extract ran | article size before summarizing |
 | `source_words` | int | once extract ran | the denominator of compression |
 | `summary_words` | int | once summarize succeeded | the numerator of compression |
-| `detail` | <= 200 chars | `code = unknown` only | our own one-line reason. Never source text |
+| `detail` | <= 2,000 chars, one line of printable ASCII | any failed row, from 2026-09-15 | our own reason, usually the exception message. Never source text |
 | `fetch_ms` | int | once fetch ran | wall-clock for the HTTP read |
 | `extract_ms` | int | once extract ran | wall-clock for text extraction |
 | `summarize_ms` | int | once the model replied | wall-clock for the whole model request |
@@ -108,10 +108,34 @@ The 42 columns, in file order:
 | `elements_found` | int | `span_integrity` is true, from 2026-09-08 | Tier 1 elements the candidate pass kept |
 | `element_class` | enum | `span_integrity` is true, from 2026-09-08 | `chartable`, `narrative` or `unclassified` |
 | `model_calls` | int | a split was recorded, from 2026-09-12 | how many calls the five cells above add up over |
-| `call_1_kind` | enum | a split was recorded, from 2026-09-12 | `summarize`, `visual_plan`, `label` or `summarize_and_plan` |
-| `call_1_*` | int | a split was recorded, from 2026-09-12 | the first call's own five, same names and same order |
-| `call_2_kind` | enum | a second call ran, from 2026-09-12 | which call ran second |
-| `call_2_*` | int | a second call ran, from 2026-09-12 | the second call's own five |
+| `label_kind` | enum | a split was recorded, from 2026-09-12 | `summarize`, `visual_plan`, `label` or `summarize_and_plan` |
+| `label_*` | int | a split was recorded, from 2026-09-12 | the first call's own five, same names and same order |
+| `summary_kind` | enum | a second call ran, from 2026-09-12 | which call ran second |
+| `summary_*` | int | a second call ran, from 2026-09-12 | the second call's own five |
+| `truncation_cap_tokens` | int | the body was cut, from 2026-09-14 | which cap did the cutting |
+
+Seventy more columns landed on 2026-09-15, in five groups. Every one is
+nullable, every one is empty on a row an earlier run wrote, and each one's own
+description is on the field in
+[`backend/idhazh/contracts/item_health.py`](../../../backend/idhazh/contracts/item_health.py)
+rather than repeated here - the table above is long enough that a second copy of
+it would be the thing that goes stale.
+
+| Group | Columns | What the group answers |
+| --- | --- | --- |
+| Why this item ran | `selection_score`, `authority_score`, `tier_score`, `feed_weight`, `feed_reliability`, `lens_bonus`, `recency_bonus`, `carriage_step`, `watchlist_bonus`, `carried_by`, `watchlist_hit`, `on_front_page`, `tier`, `source_form`, `published_at`, `time_source` | which term carried it onto the page. The ranker records each term on the plan ([discovery.md](discovery.md#ranking-is-arithmetic-not-judgement)), but the plan artifact expires in a day, so without this copy the only surviving answer to "why did this publish" is "the score said so" |
+| Where the time went | `item_started_at`, `item_ended_at`, `item_index`, `shard_item_count`, `queue_wait_ms`, `fetch_connect_ms`, `fetch_ttfb_ms`, `robots_ms`, `retry_count`, `retry_total_ms`, `label_ms`, `summary_ms`, `visual_plan_ms`, `visual_plan_ms_is_estimate`, `faithfulness_ms`, `model_wait_ms`, `item_total_ms`, `stage_gap_ms` | which part of a stage got slower. `summarize_ms` said the stage took longer and never which half |
+| What the cache and the decoder did | `visual_plan_tokens_written`, `label_cache_pct`, `summary_cache_pct`, `slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous`, `label_prefill_tokens_per_s`, `label_decode_tokens_per_s`, `summary_prefill_tokens_per_s`, `summary_decode_tokens_per_s`, `label_finish_reason`, `summary_finish_reason`, `recovered` | whether the prefix cache answered, and whether a decode was cut |
+| What it ran on | `cpu_model`, `runner_name`, `cpu_busy_pct`, `cpu_busy_max`, `cpu_busy_min`, `load_1m`, `llama_rss_bytes`, `llama_rss_peak_bytes`, `python_rss_bytes`, `cgroup_peak_bytes` | whether a slower row was a slower runner. A throughput with no machine beside it is not a measurement (Guardrail #10) |
+| What it ran with | `model_id`, `model_quantisation`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `max_output_tokens`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `temperature` | whether changing a knob helped. Config is committed, but a run reads its own day's config and git history is not a join key |
+| What broke | `failed_field`, `failed_rule` | which field a schema refusal named, and which rule refused it |
+
+**`stage_gap_ms` is the load-bearing one.** It is `item_total_ms` minus every
+named stage, and it is the only column that can catch a regression in a stage
+nobody named - every other timing column can only report on work somebody
+already thought to measure. It is signed on purpose: a negative value means two
+named stages overlapped, or two clocks disagreed, and clamping it to zero would
+hide exactly the thing it exists to report.
 
 **A call slot fills whole or not at all, and the five flat cells are their sum.**
 The contract refuses a row that records one call and leaves the totals at that
@@ -121,7 +145,7 @@ second call replays the first call's prompt and is answered for it, so
 `cached_tokens` over the item is non-zero on every item that took two calls and
 says nothing about either
 ([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
-**The picture costs nothing extra here**: call 2 writes the summary and the plan
+**The picture costs nothing extra here**: the summarize-and-plan call writes the summary and the plan
 in one reply, so what a picture cost is already inside the cells above and there
 is no second call to account for.
 
@@ -256,7 +280,7 @@ stage that did the work.
 | --- | --- |
 | `plan` | `not_attempted` |
 | `fetch` | `robots_denied`, `robots_unreachable`, `blocked_address`, `http_client_error`, `http_rate_limited`, `http_server_error`, `network_error` |
-| `extract` | `no_text`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
+| `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
 | `summarize` | `model_unreachable`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
 
@@ -317,10 +341,10 @@ Sixteen codes never count against a source:
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
 
-The remaining seven can count against the source:
+The remaining eight can count against the source:
 
 `http_client_error`, `http_server_error`, `network_error`, `no_text`,
-`paywalled`, `unsupported_form`, `unknown`
+`no_title`, `paywalled`, `unsupported_form`, `unknown`
 
 The contract carries this as data on the enum side, not as prose only, because a
 later source-health reader uses it.
@@ -465,52 +489,90 @@ your copy, which drops the rows the pipeline wrote while the branch was open.
 
 ## Scaling
 
-Measured 2026-08-25 on the committed repository.
+Measured 2026-09-15 on the committed repository, after the row widened to 113
+columns. The previous reading was taken on 2026-08-25 against a 24-column row in
+a month file; both the shape and the path have moved since, so it was a stale
+reading rather than history and has been replaced (Guardrail #10).
 
 | Quantity | Value | How |
 | --- | --- | --- |
-| Rows in `state/item-health/2026-08.csv` | 1200 | `Import-Csv` count |
-| File size | 354,465 bytes | `stat` |
-| Mean row | **295 bytes** | size / rows |
-| Rows on a full day | **800** | 2026-08-26: 5 runs x the 160-item `safety_ceiling_per_run` |
-| Published projection `frontend/public/telemetry/2026-08.csv` | 103,004 bytes, 10 of the 24 columns | `stat` |
-| Mean published row | 85.8 bytes raw, **13.8 bytes gzipped** (6.2x) | gzip at maximum level |
-| Blob versions of the shard in git so far | 14, 1.44 MB uncompressed | `git rev-list --objects` then `git cat-file -s` |
-| Whole repository pack | 26.09 MiB | `git count-objects -vH` |
+| Day files in `state/item-health/` | 22, 11,966 rows | `rglob` count |
+| Ledger on disk | 5,034,396 bytes | `stat` |
+| Mean row | **420.7 bytes** | size / rows |
+| Widest day, `2026/08/25.csv` | 1,000 rows, 396,015 bytes | `stat` |
+| Rows on a full day | **800** | 5 runs x the 160-item `safety_ceiling_per_run` |
+| A full day at the current width | **~336 KB** | 800 x 420.7 |
+| Published projection `frontend/public/telemetry/2026-09.csv` | 1,019,079 bytes, 32 of the 113 columns | `stat` |
+| Mean published row | 151.2 bytes raw, **35.2 bytes gzipped** (4.3x) | gzip at maximum level |
+| Whole ledger before the widening | 4,173,082 bytes | `stat`, same day |
+| What 70 columns cost | **+861 KB, +20.6 percent** | the two totals |
 
 Projected forward at the current cadence and ceiling:
 
-| Horizon | Ledger shard | Served projection (gzipped) |
+| Horizon | Ledger | Served projection (gzipped) |
 | --- | --- | --- |
-| a day | 236 KB | 11 KB |
-| a month (one shard) | **7.1 MB** | **330 KB** |
-| a year (12 shards) | 85 MB | 4.0 MB |
+| a day | 336 KB | 28 KB |
+| a month | **10 MB** | **845 KB** |
+| a year | 123 MB | 10 MB |
 
 Three limits, in the order they will actually bite:
 
 1. **The reader's download, first.** The console fetches a whole month shard.
- 330 KB gzipped at the end of a busy month is already more than the rest of
- the page. The lever is the projection, not the ledger: the served file
- carries 10 columns today and could carry fewer, or become a pre-aggregated
+ 845 KB gzipped at the end of a busy month is far more than the rest of the
+ page. The lever is the projection, not the ledger: the served file carries 32
+ of the row's 113 columns and could carry fewer, or become a pre-aggregated
  day-grain file with the per-item rows kept for the operator only. Nothing
  here is measured against a slow connection yet, so that is the next
  measurement rather than the next change.
-2. **Git history, second.** Every run rewrites the whole shard as a new blob, so
- the repository grows with `commits x shard size`, not with rows: five commits
- a day against a shard averaging half its final size is roughly 530 MB of
- uncompressed blob a month. Delta compression on an append-only file is
- cheap - 14 versions and 1.44 MB sit inside a 26 MiB pack - but "cheap" is not
- a measured number here and must not be quoted as one. The lever if it bites
- is a shorter shard period (weekly, `YYYY-Www.csv`), which the reader already
- handles because it globs the directory.
+2. **Git history, second.** A day file is appended to several times a day and
+ each append rewrites it as a new blob, so the repository grows with
+ `appends x file size` rather than with rows. Day sharding is what keeps that
+ bounded: an append rewrites one day and not the month. The lever if it bites
+ is the projection width again, or a shorter retention on the ledger itself.
 3. **The 1 GB published site, last and least.** `state/` is never served, so it
  does not count against that cap at all. Only the projection under
- `frontend/public/telemetry/` does, and at 4.0 MB gzipped a year it is not the
+ `frontend/public/telemetry/` does, and at 10 MB gzipped a year it is not the
  thing that fills a gigabyte - the day payloads and their SVG assets are.
 
 What is deliberately **not** planned: pruning. The ledger is the only durable
 record of what a bad day did, and a retention pass over it would delete exactly
 the evidence it exists to keep. Windows are applied on read.
+
+## A cell is fitted to its column before it is recorded
+
+Most of what lands in this row is not ours. `cpu_model` comes from a kernel
+file, `runner_name` from the environment, `summary_finish_reason` and
+`label_finish_reason` from the runtime, `model_quantisation` from committed
+config, and `detail` from whatever went wrong - which, whenever a Pydantic
+`ValidationError` is what went wrong, quotes the value it refused. A page title
+with a curly quote in it therefore arrives inside the message that says the
+title was refused.
+
+Every one of those columns declares what a value may be made of. `detail`,
+`cpu_model` and `runner_name` take printable ASCII on one line; the token
+columns take a lowercase name. So a character outside the class made the row
+raise - and the row that raised was the one reporting the failure. The evidence
+and the item were lost together, over a dash.
+
+`base.fit_cell` closes that. It reads the class and the length off the column
+being written, folds Western punctuation to its ASCII spelling, replaces each
+run of anything left with a single `?`, and returns a stated floor rather than
+an empty string where nothing survives. The fold is applied at one door -
+`ItemRecorder.note` - so a column added to this row is covered the day it is
+declared, with no list to maintain.
+
+Two things it will not do. It never folds a column whose rule names an identity:
+`item_id`, `url_key`, `canonical_url`, `vertical` and `source_id` have no
+foreign value to rescue, and a fold that satisfied `^[0-9a-f]{64}$` would have
+invented a digest. And it never returns nothing: `detail` has `min_length=1`, so
+an empty cell raises, and a detail that cannot be printed becomes
+`unspecified failure` while a reading that could not be printed becomes
+`unprintable`. An empty `cpu_model` keeps its own meaning - the probe was not
+taken.
+
+What a reader loses: the exact characters. A Cyrillic headline quoted inside a
+refusal message reads as `?` in the ledger. The trade is one `?` against a
+missing row, and `backend/tests/contracts/test_cell_shapes.py` holds it.
 
 ## Design rationale
 
@@ -537,11 +599,11 @@ A worker commits the rows for its own items, and Assemble writes the rest.
 Assemble was the only writer until 2026-08-27, to keep a diagnostic append out of
 a rebase race with the publish commit. What that reasoning missed is where the
 rows live in between: a shard's verdicts leave the runner only inside its
-`items-<shard>` artifact, which is kept for one day and is not uploaded at all
-when a job is cancelled. A run stopped between the workers and the publish had
-measured every item and recorded none of it - and a bad day is exactly the day
-worth measuring. The race the old rule avoided is answered instead by the two
-things that already existed for it: `merge=union` on `state/**/*.csv`, and the
+`items-<shard>` artifact, which expires and is never committed. A run stopped
+between the workers and the publish had measured every item and recorded none of
+it - and a bad day is exactly the day worth measuring. The race the old rule
+avoided is answered instead by the two things that already existed for it:
+`merge=union` on `state/**/*.csv`, and the
 rebase loop in `.github/scripts/commit-and-push.sh` that the plan job has always
 used for the same reason. The double-write the old rule also avoided is answered
 by the row identity above. Authority: Fowler, over Carmack's original ruling.
@@ -562,7 +624,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Prune the ledger on a retention schedule | The rows worth keeping longest are the ones from the worst days, and those are the first a size-driven prune would take. Windows are a read-side parameter instead. |
 | Serve `state/item-health/` directly to the console | The row carries `canonical_url`, `url_key` and `detail`, none of which belongs in a browser. The narrow projection under `frontend/public/telemetry/` exists so the forbidden columns are absent by construction rather than filtered on read. |
 | One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
-| Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is not uploaded at all when a job is cancelled, so a longer retention protects nothing in the case that loses the rows. |
+| Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is never committed and expires, so a longer retention delays the loss rather than preventing it. The committed row is what a later run and the console read. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |
 | Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `publish_day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |

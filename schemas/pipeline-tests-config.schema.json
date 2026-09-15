@@ -1,0 +1,155 @@
+{
+  "$defs": {
+    "PipelineTestArm": {
+      "additionalProperties": false,
+      "description": "One pass over the two articles, and what it changes about the run.\n\nAn arm is a whole pass rather than a knob, because the numbers that matter -\nwall clock, tokens a second, what the picture cost - are per pass. Three arms\nover the same two articles is what makes the difference between two of them\nreadable; one arm over six articles is not.",
+      "properties": {
+        "asks_for_a_visual_plan": {
+          "default": true,
+          "description": "Whether the second call may ask for a picture at all. False writes an empty `visuals.enabled_kinds`, so no picture is reachable and the gate takes the plan fields off the grammar, and it writes `summarize.asks_for_a_visual_plan` false so the window is sized for the call that is really sent. One knob, because the two have to agree: a window sized for a plan that is never asked for refuses articles that fit.",
+          "title": "Asks For A Visual Plan",
+          "type": "boolean"
+        },
+        "id": {
+          "description": "What the arm is called in the log and in the artifact.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "n_ctx": {
+          "anyOf": [
+            {
+              "minimum": 512,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The window for this arm. None leaves the committed value. An arm that raises the slot count raises this with it: llama-server divides the window it is given between its slots, so two slots on the committed window is a 32,768-token slot rather than the 65,536 the production gate admits articles against - and the worst article the truncation cap admits needs 54,887. Leaving it alone would make the arm a test of a smaller window wearing a concurrency arm's name.",
+          "title": "N Ctx"
+        },
+        "n_parallel": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The model server's slot count for this arm. None leaves the committed value, which is what the production run serves. An arm that moves it needs the server restarted, because the slot count is fixed when the process starts.",
+          "title": "N Parallel"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "PipelineTestArm",
+      "type": "object"
+    },
+    "PipelineTestCandidate": {
+      "additionalProperties": false,
+      "description": "One address a dispatch may draw, and the feed it came from.",
+      "properties": {
+        "source_id": {
+          "description": "The feed in `config/sources.json` that carried it. Everything else the run needs about the address - the vertical, the tier, the form - is read off that feed, so it is declared once and this file cannot disagree.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "title": {
+          "description": "The page's own headline. A daily run reads this off the feed entry, and a dispatch has no feed to read - the address is pinned and has long since fallen out of its feed's window. So it is declared here, and the plan step fills it in exactly where `discover` would have. Required rather than optional: an item with no headline is one the extractor now refuses, so an optional field would let a dispatch draw a candidate it cannot summarize.",
+          "maxLength": 500,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "description": "An article this pipeline has fetched, extracted and summarized before. Real rather than synthetic: the extractor's job is other people's markup, and a page we wrote would test none of it.",
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "source_id",
+        "title"
+      ],
+      "title": "PipelineTestCandidate",
+      "type": "object"
+    }
+  },
+  "$id": "pipeline-tests-config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "A candidate carries the page's headline, and a blank one is refused.",
+      "version": "2026-09-15",
+      "why": "The plan step built its items with no title at all, so every dispatch died in the extractor before it summarized anything. The headline has to come from somewhere, and this file is the only place that knows it: the address is pinned and has fallen out of its feed's window, so reading the feed would find nothing, and having the extractor fall back to the page's own title would put a branch in production code that only the test rig ever takes.\n\nRequired rather than optional, so the refusal lands on the config edit rather than three stages later. The type refuses a whitespace-only headline as well as an empty one - `UntrustedLine` accepts `'   '`, and this file is hand-edited. No payload is migrated: nothing but `config/pipeline-tests.json` uses this shape and it is committed here."
+    },
+    {
+      "change": "Initial shape: candidate addresses, the draw size and the arms.",
+      "version": "2026-09-14",
+      "why": "A production run takes about 200 minutes, so a pipeline change was tested a day after it was written. The test workflow closes that loop in under an hour, and everything it varies is declared here rather than written into the workflow (Guardrail #6)."
+    }
+  ],
+  "description": "`config/pipeline-tests.json` - the candidate addresses and the arms.",
+  "properties": {
+    "arms": {
+      "description": "The passes, in order. The first is the baseline the rest are read against, so there are at least two: one arm measures nothing it can be compared with.",
+      "items": {
+        "$ref": "#/$defs/PipelineTestArm"
+      },
+      "minItems": 2,
+      "title": "Arms",
+      "type": "array"
+    },
+    "articles_a_dispatch": {
+      "default": 2,
+      "description": "How many addresses one dispatch draws. Two is what fits the hour: the arms run in sequence over the same articles, so the cost is this number times the number of arms.",
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Articles A Dispatch",
+      "type": "integer"
+    },
+    "budget_minutes": {
+      "default": 45,
+      "description": "What one dispatch is allowed. The workflow's own `timeout-minutes` is this number, and a test holds the two together so the bound lives in config rather than in the YAML.",
+      "maximum": 350,
+      "minimum": 1,
+      "title": "Budget Minutes",
+      "type": "integer"
+    },
+    "candidates": {
+      "description": "The addresses a dispatch draws from. One per feed, all distinct.",
+      "items": {
+        "$ref": "#/$defs/PipelineTestCandidate"
+      },
+      "minItems": 20,
+      "title": "Candidates",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-09-15",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "candidates",
+    "arms"
+  ],
+  "title": "PipelineTestsConfig",
+  "type": "object",
+  "version": "2026-09-15"
+}

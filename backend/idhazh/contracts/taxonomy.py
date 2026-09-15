@@ -24,7 +24,14 @@ from typing import Annotated, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, Slug
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    DateStamp,
+    Model,
+    Slug,
+    records_json,
+)
 
 
 class LifecycleStatus(StrEnum):
@@ -75,17 +82,24 @@ config, not to define the match.
 DefinitionText = Annotated[str, StringConstraints(max_length=240)]
 """The sentence a model is asked to choose this entry against.
 
-The bound is a token budget rather than a style rule. Thirty definition
-sentences measured 805 tokens together, which is about 27 each, and they ride
-in every labelling prompt this pipeline sends. 240 characters is roughly twice
-that: room to sharpen a sentence, not room for a paragraph.
+The bound is a token budget rather than a style rule. Every definition sentence
+together measured 658 tokens over 23 sentences, which is 28.6 each, and they
+ride in every labelling prompt this pipeline sends. At 4.7 characters a token
+that is about 134 characters a sentence, and 240 is roughly twice it: room to
+sharpen a sentence, not room for a paragraph.
 
-**The reading is `idhazh.measured.DEFINITION_SENTENCE_TOKENS` and it names
-weights this repository retired.** It is cited rather than imported: this
-package is the bottom of the dependency graph and imports no other subpackage
-(`CLAUDE.md` section 4), so the bound stays a literal here and the record
-carries the provenance. `backend/utilities/measure_budgets.py check` is what
-says the reading is stale; `read` is what retakes it.
+**The bound did not move when the reading was retaken on 2026-09-14**, and that
+is a decision rather than an oversight. The same derivation on the new figure
+gives about 268 characters, so 240 is inside it, and the longest committed
+definition is 233. Widening to 268 would buy 35 characters nobody is asking for;
+narrowing would refuse a definition the taxonomy already carries.
+
+**The reading is `idhazh.measured.DEFINITION_SENTENCE_TOKENS`.** It is cited
+rather than imported: this package is the bottom of the dependency graph and
+imports no other subpackage (`CLAUDE.md` section 4), so the bound stays a literal
+here and the record carries the provenance.
+`backend/utilities/measure_budgets.py check` is what says the reading is stale;
+`read` is what retakes it.
 
 Empty is legal and means the entry is offered to no prompt. A proposed entry
 arrives with no definition, because the words that would go in it came off the
@@ -426,6 +440,15 @@ class Taxonomy(Contract):
         if undefined:
             raise ValueError(f"offered with no definition: {', '.join(undefined)}")
         return self
+
+    def to_json(self) -> str:
+        """One word a line - see `records_json`.
+
+        A person curates this file, and an entry's fields only mean anything
+        together: the id says nothing without the sentence the model reads it
+        by, and the keywords say nothing without the lens they match for.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     def definition_block(self) -> str:
         """The definition sentences a labelling prompt is built from.

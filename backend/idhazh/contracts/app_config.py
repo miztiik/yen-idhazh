@@ -78,26 +78,61 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-14T23:10",
+            version="2026-09-15",
+            change="The failure vocabulary this config names gained no_title.",
+            why=(
+                "Extract gained a refusal for an item whose feed carried no headline. No "
+                "knob changed; the vocabulary is inlined into this schema, so the "
+                "generated file's bytes move and the change is stamped here rather than "
+                "left to the drift gate to announce (section 11). Additive: a config "
+                "written before today names none of the new values and still validates."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T14:00",
             change=(
-                "Prose only. No field was added, removed or retyped, and no default "
-                "moved, so every config/idhazh.json that validated before this still "
-                "validates and no read-side migration is owed. What changed is the "
-                "`description` text on several blocks, which pydantic lifts from the "
-                "class docstring and the Field description into the generated schema: "
-                "page_weight, observability, summarize, turns, models and assist drop "
-                "the dated incidents, the inline readings and the decision provenance "
-                "they were carrying. The rule each one states is unchanged."
+                "summarize gains asks_for_a_visual_plan, default true. It is the value "
+                "the two-call sequence sizes its window with, which classify/dag.py "
+                "wrote out as a literal. Additive and defaulted, so a config file "
+                "written before today validates unchanged and no read-side migration "
+                "is owed. Production is untouched: the default is the literal it "
+                "replaced."
             ),
             why=(
-                "Guardrail #10 says a rule carries its reason, never its evidence - the "
-                "reason is a clause that stays true, the evidence is a reading and "
-                "lives in the instrument log. These descriptions are published in "
-                "schemas/app-config.schema.json, so a measurement inlined here is a "
-                "second copy of one docs/reference/ already holds (Guardrail #4), and "
-                "it is the copy nobody re-takes when the subject changes. An operator "
-                "reading a knob wants the rule, not the post-mortem of the run that "
-                "produced it."
+                "The pipeline test workflow runs one arm with no picture reachable, to "
+                "price what the visual decision costs. Turning the picture off is a "
+                "config edit already - an empty visuals.enabled_kinds - but the window "
+                "sizing had no way to follow it, so that arm would reserve room for a "
+                "decode it never makes and refuse articles that fit. One knob, so the "
+                "two cannot disagree (plan 27, row 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T13:00",
+            change=(
+                "logging gains five flags beside level: item_lines, stage_lines, "
+                "waiting_heartbeat_seconds, capture_prompts and capture_replies. Each "
+                "defaults on, waiting_heartbeat_seconds to 30 seconds and the four "
+                "booleans to true, and a negative heartbeat is refused. Additive and "
+                "defaulted, so a config file written before today validates unchanged "
+                "and a config file with no logging block at all still loads - no "
+                "read-side migration is owed. level is untouched at INFO and is "
+                "unrelated: these flags decide which records exist, level decides how "
+                "loud the logger that prints them is."
+            ),
+            why=(
+                "A 5x model-time regression ran for six days and nothing named it. "
+                "Median model time per item moved 97,879 ms to 475,890 ms between run "
+                "34745383977 on 2026-09-13 and run 34852763827 on 2026-09-14, and "
+                "nothing printed during a 200-minute shard. The new records close that "
+                "blind window, and they cost bytes, so each one has to be switchable "
+                "on its own - one verbosity dial cannot keep the per-item lines while "
+                "dropping prompt capture, which is the expensive one. Every flag "
+                "except item_lines carries the reading that retires it on the line "
+                "that declares it (Guardrail #6); item_lines carries none because it "
+                "is the permanent instrument rather than a debugging aid. This entry "
+                "adds configuration only - no record is emitted here. Ruled by the "
+                "owner and Fowler, 2026-09-14 (plan 27, row 4)."
             ),
         ),
         ChangelogEntry(
@@ -170,6 +205,47 @@ class AppConfig(Contract):
                 "the token it was set from, and that scale is what this removal ends. "
                 "canvas_height went with it because it was 16:10 of a number that no "
                 "longer exists and had no caller of its own."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T05:00",
+            change=(
+                "config/idhazh.json moves extract.truncation_cap_tokens from 10000 to "
+                "20000, models.summarize.inference.n_ctx from 49152 to 65536 and "
+                "finetune.sequence_length from 16384 to 32768. No field was added, "
+                "removed or retyped. InferenceConfig.n_ctx and "
+                "FinetuneConfig.sequence_length restate their arithmetic against the "
+                "new cap; neither default moves, so a fresh clone still runs the "
+                "conservative pair."
+            ),
+            why=(
+                "Plan 28 row #13b. The three tokenizer readings every one of these "
+                "sums is spent at were taken against the retired 8B. Retaken against "
+                "the configured weights, tokens a word at the cut went 1.3 to 1.3628, "
+                "so the cap and both windows were being derived at the wrong rate for "
+                "the vocabulary that reads them. At the new cap the two calls size at "
+                "54,887 tokens of 65,536 and a training row at 25,156 of 32,768, both "
+                "asserted in backend/tests/contracts/test_app_config.py against config "
+                "rather than against a pinned number. Memory is what a window costs "
+                "and 65536 costs 1,584 MiB more than 16384, against a 6.84 GiB "
+                "low-water free the runner measured - docs/reference/benchmarks/"
+                "two-call-window-sizing.md."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-14T04:00",
+            change=(
+                "run.shard_size and run.shard_timeout_minutes carry the derivation "
+                "that produced them rather than the one they were set under. Neither "
+                "number moves: the derived worst shard is 96.1 minutes against a "
+                "200-minute bound, and shard_size would have to rise above 20 to move "
+                "the fan-out at all."
+            ),
+            why=(
+                "Plan 28 row #10. A call is decoded as two spans now, so the worst-case "
+                "item is not the one either number was sized against and carrying them "
+                "forward would leave two backstops nobody could re-derive. Ruled by "
+                "Carmack, 2026-09-14."
             ),
         ),
         ChangelogEntry(
@@ -271,10 +347,10 @@ class AppConfig(Contract):
             ),
             why=(
                 "Plan 11 row #6. The work stage makes two calls per item on the "
-                "summarizer weights - call 1 labels, call 2 writes the summary and then "
-                "the picture - so the small visual planner decides nothing, and a model "
-                "nothing calls is a download, a cache entry and a 50-minute job the run "
-                "waits on. Owner ruling 2026-09-13: move forward, no rollback, so the "
+                "summarizer weights - the label call labels, the summarize-and-plan call writes "
+                "the summary and then the picture - so the small visual planner decides nothing, "
+                "and a model nothing calls is a download, a cache entry and a 50-minute job the "
+                "run waits on. Owner ruling 2026-09-13: move forward, no rollback, so the "
                 "flag goes away with the model rather than staying as a second "
                 "implementation (Guardrail #6). finetune.student had no reader and named "
                 "the retired model; re-pointing it at summarize would make the teacher "
@@ -355,10 +431,10 @@ class AppConfig(Contract):
                 "The two-call path did not fit the old window and does not fit the "
                 "32768 an owner authorised on 2026-09-12 either. Measured 2026-09-13 "
                 "on the configured weights through llama-server's own tokenizer: at "
-                "the 10,000-token truncation cap, call 1's prompt plus its 6,491-token "
-                "output budget plus the 58-token seam plus call 2's 4,694-token budget "
-                "sizes at 39,284 tokens. Three of eight cap-length articles built from "
-                "corpus prose measured over 32,768 on their own, the worst at 37,495. "
+                "the 10,000-token truncation cap, the label call's prompt plus its 6,491-token "
+                "output budget plus the 58-token seam plus the summarize-and-plan call's "
+                "4,694-token budget sizes at 39,284 tokens. Three of eight cap-length articles "
+                "built from corpus prose measured over 32,768 on their own, the worst at 37,495. "
                 "49152 is that sum plus a 25 percent margin, rounded up to the next "
                 "whole multiple of 16384 and of the 512-token batch. The 25 percent is "
                 "the size of the one tokenizer miss on record - measured's "

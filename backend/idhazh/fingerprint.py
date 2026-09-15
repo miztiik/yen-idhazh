@@ -36,6 +36,7 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef
 from idhazh.contracts.knobs.turns import TurnsConfig
+from idhazh.llm.server import turn_markers_digest
 
 #: Sixty-four zeroes. It satisfies `Sha256`, so a manifest built on it validates,
 #: publishes, and still says nothing about which weights ran (Guardrail #10).
@@ -132,14 +133,19 @@ def sampling_spelling(inference: InferenceConfig) -> str:
     `seed` is enumerated as an input and is still dead code under greedy
     decoding - it is recorded so a future move off greedy cannot change an
     output silently, and it is never cited as the determinism control.
+
+    Both span budgets are here and there is no reasoning flag beside them. What
+    turns reasoning on is the closing marker on the turn envelope, which arrives
+    under `turn_markers_sha256`; a flag here as well would be a second answer to
+    a question the envelope already answers.
     """
     return ";".join(
         (
             f"temperature={inference.temperature:.4f}",
             f"top_p={inference.top_p:.4f}",
             f"seed={inference.seed}",
-            f"max_output_tokens={inference.max_output_tokens}",
-            f"thinking={'on' if inference.thinking else 'off'}",
+            f"max_answer_tokens={inference.max_answer_tokens}",
+            f"max_think_tokens={inference.max_think_tokens}",
         )
     )
 
@@ -204,11 +210,27 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             "model_sha256 already carries, so it cannot move on its own - and it exists "
             "to be compared against those bytes at start-up, not to describe the run.",
         ),
+        "byte_count": Undigested(
+            False,
+            "How large the weights are. Two files of one size can hold different "
+            "tensors and two digests cannot, so the size says nothing the digest does "
+            "not say better. It exists to cross-check the entry against the file the "
+            "run opened, not to describe the run.",
+        ),
         "declared_for": Undigested(
             False,
             "Names the weights the block is set for. The manifest already carries those "
             "bytes as model_sha256, so recording it twice would say a swap happened "
             "twice.",
+        ),
+        "draft": Undigested(
+            False,
+            "The second, smaller set of weights that guesses ahead. It cannot move a "
+            "published word, and that is a property of the mechanism rather than a "
+            "hope: the target model verifies every drafted token and rejects any it "
+            "would not itself have produced, so a drafted run and an undrafted run "
+            "write the same text. What it moves is how long the run took, which "
+            "state/runtime-counters.csv records with the acceptance rate beside it.",
         ),
         "file": Undigested(
             False,
@@ -269,29 +291,37 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
 )
 
 #: Where a `ModelEntry` or `TurnsConfig` field arrives in the manifest when it is
-#: not carried under its own name. The whole envelope is folded into
-#: `prompt_sha256` because `classify.calls.prompt_inputs` renders both turns
-#: through it, and that is the whole of the envelope's reach:
-#: `run_manifest.ModelUse` embeds the recorded `ModelRef`, which carries no
-#: markers at all.
+#: not carried under its own name. The whole envelope is digested as
+#: `turn_markers_sha256` since 2026-09-14, which is the field that exists to
+#: carry it: `run_manifest.ModelUse` embeds the recorded `ModelRef`, which
+#: carries no markers at all.
 #:
-#: `system_role` and `system_joiner` are in here for the same reason the four
-#: markers are, and the reason is worth stating because the design once read the
-#: other way: a placement change moves the same bytes to a different address, so
-#: it was argued that the stamp could not see it. Since the prompt bytes became
+#: It used to fold into `prompt_sha256`, on the ground that
+#: `classify.calls.prompt_inputs` renders both turns through the envelope. That
+#: was true and it stopped being the whole of the envelope's reach: which of the
+#: two reply openings a call ends on, and the marker the thinking span stops at,
+#: both move an output without moving a rendered prompt. A rendered prompt still
+#: moves when a marker moves, so the envelope reaches the stamp twice - the
+#: claim written here is the one a test can check against a moved marker.
+#:
+#: `system_role` and `system_joiner` are in here for the same reason the markers
+#: are, and the reason is worth stating because the design once read the other
+#: way: a placement change moves the same bytes to a different address, so it
+#: was argued that the stamp could not see it. Since the prompt bytes became
 #: ours the stamp renders through the envelope, so it does - which is what makes
 #: a topology change as loud as a reworded instruction.
 MODEL_FIELD_SPELLING: Final[Mapping[str, str]] = MappingProxyType(
     {
         "inference": "sampling",
         "sha256": "model_sha256",
-        "turns": "prompt_sha256",
-        "turn_opening": "prompt_sha256",
-        "turn_closing": "prompt_sha256",
-        "reply_opening": "prompt_sha256",
-        "reply_opening_thinking": "prompt_sha256",
-        "system_role": "prompt_sha256",
-        "system_joiner": "prompt_sha256",
+        "turns": "turn_markers_sha256",
+        "turn_opening": "turn_markers_sha256",
+        "turn_closing": "turn_markers_sha256",
+        "reply_opening": "turn_markers_sha256",
+        "reply_opening_thinking": "turn_markers_sha256",
+        "system_role": "turn_markers_sha256",
+        "system_joiner": "turn_markers_sha256",
+        "thinking_close": "turn_markers_sha256",
     }
 )
 
@@ -347,6 +377,7 @@ def build_inputs(
     runner_class: str,
     extractor_version: str,
     sanitizer_version: str,
+    turns: TurnsConfig | None = None,
 ) -> PipelineInputs:
     """Assemble the manifest from the weights that were loaded, not the ones configured.
 
@@ -357,6 +388,12 @@ def build_inputs(
     An absent digest stops the record. The caller used to substitute
     `PLACEHOLDER_DIGEST`, which turned "nobody measured the weights" into a
     manifest that looked measured.
+
+    `turns` is optional because `ModelRef` does not carry one - a run record
+    embeds the recorded shape, and a caller holding only that shape has no
+    envelope to digest. An absent envelope leaves the key absent rather than
+    substituting a digest, which is the read-side rule
+    `PipelineInputs.turn_markers_sha256` states.
     """
     if not model_sha256 or model_sha256 == PLACEHOLDER_DIGEST:
         raise ValueError(
@@ -369,6 +406,7 @@ def build_inputs(
         runtime_build=runtime_build,
         chat_template_sha256=text_digest(chat_template),
         prompt_sha256=text_digest(prompt),
+        turn_markers_sha256=turn_markers_digest(turns) if turns is not None else None,
         output_schema_sha256=text_digest(output_schema),
         truncation_cap_tokens=truncation_cap_tokens,
         sampling=sampling_spelling(inference),

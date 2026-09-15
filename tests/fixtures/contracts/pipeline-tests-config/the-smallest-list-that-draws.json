@@ -1,0 +1,31 @@
+{
+  "arms": [
+    {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": false,"id": "no-picture","n_ctx": null,"n_parallel": null}
+  ],
+  "articles_a_dispatch": 1,
+  "budget_minutes": 20,
+  "candidates": [
+    {"source_id": "feed-00","title": "Fixture story 00","url": "https://example.test/00"},
+    {"source_id": "feed-01","title": "Fixture story 01","url": "https://example.test/01"},
+    {"source_id": "feed-02","title": "Fixture story 02","url": "https://example.test/02"},
+    {"source_id": "feed-03","title": "Fixture story 03","url": "https://example.test/03"},
+    {"source_id": "feed-04","title": "Fixture story 04","url": "https://example.test/04"},
+    {"source_id": "feed-05","title": "Fixture story 05","url": "https://example.test/05"},
+    {"source_id": "feed-06","title": "Fixture story 06","url": "https://example.test/06"},
+    {"source_id": "feed-07","title": "Fixture story 07","url": "https://example.test/07"},
+    {"source_id": "feed-08","title": "Fixture story 08","url": "https://example.test/08"},
+    {"source_id": "feed-09","title": "Fixture story 09","url": "https://example.test/09"},
+    {"source_id": "feed-10","title": "Fixture story 10","url": "https://example.test/10"},
+    {"source_id": "feed-11","title": "Fixture story 11","url": "https://example.test/11"},
+    {"source_id": "feed-12","title": "Fixture story 12","url": "https://example.test/12"},
+    {"source_id": "feed-13","title": "Fixture story 13","url": "https://example.test/13"},
+    {"source_id": "feed-14","title": "Fixture story 14","url": "https://example.test/14"},
+    {"source_id": "feed-15","title": "Fixture story 15","url": "https://example.test/15"},
+    {"source_id": "feed-16","title": "Fixture story 16","url": "https://example.test/16"},
+    {"source_id": "feed-17","title": "Fixture story 17","url": "https://example.test/17"},
+    {"source_id": "feed-18","title": "Fixture story 18","url": "https://example.test/18"},
+    {"source_id": "feed-19","title": "Fixture story 19","url": "https://example.test/19"}
+  ],
+  "version": "2026-09-14"
+}

@@ -39,6 +39,7 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.item_health import FailureCode, ItemStage
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
 )
@@ -46,15 +47,18 @@ from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, NoneReason, VisualDecision
 from idhazh.evals import evidence
 from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import (
     Completion,
+    answer_span,
     is_context_exceeded,
+    one_reply,
     post,
+    thinking_span,
 )
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
@@ -73,6 +77,16 @@ QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualificatio
 #: A sibling of `VAR_ROOT` rather than a child, because the run never reads it
 #: back and no downstream job downloads it. A test redirects it the same way.
 EVIDENCE_ROOT: Final = config.REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
+
+
+#: Where one run's model-call captures go: beside its items rather than inside
+#: them. Inside would put every rendered prompt in the `items-<shard>` artifact
+#: that `assemble` downloads whole, which is a different retention window and a
+#: job that has no use for the text. Derived from the run directory rather than
+#: from the repository root, so redirecting `VAR_ROOT` redirects this too - a
+#: capture root a test could not move wrote prompts into the working tree on
+#: every suite run (2026-09-15).
+CAPTURES_DIRNAME: Final = "captures"
 
 
 #: The planted attacks, run live against a candidate before it is adopted.
@@ -137,10 +151,11 @@ def live_fetcher(
     function exists for, and policy is what a test has to be able to get wrong
     (Guardrail #7).
 
-    `tracer` is what makes the robots read visible, and it is the sub-step no
-    ledger column can hold. `fetch_ms` is one number covering both reads, so the
-    first item from a host with a slow robots.txt reads as a slow article and
-    the next twenty from that host read as fast ones for no stated reason.
+    `tracer` is what makes the robots read visible, and the same reading now
+    lands on the result as `robots_ms`, so the ledger carries the split the
+    span was already drawing. `fetch_ms` is one number covering both reads, so
+    the first item from a host with a slow robots.txt reads as a slow article
+    and the next twenty from that host read as fast ones for no stated reason.
     """
     rules: dict[str, fetch.RobotsRules] = {}
     trace = tracer if tracer is not None else silent_tracer()
@@ -149,6 +164,7 @@ def live_fetcher(
 
     def read(url: str) -> fetch.FetchResult:
         where = fetch.origin(url)
+        asking = time.monotonic()
         with trace.span(telemetry.SpanName.ROBOTS) as span:
             span.set(telemetry.AttrKey.ROBOTS_CACHED, where in rules)
             if where not in rules:
@@ -157,9 +173,10 @@ def live_fetcher(
                 rules[where] = fetch.robots_rules(read_one(fetch.robots_url(url)))
             permission = rules[where].permits(agent, url)
             span.set(telemetry.AttrKey.ROBOTS_OUTCOME, permission.value)
+        robots_ms = int((time.monotonic() - asking) * 1000)
         if permission is not RobotsOutcome.ALLOWED:
-            return fetch.refused(permission)
-        return read_one(url)
+            return fetch.refused(permission).with_robots_ms(robots_ms)
+        return read_one(url).with_robots_ms(robots_ms)
 
     return read
 
@@ -185,12 +202,28 @@ def shard_of(plan: RunPlan, *, shard: int, shards: int) -> list[PlannedItem]:
     return [item for index, item in enumerate(plan.items) if index % shards == shard]
 
 
+class FetchedItem(NamedTuple):
+    """One item's article, the body it was cut from, and where the time went.
+
+    A shape rather than a widening tuple, because the two stages that want only
+    the article should not have to count placeholders to reach it.
+    """
+
+    article: Article
+    source_text: str
+    fetch_ms: int
+    extract_ms: int
+    #: The fetch's own split - handshake, first byte, robots, retries. Empty on
+    #: a read that reached no socket, which is a state the census can hold.
+    timings: fetch.FetchTimings
+
+
 def _fetch_one(
     item: PlannedItem,
     settings: config.Settings,
     read_url: Fetcher,
     tracer: telemetry.Tracer | None = None,
-) -> tuple[Article, str, int, int]:
+) -> FetchedItem:
     """The article, the body it was cut from, and how long each step took.
 
     The timings are separated because a slow item is either a slow host or a
@@ -202,6 +235,11 @@ def _fetch_one(
     tagger nests inside the extract span, so a taxonomy that grew a hundred
     patterns shows up as its own step rather than as the extractor getting
     slower.
+
+    `timings` is the fetch half broken down further still, and it rides on the
+    result rather than being re-timed here: the handshake and the first byte are
+    facts only the socket knows, and a second stopwatch round this call could
+    only ever restate `fetch_ms`.
     """
     trace = tracer if tracer is not None else silent_tracer()
     started = time.monotonic()
@@ -226,7 +264,13 @@ def _fetch_one(
         telemetry.article_attributes(
             span, article, source_digest=text_digest(source_text) if source_text else None
         )
-    return article, source_text, fetch_ms, int((time.monotonic() - started) * 1000)
+    return FetchedItem(
+        article=article,
+        source_text=source_text,
+        fetch_ms=fetch_ms,
+        extract_ms=int((time.monotonic() - started) * 1000),
+        timings=result.timings,
+    )
 
 
 def _log_no_reply(
@@ -253,6 +297,65 @@ def _log_no_reply(
     )
 
 
+def _two_spans(
+    payload: dict[str, Any],
+    *,
+    article: Article,
+    turns: TurnsConfig,
+    max_think_tokens: int,
+    endpoint: str,
+    timeout: float,
+) -> Completion:
+    """One call, decoded as an unconstrained think and then the constrained answer.
+
+    **Span one is the same body with the grammar off, a hard budget and a stop
+    at the entry's closing marker.** It is derived from the answer body rather
+    than rendered again, so both spans open on one string object and the KV slot
+    span one filled is the slot span two continues - the prompt cache is asked
+    for in `completion_payload` and this is what makes asking worth anything.
+
+    **What span one wrote is spliced into span two's prompt and goes nowhere
+    else.** It is discarded here: it is not returned, not persisted, not
+    replayed into the next call and not shown to anybody. It is model-written
+    text, and a prompt is exactly the channel Guardrail #11 keeps that out of -
+    so the one place it is allowed to reach is the request body of the span it
+    was thought for, where the schema binds the decode from the first token and
+    nothing written in span one can change the shape that comes back.
+
+    A span one that spends its whole budget is logged as what it is. It is not
+    an item failure: `answer_span` writes the closing marker itself, so the
+    block is closed either way and span two answers under its own budget.
+    """
+    thought = post(
+        thinking_span(payload, turns=turns, max_think_tokens=max_think_tokens),
+        endpoint=endpoint,
+        timeout=timeout,
+    )
+    if thought.hit_the_budget:
+        LOG.warning(
+            "the thinking span spent its whole budget id=%s tokens=%s",
+            article.item_id,
+            thought.completion_tokens,
+        )
+    answer = post(
+        answer_span(payload, thought=thought.content, turns=turns),
+        endpoint=endpoint,
+        timeout=timeout,
+    )
+    # What the answer span really had to prefill. It is the one reading that
+    # settles whether the slot held the thinking or re-read it, which is an
+    # estimate until a run prints this (Guardrail #10).
+    LOG.info(
+        "two spans id=%s think_tokens=%s answer_tokens=%s answer_prefilled=%s cached=%s",
+        article.item_id,
+        thought.completion_tokens,
+        answer.completion_tokens,
+        answer.prompt_tokens - answer.cached_tokens,
+        answer.cached_tokens,
+    )
+    return one_reply(thought=thought, answer=answer)
+
+
 def _ask_the_model(
     payload: dict[str, Any],
     article: Article,
@@ -263,6 +366,8 @@ def _ask_the_model(
     prompt_digest: str,
     run_id: str | None,
     trace: telemetry.Tracer,
+    turns: TurnsConfig | None = None,
+    max_think_tokens: int = 0,
 ) -> tuple[Completion | None, FailureCode]:
     """One request, its reply, and the code that says why there is none.
 
@@ -270,6 +375,13 @@ def _ask_the_model(
     what a caller does with a reply differs and how a reply is asked for does
     not. The generation span is opened here so a run that makes two calls an
     item draws two spans rather than one covering both.
+
+    `turns` decides whether that request is one decode or two. An envelope that
+    declares a closing marker gets a thinking span in front of the answer, and
+    what comes back is the pair's cost carrying the answer's words. It is
+    optional because a caller that has already rendered a chat body has no
+    second span to run: the model's own template wrote those bytes, so there is
+    no prompt to continue.
     """
     completion: Completion | None
     no_reply = FailureCode.MODEL_UNREACHABLE
@@ -277,7 +389,18 @@ def _ask_the_model(
         span.set(telemetry.AttrKey.MODEL_ID, model_id)
         span.set(telemetry.AttrKey.PROMPT_DIGEST, prompt_digest)
         try:
-            completion = post(payload, endpoint=endpoint, timeout=timeout)
+            completion = (
+                _two_spans(
+                    payload,
+                    article=article,
+                    turns=turns,
+                    max_think_tokens=max_think_tokens,
+                    endpoint=endpoint,
+                    timeout=timeout,
+                )
+                if turns is not None and turns.thinks
+                else post(payload, endpoint=endpoint, timeout=timeout)
+            )
         except HTTPError as error:
             # Before OSError, which HTTPError subclasses. A server that answered is
             # not an unreachable one, and the body is the only place it says why it
@@ -364,14 +487,21 @@ def _canary_article(
 def _one_call(
     article: Article, settings: config.Settings, *, endpoint: str
 ) -> tuple[Summary, Completion | None, float]:
-    """One live inference call, timed, with the reply kept for the gates."""
+    """One live inference call, timed, with the reply kept for the gates.
+
+    The chat route, so the model's own template writes the prompt and the
+    runtime owns the split between thinking and answer. That is why this path
+    runs one decode where the digest's runs two: there is no prompt of ours to
+    stop at a marker and continue under a grammar.
+    """
     inference = settings.models.summarize.inference
+    turns = settings.models.summarize.turns
     model_id = settings.models.summarize.id
     payload = summarize.build_request(
         article,
         model_id=model_id,
         inference=inference,
-        thinking_kwarg=settings.models.summarize.turns.thinking_kwarg,
+        turns=turns,
         prompt_config=settings.app.summarize,
     )
     started = time.monotonic()
@@ -400,6 +530,7 @@ def _one_call(
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
         no_reply=no_reply,
+        thinking=turns.thinks,
     )
     return summary, completion, seconds
 
@@ -479,6 +610,32 @@ def _item_payloads(
             eval_path=items_dir / f"{item.item_id}.eval.json",
             decision_path=items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}",
         )
+
+
+def _recovered(decision_path: Path) -> bool | None:
+    """Did this item's summary have to be salvaged from a reply that was cut?
+
+    The decision payload already knows. `recovered_completion` runs exactly when
+    the summarize-and-plan reply hit its ceiling and the summary object behind
+    the cut was still closed, and that is the same condition that makes the
+    picture's `none_reason` one of the two cut reasons - the budget's, or the
+    window's.
+
+    **Read from the payload rather than recomputed**, because recomputing means
+    re-deriving the budget the run used from the config the ledger is being
+    written under, and those are two different days the moment a bound moves.
+
+    Nothing comes back where there is no payload: an item that never reached the
+    second call has no picture decision, so the question was never asked and an
+    empty cell is the honest answer rather than `false`.
+    """
+    if not decision_path.exists():
+        return None
+    try:
+        decision = VisualDecision.read(decision_path)
+    except (OSError, ValueError):
+        return None
+    return decision.none_reason in {NoneReason.OUTPUT_BUDGET_CUT, NoneReason.WINDOW_EXHAUSTED}
 
 
 def _extraction_health(

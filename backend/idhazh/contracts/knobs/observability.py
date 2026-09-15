@@ -31,7 +31,94 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 
 
 class LoggingConfig(Model):
-    level: LogLevel = LogLevel.INFO
+    """Which records the pipeline builds, and how loud the logger that prints them is.
+
+    Those are two different questions and this block holds both. **The flags
+    choose which records EXIST; `level` chooses how loud the logger is.** Turning
+    the level down to WARNING does not stop a per-item record being built, and
+    turning it up to DEBUG does not create one.
+
+    One switch would not have done. Per-item lines cost a few hundred bytes a
+    run and prompt capture costs a run artifact, so an operator has to be able to
+    keep the cheap instrument and drop the expensive one. That is why there are
+    five flags here rather than a verbosity dial (Fowler, 2026-09-14).
+
+    Every flag defaults ON, because the reason they exist is a 5x model-time
+    regression that ran for six days with nothing printing during a 200-minute
+    shard. They are defaulted on to be switched off once that is closed, so
+    **every one of them except `item_lines` carries its removal condition on the
+    line that declares it** (Guardrail #6), and each condition names the reading
+    that retires it rather than a piece of work that lands.
+    """
+
+    level: LogLevel = Field(
+        default=LogLevel.INFO,
+        description=(
+            "How loud the logger is, and nothing else. Unrelated to the flags beside "
+            "it: they decide which records are built, this decides which of the built "
+            "records are printed. It predates them and no removal condition applies."
+        ),
+    )
+    item_lines: bool = Field(
+        default=True,
+        description=(
+            "Whether an item logs a record when it starts and another when it "
+            "finishes, success or failure. NO REMOVAL CONDITION, on purpose: this is "
+            "the permanent instrument and not a debugging aid. A run that cannot say "
+            "which item it is on, and which ones it got through, is the blind window "
+            "the rest of this block exists to end. It is a knob at all only so an "
+            "operator re-running one shard by hand can quieten it for that "
+            "invocation."
+        ),
+    )
+    stage_lines: bool = Field(
+        default=True,
+        description=(
+            "Whether fetch, extract, label, summarize and faithfulness each log a "
+            "record when they end. Retire it when the per-stage split has stopped "
+            "saying anything the completion record does not: a week of runs in which "
+            "no stage's share of item time moves by more than the run-to-run spread, "
+            "and no item time is left unattributed. Until then a shard that dies on a "
+            "timeout names no stage at all, and the completion record arrives only "
+            "for an item that finished."
+        ),
+    )
+    waiting_heartbeat_seconds: int = Field(
+        default=30,
+        ge=0,
+        description=(
+            "How often, in seconds, to log elapsed time while a model call is in "
+            "flight. 0 turns the heartbeat off and IS the retirement, so this knob "
+            "retires itself rather than being deleted. A NEGATIVE VALUE IS REFUSED: a "
+            "number that quietly means never when the operator meant often is the "
+            "worst shape a misconfiguration of this knob can take. Set it to 0 once "
+            "the slowest single model call in a full run has stayed under a minute "
+            "for a week, because then a stuck call is visible from its own completion "
+            "record and elapsed time adds nothing. Today the slowest call returns "
+            "after 22 minutes having printed nothing at all."
+        ),
+    )
+    capture_prompts: bool = Field(
+        default=True,
+        description=(
+            "Whether the rendered prompts are written to a run artifact. Retire it "
+            "when the prompt is no longer in question - a week of runs in which every "
+            "item's recorded prompt token count matches what the budget predicts, "
+            "with nothing truncated. At that point the SHA-256 and the token count "
+            "each row already carries say what the text said, for a fraction of the "
+            "bytes."
+        ),
+    )
+    capture_replies: bool = Field(
+        default=True,
+        description=(
+            "Whether the raw model replies are written to a run artifact. The most "
+            "expensive thing this block can switch on, because a reply is the longest "
+            "text in the run. Retire it when no item has been cut short for a week "
+            "and the decoded token counts agree with what each row records, because "
+            "the reply text is then answering a question nobody is asking."
+        ),
+    )
 
 
 class ObservabilityConfig(Model):
@@ -119,7 +206,7 @@ class ObservabilityConfig(Model):
     tracing_enabled: bool = Field(
         default=True,
         description=(
-            "Whether a work shard builds a span tree. On by default: a "
+            "Whether a work shard builds a span tree. On by default (2026-09-06): a "
             "span tree is the one thing the three ledgers cannot hold - a start "
             "instant, a parent, and a step too small to earn a column, the robots "
             "read inside the fetch and the prompt render and reply parse either side "
@@ -140,9 +227,11 @@ class ObservabilityConfig(Model):
             "evidence an operator opens to see one recent run step by step; the "
             "committed record is the span rollup, so a trace has a short life and a "
             "file past this window is deleted whole rather than folded - a fold would "
-            "invent a total nobody reads. Seven days covers a week of runs, and the "
-            "window is what keeps state/traces/ a constant size whatever the project's "
-            "age rather than one that grows with it (Guardrail #12). It does "
+            "invent a total nobody reads. Seven days covers a week of runs. Measured at "
+            "about 0.6 MB a run at the run.safety_ceiling_per_run item ceiling over the "
+            "five scheduled runs a day (2026-09-06), so the window bounds state/traces/ "
+            "at about 21 MB whatever the project's age - constant (Guardrail #12), and a "
+            "fraction of the 1 GB Pages reference it is not even part of. It does "
             "nothing until observability.tracing_enabled is true: before that no trace "
             "is written and the prune walks an empty tree."
         ),
@@ -167,8 +256,9 @@ class ObservabilityConfig(Model):
         ge=1,
         description=(
             "Months after which the folded item-health month is removed outright. Null "
-            "means never, and never is the default: the fold is a small fraction of the "
-            "shard it summarises, and deleting it would make a year-over-year comparison "
+            "means never, and never is the default: the aggregate costs a measured "
+            "63.8 bytes a row over four stages - about 93 KB a year against the "
+            "shard's 77 MB - and deleting it would make a year-over-year comparison "
             "unanswerable, which Guardrail #10 then forbids citing at all. Set, it must sit "
             "ABOVE item_health_full_grain_months, or a month would be deleted before "
             "it was ever folded."
@@ -305,7 +395,8 @@ class ObservabilityConfig(Model):
         ge=1,
         description=(
             "How long frontend/public/span-rollup/ keeps a published shard. Fourteen "
-            "on the same argument as the item-health copy above."
+            "on the same argument, and the record starts on 2026-09-06, so for its "
+            "first year this knob deletes nothing at all."
         ),
     )
     cost_currency: str = Field(
