@@ -538,7 +538,7 @@ What is deliberately **not** planned: pruning. The ledger is the only durable
 record of what a bad day did, and a retention pass over it would delete exactly
 the evidence it exists to keep. Windows are applied on read.
 
-## A cell is fitted to its column before it is recorded
+## A cell is fitted to its column, by the column
 
 Most of what lands in this row is not ours. `cpu_model` comes from a kernel
 file, `runner_name` from the environment, `summary_finish_reason` and
@@ -554,19 +554,25 @@ columns take a lowercase name. So a character outside the class made the row
 raise - and the row that raised was the one reporting the failure. The evidence
 and the item were lost together, over a dash.
 
-`base.fit_cell` closes that. It reads the class and the length off the column
-being written, folds Western punctuation to its ASCII spelling, replaces each
-run of anything left with a single `?`, and returns a stated floor rather than
-an empty string where nothing survives. The fold is applied at one door -
-`ItemRecorder.note` - so a column added to this row is covered the day it is
-declared, with no list to maintain.
+The column closes that itself. `base.fits_its_column` puts `base.fit_cell`
+inside validation, so the fold runs for whoever built the row - the stage, a
+re-file reading an old heading, a test harness, a writer nobody has written yet.
+It reads the class and the length off the column being written, folds Western
+punctuation to its ASCII spelling, replaces each run of anything left with a
+single `?`, and returns a stated floor rather than an empty string where nothing
+survives. There is no door to miss because there is no door.
 
-Two things it will not do. It never folds a column whose rule names an identity:
-`item_id`, `url_key`, `canonical_url`, `vertical` and `source_id` have no
-foreign value to rescue, and a fold that satisfied `^[0-9a-f]{64}$` would have
-invented a digest. And it never returns nothing: `detail` has `min_length=1`, so
-an empty cell raises, and a detail that cannot be printed becomes
-`unspecified failure` while a reading that could not be printed becomes
+**A helper a producer has to remember is the shape this replaced, and it had
+already been forgotten.** The fold lived at `ItemRecorder.note`, which builds a
+log line; the census row is constructed in `telemetry.classify_item`, which
+never called it. So the hardening covered the log and left the CSV as it was.
+
+Two things the fold will not do. It never folds a column whose rule names an
+identity: `item_id`, `url_key`, `canonical_url`, `vertical` and `source_id` have
+no foreign value to rescue, and a fold that satisfied `^[0-9a-f]{64}$` would
+have invented a digest. And it never returns nothing: `detail` has
+`min_length=1`, so an empty cell raises, and a detail that cannot be printed
+becomes `unspecified failure` while a reading that could not be printed becomes
 `unprintable`. An empty `cpu_model` keeps its own meaning - the probe was not
 taken.
 

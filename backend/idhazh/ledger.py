@@ -99,17 +99,17 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Callable, Collection, Iterable, Iterator
+from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple, Protocol
 
 from idhazh import day_partition
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
+from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow, ItemOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -202,6 +202,64 @@ HEALTH_WINDOW_DAYS: Final = 31
 #: row it saw, which is what every ledger but one wants: there a repeat is the
 #: same attempt written twice and the two rows agree.
 Preference = Callable[[dict[str, str], dict[str, str]], bool]
+
+
+class CsvRecord(Protocol):
+    """A contract that knows how to write itself as one row of a `state/` file.
+
+    Every ledger here takes one of these rather than a `dict[str, str]`. A dict
+    is not a contract - anything can build one and nothing validates it - so a
+    caller assembling cells by hand could reach a committed file without a model
+    having seen them. Declared as a protocol rather than as a base class because
+    these contracts share a shape, not an ancestor: `Contract` is the base for
+    every persisted document, and most of those are JSON and have no row.
+    """
+
+    def csv_row(self) -> dict[str, str]:
+        """Every cell a string, keyed by column name."""
+        ...
+
+
+class CsvContract(Protocol):
+    """The class side of `CsvRecord`: the columns, and the reader for an old row."""
+
+    @classmethod
+    def csv_columns(cls) -> tuple[str, ...]:
+        """The row's columns, in the row's own order."""
+        ...
+
+    @classmethod
+    def from_csv_row(cls, row: dict[str, str]) -> CsvRecord:
+        """One row read back, under any heading this ledger has ever carried."""
+        ...
+
+
+class KeyedLedger(NamedTuple):
+    """One committed file, what makes two of its rows the same record, and the
+    contract that can read a row of it.
+
+    The three travel together because the settlement needs all three and looking
+    any of them up a second time is how the file list and the reader list drift
+    apart. `carried` names the headings this contract's reader still places after
+    the column they belong to was retired; only one shape here has ever retired
+    one, and the rest declare nothing.
+    """
+
+    path: Path
+    key: tuple[str, ...]
+    model: type[CsvContract]
+    carried: frozenset[str] = frozenset()
+
+
+def _key_of(row: CsvRecord, key: tuple[str, ...]) -> tuple[str, ...]:
+    """The cells that make this row's record, as the file spells them.
+
+    Read off `csv_row` rather than off the attributes, so a filter compares what
+    is on disk against what is about to be written rather than against a Python
+    value that has still to be rendered.
+    """
+    cells = row.csv_row()
+    return tuple(cells[name] for name in key)
 
 
 def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
@@ -434,43 +492,132 @@ def _csv_line(columns: tuple[str, ...], payload: dict[str, str]) -> str:
     return buffer.getvalue()
 
 
+def refiler(model: type[CsvContract]) -> Callable[[dict[str, str]], dict[str, str]]:
+    """The contract's own reader, as a row-to-row migration.
+
+    `from_csv_row` reads a row under any heading its ledger has ever carried and
+    `csv_row` writes it under the heading it carries now, so the map between the
+    two lives once, in the contract, rather than in whatever is re-filing the
+    file this time.
+    """
+
+    def read(raw: dict[str, str]) -> dict[str, str]:
+        return model.from_csv_row(raw).csv_row()
+
+    return read
+
+
+def _headings(lines: list[str], first_column: str) -> set[str]:
+    """Every column name the file names anywhere, header blocks included.
+
+    A `merge=union` resolve can leave two header lines in one file, and the
+    second one is the only place the other side's column names appear. Reading
+    line 1 alone would therefore miss exactly the generation this is asked about.
+    """
+    sentinel = first_column + ","
+    names = set(next(csv.reader(lines[:1]), []))
+    for line in lines[1:]:
+        if line.startswith(sentinel):
+            names.update(next(csv.reader([line]), []))
+    return names
+
+
+def _unplaceable(
+    lines: list[str], columns: tuple[str, ...], carried: Collection[str]
+) -> list[str]:
+    """The headings in this file the current contract cannot read a cell into.
+
+    This is the direction test, and it is put as a question about cells rather
+    than about dates: re-filing under `columns` writes the columns the contract
+    names and drops everything else, so a heading that is neither a current
+    column nor one the reader carries forward names a cell that would be lost.
+
+    The harm it stops is a scheduled run on a checkout that predates a widening.
+    That run holds the narrower column list, so re-filing a wide file under it
+    would throw away every column the widening added - exit 0, no diagnostic, and
+    the cells simply gone.
+    """
+    return sorted(_headings(lines, columns[0]) - set(columns) - set(carried))
+
+
+def _refile(
+    lines: list[str],
+    columns: tuple[str, ...],
+    read: Callable[[dict[str, str]], dict[str, str]],
+) -> tuple[list[str], int, list[str]]:
+    """Every line under one header: the lines to write, how many moved, and a
+    complaint for each line no reader could place.
+
+    A line already under the right header and at the right width is kept as the
+    bytes that were read and never parsed, so a pass with nothing to do returns
+    the list it was handed and its caller writes nothing. Not parsing it is the
+    point as well as the saving: this repairs a shape, and asking whether every
+    committed cell still parses would be a scan of the archive wearing a repair's
+    clothes. A line that has to move and cannot be read is kept too, and named in
+    the complaints - dropping it would lose a fact to fix a shape.
+    """
+    sentinel = columns[0] + ","
+    kept = [",".join(columns) + "\n"]
+    block = tuple(next(csv.reader(lines[:1]), []))
+    moved = 0
+    refused: list[str] = []
+    for number, line in enumerate(lines[1:], start=2):
+        if line.startswith(sentinel):
+            block = tuple(next(csv.reader([line]), []))
+            continue
+        if not line.strip():
+            continue
+        cells = next(csv.reader([line]), [])
+        if block == columns and len(cells) == len(columns):
+            kept.append(line if line.endswith("\n") else line + "\n")
+            continue
+        try:
+            kept.append(_csv_line(columns, read(dict(zip(block, cells, strict=False)))))
+        except (KeyError, ValueError) as exc:
+            refused.append(f"line {number} has {len(cells)} cells and cannot be read: {exc}")
+            kept.append(line if line.endswith("\n") else line + "\n")
+            continue
+        moved += 1
+    return kept, moved, refused
+
+
 def migrate_header(
     path: Path,
     columns: tuple[str, ...],
     read: Callable[[dict[str, str]], dict[str, str]],
+    *,
+    carried: Collection[str] = (),
 ) -> int:
     """Re-file every row of `path` under `columns`, and say how many rows moved.
 
-    A file that already holds one header, on line 1, and it is the contract's, is
-    left byte-identical - so a pass with nothing to do leaves no diff.
+    **It reads line 1 and stops there when the header is already the
+    contract's**, whatever the file's size. That is the ordinary case on every
+    append, and it is complete rather than optimistic: `_append` writes rows into
+    a file that exists and a header only into one that does not, so an append
+    cannot put a second header in a file. The only thing that can is a
+    `merge=union` resolve, which happens after this run's appends rather than
+    before them, and `stages.dedupe_ledgers` settles it there.
 
     This is the half of a widening `require_matching_header` cannot give. A
     schema change ships a read-side migration, so a file an earlier run wrote
     stays readable; it does not stay appendable, because the header on disk no
-    longer names the columns the writer holds. That comes out in two shapes and
-    both are here:
+    longer names the columns the writer holds. The next run to append would raise
+    and lose the whole commit step, every ledger staged beside this one included.
 
-    - **One retired header.** The next run to append raises, and the raise costs
-      it the whole commit step, every ledger staged beside this one included.
-    - **Two headers in one file.** `state/**/*.csv` is `merge=union`, which is
-      the right answer for two runs appending different rows and no answer at
-      all for two runs appending under different headings - git keeps both
-      blocks and calls the merge clean. Measured on this repository 2026-09-15:
-      `state/item-health/2026/09/14.csv` held 394 rows under the current header
-      and 71 under the one before it, written by a run whose checkout predated
-      the widening. Line 1 there still matched the contract, so the header check
-      passed and the file stayed split.
+    **It widens, and it refuses to narrow.** `carried` names the headings the
+    contract's reader still places - the retired ones - and a file naming
+    anything outside that and `columns` is left byte-identical while the call
+    raises. That case is a scheduled run on a checkout older than the file: it
+    holds the narrower column list, and re-filing under it would drop every cell
+    the widening added, with exit 0 and nothing printed. A refusal costs that run
+    its commit step, which is the cheaper of the two and the one a person sees.
 
-    `read` is the contract's own reader. `from_csv_row` knows every heading the
-    file has ever carried and `csv_row` writes the one it carries now, so the
-    map between the two is never written down a second time.
+    `read` is the contract's own reader, which `refiler` builds. `from_csv_row`
+    knows every heading the file has ever carried and `csv_row` writes the one it
+    carries now, so the map between the two is never written down a second time.
 
-    **What this does not cover.** A run on an older checkout, which cannot know
-    about a change that had not merged when it started - the next run on new
-    code repairs what it left. A day nobody appends to again, because this runs
-    on the append: a run that stacks the last file of a day leaves the stack for
-    an operator's pass. And a rename of the FIRST column, because that name is
-    how a header line is told from a row - every contract here opens on
+    **What this does not cover.** A rename of the FIRST column, because that name
+    is how a header line is told from a row - every contract here opens on
     `version`, whose values are date stamps and never the word.
 
     Rewriting the file makes the next union merge repeat rows rather than
@@ -481,35 +628,79 @@ def migrate_header(
     """
     if not path.exists():
         return 0
+    header = read_header(path)
+    if not header or header == columns:
+        return 0
     with path.open("r", encoding="utf-8", newline="") as handle:
         lines = handle.readlines()
-    if not lines:
-        return 0
-    sentinel = columns[0] + ","
-    header = tuple(next(csv.reader(lines[:1]), []))
-    if header == columns and not any(line.startswith(sentinel) for line in lines[1:]):
-        return 0
-
-    kept = [",".join(columns) + "\n"]
-    block = list(header)
-    moved = 0
-    for line in lines[1:]:
-        if line.startswith(sentinel):
-            block = next(csv.reader([line]), [])
-            continue
-        if not line.strip():
-            continue
-        if tuple(block) == columns:
-            kept.append(line if line.endswith("\n") else line + "\n")
-            continue
-        cells = next(csv.reader([line]), [])
-        kept.append(_csv_line(columns, read(dict(zip(block, cells, strict=False)))))
-        moved += 1
-    path.write_text("".join(kept), encoding="utf-8", newline="")
+    unplaceable = _unplaceable(lines, columns, carried)
+    if unplaceable:
+        raise ValueError(
+            f"{path.name} carries {len(unplaceable)} heading(s) this build cannot place "
+            f"({', '.join(unplaceable[:5])}), so re-filing it would drop those cells. "
+            "The file is newer than this checkout; run the step again on a build that "
+            "names them."
+        )
+    kept, moved, refused = _refile(lines, columns, read)
+    if refused:
+        raise ValueError(f"{path.name} holds a row no reader could place: {refused[0]}")
+    if kept != lines:
+        path.write_text("".join(kept), encoding="utf-8", newline="")
     return moved
 
 
-def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]) -> int:
+def settle_header(
+    path: Path,
+    columns: tuple[str, ...],
+    read: Callable[[dict[str, str]], dict[str, str]],
+    *,
+    carried: Collection[str] = (),
+) -> tuple[int, list[str]]:
+    """Fold a file carrying more than one header back onto one. Never raises.
+
+    The scan `migrate_header` stopped doing, moved to the one place that can see
+    what it is looking for. `state/**/*.csv` is `merge=union`, which resolves one
+    physical line at a time: two runs appending different rows merge correctly,
+    and two runs appending under different headings leave both header blocks in
+    the file while git calls the merge clean. Measured on this repository
+    2026-09-15, `state/item-health/2026/09/14.csv` held 394 rows under the
+    current header and 71 under the one before it.
+
+    A merge is the only thing that can make that shape, so this runs after the
+    merge, over the files this run wrote. A row whose width does not match its
+    own header block is repaired here too: the contract's reader fills what a
+    short row left out, and an empty cell is what an absent optional already
+    means.
+
+    **It never raises and it never drops a line.** An abort here would cost the
+    run every ledger row staged beside the file it was fixing, and a line it
+    cannot read is kept as it was and named in what comes back. A file it cannot
+    place at all - one carrying headings this contract's reader does not know -
+    is left byte-identical and reported, which is the refusal `migrate_header`
+    makes and for the same reason.
+
+    Returns how many rows were re-filed, and a complaint for each line the caller
+    should print.
+    """
+    if not path.exists():
+        return 0, []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        lines = handle.readlines()
+    if not lines:
+        return 0, []
+    unplaceable = _unplaceable(lines, columns, carried)
+    if unplaceable:
+        return 0, [
+            f"{path.name} carries {len(unplaceable)} heading(s) this build cannot place "
+            f"({', '.join(unplaceable[:5])}); it was left as it was"
+        ]
+    kept, moved, refused = _refile(lines, columns, read)
+    if kept != lines:
+        path.write_text("".join(kept), encoding="utf-8", newline="")
+    return moved, refused
+
+
+def _append(path: Path, columns: tuple[str, ...], rows: Sequence[CsvRecord]) -> int:
     """Write every row it is handed. This path does not deduplicate, on purpose.
 
     `evals.writer.append` does, against its `OBSERVATION_KEY`, and the reason the
@@ -549,9 +740,17 @@ def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]
     Both filters read the file the job checked out, which is frozen at the
     commit its run was triggered at, so neither can see a row a second attempt
     pushed afterwards. `drop_repeated_rows` settles that after the merge.
+
+    **It takes contracts and renders them here.** A `dict[str, str]` is not a
+    contract: anything can build one, nothing validates it, and a caller that
+    assembled the cells by hand would reach a committed file without a model ever
+    having seen them. Taking the row itself puts every `state/` file behind its
+    own contract, and the rendering happens once, in this function, rather than
+    at each of the nine call sites.
     """
-    if not payloads:
+    if not rows:
         return 0
+    payloads = [row.csv_row() for row in rows]
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
     if exists:
@@ -590,8 +789,7 @@ def _stream_rows(path: Path) -> Iterator[dict[str, str]]:
 
 def append_seen(state_dir: Path, date: str, rows: Iterable[SeenRow]) -> int:
     """Append first sights. Returns how many landed, so a caller can log the count."""
-    payloads = [row.model_dump(mode="json") for row in rows]
-    return _append(seen_path(state_dir, date), SeenRow.csv_columns(), payloads)
+    return _append(seen_path(state_dir, date), SeenRow.csv_columns(), list(rows))
 
 
 def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -> int:
@@ -602,8 +800,7 @@ def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -
     rewrite the freeze rule permits and the same choice `append_seen` gives its
     caller. See `docs/concepts/partitions.md`.
     """
-    payloads = [row.model_dump(mode="json") for row in rows]
-    return _append(published_path(state_dir, date), PublishedRow.csv_columns(), payloads)
+    return _append(published_path(state_dir, date), PublishedRow.csv_columns(), list(rows))
 
 
 def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str]:
@@ -737,20 +934,46 @@ def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> 
     Returns how many rows the shard gained, so a caller can log the count. A row
     that only replaced an earlier account of the same event is not a gain.
     """
-    payloads = [row.csv_row() for row in rows]
     path = health_path(state_dir, date)
-    landed = _append(path, FeedHealthRow.csv_columns(), payloads)
+    landed = _append(path, FeedHealthRow.csv_columns(), list(rows))
     return landed - drop_repeated_rows(path, FEED_HEALTH_KEY)
 
-
 def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
-    """The contract's own reader, used as a row-to-row migration.
+    """The contract's own reader, used as a row-to-row migration."""
+    return refiler(ItemHealthRow)(raw)
 
-    `from_csv_row` reads a row under any heading this ledger has ever carried and
-    `csv_row` writes it under the heading it carries now, so the map between the
-    two lives once, in `contracts.item_health.RETIRED_CELLS`.
+
+#: The headings a day file an earlier run wrote still carries that the current
+#: row no longer names. `from_csv_row` reads each one into the column that
+#: replaced it, so a file carrying them is still a file this build can re-file.
+ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS)
+
+
+def _header_and_keys(
+    path: Path, key: tuple[str, ...]
+) -> tuple[tuple[str, ...], set[tuple[str, ...]]]:
+    """The file's own header and every record it already holds, in one pass.
+
+    One `csv.reader` rather than a `DictReader`, and one open rather than two.
+    `DictReader` builds a dict of every column for each row, which is 113 keys on
+    an item-health shard to read three cells; the positions are taken off the
+    header once and the cells are read by index after that.
+
+    A file with no header, or one that does not name every cell of `key`, holds
+    no record this key can match - which is what a day with no history has.
     """
-    return ItemHealthRow.from_csv_row(raw).csv_row()
+    if not path.exists():
+        return (), set()
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.reader(handle)
+        header = tuple(next(reader, []))
+        if any(name not in header for name in key):
+            return header, set()
+        at = [header.index(name) for name in key]
+        widest = max(at)
+        return header, {
+            tuple(cells[index] for index in at) for cells in reader if len(cells) > widest
+        }
 
 
 def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
@@ -768,27 +991,30 @@ def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]
     two writers appending the same one. The filter runs before the write, on the
     committed file each writer can see.
 
-    **The day file is re-filed under the current header first.** This is the one
-    contract here that has retired a heading, so it is the one whose day file can
-    arrive carrying a generation this writer does not name. `migrate_header` says
-    what that covers and what it does not; it costs one read of a file this
-    caller is about to read anyway, and returns without writing when the header
-    is already the contract's.
+    **The day file is read once.** That one pass answers both questions this
+    needs - which header the file carries, and which items it already records -
+    and the header answer is what says whether the rare second branch is needed
+    at all. `migrate_header` re-files the file when it was written under a
+    different generation of this row; it is the one contract here that has
+    retired a heading, so it is the one whose day file can arrive carrying a
+    generation this writer does not name.
 
     Returns how many landed, so a caller can log the count.
     """
     path = item_health_path(state_dir, date)
-    migrate_header(path, ItemHealthRow.csv_columns(), _as_item_health_row)
-    already = recorded_item_health(path)
-    payloads = []
+    columns = ItemHealthRow.csv_columns()
+    header, already = _header_and_keys(path, ITEM_HEALTH_KEY)
+    if header and header != columns:
+        migrate_header(path, columns, _as_item_health_row, carried=ITEM_HEALTH_CARRIED)
+        _, already = _header_and_keys(path, ITEM_HEALTH_KEY)
+    landing = []
     for row in rows:
-        payload = row.csv_row()
-        key = tuple(payload[name] for name in ITEM_HEALTH_KEY)
+        key = _key_of(row, ITEM_HEALTH_KEY)
         if key in already:
             continue
         already.add(key)
-        payloads.append(payload)
-    return _append(path, ItemHealthRow.csv_columns(), payloads)
+        landing.append(row)
+    return _append(path, columns, landing)
 
 
 def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
@@ -797,7 +1023,7 @@ def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
     A missing file is a day with no history, which is what the first run of a
     day has.
     """
-    return {tuple(row[name] for name in ITEM_HEALTH_KEY) for row in _read_rows(path)}
+    return _header_and_keys(path, ITEM_HEALTH_KEY)[1]
 
 
 def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> int:
@@ -814,9 +1040,8 @@ def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> in
     Returns how many rows the file gained, so a caller can log the count. A row
     that only repeated one already on record is not a gain.
     """
-    payloads = [row.csv_row() for row in rows]
     path = feed_retirements_path(state_dir)
-    landed = _append(path, FeedRetirementRow.csv_columns(), payloads)
+    landed = _append(path, FeedRetirementRow.csv_columns(), list(rows))
     return landed - drop_repeated_rows(path, FEED_RETIREMENT_KEY)
 
 
@@ -851,15 +1076,14 @@ def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow])
     """
     path = runtime_counters_path(state_dir)
     already = recorded_runtime_counters(path)
-    payloads = []
+    landing = []
     for row in rows:
-        payload = row.csv_row()
-        key = tuple(payload[name] for name in RUNTIME_COUNTERS_KEY)
+        key = _key_of(row, RUNTIME_COUNTERS_KEY)
         if key in already:
             continue
         already.add(key)
-        payloads.append(payload)
-    return _append(path, RuntimeCountersRow.csv_columns(), payloads)
+        landing.append(row)
+    return _append(path, RuntimeCountersRow.csv_columns(), landing)
 
 
 def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
@@ -879,15 +1103,14 @@ def append_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]
     """
     path = span_rollup_path(state_dir, date[:7])
     already = recorded_span_rollup(path)
-    payloads = []
+    landing = []
     for row in rows:
-        payload = row.csv_row()
-        key = tuple(payload[name] for name in SPAN_ROLLUP_KEY)
+        key = _key_of(row, SPAN_ROLLUP_KEY)
         if key in already:
             continue
         already.add(key)
-        payloads.append(payload)
-    return _append(path, SpanRollupRow.csv_columns(), payloads)
+        landing.append(row)
+    return _append(path, SpanRollupRow.csv_columns(), landing)
 
 
 def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
@@ -911,9 +1134,8 @@ def append_visual_prunes(state_dir: Path, date: str, rows: Iterable[VisualPruneR
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    payloads = [row.csv_row() for row in rows]
     path = visual_prunes_path(state_dir, date)
-    landed = _append(path, VisualPruneRow.csv_columns(), payloads)
+    landed = _append(path, VisualPruneRow.csv_columns(), list(rows))
     return landed - drop_repeated_rows(path, VISUAL_PRUNE_KEY)
 
 
@@ -938,13 +1160,12 @@ def append_counterfactual_scores(
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    payloads = [row.csv_row() for row in rows]
     path = counterfactual_scores_path(state_dir, date)
     columns = CounterfactualScoreRow.csv_columns()
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = _append(path, columns, payloads)
+    landed = _append(path, columns, list(rows))
     return landed - drop_repeated_rows(path, COUNTERFACTUAL_SCORE_KEY)
 
 
@@ -971,8 +1192,13 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     return rows
 
 
-def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[str, ...]]]:
+def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     """Every ledger here that says what makes two of its rows the same record.
+
+    Each one arrives with its key AND with the contract that can read one of its
+    rows, because the post-merge settlement needs both: it drops a repeated key
+    and it folds a file that came back from the merge carrying two headers, and
+    the second of those is a job only the contract's own reader can do.
 
     `date` says which files. A run appends only to the shard its own date routes
     to, so a repeat the union merge left behind can only be in a file that run
@@ -1019,31 +1245,43 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
     so its repeats are settled by the run that made them - the same position
     `state/feed-health/` is in.
     """
-    flat: list[tuple[Path, tuple[str, ...]]] = [
-        (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
-        (feed_retirements_path(state_dir), FEED_RETIREMENT_KEY),
+    flat: list[KeyedLedger] = [
+        KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
+        KeyedLedger(feed_retirements_path(state_dir), FEED_RETIREMENT_KEY, FeedRetirementRow),
     ]
     if date is not None:
         return [
             *flat,
-            (visual_prunes_path(state_dir, date), VISUAL_PRUNE_KEY),
-            (counterfactual_scores_path(state_dir, date), COUNTERFACTUAL_SCORE_KEY),
-            (health_path(state_dir, date), FEED_HEALTH_KEY),
-            (item_health_path(state_dir, date), ITEM_HEALTH_KEY),
+            KeyedLedger(visual_prunes_path(state_dir, date), VISUAL_PRUNE_KEY, VisualPruneRow),
+            KeyedLedger(
+                counterfactual_scores_path(state_dir, date),
+                COUNTERFACTUAL_SCORE_KEY,
+                CounterfactualScoreRow,
+            ),
+            KeyedLedger(health_path(state_dir, date), FEED_HEALTH_KEY, FeedHealthRow),
+            KeyedLedger(
+                item_health_path(state_dir, date),
+                ITEM_HEALTH_KEY,
+                ItemHealthRow,
+                ITEM_HEALTH_CARRIED,
+            ),
         ]
     return [
         *flat,
         *(
-            (path, VISUAL_PRUNE_KEY)
+            KeyedLedger(path, VISUAL_PRUNE_KEY, VisualPruneRow)
             for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)
         ),
         *(
-            (path, COUNTERFACTUAL_SCORE_KEY)
+            KeyedLedger(path, COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow)
             for path in day_partition.day_files(state_dir / COUNTERFACTUAL_SCORES_DIRNAME)
         ),
-        *((path, FEED_HEALTH_KEY) for path in day_partition.day_files(state_dir / HEALTH_DIRNAME)),
         *(
-            (path, ITEM_HEALTH_KEY)
+            KeyedLedger(path, FEED_HEALTH_KEY, FeedHealthRow)
+            for path in day_partition.day_files(state_dir / HEALTH_DIRNAME)
+        ),
+        *(
+            KeyedLedger(path, ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED)
             for path in day_partition.day_files(state_dir / ITEM_HEALTH_DIRNAME)
         ),
     ]
