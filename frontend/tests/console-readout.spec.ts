@@ -357,7 +357,7 @@ test.describe('the readout is the default', () => {
 		// So the promise splits in two and each half is checked here. A chart over
 		// inlined data still owes its resting column to the raw document. A chart
 		// that declares `data-readout-fetched` owes it the moment its payload
-		// lands, and owes an absence before that; the arm below proves the second
+		// lands, and owes an absence before that; the case below proves the second
 		// half by blocking the payload, so a chart that quietly kept a prerendered
 		// column would fail this rather than pass it.
 		for (const route of ROUTES) {
@@ -394,7 +394,7 @@ test.describe('the readout is the default', () => {
 		// move from the document to the network cost the reader the numbers.
 		//
 		// The service worker is unregistered and every cache dropped first. It
-		// serves the month shard from `idhazh-days` otherwise, so the blocked arm
+		// serves the month shard from `idhazh-days` otherwise, so the blocked case
 		// reports a page that works and proves nothing (agent-notes.md).
 		await page.goto('/console/');
 		await page.evaluate(async () => {

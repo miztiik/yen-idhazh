@@ -190,7 +190,7 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     one byte for one byte, passed against the committed receipt store and
     reported `0 of them opened`; against an empty store the same file was
     refused. `frontend/tests/malformed-day.spec.ts` was making exactly that
-    call, so the control arm that exists because a guard which only ever refuses
+    call, so the control case that exists because a guard which only ever refuses
     proves nothing was passing on a receipt about a different file - and the
     receipts it filed about its scratch trees landed in the tracked
     `state/day-validations.csv`, which `frontend/scripts/build-state.ts`

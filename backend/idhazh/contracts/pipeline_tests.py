@@ -5,14 +5,14 @@ production run takes about 200 minutes and has been cancelling shards, so a
 change to the pipeline is tested a day after it is written, by a run whose
 result is mixed in with eighty other articles. The test workflow runs two
 articles down the real path three times over, on one runner, and this file is
-where the two articles come from and what the three arms differ by.
+where the two articles come from and what the three cases differ by.
 
 **Addresses are candidates, never a fixed pair.** A fixed pair would be the
 worst kind of test: it passes for as long as those two pages stay up and stays
 silent about everything else the extractor meets. A dispatch draws its pair from
 this list, seeded from the run id it was allocated, so two dispatches read
 different articles and the seed says which - and the draw is made once, before
-any arm starts, so the three arms compare like with like.
+any case starts, so the three cases compare like with like.
 
 **A candidate names a feed and not a vertical.** The feed is already in
 `config/sources.json` with its vertical, its tier and its form, so repeating
@@ -28,7 +28,7 @@ publishes.
 from __future__ import annotations
 
 import hashlib
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, Any, ClassVar, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -81,23 +81,23 @@ class PipelineTestCandidate(Model):
     )
 
 
-class PipelineTestArm(Model):
+class PipelineTestCase(Model):
     """One pass over the two articles, and what it changes about the run.
 
-    An arm is a whole pass rather than a knob, because the numbers that matter -
-    wall clock, tokens a second, what the picture cost - are per pass. Three arms
+    A case is a whole pass rather than a knob, because the numbers that matter -
+    wall clock, tokens a second, what the picture cost - are per pass. Three cases
     over the same two articles is what makes the difference between two of them
-    readable; one arm over six articles is not.
+    readable; one case over six articles is not.
     """
 
-    id: Slug = Field(description="What the arm is called in the log and in the artifact.")
+    id: Slug = Field(description="What the case is called in the log and in the artifact.")
     n_parallel: int | None = Field(
         default=None,
         ge=1,
         le=8,
         description=(
-            "The model server's slot count for this arm. None leaves the committed "
-            "value, which is what the production run serves. An arm that moves it "
+            "The model server's slot count for this case. None leaves the committed "
+            "value, which is what the production run serves. A case that moves it "
             "needs the server restarted, because the slot count is fixed when the "
             "process starts."
         ),
@@ -106,13 +106,13 @@ class PipelineTestArm(Model):
         default=None,
         ge=512,
         description=(
-            "The window for this arm. None leaves the committed value. An arm that "
+            "The window for this case. None leaves the committed value. A case that "
             "raises the slot count raises this with it: llama-server divides the "
             "window it is given between its slots, so two slots on the committed "
             "window is a 32,768-token slot rather than the 65,536 the production "
             "gate admits articles against - and the worst article the truncation cap "
-            "admits needs 54,887. Leaving it alone would make the arm a test of a "
-            "smaller window wearing a concurrency arm's name."
+            "admits needs 54,887. Leaving it alone would make the case a test of a "
+            "smaller window wearing a concurrency case's name."
         ),
     )
     asks_for_a_visual_plan: bool = Field(
@@ -129,10 +129,25 @@ class PipelineTestArm(Model):
 
 
 class PipelineTestsConfig(Contract):
-    """`config/pipeline-tests.json` - the candidate addresses and the arms."""
+    """`config/pipeline-tests.json` - the candidate addresses and the cases."""
 
     __schema_stem__: ClassVar[str] = "pipeline-tests-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T12:00",
+            change="`arms` is now `cases`. A file spelling the old key still loads.",
+            why=(
+                "`arm` was benchmarking's word for the same work run again under "
+                "different settings. This project already has four plain words for a "
+                "unit of work - stage, shard, worker, run - and none of them means "
+                "that, so the word was kept and nothing explained it (`CLAUDE.md` "
+                "section 0b). `case` is ordinary English, it is how anybody describes "
+                "a test, and it carries the same meaning.\n\n"
+                "A person edits this file, so the old key reads for one release and is "
+                "then removed, which is the rule `RunPlan.VerticalPlan` records for a "
+                "config knob. The committed file moved in the same commit."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-15",
             change="A candidate carries the page's headline, and a blank one is refused.",
@@ -153,7 +168,7 @@ class PipelineTestsConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-14",
-            change="Initial shape: candidate addresses, the draw size and the arms.",
+            change="Initial shape: candidate addresses, the draw size and the cases.",
             why=(
                 "A production run takes about 200 minutes, so a pipeline change was "
                 "tested a day after it was written. The test workflow closes that loop "
@@ -169,8 +184,8 @@ class PipelineTestsConfig(Contract):
         le=8,
         description=(
             "How many addresses one dispatch draws. Two is what fits the hour: the "
-            "arms run in sequence over the same articles, so the cost is this number "
-            "times the number of arms."
+            "cases run in sequence over the same articles, so the cost is this number "
+            "times the number of cases."
         ),
     )
     budget_minutes: int = Field(
@@ -187,17 +202,17 @@ class PipelineTestsConfig(Contract):
         min_length=MINIMUM_CANDIDATES,
         description="The addresses a dispatch draws from. One per feed, all distinct.",
     )
-    arms: list[PipelineTestArm] = Field(
+    cases: list[PipelineTestCase] = Field(
         min_length=2,
         description=(
             "The passes, in order. The first is the baseline the rest are read "
-            "against, so there are at least two: one arm measures nothing it can be "
+            "against, so there are at least two: one case measures nothing it can be "
             "compared with."
         ),
     )
 
     def to_json(self) -> str:
-        """One candidate a line, one arm a line - see `records_json`.
+        """One candidate a line, one case a line - see `records_json`.
 
         The same reason `config/sources.json` has: a person curates it, and a
         record's five short fields are read together or not at all. At a field a
@@ -205,9 +220,28 @@ class PipelineTestsConfig(Contract):
         """
         return records_json(self.model_dump(mode="json"))
 
+    @model_validator(mode="before")
+    @classmethod
+    def _the_old_key_still_reads(cls, data: Any) -> Any:
+        """`arms` was renamed to `cases` on 2026-09-15. A file spelling it still loads.
+
+        Nothing but the name moved, so the old value is carried across whole. The
+        model forbids unknown keys, so without this a config file an earlier build
+        read would be refused outright (section 11).
+
+        This one goes a release later. A config file is a file somebody can edit,
+        so the alias buys the edit time rather than standing for ever - which is
+        the rule `RunPlan.VerticalPlan` records for the same kind of rename.
+        """
+        if isinstance(data, dict) and "arms" in data and "cases" not in data:
+            migrated = dict(data)
+            migrated["cases"] = migrated.pop("arms")
+            return migrated
+        return data
+
     @model_validator(mode="after")
     def _the_list_can_answer_the_draw(self) -> Self:
-        """Distinct addresses, distinct feeds, distinct arm names, enough to draw from.
+        """Distinct addresses, distinct feeds, distinct case names, enough to draw from.
 
         Two candidates on one feed would let a draw take two articles off the same
         site and call that a spread, and the point of the list is that it is not.
@@ -218,9 +252,9 @@ class PipelineTestsConfig(Contract):
         feeds = [candidate.source_id for candidate in self.candidates]
         if len(set(feeds)) != len(feeds):
             raise ValueError("two candidates name one feed, so a draw could take both")
-        names = [arm.id for arm in self.arms]
+        names = [case.id for case in self.cases]
         if len(set(names)) != len(names):
-            raise ValueError("two arms share a name, so their results cannot be told apart")
+            raise ValueError("two cases share a name, so their results cannot be told apart")
         if self.articles_a_dispatch > len(self.candidates):
             raise ValueError("the draw asks for more addresses than the list holds")
         return self

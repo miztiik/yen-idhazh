@@ -53,7 +53,7 @@ export const VIEW_VERSION = '2026-09-13T22:30';
 // Nine names joined the original thirteen on 2026-08-31, each with a named
 // renderer and each priced. Measured over 11 committed days and 3,733 items,
 // `gzip -9` on the compact projection, each name added to the thirteen-field
-// arm on its own:
+// case on its own:
 //
 //   carried_by      +0.94    published_at        +8.29
 //   watchlist_hit   +1.12    time_source         +0.99
@@ -79,7 +79,7 @@ export const VIEW_VERSION = '2026-09-13T22:30';
 // that says how many other sources carried the story, or that only one of ours
 // did. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 over 11 committed
 // days and 3,978 items, `gzip -9` on the compact projection, added to the
-// twenty-two-field arm: 467.49 bytes an item before and 468.24 after, which is
+// twenty-two-field case: 467.49 bytes an item before and 468.24 after, which is
 // 0.75 an item.
 //
 // `introduced_by_run` is the one name here with no renderer. It paid for the

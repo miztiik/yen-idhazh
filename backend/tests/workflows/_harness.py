@@ -156,7 +156,7 @@ APPROVED_ACTION_MAJORS: Final = {
     "actions/upload-pages-artifact": "v5",
 }
 
-# One llama.cpp build for the pipeline, the validation arm and the measurement
+# One llama.cpp build for the pipeline, the validation case and the measurement
 # harness. The sha256 was read from the release API's own `digest` field and
 # confirmed by downloading the 16,377,727-byte archive and hashing it, on
 # 2026-08-25.
@@ -206,7 +206,7 @@ WEIGHTS_CHECKS: Final = {
         "Start the model",
         '["summarize"]["sha256"]',
     ),
-    ("idhazh-pipeline-tests.yaml", "arms"): (
+    ("idhazh-pipeline-tests.yaml", "cases"): (
         "Fetch runtime and weights",
         "Verify the weights",
         "Start the model",
@@ -308,8 +308,8 @@ MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "
 
 
 #: The bench is one target and two jobs: raw prefill and decode first, then a
-#: real server doing real work. The raw arm saves the weights cache entry and
-#: the server arm restores it, so a key that differs by one character is a
+#: real server doing real work. The raw case saves the weights cache entry and
+#: the server case restores it, so a key that differs by one character is a
 #: second multi-gigabyte download inside one dispatch (Guardrail #2).
 BENCH_TARGET: Final = "bench"
 
@@ -344,7 +344,7 @@ BENCH_CONFIG_STEP: Final = "Build the candidate config"
 BENCH_EMIT_STEP: Final = "Emit the dossier body"
 
 
-#: Row #13a's arm. Its own target because retaking three token counts is minutes
+#: Row #13a's case. Its own target because retaking three token counts is minutes
 #: and the bench is hours, and nobody should have to spend the second to get the
 #: first. It shares the bench's weights cache key, so the bytes are paid for once.
 BUDGETS_JOB: Final = "budgets"
@@ -378,15 +378,15 @@ LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 # A job may declare more than one, in the order the steps run. One per job was
 # the rule until the pipeline test workflow, and it was an accident of every
 # job so far serving one model for its whole life: a slot count is fixed when
-# the process starts, so an arm that moves it has to restart the server inside
-# the job it shares with the arms it is compared against. What the closed world
+# the process starts, so a case that moves it has to restart the server inside
+# the job it shares with the cases it is compared against. What the closed world
 # still buys is unchanged - every starter is discovered by reading and the set
 # is compared by equality, so a server stood up any other way still fails here.
 SERVER_STARTERS: Final[dict[tuple[str, str], tuple[tuple[str, str | None], ...]]] = {
     ("digest.yml", "work"): (("Start the model", "config"),),
-    ("idhazh-pipeline-tests.yaml", "arms"): (
-        ("Start the model", "backend/var/arms/baseline/config"),
-        ("Restart the model with two slots", "backend/var/arms/parallel-2/config"),
+    ("idhazh-pipeline-tests.yaml", "cases"): (
+        ("Start the model", "backend/var/cases/baseline/config"),
+        ("Restart the model with two slots", "backend/var/cases/parallel-2/config"),
     ),
     ("measure.yml", "runtime"): (("Measure runtime candidate", None),),
     ("measure.yml", "budgets"): (("Start the tokenizer", "backend/var/candidate-config"),),
@@ -1925,9 +1925,9 @@ def _server_starters(
 
     A step that stands a server up any other way is a second answer to what the
     run executes, so the set this returns is compared by equality. A job's
-    starters come back in the order its steps run, because an arm that restarts
-    a server is comparing itself against the arms before it and the order is
-    what says which start each arm ran under.
+    starters come back in the order its steps run, because a case that restarts
+    a server is comparing itself against the cases before it and the order is
+    what says which start each case ran under.
     """
     found: dict[tuple[str, str], tuple[str, ...]] = {}
     for filename, workflow in workflows.items():

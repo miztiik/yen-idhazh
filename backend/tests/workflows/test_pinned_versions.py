@@ -30,7 +30,7 @@ pytestmark = pytest.mark.workflow
 
 
 def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
-    """Production, the validation arm and the harness run one binary.
+    """Production, the validation case and the harness run one binary.
 
     A throughput number is only about the pipeline if the pipeline runs the
     build the number was measured on (Guardrail #10).

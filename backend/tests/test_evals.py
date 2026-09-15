@@ -649,7 +649,7 @@ _PAGE_ITEM = PlannedItem(
 
 
 def _really_extracted(cap_tokens: int) -> Article:
-    """The captured page through the real extractor, at the cap this arm asks for.
+    """The captured page through the real extractor, at the cap this case asks for.
 
     Never a hand-written payload. `truncated` typed into a fixture proves only
     that the test agrees with itself, and the defect this column carried was
@@ -683,7 +683,7 @@ def _row_for_page(article: Article, *, hhem: float, hhem_full: float) -> EvalRow
 def test_a_page_the_extractor_cut_is_flagged_whatever_the_two_scores_did() -> None:
     """A real cut, and no gap at all between the two faithfulness scores.
 
-    The rule this replaces needed a gap above 0.100 and this arm hands it 0.000,
+    The rule this replaces needed a gap above 0.100 and this case hands it 0.000,
     so the assertion cannot pass on the old rule.
     """
     article = _really_extracted(cap_tokens=256)
@@ -1042,7 +1042,7 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
         path.parent.mkdir(parents=True, exist_ok=True)
         _write_shard(path, month_rows)
 
-    # Both arms are read back off their own files, so neither can agree with the
+    # Both cases are read back off their own files, so neither can agree with the
     # code that wrote it by being computed from the row list twice.
     at_month = {
         writer.observation_digest(record)
@@ -1252,7 +1252,7 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
 
     More than one copy is a real state, not a contrivance: `merge=union`
     concatenates two runs that both appended, and `idhazh dedupe-ledgers`
-    settles it afterwards. It is also the arm that separates "the read grows
+    settles it afterwards. It is also the case that separates "the read grows
     with the rows" from "the read grows with the measurements".
     """
     shard = writer.ledger_path(state, rows[0].date)

@@ -83,7 +83,7 @@ dev = [
     "pytest>=8.3",
     # Runs the suite across the cores the machine already has, by default. It
     # was opt-in until 2026-08-30, on the argument that a parallel-only failure
-    # would hide from the one gate everybody trusts. Running BOTH arms parallel
+    # would hide from the one gate everybody trusts. Running BOTH cases parallel
     # settles that better than running one of each: a test that only fails
     # under xdist now fails everywhere rather than only on a developer box.
     #
@@ -95,7 +95,7 @@ dev = [
     # already there.
     #
     # Measured effect, same box and date (12 logical CPUs, 31.8 GiB RAM, every
-    # arm wrapped in backend/utilities/gate_lock.py so no sibling gate could
+    # case wrapped in backend/utilities/gate_lock.py so no sibling gate could
     # land inside it): 548.03, 484.68 and 505.78 s serially, against 159.04,
     # 149.60 and 147.67 s under `-n auto` (n=3 each; means 512.83 s and
     # 152.10 s; spreads 63.35 s and 11.37 s). That is 3.37x - about six minutes

@@ -15,18 +15,18 @@ import { readDayShards } from '../src/lib/server/payload';
  * causes and different fixes, so a single figure would hide the only part an
  * operator can act on.
  *
- * Two arms, and neither is sufficient alone.
+ * Two cases, and neither is sufficient alone.
  *
- * The Node arm states the ranking over rows built here, where a tie, a share
+ * The Node case states the ranking over rows built here, where a tie, a share
  * floor and a cap can each be made to bite on purpose. The committed canary
  * cannot produce those states: it scores eight summaries from ONE source, so a
  * ranking over it is a list of one and every ordering question is vacuous.
  *
- * The browser arm reads the built canary's own two ledgers, joins them the way
+ * The browser case reads the built canary's own two ledgers, joins them the way
  * the page joins them, and holds the drawn rows to what that join says - the
  * counts, the denominator, the three signals, and the sentence covering what
  * the cap left out. What it proves there is that the page is deriving rather
- * than printing, which is the half the Node arm cannot reach.
+ * than printing, which is the half the Node case cannot reach.
  */
 
 const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');

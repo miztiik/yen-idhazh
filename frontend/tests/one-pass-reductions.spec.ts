@@ -21,7 +21,7 @@
  * the only way to see that from outside is to count the reads and double the
  * input. The audit measured the run-to-health join precisely: 4 runs over 16
  * health rows cost 64 checks, 8 over 32 cost 256, and 16 over 64 cost 1,024 -
- * doubling both dimensions quadrupled the work. Those three arms are below.
+ * doubling both dimensions quadrupled the work. Those three cases are below.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
  * more every published day (Guardrail #12), and every shape this row is about is
@@ -139,8 +139,8 @@ test.describe('the reductions return what they returned before', () => {
 });
 
 test.describe('the run-to-health join visits each row once', () => {
-	/** The three arms the audit measured, doubling both dimensions. */
-	const ARMS: Sizes[] = [
+	/** The three cases the audit measured, doubling both dimensions. */
+	const CASES: Sizes[] = [
 		{ runs: 4, shards: 2, items: 16 },
 		{ runs: 8, shards: 2, items: 32 },
 		{ runs: 16, shards: 2, items: 64 }
@@ -160,7 +160,7 @@ test.describe('the run-to-health join visits each row once', () => {
 	}
 
 	test('a run does not scan the whole health ledger', () => {
-		for (const sizes of ARMS) {
+		for (const sizes of CASES) {
 			const visits = visitsFor(sizes);
 			expect(
 				visits,
@@ -171,7 +171,7 @@ test.describe('the run-to-health join visits each row once', () => {
 	});
 
 	test('doubling both dimensions doubles the work rather than quadrupling it', () => {
-		const counted = ARMS.map(visitsFor);
+		const counted = CASES.map(visitsFor);
 		expect(counted[1] / counted[0]).toBe(2);
 		expect(counted[2] / counted[1]).toBe(2);
 	});

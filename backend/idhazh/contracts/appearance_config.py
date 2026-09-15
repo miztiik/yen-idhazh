@@ -499,6 +499,24 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T10:00",
+            change=(
+                "console.chart_arm_rule_days, console.chart_arm_minutes_target and "
+                "console.chart_arm_coverage_pct are now console.chart_rule_days, "
+                "console.chart_minutes_target and console.chart_coverage_pct. A "
+                "config spelling the old key still reads."
+            ),
+            why=(
+                "`arm` came from benchmarking and means the same work run again under "
+                "different settings. The chart section is a feature under a kill rule "
+                "rather than a second run of anything, so the word explained nothing "
+                "(`CLAUDE.md` section 0b). This file carries the three keys, so it "
+                "moved with the prose that names them. The reader half is "
+                "`ConsoleConfig._the_old_chart_keys_still_read`, which keeps the old "
+                "spelling for one release."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T23:00",
             change=(
                 "digest.pill_move_min added, defaulting to 2 and bounded 1 to 3, and "
@@ -1023,7 +1041,7 @@ class AppearanceConfig(Contract):
                 "The backend retrieval gate reads this knob, and 0.69 stopped being a "
                 "measurement of the system when the archive grew: reachable recall@10 "
                 "over the 60 labelled queries is 0.690 +/- 0.041 on 2026-08-31 against "
-                "0.767 +/- 0.036 on 2026-08-26. Four arms hold the corpus, the labels "
+                "0.767 +/- 0.036 on 2026-08-26. Four cases hold the corpus, the labels "
                 "and the vectors still one at a time and find no ranking regression - "
                 "the same items read with today's vectors score identically, and the "
                 "whole drop is new items competing for the same ten slots against a "
@@ -1056,13 +1074,13 @@ class AppearanceConfig(Contract):
         ChangelogEntry(
             version="2026-08-30T21:15",
             change=(
-                "console.chart_arm_rule_days, console.chart_arm_minutes_target and "
-                "console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 "
+                "console.chart_rule_days, console.chart_minutes_target and "
+                "console.chart_coverage_pct added, defaulting to 14 days, 6.0 "
                 "minutes and 5 percent. The shape is `ConsoleConfig`, which this "
                 "document and `AppConfig` share, so both schemas moved together."
             ),
             why=(
-                "The chart arm section now leads with the two figures its retirement "
+                "The chart drawing section now leads with the two figures its retirement "
                 "rule names, each as a bar with the limit drawn on it. A limit a "
                 "component hardcodes is one an operator cannot move (Guardrail #6), and "
                 "these three were constants in a TypeScript module. Additive with "
