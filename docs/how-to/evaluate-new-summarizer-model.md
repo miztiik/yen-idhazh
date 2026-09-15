@@ -382,6 +382,21 @@ in a way worth repeating here, because they are the ones a fast model fails:
 **Do not raise a timeout or lower a threshold to make a candidate pass.** Find
 the cause or reject the candidate.
 
+**You do not have to download an artifact to read any of this.** Each qualify
+shard prints what it measured to its own job page, and `decide` prints the
+eleven gates with failures first. Both pages are rendered from the payload the
+stage already wrote, so nothing there is a second measurement that could
+disagree with the artifact - and neither page spells a model name, so it cannot
+describe a model the run did not serve.
+
+What the shard page carries that the gates do not: **which items drifted**. The
+determinism gate reports a count, and a count sends the next reader to the
+artifact to diff digests by hand. The shard page names them.
+
+Both steps run under `if: always()`, on purpose. A run that died half way is
+exactly the one whose counts somebody wants, and `decide` exits non-zero on an
+ESCALATE - which is precisely the verdict the reader opened the page for.
+
 ### 1.6 Decide
 
 **Register the rule before you look at the outputs.** For every deterministic
