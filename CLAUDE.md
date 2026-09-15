@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -221,7 +221,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
 - [ ] For reader-facing and operator-facing surfaces: the sufficiency checks in [`docs/concepts/design-system.md`](docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not. A surface can fail by being too little.
-- [ ] Canonical docs updated in `docs/` (right tier).
+- [ ] Canonical docs updated in `docs/` (right tier). A page you added a section to paid the split test first, or the PR says in one line why it stays whole ([`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md)).
 - [ ] Schemas version-stamped + changelogged (and migrated if breaking) when any persisted contract changed (section 11).
 - [ ] Module `AGENTS.md` updated if structure or invariants changed.
 - [ ] No `[DEBUG]` markers left.
