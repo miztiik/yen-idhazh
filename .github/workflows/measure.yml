@@ -568,6 +568,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
+          import hashlib
           import json
           import os
           import re
