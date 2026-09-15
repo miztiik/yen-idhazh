@@ -76,7 +76,7 @@ def test_a_payload_carrying_the_retired_key_parses_and_comes_back_without_it(
 def test_the_same_payload_with_the_key_misspelt_is_still_refused(
     name: str, key: str, wrong: str
 ) -> None:
-    """The arm that matters, and the reason the popper names its key.
+    """The case that matters, and the reason the popper names its key.
 
     A migration written as "drop whatever the model does not declare" passes the
     test above perfectly and turns `extra="forbid"` into `extra="ignore"` for the
@@ -98,9 +98,9 @@ def test_no_other_contract_learned_to_accept_the_retired_key() -> None:
     """The popper is opted into by two shapes and inherited by none.
 
     Written on `Model` or `Contract` instead, a popper reading a shared key list
-    passes both arms above and silently opens every contract in the repository
+    passes both cases above and silently opens every contract in the repository
     to a key only two of them ever held. Nothing else can fail that, which is why
-    this arm is not optional.
+    this case is not optional.
 
     Driven from the committed contract fixtures, which are a fixed set of files a
     person wrote (`CLAUDE.md` section 13). `EvalRow` is skipped because it still

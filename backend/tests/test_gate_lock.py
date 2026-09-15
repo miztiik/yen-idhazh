@@ -37,7 +37,7 @@ GATE_LOCK: Final = REPO_ROOT / "backend" / "utilities" / "gate_lock.py"
 WORKERS: Final = 5
 HOLD_SECONDS: Final = 0.25
 
-# A crowd, for the arm that drives the reclaim path. Every caller in it fails the
+# A crowd, for the case that drives the reclaim path. Every caller in it fails the
 # create, judges the planted record stale and goes for the delete at the same
 # moment, which is the interleaving that produced the defect. Ten callers on a
 # 4 vCPU runner is a real queue; the hold is short because the point is the
@@ -45,7 +45,7 @@ HOLD_SECONDS: Final = 0.25
 CROWD: Final = 10
 CROWD_HOLD_SECONDS: Final = 0.1
 
-# The unlocked arm has to overlap to be a control, so its hold is long enough to
+# The unlocked case has to overlap to be a control, so its hold is long enough to
 # cover five process starts on a loaded box.
 UNLOCKED_HOLD_SECONDS: Final = 1.2
 
@@ -177,8 +177,8 @@ def _intervals(record: Path) -> list[tuple[float, float]]:
 def _marks(directory: Path) -> list[tuple[float, float]]:
     """Every worker's own pair, read from its own file.
 
-    One shared file would be enough for the arm above, where a lost line and an
-    overlap are the same finding. The arm below has to say WHICH intervals
+    One shared file would be enough for the case above, where a lost line and an
+    overlap are the same finding. The case below has to say WHICH intervals
     overlapped, and two callers appending to one file at the same instant on
     Windows can lose one of them - so each worker gets a file nobody else writes.
     """
@@ -192,7 +192,7 @@ def _a_lock_nobody_is_holding(age: float = 10.0 * gate_lock.STALE_AFTER_SECONDS)
     """A record past the reclaim line, so every caller that meets it must reclaim.
 
     The pid is this test's own and is alive, so it is the age that decides and
-    the arm is the same on both platforms.
+    the case is the same on both platforms.
     """
     return gate_lock.Holder(
         pid=os.getpid(),
@@ -229,11 +229,11 @@ def _exited_pid() -> int:
     assert child.returncode == 0
     return child.pid
 def test_ci_runs_the_gate_unlocked_and_the_same_workers_then_overlap(tmp_path: Path) -> None:
-    """The control arm, and decision 4 in one run.
+    """The control case, and decision 4 in one run.
 
     Identical commands and one identical lock path, with `CI` set the way a
     GitHub runner sets it. If the workers still overlap then the carve-out is
-    real, and the arm above is measuring the lock rather than a machine too slow
+    real, and the case above is measuring the lock rather than a machine too slow
     to run two things at once.
     """
     worker = _write(tmp_path / "worker.py", WORKER_SOURCE)

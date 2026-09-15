@@ -5,9 +5,9 @@
  * this file's first job is to keep it that way: a valve that changes the
  * default output is not a valve, it is a change.
  *
- * The other arms drive it OPEN. A bound tested in one direction only is not a
+ * The other cases drive it OPEN. A bound tested in one direction only is not a
  * bound - a `connectSources` that ignored its argument and always answered
- * `['self']` would pass the shut arm and ship a site that fetches nothing.
+ * `['self']` would pass the shut case and ship a site that fetches nothing.
  *
  * This is a `logic` spec and not a browser one on purpose. The canary day the
  * browser suite builds is 8 stories against a seed of 15, so every drawing is
@@ -76,7 +76,7 @@ test.describe('the asset base URL ships shut', () => {
 	test('an incomplete manifest turns the second origin off rather than half on', () => {
 		// A URL with no digests would be a permission rather than a fallback, so
 		// `encoderSource()` answers the empty block and `encoderOrigins()` answers
-		// nothing. This is the arm that keeps a config edit from widening
+		// nothing. This is the case that keeps a config edit from widening
 		// `connect-src` without also committing what the bytes must hash to.
 		const source = encoderSource();
 		expect(Object.keys(source.digests).length).toBeGreaterThan(0);

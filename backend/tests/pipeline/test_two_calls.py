@@ -339,7 +339,7 @@ class TestAReplyTheBudgetCutKeepsItsSummary:
     budget, hit the cap, and lost their summaries - the half a reader came for -
     while `calls.recovered_completion` sat beside them tested and uncalled.
 
-    Both arms run the real work stage over a captured page and a recorded reply
+    Both cases run the real work stage over a captured page and a recorded reply
     played back by a loopback server, so what is asserted is what a shard writes
     to disk (Guardrail #7).
     """

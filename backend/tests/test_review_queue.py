@@ -382,7 +382,7 @@ def test_a_tree_over_budget_caps_every_population_and_records_both_numbers(
 
 
 def test_a_day_inside_its_budget_keeps_everything(tmp_path: Path) -> None:
-    """The other arm, so the cap above is the budget and not the arithmetic."""
+    """The other case, so the cap above is the budget and not the arithmetic."""
     queue = _build(tmp_path)
     assert all(entry.kept == entry.seen for entry in queue.census)
     assert queue.bytes_written > 0

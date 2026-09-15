@@ -67,10 +67,10 @@
   },
   "console": {
     "band_outlier_rows": 6,
-    "chart_arm_coverage_pct": 5.0,
-    "chart_arm_minutes_target": 6.0,
-    "chart_arm_rule_days": 14,
+    "chart_coverage_pct": 5.0,
     "chart_height": 160,
+    "chart_minutes_target": 6.0,
+    "chart_rule_days": 14,
     "chart_width": 520,
     "default_window_days": 21,
     "doubt_rows": 6,

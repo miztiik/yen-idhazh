@@ -1,7 +1,6 @@
 # GitHub Actions Workflows
 
 **Last Updated**: 2026-09-15
-
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -37,7 +36,7 @@ the commit it made afterwards.
 
 `measure-migrated-tree.yml` was on this list and it is gone. It ran once, on
 2026-09-08, to answer what the site would weigh once the prerendered dated
-documents and the committed encoder weights left it. **Its second arm deleted
+documents and the committed encoder weights left it. **Its second case deleted
 the weights and did not delete the dated directories**, so the number it
 reported describes a tree nobody built; the real figure was taken off the
 ordinary `site` job instead, because the site as it ships is the migrated tree
@@ -645,43 +644,43 @@ prints the seed beside the pair. A fixed pair would pass for as long as those
 two pages stayed up and say nothing about anything else the extractor meets; a
 draw with no seed printed could not be replayed.
 
-**The draw happens once, before any arm starts.** One step draws, one step turns
-the pair into a run plan, and all three arms run that one plan - so the three
+**The draw happens once, before any case starts.** One step draws, one step turns
+the pair into a run plan, and all three cases run that one plan - so the three
 record the same two item ids and the numbers between them can be subtracted. The
-final step compares what each arm recorded against what the plan asked for and
+final step compares what each case recorded against what the plan asked for and
 fails the job when they disagree, because an address that 404s would otherwise
-leave one arm with one item and three rows of plausible numbers.
+leave one case with one item and three rows of plausible numbers.
 
-**Three arms, in sequence, on one runner, and never a matrix.** Prefill spans
+**Three cases, in sequence, on one runner, and never a matrix.** Prefill spans
 4.2x between GitHub-hosted runners ([measurements.md](measurements.md)), which
-is larger than anything an arm here is looking for, so three jobs would report
+is larger than anything a case here is looking for, so three jobs would report
 the three hosts they drew. Sequential on one box cancels the host.
 
-| Arm | What it changes | What the difference prices |
+| Case | What it changes | What the difference prices |
 | --- | --- | --- |
 | `baseline` | nothing - the production path exactly | the number the other two are read against |
 | `no-visual-decision` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
 | `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
 
-Each arm is a step rather than an iteration of a loop, so the run page shows
-each arm's own wall clock. Every arm setting is in config (Guardrail #6): the
+Each case is a step rather than an iteration of a loop, so the run page shows
+each case's own wall clock. Every case setting is in config (Guardrail #6): the
 addresses, the draw size, the job bound, the slot counts and the windows. One
-step writes a config root per arm from the committed `config/`, differing only
-in what that arm changes, and the committed config is never edited - an arm that
-edited it would leave the next arm reading whatever the last one wrote.
+step writes a config root per case from the committed `config/`, differing only
+in what that case changes, and the committed config is never edited - a case that
+edited it would leave the next case reading whatever the last one wrote.
 
-**The parallel arm doubles `n_ctx` because llama-server divides the window it is
+**The parallel case doubles `n_ctx` because llama-server divides the window it is
 given between its slots.** Two slots on the committed 65,536 is a 32,768-token
 slot, and the worst article the truncation cap admits needs 54,887 - so leaving
-the window alone would make that arm a test of a smaller window wearing a
-concurrency arm's name. The slot count is fixed when the process starts, which
-is why that arm costs a restart and a second model load.
+the window alone would make that case a test of a smaller window wearing a
+concurrency case's name. The slot count is fixed when the process starts, which
+is why that case costs a restart and a second model load.
 
 Two things one dispatch cannot settle. **Whether two articles are representative
 of the eighty a production day carries - they are not**, and the draw is what
 stops them being representative of nothing instead. And the faithfulness scorer,
-which every arm skips: it is a second model download, it is identical across the
-arms so it cancels from every comparison here, and it is not what the two-call
+which every case skips: it is a second model download, it is identical across the
+cases so it cancels from every comparison here, and it is not what the two-call
 path is being measured for.
 
 ## Display names and files
@@ -809,10 +808,10 @@ watched the bytes arrive - so it is the case that most needs the check.
 
 The two config digests are the same field, `ModelRef.sha256` in the file
 `config/idhazh.json`'s `models_file` points at. The other two are the exception,
-and deliberately: an operator can point the bench and the validation arm at a
+and deliberately: an operator can point the bench and the validation case at a
 model config does not name, so each resolves the digest once - from the dispatch
 input, or from config when there is none - and republishes it as a job output
-the whole run reads. The bench's raw arm checks the same digest a step earlier,
+the whole run reads. The bench's raw case checks the same digest a step earlier,
 inside `measure_llm.py`, against the Hub's own record for that commit.
 
 The workflow contract test that holds this open is closed-world. It finds the
@@ -866,7 +865,7 @@ Each one reads config in a `models` step and publishes job outputs. `digest.yml`
 does it inside `plan`, which `work` already needs; `measure.yml` has
 a small `models` job of its own that every target depends on, and that job also
 decides the bench candidate - the dispatch input where one was given, the
-configured model otherwise - so both bench arms read one answer rather than
+configured model otherwise - so both bench cases read one answer rather than
 repeating the fallback; `validate.yml`
 resolves the candidate once inside `plan`. **The `needs` context resolves before
 a job's first step while `steps` does not**, which is the whole reason the refs
@@ -929,7 +928,7 @@ after `setup-python`, and the copy is gone. Moving a step within a job is the
 same work in a different position, so no wall-clock claim is made for it
 (Guardrail #10).
 
-While the copy existed the two halves drifted, and the arm that drifted is the
+While the copy existed the two halves drifted, and the case that drifted is the
 one nobody diffed. `validate.yml` never needed the utility - its `Install`
 already ran before its server started - so for two changes it qualified
 candidates on a server the daily run does not run.

@@ -24,7 +24,7 @@ import { assistConfig } from '../src/lib/server/config';
  * reading routes call this loader now, but only for a day longer than
  * `ui.shell_seed_items` - and the canary day is eight stories against a seed of
  * fifteen, so a spec that navigated a route and aborted `digest.json` would
- * abort nothing, pass, and mean nothing. That is what a degraded arm reporting
+ * abort nothing, pass, and mean nothing. That is what a degraded case reporting
  * zero interceptions always is. So this file drives the real module itself, and
  * prints what it intercepted.
  *
@@ -63,7 +63,7 @@ const REVISION = '2026-08-30T06:00';
  *
  * Four names, because the loader keeps a story only when it carries everything
  * the page reads off it without a guard - a story short of one of them is
- * dropped and counted, which `malformed-day.spec.ts` is the arm for.
+ * dropped and counted, which `malformed-day.spec.ts` is the case for.
  */
 function dayBody(revision: string, ids: string[]): string {
 	return JSON.stringify({
@@ -91,7 +91,7 @@ const primed = new WeakSet<Page>();
  * **`/archive/` rather than `/`, and the page has to be one that fetches no day
  * and stays put.** `/` carried its whole day inline until 2026-09-10 and fetches
  * the rest now, so opening it puts one interception and one held day into every
- * arm here - which reads as the loader asking for a date it should have refused,
+ * case here - which reads as the loader asking for a date it should have refused,
  * and as a session holding a day it never visited. `/evals/` is not the answer
  * either: it is a `meta refresh` to the console, so the context is destroyed
  * under the next `page.evaluate`. `/archive/` is prerendered, asks for no
@@ -155,12 +155,12 @@ test.describe('the day a browser could not read', () => {
 		await armed(page);
 		const first = await watch(page, 30_000);
 
-		// The count is the proof the arm ran. Printed, because a degraded arm
+		// The count is the proof the case ran. Printed, because a degraded case
 		// that reports nothing is indistinguishable from one that did nothing.
 		console.log(`[payload-state] blocked-request interceptions: ${blocked.count}`);
 		expect(
 			blocked.count,
-			'nothing was intercepted, so this arm proves nothing about a blocked payload'
+			'nothing was intercepted, so this case proves nothing about a blocked payload'
 		).toBeGreaterThan(0);
 		expect(blocked.urls, 'the loader asked for an address that skips `base`').toEqual([WANTED]);
 
@@ -207,7 +207,7 @@ test.describe('the day a browser could not read', () => {
 		await page.route(PATTERN, async (route) => {
 			slow.take(route.request().url());
 			// Longer than the threshold below by enough that a busy machine cannot
-			// turn this arm into a coin toss.
+			// turn this case into a coin toss.
 			await new Promise((done) => setTimeout(done, 900));
 			await route.fulfill({ contentType: 'application/json', body: PAYLOAD });
 		});
@@ -222,7 +222,7 @@ test.describe('the day a browser could not read', () => {
 			'ready'
 		]);
 
-		// The same fetch under a threshold it never reaches. This is the arm that
+		// The same fetch under a threshold it never reaches. This is the case that
 		// keeps the sentence from becoming a spinner: a healthy day never sees it.
 		await armed(page);
 		const healthy = await watch(page, 30_000);
@@ -230,14 +230,14 @@ test.describe('the day a browser could not read', () => {
 			'loading',
 			'ready'
 		]);
-		expect(slow.count, 'the second arm never fetched').toBe(2);
+		expect(slow.count, 'the second case never fetched').toBe(2);
 	});
 
 	test('a date the loader cannot read asks the network for nothing', async ({ page }) => {
 		const asked = new Intercepted();
 		// Exactly the shape the loader builds, and nothing wider. A page under
 		// `**/digest/**` also serves an item's picture, so a wider pattern counts
-		// the page's own assets and the arm fails on a fetch nobody made.
+		// the page's own assets and the case fails on a fetch nobody made.
 		await page.route('**/digest/**/digest.json', async (route) => {
 			asked.take(route.request().url());
 			await route.abort();
@@ -602,7 +602,7 @@ test.describe('the fragment', () => {
 
 		// Arrive from somewhere else, the way a reader following an archive link
 		// does. Going straight from `/<date>/` to `/<date>/#id` is a SAME-document
-		// navigation: the shell never re-mounts, so nothing runs and the arm reads
+		// navigation: the shell never re-mounts, so nothing runs and the case reads
 		// as a broken restore when it only measured the wrong journey.
 		await page.goto('/archive/');
 		await page.goto(`/${date}/#${last}`);
@@ -707,7 +707,7 @@ test.describe('what the reader sees', () => {
 		// The other half of the sentence rule. `/` is not this component's caller,
 		// but a page that has drawn something and then lost the rest of it is a
 		// state this component still has to say correctly - and a component that
-		// only ever said one of the two would pass the arm above by saying nothing.
+		// only ever said one of the two would pass the case above by saying nothing.
 		const paint = await renderer('PayloadState');
 		await show(
 			page,

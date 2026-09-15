@@ -141,7 +141,7 @@ export default defineConfig({
 		// The site ships a service worker, and every spec but one is about the
 		// page rather than about the worker. Left on, the worker would answer a
 		// second request for a day out of its own cache, which is exactly the
-		// request a spec routes to fake a failure - so a passing arm would be
+		// request a spec routes to fake a failure - so a passing case would be
 		// measuring a cache instead of the code under test. `service-worker.spec.ts`
 		// turns them back on for itself.
 		serviceWorkers: 'block',
@@ -152,7 +152,7 @@ export default defineConfig({
 		testMatch: GROUPS[name].map((filename) => `**/${filename}`),
 		// `offline` rewrites the kill switch the served site shares, and
 		// `reading-page` in `reader` installs the worker that obeys it. Beside each
-		// other the reader's worker retires itself and the arm times out, so the one
+		// other the reader's worker retires itself and the case times out, so the one
 		// small project runs to completion before the large one starts.
 		...(name === 'reader' ? { dependencies: ['offline'] } : {}),
 		use: { ...devices['Desktop Chrome'] }

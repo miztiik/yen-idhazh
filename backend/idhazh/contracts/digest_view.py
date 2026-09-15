@@ -322,7 +322,7 @@ class DigestView(Contract):
                 "carried the story, or that only one of ours did. Measured 2026-09-01 "
                 "on Intel Core i7-1265U / Windows 11 over 11 committed days and 3,978 "
                 "items, gzip -9 over the compact projection, the name added to the "
-                "twenty-two-field arm: 467.49 bytes an item before and 468.24 after, "
+                "twenty-two-field case: 467.49 bytes an item before and 468.24 after, "
                 "which is 0.75 an item and 0.16 percent. Its sibling on the committed "
                 "item, same_story_as, is NOT here: no page draws a group as one item "
                 "yet, and a field without a reader does not earn the wire. It arrives "

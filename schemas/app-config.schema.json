@@ -352,33 +352,33 @@
           "title": "Band Outlier Rows",
           "type": "integer"
         },
-        "chart_arm_coverage_pct": {
+        "chart_coverage_pct": {
           "default": 5.0,
-          "description": "The share of a day's published items that must carry a chart, in whole percent. Below this on the median day the arm is retired: an arm that reaches almost nothing is paying for a capability the digest does not use.",
+          "description": "The share of a day's published items that must carry a chart, in whole percent. Below this on the median day chart drawing is retired: drawing that reaches almost nothing is paying for a capability the digest does not use.",
           "exclusiveMinimum": 0.0,
           "maximum": 100.0,
-          "title": "Chart Arm Coverage Pct",
+          "title": "Chart Coverage Pct",
           "type": "number"
-        },
-        "chart_arm_minutes_target": {
-          "default": 6.0,
-          "description": "Router minutes per published chart above which the median day retires the chart arm. Drawn as a marker on the bar, never as a subtraction the reader performs.",
-          "exclusiveMinimum": 0.0,
-          "title": "Chart Arm Minutes Target",
-          "type": "number"
-        },
-        "chart_arm_rule_days": {
-          "default": 14,
-          "description": "The span the chart arm's retirement rule is stated over. A median taken over any other span is the same figure with a different meaning and nothing on the page to say which one is being read, so under this many days the section prints the rule's own span and no number at all.",
-          "minimum": 1,
-          "title": "Chart Arm Rule Days",
-          "type": "integer"
         },
         "chart_height": {
           "default": 220,
           "description": "The drawn height of a console chart, in CSS pixels. The same number `chart.height_px` carries: both were raised from 180 when the frame widened, because a chart that grows in one dimension only flattens its own signal. `config/appearance.json` owns the value, as `console.chart_height`.",
           "minimum": 120,
           "title": "Chart Height",
+          "type": "integer"
+        },
+        "chart_minutes_target": {
+          "default": 6.0,
+          "description": "Router minutes per published chart above which the median day retires chart drawing. Drawn as a marker on the bar, never as a subtraction the reader performs.",
+          "exclusiveMinimum": 0.0,
+          "title": "Chart Minutes Target",
+          "type": "number"
+        },
+        "chart_rule_days": {
+          "default": 14,
+          "description": "The span the chart retirement rule is stated over. A median taken over any other span is the same figure with a different meaning and nothing on the page to say which one is being read, so under this many days the section prints the rule's own span and no number at all.",
+          "minimum": 1,
+          "title": "Chart Rule Days",
           "type": "integer"
         },
         "chart_width": {
@@ -1438,7 +1438,7 @@
       "properties": {
         "asks_for_a_visual_plan": {
           "default": true,
-          "description": "Whether the two-call sequence is sized for a summarize-and-plan call that asks for a picture. True is what the production run does and what ships. It exists so an arm of the pipeline test workflow can run the summary-only path end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields off that call's grammar, and this takes the plan's decode budget out of the window sizing beside it. The two move together or the sizing is wrong in the expensive direction - it reserves room for a decode that never happens, and refuses articles that would have fitted.",
+          "description": "Whether the two-call sequence is sized for a summarize-and-plan call that asks for a picture. True is what the production run does and what ships. It exists so a case of the pipeline test workflow can run the summary-only path end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields off that call's grammar, and this takes the plan's decode budget out of the window sizing beside it. The two move together or the sizing is wrong in the expensive direction - it reserves room for a decode that never happens, and refuses articles that would have fitted.",
           "title": "Asks For A Visual Plan",
           "type": "boolean"
         },
@@ -1840,7 +1840,7 @@
           "type": "array"
         },
         "enabled_kinds": {
-          "description": "Kinds the planner may choose. `none` is always available and never listed. Chart is the only one left: the diagram arm shipped off - the model drafted it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made the planner's own pre-filter unfireable, because a diagram's steps come from prose and nothing about it is decidable in advance - and its renderer was deleted with the Mermaid round trip on 2026-09-05.",
+          "description": "Kinds the planner may choose. `none` is always available and never listed. Chart is the only one left: diagram drawing shipped off - the model drafted it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made the planner's own pre-filter unfireable, because a diagram's steps come from prose and nothing about it is decidable in advance - and its renderer was deleted with the Mermaid round trip on 2026-09-05.",
           "items": {
             "$ref": "#/$defs/VisualKind"
           },
@@ -1929,7 +1929,7 @@
     {
       "change": "summarize gains asks_for_a_visual_plan, default true. It is the value the two-call sequence sizes its window with, which classify/dag.py wrote out as a literal. Additive and defaulted, so a config file written before today validates unchanged and no read-side migration is owed. Production is untouched: the default is the literal it replaced.",
       "version": "2026-09-14T14:00",
-      "why": "The pipeline test workflow runs one arm with no picture reachable, to price what the visual decision costs. Turning the picture off is a config edit already - an empty visuals.enabled_kinds - but the window sizing had no way to follow it, so that arm would reserve room for a decode it never makes and refuse articles that fit. One knob, so the two cannot disagree (plan 27, row 11)."
+      "why": "The pipeline test workflow runs one case with no picture reachable, to price what the visual decision costs. Turning the picture off is a config edit already - an empty visuals.enabled_kinds - but the window sizing had no way to follow it, so that case would reserve room for a decode it never makes and refuse articles that fit. One knob, so the two cannot disagree (plan 27, row 11)."
     },
     {
       "change": "logging gains five flags beside level: item_lines, stage_lines, waiting_heartbeat_seconds, capture_prompts and capture_replies. Each defaults on, waiting_heartbeat_seconds to 30 seconds and the four booleans to true, and a negative heartbeat is refused. Additive and defaulted, so a config file written before today validates unchanged and a config file with no logging block at all still loads - no read-side migration is owed. level is untouched at INFO and is unrelated: these flags decide which records exist, level decides how loud the logger that prints them is.",
@@ -2089,7 +2089,7 @@
     {
       "change": "InferenceConfig gains log_verbosity, an optional llama-server -lv level. Null omits the flag and keeps the runtime default of 3. config/idhazh.json sets 4 on both model roles.",
       "version": "2026-09-09T20:10",
-      "why": "The server was never asked to describe itself. At its default verbosity it prints twelve lines, and no line among them names flash attention, the KV buffer or the compute buffer - so every claim about what the runtime did with those settings was a claim about the flag we passed rather than about what happened (Guardrail #10). At 4 the model-loader block comes back and the log states the attention decision three ways: a named state, a compute buffer 5.1 times larger without fusion, and a graph 180 nodes longer. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, eleven server starts, three runs an arm, zero spread. It is a knob rather than a literal because an operator debugging a start wants 9 and a daily run does not (Guardrail #6), and it is set on both roles because both write a log nobody can read otherwise. What it costs is one job artifact growing from 1,085 bytes to about 16,011 - kept two days, committed never."
+      "why": "The server was never asked to describe itself. At its default verbosity it prints twelve lines, and no line among them names flash attention, the KV buffer or the compute buffer - so every claim about what the runtime did with those settings was a claim about the flag we passed rather than about what happened (Guardrail #10). At 4 the model-loader block comes back and the log states the attention decision three ways: a named state, a compute buffer 5.1 times larger without fusion, and a graph 180 nodes longer. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, eleven server starts, three runs an case, zero spread. It is a knob rather than a literal because an operator debugging a start wants 9 and a daily run does not (Guardrail #6), and it is set on both roles because both write a log nobody can read otherwise. What it costs is one job artifact growing from 1,085 bytes to about 16,011 - kept two days, committed never."
     },
     {
       "change": "observability gains six retention knobs, one per console payload that files by month: public_scores_keep_months, public_feed_health_keep_months, public_run_days_keep_months, public_day_metrics_keep_months, public_machine_keep_months and public_span_rollup_keep_months, each defaulting to 14. The three that project a state ledger must equal that ledger's own window, and all six are now checked by refuse_windows_shorter_than.",
@@ -2309,7 +2309,7 @@
     {
       "change": "assist.recall_min default moved from 0.69 to 0.61, and the committed config repeats it. The shape is `AssistConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
       "version": "2026-08-31T23:45",
-      "why": "0.69 was two standard errors below a 2026-08-26 baseline of 0.767, and the baseline has slid to 0.690 since. The gate failed on main by 0.00022, which is one percent of one standard error. It is not a ranking regression, and four arms over the same 60 queries, the same labels and the same ranking code say so. The archive at the last green commit scores 0.69163 +/- 0.04092. The same 3,485 items read with today's vectors score 0.69163 again, so the re-encode is +0.00000 and 0 of 10 committed day payloads changed a byte. The whole 3,596-item archive held to that same denominator scores 0.68978, so competition is -0.00185. The whole archive as gated scores 0.68978 too, so the denominator is +0.00000 - unlike 2026-08-26 it cannot move, because the label set is frozen and already fully embedded. The entire drop is 111 new items competing for the same ten slots against labels pooled on 2026-08-26, which is the pooling bias docs/concepts/evaluation.md describes: 70.8 percent of filled slots now hold an item no labeller judged, against 65.6 percent then. The new bar comes off the same rule as the old one, 0.690 - 2 x 0.041 = 0.607, rounded to two places as 0.61. The same rule applied at the last green commit also gives 0.61, so the number does not depend on which day it was taken. It buys about six published days at the measured slide of 0.0134 a day, and that expiry is written into the field description rather than left to be discovered by the next failing gate. Same field, same type: a config that names 0.69 still validates, so no read-side migration (section 11)."
+      "why": "0.69 was two standard errors below a 2026-08-26 baseline of 0.767, and the baseline has slid to 0.690 since. The gate failed on main by 0.00022, which is one percent of one standard error. It is not a ranking regression, and four cases over the same 60 queries, the same labels and the same ranking code say so. The archive at the last green commit scores 0.69163 +/- 0.04092. The same 3,485 items read with today's vectors score 0.69163 again, so the re-encode is +0.00000 and 0 of 10 committed day payloads changed a byte. The whole 3,596-item archive held to that same denominator scores 0.68978, so competition is -0.00185. The whole archive as gated scores 0.68978 too, so the denominator is +0.00000 - unlike 2026-08-26 it cannot move, because the label set is frozen and already fully embedded. The entire drop is 111 new items competing for the same ten slots against labels pooled on 2026-08-26, which is the pooling bias docs/concepts/evaluation.md describes: 70.8 percent of filled slots now hold an item no labeller judged, against 65.6 percent then. The new bar comes off the same rule as the old one, 0.690 - 2 x 0.041 = 0.607, rounded to two places as 0.61. The same rule applied at the last green commit also gives 0.61, so the number does not depend on which day it was taken. It buys about six published days at the measured slide of 0.0134 a day, and that expiry is written into the field description rather than left to be discovered by the next failing gate. Same field, same type: a config that names 0.69 still validates, so no read-side migration (section 11)."
     },
     {
       "change": "observability gained cost_currency, cost_input_per_million and cost_output_per_million, all with defaults the committed config repeats. page_weight.ceilings_bytes moved /console/machine/ from 6,899 to 30,391.",
@@ -2322,9 +2322,9 @@
       "why": "The console became three prerendered routes, and one ceiling covering three surfaces cannot say which of them blew a budget - which is the decisive argument for routes over tabs, so the split is not finished until the ceilings follow it. The gate already fails a ceiling that names no route in the build; a route that names no ceiling is only reported, so two new surfaces would have grown unwatched. All three numbers are re-derived rather than carried over: heaviest of five builds, plus seven published days priced by removing a real one, plus the 64-byte noise floor, measured 2026-08-31 (measurements.md). /console/ came down because its model panels moved to a route of their own. Committed values only - the model default stays empty, the shape and the validation are unchanged, and every older config still validates, so no read-side migration (section 11)."
     },
     {
-      "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
+      "change": "console.chart_rule_days, console.chart_minutes_target and console.chart_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
       "version": "2026-08-30T21:15",
-      "why": "The chart arm is the only console section with a written decision rule in its own prose, and all three numbers in that rule were constants in a TypeScript module - so the one section that states a threshold was the one section an operator could not move a threshold on (Guardrail #6). The two limits are now markers on bars and the span is what decides whether a median is printed at all. Additive with defaults, so a config written before today still validates (section 11)."
+      "why": "Chart drawing is the only console section with a written decision rule in its own prose, and all three numbers in that rule were constants in a TypeScript module - so the one section that states a threshold was the one section an operator could not move a threshold on (Guardrail #6). The two limits are now markers on bars and the span is what decides whether a median is printed at all. Additive with defaults, so a config written before today still validates (section 11)."
     },
     {
       "change": "console.band_outlier_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
@@ -2489,7 +2489,7 @@
     {
       "change": "run.route_budget_minutes now stops the route stage instead of warning it, and visuals.enabled_kinds defaults to chart alone.",
       "version": "2026-08-25",
-      "why": "Warning after the fact never saved a day. Measured on ubuntu-latest over six runs on 2026-08-24/25 (703 routed items): the mean per-item cost is 20.7 s on a fast host and 40.3 s on a slow one, so a 145-item day needs 50 to 97 minutes against a 60-minute job. Four of the six runs were cancelled at the bound, and a cancelled job skips its upload step - so every decision the hour bought was discarded and the day published with zero visuals. The diagram arm is what made the existing pre-filter unfireable: it is reachable for every item by construction, so the model was asked about 145 of 145 items on 2026-08-25 while it drafted zero diagrams in 88 and rendered zero in 703. With the arm off, 68 of those 145 items (46.9%) never reach the model at all. Same fields, same types, same units; an older config still validates. Semantic shift on one and a changed default on the other, so both are stamped here (section 11)."
+      "why": "Warning after the fact never saved a day. Measured on ubuntu-latest over six runs on 2026-08-24/25 (703 routed items): the mean per-item cost is 20.7 s on a fast host and 40.3 s on a slow one, so a 145-item day needs 50 to 97 minutes against a 60-minute job. Four of the six runs were cancelled at the bound, and a cancelled job skips its upload step - so every decision the hour bought was discarded and the day published with zero visuals. Diagram drawing is what made the existing pre-filter unfireable: it is reachable for every item by construction, so the model was asked about 145 of 145 items on 2026-08-25 while it drafted zero diagrams in 88 and rendered zero in 703. With it off, 68 of those 145 items (46.9%) never reach the model at all. Same fields, same types, same units; an older config still validates. Semantic shift on one and a changed default on the other, so both are stamped here (section 11)."
     },
     {
       "change": "Added evaluation.labellers, evaluation.label_draw_per_decile and evaluation.label_min_run_days.",

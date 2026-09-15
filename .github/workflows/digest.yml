@@ -583,7 +583,7 @@ jobs:
       # the grammar still accepts, so the only symptom is worse summaries and
       # nothing goes red.
       #
-      # Five arms, and none of them has a skip flag: the render, the prefix
+      # Five cases, and none of them has a skip flag: the render, the prefix
       # cache, the grammar, the architecture in the weights, and the window
       # against the length the model was trained for. Each refuses by name and
       # says what was declared and what was reported.
@@ -596,7 +596,7 @@ jobs:
       # the front of the weights file.
       #
       # The schema is handed in from the module that builds it rather than
-      # copied here, so the grammar arm is held to the shape this run really
+      # copied here, so the grammar case is held to the shape this run really
       # sends (`docs/architecture/summarize/model-boundary.md`).
       - name: The server proves the entry
         env:

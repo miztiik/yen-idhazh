@@ -1,7 +1,6 @@
 # Models
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 One row a model. Each row points at that model's **dossier** - the page holding
 that model's identity and its one current reading of every quantity, with the
 hardware that took it, the date and the spread.
@@ -67,7 +66,7 @@ questions, so a figure belongs to exactly one of them.
 | | A dossier | A benchmark record |
 | --- | --- | --- |
 | Organised by | the subject - one page a model | the question - one page a measurement |
-| Carries | every quantity for one model, one current reading each | one run: its conditions, method, arms and raw figures |
+| Carries | every quantity for one model, one current reading each | one run: its conditions, method, cases and raw figures |
 | A re-run | replaces the reading on the dossier | replaces the whole page |
 | Answers | "what is this model?" | "what did that run settle?" |
 

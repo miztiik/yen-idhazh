@@ -271,7 +271,7 @@ def thinks() -> TurnsConfig:
 
 
 def test_reasoning_that_survived_the_discard_still_fails_the_gate() -> None:
-    """The third refusal's other arm, and it counts exactly as it did before.
+    """The third refusal's other case, and it counts exactly as it did before.
 
     Where the entry declares a closing marker the reasoning is wanted and is
     discarded before the reply is parsed, so an observation that still carries
@@ -286,7 +286,7 @@ def test_reasoning_that_survived_the_discard_still_fails_the_gate() -> None:
     assert "discard that did not happen" in outcome.detail
 
 
-def test_the_gate_says_which_failure_it_found_on_each_arm() -> None:
+def test_the_gate_says_which_failure_it_found_on_each_case() -> None:
     """One measurement, two meanings, and the report has to name which one."""
     broken = with_one_bad_call(a_passing_shard(), think_block_words=12)
 

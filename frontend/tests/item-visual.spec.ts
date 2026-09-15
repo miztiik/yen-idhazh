@@ -17,7 +17,7 @@ import { dayReady } from './support/day-ready';
  *
  * **What the reader gives up is asserted here rather than described.** A page
  * that never runs a script draws no chart, so the figure's `aria-label` is the
- * whole of what such a reader receives - and the arm below reads it back off a
+ * whole of what such a reader receives - and the case below reads it back off a
  * real page to say it is there.
  *
  * Driven from the canary day, never from `frontend/public/digest/` - the cost of
@@ -113,7 +113,7 @@ async function wearing(page: Page, theme: string): Promise<void> {
  * **It waits for the count to settle rather than for the slots to empty.** A
  * story whose marks were refused keeps its zero-height slot for ever, which is
  * the degrade rule working - so a wait on "no slot is left" can only pass on a
- * day where nothing was refused, which is the one case the refusal arms are not
+ * day where nothing was refused, which is the one case the refusal tests are not
  * testing.
  */
 async function drawnDay(page: Page, route = DAY): Promise<void> {
@@ -139,7 +139,7 @@ async function drawnDay(page: Page, route = DAY): Promise<void> {
 
 /** Every marks file the canary day declares, in payload order.
  *
- * Read off the committed canary payload rather than off the page, so an arm
+ * Read off the committed canary payload rather than off the page, so a case
  * that stops a fetch still knows what the day promised.
  */
 function declared(): string[] {
@@ -166,7 +166,7 @@ function drawnCharts(page: Page): Promise<string[]> {
 /** The marks file behind a chart the page drew, found by its first bar name.
  *
  * The page runs newest first and the payload publishes in scored order, so the
- * two lists are not the same order - and an arm that assumed they were would
+ * two lists are not the same order - and a case that assumed they were would
  * refuse the wrong file and pass for the wrong reason.
  */
 function fileDrawing(name: string): string {
@@ -233,7 +233,7 @@ test.describe('the browser draws the chart', () => {
 		// The degrade rule, made to fire on a real page.
 		//
 		// **One story's file is refused and its sibling is left alone**, because a
-		// day where nothing drew is equally consistent with the arm never having
+		// day where nothing drew is equally consistent with the case never having
 		// run (`docs/reference/agent-notes/browser.md`). The control is the other
 		// chart, which has to still be there.
 		await drawnDay(page);
@@ -369,7 +369,7 @@ test.describe('THE ORACLE: every fact is reachable without a mouse', () => {
 	 * No fact exists only on hover, and the check is a comparison of two SETS.
 	 *
 	 * **Asserting that some keyboard route exists is not the check.** The defect
-	 * this row hunts is always one fact that only a pointer reaches, so an arm
+	 * this row hunts is always one fact that only a pointer reaches, so a case
 	 * that stops at "the figure has a name" passes on the day a bar goes missing
 	 * from that name. Both sides are enumerated and compared whole, and both are
 	 * printed when they differ.
@@ -452,7 +452,7 @@ test.describe('THE ORACLE: every fact is reachable without a mouse', () => {
 	test('a figure announces every string it painted and invents none', async ({ page }) => {
 		// The same comparison without the sentence's own shape in it: every string
 		// the browser put on screen, against the characters the announcement
-		// carries. This is the arm that catches a figure re-written on its way to
+		// carries. This is the case that catches a figure re-written on its way to
 		// the announcement - `1,200` spoken for a `1200` drawn.
 		await drawnDay(page);
 		const figures = await page.evaluate(() =>
@@ -615,7 +615,7 @@ test.describe('THE ORACLE: the drawing takes the width it is given', () => {
 	 *
 	 * **Three widths rather than one, because one cannot see a fixed box.** A
 	 * drawing that is always 720 units wide reports one drawn width at every
-	 * viewport, so the last arm reads the placed geometry at the narrowest and
+	 * viewport, so the last case reads the placed geometry at the narrowest and
 	 * the widest and says they differ.
 	 */
 
@@ -724,7 +724,7 @@ test.describe('THE ORACLE: every drawn colour comes from a token', () => {
 			for (const bar of bars) expect(bar, `${theme}: a bar is not on the token`).toBe(token);
 			seen[theme] = token;
 		}
-		// The half a literal cannot pass. One hex satisfies one arm at most.
+		// The half a literal cannot pass. One hex satisfies one case at most.
 		expect(seen.light, 'the two themes paint --chart-1 the same').not.toBe(seen.dark);
 	});
 

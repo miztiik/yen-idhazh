@@ -350,7 +350,7 @@ test('THE ORACLE: the printed count is the run the pipeline rests on', async ({ 
 	}
 
 	// At least one feed must actually be past the threshold, and at least one
-	// must be short of it. An oracle that only ever sees one arm is checking half
+	// must be short of it. An oracle that only ever sees one case is checking half
 	// a rule.
 	expect(rows.some((row) => row.resting), 'no rested feed is drawn').toBe(true);
 	expect(rows.some((row) => !row.resting), 'no healthy feed is drawn').toBe(true);

@@ -314,6 +314,30 @@ class ModelsConfig(Contract):
             ),
         ),
         ChangelogEntry(
+            version="2026-09-15T10:00",
+            change=(
+                "console.chart_arm_rule_days, console.chart_arm_minutes_target and "
+                "console.chart_arm_coverage_pct are now console.chart_rule_days, "
+                "console.chart_minutes_target and console.chart_coverage_pct. A "
+                "config spelling the old key still reads."
+            ),
+            why=(
+                "`arm` came from benchmarking - the arms of an experiment - and it "
+                "means the same work run again under different settings. The chart "
+                "section is a feature under a kill rule rather than a second run of "
+                "anything, so the word was doing no work and explaining nothing "
+                "(`CLAUDE.md` section 0b). Every sentence around these three keys "
+                "moved in the same commit, so leaving the keys would have made a "
+                "config file the one place a person still had to type it.\n\n"
+                "`ConsoleConfig._the_old_chart_keys_still_read` carries the old "
+                "spelling for one release, which is what a renamed config knob gets: "
+                "a config file is a file somebody can edit, so the alias buys the "
+                "edit time and is then replaced by a refusal (section 11). "
+                "`config/appearance.json` and the three committed fixtures moved in "
+                "this commit, so nothing on disk relies on the alias today."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-14T07:00",
             change=(
                 "models.<role>.draft, optional: a second, smaller set of weights that "

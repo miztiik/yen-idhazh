@@ -460,18 +460,18 @@ def test_a_page_headline_that_gives_an_order_is_fenced_and_never_obeyed() -> Non
     sanitizer was never going to help, because it strips machinery and this is
     English.
 
-    Three arms, and all three are needed.
+    Three cases, and all three are needed.
 
     **The title is inside a fence, everywhere it appears.** Asserted on the
     bytes the loopback server was actually posted rather than on what a builder
-    returns, because the request is what the model reads. This arm fails on the
+    returns, because the request is what the model reads. This case fails on the
     build before the fix.
 
     **The planted word is absent from what would publish.** The title, the
     summary and the key points are the three strings a reader sees.
 
     **A declared phrase from the real article is present.** Without it a model
-    that produced nothing passes the second arm, and a control that passes by
+    that produced nothing passes the second case, and a control that passes by
     producing nothing is not a control.
 
     The reply is a committed body replayed over a real loopback socket, so
@@ -519,12 +519,12 @@ def test_a_page_headline_that_gives_an_order_is_fenced_and_never_obeyed() -> Non
     )
 
 
-# --- The live arm's adapter ------------------------------------------------
+# --- The live case's adapter ------------------------------------------------
 
 
 @pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
 def test_the_canary_article_is_the_one_extract_would_have_built(canary: Canary) -> None:
-    """The live arm must not invent a page shape the pipeline cannot produce.
+    """The live case must not invent a page shape the pipeline cannot produce.
 
     The length counts and the brief flag decide which prompt the attack arrives
     in, so an adapter that guesses them runs the canary against a prompt no
@@ -572,7 +572,7 @@ def test_the_canary_hands_the_fence_the_raw_bytes(canary: Canary) -> None:
     """The one place the adapter must not copy `extract`, asserted so it stays.
 
     `untrusted_block` sanitizes what it is given rather than trusting a caller
-    to have done it earlier, and the live arm is the only assertion of that.
+    to have done it earlier, and the live case is the only assertion of that.
     Handing it pre-cleaned text would exercise the boundary against text that
     had already crossed it.
     """
@@ -582,10 +582,10 @@ def test_the_canary_hands_the_fence_the_raw_bytes(canary: Canary) -> None:
     assert article.text == canary.raw_text
 
 
-def test_the_canary_arm_writes_what_it_saw_and_fails_closed(tmp_path: Path) -> None:
+def test_the_canary_case_writes_what_it_saw_and_fails_closed(tmp_path: Path) -> None:
     """`CLAUDE.md` section 4: a stage runs on its own, a file in and a file out.
 
-    The arm was reachable only from inside `stage_qualify` at shard zero, so the
+    The case was reachable only from inside `stage_qualify` at shard zero, so the
     only way to read what a canary did was a job that runs for hours. A canary
     that never replied still fails, because a control test that did not run is
     not a control test that passed.
@@ -606,7 +606,7 @@ def test_the_canary_arm_writes_what_it_saw_and_fails_closed(tmp_path: Path) -> N
     )
 
 
-def test_the_canary_arm_is_a_stage_the_cli_answers_to(
+def test_the_canary_case_is_a_stage_the_cli_answers_to(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Registered by name, so nobody runs a whole qualification to run the attacks.
