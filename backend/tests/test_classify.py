@@ -1796,7 +1796,9 @@ class TestARepliedCutByTheBudget:
         assert by_the_window.rationale and "window" in by_the_window.rationale
 
 
-def test_a_recorded_call_two_reply_parses_over_a_loopback_socket(article_ok: Article) -> None:
+def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
+    article_ok: Article,
+) -> None:
     """The row end to end, with no network and nothing mocked.
 
     The reply is played back by a real HTTP server on loopback and read through
@@ -1867,7 +1869,7 @@ def dag_items() -> list[dict[str, Any]]:
     return list(json.loads(read_text(DAG_ITEMS))["items"])
 
 
-def test_call_two_reuses_the_whole_of_call_ones_prompt() -> None:
+def test_summarize_and_plan_reuses_the_whole_of_the_label_calls_prompt() -> None:
     """The saving the two-call design was bought with, read off the server.
 
     The summarize-and-plan call's prompt IS the label call's prompt plus the label call's reply, so a correct run

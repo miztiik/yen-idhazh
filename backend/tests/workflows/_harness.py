@@ -1883,7 +1883,7 @@ def _starter_shell(step: Mapping[str, object]) -> str:
     """Everything a starter step executes, following one level of delegation.
 
     `work` and `visuals` ran 31 lines of near-identical inline shell, 80.6 percent
-    the same, differing in the config attribute and two filenames. They the label call
+    the same, differing in the config attribute and two filenames. They run one
     script now. Reading the step alone would report that neither reaches
     `server_argv` any more, which is the opposite of what happened.
     """

@@ -1,17 +1,18 @@
 """The calls one article takes, declared once as data and walked rather than written out.
 
-**Two nodes, and the number is decided here rather than a row at a time.** Call
-1 returns the element table and every label and score. The summarize-and-plan call returns the
-summary and the visual plan. A third node is not a design this file can express
-by accident: `NODES` is checked against `NODE_COUNT` on import, and the check
-names what has to happen before the number moves.
+**Two nodes, and the number is decided here rather than a row at a time.** The
+label call returns the element table and every label and score. The
+summarize-and-plan call returns the summary and the visual plan. A third node is
+not a design this file can express by accident: `NODES` is checked against
+`NODE_COUNT` on import, and the check names what has to happen before the number
+moves.
 
 **The reason the list is a list at all is the token budget.** The window has to
 hold the longest single request the sequence ever makes, and on this path that
-is the last one - the summarize-and-plan prompt is the label prompt plus the label
-call's whole reply,
-so every node's decode budget is paid inside the next node's prompt. A sequence
-assembled a row at a time is a budget nobody ever checks whole, and the failure
+is the last one - the summarize-and-plan prompt is the label prompt plus the
+label call's whole reply, so every node's decode budget is paid inside the next
+node's prompt. A sequence assembled a row at a time is a budget nobody ever
+checks whole, and the failure
 reads as an ordinary day: `--no-context-shift` means a decode that runs into the
 wall stops on an ordinary HTTP 200, `recovered_completion` salvages the summary,
 and the item publishes with no picture and `window_exhausted` recorded beside it.

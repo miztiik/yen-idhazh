@@ -727,7 +727,7 @@ picks it up.
 
 **Open, and owned by nobody: a cap-length prompt may not be affordable at all.**
 The one 8,741-token prompt the pipeline has actually sent cost 927 s of prefill
-on the runner. A 43,603-token the label call prompt is 5 times that, and the wiring
+on the runner. A 43,603-token label-call prompt is 5 times that, and the wiring
 row is where that stops being arithmetic and starts being a shard's wall clock
 (Guardrail #2).
 
@@ -739,10 +739,11 @@ and the plan, the loop's target must become
 no row of plan 12. It is written here so the distill picks it up.
 
 **Which prompt asks what.** The label call labels what is in the item - what its
-already-extracted quantities and dates mean - and never asks for a picture. Call
-2 asks for two things in one reply, in this order: the summary first, then the
-plan for one picture. `prompts/summarize.txt` is the single-call prompt these
-two replace, and it is still what `validate` and the qualification harness send.
+already-extracted quantities and dates mean - and never asks for a picture. The
+summarize-and-plan call asks for two things in one reply, in this order: the
+summary first, then the plan for one picture. `prompts/summarize.txt` is the
+single-call prompt these two replace, and it is still what `validate` and the
+qualification harness send.
 `prompts/visual_planner.txt` asked the retired small model for a picture and was
 deleted by row 6 of plan 11.
 
@@ -862,13 +863,13 @@ labelled an estimate (Guardrail #10), and it names what would overturn it:
 decode twenty corpus articles through the label call at a budget no reply reaches and
 take the lowest ratio.
 
-**So the label call's budget is a sizing too, and its seatbelt is not a recovery.** Call
-2's reply carries the summary before the plan, so a cut is cut in the plan and
-`recovered_completion` reads out the closed half. The label call's reply is one flat
-object of eight required arrays, and a repaired one would fabricate a
-completeness the decoder never wrote - an array defaulted to empty because the
-budget ran out is byte-identical to an array that is empty because the article
-has nothing, and that ambiguity picks the desk, the entities and whether a
+**So the label call's budget is a sizing too, and its seatbelt is not a recovery.**
+The summarize-and-plan call's reply carries the summary before the plan, so a cut
+is cut in the plan and `recovered_completion` reads out the closed half. The label
+call's reply is one flat object of eight required arrays, and a repaired one would
+fabricate a completeness the decoder never wrote - an array defaulted to empty
+because the budget ran out is byte-identical to an array that is empty because the
+article has nothing, and that ambiguity picks the desk, the entities and whether a
 picture is reachable. So a cut is **named** instead: `finish_reason` is read
 before anything tries to parse, and the item fails as `labels_truncated` rather
 than as `bad_shape`, which is the code for a reply that answered inside its

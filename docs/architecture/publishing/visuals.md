@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 How an item gets a chart or - most of the time - nothing at all.
 The rule this subsystem serves is in [`../../concepts/digest.md`](../../concepts/digest.md): a
@@ -1006,10 +1006,10 @@ flowchart TD
     direction TB
     ART["<b>ARTICLE</b><br/>sanitized text; every span indexes these bytes"]
     CP["<b>CANDIDATE PASS</b> - code<br/>finds every quantity the number pattern matches<br/>mints element_id, span_start, span_end"]
-    C1["<b>CALL 1</b> - model<br/>labels what each number MEANS<br/>no schema field accepts a value, a unit or an offset"]
+    C1["<b>LABEL CALL</b> - model<br/>labels what each number MEANS<br/>no schema field accepts a value, a unit or an offset"]
     ANC["<b>ANCHORING</b> - code<br/>one rule per shape<br/>what will not anchor is dropped"]
     TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, cut from the article<br/>TIER 2 model-assigned, span-anchored")]
-    C2["<b>CALL 2</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles"]
+    C2["<b>SUMMARIZE-AND-PLAN CALL</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles"]
     VP["<b>VISUAL PLAN</b><br/>type + role -&gt; element_ids<br/>no geometry, no literal value, no authored text"]
     VV{"<b>VALIDATOR</b> - deterministic, no model<br/>is this type drawable from these elements?"}
     DL["<b>DOWNGRADE LADDER</b><br/>depth 1, depth 2, then refuse"]
