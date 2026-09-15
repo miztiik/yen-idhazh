@@ -736,8 +736,8 @@ def outlet_of(item: DigestItem) -> str:
     `source_id` is a feed. Four of our feeds are CGTN and two are The Straits
     Times, so a rule written on `source_id` counts one newsroom as several
     sources - and `also_covered_by` then prints a corroboration the reader does
-    not have. Measured 2026-09-14 over the twenty-five committed days: 3 of the
-    42 groups the pass had formed were one outlet on two of its own feeds.
+    not have. Measured 2026-09-15 over the twenty-six committed days: 3 of the
+    43 groups the pass had formed were one outlet on two of its own feeds.
 
     `source_name` is the masthead and separates 143 of our 160 feeds, which is
     why it is the key. It deliberately does NOT fold two mastheads of one owner:

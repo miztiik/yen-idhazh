@@ -62,7 +62,7 @@ which is the same family.
 
 | id | Move | Effort | What it buys | Evidence it works |
 | --- | --- | --- | --- | --- |
-| E1 | **Count an outlet once, not once per feed** | Trivial | Removes a false sentence | Measured: 3 of 42 groups were CGTN with CGTN. Row #2 |
+| E1 | **Count an outlet once, not once per feed** | Trivial | Removes a false sentence | Measured: 3 of 43 groups were CGTN with CGTN. Row #2 |
 | E2 | **Stop printing the sentence we cannot support** | Trivial | Removes a false sentence | Row #1 |
 | E3 | **TF-IDF over headline words, per day** | Half a day, no encoder, no new field | Miranda's own best monolingual feature | F1 92.7 against 74.8 for embeddings, in their data. Untested in ours - row #3 measures it |
 | E4 | **Title-only encoder vector** | Half a day, one new persisted field | The labelled false pair drops 0.9317 to 0.7824; two missed true pairs go to 1.0000 and 0.9706 | Row #3 measures it |
@@ -91,7 +91,7 @@ its numbers are below - what is outstanding is the human labelling pass.
 - **Scope:** `coverage()` in `frontend/src/lib/components/ItemMeta.svelte` returns
   null at 0 as well as at null. Nothing else changes; `also_covered_by` keeps
   its meaning and the projection keeps the field.
-- **Why:** printed **5,176 times** over the committed days against 91 for the
+- **Why:** printed **5,299 times** over the committed days against 93 for the
   positive form. The Editor's read of 2026-09-12 says roughly a quarter of the
   items carrying it were on the page more than once. On 2026-09-03 five cards
   said it about an acquisition that ran 13 times on the same page, while three
@@ -106,7 +106,7 @@ its numbers are below - what is outstanding is the human labelling pass.
 - **Scope:** `outlet_of` in `backend/idhazh/assemble.py`, used by the
   across-sources refusal and by the `also_covered_by` count.
 - **Why:** `source_id` is a feed. Four of our feeds are CGTN and two are The
-  Straits Times. Measured 2026-09-14: **3 of the 42 groups** on the committed
+  Straits Times. Measured 2026-09-15: **3 of the 43 groups** on the committed
   days were one outlet grouped with itself, each printing a corroboration the
   reader did not have.
 - **Where the line falls:** `source_name` is the masthead and separates 143 of

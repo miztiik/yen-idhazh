@@ -412,7 +412,7 @@ def test_one_outlet_on_two_of_its_own_feeds_is_not_a_group() -> None:
     Four of our feeds are CGTN and two are The Straits Times. The rule used to
     compare `source_id`, which is the feed, so one newsroom counted as two
     sources and the card printed a corroboration the reader did not have: 3 of
-    the 42 groups on the committed days were CGTN grouped with CGTN. The
+    the 43 groups on the committed days were CGTN grouped with CGTN. The
     headlines here are identical, so only the outlet rule can refuse this.
     """
     items = [
