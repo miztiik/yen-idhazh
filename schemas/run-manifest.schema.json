@@ -854,9 +854,10 @@
       "type": "string"
     },
     "SpeculationType": {
-      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the two this project can actually stand up. `llama-server` accepts a\nlonger list - eagle3, mtp, dflash, dspark and five ngram variants - and each\nof those either needs a purpose-built draft head we do not have or a lookup\ncache nothing here writes. A closed choice is what stops an operator naming\none of them and getting a server that starts and drafts nothing.",
+      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the three this project can actually stand up. Build b10598 accepts\neleven - the full list is `none`, `draft-simple`, `draft-eagle3`,\n`draft-mtp`, `draft-dflash`, `draft-dspark` and five `ngram-*` variants,\nread off `llama-server --help` by `.github/workflows/probe.yml` on\n2026-09-15. The ones left out either need a purpose-built draft head\nnobody has published for our weights, or a lookup cache nothing here\nwrites. A closed choice is what stops an operator naming one of them and\ngetting a server that starts and drafts nothing.\n\n`draft-mtp` is here because the head now exists: Unsloth publishes a\nmulti-token-prediction head for the Gemma entry, and the publisher's guide\nnames this exact value. Naming `draft-simple` for that head instead is not\na slow server, it is a dead one - every request failed on\n`decode() failed: failed to process speculative batch`, five of five, on\nrun 34941400155.",
       "enum": [
         "draft-simple",
+        "draft-mtp",
         "ngram-simple"
       ],
       "title": "SpeculationType",
@@ -930,6 +931,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "The embedded draft block's spec_type accepts a third value, draft-mtp. Additive, so every committed run.json still reads and no migration is needed.",
+      "version": "2026-09-15T12:30",
+      "why": "It follows models-config, which is where the choice is declared. A manifest records the ref a run actually used, so a value the config can hold and the manifest cannot is a run that cannot describe itself."
+    },
     {
       "change": "The embedded ModelRef gained an optional draft block. It defaults to null and nothing here requires it, so every committed run.json still reads and no migration is needed.",
       "version": "2026-09-14T07:00",
@@ -1057,7 +1063,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-14T07:00",
+      "default": "2026-09-15T12:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1069,5 +1075,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-14T07:00"
+  "version": "2026-09-15T12:30"
 }

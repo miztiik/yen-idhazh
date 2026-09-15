@@ -75,6 +75,13 @@ corpus/*.txt text eol=lf
 # core.autocrlf setting.
 tests/fixtures/** text eol=lf
 
+# Recorded process output, kept exactly as the process wrote it. `llama-server
+# --help` pads its continuation lines, so the whitespace gate rejects the
+# capture - and stripping those spaces would make the file a report of what the
+# binary printed rather than the bytes it printed. A recording that has been
+# tidied is no longer evidence, and evidence is the only reason to commit one.
+tests/fixtures/runtime/*.txt -whitespace
+
 # Source files are edited on Windows and Linux. Keep diffs about code, not line
 # endings.
 *.py text eol=lf
