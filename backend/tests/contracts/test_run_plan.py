@@ -1,20 +1,25 @@
-"""What does a run plan record about the feeds a desk could ask and the floor it asked against?"""
+"""What does a run plan record about the feeds a desk could ask and the floor it asked against?
+
+Whether today's config and health leave every desk above its floor is not asked
+here. A floor is crossed by a source outage, a retirement or a curator's edit,
+and none of those is a commit - so the check went red on pull requests that
+touched neither (`CLAUDE.md` section 13). The run reports it instead:
+`stages/plan._plan_desks` warns by name when an active desk goes silent, and
+`test_plan.py` holds it to that.
+"""
 
 from __future__ import annotations
 
-from collections import Counter
-from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh import ledger, source_health
 from idhazh.contracts.run_manifest import VerticalCount
 from idhazh.contracts.run_plan import PUBLISHED_AGE_BANDS, PublishedAgeBand, RunPlan, VerticalPlan
 from idhazh.contracts.sources import Sources
-from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
+from idhazh.contracts.taxonomy import Taxonomy
 
 from ._fixtures import desk
 
@@ -28,76 +33,6 @@ def test_every_configured_feed_names_a_declared_vertical() -> None:
     declared = {vertical.id for vertical in taxonomy.verticals}
     for feed in sources.known_feeds():
         assert feed.vertical in declared, f"feed {feed.id} names an undeclared vertical"
-
-
-def test_every_vertical_clears_its_own_feed_floor() -> None:
-    """A vertical under `min_feeds` plans nothing at all, so this is a live gate.
-
-    `rank.plan_vertical` returns an empty list for a vertical below its floor -
-    the desk does not thin out, it goes silent. Nothing else notices: the run
-    succeeds, the digest publishes, and one section is simply absent.
-
-    That was one edit away from happening on 2026-08-29. Retiring the 40 feeds
-    that had never published anything took `ai` to 28 against a floor of 35 and
-    `business-economy` to 12 against 21 - 34 percent of that day's items, gone
-    quietly. A throwaway assertion in a migration script caught it; nothing in
-    the repository would have. This is that assertion, kept.
-
-    Since 2026-09-02 it counts what a run may lawfully ask rather than what a
-    curator left active, which is the count the floor is actually compared
-    against - so it reads the committed retirement ledger and the committed
-    health record as well as the config. Measured on this checkout 2026-09-02
-    the two counts are identical on every desk, because no committed row records
-    a permission or a retirement yet.
-
-    It reads the committed config on purpose. The number that decides a run is
-    the one in `config/`, not a value a fixture chose.
-    """
-    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
-    sources = Sources.from_json(read_text(CONFIG_DIR / "sources.json"))
-    state = REPO_ROOT / ledger.STATE_DIRNAME
-    records = source_health.endpoint_records(
-        ledger.load_health(state, today=newest_health_date(state), within_days=400)
-    )
-    retired = {row.endpoint_key for row in ledger.load_retirements(state)}
-    active = Counter(
-        feed.vertical for feed in sources.feeds if feed.status is LifecycleStatus.ACTIVE
-    )
-    for vertical in taxonomy.verticals:
-        if vertical.status is not LifecycleStatus.ACTIVE:
-            continue
-        askable = source_health.eligible(
-            sources.feeds, vertical.id, retired_keys=retired, records=records
-        )
-        assert len(askable) >= vertical.min_feeds, (
-            f"{vertical.id} has {len(askable)} feeds it may ask against a floor of "
-            f"{vertical.min_feeds}, so it would publish nothing - of "
-            f"{active[vertical.id]} a curator left active"
-        )
-
-
-def newest_health_date(state: Path) -> str:
-    """The last day the committed record covers, so the read does not move with the clock.
-
-    A window ending at today would make this test's answer depend on when it
-    ran, and the question it asks is about committed evidence rather than about
-    the hour.
-
-    Three listings - newest year, newest month, newest day - rather than a walk
-    of the tree. The ledger files by day, so the newest file's own path IS the
-    date, and the cost stays at most twelve plus thirty-one entries however long
-    the project runs (`CLAUDE.md` section 13, Guardrail #12). It used to glob the
-    month shards and hand back `<stem>-28`, which at day grain names a file the
-    ledger may never have held.
-    """
-    root = state / ledger.HEALTH_DIRNAME
-    years = [path for path in root.iterdir() if path.is_dir()] if root.is_dir() else []
-    if not years:
-        return "1970-01-01"
-    year = max(years)
-    month = max(path for path in year.iterdir() if path.is_dir())
-    day = max(path for path in month.iterdir() if path.suffix == ".csv")
-    return f"{year.name}-{month.name}-{day.stem}"
 
 
 def test_a_plan_that_spells_live_feeds_still_reads() -> None:
