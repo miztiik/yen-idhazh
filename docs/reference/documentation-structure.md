@@ -202,6 +202,22 @@ page that is too long costs a diluted answer; a page nobody opens costs a
 confident wrong one. Where the split test and the merge test disagree, the page
 stays whole.
 
+**The page you add to pays first.** A rule with no moment is a rule nobody runs,
+and the moment is when somebody already has the page open and already
+understands the material. Before you add a section, apply the split test to the
+page you are adding it to. Where that page already holds two questions, your new
+section starts the new page and takes its nearest sibling with it.
+
+**One addition buys at most one cut.** Nobody is asked to split a whole page, and
+a page needing four cuts gets them from four people who were each already there.
+That is what makes this scale where a migration project does not: the cost falls
+in proportion to how often a page is added to, so the pages growing fastest are
+the ones cut soonest.
+
+Where you judge the page whole, say so in the pull request in one line. A split
+declined on purpose and a split nobody considered produce the same diff, and
+only the sentence tells them apart.
+
 ### What a sentence has to do to stay
 
 **Keep the sentence a reader who skipped it would act wrongly without. Cut the
