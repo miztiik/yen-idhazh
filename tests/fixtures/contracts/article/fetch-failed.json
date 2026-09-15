@@ -25,6 +25,7 @@
   "text": null,
   "tier": 2,
   "title": null,
+  "title_source": null,
   "token_count": 0,
   "truncated": false,
   "truncated_at_tokens": null,

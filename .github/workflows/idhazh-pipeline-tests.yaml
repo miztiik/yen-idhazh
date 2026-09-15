@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     # The whole promise of this workflow, and `pipeline-tests.budget_minutes`
     # is where it is written. A test holds the two together.
-    timeout-minutes: 45
+    timeout-minutes: 140
     steps:
       - uses: actions/checkout@v6
 

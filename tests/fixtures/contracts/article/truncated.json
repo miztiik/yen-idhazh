@@ -28,6 +28,7 @@
   "text": "Example Grid has ordered four small modular reactors for a datacentre campus, with the first unit due in 2031. The order is worth 3.2 billion dollars and covers 1.2 gigawatts of capacity.",
   "tier": 1,
   "title": "Example Grid orders four small modular reactors",
+  "title_source": null,
   "token_count": 2500,
   "truncated": true,
   "truncated_at_tokens": 2500,
