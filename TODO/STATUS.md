@@ -35,13 +35,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
+| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 6 | 0 | 6 | 4 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 31
+## Ready now - 35
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -80,8 +81,12 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 |
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
+| #1 | 29 | - | Stop printing "Only one of our sources carried this" | - |
+| #2 | 29 | - | Two feeds of one outlet are one source | - |
+| #3 | 29 | - | Measure: title signal against the committed days | - |
+| #4 | 29 | - | Correct the token-share number defect 22 shipped | - |
 
-## Waiting on another row - 48
+## Waiting on another row - 50
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -133,6 +138,8 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
+| #5 | 29 | - | The title arm, at a floor row #3 sets | 3 is PENDING |
+| #6 | 29 | - | Draw the collapse | 3 is PENDING; 5 is PENDING |
 
 ## Finished - 18 plans with no live row
 
