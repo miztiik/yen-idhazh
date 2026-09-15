@@ -1,4 +1,10 @@
-"""Does every day already committed still read, and does the gate that checks them fail loudly?"""
+"""Does every day already committed still read, and does the gate that checks them fail loudly?
+
+Every day these tests open is built here. What the published tree happens to
+hold is the producer's question - `idhazh validate-days` reads every committed
+day on every publish - and asking it from pytest made a short or shallow
+checkout look like a code defect (`CLAUDE.md` section 13).
+"""
 
 from __future__ import annotations
 
@@ -13,6 +19,7 @@ from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh.cli import main
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
 from idhazh.contracts.knobs.ui import UiConfig
+from idhazh.stages import common
 from idhazh.stages.validate_days import stage_validate_days
 
 from ._fixtures import (
@@ -24,39 +31,6 @@ pytestmark = pytest.mark.contract
 
 
 DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
-
-
-def committed_days() -> list[Path]:
-    """Published days a test may read. The newest date is still being written to."""
-    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))[:-1]
-
-
-def test_the_published_tree_holds_days_to_migrate() -> None:
-    """The denominator for the one check below that still opens a real day.
-
-    `a_day_that_validates` reads the newest committed payload, and an empty tree
-    would leave it reading nothing while reporting the same pass as a tree it
-    read. The read-side migrations beside it are driven from a fixture instead,
-    so they no longer need this. `committed_days` already drops the date still
-    being written, so a tree holding only that one date reads as empty here.
-    """
-    assert committed_days(), "frontend/public/digest holds no finished day"
-
-
-def a_day_that_validates() -> dict[str, Any]:
-    """A finished committed day, taken off the real tree rather than written here.
-
-    The two tests below it are about a tree that holds a day the gate accepts,
-    and say nothing about what is in one. The real file is the cheapest such day
-    and it costs one read; `committed_days` keeps the date still being written
-    out of reach, because that one can be half a day at any moment.
-
-    Nothing here may depend on the day's LENGTH. A committed day is as long as
-    the run that wrote it managed to be, so a test that needs a particular
-    length builds one (`a_day_longer_than_the_seed`).
-    """
-    day: dict[str, Any] = json.loads(read_text(committed_days()[-1]))
-    return day
 
 
 #: Where a day written by these tests is filed, and the date it carries. One
@@ -105,6 +79,21 @@ def a_day_longer_than_the_seed(seed: int) -> dict[str, Any]:
         "partial": False,
         "embeddings": None,
     }
+
+
+def a_day_that_validates() -> dict[str, Any]:
+    """A day the gate accepts, built here rather than taken off the real tree.
+
+    The tests below it are about a tree that HOLDS a day the gate accepts and
+    say nothing about what is in one, so the cheapest such day is the one the
+    case above already proves the gate accepts whole.
+
+    It used to be the newest finished committed payload. That made three tests
+    depend on the archive carrying a finished day - which no commit can change
+    and a short or shallow checkout breaks on its own (`CLAUDE.md` section 13) -
+    and it made each of them read a file whose contents nobody here chose.
+    """
+    return a_day_longer_than_the_seed(UiConfig().shell_seed_items)
 
 
 def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = BUILT_DATE) -> Path:
@@ -160,22 +149,32 @@ def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -
     assert stage_validate_days(empty) == 1
 
 
-def test_the_gate_defaults_to_the_one_committed_tree(tmp_path: Path) -> None:
+def test_the_gate_defaults_to_the_one_committed_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Unlike `--site-tree`, which has no default because there are two trees.
 
     There is exactly one committed digest tree, so a default cannot point at the
     wrong one - and a step nobody has to give a path to is a step nobody gets
     wrong in a workflow.
 
-    One day is named, so this costs one day rather than every day the archive
-    has piled up (Guardrail #12). The receipts go to a directory this test owns: the
-    state root defaults to the committed one, and a test that appended to it
-    would leave the repository dirty for whoever ran it.
-    """
-    newest = committed_days()[-1]
-    day = "-".join(newest.parts[-4:-1])
+    The default is followed to a tree built here. Run against the real one, this
+    asked whether the committed days are well formed - the producer's own
+    question, answered on every publish - and it failed on a short or shallow
+    checkout that no commit caused (`CLAUDE.md` section 13). Two things a code
+    change CAN break are read instead: that `common.PUBLIC_ROOT` names the
+    committed tree, and that the flag follows it when nobody passes one.
 
-    assert main(["validate-days", "--day", day, "--state-root", str(tmp_path)]) == 0
+    The receipts go to a directory this test owns: the state root defaults to the
+    committed one, and a test that appended to it would leave the repository
+    dirty for whoever ran it.
+    """
+    assert common.PUBLIC_ROOT == REPO_ROOT / "frontend" / "public" / "digest"
+
+    root = a_tree_holding(tmp_path / "tree", a_day_that_validates())
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+
+    assert main(["validate-days", "--day", BUILT_DATE, "--state-root", str(tmp_path)]) == 0
 
 
 def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(

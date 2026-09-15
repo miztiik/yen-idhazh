@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -230,8 +230,10 @@ the floor is for. Five feeds' newest committed row is a robots refusal today -
 `anthropic-engineering`, `anthropic-research`, `axios-business`, `cbc-world` and
 `cnbc-top` - and two of the five sit on `ai`, so even if every one of them
 records a typed refusal on the next run, no desk moves under its floor.
-`backend/tests/contracts/test_run_plan.py::test_every_vertical_clears_its_own_feed_floor`
-is the gate, and it reads the committed ledger rather than a fixture.
+`stages/plan._plan_desks` is what says so when one does: an active desk under its
+floor writes a `WARNING` naming the desk, its askable count and the floor. The
+run reports it rather than a test gating on it, because a floor is crossed by an
+outage or a retirement and neither is a commit (`CLAUDE.md` section 13).
 
 The plan payload carries both numbers per desk, and the run manifest carries
 them too - `below_feed_floor` on its own says a desk went dark and neither

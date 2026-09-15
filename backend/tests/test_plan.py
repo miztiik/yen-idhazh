@@ -405,6 +405,36 @@ def test_a_vertical_below_its_feed_floor_is_counted_but_renders_nothing() -> Non
     assert built.items == []
 
 
+def test_a_desk_that_goes_silent_on_its_floor_says_so_in_the_run(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The silence is the defect the line exists for.
+
+    A desk under its floor plans nothing and raises nothing, so the run
+    succeeds, the digest publishes, and one section is simply absent. Retiring
+    40 feeds that had never published took `ai` to 28 against a floor of 35 and
+    `business-economy` to 12 against 21 on 2026-08-29 - 34 percent of that day's
+    items, gone quietly - and nothing in the repository said so.
+
+    This is the run's own report, not a check over `config/`. A floor is crossed
+    by a source outage, a retirement or a curator's edit, and none of those is a
+    commit - so a test that read the committed config and health went red on a
+    pull request that touched neither (`CLAUDE.md` section 13).
+    """
+    caplog.set_level("WARNING", logger="idhazh")
+    dark = plan([LAB, TRADE])
+
+    assert dark.verticals[0].below_feed_floor
+    assert "desk silent on its feed floor" in caplog.text
+    assert f"askable=2 floor={dark.verticals[0].feed_floor}" in caplog.text
+
+    caplog.clear()
+    lit = plan([LAB, TRADE, COMMUNITY])
+
+    assert not lit.verticals[0].below_feed_floor
+    assert "desk silent" not in caplog.text, "a desk that cleared its floor is not news"
+
+
 def test_a_second_vertical_with_no_feeds_still_appears_in_the_plan() -> None:
     """A desk that planned nothing is a fact about the day, not an absence."""
     energy = VerticalDef(id="energy", display_name="Energy", min_feeds=3, definition=DEFINITION)
