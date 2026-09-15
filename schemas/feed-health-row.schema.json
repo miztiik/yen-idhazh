@@ -29,19 +29,19 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "endpoint_key, robots_outcome, robots_checked_at, robots_status and target_attempted appended, every one of them nullable. The committed shards are rewritten onto the wider header in the same commit by backend/utilities/migrate_feed_health.py, and every rewritten row carries five empty cells.",
+      "change": "endpoint_key, robots_outcome, robots_checked_at and robots_status added.",
       "version": "2026-09-02T20:00",
-      "why": "The record could say what a feed answered and not which address was asked, whether the site allowed the request, or whether the request was made at all. A run cannot retire a dead address without knowing the address, and a robots refusal reads as a failed read without the permission beside it. Empty rather than backfilled: the configured URL may have moved since a row was written, and a guessed identity would retire the wrong address later."
+      "why": "The record said what a feed answered and not which address was asked."
     },
     {
       "change": "outcome gains `skipped`, for a run that held a quarantined feed back.",
       "version": "2026-08-23T12:00",
-      "why": "A quarantine that writes nothing can never lift: the failures that caused it stay the newest thing on record forever. A skip has to be recorded for the rest to end on its own."
+      "why": "A quarantine that writes nothing can never lift itself."
     },
     {
       "change": "Initial shape: the feed, the run, the outcome and what it yielded.",
       "version": "2026-08-23",
-      "why": "A feed can go quiet for a week before anybody notices, and nothing recorded whether a source answered. A quarantine rule and a health dashboard both need a measurement that already exists."
+      "why": "A feed can go quiet for a week before anybody notices."
     }
   ],
   "description": "One feed, one run, one row.",

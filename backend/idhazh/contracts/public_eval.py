@@ -56,44 +56,18 @@ class PublicEvalRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint, and the published column with it. BREAKING.",
-            why=(
-                "Nothing under frontend/src/ reads this file - measured 2026-09-13, the "
-                "console's own score read is payload.ts evalRows over state/scores/, and "
-                "the only readers of the published mirror are the backend's own "
-                "publish_scores.read_shard and publish_console_band. Both compare the "
-                "header tuple exactly, so a narrowing is a breaking CSV change and the two "
-                "committed months are rewritten one column narrower in this commit. That "
-                "rewrite is the read-side migration; no popper is owed, because "
-                "from_csv_row only ever reads the columns the shape declares."
-            ),
+            change="Removed pipeline_fingerprint, and the published column with it.",
+            why="No page reads this column, so publishing it cost bytes and bought nothing.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
-            why=(
-                "The stamp stopped being a gate, so the ledger row this mirrors no longer "
-                "carries one. The column stays, because the two committed months hold "
-                "values in it and a published file is never rewritten."
-            ),
+            why="The stamp stopped gating, so the ledger row this mirrors stopped filling it.",
         ),
         ChangelogEntry(
             version="2026-09-09",
-            change=(
-                "Initial shape: the score ledger's own measurements, typed, with "
-                "url_key, source_url and title refused at import."
-            ),
-            why=(
-                "The console reads state/scores/ at build time and serialises the "
-                "result into its document, so the ledger's shape crossed to a reader "
-                "as inlined JSON with no contract, no version stamp and no changelog "
-                "while the telemetry projection beside it has all three (Guardrail #3). "
-                "Naming the shape before a producer exists is what stops the producer, "
-                "the consumer and the gates each inventing their own list. item_id is "
-                "carried as an opaque key on the same terms PublicTelemetryRow carries "
-                "it: identity is minted by the ledger writer, and a published shard has "
-                "no writer left to re-mint it if that grammar moves."
-            ),
+            change="Initial shape: the score ledger's own measurements, typed, with url_key.",
+            why="The console serialised this at build time with no declared shape behind it.",
         ),
     )
 

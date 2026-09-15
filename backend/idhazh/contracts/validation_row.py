@@ -46,24 +46,13 @@ class ValidationRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-08-26",
-            change=(
-                "leaderboard_hhem may be null beside a leaderboard_provenance of "
-                "not_reported, and the verdict set gained qualified and not_qualified."
-            ),
-            why=(
-                "A single-model qualification has no incumbent to compare against, and the "
-                "candidate's model card publishes no summarization or faithfulness result. "
-                "Recording that absence as 0.0 invents a worst case. Older rows carry a "
-                "float and read as reported, which is the read-side migration."
-            ),
+            change="leaderboard_hhem may be null beside a leaderboard_provenance of not_reported.",
+            why="A single-model qualification has no incumbent to compare against.",
         ),
         ChangelogEntry(
             version="2026-08-22",
             change="Initial shape: the incumbent and its challengers, measured and predicted.",
-            why=(
-                "Row #7 is an ESCALATE gate, so its inputs and its verdict are a persisted "
-                "contract rather than a paragraph in a pull request."
-            ),
+            why="An escalation gate's inputs and verdict have to be a persisted record.",
         ),
     )
 

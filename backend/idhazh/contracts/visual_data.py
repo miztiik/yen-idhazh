@@ -198,22 +198,8 @@ class VisualData(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T20:00",
-            change=(
-                "Initial shape: the marks with their values and provenance, the "
-                "encoding that says which of them fills which channel, the type, and "
-                "renderer_version."
-            ),
-            why=(
-                "The owner ruled on 2026-09-13 that the reader's browser draws the "
-                "chart and the pipeline never draws one, so the compiled data has to "
-                "reach the reader. It could not: VisualDecision.spec lands under "
-                "gitignored backend/var/, travels as a one-day artifact, and the "
-                "published DigestVisual carried only where the drawing was. This is "
-                "that data as a published contract. It lands ahead of the drawing code "
-                "on purpose - while the build-time renderer still runs, the data on the "
-                "wire can be checked against the picture the old renderer drew, and the "
-                "moment that renderer is deleted the comparison is gone for good."
-            ),
+            change="Initial shape: the marks with their values and provenance, the encoding.",
+            why="The reader's browser draws the chart, so it needs the marks rather than an SVG.",
         ),
     )
 

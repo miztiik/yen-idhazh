@@ -63,20 +63,8 @@ class DayValidationReceipt(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-08",
-            change=(
-                "Initial shape: the day, the length and digest of the payload that "
-                "passed, and the identity of the validator that passed it."
-            ),
-            why=(
-                "`validate-days` re-read every committed day on every publication and "
-                "every CI run - 18 days and 19,867,266 bytes on 2026-09-08, 0.45 s "
-                "median, and one day more every day nobody writes any code (Guardrail #12). "
-                "A published day is frozen, so re-reading it can only find a fault the "
-                "day it was written already refused. What can change is the contract it "
-                "is read through, so the receipt keys on the validator's identity as "
-                "well as on the payload, and a validator that moves invalidates every "
-                "row at once."
-            ),
+            change="Initial shape: the day, the length and digest of the payload that passed.",
+            why="`validate-days` re-read every committed day on every publication.",
         ),
     )
 

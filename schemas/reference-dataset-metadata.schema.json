@@ -737,17 +737,17 @@
     {
       "change": "Added the cleaning phase and its totals.",
       "version": "2026-09-13T13:05",
-      "why": "Cleaning writes a new collection rather than editing the frozen extraction, so it needs its own phase and its own totals. removed_lines carries every line the pass took out, because this is the one step that changes an article's text."
+      "why": "Cleaning writes a new collection rather than editing the frozen extraction."
     },
     {
       "change": "Removed extraction_totals.attempts.",
       "version": "2026-09-13T11:40",
-      "why": "The extraction makes one request per identity, so attempts and unique_attempted were computed from the same set and could never disagree. A number that cannot disagree with its neighbour reads as a check and is decoration (Guardrail #10)."
+      "why": "One request per identity makes attempts and unique_attempted the same number."
     },
     {
-      "change": "Initial shape: the phase, the input and output identity, the count maps, the frozen publisher map, the resolved settings, and one totals block per phase.",
+      "change": "Initial shape: the phase, the input and output identity, the count maps.",
       "version": "2026-09-13",
-      "why": "A collection file is a bare JSON array, so the provenance it cannot carry lives beside it (Guardrail #3). The resolved settings are recorded per run because a later edit to `config.json` must not change what an earlier result claims to have been built with."
+      "why": "A collection file is a bare JSON array, so its provenance needs a home."
     }
   ],
   "description": "The `.meta.json` beside one collection file: what wrote it, from what, and how much.\n\nOne model for the three phases, with one block each and a refusal when the\nblock does not match the phase. Three near-identical models would drift, and\na single flat model would let an import file carry a selection's counts.\n\nEvery count here is read back off the written file rather than carried from\nthe loop that produced it: two numbers computed from one variable agree by\nconstruction and prove nothing (Guardrail #10).",

@@ -216,104 +216,28 @@ class RuntimeCountersRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-12",
-            change=(
-                "Appended `job`, the workflow job that wrote the row, defaulted to "
-                "`work`. `ledger.RUNTIME_COUNTERS_KEY` gained it in the same commit."
-            ),
-            why=(
-                "Every row committed up to 2026-09-12 came from the `work` job - 293 "
-                "of them on the day this landed - because exactly one workflow step "
-                "ran `idhazh counters` and it sits in that job. So the summarizer's "
-                "live-path figures are on record and the visual planner's are not: the "
-                "4B has no `prompt_tokens_cached_total`, no `peak_rss_bytes`, no "
-                "`prompt_seconds_total` and no `n_ctx_configured` taken in the digest "
-                "path, and a `llama-bench` run produces none of the four. The `visuals` "
-                "job now writes a row of its own, and two jobs appending to one ledger "
-                "make the old key ambiguous: both spell shard 0 of the same run, so "
-                "without this cell the second row is dropped as a repeat of the first. "
-                "The default is a reading rather than a guess, which is what lets a row "
-                "written before this column existed still validate."
-            ),
+            change="Appended `job`, the workflow job that wrote the row, defaulted to `work`.",
+            why="Every row came from one job, so a second job's rows would have been unreadable.",
         ),
         ChangelogEntry(
             version="2026-09-08",
-            change=(
-                "Appended `n_ctx_configured`, the window one sequence got; "
-                "`python_peak_rss_bytes`, the high-water mark summed over the job's own "
-                "python processes; and `cgroup_peak_bytes`, what the kernel counted "
-                "against the job's memory limit."
-            ),
-            why=(
-                "`peak_rss_bytes` is llama-server's high-water mark ALONE, so every "
-                "headroom figure this project has published is an upper bound on "
-                "headroom - the unsafe direction. Measured over the four committed "
-                "captures of run `2026-08-29-3`, llama-server and python together held "
-                "14.31 GiB at one instant on the worst shard, leaving 0.59 GiB of the "
-                "runner's 14.90 GiB usable, where llama-server alone reads 13.16 GiB "
-                "and 1.74 GiB free. Python was two thirds of the missing gigabyte and "
-                "no committed row carried it. The cgroup peak is the only reading that "
-                "covers every process at once, and it reached a two-day artifact and "
-                "no further. The window lands beside them because a memory figure "
-                "cannot be read against another run's without it - `n_ctx` is a config "
-                "value, and raising it is what the next plan row does."
-            ),
+            change="Appended `n_ctx_configured`, the window one sequence got.",
+            why="`peak_rss_bytes` is the server's high-water mark alone, so headroom needs both.",
         ),
         ChangelogEntry(
             version="2026-08-30",
-            change=(
-                "Appended `cpu_busy_pct`, the share of every processor second the host "
-                "spent busy over the job; `peak_rss_bytes`, llama-server's own high-water "
-                "mark; and `model_load_ms`, the time the server took to open the weights."
-            ),
-            why=(
-                "The row said what the server counted and how long the job took, and "
-                "nothing about the machine that did it. Three questions had no committed "
-                "answer. A shard that reads the prompt 2.30x slower than its sibling in "
-                "the same run is either short of processor or waiting on something else, "
-                "and only a busy figure separates those - the cgroup ran 3.99 of 4 "
-                "processors when it was last measured by hand, so the reading is expected "
-                "at or near 100 and a drop is the signal. Whether a candidate model fits "
-                "the runner's 16 GB at `n_ctx` 8192 was answered by whether the run "
-                "survived; a qualification proves a model is fast enough and faithful "
-                "enough and proves nothing about what it holds. And model load is the "
-                "fixed cost `run.shard_size` exists to amortise, which cannot be sized "
-                "against a number nobody kept."
-            ),
+            change="Appended `cpu_busy_pct`, the share of processor seconds the host spent busy.",
+            why="The row said what the server counted, never whether the host was saturated.",
         ),
         ChangelogEntry(
             version="2026-08-29",
-            change=(
-                "Appended `job_seconds`, the shard job's own clock up to this scrape, "
-                "and `cpu_model`, the processor the host drew."
-            ),
-            why=(
-                "The truncation cap reverts when the slowest work job passes 110 "
-                "minutes on two of three scheduled runs, and no committed file carried "
-                "a job's clock - only the GitHub jobs API did, and it drops a job "
-                "record when the run ages out. A rollback rule that reads an instrument "
-                "outside the repository is checked by hand or not at all. The CPU model "
-                "lands in the same row because this project has measured a 3.1x swing "
-                "in read throughput between hosts, so a clock without the part it was "
-                "taken on cannot be compared with the next run's (Guardrail #10). Both are "
-                "one fact about one work job, which is exactly this row's grain; the "
-                "run manifest is one row per run and a run draws up to eight hosts."
-            ),
+            change="Appended `job_seconds`, the shard job's own clock up to this scrape.",
+            why="A cap reverts on the slowest work job, and nothing recorded that clock.",
         ),
         ChangelogEntry(
             version="2026-08-27",
-            change=(
-                "Initial shape: the shard, and the llamacpp: counters its server "
-                "reported at job end."
-            ),
-            why=(
-                "The item-health ledger's prefill and decode timings are copied out of "
-                "the model's own replies, one request at a time, and two published "
-                "surfaces quote rates derived from them. Nothing committed could check "
-                "either, because the server's own counters were scraped into a job log "
-                "that keeps them for two days. A number that cannot be reconciled "
-                "cannot justify a design (Guardrail #10), so the second instrument is now a "
-                "committed row."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

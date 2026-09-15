@@ -53,25 +53,13 @@ class SeenRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-08-31",
-            change="Removed canonical_url. The row is url_key, first_seen_at and first_seen_run.",
-            why=(
-                "The same defect PublishedRow shed on 2026-08-26, one ledger over, and "
-                "it was worse here because this ledger is written for every candidate "
-                "rather than for every published item. `load_seen` is the only reader "
-                "and it opens url_key and first_seen_at. Measured on the committed "
-                "shard: 2,800,867 of 5,705,102 bytes, 49.1 percent of the file, over "
-                "25,036 rows in 8 days. The address is still recoverable where it "
-                "matters - a row that reached a reader joins to that day's payload by "
-                "url_key, and a row that did not is one nobody can look up anyway."
-            ),
+            change="Removed canonical_url.",
+            why="Nothing on the read path opened it, and it doubled the row for no reader.",
         ),
         ChangelogEntry(
             version="2026-08-22T11:00",
             change="Initial shape: the address, when we first saw it, and the run that saw it.",
-            why=(
-                "An undated article has no age we can trust. First sight is the only "
-                "honest one, and it has to survive the run that observed it."
-            ),
+            why="An undated article has no age we can trust.",
         ),
     )
 
@@ -103,50 +91,23 @@ class PublishedRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
+            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
+            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-09-08",
             change="Named the day file instead of the flat state/published.csv.",
-            why=(
-                "The flat file was split into state/published/YYYY/MM/DD.csv and "
-                "removed, so the description named a file that no longer exists. No "
-                "field moved and no cell changed, so nothing migrates - but the "
-                "generated schema does change, and a schema that changes with no "
-                "changelog entry is a diff nobody can explain."
-            ),
+            why="The flat file was split into state/published/YYYY/MM/DD.csv and removed.",
         ),
         ChangelogEntry(
             version="2026-08-26",
-            change="Removed canonical_url. The row is url_key, published_on and item_id.",
-            why=(
-                "Nothing on the read path opened it: load_published maps url_key to "
-                "published_on by name. It was 48.6 percent of a row on a ledger with "
-                "no time bound. The address is recoverable by joining item_id and "
-                "published_on against that day's payload, which retention may not touch."
-            ),
+            change="Removed canonical_url.",
+            why="Nothing on the read path opened it: load_published maps url_key to published_on.",
         ),
         ChangelogEntry(
             version="2026-08-22T11:00",
             change="Initial shape: the address, the day it ran, and the item it ran as.",
-            why=(
-                "A freshness window cannot stop a repeat on its own. Late-evening "
-                "articles are still inside the window the next morning."
-            ),
+            why="A freshness window cannot stop a repeat on its own.",
         ),
     )
 

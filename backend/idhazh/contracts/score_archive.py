@@ -276,59 +276,23 @@ class ScoreArchive(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T23:00",
-            change=(
-                "source_sha256 digests the month's day files in day order, where it "
-                "digested one month shard. No field moved and no type changed."
-            ),
-            why=(
-                "state/scores/ files by day from today, so a month is a directory of "
-                "<YYYY>/<MM>/<DD>.csv rather than one file, and the field that says "
-                "WHICH bytes this summarises has to name all of them. No read side "
-                "migrates: state/score-archive/ has never been written, because the "
-                "prune that writes it takes --dry-run from the workflow step."
-            ),
+            change="source_sha256 digests the month's day files in day order.",
+            why="The ledger files by day now, so a month is a directory and not one file.",
         ),
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint from a cohort. BREAKING, and nothing to migrate.",
-            why=(
-                "It left the cohort key on 2026-09-12 and no writer has filled it since. No "
-                "archive exists to migrate: state/score-archive/ is absent from this "
-                "checkout, and the first month prune_scores can fold is 2026-08 on "
-                "2027-10-01, so the shape moves before any payload of it was ever written."
-            ),
+            change="Removed pipeline_fingerprint from a cohort.",
+            why="It had already left the cohort key, and no writer has filled it since.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
-            change=(
-                "pipeline_fingerprint is optional and leaves the cohort key, which is now "
-                "(date, run, row version, model, scorer)."
-            ),
-            why=(
-                "Splitting a month's rows on a stamp that moved on any of seventeen inputs "
-                "turned one day into several cohorts of a handful of rows each, which is "
-                "how a monthly figure stopped being readable. The field stays on the "
-                "cohort so an archive written before today still validates."
-            ),
+            change="pipeline_fingerprint is optional and leaves the cohort key.",
+            why="Splitting a month on a stamp that moved on any of seventeen inputs split noise.",
         ),
         ChangelogEntry(
             version="2026-09-03",
-            change=(
-                "Initial shape: one archived month, its source hash and row count, its "
-                "sorted observation digests, and one cohort per (date, run, row "
-                "version, model, pipeline, scorer)."
-            ),
-            why=(
-                "state/scores/ is the largest store under state/ - 5,335 rows in "
-                "4,266,655 bytes on 2026-09-03 - and nothing bounded it. Deleting an "
-                "old month outright would erase the evidence behind every published "
-                "quality claim about it, and would let every measurement in it be "
-                "scored again as if it were new, because evals.writer refuses a repeat "
-                "by reading the rows themselves. This shape is what a month is turned "
-                "into before its shard is unlinked: the cohorts keep the totals, "
-                "rates, distributions, ranges and spread, and the digest index keeps "
-                "the dedupe exact."
-            ),
+            change="Initial shape: one archived month, its source hash, row count and sorted keys.",
+            why="The score ledger is the largest store under state/ and nothing folded it.",
         ),
     )
 

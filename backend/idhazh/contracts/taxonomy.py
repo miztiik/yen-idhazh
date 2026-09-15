@@ -235,150 +235,28 @@ class Taxonomy(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T13:49",
-            change=(
-                "Added VerticalDef.floor, the fewest stories a desk publishes in a day, and "
-                "VerticalDef.ceiling, the most of a day it may hold as a share."
-            ),
-            why=(
-                "Five desks cannot go empty today and nothing in the code guarantees it - a "
-                "feed sits on exactly one desk and min_feeds counts FEEDS rather than "
-                "stories, so the five are held up by the shape of config/sources.json and not "
-                "by a rule. The measured risk when the desk becomes what the article says it "
-                "is, is the opposite of an empty desk: three AI-adjacent stories arriving on "
-                "an Energy feed, a Business feed and a World feed are three desks today and "
-                "one desk afterwards, so a five-desk digest becomes a one-desk digest with "
-                "four thin rails on exactly the day a reader most needs the other four. The "
-                "ceiling stops that and the floor fills the gap it leaves. Both re-file a "
-                "story onto its second-best desk and neither admits or drops one, so the day "
-                "is exactly as long either way. Both sit beside min_feeds because that is "
-                "where a desk's other bound already is, and both are per-desk because ai has "
-                "35 feeds where the other four have 21. Additive with defaults that are the "
-                "identity - floor 0 and ceiling 1.0 are no rule - so a taxonomy written "
-                "before this still validates and moves nothing; no read-side migration is "
-                "needed. Optional rather than required on purpose: the schema gates shape and "
-                "never contents, and a taxonomy fixture another plan writes must still "
-                "validate without them."
-            ),
+            change="Added VerticalDef.floor, the fewest stories a desk publishes in a day.",
+            why="Nothing in the code stopped a desk going empty on a quiet day.",
         ),
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "EventDef extends Lifecycled, so an event carries status and retired_on the "
-                "way a vertical and a lens already do. definition_block offers only active "
-                "events, event_terms drops a retired one, and the definition rule asks only "
-                "the events the vocabulary still offers."
-            ),
-            why=(
-                "Retire, never delete is the rule the other two vocabularies follow, and the "
-                "event vocabulary could not follow it: EventDef extended plain Model, so there "
-                "was nothing to retire an event WITH. Deleting the entry was the only way to "
-                "stop offering a word, and that leaves every committed day carrying it holding "
-                "an id nothing can name - which is the cost the lens tombstone already exists "
-                "to avoid. Additive with defaults, so a taxonomy written before this still "
-                "validates unchanged and every event in it reads as active; no read-side "
-                "migration is needed. Its own entry rather than a clause of the "
-                "2026-09-12T03:55 retype, because that one is breaking on the write side and "
-                "an expand bundled into a break cannot be reverted on its own (section 11)."
-            ),
+            change="EventDef extends Lifecycled, so an event carries status and retired_on.",
+            why="Retire, never delete is the rule the other two vocabularies follow.",
         ),
         ChangelogEntry(
             version="2026-09-12T03:55",
-            change=(
-                "LensDef.id and EventDef.id are Slug rather than the closed LensId and "
-                "EventType enums, which are deleted. Taxonomy no longer requires the "
-                "file to label every enum member exactly once; ids must only be "
-                "distinct within their vocabulary."
-            ),
-            why=(
-                "Adding or retiring a lens was a Python edit, a schema regeneration and "
-                "a release, which is the opposite of the rule that a label vocabulary is "
-                "config - and it is why the vocabulary had not moved. The schema now "
-                "gates shape (the slug pattern) and never membership, so a word is one "
-                "config edit. Breaking on the write side, read-compatible on the read "
-                "side and deliberately so (section 11): every id any committed payload "
-                "carries is a well-formed slug, so a widened type accepts every one of "
-                "them, where a narrowed one would reject a day whose word this file has "
-                "since stopped carrying. Nothing may invent a label, because "
-                "tag.tags can only return a key of the mapping this file builds. What "
-                "the enum was also doing was making it impossible to DELETE an id: "
-                "measured 2026-09-12, ai-roi is retired here and carried by 18 committed "
-                "items over 2026-08-27, 08-28 and 08-29, so deleting it rather than "
-                "tombstoning it would leave those 18 holding a word nothing can name. "
-                "That is what the reading side migrates for - it renders an id it cannot "
-                "name rather than dropping it."
-            ),
+            change="LensDef.id and EventDef.id are Slug rather than the closed LensId.",
+            why="Adding or retiring a lens was a source edit where it should be a config edit.",
         ),
         ChangelogEntry(
             version="2026-09-12",
-            change=(
-                "Added VocabularyEntry.definition to every vertical, lens and event, "
-                "and is_auto_discovered to VerticalDef and LensDef."
-            ),
-            why=(
-                "An id and a display name tell a model nothing. `research` means "
-                "whatever sentence sits next to it, so the sentence is the label and it "
-                "has to be somewhere a person can edit without touching Python - change "
-                "the text and the next run labels against it, with no code change and "
-                "no schema regeneration. The bound is a token budget: 30 definition "
-                "sentences measured 805 tokens together with llama-tokenize against the "
-                "pinned Qwen3-8B-Q4_K_M on 2026-09-11, about 27 tokens each, and 240 "
-                "characters is roughly twice that. is_auto_discovered says a model "
-                "proposed the entry, which stops a word that arrived from the open web "
-                "reading like one a person chose. Both are additive with defaults, so a "
-                "taxonomy written before this still validates and offers nothing extra "
-                "to a prompt; no read-side migration is needed. An entry the vocabulary "
-                "does offer must carry its sentence, which is a rule on Taxonomy rather "
-                "than a required key, because a draft entry has no definition yet."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-30",
-            change=(
-                "Added the war, trade and chips lenses, and LensDef.weight. "
-                "ai-roi keeps its id and is retired in config."
-            ),
-            why=(
-                "A lens could only label, so the vocabulary had no way to say a theme "
-                "was worth publishing. Measured 2026-08-30 over the 2,900 published "
-                "items on record, 2,683 of them - 92.5 percent - carried no lens at "
-                "all, while war words appeared in 637 and tariff words in 75 with no "
-                "id to hold them. weight is what a lens adds to a rank when one of its "
-                "terms is in the headline, which is all a run has at plan time. Zero is "
-                "the default and the answer for most lenses: a bonus rescues a story "
-                "one outlet has and nobody has repeated, and on a theme every wire "
-                "already carries it compounds a lead repetition gave. Additive with a "
-                "default, so a taxonomy written before this still validates and scores "
-                "nothing. Three new enum members widen a closed vocabulary, so an older "
-                "payload still reads - no published lens id was removed or renamed, and "
-                "ai-roi is tombstoned rather than deleted so days that carry it stay "
-                "valid (section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-26",
-            change="Added keywords to LensDef and EventDef.",
-            why=(
-                "Both vocabularies shipped with no way to say what assigns a tag, so "
-                "nothing ever did: 0 of 2,121 committed items carried a lens or an event. "
-                "The rule cannot be derived from the id - measured, deriving it tags 88.2 "
-                "percent of items because `ai` sits inside `said` - so it has to be "
-                "written down. Additive with an empty default, so a taxonomy written "
-                "before this still validates and simply assigns nothing."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-22T11:00",
-            change="Removed VerticalDef.daily_cap.",
-            why=(
-                "It decided how big a vertical's day was before the ranking had a say. "
-                "Supply and the score set the size now; max_per_source still stops one "
-                "feed becoming the vertical."
-            ),
+            change="Added VocabularyEntry.definition to every vertical, lens and event.",
+            why="An id and a display name tell a model nothing.",
         ),
         ChangelogEntry(
             version="2026-08-21",
-            change="Initial shape: verticals, lenses and events.",
-            why="Contracts before logic - the vocabulary is fixed before any stage reads it.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

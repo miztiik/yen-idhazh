@@ -112,27 +112,13 @@ class Watchlist(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-08-31",
-            change=(
-                "EntityDef gained kind, so an entry can be a subject and not only "
-                "an organisation."
-            ),
-            why=(
-                "A running story - a pandemic, a tournament, an export-control regime - "
-                "has no SEC filer id and no feed of its own, and the registry described "
-                "itself as a list of named organisations, so nothing could hold one. The "
-                "field defaults to organisation, which is what all 30 committed entries "
-                "are, so the change is additive and no payload needs a migration."
-            ),
+            change="EntityDef gained kind, so an entry can be a subject and not only an outfit.",
+            why="A running story is a subject a reader follows, and nothing could name one.",
         ),
         ChangelogEntry(
             version="2026-08-26",
             change="Stated the match rule on EntityDef.aliases.",
-            why=(
-                "The field was declared on day one and read nowhere, so entities were "
-                "empty on every committed item and the watchlist ranking bonus had never "
-                "moved a score. The rule is now written where the terms live. "
-                "Description-only, so no payload changes and none needs a migration."
-            ),
+            why="The field was declared on day one and read nowhere, so entities were empty.",
         ),
         ChangelogEntry(
             version="2026-08-21",

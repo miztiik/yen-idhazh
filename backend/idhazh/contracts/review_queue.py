@@ -145,19 +145,8 @@ class ReviewQueue(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Initial shape: the three populations that have a producer, one row an "
-                "item, and a census carrying each population's true size beside the "
-                "number of rows kept."
-            ),
-            why=(
-                "Contracts before logic - the review tree's renderer and the reviewing "
-                "tools that read it back are written against a fixed payload (Guardrail #3). "
-                "The file is gitignored and rebuilt by a re-run, and it is a contract for "
-                "the reason EvidenceItem is one: it is written on a runner and read on a "
-                "reviewer's machine, so the reader has to be able to refuse a queue it "
-                "cannot trust."
-            ),
+            change="Initial shape: the three populations that have a producer, one row an item.",
+            why="Contracts before logic - the review tree's renderer and the reviewing tools.",
         ),
     )
 

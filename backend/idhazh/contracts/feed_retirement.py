@@ -55,17 +55,8 @@ class FeedRetirementRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-02T20:00",
-            change=(
-                "Initial shape: the feed, the endpoint, the day, the deciding run, the "
-                "cause and the runs that evidenced it."
-            ),
-            why=(
-                "Only a person could stop the pipeline asking a dead address, so a feed "
-                "the server reported permanently gone was requested on every run until "
-                "somebody edited curated config. The record has to live outside "
-                "config/sources.json: a generated commit may not rewrite a file a "
-                "person curates."
-            ),
+            change="Initial shape: the feed, the endpoint, the day, the deciding run, the cause.",
+            why="Only a person could stop the pipeline asking a dead address.",
         ),
     )
 

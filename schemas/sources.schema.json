@@ -167,34 +167,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "A salience feed's description no longer says a vote is worth collect.front_page_bonus. No field was added, removed or retyped, so a config/sources.json written before this still loads and needs no read-side migration.",
+      "change": "A salience feed's description no longer prices a front-page vote.",
       "version": "2026-09-13T18:00",
-      "why": "collect.front_page_bonus was removed in the same commit, so the sentence named a config key that no longer exists. A vote is now a published fact about the item rather than a term of the score, and the description says which of the two it is."
+      "why": "The knob that paid for the vote was removed in the same commit."
     },
     {
       "change": "Added feed form with an abstract value.",
       "version": "2026-08-23T18:47",
-      "why": "A reader must be told when the summary is of an abstract, but detecting that from page text would turn a stranger's words into control data. The form is declared per feed instead."
+      "why": "A reader must be told when the summary is of an abstract and not an article."
     },
     {
       "change": "Split retired feeds out of feeds into their own list.",
       "version": "2026-08-22T10:00",
-      "why": "A retired feed sat in the list Collect loops, so it cost a request every run and its articles still reached a reader - the retirement was recorded and not honoured. Two lists make the live one lean and the rule structural rather than a filter every caller has to remember."
+      "why": "A retired feed sat in the list Collect loops, so it cost a request every run."
     },
     {
       "change": "Removed weight from a salience feed.",
       "version": "2026-08-22T09:00",
-      "why": "Nothing read it. A vote is worth collect.front_page_bonus - one number for every aggregator - so a per-feed weight was a knob that looked tunable and moved nothing."
+      "why": "Nothing read it."
     },
     {
-      "change": "Added kind to a feed.",
-      "version": "2026-08-21T06:00",
-      "why": "A company announcing its own product and a reporter measuring it arrived looking identical. Reader named this as the one thing an item lacked before they would share it."
-    },
-    {
-      "change": "Initial shape: per-vertical feeds plus a separate salience list.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-21",
-      "why": "Contracts before logic - Collect is written against a fixed source shape."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "`config/sources.json` - what the Collect stage consults.",

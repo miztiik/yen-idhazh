@@ -66,19 +66,8 @@ class CounterfactualScoreRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-14T11:00",
-            change=(
-                "Initial shape: the desk, the address, whether the run took it, the "
-                "lens it matched and that lens's committed weight, the multiplier the "
-                "counterfactual asked about, and the two scores."
-            ),
-            why=(
-                "A lens weight was a number somebody picked, and no committed file said "
-                "what a different number would have done. The half that cannot be "
-                "recovered afterwards is the refused candidate: it reaches no payload "
-                "and no page, and the next run rebuilds its candidate list from feeds "
-                "that have moved on. Writing the pair at plan time is the only way the "
-                "question stays answerable."
-            ),
+            change="Initial shape: the desk, the address, whether the run took it, the lens.",
+            why="A lens weight was a number somebody picked and no committed file priced it.",
         ),
     )
 

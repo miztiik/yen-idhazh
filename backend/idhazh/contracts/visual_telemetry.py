@@ -224,19 +224,8 @@ class VisualAttemptRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T23:50",
-            change=(
-                "Initial shape: one row per attempt at a visual, carrying the eight "
-                "terms the fold groups on and the two columns it keeps a distribution "
-                "of. No writer yet."
-            ),
-            why=(
-                "The fold this store takes at the window edge deletes the full-grain "
-                "shard, so the group key has to be settled before the first row is "
-                "written - a key settled narrow cannot be widened later against data "
-                "that no longer exists. Settling it needs the shape it is a key OVER, "
-                "so the attempt row is declared here at the grain the fold reads and "
-                "widened by the row that builds the writer."
-            ),
+            change="Initial shape: one row per attempt at a visual, carrying the eight terms.",
+            why="The fold this store takes at the window edge deletes the full-grain shard.",
         ),
     )
 
@@ -403,19 +392,8 @@ class VisualAggregateRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T23:50",
-            change=(
-                "Initial shape: one row per eight-term group, folded from a month of "
-                "visual attempts, carrying counts and two distributions."
-            ),
-            why=(
-                "state/visuals/ folds at observability.visuals_full_grain_months and the "
-                "fold deletes the full-grain shard, so this shape is the whole of what a "
-                "reader can ever ask of an old month. Four questions have to survive it: "
-                "which gate refused most, how the keep rate moved with downgrade depth, "
-                "how the strata differ, and how the measured columns are shaped. Folding "
-                "on date alone answers none of the last three, and a mean answers the "
-                "fourth with the one statistic that hides a bimodal spread."
-            ),
+            change="Initial shape: one row per eight-term group, folded from a month of attempts.",
+            why="The visual store folds at the window edge and needed a shape to fold into.",
         ),
     )
 

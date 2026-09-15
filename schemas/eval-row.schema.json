@@ -16,79 +16,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "pipeline_fingerprint stays on this one shape after leaving the other nine, and its description now carries the condition that removes it.",
+      "change": "pipeline_fingerprint stays on this one shape after leaving the other nine.",
       "version": "2026-09-13T22:00",
-      "why": "It is still read. Measured 2026-09-13: frontend/src/lib/server/payload.ts reads state/scores/ at build time and hands the rows to model-work.ts, whose pipelineChanges draws the operator console's model-change boundaries from this column for every day before RECORDED_INPUTS_FROM. All 23 committed run.json files carry no recorded inputs at all, so that column is the only source of those boundaries and dropping it would make the panel report that nothing moved across nine days on which something did. No field moved; the description did, so the schema moves with it."
+      "why": "The console still reads its column for every day before the recorded inputs."
     },
     {
       "change": "pipeline_fingerprint is optional and nothing sets it.",
       "version": "2026-09-12T21:00",
-      "why": "It keyed the eval window - a quality number counted only after N run-days at one stamp - and the stamp moves on any of seventeen inputs, so the window never opened. Relaxing rather than removing keeps every committed row valid; the drop and its read-side migration are their own commit."
+      "why": "It keyed the eval window, and the window stopped being keyed on a stamp."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
+      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
       "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
+      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
-      "change": "Added new_fact_rate, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "change": "Added new_fact_rate, nullable, at the end of the row.",
       "version": "2026-09-07T01:00",
-      "why": "Rows 1 to 3 reordered the key-point decode, moved the count onto the band and dropped a restating key point rather than failing the item, and nothing measured whether any of it worked. new_fact_rate is that instrument: the share of an item's key points that add a fact the summary does not already carry, the aggregate inverse of the drop, read at the same distinctness ceiling. Null and not 0.0 on the rows that predate it: 0.0 is a scored reply whose every key point restated, which is not what an unscored row can claim. Recorded only - no band reads it, so METRICS_VERSION did not move."
+      "why": "A summary can add a fact the article never carried and nothing counted it."
     },
     {
-      "change": "hhem_delta, truncation_flagged and score_ms each say what they hold and how to read them. No column was added, removed or retyped.",
-      "version": "2026-08-30T20:00",
-      "why": "The owner had to ask what two of these columns meant, which is the definition of a description not doing its job, and each of the three carries a trap a reader cannot see from the cell. hhem_delta is derived and recomputed on read, so it is not an independent measurement, and the window geometry moves it by more than the whole medium band. truncation_flagged means one thing before 2026-08-29T09:00 and another after, so a query without the version branch reads two facts as one. score_ms is off the critical path and exists to size the census-versus-sample decision, which observability.sample_rate now implements. The generated schema moves because a description is part of it; every committed row still validates unchanged."
-    },
-    {
-      "change": "truncation_flagged is Article.truncated - whether extract cut the article body. It was hhem_delta above evaluation.truncation_gap_max, or a brief item copied past evaluation.brief_compression_ceiling. No column was added or removed and no row was rewritten.",
-      "version": "2026-08-29T09:00",
-      "why": "The column's name says the article was cut short and its only consumer prints exactly that sentence, and it was reading a faithfulness gap instead. The gap cannot answer the question: score_over_chunks takes the best of overlapping windows, and a cut article's last window is not a window of the whole article, so the two maxima are taken over different premises and the difference is not a cost. Measured 2026-08-28 over all 2,683 committed rows of state/scores.csv: 22 rows were genuinely cut, hhem_delta over them runs -0.1235 to +0.0381 against a threshold of +0.100, and the flag fired on 0 of them. It fired on exactly one row in the whole ledger, and that row read 748 words of a 748-word article. The brief-copying clause went with it: verbatim_run and extractiveness already carry that fact, and one column answers one question. A row stamped before this is UNKNOWN and never False, in both directions: a row before 2026-08-27T20:30 held two scores of one text so its gap could not be non-zero, and a row between the two stamps held a real gap read by the wrong rule. Neither state is recoverable from the row, so frontend/src/lib/server/model-work.ts counts the column only over rows stamped at or after 2026-08-28 and prints absence as absence."
-    },
-    {
-      "change": "source_word_count is nullable, source_seen_word_count may not exceed it, and the committed ledger is rewritten to obey that.",
-      "version": "2026-08-27T21:00",
-      "why": "The stamp below fixed the writer and left the committed rows carrying the old meaning. Measured over all 2,566 rows: 610 have the seen count LARGER than the full count, and every one of them was written by the old writer - none of the 220 rows the fixed writer produced reads that way. Nothing compared the two cells, which is how the pair stayed wrong for months, so the rule is a validator now rather than a habit. Null and not zero where the length cannot be recovered: extract discards the pre-cap body, so a truncated row written before this has no full length anywhere and zero would say the article was empty. backend/utilities/migrate_score_ledger.py is the read-side migration. It recovers rather than guesses - an article under the cap IS the text the model saw, so its two counts are equal by construction, and 2,204 rows got a real number back while 142 were emptied."
-    },
-    {
-      "change": "hhem_full is now scored against the article before the truncation cap, so hhem_delta and truncation_flagged can be non-zero. No column was added or removed and no row was rewritten.",
-      "version": "2026-08-27T20:30",
-      "why": "dual_score exists to tell a model that invented something from a model that faithfully summarized the half we gave it, and its only production caller handed it the same string twice: extract.truncate_to_tokens returned the cut text and to_article kept only that. Measured over all 2,232 rows written before this, hhem_delta is exactly 0.0 on 2,232 of 2,232 and hhem equals hhem_full on every one. Those rows record two scores of one text, so 'the gap was zero' means 'the gap was never measured' and must not be read as evidence that truncation costs nothing. Recorded only - no band reads either column, so METRICS_VERSION did not move."
-    },
-    {
-      "change": "source_word_count is now Article.source_word_count, the pre-cap count, rather than a recount of whatever text the caller passed as full_text. No column was added or removed and no row was rewritten.",
-      "version": "2026-08-27T20:00",
-      "why": "The pair source_word_count / source_seen_word_count reads as before-truncation and after-truncation and was neither. Both came off the same post-cap string through two different counters - len(_WORD.findall(t)) against len(t.split()) - so the difference between them measured the counters. Measured over all 2,232 rows written before this: they agree on 287, source_word_count is larger on 1,355, and source_seen_word_count is larger on 590, which is impossible if one string is a cut of the other. Read as a truncation signal the pair said 87 percent of items were truncated; counting the rows sitting on the 1,923-word cap says 6.3 percent. Rows written before this stamp carry the old meaning and must not be read as a truncation rate."
-    },
-    {
-      "change": "Added source_digest, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
-      "version": "2026-08-27",
-      "why": "The row named the words that came out and never the text they were scored against. A person re-reading an item to label it by hand had no way to prove the article in front of them was the sanitized, truncated premise the scorer read, so a disagreement between the two measured premise mismatch and not scorer error. Empty on the 2,232 rows that predate it: those runs recorded no premise, and a digest computed today would name text nobody read. Recorded only - no band reads it, so METRICS_VERSION did not move."
-    },
-    {
-      "change": "Added self_repetition, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
-      "version": "2026-08-26",
-      "why": "Every n-gram column here reads the summary against the article. Nothing read the summary against itself, so a summary that says the same clause three times scored clean on all eleven quality columns - greedy decoding has no sampling noise to break a loop, and a repeated sentence is still perfectly supported by the source. Null and not zero on the rows that predate it: zero means measured and not repeating. Recorded only - no band reads it, so METRICS_VERSION did not move."
-    },
-    {
-      "change": "Added evidential_density and speculative_density, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
-      "version": "2026-08-23",
-      "why": "Every other column scores our summary against the article. These two score the article, which nothing did: a faithful summary of an unsourced rumour scores high on all of them and is still an unsourced rumour. First columns to land after the ledger had rows in it, hence appended rather than filed by meaning, and null rather than zero on the ten rows that predate them. Recorded only - no band reads them until enough rows exist to say what a normal value is (Guardrail #10)."
-    },
-    {
-      "change": "Added unsupported_numbers, hedge_dropped, extraction_suspect, verbatim_run and source_seen_word_count.",
-      "version": "2026-08-21T03:00",
-      "why": "Faithfulness cannot see a wrong number, a rumour asserted as fact, or a summary of navigation chrome - it scores all three generously. The ledger is still empty, so these cost a changelog entry today and a migration ever after."
-    },
-    {
-      "change": "Added pipeline_fingerprint, output_digest and determinism_violation.",
-      "version": "2026-08-21T02:00",
-      "why": "The ledger is the only committed record that survives a run, so it is the only place a later run can detect that identical inputs produced different words. No payload predates this - the ledger has never been written."
-    },
-    {
-      "change": "Initial shape: dual faithfulness scores, the counterweights, and the band.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-21",
-      "why": "Contracts before logic - the columns are fixed before the first row lands."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "The Evaluate stage's output, appended once per item.",

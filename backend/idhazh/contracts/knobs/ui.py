@@ -13,10 +13,9 @@ from idhazh.contracts.base import Model
 class ThemeChoice(StrEnum):
     """The two themes. There is no third member for "follow the device".
 
-    `system` was removed on 2026-08-31 with the control that offered it. It was
-    not a theme - it was the absence of a choice - and keeping it here would let
-    an operator set a value no surface can honour. `UiConfig` migrates an older
-    file that names it (section 11).
+    `system` is not a theme - it is the absence of a choice - and keeping it here
+    would let an operator set a value no surface can honour. `UiConfig` migrates
+    an older file that names it (section 11).
     """
 
     LIGHT = "light"
@@ -88,12 +87,10 @@ class UiConfig(Model):
         le=8,
         description=(
             "How many characters a reader types before an in-place filter narrows a "
-            "list. It binds the day page and the archive, which share one panel since "
-            "2026-09-01. Two rather than one because one letter narrows nothing: "
-            "measured 2026-09-01 over the 12 committed days and 4,203 story titles - "
-            "arithmetic over committed text, so the spread is zero by construction - "
-            "the median single letter matches 80.2 percent of them and `e` matches 99.8 "
-            "percent, against a median 0.8 percent for a two-letter pair. A first "
+            "list. It binds the day page and the archive, which share one panel. "
+            "Two rather than one because one letter narrows nothing: a single letter "
+            "matches most story titles and the commonest matches almost all of them, "
+            "where a two-letter pair matches a small fraction. A first "
             "keystroke that redraws the page and removes almost nothing is work the "
             "reader watches for no answer. Over 8 the field stops narrowing anything a "
             "reader would think to type."
@@ -104,9 +101,9 @@ class UiConfig(Model):
         ge=1,
         deprecated=True,
         description=(
-            "Retired 2026-09-01 and read by nothing. The all-topics page drew this many "
-            "of each topic under a heading and put the rest behind a link, which on the "
-            "431-story day of 2026-08-30 published 15 stories and hid 416. The leading "
+            "Retired and read by nothing. The all-topics page drew this many "
+            "of each topic under a heading and put the rest behind a link, which on a "
+            "busy day published a handful of stories and hid hundreds. The leading "
             "block replaced the headings and the flat stream carries the whole day. "
             "Kept as a field, and dropped from the committed config, so a file written "
             "before today still validates - an unknown key is refused (section 11)."
@@ -146,9 +143,8 @@ class UiConfig(Model):
         description=(
             "How many distinct sources must name one entity in their published titles "
             "before that shared subject counts for anything. Under it the term is zero. "
-            "Measured 2026-09-01 over the 11 committed days and 4,086 items: at two "
-            "sources 14.64 percent of stories sit in a cluster and at three it is 12.85 "
-            "percent, so the stronger claim costs 73 stories in 11 days."
+            "Three rather than two is the stronger claim, and it costs a small number "
+            "of stories their cluster."
         ),
     )
     lead_shared_subject_weight: float = Field(
@@ -159,16 +155,12 @@ class UiConfig(Model):
             "block. It is a step and not a ramp: no measurement supports a shape, and a "
             "shape nobody measured may not justify a design (Guardrail #10). It must stay "
             "below what one more feed carrying the same address is worth, which is "
-            "collect.carriage_step - 0.25 on the committed config - so a recurring "
-            "subject cannot outrank a story two independent feeds carried today. Until "
-            "2026-09-13 that bound was collect.tier_weights.trade_press times "
-            "collect.repetition_weight, 0.6, because carriage multiplied a tier; it no "
-            "longer multiplies anything, so the bound cannot either. Measured 2026-09-01: "
-            "a second carrier fires on 4.49 percent of the stories that record it and a "
-            "shared subject on 12.85 percent, 2.9 times as often. The derivation that "
-            "divided 0.6 by 2.9 went with the 0.6; re-deriving this weight against the "
-            "new step would move the leading block's order and belongs to plan 23 row "
-            "#17's per-run loop."
+            "collect.carriage_step, so a recurring "
+            "subject cannot outrank a story two independent feeds carried today. A "
+            "shared subject fires several times as often as a second carrier, so this "
+            "weight is the smaller of the two. Re-deriving it against the step would "
+            "move the leading block's order and belongs to plan 23 row #17's per-run "
+            "loop."
         ),
     )
     lead_max_yesterday: int = Field(
@@ -192,7 +184,7 @@ class UiConfig(Model):
             "topic's story count at build time, never by measuring the row in "
             "pixels - one order is computed in the backend and published, so a "
             "measurement taken on a reader's device could disagree with the order "
-            "the payload carries. Five rather than eight since 2026-09-13: "
+            "the payload carries. Five rather than eight: "
             "config/taxonomy.json declares five verticals, so eight was a cap "
             "nothing could reach, and the number now says what the row is for."
         ),
@@ -209,15 +201,9 @@ class UiConfig(Model):
             "strict count order and stays reachable. Three is the ceiling because "
             "every inversion above it sits between three-digit desks a reader "
             "cannot tell apart, so the margin stops protecting anything visible "
-            "and hands the row back to the alphabet. Measured 2026-09-13 over the "
-            "23 committed days carrying all five desks, 92 adjacent pairs: at two, "
-            "one pair in 92 shows a smaller count first and it reads 1 ahead of 2; "
-            "at three it is four pairs and the worst reads 1 ahead of 3. "
-            "Arithmetic over committed payloads, so the spread is zero by "
-            "construction. What it does NOT buy is steadiness across days - the "
-            "same measurement counted 31 desk-days moving at two against 28 at "
-            "one, so a bigger margin moves the row MORE. It bounds the reason a "
-            "desk moves, never how often."
+            "and hands the row back to the alphabet. What it does NOT buy is "
+            "steadiness across days - a bigger margin moves the row MORE, not less. "
+            "It bounds the reason a desk moves, never how often."
         ),
     )
     desk_thin_max: int = Field(
@@ -231,11 +217,8 @@ class UiConfig(Model):
             "pretending to be information. Twelve is one page of the stream - what "
             "a reader sees before the first `Show more` - so a desk under it is a "
             "desk they see the whole of at once, which is where 'is this broken?' "
-            "starts. Measured 2026-09-02 over the 12 committed days and 56 "
-            "desk-days: 7 sit at or below it, 12.5 percent, and the record has a "
-            "gap with nothing between 4 and 12 - so any value from 5 to 12 selects "
-            "the same six startup desk-days and 12 adds the seventh. Arithmetic "
-            "over committed payloads, so the spread is zero by construction."
+            "starts. The committed record has a wide gap below it, so any value in "
+            "that gap selects the same startup desks."
         ),
     )
     shell_seed_items: int = Field(
@@ -249,14 +232,11 @@ class UiConfig(Model):
             "twelve a flat list pages at and the five the leading block draws. It "
             "is a floor rather than the whole answer: a lead is chosen across the "
             "whole day and is not inside any prefix, so the document has to carry "
-            "those as well - measured 2026-09-01 on the 601-story day of "
-            "2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. "
+            "those as well, and on a busy day they sit deep in the order. "
             "Re-derive it when the block or the page size moves; do not raise it "
             "to cover a busy day, because the stories past the seed arrive by "
-            "fetch. Measured 2026-09-01 on the 431-story day of 2026-08-30, gzip "
-            "-9, Intel Core i7-1265U / Windows 11 / node 24.12.0: the first "
-            "fifteen stories cost a dated route 20,302 bytes across the two "
-            "documents it emits, against 420,074 for all 431."
+            "fetch - the first fifteen are a small fraction of what a busy day "
+            "would cost a prerendered document."
         ),
     )
     payload_slow_ms: int = Field(
@@ -272,12 +252,10 @@ class UiConfig(Model):
             "reader has to act on gets (docs/concepts/design-system.md). Under 250 "
             "ms the sentence fires on a fetch that was never slow, which teaches a "
             "reader to ignore it; over 30 s they have already decided the page is "
-            "broken. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node "
-            "24.12.0, Chromium against a local preview server: a 9,731-byte served "
-            "day answered in 10.2 to 22.3 ms over 12 probes, median 13, so the "
-            "default is about 90 times that median and cannot fire on a healthy "
-            "fetch here. That is a server on the same machine and not a reader's "
-            "connection, which is exactly why this is a knob and not a constant."
+            "broken. The default is orders of magnitude above what a healthy fetch "
+            "takes on a fast connection, so it cannot fire on one. That bound comes "
+            "from a server on the same machine and not a reader's connection, which "
+            "is exactly why this is a knob and not a constant."
         ),
     )
     repo_url: str = Field(default="https://github.com/miztiik/yen-idhazh", min_length=1)
@@ -391,14 +369,10 @@ class UiConfig(Model):
             "prefetches a day nobody asked for - and this is what stops the kept set "
             "growing with the archive. Fourteen is two weeks, the same span "
             "`read_mark_days` keeps a read mark for, so a day a reader can still see "
-            "their marks on is a day they can still open with no network. Measured "
-            "2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 over the 12 "
-            "served days: a day payload is 8,231 to 1,373,593 bytes uncompressed, "
-            "median 727,622, so the full fourteen is about 10 MB at the median and "
-            "about 19 MB at the largest. Arithmetic over committed payloads, so the "
-            "spread is zero by construction. That 167-fold spread is why a day count "
-            "cannot be the only bound - `offline_bytes_kept` is the other one. Read by "
-            "the build alone, so it never rides to a reader."
+            "their marks on is a day they can still open with no network. A day "
+            "payload varies by more than two orders of magnitude, which is why a day "
+            "count cannot be the only bound - `offline_bytes_kept` is the other one. "
+            "Read by the build alone, so it never rides to a reader."
         ),
     )
     offline_bytes_kept: int = Field(
@@ -408,16 +382,14 @@ class UiConfig(Model):
         description=(
             "The most bytes of cached day payloads the offline reader keeps on the "
             "reader's device. A SECOND BOUND BESIDE `offline_days_kept`, NOT A "
-            "REPLACEMENT FOR IT, because a day count cannot bound bytes: measured "
-            "2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 over the 12 "
-            "served days, one day payload runs 8,231 to 1,373,593 bytes uncompressed, "
-            "median 727,622 - a factor of 167 between the smallest day and the largest, "
-            "so fourteen days is anything from 115 KB to 19 MB and the count alone "
-            "promises the reader nothing. Twenty million bytes is 20 MB, just over the "
-            "19,230,302 the day count already permits at the largest day measured, so "
-            "on today's payloads the day count still binds first and this is the "
-            "backstop for the day payloads grow. The floor is 2 MB, above the largest "
-            "single day measured, so no reachable value can leave the cache unable to "
+            "REPLACEMENT FOR IT, because a day count cannot bound bytes: one day "
+            "payload varies by more than two orders of magnitude, so fourteen days is "
+            "anything from a fraction of a megabyte to tens of them, and the count "
+            "alone promises the reader nothing. Twenty million bytes sits just above "
+            "what the day count already permits at the largest day seen, so on "
+            "today's payloads the day count still binds first and this is the "
+            "backstop for when day payloads grow. The floor is above the largest "
+            "single day seen, so no reachable value can leave the cache unable to "
             "hold one day - a ceiling that evicts a day as fast as it arrives is worse "
             "than no cache, because the reader pays the download and keeps nothing. "
             "The ceiling is 100 MB, a little over twice the 43.2 MB the on-device "

@@ -279,14 +279,14 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "RouteId gains the route ids judgement and voices, so the strip and the worst-thing link carry five routes rather than three.",
+      "change": "RouteId gains the route ids judgement and voices.",
       "version": "2026-09-12",
-      "why": "Additive: an older payload names three of the five and validates unchanged, and the reader keeps a route the payload omits on the strip with no worst state. The ids are minted here rather than with the panels because the band's own validator refuses a worst route the strip does not carry, so a tab cannot be drawn before its id exists on this shape."
+      "why": "Additive: an older payload names three of the five and validates unchanged."
     },
     {
-      "change": "Initial shape: the verdict, the worst thing, the size, the route strip, and the months list the console pans over.",
+      "change": "Initial shape: the verdict, the worst thing, the size, the route strip.",
       "version": "2026-09-09",
-      "why": "The band is derived from six committed ledgers and was inlined into three prerendered documents, so the one thing an operator reads first was the one thing with no contract and no version stamp (Guardrail #3). Fetching it first and alone is what lets the console answer 'did it work' before a single month file lands, and the months list is on it because a shell that had to ask for the list separately would make the first month a third serial hop."
+      "why": "The band is derived from six committed ledgers and was inlined in three places."
     }
   ],
   "description": "What every console route carries above its own panels.",

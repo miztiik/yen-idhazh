@@ -26,7 +26,6 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
         "state/scores/ column for every day before RECORDED_INPUTS_FROM - the "
         "condition that removes it is on the line that declares it"
     ),
-    "backend/idhazh/contracts/app_config.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/score_archive.py": "a changelog entry and a docstring, both history",
     "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",

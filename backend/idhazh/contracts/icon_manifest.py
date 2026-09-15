@@ -27,12 +27,7 @@ class IconManifest(Contract):
         ChangelogEntry(
             version="2026-08-29",
             change="Initial shape: the generated icon set, its source and its licence.",
-            why=(
-                "The surface had two inline SVGs and no system, so a mark was whatever "
-                "a component happened to hold. Making the set a contract is what stops "
-                "an id being invented at a call site, and what keeps the licence "
-                "attached to the artwork rather than to a comment somewhere."
-            ),
+            why="The surface had two inline SVGs and no system, so a mark was whatever fitted.",
         ),
     )
 

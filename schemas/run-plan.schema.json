@@ -435,54 +435,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "A planned item carries the eight terms that add up to rank_score - authority_score, tier_score, feed_weight, feed_reliability, carriage_step, watchlist_bonus, lens_bonus and recency_bonus - and five empty slots for scores a later producer will write: label_confidence, relationship_score, fit_weight, dual_score and null_score.",
+      "change": "A planned item carries the eight terms that add up to rank_score.",
       "version": "2026-09-14",
-      "why": "Only the total survived the plan stage, so an operator could read what a story scored and never which part of the score admitted it - the same blindness one level down from the run that regressed for six days with no surface naming it. rank.score already computes every one of these terms and threw them away on the next line, so the terms are extracted from that one computation rather than recomputed: a second copy of the ranker's arithmetic is a second thing to keep in step (Guardrail #5), and feed_reliability is built once per run from the feed-health ledger and is not in a worker's hands at all. The three authority factors come from the carrier that won the maximum, never from another carrier of the same address. The five empty slots are declared now so the row shape stops moving every time another plan lands. Additive, and all thirteen default to null, so a plan an earlier run wrote still validates and reads every one of them as unknown rather than as a score of zero (section 11)."
+      "why": "Only the total survived, so nobody could read why a story ranked where it did."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
+      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
       "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
+      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
-      "change": "A run records what the already-published guard refused on dropped_published, and how old those addresses were on dropped_published_ages.",
+      "change": "A run records what the already-published guard refused on dropped_published.",
       "version": "2026-09-07",
-      "why": "The guard is the whole reason the published ledger is read entire and never windowed, and nothing committed said what it bought. The count went to stderr and stopped there, so no payload could say how often the guard fired or how old the addresses it refused were - and the age is the number a finite cover turns on, because a cover only ever forgets the old ones. Measured on this checkout 2026-09-08 on an Intel Core i7-1265U, over the ledger as it stood at the end of 2026-09-07: 7,600 rows, 7,519 distinct addresses, and 16 published days from 2026-08-23 to 2026-09-07 - so the whole record is 16 days wide. Every cover anybody has proposed is wider than that, and today the question cannot be answered from what is committed at all. Recording the bands is what makes it answerable, one run at a time. Additive with a default, so a plan an earlier run wrote still validates and no read-side migration is needed (section 11)."
+      "why": "The guard is the whole reason the published ledger is read entire."
     },
     {
-      "change": "live_feeds on a vertical is renamed eligible_feeds and feed_floor is added beside it. A plan spelling the old name still reads, and no floor is invented for a payload that never carried one. feeds_skipped now also covers a feed held back by a retired address.",
+      "change": "live_feeds on a vertical is renamed eligible_feeds and feed_floor is added.",
       "version": "2026-09-02T23:00",
-      "why": "The count decided whether a desk publishes at all, and it counted feeds a curator had not retired - so a source robots.txt refuses, an address a server reports permanently gone, and a source we may actually ask all counted the same. The floor exists to stop a thin desk reaching a reader, and padding it with sources we are not allowed to ask is how it stops doing that. The new name says what is counted; feed_floor beside it means the payload can be read without the config that produced it. Measured on this checkout 2026-09-02 over the committed ledger: the two counts are identical on every desk today - ai 43 against a floor of 35, energy 27 against 21, business-economy 25 against 21, world 25 against 21, india 24 against 21 - because no committed row records permission or a retirement yet. Breaking, and the read migration is in this commit (section 11)."
+      "why": "The count decided whether a desk publishes and counted the wrong feeds."
     },
     {
-      "change": "Added time_source to each planned item.",
-      "version": "2026-08-31T10:30",
-      "why": "published_at holds the feed's own date, or our first sight of the address when the feed gave no usable one, and the field could not say which. The choice is made in rank.appeared_at and was thrown away one line later, so a page printing the time could not vouch for it. Measured 2026-08-31 on the committed 2026-08-30 payload - the newest day that had finished publishing - 431 items: 305 distinct HH:mm values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. That last figure is an upper bound on the fallback rather than a count of it, because nothing committed records the choice yet - which is the defect. Additive with a default, so a plan an earlier run wrote still validates, and a null reads as unknown (section 11)."
-    },
-    {
-      "change": "Added too_old to each vertical's plan summary.",
-      "version": "2026-08-30",
-      "why": "collect.max_age_hours now refuses a story older than a day, and the verticals do not lose the same amount. Measured 2026-08-30 over the 2,900 items published from 2026-08-22 to 2026-08-29: a one-day gate keeps 95.7 percent of world and 32.4 percent of ai, because the ai desk is largely fed by research-lab blogs that serve a back catalogue. Without this count a desk that halves overnight looks like a broken feed rather than a working gate. Additive with a default, so a plan an earlier run wrote still validates (section 11)."
-    },
-    {
-      "change": "Added source_form to each planned item.",
-      "version": "2026-08-23T18:48",
-      "why": "Workers need to know when a source is an abstract without detecting it from page text. Carrying the curator-declared feed form keeps that fact in the plan payload."
-    },
-    {
-      "change": "feeds_skipped counts the feeds a quarantine held back this run.",
-      "version": "2026-08-23T12:00",
-      "why": "A quarantined feed is neither read nor failed, so a short day looked like a quiet news day. The count says which it was."
-    },
-    {
-      "change": "item_id is derived from the address instead of the rank position, and published_at now carries the time the run believes rather than the time the feed claimed.",
-      "version": "2026-08-22T11:00",
-      "why": "A rank position renumbers the day on every run, so on a six-hourly schedule the same story came back under a new id and published twice. A date a feed puts in the future is not a date, and forwarding one to a reader repeats the feed's claim as our own."
-    },
-    {
-      "change": "Initial shape: the ranked, capped, deduplicated work list for one run.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-21T04:00",
-      "why": "Contracts before logic - a worker reads a fixed shape and never re-decides."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "What the plan job decided, before a single byte of an article was fetched.",

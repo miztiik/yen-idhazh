@@ -181,34 +181,13 @@ class ConsoleBand(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-12",
-            change=(
-                "RouteId gains the route ids judgement and voices, so the strip and "
-                "the worst-thing link carry five routes rather than three."
-            ),
-            why=(
-                "Additive: an older payload names three of the five and validates "
-                "unchanged, and the reader keeps a route the payload omits on the "
-                "strip with no worst state. The ids are minted here rather than with "
-                "the panels because the band's own validator refuses a worst route "
-                "the strip does not carry, so a tab cannot be drawn before its id "
-                "exists on this shape."
-            ),
+            change="RouteId gains the route ids judgement and voices.",
+            why="Additive: an older payload names three of the five and validates unchanged.",
         ),
         ChangelogEntry(
             version="2026-09-09",
-            change=(
-                "Initial shape: the verdict, the worst thing, the size, the route "
-                "strip, and the months list the console pans over."
-            ),
-            why=(
-                "The band is derived from six committed ledgers and was inlined into "
-                "three prerendered documents, so the one thing an operator reads first "
-                "was the one thing with no contract and no version stamp (Guardrail #3). "
-                "Fetching it first and alone is what lets the console answer 'did it "
-                "work' before a single month file lands, and the months list is on it "
-                "because a shell that had to ask for the list separately would make "
-                "the first month a third serial hop."
-            ),
+            change="Initial shape: the verdict, the worst thing, the size, the route strip.",
+            why="The band is derived from six committed ledgers and was inlined in three places.",
         ),
     )
 

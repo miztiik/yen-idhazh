@@ -101,69 +101,28 @@ class LabelRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
-            why=(
-                "It was the covariate a draw reported per stratum, and the stamp stopped "
-                "being written on 2026-09-12. No row is migrated because none exists: "
-                "state/labels.csv has never been written, which is the same reason the "
-                "two entries below it migrate nothing either."
-            ),
+            change="Removed pipeline_fingerprint.",
+            why="It was a draw's per-stratum covariate, and the stamp stopped gating anything.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
-            why=(
-                "A draw reported the stamp per stratum and refused to call a mixed pool a "
-                "calibration. The stamp stopped being written, so there is one pool at one "
-                "scorer and the number is read rather than withheld."
-            ),
+            why="A draw refused to call a mixed pool comparable, on a stamp that had stopped.",
         ),
         ChangelogEntry(
             version="2026-09-03",
-            change=(
-                "Added unsupported_numbers, hedge_dropped and extraction_suspect, "
-                "nullable, at the end of the row, and from_csv_row as the read side."
-            ),
-            why=(
-                "The read side re-joined these three from state/scores.csv on "
-                "output_digest, and that ledger now keeps only "
-                "observability.scores_full_grain_months months of item-level rows. A "
-                "label whose month has been archived would keep its verdict and lose "
-                "the three counterweights its own tag vocabulary mirrors - "
-                "wrong_number against unsupported_numbers, overstated against "
-                "hedge_dropped, not_the_article against extraction_suspect - which is "
-                "the precision and recall the sixty labels are drawn to buy. Copied "
-                "onto the row so the label is self-contained before its source can "
-                "expire. Null and not a value on a row written before this stamp: "
-                "null says re-join from the ledger while the month is still there, and "
-                "False would say the counterweight was read and did not fire. No row "
-                "is migrated because none exists - state/labels.csv has never been "
-                "written. Appended at the end for the reason the eval ledger appends: "
-                "a column inserted mid-row shifts every later cell one place under a "
-                "reader that maps by position."
-            ),
+            change="Added unsupported_numbers, hedge_dropped and extraction_suspect, nullable.",
+            why="The read side re-joined all three from another ledger on every output.",
         ),
         ChangelogEntry(
             version="2026-08-27",
             change="source_word_count is now source_seen_word_count.",
-            why=(
-                "The queue filled it from the eval ledger's source_word_count, which now "
-                "means the whole article and is null when that length was never recorded. "
-                "A labeller cannot check a number against text nobody kept. The premise "
-                "they read is the truncated text, so the count beside it is the count of "
-                "that text, and it is never missing. No row is migrated because no label "
-                "has ever been written - state/labels.csv does not exist."
-            ),
+            why="The old name read as the article's length and holds what the model was shown.",
         ),
         ChangelogEntry(
             version="2026-08-24",
-            change="Initial shape: the draw's identity, the scorer at draw time, and the label.",
-            why=(
-                "The faithfulness cuts are a reader-facing promise with no measured error "
-                "rate behind them. Nothing can move a threshold until labels exist, and "
-                "labels cannot exist until the shape that holds them does (Guardrail #3). "
-                "Contracts before logic, and this one lands before a single row."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

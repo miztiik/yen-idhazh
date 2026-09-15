@@ -76,9 +76,9 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Initial shape: one row per eight-term group, folded from a month of visual attempts, carrying counts and two distributions.",
+      "change": "Initial shape: one row per eight-term group, folded from a month of attempts.",
       "version": "2026-09-13T23:50",
-      "why": "state/visuals/ folds at observability.visuals_full_grain_months and the fold deletes the full-grain shard, so this shape is the whole of what a reader can ever ask of an old month. Four questions have to survive it: which gate refused most, how the keep rate moved with downgrade depth, how the strata differ, and how the measured columns are shaped. Folding on date alone answers none of the last three, and a mean answers the fourth with the one statistic that hides a bimodal spread."
+      "why": "The visual store folds at the window edge and needed a shape to fold into."
     }
   ],
   "description": "One `(date, decision, none_reason, rejection_reason, potential_primary,\nfamily, element_band, downgrade_depth)` group, folded from one month of\nattempts.\n\n**That eight-term tuple IS the key, and this description is where it is\ndeclared** - the convention `state/telemetry-aggregate/` already sets by\nnaming its own `(date, stage)` pair in its description rather than leaving\nthe group to be inferred from the code that writes it.\n\nOrdered by the key, so a folded month reads down the days and then down the\ncauses rather than down the alphabet.\n\n**The fold can never grow the store.** A group holds at least one attempt, so\nthe row count never rises, and this row is narrower than the attempt row it\nreplaces. The pathological case is real and is bounded rather than argued\naway: a month in which every attempt lands in its own group folds to exactly\nas many rows as it had, each one smaller.",

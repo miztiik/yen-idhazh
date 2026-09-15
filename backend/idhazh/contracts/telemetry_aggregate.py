@@ -53,27 +53,13 @@ class TelemetryAggregateRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-14T01:30",
-            change="ItemStage gained visual. No folded row can carry it.",
-            why=(
-                "The enum is inlined in this schema, so a name added for the event "
-                "envelope's src becomes legal in this column too. It is unreachable: "
-                "retention.fold_month groups item-health rows, and that census column "
-                "refuses visual because an item whose picture failed still publishes. A "
-                "folded month an earlier run wrote reads unchanged, and the entry exists "
-                "so the widening is dated rather than inferred from a schema diff."
-            ),
+            change="ItemStage gained visual.",
+            why="The enum is inlined here, so a name the event envelope gained moves this file.",
         ),
         ChangelogEntry(
             version="2026-08-30T20:00",
             change="Initial shape: one row per (date, stage) folded from an item-health shard.",
-            why=(
-                "The item-health census grows at about 212,000 bytes a published day and "
-                "nothing bounded it. Deleting an old shard outright would answer that and "
-                "cost every year-over-year comparison, so a month past "
-                "observability.keep_months is folded to this shape first. Five rows a day "
-                "keeps the counts and the timing distribution and drops only the per-item "
-                "detail, which is what the console's failure list offers and no rate needs."
-            ),
+            why="The item-health census grows with every published day and nothing folded it.",
         ),
     )
 

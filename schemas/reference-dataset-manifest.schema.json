@@ -4,9 +4,9 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Initial shape: the input position, the three addresses, the registered domain, the host, the frozen publisher key, and the optional source id and vertical.",
+      "change": "Initial shape: the input position, the three addresses and the registrar.",
       "version": "2026-09-13",
-      "why": "The import needs a declared row before it writes one (Guardrail #3). `publisher` is stored rather than derived on read because its length depends on which other hosts are in the pool, so recomputing it over a later pool could rename an outlet that nothing changed."
+      "why": "The import needs a declared row before it writes one."
     }
   ],
   "description": "One line of the supplied URL list, as one element of `manifest.json`.\n\n`source_line` is here because the list is the deliverable's input and a\nperson reading a refusal needs the line to look at. Two lines carrying\nequivalent addresses keep both rows and share one `url_key`, so the count of\nrows and the count of identities are different numbers on purpose.",

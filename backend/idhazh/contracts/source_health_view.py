@@ -255,39 +255,13 @@ class SourceHealthView(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Each row gains reliability and reliability_reads; the view gains "
-                "reliability_floor, reliability_window_days and headline_sentence."
-            ),
-            why=(
-                "The ranker has discounted a feed's authority by a measured factor "
-                "since the reliability window landed, and no surface has ever drawn "
-                "it, so an operator could see that a feed was failing and not that "
-                "the ranking had already acted on it. Publishing the factor the run "
-                "applied - rather than letting a page reduce the feed-health rows a "
-                "second time - keeps one answer to one question (Guardrail #3). "
-                "reliability_reads carries the denominator, because a feed with no "
-                "evidence scores the same 1.0 as a feed that never missed and a page "
-                "must not draw those two the same. headline_sentence is computed "
-                "here for the same reason the view carries yield_readable: the page "
-                "and this file cannot be allowed to disagree about which figure is "
-                "the worst one."
-            ),
+            change="Each row gains reliability and reliability_reads, and the view gains a window.",
+            why="The ranker discounts a feed's authority by a factor no view could show.",
         ),
         ChangelogEntry(
             version="2026-09-03T09:00",
-            change=(
-                "Initial shape: the run that wrote it, the window the publishing "
-                "record covers, whether that window is deep enough to read as a rate, "
-                "and one row per configured address."
-            ),
-            why=(
-                "Permission, availability, retirement and yield were derived in four "
-                "places and published in none, so the console re-derived what it could "
-                "in TypeScript and simply could not see the rest. A typed projection "
-                "gives the page one answer to render and keeps every private cell out "
-                "of the published tree by construction (Guardrail #11)."
-            ),
+            change="Initial shape: the run that wrote it and the window it read.",
+            why="Permission, availability, retirement and yield were derived in four places.",
         ),
     )
 

@@ -204,14 +204,14 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "EntityDef gained kind, so an entry can be a subject and not only an organisation.",
+      "change": "EntityDef gained kind, so an entry can be a subject and not only an outfit.",
       "version": "2026-08-31",
-      "why": "A running story - a pandemic, a tournament, an export-control regime - has no SEC filer id and no feed of its own, and the registry described itself as a list of named organisations, so nothing could hold one. The field defaults to organisation, which is what all 30 committed entries are, so the change is additive and no payload needs a migration."
+      "why": "A running story is a subject a reader follows, and nothing could name one."
     },
     {
       "change": "Stated the match rule on EntityDef.aliases.",
       "version": "2026-08-26",
-      "why": "The field was declared on day one and read nowhere, so entities were empty on every committed item and the watchlist ranking bonus had never moved a score. The rule is now written where the terms live. Description-only, so no payload changes and none needs a migration."
+      "why": "The field was declared on day one and read nowhere, so entities were empty."
     },
     {
       "change": "Initial shape: entities with their own feeds, plus the EDGAR policy.",

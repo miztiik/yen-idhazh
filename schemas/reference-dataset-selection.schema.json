@@ -6,7 +6,7 @@
     {
       "change": "Initial shape: the identity, the grouping fields and the text digest.",
       "version": "2026-09-13",
-      "why": "The sample needs a declared row before one is written (Guardrail #3). The text is not copied: two copies of an article in one collection are two things that can disagree, and the digest is what proves they have not."
+      "why": "The sample needs a declared row before one is written."
     }
   ],
   "description": "One chosen article, as one element of `urls.json`.\n\nIt holds the identity and the text digest, never the text. The sample points\nat one named extraction through its metadata, so an article edited after the\nsample was drawn stops matching instead of quietly becoming what was chosen.",
