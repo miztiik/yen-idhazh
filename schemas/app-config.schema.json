@@ -804,6 +804,7 @@
         "http_server_error",
         "network_error",
         "no_text",
+        "no_title",
         "too_short",
         "not_prose",
         "boilerplate",
@@ -1916,6 +1917,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The failure vocabulary this config names gained no_title.",
+      "version": "2026-09-15",
+      "why": "Extract gained a refusal for an item whose feed carried no headline. No knob changed; the vocabulary is inlined into this schema, so the generated file's bytes move and the change is stamped here rather than left to the drift gate to announce (section 11). Additive: a config written before today names none of the new values and still validates."
+    },
+    {
       "change": "summarize gains asks_for_a_visual_plan, default true. It is the value the two-call sequence sizes its window with, which classify/dag.py wrote out as a literal. Additive and defaulted, so a config file written before today validates unchanged and no read-side migration is owed. Production is untouched: the default is the literal it replaced.",
       "version": "2026-09-14T14:00",
       "why": "The pipeline test workflow runs one arm with no picture reachable, to price what the visual decision costs. Turning the picture off is a config edit already - an empty visuals.enabled_kinds - but the window sizing had no way to follow it, so that arm would reserve room for a decode it never makes and refuse articles that fit. One knob, so the two cannot disagree (plan 27, row 11)."
@@ -2648,7 +2654,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-14T14:00",
+      "default": "2026-09-15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2659,5 +2665,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-14T14:00"
+  "version": "2026-09-15"
 }

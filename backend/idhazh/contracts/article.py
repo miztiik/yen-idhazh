@@ -54,6 +54,20 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15",
+            change="failure_code may now carry no_title.",
+            why=(
+                "Extract gained a refusal: an item whose feed carried no headline. It "
+                "used to build an ok payload of this shape and the shape refused it, "
+                "which raised out of the per-item loop and killed the whole shard. No "
+                "field here changed - the failure vocabulary is inlined into this "
+                "schema, so the generated file's bytes move and the change is stamped "
+                "here rather than left to the drift gate to announce (section 11). "
+                "Additive: a payload written before today names none of the new values "
+                "and still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13",
             change=(
                 "Added secondary_desk: the one other desk the article's own reading "
