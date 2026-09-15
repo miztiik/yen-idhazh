@@ -78,7 +78,16 @@ class ItemRecorder:
     function rather than from two that agree by luck.
     """
 
-    __slots__ = ("_cells", "_flags", "_log", "_now", "_run_id", "_started")
+    __slots__ = (
+        "_cells",
+        "_flags",
+        "_in_flight",
+        "_log",
+        "_now",
+        "_parked_ms",
+        "_run_id",
+        "_started",
+    )
 
     def __init__(
         self,
@@ -94,6 +103,8 @@ class ItemRecorder:
         self._log = log
         self._cells: dict[str, object] = {}
         self._started = time.monotonic()
+        self._in_flight = "summarize"
+        self._parked_ms = 0
 
     @property
     def flags(self) -> Flags:
@@ -165,12 +176,22 @@ class ItemRecorder:
             self._addressed(stage=stage.value, waited_s=round(ms / 1000, 3)),
         )
 
-    def waiting(self, call: str, waited_s: float) -> None:
-        """Say a model call is still in flight, and for how long."""
+    def calling(self, call: str) -> None:
+        """Name the model call about to go on the wire, for the heartbeat to read.
+
+        Until 2026-09-15 the heartbeat said `summarize` for both calls, which is
+        the stage rather than the call. An operator watching a stalled shard
+        could not tell which of the two was hanging - and the two have different
+        causes, because one is cold prefill and the other is decode.
+        """
+        self._in_flight = call
+
+    def waiting(self, waited_s: float) -> None:
+        """Say the model call now in flight is still in flight, and for how long."""
         self._emit(
             telemetry.EventName.MODEL_WAITING,
             ItemStage.SUMMARIZE,
-            self._addressed(call=call, waited_s=waited_s),
+            self._addressed(call=self._in_flight, waited_s=waited_s),
         )
 
     def call_done(self, call: str, cells: Mapping[str, object]) -> None:
@@ -189,13 +210,26 @@ class ItemRecorder:
             self._addressed(stage=ItemStage.SUMMARIZE.value, call=call, **dict(cells)),
         )
 
+    def parked(self, ms: int) -> None:
+        """Discount time the item spent on a list rather than being worked on.
+
+        The stage fetches every item and then runs the model over them in a
+        different order, so an item's wall clock from `start` to `close` counts
+        the whole queue ahead of it. Summing that across a shard counted the
+        shard's own duration once per item: on a two-item shard it read 2,786
+        seconds against a true 2,196 (2026-09-14). `item_total_ms` is what the
+        item cost; `queue_wait_ms` is what it waited, and the two are separate
+        questions.
+        """
+        self._parked_ms += max(ms, 0)
+
     def close(self) -> dict[str, object]:
         """Seal the item's clock and return its cells.
 
         `item_total_ms` and `stage_gap_ms` are computed here rather than at the
         call site, so they cannot be filled by two subtractions that disagree.
         """
-        total = int((time.monotonic() - self._started) * 1000)
+        total = int((time.monotonic() - self._started) * 1000) - self._parked_ms
         named = sum(
             int(value)
             for name in NAMED_STAGE_MS

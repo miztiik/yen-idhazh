@@ -192,6 +192,12 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
     count, so a stranger's page cannot steer our control flow (Guardrail #11) - the
     same property the single-call gate above holds and for the same reason.
     """
+    # Every type in the vocabulary is a chart, so an operator who takes `chart`
+    # out of `enabled_kinds` has said no picture is reachable at all. Read here
+    # rather than at the call site because this is the one function the gate and
+    # the budget sizing both go through.
+    if VisualKind.CHART not in visuals.enabled_kinds:
+        return ()
     drawable = _drawable(table)
     reached: list[VisualType] = []
     for visual_type, rules in TYPE_RULES.items():
