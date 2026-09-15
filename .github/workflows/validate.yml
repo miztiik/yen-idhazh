@@ -231,35 +231,15 @@ jobs:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
-      # The committed config still names the incumbent, and an experiment does
-      # not edit it. The scratch copy differs in ONE LINE - `models_file` - and
-      # nothing else, so every control the gates hold fixed (prompt, schema,
-      # sampler, context, threads, truncation cap) is the committed one by
-      # construction, and a candidate is qualified through the exact line a swap
-      # would later move. Move that line and you have run the swap; move it back
-      # and you have run the revert.
-      #
-      # Nothing is transplanted onto the entry any more. This step used to build
-      # the candidate field by field and copy the incumbent's `inference` and
-      # `turns` blocks across with the digests overwritten, which asserted that
-      # numbers measured for one model held for another. The candidate's own
-      # file carries its own blocks, already declared for its own digest, and
-      # `ModelsConfig` refuses the file at load if they are not.
+      # Why the copy differs in one line and nothing else is written down once,
+      # in the action. What it means HERE is the part worth repeating: move that
+      # line and you have run the swap; move it back and you have run the
+      # revert, so a candidate is qualified through the exact line an adoption
+      # would later touch.
       - name: Build the candidate config
-        env:
-          CANDIDATE_MODELS_FILE: ${{ needs.plan.outputs.candidate_models_file }}
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var
-          rm -rf backend/var/candidate-config
-          cp -a config backend/var/candidate-config
-          python - <<'PY'
-          import json, os, pathlib
-          path = pathlib.Path("backend/var/candidate-config/idhazh.json")
-          settings = json.loads(path.read_text(encoding="utf-8"))
-          settings["models_file"] = os.environ["CANDIDATE_MODELS_FILE"]
-          path.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          PY
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ needs.plan.outputs.candidate_models_file }}
 
       # Keyed on the candidate bytes, not on its filename: two builds of one
       # model share a name, and a key that cannot tell them apart serves the
