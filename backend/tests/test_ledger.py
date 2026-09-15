@@ -1148,7 +1148,7 @@ def counted_reads(
     real_open = Path.open
 
     def opener(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
-        handle = real_open(self, mode, *args, **kwargs)  # type: ignore[call-overload]
+        handle = real_open(self, mode, *args, **kwargs)
         if self != path or "r" not in mode:
             return handle
         opens[0] += 1

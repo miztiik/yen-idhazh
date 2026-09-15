@@ -16,6 +16,7 @@ import csv
 import importlib
 import io
 import json
+import logging
 import os
 import pkgutil
 import shutil
@@ -420,33 +421,45 @@ def test_the_failure_detail_writer_fits_its_column() -> None:
     assert telemetry.detail_cell("   ") == UNSPECIFIED
 
 
-def test_the_recorder_fits_every_cell_a_stage_hands_it() -> None:
-    """One door: a stage's instrument cells are folded on the way into the record.
+def test_the_recorder_passes_a_stage_cell_through_untouched() -> None:
+    """The recorder folds nothing, because the column does it.
 
-    The recorder is where this has to happen, because the cells reaching it come
-    from a kernel file, an environment variable, a runtime's finish reason and a
-    Pydantic message quoting text it refused - four producers, one door.
+    A record cell is a log line, and the same name on the census row is a column
+    that folds its own cell. Folding in both places would be two rules over one
+    value, and it was one rule over the wrong value before: the fold lived here
+    and the census row was built somewhere that never called it.
     """
-    from idhazh import telemetry
+    from idhazh import itemrecord, telemetry
+
+    recorder = itemrecord.ItemRecorder(
+        run_id="2026-09-15-1",
+        flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+        now=lambda: "2026-09-15T00:00:00Z",
+        log=logging.getLogger("test"),
+    )
+    recorder.note(cpu_model=HOSTILE["em_dash"], item_id=HOSTILE["curly_quote"])
+
+    assert recorder.get("cpu_model") == HOSTILE["em_dash"]
+    assert recorder.get("item_id") == HOSTILE["curly_quote"]
+    with pytest.raises(ValueError, match="names no column"):
+        recorder.note(not_a_column="anything")
+    assert "cpu_model" in telemetry.RECORD_CELLS
+
+
+def test_the_census_row_fits_every_cell_a_stage_hands_it() -> None:
+    """The cells a stage records reach the ledger through the row, and it folds.
+
+    They come from a kernel file, an environment variable, a runtime's finish
+    reason and a Pydantic message quoting text it refused - four producers, and
+    the column is what covers all of them.
+    """
     from idhazh.contracts.item_health import ItemHealthRow
 
     for case, raw in HOSTILE.items():
-        fitted = telemetry.fit_record_cells(
-            {
-                "cpu_model": raw,
-                "runner_name": raw,
-                "model_id": raw,
-                "model_quantisation": raw,
-                "failed_field": raw,
-                "failed_rule": raw,
-                "summary_finish_reason": raw,
-                "label_finish_reason": raw,
-                "time_source": raw,
-                "detail": raw,
-            }
-        )
-        for name, value in fitted.items():
+        row = _failed_census_row(**dict.fromkeys(FOREIGN_CENSUS_CELLS, raw))
+        for name in FOREIGN_CENSUS_CELLS:
             column = field_column(ItemHealthRow.model_fields[name])
+            value = getattr(row, name)
             TypeAdapter(column).validate_python(value)
             assert value, f"{case} emptied {name}"
 
@@ -454,16 +467,23 @@ def test_the_recorder_fits_every_cell_a_stage_hands_it() -> None:
 def test_the_recorder_leaves_a_minted_identity_alone() -> None:
     """An item id that arrived wrong stays wrong, and the row still refuses it.
 
-    Folding here would turn a bug in identity into a row that validates and
-    points at nothing.
+    Folding it would turn a bug in identity into a row that validates and points
+    at nothing. `test_a_row_built_by_hand_still_refuses_a_crooked_identity` is
+    the other half: the log line keeps the value, and the ledger row raises.
     """
-    from idhazh import telemetry
+    from idhazh import itemrecord
 
     crooked = "NOT an item id \u2014 at all"
-    fitted = telemetry.fit_record_cells({"item_id": crooked, "url_key": crooked})
+    recorder = itemrecord.ItemRecorder(
+        run_id="2026-09-15-1",
+        flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+        now=lambda: "2026-09-15T00:00:00Z",
+        log=logging.getLogger("test"),
+    )
+    recorder.note(item_id=crooked, url_key=crooked)
 
-    assert fitted["item_id"] == crooked
-    assert fitted["url_key"] == crooked
+    assert recorder.get("item_id") == crooked
+    assert recorder.get("url_key") == crooked
 
 
 def test_the_processor_name_fits_its_column() -> None:
