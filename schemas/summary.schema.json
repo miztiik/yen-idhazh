@@ -79,6 +79,7 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -116,6 +117,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "failure_code may now carry model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row. A failed summary that says the server was unreachable, when the server answered and refused, sends the reader to the wrong thing."
+    },
     {
       "change": "failure_code may now carry no_title.",
       "version": "2026-09-15",
@@ -396,7 +402,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15",
+      "default": "2026-09-15T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -412,5 +418,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-09-15"
+  "version": "2026-09-15T20:00"
 }

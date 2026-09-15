@@ -87,6 +87,9 @@ _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
     FailureCode.MODEL_UNREACHABLE: (
         "the model server was unreachable, so there was no reply to parse"
     ),
+    FailureCode.MODEL_REFUSED: (
+        "the model server answered with an error, so there was no reply to parse"
+    ),
     FailureCode.CONTEXT_EXCEEDED: (
         "the prompt did not fit the served context window, so the server refused it"
     ),

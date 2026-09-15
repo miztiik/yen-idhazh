@@ -257,6 +257,21 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
+        case FailureCode.MODEL_REFUSED:
+            failed_summary = summarize.to_summary(
+                ok_article,
+                None,
+                model_id="qwen3-8b",
+                generated_at="2026-08-21T06:00:00Z",
+                no_reply=FailureCode.MODEL_REFUSED,
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=ok_article,
+                summary=failed_summary,
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
         case FailureCode.OUTPUT_TRUNCATED:
             failed_summary = summarize.to_summary(
                 ok_article,

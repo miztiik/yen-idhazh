@@ -189,6 +189,13 @@ class FailureCode(StrEnum):
     PAYWALLED = "paywalled"
     UNSUPPORTED_FORM = "unsupported_form"
     MODEL_UNREACHABLE = "model_unreachable"
+    #: The server answered, and the answer was an error it could not explain as
+    #: a context overflow. A different morning from `model_unreachable`: that
+    #: one sends an operator to the process and the port, this one to the
+    #: request - the flags the entry declares, the grammar, the body. Gemma
+    #: named the wrong speculation kind on 2026-09-15 and every item read as a
+    #: network fault while the server was up and answering.
+    MODEL_REFUSED = "model_refused"
     CONTEXT_EXCEEDED = "context_exceeded"
     OUTPUT_TRUNCATED = "output_truncated"
     #: The two-call path's labelling reply ran out of its own output budget, so
@@ -222,6 +229,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.PAYWALLED: frozenset({ItemStage.EXTRACT}),
         FailureCode.UNSUPPORTED_FORM: frozenset({ItemStage.EXTRACT}),
         FailureCode.MODEL_UNREACHABLE: frozenset({ItemStage.SUMMARIZE}),
+        FailureCode.MODEL_REFUSED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.CONTEXT_EXCEEDED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.OUTPUT_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LABELS_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
@@ -246,6 +254,7 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.HTTP_RATE_LIMITED,
         FailureCode.TOO_SHORT,
         FailureCode.MODEL_UNREACHABLE,
+        FailureCode.MODEL_REFUSED,
         FailureCode.CONTEXT_EXCEEDED,
         FailureCode.NOT_PROSE,
         FailureCode.BOILERPLATE,
@@ -264,6 +273,21 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T20:00",
+            change=(
+                "failure_code may now carry model_refused. Additive: every committed "
+                "row still reads, and no row already written changes meaning."
+            ),
+            why=(
+                "model_unreachable was doing two jobs. A server that never answered "
+                "and a server that answered with an error are different mornings - "
+                "the first sends an operator to the process and the port, the second "
+                "to the request. Gemma named a speculation kind its head could not "
+                "drive on 2026-09-15 and failed five items of five on a live, healthy "
+                "server, and every one of them read as a network fault."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-15T19:40",
             change=(

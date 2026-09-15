@@ -2688,15 +2688,28 @@ def test_a_refused_connection_is_still_an_unreachable_model() -> None:
     assert result.failure_code is FailureCode.MODEL_UNREACHABLE
 
 
-def test_an_error_the_transport_does_not_recognise_stays_unreachable() -> None:
-    """Decision 4: an unrecognised status must not become a new silent class."""
+def test_a_server_that_answered_with_an_error_is_not_an_unreachable_one() -> None:
+    """The Oracle. `model_unreachable` means nobody answered, and only that.
+
+    An earlier decision sent every unrecognised status to `model_unreachable` so
+    that it could not become a new silent class. A named code is louder than a
+    borrowed one, so that reason is better served here than it was: the status
+    still cannot pass unnamed, and an operator is no longer sent to a process
+    that is running.
+
+    The morning this cost: Gemma named a speculation kind its head could not
+    drive, the server answered 500 on every request, five items of five died,
+    and the whole run reported a network fault against a healthy server
+    (run 34941400155).
+    """
     body = (LLM_ERRORS / "server-unavailable.json").read_bytes()
 
     with RecordedErrorEndpoint(503, body) as server:
         result = summarize_against(server.endpoint)
 
     assert result.status is SummaryStatus.FAILED
-    assert result.failure_code is FailureCode.MODEL_UNREACHABLE
+    assert result.failure_code is FailureCode.MODEL_REFUSED
+    assert "answered with an error" in (result.failure_detail or "")
 
 
 # --- The five things the server proves before the first item ----------------
