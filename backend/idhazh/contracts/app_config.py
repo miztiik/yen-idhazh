@@ -78,6 +78,22 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T23:30",
+            change=(
+                "run.qualify_on_the_production_path, additive, default true. It changes "
+                "behaviour on the default, and that is the point of it: the "
+                "qualification now summarizes the way the digest does."
+            ),
+            why=(
+                "Plan 29 T5 step B4. The gate made one call per item and the digest "
+                "makes two, so every threshold it cleared was cleared against a call "
+                "path nothing publishes. The knob is the switch the owner asked for on "
+                "2026-09-15 - a run that goes wrong on the new path is put back with a "
+                "config edit rather than a revert. Remove it once one qualification has "
+                "cleared `decide` on the production path."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T22:00",
             change=(
                 "run.trial_state_dirname and retention.trial_state_days, both "

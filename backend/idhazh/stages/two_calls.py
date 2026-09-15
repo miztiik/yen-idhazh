@@ -107,10 +107,20 @@ class _TwoCalls(NamedTuple):
     never written a decision for an item that carries no summary - `plannable_items`
     skips one - and a decision about a story no reader will see is a payload
     `assemble` would have to throw away.
+
+    **The two replies come back with it, for the caller that is measuring this
+    path rather than publishing from it.** `_split_the_cost` folds the pair's
+    five numbers into the summary, which is the right shape for a ledger row and
+    the wrong one for a gate: a sum cannot say whether a decode was cut, and the
+    reasoning channel leaves no trace in it at all. Either reply is None when
+    its call never happened, so a caller reads what ran and never a zero for a
+    call that did.
     """
 
     summary: Summary
     decision: VisualDecision | None
+    label_reply: Completion | None = None
+    answer_reply: Completion | None = None
 
 
 def _watchlist_slugs(settings: config.Settings) -> dict[str, str]:
@@ -445,7 +455,9 @@ def two_calls_one_item(
             evaluation=settings.app.evaluation,
             no_reply=no_reply,
         )
-        return _TwoCalls(summary if one is None else _split_the_cost(summary, one, None), None)
+        return _TwoCalls(
+            summary if one is None else _split_the_cost(summary, one, None), None, one, None
+        )
 
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
@@ -673,7 +685,7 @@ def two_calls_one_item(
         telemetry.summary_attributes(stage_span, summary)
 
     if summary.status is not SummaryStatus.OK:
-        return _TwoCalls(summary, None)
+        return _TwoCalls(summary, None, so_far.one, two)
 
     with trace.span(telemetry.SpanName.VISUAL_PLANNER) as span:
         # The picture's own clock, and never the pair's. `decision_ms` means the
@@ -700,7 +712,7 @@ def two_calls_one_item(
         span.set(telemetry.AttrKey.DRAFTED_CHART, decision.drafted_chart)
         span.set(telemetry.AttrKey.VISUAL_KIND, decision.kind.value)
         span.set(telemetry.AttrKey.VISUAL_STATE, decision.visual_state.value)
-    return _TwoCalls(summary, decision)
+    return _TwoCalls(summary, decision, so_far.one, two)
 
 
 def _decide_the_visual(
