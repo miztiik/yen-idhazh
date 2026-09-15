@@ -53,6 +53,7 @@ from idhazh.contracts.reference_dataset import (
 from idhazh.contracts.review_queue import ReviewQueue
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.search_index import SearchIndex
@@ -112,6 +113,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     RunManifest,
     PublishedRow,
     RunPlan,
+    RunTimelineRow,
     RuntimeCountersRow,
     ScoreArchive,
     SearchIndex,
