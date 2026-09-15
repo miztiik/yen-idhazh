@@ -430,7 +430,7 @@ def stage_work(
         ):
             telemetry.item_attributes(item_span, item, run_id=plan.run_id, shard=shard)
             model_started = time.monotonic()
-            summary, decision = two_calls_one_item(
+            summary, decision, _, _ = two_calls_one_item(
                 article,
                 settings,
                 date=plan.date,
