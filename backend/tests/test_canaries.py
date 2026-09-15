@@ -51,7 +51,7 @@ from idhazh.elements import element_table
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import text_digest
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, sanitize, untrusted_block
-from idhazh.stages import work
+from idhazh.stages import two_calls
 from idhazh.stages.common import _canary_article
 from idhazh.stages.qualify_canaries import _canary_report
 from idhazh.visual_planner import plan_is_reachable
@@ -492,7 +492,7 @@ def test_a_page_headline_that_gives_an_order_is_fenced_and_never_obeyed() -> Non
         (LABEL_REPLIES / "labelled.json").read_bytes(),
         (SUMMARIZE_AND_PLAN_REPLIES / "canary-page-title.json").read_bytes(),
     ) as server:
-        both = work._two_calls_one_item(
+        both = two_calls.two_calls_one_item(
             article, settings, date="2026-08-27", endpoint=server.endpoint
         )
         sent = server.sent
