@@ -108,6 +108,31 @@ class Split:
 
 
 @dataclass(frozen=True, slots=True)
+class About:
+    """Which story these calls were about, so the summary can be checked against it.
+
+    A prompt nobody can trace back to a source is a prompt nobody can judge. The
+    capture carries the first three and the item-health row carries all of them,
+    so a report has the link whichever of the two it was given.
+    """
+
+    canonical_url: str = ""
+    source_id: str = ""
+    title: str = ""
+    source_words: int = 0
+    summary_words: int = 0
+    outcome: str = ""
+    failure_code: str = ""
+    run_id: str = ""
+    shard: str = ""
+
+    @property
+    def known(self) -> bool:
+        """Something here identifies the story, so the section has a reason to run."""
+        return bool(self.canonical_url or self.source_id or self.title)
+
+
+@dataclass(frozen=True, slots=True)
 class Capture:
     """One call's capture file, as it was written."""
 
@@ -121,6 +146,7 @@ class Capture:
     finish_reason: str
     cost: Cost | None
     split: Split | None
+    about: About = About()
 
     @property
     def missing(self) -> str | None:
@@ -169,6 +195,17 @@ def split_of(payload: Any) -> Split | None:
     )
 
 
+def about_of(payload: Any) -> About:
+    """Which story a capture file says its call was about, or nothing known."""
+    if not isinstance(payload, Mapping):
+        return About()
+    return About(
+        canonical_url=str(payload.get("canonical_url") or ""),
+        source_id=str(payload.get("source_id") or ""),
+        title=str(payload.get("title") or ""),
+    )
+
+
 def load(path: Path) -> Capture:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return Capture(
@@ -182,6 +219,7 @@ def load(path: Path) -> Capture:
         finish_reason=str(payload.get("finish_reason") or ""),
         cost=cost_of(payload.get("cost")),
         split=split_of(payload.get("decode_split")),
+        about=about_of(payload.get("about")),
     )
 
 
@@ -214,12 +252,21 @@ def ledger_split(row: Mapping[str, str]) -> Split | None:
     )
 
 
-def from_ledger(path: Path) -> dict[str, dict[str, tuple[Cost, Split | None, str]]]:
-    """The cost numbers the run wrote to its item-health rows, by item and call.
+@dataclass(frozen=True, slots=True)
+class Row:
+    """One item-health row as this report reads it: who the item was, what it cost."""
 
-    The fallback for a capture taken before this utility recorded its own. Both
-    sources are the same five numbers off the same reply, so a capture that
-    carries them wins and this fills only what it left empty.
+    about: About
+    calls: dict[str, tuple[Cost, Split | None, str]]
+
+
+def from_ledger(path: Path) -> dict[str, Row]:
+    """What the run wrote to its item-health rows, by item.
+
+    The fallback for a capture taken before this utility recorded its own, and
+    the only source for the cells a capture never carries - the outcome, the
+    word counts, the shard. Both sources are the same numbers off the same
+    reply, so a capture that carries them wins and this fills what it left empty.
 
     One named day file, read once for the whole directory. A read whose cost
     grows with the archive has to justify itself (Guardrail #12), and one that
@@ -227,39 +274,82 @@ def from_ledger(path: Path) -> dict[str, dict[str, tuple[Cost, Split | None, str
     a day can hold two runs over one item, and the later one is the one a reader
     downloading today's artifact is asking about.
     """
-    found: dict[str, dict[str, tuple[Cost, Split | None, str]]] = {}
+    found: dict[str, Row] = {}
     with path.open(encoding="utf-8", newline="") as handle:
-        for row in csv.DictReader(handle):
-            item_id = row.get("item_id") or ""
+        for line in csv.DictReader(handle):
+            item_id = line.get("item_id") or ""
+            if not item_id:
+                continue
+            calls: dict[str, tuple[Cost, Split | None, str]] = {}
             for call in CALL_ORDER:
-                if not row.get(f"{call}_input_tokens"):
+                if not line.get(f"{call}_input_tokens"):
                     continue
-                found.setdefault(item_id, {})[call] = (
+                calls[call] = (
                     Cost(
-                        kind=str(row.get(f"{call}_kind") or ""),
-                        prefill_ms=whole(row.get(f"{call}_prefill_ms")),
-                        decode_ms=whole(row.get(f"{call}_decode_ms")),
-                        input_tokens=whole(row.get(f"{call}_input_tokens")),
-                        output_tokens=whole(row.get(f"{call}_output_tokens")),
-                        cached_tokens=whole(row.get(f"{call}_cached_tokens")),
+                        kind=str(line.get(f"{call}_kind") or ""),
+                        prefill_ms=whole(line.get(f"{call}_prefill_ms")),
+                        decode_ms=whole(line.get(f"{call}_decode_ms")),
+                        input_tokens=whole(line.get(f"{call}_input_tokens")),
+                        output_tokens=whole(line.get(f"{call}_output_tokens")),
+                        cached_tokens=whole(line.get(f"{call}_cached_tokens")),
                     ),
-                    ledger_split(row) if call == "summary" else None,
-                    str(row.get(f"{call}_finish_reason") or ""),
+                    ledger_split(line) if call == "summary" else None,
+                    str(line.get(f"{call}_finish_reason") or ""),
                 )
+            found[item_id] = Row(about=ledger_about(line), calls=calls)
     return found
 
 
-def merged(
-    pair: Mapping[str, Capture], rows: Mapping[str, tuple[Cost, Split | None, str]]
-) -> dict[str, Capture]:
-    """The captures, with any cost the ledger can fill that the file did not."""
+def ledger_about(line: Mapping[str, str]) -> About:
+    """Which story one item-health row was about, and how it ended."""
+    return About(
+        canonical_url=str(line.get("canonical_url") or ""),
+        source_id=str(line.get("source_id") or ""),
+        title=str(line.get("title") or ""),
+        source_words=whole(line.get("source_words")),
+        summary_words=whole(line.get("summary_words")),
+        outcome=str(line.get("outcome") or ""),
+        failure_code=str(line.get("failure_code") or ""),
+        run_id=str(line.get("run_id") or ""),
+        shard=str(line.get("shard") or ""),
+    )
+
+
+def merged(pair: Mapping[str, Capture], row: Row | None) -> dict[str, Capture]:
+    """The captures, with anything the ledger can fill that the file did not.
+
+    The capture wins cell by cell rather than wholesale: a capture written today
+    knows its own cost and its own link, and one written last month knows
+    neither, and both may sit in the same directory.
+    """
+    if row is None:
+        return dict(pair)
     out = dict(pair)
-    for call, (money, split, finish) in rows.items():
-        here = out.get(call)
-        if here is None or here.cost is not None:
+    for call, capture in pair.items():
+        found = row.calls.get(call)
+        about = (
+            replace(
+                capture.about,
+                source_words=row.about.source_words,
+                summary_words=row.about.summary_words,
+                outcome=row.about.outcome,
+                failure_code=row.about.failure_code,
+                run_id=row.about.run_id,
+                shard=row.about.shard,
+            )
+            if capture.about.known
+            else row.about
+        )
+        if found is None:
+            out[call] = replace(capture, about=about)
             continue
+        money, split, finish = found
         out[call] = replace(
-            here, cost=money, split=split, finish_reason=here.finish_reason or finish
+            capture,
+            about=about,
+            cost=capture.cost if capture.cost is not None else money,
+            split=capture.split if capture.split is not None else split,
+            finish_reason=capture.finish_reason or finish,
         )
     return out
 
@@ -644,6 +734,58 @@ def split_block(pair: Mapping[str, Capture], number: int, step: Iterator[int]) -
     return out
 
 
+def about_section(pair: Mapping[str, Capture], number: int, *, summary_at: int) -> list[str]:
+    """Which story this was, and where to go to judge what the model made of it.
+
+    First, because none of the rest can be judged without it. A summary is right
+    or wrong against a source, and a reader holding only the summary can check
+    its grammar and nothing else.
+
+    The link is an autolink rather than a labelled one. The label of a markdown
+    link and its target can disagree, and this document is built out of fetched
+    text (Guardrail #11) - an autolink cannot say one thing and go to another.
+    """
+    about = next((c.about for c in pair.values() if c.about.known), About())
+    out = [f"## {number}. The story these calls read", ""]
+    if not about.known:
+        return [
+            *out,
+            "This capture does not say which story it was about. A capture written "
+            "before 2026-09-15 carries no link; pass "
+            "`--health state/item-health/<yyyy>/<mm>/<dd>.csv` to fill this from the "
+            "row that run did write.",
+            "",
+        ]
+    rows = [["link", f"<{about.canonical_url}>" if about.canonical_url else "-"]]
+    if about.title:
+        rows.append(["title", cell(about.title)])
+    rows.append(["outlet", cell(about.source_id)])
+    if about.source_words or about.summary_words:
+        rows.append(
+            [
+                "length",
+                f"{counted(about.source_words, 'word', 'words')} of article, "
+                f"{counted(about.summary_words, 'word', 'words')} of summary",
+            ]
+        )
+    if about.outcome:
+        ended = (
+            about.outcome if not about.failure_code else f"{about.outcome}, {about.failure_code}"
+        )
+        rows.append(["how it ended", cell(ended)])
+    if about.run_id:
+        where = about.run_id if not about.shard else f"{about.run_id}, shard {about.shard}"
+        rows.append(["run", cell(where)])
+    out += table(["field", "value"], rows, align="ll")
+    out += [
+        f"**Open the link and read section {summary_at} beside it.** That is the whole "
+        "quality check: the summary is right or wrong against the article, and nothing "
+        "in this document can settle it on its own.",
+        "",
+    ]
+    return out
+
+
 def reply_section(capture: Capture, title: str, number: int) -> list[str]:
     """One reply read as what it says, rather than as the bytes it arrived in."""
     out = [f"## {number}. What {title} sent back", ""]
@@ -770,15 +912,18 @@ def raw_section(pair: Mapping[str, Capture], number: int, *, head: int, tail: in
 
 
 def render(pair: Mapping[str, Capture], *, head: int, tail: int) -> str:
-    """One item's calls as a document: what is wrong, what it cost, then the bytes.
+    """One item's calls as a document: the story, what is wrong, the cost, the bytes.
 
     Every heading carries its number, and the numbers run in the order a reader
-    needs them rather than the order the run produced them: the verdict, the
-    cost, each reply read as what it says, and the bytes last.
+    needs them rather than the order the run produced them: what was read, the
+    verdict, the cost, each reply read as what it says, and the bytes last.
     """
     item_id = next(iter(pair.values())).item_id
     said = findings(pair)
-    out: list[str] = [f"# {item_id}", "", "## 1. What to look at", ""]
+    summary_at = 4 + CALL_ORDER.index("summary")
+    out: list[str] = [f"# {item_id}", ""]
+    out += about_section(pair, 1, summary_at=summary_at)
+    out += ["## 2. What to look at", ""]
     if said:
         out += [*[f"- {line}" for line in said], ""]
     else:
@@ -790,8 +935,8 @@ def render(pair: Mapping[str, Capture], *, head: int, tail: int) -> str:
             "",
         ]
 
-    out += cost_section(pair, 2)
-    for number, call in enumerate(CALL_ORDER, 3):
+    out += cost_section(pair, 3)
+    for number, call in enumerate(CALL_ORDER, 4):
         capture = pair.get(call)
         title = CALL_TITLE.get(call, call)
         if capture is None:
@@ -799,7 +944,7 @@ def render(pair: Mapping[str, Capture], *, head: int, tail: int) -> str:
             out += ["There is no capture file for this call.", ""]
             continue
         out += reply_section(capture, title, number)
-    out += raw_section(pair, len(CALL_ORDER) + 3, head=head, tail=tail)
+    out += raw_section(pair, len(CALL_ORDER) + 4, head=head, tail=tail)
     return "\n".join(out)
 
 
@@ -868,9 +1013,7 @@ def main(argv: list[str] | None = None) -> int:
         listed = found
         if args.health is not None:
             rows = from_ledger(args.health)
-            listed = {
-                item_id: merged(pair, rows.get(item_id, {})) for item_id, pair in found.items()
-            }
+            listed = {item_id: merged(pair, rows.get(item_id)) for item_id, pair in found.items()}
         print(summarise(listed))
         print(f"\n{len(listed)} item(s). Add --item <id> to read one.")
         return 0
@@ -883,7 +1026,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = from_ledger(args.health) if args.health is not None else {}
     documents = []
     for item_id in wanted:
-        pair = merged(found[item_id], rows.get(item_id, {}))
+        pair = merged(found[item_id], rows.get(item_id))
         documents.append(render(pair, head=head, tail=args.tail))
     text = "\n\n".join(documents)
     if args.out:

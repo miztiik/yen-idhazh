@@ -300,6 +300,11 @@ def test_a_capture_carries_what_its_own_call_cost(tmp_path: Path) -> None:
         ),
         decode_split={"summary_ms": 2010, "plan_ms": 1178, "is_estimate": True},
         finish_reason="length",
+        about=capture.About(
+            canonical_url="https://example.org/wind-farm",
+            source_id="dna-india",
+            title="A wind farm starts sending power",
+        ),
     )
 
     payload = json.loads(written[0])
@@ -307,6 +312,8 @@ def test_a_capture_carries_what_its_own_call_cost(tmp_path: Path) -> None:
     assert payload["cost"]["cached_tokens"] == 3886
     assert payload["decode_split"]["plan_ms"] == 1178
     assert payload["finish_reason"] == "length"
+    assert payload["about"]["canonical_url"] == "https://example.org/wind-farm"
+    assert payload["about"]["source_id"] == "dna-india"
 
 
 def test_a_capture_with_no_cost_still_names_the_key(tmp_path: Path) -> None:
@@ -328,3 +335,4 @@ def test_a_capture_with_no_cost_still_names_the_key(tmp_path: Path) -> None:
     assert payload["cost"] is None
     assert payload["decode_split"] is None
     assert payload["finish_reason"] == ""
+    assert payload["about"] is None

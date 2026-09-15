@@ -325,7 +325,7 @@ def _split_cells(split: calls.DecodeSplit | None) -> dict[str, Any]:
 def _kept_call(
     recorder: itemrecord.ItemRecorder,
     date: str,
-    item_id: str,
+    article: Article,
     *,
     call: str,
     kind: CallKind,
@@ -345,7 +345,7 @@ def _kept_call(
     """
     kept = capture.of(
         root=_run_dir(date) / common.CAPTURES_DIRNAME,
-        item_id=item_id,
+        item_id=article.item_id,
         call=call,
         prompt=prompt,
         reply="" if reply is None else reply.content,
@@ -355,6 +355,11 @@ def _kept_call(
         cost=None if reply is None else _cost(kind, reply),
         decode_split=None if split is None else split._asdict(),
         finish_reason="" if reply is None else reply.finish_reason,
+        about=capture.About(
+            canonical_url=str(article.canonical_url),
+            source_id=article.source_id,
+            title=article.title or "",
+        ),
     )
     recorder.call_done(call, kept.cells())
 
@@ -505,7 +510,7 @@ def two_calls_one_item(
                 _kept_call(
                     kept,
                     date,
-                    article.item_id,
+                    article,
                     call="label",
                     kind=CallKind.LABEL,
                     prompt=rendered,
@@ -517,7 +522,7 @@ def two_calls_one_item(
             _kept_call(
                 kept,
                 date,
-                article.item_id,
+                article,
                 call="label",
                 kind=CallKind.LABEL,
                 prompt=rendered,
@@ -598,7 +603,7 @@ def two_calls_one_item(
                 _kept_call(
                     kept,
                     date,
-                    article.item_id,
+                    article,
                     call="summary",
                     kind=CallKind.SUMMARIZE_AND_PLAN,
                     prompt=second_rendered,
@@ -615,7 +620,7 @@ def two_calls_one_item(
             _kept_call(
                 kept,
                 date,
-                article.item_id,
+                article,
                 call="summary",
                 kind=CallKind.SUMMARIZE_AND_PLAN,
                 prompt=second_rendered,
