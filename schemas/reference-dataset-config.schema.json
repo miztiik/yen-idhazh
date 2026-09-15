@@ -290,17 +290,17 @@
     {
       "change": "Added the cleaning block.",
       "version": "2026-09-13T13:05",
-      "why": "Filtering rows cannot improve text, and 44,523 words of the real corpus - 1.8 percent overall and 15.9 percent of one publisher - are disclaimers and sales pitches sitting inside articles that pass every flag. Every threshold is here rather than in the loop so a different judgement about what counts as furniture is a config edit (Guardrail #6)."
+      "why": "Filtering rows cannot improve text, and the real corpus carries boilerplate."
     },
     {
       "change": "Added selection.generic_host_labels.",
       "version": "2026-09-13T10:20",
-      "why": "The first import over the supplied list produced the outlet key `newsletter` for `newsletter.semianalysis.com`, which names a subdomain rather than a publisher. The list of labels that fall back to the registered name is a knob rather than a literal, because which words read as generic is a judgement that will change (Guardrail #6)."
+      "why": "The first import over the supplied list produced the outlet key `newsletter`."
     },
     {
-      "change": "Initial shape: the input and vocabulary paths, the fetch settings, the request delay, and the selection block.",
+      "change": "Initial shape: the input and vocabulary paths, the fetch settings.",
       "version": "2026-09-13",
-      "why": "The collection needs a declared, validated settings file before anything writes into it (Guardrail #3), and the owner ruled on 2026-09-13 that these settings stay local rather than joining AppConfig. The selection numbers are here rather than in the loop so a different sample size is a config edit (Guardrail #6)."
+      "why": "The collection needs a declared, validated settings file before anything writes."
     }
   ],
   "description": "Every setting `corpus/reference-dataset-2/` is built with, and it reads no other.\n\nIt is deliberately not a block of `config/idhazh.json`. This collection is\nbuilt by hand once or twice a year and the pipeline runs every day, so a\nknob that only this tool reads does not belong in the file every stage\nloads (owner decision, 2026-09-13).\n\nPaths are relative to the repository root, POSIX-separated, with no `..`\nsegment (`CLAUDE.md` section 2). A path relative to this file would have to\nclimb out of the collection to name the taxonomy, and a stored `..` is the\none form that stops meaning the same thing when a file moves.",

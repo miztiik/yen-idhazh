@@ -131,14 +131,14 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Description only, on three sentences the first labelling pass made false: `reference_summary` has a writer, `second_labels` holds the same labeller's alternative reading rather than an independent second rating, and the module no longer claims no model wrote a field here.",
+      "change": "Description only, on three sentences the first labelling pass made false.",
       "version": "2026-09-14",
-      "why": "The pass of 2026-09-13 filled all 641 rows at the owner's direction and recorded `labelled_by` of `human` (owner decision, `CLAUDE.md` section 0). Who wrote a label is the fact every number taken on this set rests on, so a contract asserting the opposite is worse than one that says nothing. No field moved, so no payload needs a migration."
+      "why": "A description that describes a state the data has left is worse than none."
     },
     {
-      "change": "Initial shape: the article's identity and provenance, the text file's digest and word count, and two empty label slots - one per rater.",
+      "change": "Initial shape: the article's identity and provenance, the text file's digest.",
       "version": "2026-09-13",
-      "why": "Plan 23 measures a classifier against a frozen labelled set, and the set needs a declared shape before anything writes one (Guardrail #3). The split is deliberately absent: `splits/dev.txt` and `splits/test.txt` are the split, and a copy of it here is a second thing that can disagree. `second_labels` is here from the first commit because row #P3 double-labels 60 dev items for a Cohen's kappa, and a field added later would make that a schema argument in the middle of a labelling pass."
+      "why": "A classifier is measured against a frozen labelled set, which needs a shape."
     }
   ],
   "description": "One article of `corpus/reference-dataset-1/dataset.jsonl`.",

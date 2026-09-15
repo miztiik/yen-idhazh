@@ -57,19 +57,8 @@ class VisualPruneRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-06T13:00",
-            change=(
-                "Initial shape: the policy in force, the cutoff it computed, what it "
-                "found, what it took, what the fuse held back, the oldest day still "
-                "carrying a picture, and the tree it walked before and after."
-            ),
-            why=(
-                "The cleanup counted what it deleted into a job log that GitHub keeps "
-                "for a while and nothing kept afterwards. That count is capped by the "
-                "fuse, so it is the same number on a run that finished its backlog and "
-                "on one that could not reach it, and no committed file said which. "
-                "`skipped_by_fuse` is the half that answers it, and it is the half "
-                "nobody would have added, because `deleted` looks like the answer."
-            ),
+            change="Initial shape: the policy in force, the cutoff it computed, what it found.",
+            why="The cleanup counted what it deleted into a job log that GitHub keeps.",
         ),
     )
 

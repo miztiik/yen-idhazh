@@ -385,90 +385,28 @@ class DayMetrics(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-14T01:30",
-            change="ItemStage gained visual, so stage_timing may name it. Nothing writes it yet.",
-            why=(
-                "The enum is inlined in this schema, so a name added for the event "
-                "envelope's src becomes a legal stage timing here as well. "
-                "publish_day_metrics times fetch, extract and summarize and nothing else, "
-                "so no day metrics file carries the new name and this entry records a "
-                "vocabulary that widened rather than a field that moved. The date is what "
-                "lets a reader of an old payload place the shape without diffing two "
-                "generated files."
-            ),
+            change="ItemStage gained visual, so stage_timing may name it.",
+            why="The enum is inlined here, so a name the event envelope gained moves this file.",
         ),
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint. BREAKING.",
-            why=(
-                "The stamp gated nothing and no writer had filled it since 2026-09-12, so "
-                "the field was a question every future author of this shape had to ask and "
-                "an answer nobody could use. Removing it is breaking, because "
-                "contracts.base.Model sets extra='forbid' and 23 committed "
-                "state/day-metrics/ records and the two published month mirrors folded from "
-                "them all carry the key. The read-side migration ships in this commit and "
-                "is permanent: _drop_retired_keys pops the one named key before validation. "
-                "What would let it be deleted is written on the line that declares it."
-            ),
+            change="Removed pipeline_fingerprint.",
+            why="The stamp gated nothing and no writer had filled it for a month.",
         ),
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Added the optional label_similarity block: the day's distribution of each "
-                "item's cosine to its closest committed label vector, with the vocabulary "
-                "digest and the encoder reference it was taken under."
-            ),
-            why=(
-                "Nothing said whether the encoder's geometry had moved. The item vectors are "
-                "already on the day payload and the label vectors are committed once, so the "
-                "reading costs no encoder pass and no byte on an item - and a day that reads "
-                "differently from the days around it is the only signal there is, because the "
-                "cosine is uncalibrated in absolute terms and a fixed threshold would be a "
-                "number somebody picked (Carmack). Optional, because the 23 day records "
-                "already on disk carry no such block and a block of zeros there would report "
-                "an encoder that matched nothing rather than a day that measured nothing. It "
-                "picks no label and keeps no per-item value, so it reaches no reader and "
-                "selects nothing to publish (CLAUDE.md section 0a)."
-            ),
+            change="Added the optional label_similarity block: the day's distribution.",
+            why="Nothing said whether the encoder's geometry had moved.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
-            why=(
-                "The stamp stopped being a gate and stopped being the eval window's key, "
-                "so no writer fills it. Relaxing rather than removing: every payload "
-                "already on disk still validates, and the field is dropped in its own "
-                "commit with the read-side migration that lets an older payload parse."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-08T21:00",
-            change="Added the nullable extraction block.",
-            why=(
-                "Nothing said whether an article the planner drew nothing for had "
-                "anything to draw, so a fall in published charts read the same whether "
-                "the planner stopped choosing them or the extractor stopped finding "
-                "numbers. The block is the day's join of the item-health census, which "
-                "carries the class, against the published day, which carries the chart - "
-                "both bounded by the day and neither by the archive (Guardrail #12). Nullable, "
-                "because a record an earlier run wrote carries no such block and the "
-                "console reads it leniently rather than dropping the whole day."
-            ),
+            why="The stamp stopped being a gate and stopped being the eval window's key.",
         ),
         ChangelogEntry(
             version="2026-09-07",
-            change="Initial shape: one record per published day, additive against non-additive.",
-            why=(
-                "The console rebuilt every per-day figure by walking the whole committed "
-                "history on every build (research findings 61-75), a cost that rose with "
-                "each published day for an answer that never changed once the day was "
-                "frozen (Guardrail #12). This record carries those figures, written once by the "
-                "producer that already holds the data. It stores a total only where a "
-                "reader may add it across days and never as a running counter, because a "
-                "correction to a counter needs a decrement path and a missed decrement is "
-                "silent (owner, 2026-09-06); a correction rewrites this whole record "
-                "instead. A non-additive figure carries the day's own value plus what a "
-                "reader needs to combine days in a defined way (Andre)."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

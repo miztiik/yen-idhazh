@@ -476,39 +476,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "DigestViewVisual.path became data_path. The visual carries state, data_path and alt.",
+      "change": "DigestViewVisual.path became data_path.",
       "version": "2026-09-13T22:30",
-      "why": "The reader's browser draws the chart from the marks file and the pipeline draws nothing, so path named a drawing that no longer exists and data_path is what a story needs to ask for its own picture. This is a projection rebuilt on every build rather than a frozen payload, so no read side is owed here - but a shell cached before this change reads data_path as absent, which is the same fact it already reads on a day that never had one: the story simply has no chart. A shell cached after it reads a day projected before it the same way."
+      "why": "The reader's browser draws the chart from the marks, so no SVG is published."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
+      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
       "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
+      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
-      "change": "Added DigestViewItem.desk, so a served item says which topic the day publishes it under. DigestVerticalRef, which this file reuses, gained desk_count beside count; count keeps meaning the vertical count.",
+      "change": "Added DigestViewItem.desk, so a served item says which topic it sat under.",
       "version": "2026-09-12T06:56",
-      "why": "This is the copy a browser fetches, and the reading page is what groups stories under a topic - so a desk the committed day knows and this file drops is a grouping the page cannot make. Additive and optional: an older shell ignores a key it does not know, and a newer shell reading a payload written before today sees null and falls back to `vertical`, which is what every one of those days meant. So nothing else is owed on the read side (section 11). Costs one name on the item list, which is the per-item half of the wire; the day-level desk_count rides on `verticals`, which was already carried."
+      "why": "A browser fetches this copy, and the reading page groups stories by desk."
     },
     {
-      "change": "lenses on a served item is a list of Slug rather than of the closed LensId enum, which is deleted. The schema gates the slug pattern and no longer enumerates the members.",
+      "change": "lenses on a served item is a list of Slug rather than of the closed LensId.",
       "version": "2026-09-12T03:55",
-      "why": "This is the payload a browser fetches, so the enum was a second copy of the vocabulary that had to be regenerated and redeployed before a config edit could take effect. Read-compatible, and here that is a promise to a device rather than to a job: a service worker keeps days, so a shell holding a payload written weeks ago reads every id it carries unchanged. The reading side takes the other half of the same change - it renders an id the committed vocabulary cannot name rather than dropping the chip, so a day cannot quietly stop saying what it said (section 11)."
+      "why": "A browser fetches this, so the closed enum was a second copy of the taxonomy."
     },
     {
-      "change": "Added the day's own facts to a served day: date, generated_at, partial, items_planned, items_failed, retention_window_months, runs, verticals and leads. Every one of them is optional.",
-      "version": "2026-09-09",
-      "why": "Until now this file carried a day's stories and nothing about the day itself, which was enough while the only page reading it already held those facts in its own document. A dated URL is about to be served by one shell that no build wrote a day into, so the browser has no other source for them: no topic pills, no leading block, no day notice and no story count. Nine names, each with a named renderer - date, verticals and leads for DigestList; runs, partial, items_planned, items_failed and retention_window_months for the day notice and the footer; generated_at for the revision key the day cache already reads and never found. Measured 2026-09-09 on Intel Core i7-1265U / Windows 11 over the 20 committed days and 7,967 items, gzip -9 over the compact projection: 322 bytes a day on average and 478 on the worst day, against 3,657,996 bytes of served days, which is 0.18 percent. A day pays it once, where an item field pays it per story, so nine names here cost less than one name on the item list. Additive, so a shell holding a payload written before this - a service worker keeps days - reads every one of them as absent, and absent is unknown rather than a value."
-    },
-    {
-      "change": "Added also_covered_by to a served item.",
-      "version": "2026-09-01T09:00",
-      "why": "It has a named renderer, which is the bar every field here answers to: `ItemMeta` prints the sentence that says how many other sources carried the story, or that only one of ours did. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 over 11 committed days and 3,978 items, gzip -9 over the compact projection, the name added to the twenty-two-field case: 467.49 bytes an item before and 468.24 after, which is 0.75 an item and 0.16 percent. Its sibling on the committed item, same_story_as, is NOT here: no page draws a group as one item yet, and a field without a reader does not earn the wire. It arrives when a reading route can also say where the items it stopped drawing went. Additive, so an older shell ignores the key and draws the page it drew yesterday."
-    },
-    {
-      "change": "Initial shape: the day's items narrowed to what a page renders, carrying a version of their own.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-31T12:00",
-      "why": "The staged day payload was a thirteen-name array in a build script, which was enough while the only reader was our own archive page. A reading route is about to fetch this file, so a browser we cannot upgrade will parse it and its address stops being movable - which is a persisted shape and therefore a contract before logic reads it (Guardrail #3). The version is here from the first byte so that an older shell reading a newer payload has something to branch on. Nine names join the thirteen in the same commit, each with a named renderer: carried_by, watchlist_hit, on_front_page and rank_score for the lead block, published_at and time_source for the time rail, introduced_by_run for the run divider, lenses for the topic chips, and key_points for the in-page filter that reads them today. Measured 2026-08-31 over 11 committed days and 3,733 items, gzip -9: 361.10 bytes an item before and 468.58 after, against 792.65 for the committed day."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "`<base>/digest/<YYYY>/<MM>/<DD>/digest.json`, as a browser fetches it.",
