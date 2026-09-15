@@ -25,11 +25,12 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_partition, ledger, publish_console
+from idhazh import day_partition, ledger
 from idhazh.contracts.public_feed_health import FORBIDDEN_COLUMNS, PublicFeedRow
+from idhazh.telemetry.publish import series
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = PublicFeedRow.csv_columns()
-DIRNAME: Final = publish_console.FEED_HEALTH_DIRNAME
+DIRNAME: Final = series.FEED_HEALTH_DIRNAME
 SUFFIX: Final = ".csv"
 
 __all__ = [
@@ -47,12 +48,12 @@ __all__ = [
 
 def shard_path(digest_root: Path, month: str) -> Path:
     """The browser's copy of one feed-health month."""
-    return publish_console.month_path(digest_root, DIRNAME, month, SUFFIX)
+    return series.month_path(digest_root, DIRNAME, month, SUFFIX)
 
 
 def shard_relpath(month: str) -> str:
     """`frontend/public/feed-health/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return publish_console.relpath(DIRNAME, f"{month}{SUFFIX}")
+    return series.relpath(DIRNAME, f"{month}{SUFFIX}")
 
 
 def project(source: Path) -> list[PublicFeedRow]:
@@ -96,9 +97,9 @@ def publish(
 
     def encode(month: str) -> bytes:
         rows = [row for day in by_month.get(month, ()) for row in project(day)]
-        return publish_console.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
+        return series.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
 
-    return publish_console.publish_series(
+    return series.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,

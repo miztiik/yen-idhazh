@@ -353,10 +353,10 @@ collections out of nineteen, and was deleted the day it shipped
 ([../reference/agent-notes/gates-and-builds.md](../reference/agent-notes/gates-and-builds.md),
 2026-09-06). Deriving the table from code moves the list rather than removing it,
 and several stores build their paths outside `ledger.py` - `evals/writer.py`,
-`publish_day_metrics.py` and `telemetry/traces.py` each hold their own - so the
-generator is a subsystem rather than a row of one plan. What is left is a named
-rule with a printed command, which is section 13's third fate and is checked at
-review. Fowler, 2026-09-12.
+`telemetry/publish/day_metrics.py` and `telemetry/traces.py` each hold their own -
+so the generator is a subsystem rather than a row of one plan. What is left is a
+named rule with a printed command, which is section 13's third fate and is
+checked at review. Fowler, 2026-09-12.
 
 **Sharding is what makes a fold safe enough to switch on.** A month kept in one
 file per month is folded by writing one file and unlinking one file, so an

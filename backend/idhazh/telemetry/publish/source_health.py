@@ -43,7 +43,7 @@ from idhazh.contracts.source_health_view import (
 from idhazh.contracts.sources import FeedDef, Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.discover import live, resting, settled, streak
-from idhazh.source_health import endpoint_records
+from idhazh.telemetry.source_health import endpoint_records
 
 #: Where the view sits under `frontend/public/`. Beside the day payloads rather
 #: than inside them: it is a projection of `state/`, not of a published day.
