@@ -23,6 +23,7 @@
         "http_server_error",
         "network_error",
         "no_text",
+        "no_title",
         "too_short",
         "not_prose",
         "boilerplate",
@@ -68,6 +69,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "The failure vocabulary this payload publishes gained no_title.",
+      "version": "2026-09-15T04:30",
+      "why": "Extract gained a refusal for an item whose feed carried no headline. No field here changed; the vocabulary is inlined into this schema, so the generated file's bytes move and the change is stamped here rather than left to the drift gate to announce (section 11). Additive: a payload written before today names none of the new values and still validates."
+    },
     {
       "change": "The six first-call cells are named for what the call does - call_1_* became label_*. The six second-call cells were appended: summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens.",
       "version": "2026-09-15T00:00",
@@ -458,7 +464,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-15T00:00",
+      "default": "2026-09-15T04:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -480,5 +486,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-15T00:00"
+  "version": "2026-09-15T04:30"
 }

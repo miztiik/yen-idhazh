@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from pydantic import ValidationError
 
 from idhazh import config
 from idhazh.contracts.pipeline_tests import MINIMUM_CANDIDATES, PipelineTestsConfig
@@ -354,6 +355,23 @@ def test_the_address_list_can_still_answer_a_draw() -> None:
         )
 
 
+@pytest.mark.parametrize("headline", ["", "   ", "\t\n"], ids=["empty", "spaces", "tab-newline"])
+def test_a_candidate_with_a_blank_headline_is_refused_by_the_config(headline: str) -> None:
+    """The typo is a hand edit to this file, so this is where it has to land.
+
+    Extract refuses an item with no headline, which degrades that item and costs
+    a dispatch half its articles. A blank headline in the list is a mistake we
+    can see before anything is dispatched, and a minimum length of one would not
+    see it: three spaces is three characters.
+    """
+    settings = _settings()
+    payload = settings.model_dump(mode="json")
+    payload["candidates"][0]["title"] = headline
+
+    with pytest.raises(ValidationError):
+        PipelineTestsConfig.model_validate(payload)
+
+
 def test_the_draw_is_decided_by_the_seed_and_by_nothing_else() -> None:
     """Same seed, same pair, anywhere. Different seed, different pair.
 
@@ -463,6 +481,9 @@ def test_the_plan_step_writes_a_plan_the_work_stage_can_open(tmp_path: Path) -> 
     plan = RunPlan.from_json(read_text(written))
     assert plan.run_id == f"{published['date']}-{seed}"
     assert [item.source_url for item in plan.items] == [c.url for c in drawn]
+    assert [item.title for item in plan.items] == [c.title for c in drawn], (
+        "a planned item with no headline is refused by extract, so every arm reads zero items"
+    )
     assert published["item_ids"] == " ".join(item.item_id for item in plan.items)
     assert plan.feeds_read == 0, "this plan came off a config list, so no feed was asked"
 

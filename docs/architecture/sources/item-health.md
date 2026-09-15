@@ -280,7 +280,7 @@ stage that did the work.
 | --- | --- |
 | `plan` | `not_attempted` |
 | `fetch` | `robots_denied`, `robots_unreachable`, `blocked_address`, `http_client_error`, `http_rate_limited`, `http_server_error`, `network_error` |
-| `extract` | `no_text`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
+| `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
 | `summarize` | `model_unreachable`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
 
@@ -341,10 +341,10 @@ Sixteen codes never count against a source:
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
 
-The remaining seven can count against the source:
+The remaining eight can count against the source:
 
 `http_client_error`, `http_server_error`, `network_error`, `no_text`,
-`paywalled`, `unsupported_form`, `unknown`
+`no_title`, `paywalled`, `unsupported_form`, `unknown`
 
 The contract carries this as data on the enum side, not as prose only, because a
 later source-health reader uses it.
