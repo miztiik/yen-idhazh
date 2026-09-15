@@ -58,12 +58,26 @@
       ],
       "title": "SourceTier",
       "type": "integer"
+    },
+    "TitleSource": {
+      "description": "Which stranger's string the published headline came from.\n\nBoth are untrusted and both are cleaned by the same rule, so this records\nprovenance for an operator rather than a level of trust.",
+      "enum": [
+        "feed",
+        "page"
+      ],
+      "title": "TitleSource",
+      "type": "string"
     }
   },
   "$id": "article.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added title_source: feed or page, the headline's provenance.",
+      "version": "2026-09-15T06:19",
+      "why": "Extract now falls back to the page's own headline when the feed carried none, so a published title has two possible origins and an operator reading a payload could not tell them apart. Both strings are untrusted and both pass clean_title, so this is provenance and never a level of trust. Additive and optional: null is a failed payload, which publishes no headline, or an ok payload written before the field existed, and every payload on disk still reads (section 11)."
+    },
     {
       "change": "failure_code may now carry no_title.",
       "version": "2026-09-15",
@@ -318,6 +332,18 @@
       "default": null,
       "title": "Title"
     },
+    "title_source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TitleSource"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Where `title` came from: the feed entry, or the fetched page's own metadata when the feed carried none. Provenance, never trust - both are a stranger's string and both pass the same cleaner. Null on a failed payload, which publishes no headline, and on an ok payload written before the field existed."
+    },
     "token_count": {
       "default": 0,
       "minimum": 0,
@@ -349,7 +375,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15",
+      "default": "2026-09-15T06:19",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -384,5 +410,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-09-15"
+  "version": "2026-09-15T06:19"
 }
