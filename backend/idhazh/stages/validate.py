@@ -118,7 +118,7 @@ def stage_validate(
     scores: list[float] = []
 
     for index, item in enumerate(plan.items, start=1):
-        article, _, _, _ = _fetch_one(item, settings, read_url)
+        article = _fetch_one(item, settings, read_url).article
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue

@@ -17,17 +17,23 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import NamedTuple
+import socket
+import threading
+import time
+from dataclasses import replace
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, NamedTuple
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
+from idhazh import fetch as fetch_module
 from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
-from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
@@ -42,6 +48,7 @@ from idhazh.extract import (
 from idhazh.fetch import (
     ROBOTS_REFUSALS,
     FetchResult,
+    FetchTimings,
     RobotsRules,
     address_is_dialable,
     backoff_delays,
@@ -476,6 +483,178 @@ def test_the_retry_budget_is_finite_and_config_driven() -> None:
 
 def test_a_zero_retry_budget_is_honoured() -> None:
     assert backoff_delays(ExtractConfig(max_retries=0)) == []
+
+
+# --- Where the milliseconds went -------------------------------------------
+
+
+class _LoopbackSite:
+    """A real HTTP server on 127.0.0.1, answering on a schedule the test sets.
+
+    A server rather than a recorded response, because the numbers under test
+    belong to a socket: a handshake that never happened cannot be timed, and a
+    playback would leave both cells reading zero however the code split them.
+    Nothing here reaches the network - the address is the loopback and the port
+    is whatever the kernel handed out (Guardrail #7).
+    """
+
+    def __init__(self, *, first_byte_delay: float = 0.0, failures: int = 0) -> None:
+        self.first_byte_delay = first_byte_delay
+        self.failures = failures
+        self.served = 0
+        site = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                site.served += 1
+                time.sleep(site.first_byte_delay)
+                if site.served <= site.failures:
+                    self.send_response(503)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                body = b"<html><body><p>the article body</p></body></html>"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+                return
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    def __enter__(self) -> _LoopbackSite:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._server.server_port}/article"
+
+
+def _let_the_loopback_be_dialled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand the two address guards aside so a test server can be the host.
+
+    They exist to stop a hostile feed aiming the fetcher inward, and refusing
+    127.0.0.1 is exactly the job they do (Guardrail #11). Both are pure
+    predicates with their own tests above; what these tests are about is the
+    clock, and a clock needs a real socket.
+    """
+    monkeypatch.setattr(fetch_module, "address_is_dialable", lambda url: (True, None))
+    monkeypatch.setattr(fetch_module, "resolves_to_public", lambda host: True)
+
+
+def _delay_the_handshake(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
+    """Make a real connect take real time, without touching the code under test.
+
+    `http.client` opens its socket through `socket.create_connection`, so a
+    delay there lands inside `connect` - which is the half the connect cell is
+    supposed to hold.
+    """
+    real = socket.create_connection
+
+    def slow(*args: Any, **kwargs: Any) -> socket.socket:
+        time.sleep(seconds)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(socket, "create_connection", slow)
+
+
+def test_every_timing_names_a_census_column() -> None:
+    """The cells go straight into the item record, which refuses an unknown key."""
+    assert set(FetchTimings().cells()) <= set(ItemHealthRow.csv_columns())
+
+
+def test_the_handshake_and_the_wait_land_in_different_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The two halves a slow item is made of, told apart.
+
+    One delay is injected inside the connect and one inside the server before
+    it answers. A stopwatch round the whole call would put both in one number,
+    so these assertions fail if either delay lands in the other's cell.
+    """
+    with _LoopbackSite(first_byte_delay=0.25) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        _delay_the_handshake(monkeypatch, 0.25)
+        started = time.monotonic()
+        result = fetch(site.url, config=ExtractConfig(), permission=RobotsOutcome.ALLOWED)
+        fetch_ms = int((time.monotonic() - started) * 1000)
+
+    assert result.ok
+    connect_ms = result.timings.fetch_connect_ms
+    ttfb_ms = result.timings.fetch_ttfb_ms
+    assert connect_ms is not None and ttfb_ms is not None
+    assert connect_ms >= 200, "the injected handshake belongs to the connect cell"
+    assert ttfb_ms >= 200, "the injected wait belongs to the first-byte cell"
+    assert connect_ms + ttfb_ms <= fetch_ms
+    assert result.timings.retry_count == 0
+
+
+def test_a_host_that_fails_twice_says_what_the_retries_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The count and the cost come from the loop, not from a counter beside it."""
+    budget = ExtractConfig(max_retries=3, backoff_initial_seconds=0.01, backoff_multiplier=2.0)
+    with _LoopbackSite(first_byte_delay=0.1, failures=2) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        result = fetch(site.url, config=budget, permission=RobotsOutcome.ALLOWED)
+
+    assert result.ok
+    assert site.served == 3, "two refusals and the answer"
+    assert result.timings.retry_count == 2
+    retry_total_ms = result.timings.retry_total_ms
+    assert retry_total_ms is not None
+    assert retry_total_ms >= 200, "the two failed attempts are inside it"
+
+
+def test_a_read_that_reached_no_socket_records_nothing_rather_than_zero() -> None:
+    """A blocked address opened no connection, and zero would claim one had."""
+    result = fetch(
+        "http://127.0.0.1:8080/admin",
+        config=ExtractConfig(),
+        permission=RobotsOutcome.ALLOWED,
+    )
+
+    assert result.outcome is FetchOutcome.BLOCKED
+    assert all(value is None for value in result.timings.cells().values())
+
+
+def test_the_permission_check_is_priced_on_the_read_that_paid_for_it() -> None:
+    """Both a refusal and a success carry what establishing permission cost."""
+    settings = config.load(CONFIG_DIR)
+
+    refusing = Recorder(served(read_text(ROBOTS / "crawler-specific-group.txt")))
+    refusal = common.live_fetcher(settings, read_address=refusing)(f"{HOST}/private/a")
+    assert refusal.outcome is FetchOutcome.ROBOTS_DENIED
+    assert refusal.timings.robots_ms is not None
+
+    permitting = Recorder(served(read_text(ROBOTS / "no-rules.txt")))
+    allowed = common.live_fetcher(settings, read_address=permitting)(f"{HOST}/a")
+    assert allowed.outcome is FetchOutcome.OK
+    assert allowed.timings.robots_ms is not None
+
+
+def test_the_fetch_split_travels_with_the_item_it_was_measured_for() -> None:
+    """`_fetch_one` hands the socket's own numbers on rather than re-timing them."""
+    measured = FetchTimings(
+        fetch_connect_ms=7, fetch_ttfb_ms=11, robots_ms=3, retry_count=1, retry_total_ms=90
+    )
+
+    def reader(_url: str) -> FetchResult:
+        return replace(ok("article.html"), timings=measured)
+
+    fetched = common._fetch_one(ITEM, config.load(CONFIG_DIR), reader)
+
+    assert fetched.article.url_key == ITEM.url_key
+    assert fetched.timings == measured
 
 
 # --- Bodies -----------------------------------------------------------------

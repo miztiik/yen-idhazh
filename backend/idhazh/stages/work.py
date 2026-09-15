@@ -384,13 +384,20 @@ def stage_work(
             tracer.span(telemetry.SpanName.ITEM) as span,
         ):
             telemetry.item_attributes(span, item, run_id=plan.run_id, shard=shard)
-            article, source_text, fetch_ms, extract_ms = _fetch_one(
-                item, settings, read_url, tracer
-            )
+            fetched = _fetch_one(item, settings, read_url, tracer)
+        article, source_text = fetched.article, fetched.source_text
+        fetch_ms, extract_ms = fetched.fetch_ms, fetched.extract_ms
         # One reading of the pair, split across the two cells the stage records
         # separately, so the stage lines and the census row cannot disagree about
-        # which milliseconds belonged to which half.
-        recorder.note(fetch_ms=fetch_ms, extract_ms=extract_ms, **_article_cells(article))
+        # which milliseconds belonged to which half. The fetch's own split -
+        # handshake, first byte, robots, retries - rides in beside them, so a
+        # slow item says which of those it was rather than only that it was slow.
+        recorder.note(
+            fetch_ms=fetch_ms,
+            extract_ms=extract_ms,
+            **fetched.timings.cells(),
+            **_article_cells(article),
+        )
         recorder.stage_done(ItemStage.FETCH, fetch_ms)
         recorder.stage_done(ItemStage.EXTRACT, extract_ms)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
