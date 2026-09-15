@@ -79,6 +79,15 @@ def test_every_action_is_pinned_to_an_approved_major() -> None:
 
         for job_name, uses in references:
             where = f"{filename}/{job_name}"
+            # A `./` action is this repository at the commit the run checked
+            # out, so it is already pinned to the thing under test and there is
+            # no major to approve. It is held by `_composite_action_script`
+            # instead, which reads what it actually runs.
+            if uses.startswith("./"):
+                assert (REPO_ROOT / uses[2:] / "action.yml").is_file(), (
+                    f"{where} calls a local action that does not exist: {uses}"
+                )
+                continue
             action, separator, version = uses.partition("@")
             assert separator, f"{where} must pin a version: {uses}"
             assert action in APPROVED_ACTION_MAJORS, f"{where} uses unapproved {action}"
