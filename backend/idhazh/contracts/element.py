@@ -101,10 +101,6 @@ from idhazh.contracts.base import (
     derive_url_key,
 )
 
-#: `<kind>-<span_start>-<span_end>`: the element's address inside its article.
-#: Derived from the two facts that make it unique there, so it is rebuilt on
-#: read rather than trusted, and legible in a committed diff.
-ELEMENT_ID_PATTERN: Final = r"^[a-z]+-[0-9]+-[0-9]+$"
 #: A quantity's value: a decimal, pinned as text for the reason a timestamp is.
 #: One spelling, and no float formatting that can drift under a committed file.
 QUANTITY_VALUE_PATTERN: Final = r"^-?[0-9]+(?:\.[0-9]+)?$"
@@ -113,7 +109,6 @@ QUANTITY_VALUE_PATTERN: Final = r"^-?[0-9]+(?:\.[0-9]+)?$"
 #: wrote, and a derived value is not a found one.
 DATE_OR_YEAR_PATTERN: Final = r"^\d{4}(?:-\d{2}-\d{2})?$"
 
-ElementId = Annotated[str, StringConstraints(pattern=ELEMENT_ID_PATTERN)]
 DateOrYear = Annotated[str, StringConstraints(pattern=DATE_OR_YEAR_PATTERN)]
 #: The two bounds a producer needs as numbers rather than as annotations. A
 #: pattern over fetched bytes can match a 200-digit serial number or a
@@ -154,6 +149,40 @@ class ElementKind(StrEnum):
     QUOTE = "quote"
     #: An assertion the article made in its own voice.
     CLAIM = "claim"
+
+
+#: How many digits a span offset may carry. `extract` truncates a body at
+#: `truncation_cap_tokens` (10000), which `truncate_to_tokens` spends as
+#: `int(10000 / 1.3)` = 7,692 words, so six digits covers an article of 999,999
+#: characters and is an upper bound with room in it.
+ELEMENT_ID_OFFSET_DIGITS: Final = 6
+#: The longest kind, which is what the pattern below admits. Derived from the
+#: enum rather than written down, so a seventh kind widens the bound with it.
+_ELEMENT_KIND_MAX_LENGTH: Final = max(len(kind.value) for kind in ElementKind)
+
+#: `<kind>-<span_start>-<span_end>`: the element's address inside its article.
+#: Derived from the two facts that make it unique there, so it is rebuilt on
+#: read rather than trusted, and legible in a committed diff.
+#:
+#: Every quantifier carries an upper bound, and that is load-bearing rather than
+#: tidy. This pattern reaches a constrained decoder, and llama.cpp's
+#: schema-to-grammar converter honours a `pattern` or a length bound, never both
+#: - so a `maxLength` sitting beside an unbounded `[a-z]+` is dropped and the
+#: decoder is handed a state it can stay in forever. On 2026-09-14 one reply
+#: spent 15,472 characters inside this 22-character field, and 15.8 minutes of a
+#: 4 vCPU runner, before its token budget stopped it. A pattern in a decoder
+#: schema bounds its own length; `backend/tests/contracts/test_decoder_grammar.py`
+#: holds every schema to that.
+ELEMENT_ID_PATTERN: Final = (
+    rf"^[a-z]{{1,{_ELEMENT_KIND_MAX_LENGTH}}}"
+    rf"-[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}"
+    rf"-[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"
+)
+#: The widest string the pattern admits, so a decoder bound and the identity
+#: rule cannot drift apart: kind, two offsets, and the two hyphens between them.
+ELEMENT_ID_MAX_LENGTH: Final = _ELEMENT_KIND_MAX_LENGTH + 2 * ELEMENT_ID_OFFSET_DIGITS + 2
+
+ElementId = Annotated[str, StringConstraints(pattern=ELEMENT_ID_PATTERN)]
 
 
 class Extractor(StrEnum):
@@ -354,6 +383,37 @@ class ElementTable(Contract):
 
     __schema_stem__: ClassVar[str] = "element-table"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T19:40",
+            change=(
+                "element_id's pattern bounds every one of its own quantifiers: "
+                "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$ in place of ^[a-z]+-[0-9]+-[0-9]+$. "
+                "The kind bound is derived from ElementKind and the offset bound from "
+                "the extract stage's truncation cap, so neither is a number written "
+                "down here."
+            ),
+            why=(
+                "This pattern reaches a constrained decoder, and llama.cpp's "
+                "schema-to-grammar converter honours a pattern or a length bound and "
+                "never both. The maxLength of 22 that the visual plan declares beside "
+                "it was therefore dropped, and the decoder was handed [a-z]+ - a state "
+                "with no space token, no capital and no exit except a hyphen followed "
+                "by a digit, which is never the argmax once the model is inside an "
+                "English phrase.\n\n"
+                "On 2026-09-14 one reply wrote 15,472 lowercase characters into that "
+                "22-character field, 15.8 minutes of a 4 vCPU runner, after the same "
+                "reply had already decided the article should carry no picture. "
+                "Twenty-one such pages would exhaust a six-hour job, which makes a "
+                "loose quantifier in a decoder schema an availability surface reachable "
+                "from anybody's web page (Guardrail #11).\n\n"
+                "Narrowing, and no committed payload moves: the kind comes from a "
+                "six-member enum whose longest member is eight characters, and the "
+                "offsets index a body the extract stage truncates at 10,000 tokens, so "
+                "six digits covers an article of 999,999 characters. "
+                "backend/tests/contracts/test_decoder_grammar.py now holds every "
+                "schema this pipeline sends a decoder to the same rule."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T18:40",
             change=(

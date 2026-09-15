@@ -231,24 +231,31 @@ def _call_cells(slot: str, reply: Completion) -> dict[str, Any]:
     reader deriving them is a reader who has to know which milliseconds go with
     which token count - and the regression this exists to catch is exactly a
     decode rate moving while a wall clock stayed put.
+
+    **The prefill rate counts only the tokens the server really evaluated.**
+    Dividing the whole prompt by the prefill clock counts a cache hit as work
+    done: the summarize call reported 787 tokens a second on 2026-09-14 while
+    evaluating 52 real tokens in 6.2 seconds, which is 8.4. The cache share is
+    the column that says how much was skipped, so a rate that also claims it is
+    the same number twice (Guardrail #10).
     """
     prefill_s = reply.prefill_ms / 1000
     decode_s = reply.decode_ms / 1000
+    cached = min(reply.cached_tokens, reply.prompt_tokens)
+    evaluated = reply.prompt_tokens - cached
     return {
         f"{slot}_prefill_ms": reply.prefill_ms,
         f"{slot}_decode_ms": reply.decode_ms,
         f"{slot}_input_tokens": reply.prompt_tokens,
         f"{slot}_output_tokens": reply.completion_tokens,
-        f"{slot}_cached_tokens": min(reply.cached_tokens, reply.prompt_tokens),
+        f"{slot}_cached_tokens": cached,
         f"{slot}_finish_reason": reply.finish_reason,
         f"{slot}_ms": reply.prefill_ms + reply.decode_ms,
         f"{slot}_cache_pct": (
-            round(100 * min(reply.cached_tokens, reply.prompt_tokens) / reply.prompt_tokens, 2)
-            if reply.prompt_tokens
-            else None
+            round(100 * cached / reply.prompt_tokens, 2) if reply.prompt_tokens else None
         ),
         f"{slot}_prefill_tokens_per_s": (
-            round(reply.prompt_tokens / prefill_s, 2) if prefill_s > 0 else None
+            round(evaluated / prefill_s, 2) if prefill_s > 0 else None
         ),
         f"{slot}_decode_tokens_per_s": (
             round(reply.completion_tokens / decode_s, 2) if decode_s > 0 else None
@@ -271,7 +278,7 @@ def _heartbeat(recorder: itemrecord.ItemRecorder) -> Callable[[float], None]:
     """
 
     def tick(seconds: float) -> None:
-        recorder.waiting("summarize", seconds)
+        recorder.waiting(seconds)
 
     return tick
 
@@ -435,7 +442,14 @@ def stage_work(
         # The gap between the fetch loop finishing this item and the model loop
         # reaching it. The two loops run in different orders, so this is real
         # time an item spent on a list and it is the only place it is visible.
-        recorder.note(queue_wait_ms=int((time.monotonic() - work.started) * 1000) - work.fetch_ms)
+        # Its own fetch and extract are subtracted because both are work rather
+        # than waiting, and `parked` takes the same number back out of the item
+        # clock so a shard's items do not each count the queue ahead of them.
+        queue_wait_ms = (
+            int((time.monotonic() - work.started) * 1000) - work.fetch_ms - work.extract_ms
+        )
+        recorder.note(queue_wait_ms=queue_wait_ms)
+        recorder.parked(queue_wait_ms)
         with (
             tracer.trace(_trace_id(plan.run_id, item)),
             tracer.span(telemetry.SpanName.ITEM) as item_span,
@@ -1018,6 +1032,7 @@ def _two_calls_one_item(
                 first_digest = text_digest(rendered)
                 span.set(telemetry.AttrKey.PROMPT_DIGEST, first_digest)
                 span.set(telemetry.AttrKey.PROMPT_CHARS, len(rendered))
+            kept.calling("label")
             one, no_reply = _ask_the_model(
                 first,
                 article,
@@ -1094,6 +1109,7 @@ def _two_calls_one_item(
                 )
                 second_rendered = str(second["prompt"])
                 span.set(telemetry.AttrKey.PROMPT_CHARS, len(second_rendered))
+            kept.calling("summary")
             two, no_reply = _ask_the_model(
                 second,
                 article,

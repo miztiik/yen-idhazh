@@ -197,6 +197,21 @@ class TestTheReachabilityGate:
 
         assert reached & UNRULED_TYPES == set()
 
+    def test_taking_chart_out_of_enabled_kinds_makes_every_type_unreachable(self) -> None:
+        """Guardrail #6's substitution test, on the knob that had no reader.
+
+        Until 2026-09-15 `visuals.enabled_kinds` was read by its own validator
+        and by nothing in the pipeline, while three docstrings said it took the
+        plan off the call. An arm of the two-call experiment set it to `[]` to
+        measure a run with no visual plan and measured a run identical to the
+        other two.
+        """
+        table = wind_table(*WHOLE)
+
+        assert reachable_types(table, visuals=committed_visuals()) != ()
+        assert reachable_types(table, visuals=committed_visuals(enabled_kinds=[])) == ()
+        assert plan_is_reachable(table, visuals=committed_visuals(enabled_kinds=[])) is False
+
     def test_the_mark_floor_is_read_from_config_and_is_not_a_number_written_here(self) -> None:
         """No magnitude asserted: the floor moves and the answer moves with it."""
         table = wind_table(*WHOLE)
