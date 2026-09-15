@@ -23,9 +23,9 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | --- | --- | --- |
 | `ledger.py`, `retention.py`, `day_partition.py`, `month_partition.py` moving into the package | 3,341 lines stay outside the owner of the thing they store. A reader looking for "where does a row land" still opens two trees | A measurement that a change to one of them required a change inside `telemetry/` in the same commit, twice |
 | `frontend/public/digest/` and `frontend/public/assist/` producers | they stay outside the package, which is correct - they are the product, not the instrument. Costs nothing unless somebody later reads the package name as "everything that writes a file" | Never. This is a boundary, not a backlog item |
-| The three server-slot columns (`slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous`) | 3 of 113 stay empty and prefix reuse stays unmeasurable per item | a reading of whether the pinned `llama-server` build returns slot state on a completion response. One request settles it |
-| Re-encoding any column value | 369,855 bytes stay on disk - 7.1 percent of the store. Measured 2026-09-15: every closed-vocabulary column written as an ordinal integer costs 58,567 bytes against 428,422 today. `version` alone is 148,774 bytes of 13 repeated date stamps | it is row 16's measurement that defers this, not a refusal. Compressing the projection takes about 80 percent of the whole file - 11 times more - with no readability cost, so it is taken first and this is re-priced after |
-| Compressing the published projections | about 80 percent of 8.8 MB stays uncompressed. The site is at 39.2 MB of a 1 GB cap, so nothing binds | one build proving every console fetch path handles the encoding |
+| The three server-slot columns (`slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous`) | 3 of 113 stay empty and prefix reuse stays unmeasurable per item | **answered by row 16, 2026-09-15: build `b10598-56db501e7` carries all three on the `/completions` reply the summarizer already reads** - `id_slot`, `tokens_cached` and `timings.cache_n`, at no extra request. What is left is a decision, not a reading: `slot_id` is a constant at `-np 1` and `timings.cache_n` is already filed as `cached_tokens`, so only `kv_tokens_at_start` says anything new |
+| Re-encoding any column value | 369,855 bytes stay on disk - 7.1 percent of the store. Measured 2026-09-15: every closed-vocabulary column written as an ordinal integer costs 58,567 bytes against 428,422 today. `version` alone is 148,774 bytes of 13 repeated date stamps | it is row 16's measurement that defers this, not a refusal. **Measured 2026-09-15: compressing the same files saves 3,551,430 bytes, 68.4 percent of the store and 9.6 times the ordinal**, with no readability cost, so it is taken first and this is re-priced after |
+| Compressing the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606 stay uncompressed, 77.0 percent**. The site is at 39.2 MB of a 1 GB cap, so nothing binds | one build proving every console fetch path handles the encoding |
 | A year rung on the fold ladder | year-over-year has no shape | a month fold that is too big to read. At kilobytes a month it is not |
 
 ---
@@ -49,7 +49,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 13 | A closed vocabulary is an enum | 2 | B | PENDING | - | - | - |
 | 14 | The run timeline draws | 1, 7, 8 | H | PENDING | - | - | - |
 | 15 | The two published mirrors nothing reads are deleted | 10 | F | PENDING | - | - | - |
-| 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | PENDING | - | - | - |
+| 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
 
 **Column arithmetic.** 43 of 113 carry a value today; `telemetry._row` names 31 fields and `_flatten_calls` adds the call cells, 44 written of which one is always empty. Row 6 fills 58, row 7 fills 6, row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question.
 
@@ -554,9 +554,9 @@ Green is new in this plan. Everything else is a move, not a rewrite.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `slot_id`, `kv_tokens_at_start` and `prefix_shared_with_previous` exist only on the contract at `item_health.py:673` - no module writes them and nobody has asked the server whether it could. A column declared against an unchecked source is a guess with a schema around it | Carmack |
+| 1 | `slot_id`, `kv_tokens_at_start` and `prefix_shared_with_previous` exist only on the contract at `item_health.py:673` - no module writes them and nobody had asked the server whether it could. A column declared against an unchecked source is a guess with a schema around it. **Asked and answered 2026-09-15: all three arrive on the `/completions` reply the summarizer already reads** | Carmack |
 | 2 | Measured 2026-09-15: ordinal encoding of every closed-vocabulary column costs 58,567 bytes against 428,422 today, saving 369,855 - **7.1 percent of a 5,194,794-byte store**. `version` is the largest single line at 148,774 bytes, being one date stamp repeated 12,277 times | Carmack |
-| 3 | It is not taken in this plan, and the reason is order rather than merit. Compression takes about 80 percent of the whole file - 11 times more - and costs no readability. An ordinal taken first would be re-encoded again when compression lands | Carmack |
+| 3 | It is not taken in this plan, and the reason is order rather than merit. **Measured 2026-09-15: compression saves 3,551,430 bytes of `state/item-health/`, 68.4 percent, against the ordinal's 369,855 - 9.6 times more** - and costs no readability. An ordinal taken first would be re-encoded again when compression lands | Carmack |
 | 4 | The readability cost is named rather than implied: the console parses these files in the browser, so an ordinal needs a legend shipped beside it or a chart axis reads `3`; and `grep failed` over a committed day stops working | Susan |
 
 - **Rejected alternatives:**
