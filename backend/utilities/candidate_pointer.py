@@ -1,0 +1,43 @@
+"""Point a scratch config at the candidate, by moving one line and nothing else.
+
+The scratch copy differs from the committed config in `models_file` alone, so
+every control a measurement holds fixed - prompt, schema, sampler, context,
+threads, truncation cap - is the committed one by construction, and a candidate
+is measured through the exact line a swap would later move.
+
+**Nothing is transplanted onto the entry.** The bench once overwrote the
+incumbent's `inference` and `turns` digests with the candidate's, which asserts
+that numbers measured for one model hold for another, and then reported a
+throughput taken on a window nobody had sized for those weights. The candidate's
+own file carries its own blocks.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+POINTER_KEY = "models_file"
+SCRATCH = Path("backend/var/candidate-config")
+
+
+def point_at(models_file: str, *, scratch: Path = SCRATCH) -> Path:
+    path = scratch / "idhazh.json"
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    settings[POINTER_KEY] = models_file
+    path.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--models-file", required=True)
+    parser.add_argument("--scratch", type=Path, default=SCRATCH)
+    args = parser.parse_args(argv)
+    point_at(args.models_file, scratch=args.scratch)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

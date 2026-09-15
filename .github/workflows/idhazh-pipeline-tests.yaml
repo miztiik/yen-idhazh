@@ -336,24 +336,8 @@ jobs:
           mkdir -p backend/var
           # Every flag comes from the first case's config, so the server this case
           # measures is the server that case's config describes (Guardrail #6).
-          python - <<'PY' > backend/var/llama-argv
-          import os
-          import sys
-          from pathlib import Path
-
-          from idhazh import config
-          from idhazh.llm.server import server_argv
-
-          settings = config.load(Path("backend/var/cases/baseline/config"))
-          argv = server_argv(
-              binary=Path("backend/bin/llama-server"),
-              weights=Path(os.environ["LLAMA_WEIGHTS"]),
-              model=settings.models.summarize,
-              inference=settings.models.summarize.inference,
-              port=int(os.environ["LLAMA_PORT"]),
-          )
-          sys.stdout.write("\0".join(argv) + "\0")
-          PY
+          python3 backend/utilities/llama_argv.py \
+            --config-root backend/var/cases/baseline/config > backend/var/llama-argv
           mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
           echo "starting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
@@ -435,24 +419,8 @@ jobs:
             sleep 1
           done
           mv llama-server.log backend/var/cases/baseline/llama-server.log
-          python - <<'PY' > backend/var/llama-argv
-          import os
-          import sys
-          from pathlib import Path
-
-          from idhazh import config
-          from idhazh.llm.server import server_argv
-
-          settings = config.load(Path("backend/var/cases/parallel-2/config"))
-          argv = server_argv(
-              binary=Path("backend/bin/llama-server"),
-              weights=Path(os.environ["LLAMA_WEIGHTS"]),
-              model=settings.models.summarize,
-              inference=settings.models.summarize.inference,
-              port=int(os.environ["LLAMA_PORT"]),
-          )
-          sys.stdout.write("\0".join(argv) + "\0")
-          PY
+          python3 backend/utilities/llama_argv.py \
+            --config-root backend/var/cases/parallel-2/config > backend/var/llama-argv
           mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
           echo "restarting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &

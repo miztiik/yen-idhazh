@@ -33,10 +33,5 @@ runs:
         mkdir -p backend/var
         rm -rf backend/var/candidate-config
         cp -a config backend/var/candidate-config
-        python - <<'PY'
-        import json, os, pathlib
-        path = pathlib.Path("backend/var/candidate-config/idhazh.json")
-        settings = json.loads(path.read_text(encoding="utf-8"))
-        settings["models_file"] = os.environ["CANDIDATE_MODELS_FILE"]
-        path.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        PY
+          python3 backend/utilities/candidate_pointer.py \
+            --models-file "$CANDIDATE_MODELS_FILE"

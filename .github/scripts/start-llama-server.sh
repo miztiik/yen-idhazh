@@ -41,25 +41,9 @@ esac
 chmod +x backend/bin/llama-server
 mkdir -p backend/var
 
-LLAMA_ROLE="$ROLE" python - <<'PY' > backend/var/llama-argv
-import os
-import sys
-from pathlib import Path
-
-from idhazh import config
-from idhazh.llm.server import server_argv
-
-settings = config.load(Path("config"))
-role = getattr(settings.models, os.environ["LLAMA_ROLE"])
-argv = server_argv(
-    binary=Path("backend/bin/llama-server"),
-    weights=Path(os.environ["LLAMA_WEIGHTS"]),
-    model=role,
-    inference=role.inference,
-    port=int(os.environ["LLAMA_PORT"]),
-)
-sys.stdout.write("\0".join(argv) + "\0")
-PY
+LLAMA_ROLE="$ROLE" python3 backend/utilities/llama_argv.py \
+	--config-root config \
+	--role "$ROLE" > backend/var/llama-argv
 
 mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
 echo "starting: ${LLAMA_ARGV[*]}"

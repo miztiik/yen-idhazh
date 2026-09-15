@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, read_text
+
+from utilities import shard_bound
 
 from ._harness import (
     CONTENT_REFRESH_SHARD_DEFAULT,
@@ -22,7 +24,6 @@ from ._harness import (
     _load_workflows,
     _mapping,
     _needs,
-    _run_the_inline_program,
     _script,
     _step,
     _steps,
@@ -83,33 +84,29 @@ def test_the_work_bound_is_whatever_the_config_says_it_is(tmp_path: Path) -> Non
     )
 
     script = _script(_step(workflow, "plan", "id", "bounds"), "digest.yml/plan/bounds")
-    assert "config/idhazh.json" in script, "the bound comes from config"
+    assert "backend/utilities/shard_bound.py" in script, "the bound comes from one module"
     assert '>> "$GITHUB_OUTPUT"' in script
 
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["run"]
-    assert _run_the_inline_program(script, REPO_ROOT) == {
-        "shard_timeout_minutes": str(committed["shard_timeout_minutes"])
-    }
+    assert shard_bound.minutes(CONFIG_DIR) == committed["shard_timeout_minutes"]
 
     def config_saying(minutes: object) -> Path:
         (tmp_path / "config").mkdir(exist_ok=True)
         (tmp_path / "config" / "idhazh.json").write_text(
             json.dumps({"run": {"shard_timeout_minutes": minutes}}), encoding="utf-8"
         )
-        return tmp_path
+        return tmp_path / "config"
 
     moved = int(committed["shard_timeout_minutes"]) + 7
-    assert _run_the_inline_program(script, config_saying(moved)) == {
-        "shard_timeout_minutes": str(moved)
-    }
+    assert shard_bound.minutes(config_saying(moved)) == moved
 
     # `timeout-minutes` takes whatever it is handed, and a value it cannot read
     # as a number leaves the worker with no bound at all - which the run finds
-    # out six hours later. So the one step that writes it is where a bound that
+    # out six hours later. So the one place that writes it is where a bound that
     # is not a whole count of minutes has to stop.
     for unusable in ("150", 0, -1, 12.5, True, None):
-        with pytest.raises(AssertionError, match="shard_timeout_minutes"):
-            _run_the_inline_program(script, config_saying(unusable))
+        with pytest.raises(SystemExit, match="shard_timeout_minutes"):
+            shard_bound.minutes(config_saying(unusable))
 
 
 def test_content_refresh_derives_the_shard_count_after_the_plan() -> None:

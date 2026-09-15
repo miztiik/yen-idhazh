@@ -11,6 +11,8 @@ from typing import cast
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
+from utilities import model_refs
+
 from ._harness import (
     CONFIG_FILE_NAME,
     DRAFT_REF_OUTPUTS,
@@ -40,7 +42,6 @@ from ._harness import (
     _plan_output,
     _reads_the_environment,
     _run_bodies,
-    _run_the_inline_program,
     _runtime_cache_keys,
     _script,
     _step,
@@ -49,6 +50,16 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+#: What a workflow runs instead of carrying its own copy. Three of them called
+#: this program by heredoc and the copies drifted; the call is asserted so a
+#: fourth cannot quietly go back to inlining it.
+MODEL_REFS_CALL = "python3 backend/utilities/model_refs.py"
+
+
+def _published(rows: list[str]) -> dict[str, str]:
+    """The `KEY=value` lines a step appends to `$GITHUB_OUTPUT`, as a mapping."""
+    return dict(row.split("=", 1) for row in rows)
 
 
 def test_every_weights_fetch_fails_loudly() -> None:
@@ -214,8 +225,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
 
     step = _step(workflow, "plan", "id", "models")
     script = _script(step, "digest.yml/plan/models")
-    assert "config/idhazh.json" in script, "the refs come from config"
-    assert MODELS_POINTER_KEY in script, "and through the pointer, never by filename"
+    assert MODEL_REFS_CALL in script, "the refs come from the one module that reads config"
     assert '>> "$GITHUB_OUTPUT"' in script
 
     models = _committed_models()
@@ -223,7 +233,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     # which is the case that matters: a guard that refused an absent ref would
     # take down every run this repository makes, and `"".split()` is `[]`
     # rather than `[""]`, so the obvious shape check does exactly that.
-    assert _run_the_inline_program(script, REPO_ROOT) == {
+    assert _published(model_refs.configured_rows(REPO_ROOT, with_draft=True)) == {
         **{
             f"{role}_{field}": models[role][field]
             for role in set(WEIGHTS_CACHE_ROLES.values())
@@ -242,8 +252,8 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     (tmp_path / "config" / "idhazh.json").write_text(
         json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
     )
-    with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
-        _run_the_inline_program(script, tmp_path)
+    with pytest.raises(SystemExit, match=re.escape("models.summarize.file")):
+        model_refs.configured_rows(tmp_path, with_draft=True)
 
 
 def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
@@ -262,10 +272,6 @@ def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
     a head today, and a guard that refused `{}` would take down every run this
     repository makes.
     """
-    script = _script(
-        _step(_load_workflows()["digest.yml"], "plan", "id", "models"),
-        "digest.yml/plan/models",
-    )
     pointer = "models/probe.json"
     (tmp_path / "config" / "models").mkdir(parents=True)
     models = _committed_models()
@@ -280,8 +286,8 @@ def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
         json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
     )
 
-    with pytest.raises(AssertionError, match=re.escape("models.summarize.draft.sha256")):
-        _run_the_inline_program(script, tmp_path)
+    with pytest.raises(SystemExit, match=re.escape("models.summarize.draft.sha256")):
+        model_refs.configured_rows(tmp_path, with_draft=True)
 
 
 def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: Path) -> None:
@@ -298,7 +304,10 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
     and not a name check.
     """
     committed = _committed_models()
-    for filename, step_id in (("validate.yml", "candidate"), ("measure.yml", "models")):
+    for filename, step_id, prefix in (
+        ("validate.yml", "candidate", ""),
+        ("measure.yml", "models", "candidate_"),
+    ):
         workflow = _load_workflows()[filename]
         declared = sorted(
             name for name in _declared_dispatch_inputs(workflow) if name.startswith("candidate")
@@ -307,11 +316,16 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
             f"{filename} asks for more than the one file that already holds the answer"
         )
 
-        script = _script(_step(workflow, "plan" if step_id == "candidate" else step_id, "id", step_id), filename)
-        published = _run_the_inline_program(script, REPO_ROOT)
+        job = "plan" if step_id == "candidate" else step_id
+        script = _script(_step(workflow, job, "id", step_id), filename)
+        assert MODEL_REFS_CALL in script, f"{filename} resolves the candidate somewhere else"
+        assert f"--prefix {prefix}" in script or not prefix, (
+            f"{filename} publishes its keys under a prefix this test does not know"
+        )
+
+        published = _published(model_refs.candidate_rows(REPO_ROOT, "", prefix=prefix))
         for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
-            key = field if filename == "validate.yml" else f"candidate_{field}"
-            assert published[key] == committed["summarize"][field], (
+            assert published[f"{prefix}{field}"] == committed["summarize"][field], (
                 f"{filename} publishes a {field} the committed entry does not carry"
             )
 
@@ -326,15 +340,13 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
         (tmp_path / "config" / CONFIG_FILE_NAME).write_text(
             json.dumps({MODELS_POINTER_KEY: "models/other.json"}), encoding="utf-8"
         )
-        named = _run_the_inline_program(
-            script, tmp_path, {"CANDIDATE_MODELS_FILE": "models/other.json"}
+        named = _published(
+            model_refs.candidate_rows(tmp_path, "models/other.json", prefix=prefix)
         )
-        assert named["id" if filename == "validate.yml" else "candidate_id"] == "some-other-model"
+        assert named[f"{prefix}id"] == "some-other-model"
 
-        with pytest.raises(AssertionError, match="under config/"):
-            _run_the_inline_program(
-                script, tmp_path, {"CANDIDATE_MODELS_FILE": "../../etc/passwd.json"}
-            )
+        with pytest.raises(SystemExit, match="under config/"):
+            model_refs.candidate_rows(tmp_path, "../../etc/passwd.json", prefix=prefix)
 
 
 def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> None:
@@ -370,10 +382,12 @@ def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> Non
                         )
                         node = cast(dict[str, object], node)[key]
 
-    # The sweep rewrites its own copy of the config, which is the read that went
-    # stale. Naming it keeps this test from passing by finding nothing, and it
-    # names a path in EACH document so neither half can go quiet on its own.
-    assert ("measure.yml", MODELS_DOCUMENT, ("summarize", "inference")) in seen
+    # The pipeline-tests case rewrites its own copy of the config, which is the
+    # read that goes stale. Naming it keeps this test from passing by finding
+    # nothing, and it names a path in EACH document so neither half can go quiet
+    # on its own. It was `measure.yml` until the bench's programs moved into
+    # `backend/utilities/`, where ruff and mypy can see them.
+    assert ("idhazh-pipeline-tests.yaml", MODELS_DOCUMENT, ("summarize",)) in seen
     assert ("digest.yml", CONFIG_FILE_NAME, (MODELS_POINTER_KEY,)) in seen
 
 
@@ -501,11 +515,18 @@ def _a_config_tree(tmp_path: Path, summarize: dict[str, object]) -> Path:
 def _candidate_outputs(
     filename: str, job_name: str, step_id: str, tmp_path: Path, summarize: dict[str, object]
 ) -> dict[str, str]:
+    """What the step publishes, driven through the module the step now calls.
+
+    The step is still read, because the thing that would break silently is a
+    workflow quietly going back to its own copy - and then this would be
+    checking a program nothing runs.
+    """
     step = _step(_load_workflows()[filename], job_name, "id", step_id)
-    return _run_the_inline_program(
-        _script(step, f"{filename}/{job_name}/{step_id}"),
-        _a_config_tree(tmp_path, summarize),
-        {"CANDIDATE_MODELS_FILE": ""},
+    script = _script(step, f"{filename}/{job_name}/{step_id}")
+    assert MODEL_REFS_CALL in script, f"{filename} resolves the candidate somewhere else"
+    prefix = {name: value for name, _, _, value in CANDIDATE_STEPS}[filename]
+    return _published(
+        model_refs.candidate_rows(_a_config_tree(tmp_path, summarize), "", prefix=prefix)
     )
 
 
@@ -562,5 +583,5 @@ def test_a_draft_head_that_declares_no_digest_is_refused(
     """A head with no digest would be downloaded unchecked, which is the one thing we never do."""
     entry = _an_entry(draft={"repo": "p/M", "revision": "0" * 40, "file": "mtp.gguf"})
 
-    with pytest.raises(AssertionError, match=r"draft\.sha256"):
+    with pytest.raises(SystemExit, match=r"draft\.sha256"):
         _candidate_outputs(filename, job_name, step_id, tmp_path, entry)

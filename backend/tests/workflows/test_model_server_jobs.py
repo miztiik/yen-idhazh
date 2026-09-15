@@ -17,6 +17,7 @@ from idhazh.contracts import runtime_counters
 from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
 
 from ._harness import (
+    ARGV_MODULE_CALL,
     CGROUP_PEAK_PATH,
     COUNTERS_COMMAND,
     COUNTERS_FIXTURE,
@@ -48,6 +49,7 @@ from ._harness import (
     SAMPLE_SCRIPT,
     SCRIPTS_DIR,
     SERVER_LOG_FILE,
+    SERVER_STARTER_MODULES,
     SERVER_STARTERS,
     START_SERVER_SCRIPT,
     WORKFLOWS_DIR,
@@ -88,6 +90,13 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
         where: tuple(name for name, _ in declared) for where, declared in SERVER_STARTERS.items()
     }
 
+    # The runtime case starts a server from a module rather than a heredoc, so
+    # the Oracle follows it there. The rule is unchanged: one function spells a
+    # llama-server flag, and a second spelling anywhere is the defect.
+    for relative in SERVER_STARTER_MODULES:
+        source = read_text(REPO_ROOT / relative)
+        assert "from idhazh.llm.server import server_argv" in source, relative
+
     for (filename, job_name), declared in sorted(SERVER_STARTERS.items()):
         for step_name, config_root in declared:
             where = f"{filename}/{job_name}/{step_name}"
@@ -98,13 +107,12 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
             )
 
             script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
-            assert "from idhazh.llm.server import server_argv" in script, where
+            assert ARGV_MODULE_CALL in script, where
             if config_root is None:
                 continue
-            assert f'config.load(Path("{config_root}"))' in script, f"{where} reads {config_root}"
+            assert f"--config-root {config_root}" in script, f"{where} reads {config_root}"
             # NUL-separated, so a flag value carrying a space stays one argument.
             assert "mapfile -d '' LLAMA_ARGV" in script, where
-            assert 'port=int(os.environ["LLAMA_PORT"])' in script, where
 
     # The other side of the same Oracle: no command a runner executes renders
     # the list itself. Only `run:` scripts are read, because a dispatch-form
@@ -460,9 +468,10 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     # The one starter that does not go through the shared script. It sweeps a
     # setting over per-candidate config roots and holds the process object to
     # sample its memory, neither of which the script can do - so it keeps its own
-    # start sequence and reads the port the workflow declared.
-    assert f'SERVER_PORT = int(os.environ["{LLAMA_PORT_ENV}"])' in read_text(
-        WORKFLOWS_DIR / "measure.yml"
+    # start sequence and reads the port the workflow declared. It moved out of
+    # `measure.yml` into a module on 2026-09-15; the rule did not move with it.
+    assert f'PORT_ENV = "{LLAMA_PORT_ENV}"' in read_text(
+        REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py"
     ), f"the measurement harness must read {LLAMA_PORT_ENV} rather than hold a port"
 
 
