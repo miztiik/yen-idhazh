@@ -216,7 +216,7 @@ of nineteen and looked finished, and its own upkeep grew with the other
 seventeen. Read the rows below to see the three answers in service. Do not read
 them as the set of places the rule applies.
 
-**Twenty-four reads over a collection a run appends to**, each with the cover or
+**Twenty-five reads over a collection a run appends to**, each with the cover or
 the bound its own code declares. A helper that opens one named file is not
 listed: its cover is its argument. These are `backend/`'s;
 [the site's are below](#the-site-reads-the-same-collections-2026-09-09).
@@ -260,9 +260,10 @@ listed: its cover is its argument. These are `backend/`'s;
 | `retention.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
 | `retention._dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
+| `item_health_provenance.archive_columns` | every day file of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
 
-**The reference-set read is the only one on this table that nothing schedules**,
-and that is the whole of its cover. `plan` is one of four verbs on
+**Two reads on this table are scheduled by nothing, and that is the whole of
+their cover.** `plan` is one of four verbs on
 `backend/utilities/build_reference_dataset.py`, a person runs it by hand, and its
 sibling `verify` - the one anybody might run twice - reads only the frozen set
 and the capped fine-tuning window. Measured 2026-09-13 on an Intel Core i7-1265U:

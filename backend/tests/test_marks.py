@@ -89,6 +89,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_gate_lock",
         "test_grader_length_bias",
         "test_head_frame",
+        "test_item_health_provenance",
         "test_item_records",
         "test_labels",
         "test_leading_stories",
