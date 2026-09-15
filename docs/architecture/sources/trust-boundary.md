@@ -285,6 +285,12 @@ Accepting that prose instructions survive - and saying so - is the honest positi
 
 Making the canary gate say why it failed is a Guardrail #10 fix, not a reporting nicety. The old string carried no measurement - it named a canary and left the reason to be guessed - and the guess that got written down turned a blank reply into a security breach. A control that reports a failure nobody can diagnose is a control that gets re-interpreted by whoever reads it next. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
 
+**Qualification keeps our summary and still keeps no article body, 2026-09-15.** A qualification run scored the writing into eleven floats and dropped the writing, so a reviewer could see that an item scored 0.61 and never see what it said. `backend/var/qualification/samples-<shard>.json` now holds the title, the summary, the source address, the length band, the truncation flag and the two readings a reviewer cross-checks against - its own artifact at 30 days, never committed, never under `frontend/public/`.
+
+**The non-goal this does not touch** is republishing an **article body** to a reader ([../../../CLAUDE.md](../../../CLAUDE.md) section 0a). The article is still only hashed, the prompt that contains it is still behind its own flag, and the source is a link. What this file holds is our own output. It is the same argument the visual review tree already won: a qualification artifact reaches no reader.
+
+**Two objections are recorded rather than resolved**, because both are real. A human reading these is a selector nobody logs, and somebody who sorts by faithfulness, reads ten and quietly re-runs is re-rolling the corpus by hand - which the frozen corpus exists to stop. And seven fields is a taste panel with no rubric, no second rater and no agreement number; it will be cited as evidence and it is not. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -302,6 +308,8 @@ Making the canary gate say why it failed is a Guardrail #10 fix, not a reporting
 | Record the outcome on the observation as a stored enum | A second answer to a question the conditions already answer. The two drift the first time one of them changes, and the stored one is the one a reader trusts. | Andre |
 | Split the non-reply into a second, softer gate | A control test that did not run is not a control test that passed. A separate gate is a place to lower a bar during an incident, which is the moment the bar exists for. | Andre |
 | Shorten the fixtures so the old `brief=False` becomes true | Fixing the measurement to match the instrument. The fixtures describe attacks; the adapter describes a page, and it was the adapter that described one extraction cannot produce. | Andre |
+| Put the kept summaries on `QualificationReport` | The report is what the gates are computed from, so a field there is a gate that can learn to read text it also scored. Its own file and its own artifact makes that a contract change somebody has to argue for. | Andre |
+| Keep the prompt beside the summary | The prompt contains the article body, and that non-goal is the one still standing. It stays behind its own flag, default off. | Guardrail #11 |
 
 ## See also
 

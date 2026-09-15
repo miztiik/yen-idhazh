@@ -415,6 +415,16 @@ jobs:
           path: backend/var/qualification/shard-*.json
           retention-days: 30
 
+      # Our own summaries, so a person can read the writing the scores judged.
+      # Its own artifact rather than a field on the shard, because a gate must
+      # not learn to read it. Still no article body: the source is a link
+      # (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qualification-samples-${{ matrix.shard }}
+          path: backend/var/qualification/samples-*.json
+          retention-days: 30
+
   decide:
     needs: [plan, qualify]
     # `always()`, because a shard that died still leaves the gates something to

@@ -26,8 +26,10 @@ from idhazh.contracts.qualification import (
     CorpusItem,
     ItemObservation,
     ItemScore,
+    QualificationSamples,
     QualificationShard,
     ScorerIdentity,
+    SummarySample,
 )
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -294,6 +296,24 @@ def _score_item(
     )
 
 
+def _sample(frozen: _Frozen, summary: Summary, score: ItemScore) -> SummarySample:
+    """The writing, beside the two numbers a reviewer cross-checks it against.
+
+    Self-contained: a reviewer asking whether 0.61 is believable should not have
+    to join three files to learn the item was a truncated long read.
+    """
+    return SummarySample(
+        item_id=frozen.row.item_id,
+        title=summary.title,
+        summary=summary.summary or "",
+        source_url=frozen.row.canonical_url,
+        band_index=frozen.row.band_index,
+        truncated=frozen.row.truncated,
+        hhem=score.hhem,
+        compression=score.compression,
+    )
+
+
 def stage_qualify(
     *,
     settings: config.Settings,
@@ -386,6 +406,7 @@ def stage_qualify(
 
     observations: list[ItemObservation] = []
     scores: list[ItemScore] = []
+    samples: list[SummarySample] = []
     # Repeats on the outside, items on the inside. The other order would let
     # each repeat land on a warm prompt cache, and an identical reply that
     # skipped its own prefill is weaker evidence of determinism than one that
@@ -414,7 +435,9 @@ def stage_qualify(
                 seconds,
             )
             if repeat == 1 and summary.status is SummaryStatus.OK:
-                scores.append(_score_item(entry, summary, scorer, settings.app.evaluation))
+                score = _score_item(entry, summary, scorer, settings.app.evaluation)
+                scores.append(score)
+                samples.append(_sample(entry, summary, score))
 
     canaries = _run_canaries(settings, endpoint=model_endpoint) if shard == 0 else []
 
@@ -441,6 +464,19 @@ def stage_qualify(
     assemble.write_atomic(
         common.QUALIFICATION_ROOT / f"shard-{shard}.md",
         qualification_summary.render_shard(result),
+    )
+    # Worst faithfulness first, because that is the order a reviewer reads in.
+    # Its own file and its own artifact: a gate that learned to read this would
+    # be a gate reading text it also scored.
+    assemble.write_atomic(
+        common.QUALIFICATION_ROOT / f"samples-{shard}.json",
+        QualificationSamples(
+            version=QualificationSamples.schema_version(),
+            date=date,
+            shard=shard,
+            candidate=candidate,
+            samples=sorted(samples, key=lambda sample: sample.hhem),
+        ).to_json(),
     )
     LOG.info(
         "qualification shard done shard=%s frozen=%s calls=%s scored=%s minutes=%.1f",

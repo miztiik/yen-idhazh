@@ -41,12 +41,26 @@ def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:
 
 def test_the_qualification_uploads_no_article_body() -> None:
     """This repository is public. A frozen corpus is hashes and measurements;
-    the article text stays on the runner that captured it and dies with it."""
+    the article text stays on the runner that captured it and dies with it.
+
+    Two artifacts now leave the shard, and neither carries a body: the payload
+    of hashes and counts, and our own summaries for a person to read. The
+    article is still only hashed and the source is still only a link.
+    """
     workflow = _load_workflows()["validate.yml"]
-    upload = _step(workflow, "qualify", "uses", "actions/upload-artifact@v7")
-    path = _mapping(upload.get("with"), "qualify upload 'with'").get("path")
-    assert path == "backend/var/qualification/shard-*.json"
-    assert "items" not in str(path)
+    uploads = [
+        _mapping(step.get("with"), "qualify upload 'with'")
+        for step in _steps(workflow, "qualify")
+        if step.get("uses") == "actions/upload-artifact@v7"
+    ]
+    paths = sorted(str(upload.get("path")) for upload in uploads)
+
+    assert paths == [
+        "backend/var/qualification/samples-*.json",
+        "backend/var/qualification/shard-*.json",
+    ], "a third artifact left the shard without anybody saying what is in it"
+    for path in paths:
+        assert "items" not in path, "the frozen article payloads stay on the runner"
 
 
 def test_both_qualification_pages_survive_the_run_that_needed_them() -> None:
