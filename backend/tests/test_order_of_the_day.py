@@ -27,7 +27,7 @@ from idhazh import rank
 from idhazh.config import load
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.run_plan import TimeSource
+from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LensDef, SourceTier
 from idhazh.discover import Candidate
