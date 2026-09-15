@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -390,6 +390,30 @@ exits telling the operator to use `--spec-draft-n-max` and `--spec-draft-n-min`.
 llama-server flag may be spelled, and a test pins all four current spellings and
 refuses the two retired ones by name - so a rename in either direction fails
 here rather than on a runner.
+
+**The spelling of the flag's VALUE is the second trap, and it is quieter.**
+`spec_type` says which kind of speculation the runtime should drive, and naming
+the wrong kind is not a slow server - it is a dead one. The Gemma entry declared
+a multi-token head as `draft-simple`; the server started, loaded the head, and
+then failed every single request on `decode() failed: failed to process
+speculative batch`. Five articles of five, deterministic, one hour of bench time
+on run 34941400155. It reached the pipeline as `model_unreachable`, which is a
+network word for a decode failure and is why that mapping is worth splitting.
+
+The build accepts eleven values and the contract offers three - `draft-simple`,
+`draft-mtp` and `ngram-simple`. The rest need either a draft head nobody has
+published for our weights or a lookup cache nothing here writes, and a closed
+choice is what stops an operator naming one and getting a server that drafts
+nothing. **The agreement between the two lists is now a test rather than a
+memory**: `tests/fixtures/runtime/b10598-llama-server-help.txt` is what the
+pinned build printed for `--help`, and the contract's values must be a subset of
+the list on its `--spec-type` line. The fixture is named for the build, so
+moving the pin without re-recording fails on a missing file rather than passing
+against a binary nobody runs.
+
+**The recording comes from `.github/workflows/probe.yml`**, which installs the
+pinned asset, runs `--help` and keeps the output. It exists because the
+alternative way to learn what a build accepts is the hour the Gemma run spent.
 
 ## The two measurement arms
 
