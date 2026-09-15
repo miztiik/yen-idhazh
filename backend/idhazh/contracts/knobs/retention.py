@@ -63,6 +63,19 @@ class RetentionConfig(Model):
         ge=0,
         description="The fuse. An off-by-one in a date parse must not eat the archive.",
     )
+    trial_state_days: int = Field(
+        default=90,
+        ge=1,
+        description=(
+            "How long a trial run's ledgers under `state/<run.trial_state_dirname>/` "
+            "are kept. Ninety days because it is the artifact retention this project "
+            "already uses everywhere else, so a trial's rows outlive the run's own "
+            "artifacts by nothing and a question asked of one can still be asked of "
+            "the other. Nothing reads these rows - no published series, no gate, no "
+            "console band - so the window is about disk and about a reader who opens "
+            "`state/` and wonders what a directory is, rather than about evidence."
+        ),
+    )
     pages_hard_cap_mb: int = Field(
         default=PAGES_HARD_CAP_MB,
         ge=1,

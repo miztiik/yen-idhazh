@@ -18,6 +18,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.placement import LensWeightsConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.evals import archive as score_archive
 from idhazh.stages import common
 from idhazh.stages.common import LOG
@@ -31,6 +32,7 @@ def stage_prune_state(
     run_id: str,
     today: date_type,
     lens_weights: LensWeightsConfig | None = None,
+    run: RunConfig | None = None,
     state_dir: Path | None = None,
     public_root: Path | None = None,
     digest_root: Path | None = None,
@@ -105,7 +107,7 @@ def stage_prune_state(
     removed += _prune_trace_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
-
+    removed += _prune_trial_shards(state, run, retention_config, today, dry_run=dry_run)
     result = retention.prune_telemetry(
         state, observability, today, public_root=public, dry_run=dry_run
     )
@@ -333,6 +335,49 @@ def _prune_trace_shards(
         traces.kept,
     )
     return list(traces.deleted)
+
+
+def _prune_trial_shards(
+    state: Path,
+    run: RunConfig | None,
+    retention_config: RetentionConfig,
+    today: date_type,
+    *,
+    dry_run: bool,
+) -> list[str]:
+    """Empty a trial run's ledgers past their window, and say what went.
+
+    It cleans the directory `run.trial_state_dirname` names and no other. A
+    trial renamed since its last run leaves its old tree behind for a person to
+    remove - the cost of not keeping a list of every name anybody has ever used,
+    which would rot the first time somebody deleted a directory by hand.
+    """
+    if run is None or not run.trial_state_dirname:
+        return []
+    trial = retention.prune_trial_state(
+        state,
+        dirname=run.trial_state_dirname,
+        today=today,
+        within_days=retention_config.trial_state_days,
+        dry_run=dry_run,
+    )
+    if not trial.changed:
+        LOG.info(
+            "trial prune: every day file under state/%s is inside the %s-day window, "
+            "so none was deleted",
+            run.trial_state_dirname,
+            retention_config.trial_state_days,
+        )
+        return []
+    LOG.info(
+        "trial prune%s: deleted %s files under state/%s, freed %s bytes, kept %s",
+        " (dry run)" if trial.dry_run else "",
+        len(trial.deleted),
+        run.trial_state_dirname,
+        trial.bytes_freed,
+        trial.kept,
+    )
+    return list(trial.deleted)
 
 
 def _prune_score_shards(

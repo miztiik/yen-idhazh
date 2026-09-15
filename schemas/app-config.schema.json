@@ -1385,6 +1385,13 @@
           "minimum": 1,
           "title": "Site Budget Mb",
           "type": "integer"
+        },
+        "trial_state_days": {
+          "default": 90,
+          "description": "How long a trial run's ledgers under `state/<run.trial_state_dirname>/` are kept. Ninety days because it is the artifact retention this project already uses everywhere else, so a trial's rows outlive the run's own artifacts by nothing and a question asked of one can still be asked of the other. Nothing reads these rows - no published series, no gate, no console band - so the window is about disk and about a reader who opens `state/` and wonders what a directory is, rather than about evidence.",
+          "minimum": 1,
+          "title": "Trial State Days",
+          "type": "integer"
         }
       },
       "title": "RetentionConfig",
@@ -1428,6 +1435,20 @@
           "minimum": 0,
           "title": "Success Floor Pct",
           "type": "integer"
+        },
+        "trial_state_dirname": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where a trial run's ledgers go, under `state/`. Null is production and is the default, so a run that says nothing writes where it always did. Set it and every day shard this run appends lands under `state/<name>/` instead - the seen store, feed health, item health, the published ledger, the traces and the rollups, all of them, because a run that split them would put half a trial in the published series. Owner decision, 2026-09-15: a run that exists to exercise production's code path must not be readable as a production day. `retention.trial_state_days` is what empties it again.",
+          "title": "Trial State Dirname"
         }
       },
       "title": "RunConfig",
@@ -1917,6 +1938,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "run.trial_state_dirname and retention.trial_state_days, both additive. The first is null by default, which is production, so a config that says nothing behaves exactly as it did.",
+      "version": "2026-09-15T22:00",
+      "why": "Plan 29 T5 step B3. A run that exercises production's code path in order to measure it would otherwise append to the same ledgers the published series is read from, and a trial day would be indistinguishable from a real one. Naming a directory moves every ledger at once, which is the only way to be sure none is left behind. Owner decision, 2026-09-15."
+    },
     {
       "change": "The embedded failure vocabulary gained model_refused.",
       "version": "2026-09-15T20:00",
@@ -2665,7 +2691,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-15T20:00",
+      "default": "2026-09-15T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2676,5 +2702,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-15T20:00"
+  "version": "2026-09-15T22:00"
 }

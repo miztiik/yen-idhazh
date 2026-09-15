@@ -8,7 +8,7 @@ from typing import Any, Final
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import Model
+from idhazh.contracts.base import Model, Slug
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 
@@ -81,6 +81,19 @@ class RunConfig(Model):
     )
     success_floor_pct: int = Field(
         default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
+    )
+    trial_state_dirname: Slug | None = Field(
+        default=None,
+        description=(
+            "Where a trial run's ledgers go, under `state/`. Null is production and is "
+            "the default, so a run that says nothing writes where it always did. Set it "
+            "and every day shard this run appends lands under `state/<name>/` instead - "
+            "the seen store, feed health, item health, the published ledger, the traces "
+            "and the rollups, all of them, because a run that split them would put half "
+            "a trial in the published series. Owner decision, 2026-09-15: a run that "
+            "exists to exercise production's code path must not be readable as a "
+            "production day. `retention.trial_state_days` is what empties it again."
+        ),
     )
 
     @model_validator(mode="before")

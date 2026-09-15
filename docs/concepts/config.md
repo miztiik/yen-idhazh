@@ -812,6 +812,12 @@ a cleanup age second: `observability.trace_window_days` bounds `state/traces/`,
 and `collect.seen_window_days` bounds `state/seen/` by naming the day files the
 reader opens.
 
+**A third sits outside it for the opposite reason.** `retention.trial_state_days`
+(90) bounds `state/<run.trial_state_dirname>/`, and nothing reads those rows at
+all - no published series, no gate, no console band. The age is about disk and
+about a reader who opens `state/` and wonders what a directory is, so it needs
+no full-grain window, no summary and no published pair.
+
 **Null keeps a summary indefinitely, and a finite value must sit above its own
 full-grain window.** The contract refuses any other pair, so a month can never
 be deleted before the thing that replaces it has been written.
