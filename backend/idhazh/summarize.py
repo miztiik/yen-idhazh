@@ -92,6 +92,11 @@ _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
         "request_timeout_minutes, so the call was cut off mid-decode. It was "
         "serving; it was writing more tokens than the clock admits"
     ),
+    FailureCode.SHARD_OUT_OF_TIME: (
+        "the worker stopped starting items before it reached this one, so nothing "
+        "was ever asked. The article was fetched and extracted; the shard ran out "
+        "of its own clock"
+    ),
     FailureCode.CONTEXT_EXCEEDED: (
         "the prompt did not fit the served context window, so the server refused it"
     ),

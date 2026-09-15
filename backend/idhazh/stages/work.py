@@ -610,10 +610,39 @@ def stage_work(
         slowest_item_s = max(slowest_item_s, time.monotonic() - item_started)
     # Every item that was fetched and never reached by the loop above, because
     # the worker's clock ran out before it could start work it could finish.
+    #
+    # The refusal is written as a summary payload as well as a record, because
+    # the census row is built from the payloads (`telemetry.classify_item`) and
+    # not from these records. An article with no summary beside it is filed
+    # `unknown` carrying "summary payload missing" - a throughput problem
+    # reported as a mystery, which is the reading `shard_out_of_time` exists to
+    # replace. Nothing is asked of the model here; the cost cells stay null
+    # because no call returned.
     for work in ready:
         if work.recorder.get("item_ended_at") is None:
+            abandoned = summarize.to_summary(
+                work.article,
+                None,
+                model_id=model.id,
+                generated_at=assemble.utc_now(),
+                no_reply=FailureCode.SHARD_OUT_OF_TIME,
+            ).model_copy(
+                update={
+                    "duration_ms": int((time.monotonic() - work.started) * 1000),
+                    "fetch_ms": work.fetch_ms,
+                    "extract_ms": work.extract_ms,
+                }
+            )
+            assemble.write_atomic(
+                items_dir / f"{work.item.item_id}.summary.json", abandoned.to_json()
+            )
             work.recorder.note(
-                code=FailureCode.SHARD_OUT_OF_TIME.value, outcome=ItemOutcome.FAILED.value
+                stage=ItemStage.SUMMARIZE.value,
+                outcome=ItemOutcome.FAILED.value,
+                code=FailureCode.SHARD_OUT_OF_TIME.value,
+                detail=telemetry.detail_cell(abandoned.failure_detail)
+                if abandoned.failure_detail
+                else None,
             )
             work.recorder.abandoned("the shard ran out of its own clock before this item ran")
             failures["abandoned"] = failures.get("abandoned", 0) + 1

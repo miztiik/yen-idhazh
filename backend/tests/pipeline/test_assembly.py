@@ -213,6 +213,15 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
 
     written = sorted((tmp_path / "run" / run_plan.date / "items").glob("*.article.json"))
     assert written, "the shard has to write what it fetched before it stops"
-    assert not sorted((tmp_path / "run" / run_plan.date / "items").glob("*.summary.json")), (
+    refused = [
+        Summary.read(path)
+        for path in sorted((tmp_path / "run" / run_plan.date / "items").glob("*.summary.json"))
+    ]
+    assert len(refused) == len(written), "every item the shard skipped has to say so"
+    assert {summary.failure_code for summary in refused} == {FailureCode.SHARD_OUT_OF_TIME}
+    # The census row is built from this payload, so a skipped item with none
+    # beside it reads `unknown` with "summary payload missing" - a throughput
+    # problem filed as a mystery.
+    assert all(summary.call_1 is None for summary in refused), (
         "no item should have been sent to the model on a shard with no clock left"
     )
