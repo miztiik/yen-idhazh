@@ -1,6 +1,6 @@
 # What the two calls cost at the truncation cap, 2026-09-13
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-15
 
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
@@ -127,10 +127,10 @@ the cap or change the extractor.
 
 **And a cap-length prompt may not be affordable at all.** The one 8,741-token
 prompt the pipeline has actually sent cost 927 s of prefill on the runner
-([`../measurements.md`](../measurements.md)). A 28,041-token the label call prompt is 3.2
-times that. The window costs memory; the tokens cost time, and the same tokens
-cost the same time at any window - so this is plan 11 row #5b's question and the
-cap's, not the window's.
+([`../measurements.md`](../measurements.md)). A 28,041-token label-call prompt is
+3.2 times that. The window costs memory; the tokens cost time, and the same
+tokens cost the same time at any window - so this is plan 11 row #5b's question
+and the cap's, not the window's.
 
 ## What was taken with
 
