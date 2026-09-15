@@ -22,7 +22,7 @@ So nothing raised in the session that produced this plan falls off the end.
 | C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | **shipped, #764.** `samples-{shard}.json`, worst faithfulness first, its own artifact |
 | C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | **shipped, #765 #769 #773.** All three steps |
 | C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | **shipped, #769** as `run.trial_state_dirname`, a named directory rather than a fixed one |
-| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **blocked, and the block is new.** The drift guard fails a run outright. See T1 |
+| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **unblocked, not started.** The harness is ready; what it needs is a decision to spend runner time |
 | C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | **shipped, #760.** The oracle found a third workflow, so six server starts assert the served alias where two did |
 | C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | **shipped, #762.** The scratch-config block only, as the smallest first step |
 | C14 | Merge the two ready pull requests | task T9 | shipped |
@@ -31,9 +31,9 @@ So nothing raised in the session that produced this plan falls off the end.
 | C17 | The owner's "old code" suspicion about item ids | section 7 | answered, no defect |
 | C18 | Free memory has no value - record a peak, never a remainder | section 2, section 3 | owner ruled 2026-09-15 |
 | C19 | The GitHub cache is GitHub's to manage, not ours | task T8 | owner ruled 2026-09-15 |
-| C20 | **The bench refetches article text on every repeat, so any long run can be refused** | task T1, and it blocks T6 | **found 2026-09-15, needs a ruling** |
+| C20 | **The bench refetches article text on every repeat, so any long run can be refused** | task T1, and it blocked T6 | **shipped, #778.** The agreeing repeats are timed and named; a `no_draft` case and a dispatchable repeat count came with it |
 
-Everything above has landed except C11 and C20, and C11 waits on C20. C20 is the one open decision and it is written up at the end of T1.
+**Every row has landed except C11, and C11 is not code.** T6 is the one open item: the harness is ready and what remains is a decision to spend runner time on the draws.
 
 ## 0. What this project is, and the five minutes of reading you owe
 
@@ -360,18 +360,20 @@ The guard's reason is sound: a timing difference must not be blamed on the model
 
 This is the same defect the qualification was designed against. `stage_qualify`'s own docstring names it: *"The old validation case replanned and refetched for every model it scored, so two numbers could differ because a publisher edited a page rather than because the weights differed."* The qualification freezes the fetched article and replays it. The bench does not.
 
-**It blocks T6.** The owner ruled on 2026-09-15 to keep drawing bench runs and infer from the distribution. A harness that refuses a draw whenever a publisher edits a page cannot produce a distribution.
+**It blocked T6.** The owner ruled on 2026-09-15 to keep drawing bench runs and infer from the distribution. A harness that refuses a draw whenever a publisher edits a page cannot produce a distribution.
 
-Options, for a person to rule on:
+**Shipped as #778 on 2026-09-15, taking A3 below.** The largest set of repeats that read the same text is what gets timed; the rest are named in `problems` as `input_drift_dropped`; `repeats_timed` sits beside `repeats` so the dossier prints the denominator it had; and the run is refused only when a case has fewer than two agreeing repeats left. Output drift is now asked only across identical inputs, because asking it across drifted ones reported a newsroom's edit as the model being unstable. The same pull request added the `no_draft` case and made `runtime_repeats` dispatchable.
+
+The four options are kept below because the one that shipped is not the one that is eventually right, and a later reader deserves to see what it traded.
 
 | id | Option | Cost | What it gives up |
 | --- | --- | --- | --- |
 | A1 | Freeze the text: keep repeat 1's articles and replay them for repeats 2..N | The largest change - the bench has to hand the pipeline an article it already has, which is a capability `stage_work` does not expose today | Nothing about the measurement. It is what the qualification already does |
 | A2 | Report the drift instead of failing: the verdict names the items whose text moved and the timing stands with that caveat attached | About ten lines. Output drift still fails, so a nondeterministic model is still caught | A weaker guard. A repeat that summarized different text sits in the same median as one that did not |
-| A3 | Time only the largest set of repeats that share one input, and fail only when fewer than two agree | About twenty lines. Keeps the guard's reason exactly and stops discarding good repeats | Nothing obvious, but it is new logic rather than removed logic, so it is the option most likely to be wrong in a way nobody notices |
+| A3 | **Shipped.** Time only the largest set of repeats that share one input, and fail only when fewer than two agree | About twenty lines. Keeps the guard's reason exactly and stops discarding good repeats | Nothing obvious, but it is new logic rather than removed logic, so it is the option most likely to be wrong in a way nobody notices |
 | A4 | Leave it and re-dispatch until a run gets lucky | Nothing to write. Roughly one job in two is wasted, at 3.3 hours each | The owner's T6 ruling in practice, and it gets worse as repeats rise |
 
-**Recommended: A3**, then the six-line paired case above. A3 keeps the guard's reason - never compare across different text - while ending the behaviour that throws away a finished run, and it is what makes T6 possible at all. A1 is the better answer eventually and is a larger piece of work than this plan should absorb.
+A3 keeps the guard's reason - never compare across different text - while ending the behaviour that throws away a finished run, and it is what makes T6 possible at all. **A1 is still the better answer eventually**, and it is a larger piece of work than this plan should absorb: it needs `stage_work` to accept an article it already has, which is a stage contract change rather than a workflow one.
 
 ### T2 - Write the dossiers for the models that have numbers
 
@@ -437,6 +439,18 @@ What to do:
 The advisor's objection is recorded here rather than acted on, because a later reader deserves it: a mean over three unknown-weight machine types moves when GitHub rotates hardware and tells nobody, so any fleet number this produces carries a date and expires. Write that sentence next to the number rather than dropping it.
 
 The paired bench remains a good idea nobody has rejected - it is simply not what the owner asked for first. If it is ever picked up, the one thing to remember is that the weights cache key is one model's digest today, so a two-model job needs a key naming both.
+
+#### Where this stands, 2026-09-15
+
+**Unblocked and not started. It is the only row of this plan still open, and what it needs is a decision to spend runner time.**
+
+The harness is ready. #778 stopped a publisher's edit refusing a finished run, so a draw now produces a reading instead of an exit code. Every draw already records its processor, so step 1's requirement is met by the artifact rather than by anybody remembering.
+
+**One thing the ruling did not anticipate, and it is worth knowing before the next draw.** The two dispatches this session measured the between-run spread by accident: the same `llama-bench` decode test, the same weights, two machines both reporting EPYC 7763, differed by **8.8 percent**. So a solo draw is a reading of a machine as much as of a model, which is the advisor's objection with a number attached rather than a new argument. It does not overturn the ruling - the distribution is still real information - but it does set the bar a difference has to clear before it means anything, and any solo comparison under about 9 percent should be read as silence.
+
+**The draft-head question is the one case where the paired shape is now cheap.** Both configurations open the same weights file, so there is no second download and the cache key problem above does not arise. `runtime_candidate=no_draft` runs it in one job. That is a different question from the fleet distribution the owner asked for, and it does not replace it.
+
+What a draw costs: about 70 minutes a repeat on the machines measured so far, so a solo draw at 3 repeats is roughly 3.5 hours of one runner, and a paired draw at 2 repeats is roughly 4.5 hours.
 
 Done when: each model has at least three recorded draws, the plan's measurement table carries every draw with its processor, and the write-up quotes a median with its sample size and date.
 
