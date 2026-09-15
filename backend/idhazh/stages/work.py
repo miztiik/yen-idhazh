@@ -379,7 +379,32 @@ def stage_work(
             )
         )
 
+    # The worker's own clock. `run.shard_timeout_minutes` is the platform's, and
+    # a job killed on that one uploads nothing - so every item this shard had
+    # already finished dies with the ones it never started. Stopping here
+    # instead means the shard writes what it has and says what it skipped.
+    #
+    # The gate is the slowest item this shard has already finished, which needs
+    # no estimate and calibrates itself to whichever processor the shard drew.
+    # Before the first item finishes it is zero, so the first item always runs.
+    deadline = shard_started + max(
+        settings.app.run.shard_timeout_minutes - settings.app.run.shard_wrap_up_minutes, 0
+    ) * 60
+    slowest_item_s = 0.0
+
     for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
+        left_s = deadline - time.monotonic()
+        if left_s < slowest_item_s:
+            LOG.warning(
+                "the shard stopped starting items shard=%s left_s=%.0f slowest_item_s=%.0f "
+                "not_started=%s",
+                shard,
+                left_s,
+                slowest_item_s,
+                sum(1 for rest in ready if rest.recorder.get("item_ended_at") is None),
+            )
+            break
+        item_started = time.monotonic()
         item = work.item
         article = work.article
         recorder = work.recorder
@@ -526,13 +551,44 @@ def stage_work(
             )
             recorder.note(**watch.close().cells())
             finished.append(recorder.done())
-    # Every item that was fetched, never reached by the loop above and therefore
-    # never closed. Today the loop cannot exit early, so this is empty on every
-    # run - and it is what makes an early exit added later say so rather than
-    # dropping the items silently.
+        slowest_item_s = max(slowest_item_s, time.monotonic() - item_started)
+    # Every item that was fetched and never reached by the loop above, because
+    # the worker's clock ran out before it could start work it could finish.
+    #
+    # The refusal is written as a summary payload as well as a record, because
+    # the census row is built from the payloads (`telemetry.classify_item`) and
+    # not from these records. An article with no summary beside it is filed
+    # `unknown` carrying "summary payload missing" - a throughput problem
+    # reported as a mystery, which is the reading `shard_out_of_time` exists to
+    # replace. Nothing is asked of the model here; the cost cells stay null
+    # because no call returned.
     for work in ready:
         if work.recorder.get("item_ended_at") is None:
-            work.recorder.abandoned("the shard ended before this item ran")
+            abandoned = summarize.to_summary(
+                work.article,
+                None,
+                model_id=model.id,
+                generated_at=assemble.utc_now(),
+                no_reply=FailureCode.SHARD_OUT_OF_TIME,
+            ).model_copy(
+                update={
+                    "duration_ms": int((time.monotonic() - work.started) * 1000),
+                    "fetch_ms": work.fetch_ms,
+                    "extract_ms": work.extract_ms,
+                }
+            )
+            assemble.write_atomic(
+                items_dir / f"{work.item.item_id}.summary.json", abandoned.to_json()
+            )
+            work.recorder.note(
+                stage=ItemStage.SUMMARIZE.value,
+                outcome=ItemOutcome.FAILED.value,
+                code=FailureCode.SHARD_OUT_OF_TIME.value,
+                detail=telemetry.detail_cell(abandoned.failure_detail)
+                if abandoned.failure_detail
+                else None,
+            )
+            work.recorder.abandoned("the shard ran out of its own clock before this item ran")
             failures["abandoned"] = failures.get("abandoned", 0) + 1
     itemrecord.shard_done(
         run_id=plan.run_id,

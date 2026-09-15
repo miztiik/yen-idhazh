@@ -9,7 +9,7 @@ pipeline needs.
 `CLAUDE.md` Guardrail #2 states the 10 GB ceiling. The eviction behaviour behind it -
 an entry unread for 7 days is deleted, and a restore is paid once per job rather
 than once per run - is in
-[github-actions.md](github-actions.md#platform-limits-that-shape-the-workflows).
+[ci-environment.md](ci-environment.md#platform-limits-that-shape-the-workflows).
 This page is the inventory and the rule.
 
 ## The budget, measured
@@ -51,7 +51,7 @@ pipeline far more than it ever saved CI.**
 | Browser binaries | `playwright-<os>-<playwright version>` | `ci.yml` `browser` and `whole-day` | both, on every pull request that buys the browser half | about 300 MB |
 
 The weights key and why it carries a revision and a build are in
-[github-actions.md](github-actions.md#the-inference-runtime-is-pinned-and-the-cache-key-says-which-build).
+[ci-model-runtime.md](ci-model-runtime.md#the-inference-runtime-is-pinned-and-the-cache-key-says-which-build).
 
 ## The rule: a cache earns its bytes by being read more often than it is written
 
