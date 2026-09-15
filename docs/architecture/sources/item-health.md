@@ -281,7 +281,7 @@ stage that did the work.
 | `plan` | `not_attempted` |
 | `fetch` | `robots_denied`, `robots_unreachable`, `blocked_address`, `http_client_error`, `http_rate_limited`, `http_server_error`, `network_error` |
 | `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
-| `summarize` | `model_unreachable`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
+| `summarize` | `model_unreachable`, `model_refused`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
 
 `detail` is `str | None`, max 200 characters, and is populated only when
@@ -333,11 +333,11 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Sixteen codes never count against a source:
+Seventeen codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
 `http_rate_limited`, `too_short`, `not_prose`, `boilerplate`,
-`model_unreachable`, `context_exceeded`, `output_truncated`,
+`model_unreachable`, `model_refused`, `context_exceeded`, `output_truncated`,
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
 
@@ -351,6 +351,14 @@ later source-health reader uses it.
 
 `model_unreachable` records our local model server being down. It is
 infrastructure failure. It never counts against a source.
+
+`model_refused` records the server answering with an error it could not explain
+as a context overflow. The server is up; the request is what it would not take -
+a flag the entry declares, a grammar, a body. It was `model_unreachable` until
+2026-09-15, which sent an operator to a process that was running: Gemma named a
+speculation kind its draft head could not drive, and five items of five reported
+a network fault against a healthy server. It never counts against a source
+either.
 
 `context_exceeded` records the served context window refusing a prompt. The
 article was long, and the window, the truncation cap and the prompt overhead are

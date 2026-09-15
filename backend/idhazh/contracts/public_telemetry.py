@@ -75,6 +75,18 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T20:00",
+            change=(
+                "The failure vocabulary gained model_refused. Additive, so every "
+                "published month still reads."
+            ),
+            why=(
+                "It follows item-health-row, where the vocabulary is declared. A "
+                "published series that cannot say a server answered with an error "
+                "reports it as a network fault instead."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T19:40",
             change=(
                 "queue_wait_ms, item_total_ms and the two prefill rates keep their "

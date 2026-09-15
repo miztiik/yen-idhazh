@@ -183,8 +183,10 @@ jobs:
           draft = models["summarize"].get("draft") or {}
           for field in ("repo", "revision", "file", "sha256"):
               value = draft.get(field) or ""
-              if value and value.split() != [value]:
-                  raise SystemExit(f"models.summarize.draft.{field} is not one word")
+              # `draft and`, not `value and`: an entry that declares a head must
+              # declare all four, or the fetch downstream runs on a blank.
+              if draft and value.split() != [value]:
+                  raise SystemExit(f"models.summarize.draft.{field} is empty or not one word")
               print(f"draft_{field}={value}")
           PY
 
