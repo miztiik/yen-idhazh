@@ -118,6 +118,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_search_index",
         "test_seen_days",
         "test_site_alarm",
+        "test_slot_probe",
         "test_source_health",
         "test_spans",
         "test_stream_order",
