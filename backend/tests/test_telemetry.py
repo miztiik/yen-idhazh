@@ -24,6 +24,7 @@ from idhazh.contracts.base import column_bounds, derive_url_key, field_column
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import (
+    UNSPECIFIED,
     FailureCode,
     ItemHealthDetail,
     ItemHealthRow,
@@ -542,9 +543,9 @@ def test_a_detail_that_folds_away_to_nothing_still_says_a_failure_happened() -> 
     A row whose detail folded to nothing is still a row reporting a failure. An
     empty cell would raise and take that report with it.
     """
-    assert telemetry.detail_cell("") == telemetry.UNSPECIFIED
-    assert telemetry.detail_cell("   ") == telemetry.UNSPECIFIED
-    assert telemetry.detail_cell("\u200b\u200b") == telemetry.UNSPECIFIED
+    assert telemetry.detail_cell("") == UNSPECIFIED
+    assert telemetry.detail_cell("   ") == UNSPECIFIED
+    assert telemetry.detail_cell("\u200b\u200b") == UNSPECIFIED
 
 
 # --- The length before the cap ----------------------------------------------
