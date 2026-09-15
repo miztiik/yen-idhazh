@@ -1175,18 +1175,7 @@ Verified 2026-08-20.
  are the exception: they outlive every artifact here, which is why a question
  about what a past run did is asked with `gh run view --job <id> --log`. **`captures-<shard>` is the one artifact that outlives the day it describes**, and it is the odd one on purpose: a regression is found by comparing today with a run from weeks ago, so a window shorter than the comparison is a window that closes exactly when it is wanted. It holds each call's rendered prompt and raw reply behind `logging.capture_prompts` and `logging.capture_replies`; with both off the directory is empty and the upload is a green no-op. It is never committed and is named in no `commit-and-push.sh` call, because a rendered prompt carries the article body inside it ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
- **Read it with `backend/utilities/read_captures.py`, not with a text editor.** A capture file is one JSON object holding a 15,000-character prompt on one line, so a reader opening it by hand sees a wall. The utility writes one numbered markdown document an item, in the order the questions get asked rather than the order the run produced them: section 1 is the story the calls read - the link, the outlet, the word counts, how the item ended - section 2 is what looks wrong, section 3 is what the calls cost, one row a call, carrying the server's own clock, the tokens in, the tokens the cache answered, the tokens it really read, the tokens out and the reason each call stopped, sections 4 and 5 read each reply as tables of what it says, and section 6 carries every prompt and every reply whole, folded into a `<details>` block. The bytes are all still there; they are just not what a reader scrolls past to reach the numbers.
-
- **Section 1 is what makes the document a quality check rather than a curiosity.** A summary is right or wrong against its source, so the report opens with the canonical link and says to read it beside the summary in section 5.
-
- **Each capture carries the five numbers its own call spent and the link its article came from**, so sections 1 and 3 work on a 90-day-old artifact whose `state/` rows were pruned long ago. A capture written before 2026-09-15 has neither: point `--health` at the day's item-health ledger and both sections fill from the row that run did write. `--head N` brings back the old eliding behaviour for the raw blocks, which are printed whole by default.
-
- ```powershell
- gh run download <run-id> --repo miztiik/yen-idhazh --name captures-<shard> --dir captures
- python backend/utilities/read_captures.py captures
- python backend/utilities/read_captures.py captures --item <part-of-an-item-id> --out pair.md
- python backend/utilities/read_captures.py captures --item <id> --health state/item-health/2026/09/14.csv
- ```
+ **A capture is not read by hand.** One file is a single JSON object holding a 15,000-character prompt on one line. [../how-to/analyze-a-pipeline-artifact.md](../how-to/analyze-a-pipeline-artifact.md) is the procedure: what to download, what to run, and what the document it writes holds.
 - **A re-run is per job, never per step, and it reuses the original commit.**
  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
  again from its first step; there is no way to resume at the step that failed.
@@ -1205,6 +1194,7 @@ Verified 2026-08-20.
 ## See also
 
 - [ci-caches.md](ci-caches.md) - every cache these workflows keep, what it costs against the 10 GB ceiling, and when a new job earns one.
+- [../how-to/analyze-a-pipeline-artifact.md](../how-to/analyze-a-pipeline-artifact.md) - how to read what the model was asked and what it answered, out of the `captures-<shard>` artifact.
 - [../architecture/overview.md](../architecture/overview.md) - how CI, committed payloads, and the static site fit together.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each pipeline stage owns.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - how to run the same stages locally.
