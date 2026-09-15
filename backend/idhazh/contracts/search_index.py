@@ -89,54 +89,18 @@ class SearchIndex(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
+            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
+            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-09-10T09:00",
-            change=(
-                "model_id keeps its type and its writer and gains the sentence that "
-                "says what a mismatch now means. No field was added, removed or "
-                "retyped, so every committed shard still validates."
-            ),
-            why=(
-                "The browser may now fetch the encoder from a second origin when this "
-                "site cannot serve it, so the encoder a tab is running is no longer "
-                "guaranteed to be the one this site published. That makes the guard "
-                "in frontend/src/lib/assist/search.ts a check against something that "
-                "can really differ rather than a check that could only ever pass: a "
-                "shard whose model_id is not the browser's own is browsable and not "
-                "searchable, and the scope the page prints collapses to the months "
-                "that match. Stamped in the commit that changes what the field means, "
-                "rather than left to be inferred from the frontend."
-            ),
+            change="model_id keeps its type and its writer and gains a sentence on its meaning.",
+            why="The browser may now fetch the encoder from a second origin.",
         ),
         ChangelogEntry(
             version="2026-08-26",
-            change=(
-                "Initial shape: one month of published items in published order, each "
-                "naming a byte offset into a sibling int8 vector file or null."
-            ),
-            why=(
-                "The archive page inlines every committed day so on-device search can see "
-                "the whole corpus, which grows about 170 KB gzipped a day and has no bound. "
-                "A month shard bounds it. Contracts before logic, so the shape is fixed "
-                "before anything reads it - and nothing does yet, which is what makes this "
-                "revertible."
-            ),
+            change="Initial shape: one month of published items in published order.",
+            why="The archive page inlined every committed day so on-device search could see it.",
         ),
     )
 

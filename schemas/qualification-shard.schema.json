@@ -606,39 +606,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Added calls_per_item, defaulting to 1. Not breaking: a shard is a workflow artifact uploaded and merged inside one job, and a shard written before today made one call, which is what the default says.",
+      "change": "Added calls_per_item, defaulting to 1.",
       "version": "2026-09-15T23:30",
-      "why": "The qualification can now run the same call path the digest runs, and that path makes two calls per item. Every per-item number moves when it does - the token counts become a pair's sum and the prompt is a different prompt - so a shard that could not say which path produced it would invite a comparison between two numbers that measured different work (Guardrail #10)."
+      "why": "Qualification can now run the call path the digest runs, which calls twice."
     },
     {
-      "change": "inputs gains turn_markers_sha256, optional. Not breaking: a shard is a workflow artifact uploaded and merged inside one job, so no payload of this shape exists on disk to migrate.",
+      "change": "inputs gains turn_markers_sha256, optional.",
       "version": "2026-09-14T04:00",
-      "why": "Plan 28 row #10 put the turn envelope in the recorded input manifest, and a shard embeds that manifest. A qualification that could not say which envelope it ran under could not compare an incumbent against the same incumbent with thinking on, which is exactly the run that row asks for. Ruled by Fowler, 2026-09-14."
+      "why": "The turn envelope is a control, so a verdict has to record which one it ran."
     },
     {
-      "change": "Removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
+      "change": "Removed pipeline_fingerprint.",
       "version": "2026-09-13T22:00",
-      "why": "`inputs` beside it records the same facts by name and no writer has built a stamp since 2026-09-12. A shard is a workflow artifact uploaded by one qualification job and merged by the next; none is committed, so the shape moves with no payload of it on disk."
+      "why": "`inputs` beside it records the same controls by name."
     },
     {
-      "change": "A shard and a report carry `inputs`, the recorded input manifest, and pipeline_fingerprint is optional on both.",
+      "change": "A shard and a report carry `inputs`, the recorded input manifest.",
       "version": "2026-09-12T21:00",
-      "why": "A qualification run stamped its controls so two candidates could be shown to have run under one pipeline. The stamp stopped being built, so the field is recorded when a caller has one and absent otherwise."
+      "why": "Two candidates are only comparable when the run records what it held still."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
-      "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
-    },
-    {
-      "change": "Added optional failure_code and failure_detail to CanaryObservation.",
-      "version": "2026-08-27",
-      "why": "A canary that never replied and a canary whose reply carried the attack both landed as `replied: false` with nothing to tell them apart, so a blank reply was read as a sanitizer breach. Both fields are nullable, so a shard written before today still validates."
-    },
-    {
-      "change": "Initial shape: the frozen corpus, every call, every score and the canaries.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-26",
-      "why": "Row #10 qualifies one model on absolute gates, so the evidence a shard hands the decider is a persisted contract rather than a log line."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "What one capture-and-replay job uploads.\n\nThe corpus is hashed and written before the first inference call, so the\npre-registration is an ordering the code enforces rather than a promise in a\ndocument.",

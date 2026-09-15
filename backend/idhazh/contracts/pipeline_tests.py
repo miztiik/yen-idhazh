@@ -135,46 +135,18 @@ class PipelineTestsConfig(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-15T12:00",
-            change="`arms` is now `cases`. A file spelling the old key still loads.",
-            why=(
-                "`arm` was benchmarking's word for the same work run again under "
-                "different settings. This project already has four plain words for a "
-                "unit of work - stage, shard, worker, run - and none of them means "
-                "that, so the word was kept and nothing explained it (`CLAUDE.md` "
-                "section 0b). `case` is ordinary English, it is how anybody describes "
-                "a test, and it carries the same meaning.\n\n"
-                "A person edits this file, so the old key reads for one release and is "
-                "then removed, which is the rule `RunPlan.VerticalPlan` records for a "
-                "config knob. The committed file moved in the same commit."
-            ),
+            change="`arms` is now `cases`.",
+            why="`arm` was benchmarking's word and reads as a limb everywhere else.",
         ),
         ChangelogEntry(
             version="2026-09-15",
             change="A candidate carries the page's headline, and a blank one is refused.",
-            why=(
-                "The plan step built its items with no title at all, so every dispatch "
-                "died in the extractor before it summarized anything. The headline has "
-                "to come from somewhere, and this file is the only place that knows it: "
-                "the address is pinned and has fallen out of its feed's window, so "
-                "reading the feed would find nothing, and having the extractor fall "
-                "back to the page's own title would put a branch in production code "
-                "that only the test rig ever takes.\n\n"
-                "Required rather than optional, so the refusal lands on the config edit "
-                "rather than three stages later. The type refuses a whitespace-only "
-                "headline as well as an empty one - `UntrustedLine` accepts `'   '`, "
-                "and this file is hand-edited. No payload is migrated: nothing but "
-                "`config/pipeline-tests.json` uses this shape and it is committed here."
-            ),
+            why="The plan step built items with no title, so every dispatch died downstream.",
         ),
         ChangelogEntry(
             version="2026-09-14",
             change="Initial shape: candidate addresses, the draw size and the cases.",
-            why=(
-                "A production run takes about 200 minutes, so a pipeline change was "
-                "tested a day after it was written. The test workflow closes that loop "
-                "in under an hour, and everything it varies is declared here rather "
-                "than written into the workflow (Guardrail #6)."
-            ),
+            why="A production run is long, so a pipeline change was tested a day at a time.",
         ),
     )
 

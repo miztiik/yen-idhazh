@@ -6,7 +6,7 @@
     {
       "change": "Initial shape: the census of the window, plus harvested_date and pruned_date.",
       "version": "2026-08-28",
-      "why": "Two schedules need somewhere to remember when they last fired, and a cron line cannot be that place - GitHub Actions parses on.schedule before any step runs, so no config value reaches it, and 5-field cron has no every-N-days field at all. The census beside it answers the question a person asks before spending a training session: how many rows are there, over what range of days, and is it all one vertical."
+      "why": "Two schedules need somewhere to remember when they last fired."
     }
   ],
   "description": "What the window holds, and when each of its two schedules last fired.\n\nCommitted beside the rows, and it is the schedule itself rather than a\nreport about one. `on.schedule` is parsed before any step runs, so no value\nin `config/` can ever reach a cron line; a cadence that has to be\nconfigurable is therefore a due-check in a step, and a due-check needs\ndurable state to compare against. That state is this file.\n\nKeeping it as dates rather than as timestamps is deliberate: a due-check\nthat compares two `YYYY-MM-DD` strings is a test with no clock in it, and\nwhen the job actually ran is already recorded by the commit it made.",

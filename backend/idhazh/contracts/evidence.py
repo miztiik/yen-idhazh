@@ -63,53 +63,23 @@ class EvidenceItem(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
-            why=(
-                "The stamp gated nothing and no writer had filled it since 2026-09-12. This "
-                "shape is deliberately not a migration surface: the oldest EvidenceItem "
-                "that can exist is a 14-day workflow artifact, so nothing it was written "
-                "into survives and a shape change here owes a re-run rather than a popper "
-                "(docs/architecture/contracts/schemas.md)."
-            ),
+            change="Removed pipeline_fingerprint.",
+            why="The stamp gated nothing and no writer had filled it for a month.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
             change="pipeline_fingerprint is optional and nothing sets it.",
-            why=(
-                "The stamp stopped being a gate, so the eval row it is copied from no "
-                "longer carries one. Relaxed rather than removed so every package already "
-                "written still parses."
-            ),
+            why="The stamp stopped being a gate, so the eval row this copies stopped filling it.",
         ),
         ChangelogEntry(
             version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
+            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
+            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-08-27",
             change="Initial shape: the measurement's identity, the premise, and the summary.",
-            why=(
-                "The faithfulness bands are a reader-facing promise with no measured human "
-                "error rate, and the label queue could not produce one: it showed a "
-                "labeller the headline and the link and never the article the verdict has "
-                "to judge. This payload carries the exact text the scorer read, beside the "
-                "exact summary it scored, so a human and the scorer answer the same "
-                "question about the same document."
-            ),
+            why="The faithfulness bands are a reader-facing promise with no measured human error.",
         ),
     )
 
