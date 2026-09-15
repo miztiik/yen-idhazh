@@ -27,7 +27,7 @@ because the committed record disagrees with itself:
   name the body carried and the summary dropped. It never invents one, because
   the vocabulary is closed.
 
-Where both arms are live they are reported against each other, so the price of
+Where both cases are live they are reported against each other, so the price of
 the smaller haystack is a measured number rather than a claim.
 
 **Nothing here is a rate this repository can set.** A median gap of 1 day means
@@ -73,7 +73,7 @@ DIGEST_RELDIR: Final = "frontend/public/digest"
 #: A term the matcher is handed. `Watchlist.entity_terms()` returns this shape.
 Vocabulary = Mapping[str, Sequence[str]]
 
-#: What one item was seen to mention. Two arms supply this, and the report says
+#: What one item was seen to mention. Two cases supply this, and the report says
 #: which one every figure came from.
 Seen = Callable[[DigestItem], Iterable[str]]
 
@@ -96,7 +96,7 @@ def rematched(vocabulary: Vocabulary) -> Seen:
     """The pipeline's matcher over the words a reader is served.
 
     The title, the summary and the key points - never the article body, which no
-    published payload carries. Fewer words than the pipeline read, so this arm
+    published payload carries. Fewer words than the pipeline read, so this case
     can only under-count.
     """
 
@@ -187,7 +187,7 @@ def unregistered_ids(days: Sequence[DigestDay], entity_ids: Sequence[str]) -> li
 
 
 def live_days(days: Sequence[DigestDay], seen: Seen) -> list[date]:
-    """The published days on which this arm sees anything at all."""
+    """The published days on which this case sees anything at all."""
     return [
         date.fromisoformat(day.date)
         for day in days
@@ -196,10 +196,10 @@ def live_days(days: Sequence[DigestDay], seen: Seen) -> list[date]:
 
 
 def agreement(days: Sequence[DigestDay], vocabulary: Vocabulary) -> tuple[int, int, int]:
-    """Item-entity pairs both arms found, only the run found, and only the re-match found.
+    """Item-entity pairs both cases found, only the run found, and only the re-match found.
 
     Taken over the days the published field is live on, because a day where it
-    is empty says nothing about either arm.
+    is empty says nothing about either case.
     """
     matcher = rematched(vocabulary)
     both = run_only = rematch_only = 0
@@ -257,9 +257,11 @@ def _record_lines(days: Sequence[DigestDay], watchlist: Watchlist) -> list[str]:
     ]
 
 
-def _arm_lines(days: Sequence[DigestDay], rows: Sequence[Appearances], live: Sequence[date]) -> str:
+def _case_lines(
+    days: Sequence[DigestDay], rows: Sequence[Appearances], live: Sequence[date]
+) -> str:
     if not live:
-        return f"  live on 0 of {len(days)} published days - this arm has nothing to report"
+        return f"  live on 0 of {len(days)} published days - this case has nothing to report"
     with_a_gap = [row for row in rows if row.gaps]
     return (
         f"  live on {len(live)} of {len(days)} published days, {live[0]} to {live[-1]};"
@@ -283,10 +285,10 @@ def report(root: Path, watchlist: Watchlist) -> str:
     lines = [*_record_lines(days, watchlist), ""]
     lines += [
         "As published - the entities list each run wrote onto its own item",
-        _arm_lines(days, published_rows, live_days(days, as_published)),
+        _case_lines(days, published_rows, live_days(days, as_published)),
         "",
         "Re-matched - the same matcher over the title, summary and key points",
-        _arm_lines(days, rematched_rows, live_days(days, matcher)),
+        _case_lines(days, rematched_rows, live_days(days, matcher)),
         "",
         "Per entry. A gap of 1 day means consecutive days - we went quiet for none of it.",
     ]
@@ -350,7 +352,7 @@ def report(root: Path, watchlist: Watchlist) -> str:
     lines += [
         "",
         "What the smaller haystack costs, over the days the published field is live on",
-        f"  both arms      {both} item-entity pairs",
+        f"  both cases      {both} item-entity pairs",
         f"  run only       {run_only} - the body carried the name and the summary dropped it"
         f" ({_share(run_only, both + run_only)} of what the run wrote)",
         f"  re-match only  {rematch_only} - published without the name the summary carries",

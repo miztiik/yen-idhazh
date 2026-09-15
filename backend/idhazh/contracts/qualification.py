@@ -1,6 +1,6 @@
 """The evidence one model qualification leaves behind.
 
-A qualification runs one model. There is no incumbent arm and no paired replay:
+A qualification runs one model. There is no incumbent case and no paired replay:
 the owner ruled on 2026-08-26 that the candidate is judged alone, and Andre
 ruled that re-basing the dropped comparisons on the committed 8B history would
 be confounded - those rows span two run-days, the articles differ every day, and

@@ -3,7 +3,7 @@
 	 *
 	 * It answers one question and refuses the others: did the pipeline work. Did
 	 * the runs finish, how long each stage took, what the truncation cap is
-	 * costing, and whether the chart arm earns its minutes. Who supplied the day
+	 * costing, and whether the chart drawing earns its minutes. Who supplied the day
 	 * is on `/console/voices/` - every feed and source panel left this page on
 	 * 2026-09-14 and none of them stayed behind. What the model wrote is on
 	 * `/console/model/` and the hardware under it is on `/console/machine/`.
@@ -74,7 +74,7 @@
 	} from '$lib/charts/frame';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
-		chartArm,
+		chartRule,
 		failureMix,
 		failureMixColumns,
 		publishedSkyline,
@@ -375,19 +375,19 @@
 	function pct(value: number | null): string {
 		return value === null ? '-' : `${value}%`;
 	}
-	/** The chart arm's own rule, read from config rather than written into a
+	/** The chart drawing's own rule, read from config rather than written into a
 	 * component. An operator moves a threshold in `config/appearance.json`. */
 	const thresholds = $derived({
-		ruleDays: data.console.chart_arm_rule_days,
-		minutesTarget: data.console.chart_arm_minutes_target,
-		coveragePct: data.console.chart_arm_coverage_pct
+		ruleDays: data.console.chart_rule_days,
+		minutesTarget: data.console.chart_minutes_target,
+		coveragePct: data.console.chart_coverage_pct
 	});
-	/** The chart-arm days inside the open window. The rule reads them and so do
+	/** The chart-drawing days inside the open window. The rule reads them and so do
 	 * the rows behind the disclosure: a table under a control that ignored it
 	 * would answer a question the reader did not ask, at a span nothing on the
 	 * page states. */
 	const chartsInWindow = $derived(data.charts.filter((day) => inWindow(day.date)));
-	const arm = $derived(chartArm(chartsInWindow, thresholds, windowDays));
+	const rule = $derived(chartRule(chartsInWindow, thresholds, windowDays));
 	/** What the extractor found over the open window, reduced once per span on the
 	 * server. The browser picks the open one; nothing re-reads a record to change
 	 * window. */
@@ -788,17 +788,17 @@
 	{#snippet articleBars()}{@render skylineBars(articleSkyline, 'articles', 'Articles published')}{/snippet}
 	{#snippet visualBars()}{@render skylineBars(visualSkyline, 'visuals', 'Visuals published')}{/snippet}
 
-	<!-- Which way a chart-arm figure has moved across the window it draws.
+	<!-- Which way a chart-drawing figure has moved across the window it draws.
 
 	     The polarity comes off the bar's own marks, so the delta and the target
 	     marker above it read one declaration: fewer minutes spent is better and
 	     a wider chart share is better, and neither is decided here. -->
-	{#snippet armMove(change: number | null, sense: TargetSense, figure: string)}
+	{#snippet ruleMove(change: number | null, sense: TargetSense, figure: string)}
 		{#if change !== null}
 			{@const verdict = movementVerdict(change, sense)}
-			<p class="arm-move" data-arm-move={figure}>
+			<p class="rule-move" data-rule-move={figure}>
 				<span
-					class="arm-move-value"
+					class="rule-move-value"
 					data-movement={change.toFixed(4)}
 					data-polarity={sense}
 					data-movement-verdict={verdict}
@@ -1383,59 +1383,59 @@
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Visuals drawn for articles</h2>
 		<div
-			data-windowed="chart-arm"
+			data-windowed="chart-drawing"
 			data-window-days={windowDays}
 			data-model-rule="no"
-			data-model-rule-name="chart-arm"
-			data-model-rule-none="the chart arm is a different model call, judged on its own rule"
+			data-model-rule-name="chart-drawing"
+			data-model-rule-none="the chart drawing is a different model call, judged on its own rule"
 		>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-				Over {thresholds.ruleDays} days with the chart-only gate on, the arm is retired if the
+				Over {thresholds.ruleDays} days with the chart-only gate on, chart drawing is retired if the
 				median day spends more than {thresholds.minutesTarget} minutes per published visual, or
 				puts a visual on fewer than {thresholds.coveragePct}% of the items it published. Over
 				{windowDays} days.
 			</p>
-			<div class="console-panel mt-3" data-charts="arm">
-				{#if arm.narrow}
+			<div class="console-panel mt-3" data-charts="rule">
+				{#if rule.narrow}
 					<!-- The rule is stated over its own span, and a median of any other
 					     span is the same figure with a different meaning. -->
-					<p class="text-[0.9375rem] text-text-secondary" data-window-too-narrow="chart-arm">
+					<p class="text-[0.9375rem] text-text-secondary" data-window-too-narrow="chart-drawing">
 						The rule reads {thresholds.ruleDays} days. Widen the window to see it.
 					</p>
 				{:else}
-					<p class="text-[0.9375rem] text-text" data-charts-verdict>{arm.verdict}</p>
-					<div class="arm-figures">
-						<div class="arm-figure" data-arm-figure="minutes">
+					<p class="text-[0.9375rem] text-text" data-charts-verdict>{rule.verdict}</p>
+					<div class="rule-figures">
+						<div class="rule-figure" data-rule-figure="minutes">
 							<TargetBar
-								marks={arm.minutesMarks}
+								marks={rule.minutesMarks}
 								label="Minutes per visual"
-								valueText={arm.minutes === null ? '-' : arm.minutes.toFixed(1)}
+								valueText={rule.minutes === null ? '-' : rule.minutes.toFixed(1)}
 								targetText="Retired above {thresholds.minutesTarget}, on the median day."
 								emptyNote="No minutes are on record for these {windowDays} days."
 							/>
 							<Sparkline
-								marks={arm.minutesTrend}
+								marks={rule.minutesTrend}
 								width={220}
 								height={30}
-								label="Minutes per visual, day by day, over {arm.minutesDays} measured days"
+								label="Minutes per visual, day by day, over {rule.minutesDays} measured days"
 							/>
-							{@render armMove(arm.minutesTrend.movement, arm.minutesMarks.sense, 'minutes')}
+							{@render ruleMove(rule.minutesTrend.movement, rule.minutesMarks.sense, 'minutes')}
 						</div>
-						<div class="arm-figure" data-arm-figure="coverage">
+						<div class="rule-figure" data-rule-figure="coverage">
 							<TargetBar
-								marks={arm.coverageMarks}
+								marks={rule.coverageMarks}
 								label="Published articles with a visual"
-								valueText={arm.coverage === null ? '-' : `${Math.round(arm.coverage)}%`}
+								valueText={rule.coverage === null ? '-' : `${Math.round(rule.coverage)}%`}
 								targetText="Retired below {thresholds.coveragePct}%, on the median day."
 								emptyNote="No day in these {windowDays} days published anything to put a visual on."
 							/>
 							<Sparkline
-								marks={arm.coverageTrend}
+								marks={rule.coverageTrend}
 								width={220}
 								height={30}
-								label="Share of published articles carrying a visual, day by day, over {arm.coverageDays} measured days"
+								label="Share of published articles carrying a visual, day by day, over {rule.coverageDays} measured days"
 							/>
-							{@render armMove(arm.coverageTrend.movement, arm.coverageMarks.sense, 'coverage')}
+							{@render ruleMove(rule.coverageTrend.movement, rule.coverageMarks.sense, 'coverage')}
 						</div>
 					</div>
 				{/if}
@@ -1729,7 +1729,7 @@ color: var(--color-text-tertiary);
 /* Two figures, side by side where there is room and stacked where there is
    not. The rule names both, so reading one without the other answers half a
    question. */
-.arm-figures {
+.rule-figures {
 display: grid;
 grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
 gap: var(--space-6);
@@ -1738,7 +1738,7 @@ margin-block-start: var(--space-4);
 
 /* Four cards, and they wrap rather than scroll. The narrowest is set to hold
    the longest label without breaking a word, so a 360px column gets one card a
-   row and a wide console gets four - the same rule the chart-arm figures above
+   row and a wide console gets four - the same rule the chart-drawing figures above
    follow, at the width four cards need instead of two. */
 .extraction-figures {
 display: grid;
@@ -1746,7 +1746,7 @@ grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 gap: var(--space-4);
 }
 
-.arm-figure {
+.rule-figure {
 display: flex;
 flex-direction: column;
 gap: var(--space-2);
@@ -1757,24 +1757,24 @@ min-inline-size: 0;
    got 3 percent slower is not a broken run, and painting it in --band-low is
    how an operator learns to ignore --band-low. The sign is printed beside the
    colour, so the hue is never the only signal. */
-.arm-move {
+.rule-move {
 margin: 0;
 font-size: var(--text-xs);
 line-height: var(--leading-xs);
 color: var(--color-text-tertiary);
 }
 
-.arm-move-value[data-movement-verdict='good'] {
+.rule-move-value[data-movement-verdict='good'] {
 color: var(--movement-good);
 }
-.arm-move-value[data-movement-verdict='bad'] {
+.rule-move-value[data-movement-verdict='bad'] {
 color: var(--movement-bad);
 }
-.arm-move-value[data-movement-verdict='neutral'] {
+.rule-move-value[data-movement-verdict='neutral'] {
 color: var(--color-text-secondary);
 }
 
-/* The chart-arm flow, as a stepped list. It replaces the diagram below the
+/* The chart-drawing flow, as a stepped list. It replaces the diagram below the
    page's own stacking breakpoint and never sits beside it: two shapes of one
    flow on one screen is two answers to one question. */
 .flow-steps {

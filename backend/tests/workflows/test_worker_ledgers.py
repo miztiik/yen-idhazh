@@ -336,7 +336,7 @@ def test_a_second_attempt_at_one_shard_leaves_the_row_the_first_one_pushed(
     own, `merge=union` keeps both lines, and the ledger ends up with a key twice.
     That is how run `2026-08-29-3` came to hold six counter rows for four shards.
 
-    Both arms run the shipped script over the same repository. The one without
+    Both cases run the shipped script over the same repository. The one without
     the setting is the defect; the one with it is the fix. The row that survives
     is the one origin already published, so the commit adds nothing and deletes
     nothing the tip holds - which is the property that makes settling after a

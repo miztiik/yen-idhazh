@@ -815,7 +815,7 @@ def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path)
 
 
 def flagged_article() -> Article:
-    """An article extract kept and flagged, so the degraded-but-done arm has a payload."""
+    """An article extract kept and flagged, so the degraded-but-done case has a payload."""
     return extract.to_article(
         item(),
         FetchResult(
@@ -839,7 +839,7 @@ def refused_summary() -> Summary:
     )
 
 
-def every_arm() -> dict[str, tuple[Article | None, Summary | None]]:
+def every_case() -> dict[str, tuple[Article | None, Summary | None]]:
     """One payload pair for each place `classify_item` builds a row."""
     return {
         "nothing reached it": (None, None),
@@ -851,14 +851,14 @@ def every_arm() -> dict[str, tuple[Article | None, Summary | None]]:
     }
 
 
-def test_every_arm_of_the_classifier_carries_the_shard() -> None:
+def test_every_case_of_the_classifier_carries_the_shard() -> None:
     """Six places build a row and a shard missed on one is a hole in the join.
 
     The hole would not raise: the cell reads empty, which is the same thing an
     unclaimed row says, so a per-shard figure would quietly drop those items and
     still add up to a plausible number.
     """
-    for name, (payload, reply) in every_arm().items():
+    for name, (payload, reply) in every_case().items():
         row = telemetry.classify_item(
             planned=item(),
             article=payload,

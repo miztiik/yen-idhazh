@@ -496,7 +496,7 @@ def test_the_active_census_is_exactly_the_addresses_a_run_would_ask() -> None:
 def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """THE ORACLE: the page's factor equals `ledger.reliability`, over one state tree.
 
-    Both arms read the same written ledger through their own loader, which is
+    Both cases read the same written ledger through their own loader, which is
     the only way this catches the two divergences that were live while the field
     was being added. The ranker groups what `load_health` returned and never
     settles the rows; this view settles them everywhere else. And the ranker's

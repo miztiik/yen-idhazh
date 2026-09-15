@@ -187,8 +187,8 @@ def publish(
     `observability.item_health_full_grain_months` caps it at fourteen months.
     That cap has never had a candidate to take - the oldest partition on disk is
     2026-08 and `retention.prune_telemetry` first reaches it on 2027-10-01 - so
-    the unbounded arm reads every partition there has ever been. **The day grain
-    makes that arm about thirty times wider in file handles and not one row
+    the unbounded case reads every partition there has ever been. **The day grain
+    makes that case about thirty times wider in file handles and not one row
     wider**, and the listing behind it grows by one directory entry a day rather
     than one a month.
     """

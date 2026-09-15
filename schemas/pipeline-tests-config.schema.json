@@ -1,57 +1,5 @@
 {
   "$defs": {
-    "PipelineTestArm": {
-      "additionalProperties": false,
-      "description": "One pass over the two articles, and what it changes about the run.\n\nAn arm is a whole pass rather than a knob, because the numbers that matter -\nwall clock, tokens a second, what the picture cost - are per pass. Three arms\nover the same two articles is what makes the difference between two of them\nreadable; one arm over six articles is not.",
-      "properties": {
-        "asks_for_a_visual_plan": {
-          "default": true,
-          "description": "Whether the second call may ask for a picture at all. False writes an empty `visuals.enabled_kinds`, so no picture is reachable and the gate takes the plan fields off the grammar, and it writes `summarize.asks_for_a_visual_plan` false so the window is sized for the call that is really sent. One knob, because the two have to agree: a window sized for a plan that is never asked for refuses articles that fit.",
-          "title": "Asks For A Visual Plan",
-          "type": "boolean"
-        },
-        "id": {
-          "description": "What the arm is called in the log and in the artifact.",
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-          "title": "Id",
-          "type": "string"
-        },
-        "n_ctx": {
-          "anyOf": [
-            {
-              "minimum": 512,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The window for this arm. None leaves the committed value. An arm that raises the slot count raises this with it: llama-server divides the window it is given between its slots, so two slots on the committed window is a 32,768-token slot rather than the 65,536 the production gate admits articles against - and the worst article the truncation cap admits needs 54,887. Leaving it alone would make the arm a test of a smaller window wearing a concurrency arm's name.",
-          "title": "N Ctx"
-        },
-        "n_parallel": {
-          "anyOf": [
-            {
-              "maximum": 8,
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The model server's slot count for this arm. None leaves the committed value, which is what the production run serves. An arm that moves it needs the server restarted, because the slot count is fixed when the process starts.",
-          "title": "N Parallel"
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "title": "PipelineTestArm",
-      "type": "object"
-    },
     "PipelineTestCandidate": {
       "additionalProperties": false,
       "description": "One address a dispatch may draw, and the feed it came from.",
@@ -85,6 +33,58 @@
       ],
       "title": "PipelineTestCandidate",
       "type": "object"
+    },
+    "PipelineTestCase": {
+      "additionalProperties": false,
+      "description": "One pass over the two articles, and what it changes about the run.\n\nA case is a whole pass rather than a knob, because the numbers that matter -\nwall clock, tokens a second, what the picture cost - are per pass. Three cases\nover the same two articles is what makes the difference between two of them\nreadable; one case over six articles is not.",
+      "properties": {
+        "asks_for_a_visual_plan": {
+          "default": true,
+          "description": "Whether the second call may ask for a picture at all. False writes an empty `visuals.enabled_kinds`, so no picture is reachable and the gate takes the plan fields off the grammar, and it writes `summarize.asks_for_a_visual_plan` false so the window is sized for the call that is really sent. One knob, because the two have to agree: a window sized for a plan that is never asked for refuses articles that fit.",
+          "title": "Asks For A Visual Plan",
+          "type": "boolean"
+        },
+        "id": {
+          "description": "What the case is called in the log and in the artifact.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "n_ctx": {
+          "anyOf": [
+            {
+              "minimum": 512,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The window for this case. None leaves the committed value. A case that raises the slot count raises this with it: llama-server divides the window it is given between its slots, so two slots on the committed window is a 32,768-token slot rather than the 65,536 the production gate admits articles against - and the worst article the truncation cap admits needs 54,887. Leaving it alone would make the case a test of a smaller window wearing a concurrency case's name.",
+          "title": "N Ctx"
+        },
+        "n_parallel": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The model server's slot count for this case. None leaves the committed value, which is what the production run serves. A case that moves it needs the server restarted, because the slot count is fixed when the process starts.",
+          "title": "N Parallel"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "PipelineTestCase",
+      "type": "object"
     }
   },
   "$id": "pipeline-tests-config.schema.json",
@@ -92,30 +92,26 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "`arms` is now `cases`. A file spelling the old key still loads.",
+      "version": "2026-09-15T12:00",
+      "why": "`arm` was benchmarking's word for the same work run again under different settings. This project already has four plain words for a unit of work - stage, shard, worker, run - and none of them means that, so the word was kept and nothing explained it (`CLAUDE.md` section 0b). `case` is ordinary English, it is how anybody describes a test, and it carries the same meaning.\n\nA person edits this file, so the old key reads for one release and is then removed, which is the rule `RunPlan.VerticalPlan` records for a config knob. The committed file moved in the same commit."
+    },
+    {
       "change": "A candidate carries the page's headline, and a blank one is refused.",
       "version": "2026-09-15",
       "why": "The plan step built its items with no title at all, so every dispatch died in the extractor before it summarized anything. The headline has to come from somewhere, and this file is the only place that knows it: the address is pinned and has fallen out of its feed's window, so reading the feed would find nothing, and having the extractor fall back to the page's own title would put a branch in production code that only the test rig ever takes.\n\nRequired rather than optional, so the refusal lands on the config edit rather than three stages later. The type refuses a whitespace-only headline as well as an empty one - `UntrustedLine` accepts `'   '`, and this file is hand-edited. No payload is migrated: nothing but `config/pipeline-tests.json` uses this shape and it is committed here."
     },
     {
-      "change": "Initial shape: candidate addresses, the draw size and the arms.",
+      "change": "Initial shape: candidate addresses, the draw size and the cases.",
       "version": "2026-09-14",
       "why": "A production run takes about 200 minutes, so a pipeline change was tested a day after it was written. The test workflow closes that loop in under an hour, and everything it varies is declared here rather than written into the workflow (Guardrail #6)."
     }
   ],
-  "description": "`config/pipeline-tests.json` - the candidate addresses and the arms.",
+  "description": "`config/pipeline-tests.json` - the candidate addresses and the cases.",
   "properties": {
-    "arms": {
-      "description": "The passes, in order. The first is the baseline the rest are read against, so there are at least two: one arm measures nothing it can be compared with.",
-      "items": {
-        "$ref": "#/$defs/PipelineTestArm"
-      },
-      "minItems": 2,
-      "title": "Arms",
-      "type": "array"
-    },
     "articles_a_dispatch": {
       "default": 2,
-      "description": "How many addresses one dispatch draws. Two is what fits the hour: the arms run in sequence over the same articles, so the cost is this number times the number of arms.",
+      "description": "How many addresses one dispatch draws. Two is what fits the hour: the cases run in sequence over the same articles, so the cost is this number times the number of cases.",
       "maximum": 8,
       "minimum": 1,
       "title": "Articles A Dispatch",
@@ -138,8 +134,17 @@
       "title": "Candidates",
       "type": "array"
     },
+    "cases": {
+      "description": "The passes, in order. The first is the baseline the rest are read against, so there are at least two: one case measures nothing it can be compared with.",
+      "items": {
+        "$ref": "#/$defs/PipelineTestCase"
+      },
+      "minItems": 2,
+      "title": "Cases",
+      "type": "array"
+    },
     "version": {
-      "default": "2026-09-15",
+      "default": "2026-09-15T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -147,9 +152,9 @@
   },
   "required": [
     "candidates",
-    "arms"
+    "cases"
   ],
   "title": "PipelineTestsConfig",
   "type": "object",
-  "version": "2026-09-15"
+  "version": "2026-09-15T12:00"
 }

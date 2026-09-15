@@ -178,7 +178,7 @@ def test_every_day_tree_reader_refuses_the_same_names(
 ) -> None:
     """The Oracle, second half: the same four names stop every reader.
 
-    Each arm holds the good day file as well, so a refusal here is about the
+    Each case holds the good day file as well, so a refusal here is about the
     name and never about an empty tree. A reader that skipped the stray would
     return the good day and pass the half above while quietly reading a tree it
     cannot account for.

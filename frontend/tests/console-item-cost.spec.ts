@@ -173,7 +173,7 @@ test.describe('what one item cost, as arithmetic', () => {
 	});
 
 	test('a middle taken over an even number of items is still a whole number', () => {
-		// The canary holds an odd number of timed items, so no browser arm can reach
+		// The canary holds an odd number of timed items, so no browser case can reach
 		// this. The committed projection holds 6,104 and reached it on the first
 		// real build: the middle prompt printed 1,687.5 tokens.
 		const cost = itemCost(

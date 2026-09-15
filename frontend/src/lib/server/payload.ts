@@ -1119,7 +1119,7 @@ export function publishedItems(
 
 /** What one published day put on a page: its items, and the charts among them. */
 export interface DayVisuals {
-	/** Every item the day published. The denominator of the arm's coverage rule. */
+	/** Every item the day published. The denominator of the chart coverage rule. */
 	items: number;
 	/** Charts a reader can actually see. */
 	charts: number;
@@ -1132,7 +1132,7 @@ export interface DayVisuals {
  * the page. A chart whose render failed is a visual and is not a published
  * chart.
  *
- * The item count rides along rather than costing a second pass: the arm's
+ * The item count rides along rather than costing a second pass: chart drawing's
  * second threshold is a share of what the day published, and the day payload is
  * already open here.
  *

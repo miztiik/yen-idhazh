@@ -1,7 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-12
-
+**Last Updated**: 2026-09-15
 Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
 environment, npm and the libraries that lie about what they returned. Index and
 scope: [../agent-notes.md](../agent-notes.md).
@@ -12,7 +11,7 @@ scope: [../agent-notes.md](../agent-notes.md).
 
 **`[System.IO.File]` resolves a relative path against the process directory, not the shell's.** `Set-Location` and `Push-Location` move the PowerShell location only, so `WriteAllText('docs/x.md',...)` lands in whatever directory the host started in - usually the shared checkout, so an edit meant for a worktree silently modifies `main`. Two tells: a size that matches the file before your edit, and a `git status` that is dirty in the OTHER checkout. `Get-Content` and `Select-String` are unaffected, because PowerShell resolves their paths itself. Always pass an absolute path, or call `[IO.Directory]::SetCurrentDirectory($w)` right after the `Set-Location`. Fourth sighting 2026-09-10, on a READ rather than a write: `ReadAllText` on a relative path returned the shared checkout's copy of a file just edited in the worktree, which reads as an edit that did not apply and cost 20 minutes.
 
-**A function that logs with `Write-Output` returns the log as part of its value.** Every uncaptured expression joins the return value, so a caller doing `if (Test-Thing) { }` tests a non-empty array and always takes the true branch. On 2026-09-09 a build-hash oracle printed `IDENTICAL=` with nothing after it for that reason, and the two arms agreed only because the second build had failed and the helper hashed the first build's leftover file. Log with `Write-Host`, return exactly one object, and return an explicit sentinel on failure rather than falling through.
+**A function that logs with `Write-Output` returns the log as part of its value.** Every uncaptured expression joins the return value, so a caller doing `if (Test-Thing) { }` tests a non-empty array and always takes the true branch. On 2026-09-09 a build-hash oracle printed `IDENTICAL=` with nothing after it for that reason, and the two cases agreed only because the second build had failed and the helper hashed the first build's leftover file. Log with `Write-Host`, return exactly one object, and return an explicit sentinel on failure rather than falling through.
 
 **`Start-Process -Wait` does not set `$LASTEXITCODE`.** It stays at whatever the last native command left, so a failing child reads as success and a timed-out wait looks like a finished one. Capture the process:
 

@@ -332,7 +332,7 @@ def test_a_bin_count_outside_the_mark_window_never_loads() -> None:
 def test_a_numeral_in_reader_facing_prose_is_matched_against_the_cited_elements() -> None:
     """The three prose channels the shape could only length-bound.
 
-    Each is checked on its own arm, because one combined arm passes while two of
+    Each is checked on its own case, because one combined case passes while two of
     the three are unread. A numeral the article's own characters carry is fine;
     a numeral from nowhere is not, and neither is one the model reached by
     converting - code does the arithmetic, and row 4 records it when it does.

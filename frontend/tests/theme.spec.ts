@@ -12,10 +12,10 @@
  *    before it existed cannot have repainted anything - and a change recorded
  *    after it existed is the flash, whatever the final colour is.
  * 2. With JavaScript switched off the page is dark. There is exactly one frame
- *    in that arm, so it is the first one by construction, and it proves the
+ *    in that case, so it is the first one by construction, and it proves the
  *    default lives in `:root` rather than in the inline script.
  *
- * Three storage arms, because the reader has three states and only one of them
+ * Three storage cases, because the reader has three states and only one of them
  * is the interesting case: no key at all, `light`, and `dark`.
  */
 

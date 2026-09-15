@@ -1,6 +1,6 @@
 """The eleven hard gates, as arithmetic rather than as an argument.
 
-One model runs. There is no incumbent arm, so no gate here reads a second
+One model runs. There is no incumbent case, so no gate here reads a second
 model's number: the owner ruled on 2026-08-26 that the candidate is qualified
 alone, and every threshold below is read from something already committed -
 `config/idhazh.json`, the adoption target in `docs/reference/measurements.md`,
@@ -183,7 +183,7 @@ def reasoning_leakage(
     taking. With one declared, the reasoning is wanted and is discarded before
     the reply is parsed - so a channel or a block still reaching an observation
     means the discard did not happen, which is the same zero and a different
-    sentence. A gate that stopped counting on the thinking arm would be a
+    sentence. A gate that stopped counting on the thinking case would be a
     control that fires only on the path nobody runs.
     """
     channel = [o for o in observations if o.reasoning_channel_used]

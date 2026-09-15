@@ -14,20 +14,20 @@ import { dayReady } from './support/day-ready';
 /**
  * The offline reader, and the way out of it.
  *
- * Two arms, in one file on purpose. A worker whose exit has not been
+ * Two cases, in one file on purpose. A worker whose exit has not been
  * demonstrated is the one failure a static site cannot recover from - a reader
- * pinned to a bundle with no way to reach the fix - so the arm that proves the
- * feature and the arm that proves the switch are read together or not at all.
+ * pinned to a bundle with no way to reach the fix - so the case that proves the
+ * feature and the case that proves the switch are read together or not at all.
  *
- * **A null result is a failure here, twice over.** An offline arm that
+ * **A null result is a failure here, twice over.** An offline case that
  * intercepted nothing has proved that a page loaded, which it would have done
- * anyway. A cleared-cache arm that started from an empty cache has cleared
+ * anyway. A cleared-cache case that started from an empty cache has cleared
  * nothing. Both counts are printed and both are asserted above zero before the
  * thing they are evidence for is asserted at all.
  *
  * Service workers are blocked for the rest of the suite (`playwright.config.ts`)
  * and turned back on here. Every test takes a fresh browser context, so nothing
- * one arm registers can reach the next.
+ * one case registers can reach the next.
  */
 
 const BUILD = resolve(process.cwd(), 'build');
@@ -40,7 +40,7 @@ const CACHE_PREFIX = 'idhazh-';
  * `npm run preview`, and SvelteKit's preview server serves
  * `.svelte-kit/output/client` - the generated client assets plus the contents of
  * `static/` - rather than the adapter's `build/` directory. Writing the killed
- * switch into `build/` changes nothing the browser can see, and the arm then
+ * switch into `build/` changes nothing the browser can see, and the case then
  * fails on a worker that was behaving correctly. Both are written so the two
  * trees never disagree, and both are gitignored.
  */
@@ -72,7 +72,7 @@ function newestServedDay(): string {
 		.filter((path) => existsSync(join(path, 'digest.json')))
 		.map((path) => path.slice(root.length + 1).split(/[\\/]/).join('-'))
 		.sort();
-	if (days.length === 0) throw new Error('the built site serves no day, so neither arm can run');
+	if (days.length === 0) throw new Error('the built site serves no day, so neither case can run');
 	return days[days.length - 1];
 }
 
@@ -81,7 +81,7 @@ function newestServedDay(): string {
  *
  * The shell cache used to keep whatever a page asked for, so this is the probe
  * that says whether it still does. It is discovered rather than named: a fixed
- * path would go stale, and a probe that 404s would make the arm prove nothing.
+ * path would go stale, and a probe that 404s would make the case prove nothing.
  */
 function publishedButNotShell(): string {
 	const under = (root: string, suffix: string): string[] =>
@@ -185,7 +185,7 @@ test.afterEach(async ({ page, context }) => {
 			for (const name of await caches.keys()) await caches.delete(name);
 		})
 		.catch(() => {
-			// The kill-switch arm ends on a page that could not load. There is
+			// The kill-switch case ends on a page that could not load. There is
 			// nothing left to clean up there, and the context is discarded anyway.
 		});
 });
@@ -322,7 +322,7 @@ test.describe('a day already opened', () => {
 		// The day payload goes onto the device the way a reader puts it there: by
 		// asking for it once. Nothing prefetched it and nothing will.
 		const first = await page.evaluate((url) => fetch(url).then((answer) => answer.status), DAY_URL);
-		expect(first, 'the day this arm is about is not served').toBe(200);
+		expect(first, 'the day this case is about is not served').toBe(200);
 
 		// One reload online, so the document itself is on the device too. The
 		// first load came from the network - a worker claims a page it did not
@@ -350,7 +350,7 @@ test.describe('a day already opened', () => {
 
 		// The body is read, not just the status. A resource-timing entry lands when
 		// the response is finished, so a fetch left half-read is a request the
-		// count below cannot see - which would leave the arm reporting one.
+		// count below cannot see - which would leave the case reporting one.
 		const offline = await page.evaluate(
 			(url) =>
 				fetch(url)
@@ -391,7 +391,7 @@ test.describe('a day already opened', () => {
 		await page.goto(`/${DATE}/`);
 		await controlled(page);
 		const first = await page.evaluate((url) => fetch(url).then((answer) => answer.status), DAY_URL);
-		expect(first, 'the day this arm is about is not served').toBe(200);
+		expect(first, 'the day this case is about is not served').toBe(200);
 
 		const stamp = await page.evaluate(
 			async ([url, header]) => {
@@ -421,7 +421,7 @@ test.describe('a day already opened', () => {
 		await controlled(page);
 		// One reload, so the document itself goes through the worker. A worker
 		// claims a page it did not serve, so the first navigation never reached it
-		// and the shell cache would be missing the one entry this arm needs kept.
+		// and the shell cache would be missing the one entry this case needs kept.
 		await page.reload();
 		await controlled(page);
 
@@ -457,7 +457,7 @@ test.describe('a day already opened', () => {
 			[published, `/${DATE}/`, '/manifest.webmanifest'] as const
 		);
 
-		expect(shell, 'there is no shell cache, so this arm proves nothing').not.toBeNull();
+		expect(shell, 'there is no shell cache, so this case proves nothing').not.toBeNull();
 		console.log(
 			`[service-worker] ${shell?.name} holds ${shell?.kept} entries; ${published} kept: ${shell?.probe}`
 		);

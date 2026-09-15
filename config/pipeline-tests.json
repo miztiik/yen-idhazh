@@ -1,9 +1,4 @@
 {
-  "arms": [
-    {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": false,"id": "no-visual-decision","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 131072,"n_parallel": 2}
-  ],
   "articles_a_dispatch": 2,
   "budget_minutes": 140,
   "candidates": [
@@ -31,6 +26,11 @@
     {"source_id": "livemint","title": "'How can magistrate issue notice?' Why CJI Surya Kant questioned notice to Noida student over Jantar Mantar protest","url": "https://livemint.com/news/india/how-can-magistrate-issue-notice-why-cji-surya-kant-questioned-notice-to-noida-student-over-jantar-mantar-protest-cjp-11788936471939.html"},
     {"source_id": "scroll-in","title": "Has El Nino's monsoon effect hit India's kharif crops?","url": "https://scroll.in/article/1095412/has-el-ninos-monsoon-effect-hit-indias-kharif-crops"},
     {"source_id": "hindustan-times","title": "Assam ordered to pay Rs 2 lakh to family of woman pushed into Bangladesh: 'Expelled without information to husband'","url": "https://hindustantimes.com/india-news/gauhati-hc-orders-assam-to-pay-rs-2-lakh-to-family-of-woman-pushed-to-bangladesh-101788794423171.html"}
+  ],
+  "cases": [
+    {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": false,"id": "no-visual-decision","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 131072,"n_parallel": 2}
   ],
   "version": "2026-09-15"
 }

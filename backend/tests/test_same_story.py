@@ -263,18 +263,18 @@ def test_the_count_is_of_other_sources_and_not_of_other_items() -> None:
 # story are pulled apart by the part that is guaranteed to differ. Measured
 # 2026-09-14 over the twenty-five committed days: the fifty-three cross-source
 # pairs that share a headline have a median cosine of 0.9177, and the pair
-# above is two stories at 0.9317. The populations overlap, so the two arms
+# above is two stories at 0.9317. The populations overlap, so the two cases
 # below hold the threshold still and change one thing - the headline.
 
 #: Far enough apart that no threshold this project would ship groups them. The
-#: assertion in each arm proves it rather than trusting this comment.
+#: assertion in each case proves it rather than trusting this comment.
 _APART: Final = 30.0
 #: Close enough that the cosine alone forms a group, for the chaining guard.
 _TOGETHER: Final = 45.0
 
 
 def test_two_sources_with_one_headline_are_one_story_below_the_threshold() -> None:
-    """The joined arm. Two outlets, one headline, a cosine that never clears."""
+    """The joined case. Two outlets, one headline, a cosine that never clears."""
     items = [
         item("world-01", source="wire", score=1.0, title="Ferry capsizes off Cyprus, killing seven"),
         item("world-02", source="paper", score=9.0, title="Ferry capsizes off Cyprus killing seven"),
@@ -282,7 +282,7 @@ def test_two_sources_with_one_headline_are_one_story_below_the_threshold() -> No
     vectors = {"world-01": unit(0), "world-02": unit(_APART)}
     assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-02"])) < (
         committed_threshold()
-    ), "the arm is only a test of the headline if the vectors cannot form this group"
+    ), "the case is only a test of the headline if the vectors cannot form this group"
 
     stamped = collapse_same_story(items, block(vectors), similarity_min=committed_threshold())
 
@@ -291,12 +291,12 @@ def test_two_sources_with_one_headline_are_one_story_below_the_threshold() -> No
 
 
 def test_a_headline_one_word_apart_is_not_a_story_below_the_threshold() -> None:
-    """The control arm. Everything above, with one word of one headline changed.
+    """The control case. Everything above, with one word of one headline changed.
 
-    Both arms run at the threshold `config/idhazh.json` ships and both pairs
-    carry the same two vectors, so this is the arm that goes red if somebody
+    Both cases run at the threshold `config/idhazh.json` ships and both pairs
+    carry the same two vectors, so this is the case that goes red if somebody
     answers the defect by lowering `duplicate_similarity_min` instead: a floor
-    low enough to group the arm above groups this one too.
+    low enough to group the case above groups this one too.
     """
     items = [
         item("world-01", source="wire", score=1.0, title="Ferry capsizes off Cyprus, killing seven"),
@@ -381,7 +381,7 @@ def test_two_desks_rounding_one_price_are_one_group() -> None:
     vectors = {"business-01": unit(0), "business-02": unit(_APART)}
     assert cosine(from_base64(vectors["business-01"]), from_base64(vectors["business-02"])) < (
         committed_threshold()
-    ), "the arm is only a test of the headline if the vectors cannot form this group"
+    ), "the case is only a test of the headline if the vectors cannot form this group"
 
     stamped = collapse_same_story(items, block(vectors), similarity_min=committed_threshold())
 
@@ -390,7 +390,7 @@ def test_two_desks_rounding_one_price_are_one_group() -> None:
 
 
 def test_two_desks_printing_different_figures_are_two_groups() -> None:
-    """The control for the arm above. One word of one headline, one digit apart."""
+    """The control for the case above. One word of one headline, one digit apart."""
     items = [
         item("business-01", source="wire", score=1.0, title="Tariff raised to 25 percent"),
         item("business-02", source="paper", score=9.0, title="Tariff raised to 50 percent"),

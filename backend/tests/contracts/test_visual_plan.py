@@ -30,7 +30,7 @@ pytestmark = pytest.mark.contract
 
 #
 # One combined test passes while three of the four are unenforced, so each gets
-# its own arm and each arm names the thing it refuses. Every payload here is a
+# its own case and each case names the thing it refuses. Every payload here is a
 # committed fixture with one field changed (Guardrail #7, Guardrail #12) - nothing walks a
 # collection a run appends to.
 
@@ -65,7 +65,7 @@ def test_a_plan_carrying_a_literal_number_does_not_load() -> None:
     """Prohibition 2. A bar height is reached by citing an element, so the worst
     an injection can do is pick the wrong bars rather than draw the wrong figure.
 
-    Two arms, because the ways in differ: a new field is refused as an unknown
+    Two cases, because the ways in differ: a new field is refused as an unknown
     key, and a number pushed into a reference field is refused by its type.
     """
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):

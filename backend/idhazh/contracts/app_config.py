@@ -127,10 +127,10 @@ class AppConfig(Contract):
                 "replaced."
             ),
             why=(
-                "The pipeline test workflow runs one arm with no picture reachable, to "
+                "The pipeline test workflow runs one case with no picture reachable, to "
                 "price what the visual decision costs. Turning the picture off is a "
                 "config edit already - an empty visuals.enabled_kinds - but the window "
-                "sizing had no way to follow it, so that arm would reserve room for a "
+                "sizing had no way to follow it, so that case would reserve room for a "
                 "decode it never makes and refuse articles that fit. One knob, so the "
                 "two cannot disagree (plan 27, row 11)."
             ),
@@ -980,7 +980,7 @@ class AppConfig(Contract):
                 "named state, a compute buffer 5.1 times larger without fusion, and a "
                 "graph 180 nodes longer. Measured 2026-09-09 on a 12th Gen Intel Core "
                 "i7-1265U against llama.cpp b10444, eleven server starts, three runs an "
-                "arm, zero spread. It is a knob rather than a literal because an "
+                "case, zero spread. It is a knob rather than a literal because an "
                 "operator debugging a start wants 9 and a daily run does not (Guardrail #6), "
                 "and it is set on both roles because both write a log nobody can read "
                 "otherwise. What it costs is one job artifact growing from 1,085 bytes "
@@ -1933,7 +1933,7 @@ class AppConfig(Contract):
                 "0.69 was two standard errors below a 2026-08-26 baseline of 0.767, "
                 "and the baseline has slid to 0.690 since. The gate failed on main by "
                 "0.00022, which is one percent of one standard error. It is not a "
-                "ranking regression, and four arms over the same 60 queries, the same "
+                "ranking regression, and four cases over the same 60 queries, the same "
                 "labels and the same ranking code say so. The archive at the last "
                 "green commit scores 0.69163 +/- 0.04092. The same 3,485 items read "
                 "with today's vectors score 0.69163 again, so the re-encode is "
@@ -2011,13 +2011,13 @@ class AppConfig(Contract):
         ChangelogEntry(
             version="2026-08-30T21:15",
             change=(
-                "console.chart_arm_rule_days, console.chart_arm_minutes_target and "
-                "console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 "
+                "console.chart_rule_days, console.chart_minutes_target and "
+                "console.chart_coverage_pct added, defaulting to 14 days, 6.0 "
                 "minutes and 5 percent. The shape is `ConsoleConfig`, which this "
                 "document and `AppearanceConfig` share, so both schemas moved together."
             ),
             why=(
-                "The chart arm is the only console section with a written decision rule "
+                "Chart drawing is the only console section with a written decision rule "
                 "in its own prose, and all three numbers in that rule were constants in "
                 "a TypeScript module - so the one section that states a threshold was "
                 "the one section an operator could not move a threshold on (Guardrail #6). "
@@ -2644,10 +2644,10 @@ class AppConfig(Contract):
                 "50 to 97 minutes against a 60-minute job. Four of the six runs were "
                 "cancelled at the bound, and a cancelled job skips its upload step - so "
                 "every decision the hour bought was discarded and the day published with "
-                "zero visuals. The diagram arm is what made the existing pre-filter "
+                "zero visuals. Diagram drawing is what made the existing pre-filter "
                 "unfireable: it is reachable for every item by construction, so the model "
                 "was asked about 145 of 145 items on 2026-08-25 while it drafted zero "
-                "diagrams in 88 and rendered zero in 703. With the arm off, 68 of those "
+                "diagrams in 88 and rendered zero in 703. With it off, 68 of those "
                 "145 items (46.9%) never reach the model at all. Same fields, same types, "
                 "same units; an older config still validates. Semantic shift on one and a "
                 "changed default on the other, so both are stamped here (section 11)."

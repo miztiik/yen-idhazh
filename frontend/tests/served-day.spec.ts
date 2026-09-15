@@ -202,7 +202,7 @@ test('the day facts are projected, and an absent one is null', () => {
 test('a field the run never recorded reads as unknown, never as a value', () => {
 	const [legacy, current] = DAYS as [Day, Day];
 
-	// The arm that would make every assertion below vacuous: the older shape has
+	// The case that would make every assertion below vacuous: the older shape has
 	// to be missing the five in the first place.
 	for (const [index, item] of legacy.served.items.entries()) {
 		const source = legacy.committed.items[index] as Record<string, unknown>;

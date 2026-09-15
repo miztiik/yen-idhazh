@@ -1,7 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-13
-
+**Last Updated**: 2026-09-15
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -230,7 +229,7 @@ run the project made. Every day file's name IS a recorded date, so the newest
 not do this: it says only that the store holds records somewhere inside that
 month.
 
-What the day grain costs, stated rather than implied: the unbounded arm of
+What the day grain costs, stated rather than implied: the unbounded case of
 `publish_telemetry.publish` opens about thirty times as many file handles for the
 same rows, and every listing of the store names one entry a recorded day instead
 of one a month. What it buys is the two properties in the first bullet, and a

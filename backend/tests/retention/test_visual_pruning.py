@@ -44,7 +44,7 @@ def test_the_day_s_own_payloads_are_never_candidates(tmp_path: Path) -> None:
     """`digest.json` is the record that a day happened and is never deleted.
 
     It sits in the same directory as a visual and now carries the same
-    extension, so this is the arm that would have caught the cheap version of
+    extension, so this is the case that would have caught the cheap version of
     this change - adding `.json` to a suffix set. `run.json` is here for the
     same reason: it walked straight through the deny-list that named only
     `digest.json`, which is why there is no deny-list any more.
@@ -110,13 +110,13 @@ def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
 SCAN_START: Final = date(2019, 1, 1)
 
 
-#: Days in the big arm. 400 puts fourteen calendar months on the tree and leaves
+#: Days in the big case. 400 puts fourteen calendar months on the tree and leaves
 #: the cutoff a long way inside it, so a walk that stopped early shows up as a
 #: missing month rather than as a rounding difference.
 SCAN_DAYS: Final = 400
 
 
-#: Days in the small arm. Both arms hold the same expired days; every day they
+#: Days in the small case. Both cases hold the same expired days; every day they
 #: do not share is inside the window, which is the side the archive grows on.
 SCAN_SMALL_DAYS: Final = 260
 
@@ -259,7 +259,7 @@ def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
 def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> None:
     """Two trees, the same backlog, and the same reads.
 
-    The large arm carries 140 more published days and 3,080 more files, all of
+    The large case carries 140 more published days and 3,080 more files, all of
     them inside the window. Guardrail #12's question is whether a run that changed no
     code costs more because an earlier run appended - so the two scans have to
     open the same directories, not merely find the same files.

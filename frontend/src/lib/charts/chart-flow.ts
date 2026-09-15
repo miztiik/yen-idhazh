@@ -79,7 +79,7 @@ const NODE_GAP = 34;
 export interface FlowStep {
 	label: string;
 	value: number;
-	/** Whole percent of everything that reached the arm. */
+	/** Whole percent of everything that reached chart drawing. */
 	share: number;
 	token: ChartToken;
 	/** What left the flow at this stage, or null at the last one. Null is also

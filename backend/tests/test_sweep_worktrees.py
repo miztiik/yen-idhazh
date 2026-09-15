@@ -2,12 +2,12 @@
 
 The decision is pure and the collection is real. `decide` is exercised directly
 over crafted facts, because the rule is the thing that must not drift; the
-end-to-end arms build an actual repository with actual worktrees in `tmp_path`
+end-to-end cases build an actual repository with actual worktrees in `tmp_path`
 and let the tool remove one, because a stub of `git worktree remove` would pass
 against a tool that never removed anything.
 
 Nothing here reaches the network. `ask_gh=False` is a real flag - it is what a
-box with no `gh` gets - and every arm that uses it asserts the SAFE answer, so
+box with no `gh` gets - and every case that uses it asserts the SAFE answer, so
 the test cannot pass by accident on a machine that happens to be authenticated.
 """
 

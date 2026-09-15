@@ -72,7 +72,7 @@ def test_a_turn_opening_that_names_no_role_is_refused(opening: str) -> None:
     """A substitution over a string that names nothing returns it unchanged.
 
     Every turn then renders with no role header, the prompt is still
-    syntactically fine, and no reader downstream can tell. The second arm is the
+    syntactically fine, and no reader downstream can tell. The second case is the
     renamed placeholder, which raises at the first render rather than at load -
     late, and in the middle of a shard.
     """

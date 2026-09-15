@@ -16,7 +16,7 @@
 import type { SummaryBand, TelemetryRow } from '../../src/lib/charts/series';
 import { telemetryRow } from './telemetry-row';
 
-/** The sizes one arm of the counted-visit oracle is built at.
+/** The sizes one case of the counted-visit oracle is built at.
  *
  * `runs` and `items` double together, which is what turns a run-by-row join
  * into four times the work rather than two.

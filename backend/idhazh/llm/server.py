@@ -131,7 +131,7 @@ class TurnMarkers:
     system_role: SystemPlacement
     #: Empty under `own_turn`, where nothing reads it. The contract refuses a
     #: fold that declares no joiner, so the empty string is unreachable on the
-    #: arm that does read it.
+    #: case that does read it.
     system_joiner: str
     #: What closes this model's reasoning block, and the whole declaration that
     #: reasoning is wanted. `None` is one schema-constrained span and no
@@ -163,7 +163,7 @@ class TurnMarkers:
         return self.thinking_close is not None
 
     def opening(self) -> str:
-        """Where the model starts writing, on the arm this envelope declares.
+        """Where the model starts writing, on the case this envelope declares.
 
         It takes no argument. A flag handed in beside the markers is a second
         answer to a question the markers already answer, and the two disagreeing
@@ -307,7 +307,7 @@ class FlashAttention(StrEnum):
 FLASH_ASKED: Final = re.compile(r"flash_attn\s*=\s*(\w+)")
 
 #: The decision itself, printed only when `auto` left one to make - so it is
-#: absent from both explicit arms and present in neither of their logs.
+#: absent from both explicit cases and present in neither of their logs.
 FLASH_FUSED: Final = "resolve_fused_ops: Flash Attention enabled"
 
 
@@ -318,7 +318,7 @@ def flash_attention_state(server_log: str) -> FlashAttention:
     so a log taken from a quiet server answers `UNREADABLE` rather than
     `REFUSED`. That distinction is the whole point: a reader that took a missing
     line for "off" would turn a forgotten verbosity into a finding about
-    attention. Measured 2026-09-09, three runs an arm and zero spread -
+    attention. Measured 2026-09-09, three runs a case and zero spread -
     `docs/reference/measurements.md`.
     """
     asked = FLASH_ASKED.search(server_log)
@@ -851,7 +851,7 @@ PROBE_USER: Final = "Answer with the one word this shape allows."
 #: The turn the second probe call adds, so its prompt is the first one plus what
 #: came back plus one more turn - the exact shape a real item's two calls take.
 PROBE_FOLLOW_UP: Final = "Answer once more."
-#: The only value the constrained-decoding arm's schema admits.
+#: The only value the constrained-decoding case's schema admits.
 PROBE_ANSWER: Final = "probe"
 #: The decode budget for one probe call. Not a tunable: the grammar admits
 #: exactly one short document, so this is a ceiling on a shape that cannot vary,
@@ -894,7 +894,7 @@ def _first_difference(ours: Sequence[int], theirs: Sequence[int]) -> int:
 
 
 def the_render_agrees(*, ours: Sequence[int], theirs: Sequence[int]) -> None:
-    """Arm 1. Our rendered prompt is the prompt the model's own template renders.
+    """Case 1. Our rendered prompt is the prompt the model's own template renders.
 
     **Token ids, not bytes.** A chat template's output may open with the model's
     own sequence token, and the runtime inserts that token again when it reads a
@@ -920,7 +920,7 @@ def the_render_agrees(*, ours: Sequence[int], theirs: Sequence[int]) -> None:
 
 
 def the_prefix_cache_is_live(*, first: Completion, second: Completion) -> None:
-    """Arm 2. The second call read the first call's prompt out of the slot.
+    """Case 2. The second call read the first call's prompt out of the slot.
 
     The second probe's prompt IS the first one plus the reply plus one turn, so
     every token the first call prefilled is a prefix of it. Reusing none of them
@@ -939,7 +939,7 @@ def the_prefix_cache_is_live(*, first: Completion, second: Completion) -> None:
     `b10598`, Qwen3.5-9B-Q4_K_M, run 34820209002: the first probe prefilled 31
     tokens, the slot checkpointed at position 26, and the second probe reused 27
     of its 60 and evaluated 33. Prefill was cut, not doubled - and the version
-    of this arm that wanted 31 refused all four shards on the first real run it
+    of this case that wanted 31 refused all four shards on the first real run it
     ever saw, so the day planned 80 items and published none.
     """
     if first.prompt_tokens > 0 and second.cached_tokens > 0:
@@ -974,7 +974,7 @@ def one_document_schema(
 
 
 def decoding_still_constrains(*, reply: str, only: Mapping[str, Any]) -> None:
-    """Arm 3. The grammar is still as narrow as the schema that built it.
+    """Case 3. The grammar is still as narrow as the schema that built it.
 
     One call under a schema exactly one document satisfies. A reply that is
     anything else means the schema-to-grammar converter dropped a feature, so
@@ -998,7 +998,7 @@ def decoding_still_constrains(*, reply: str, only: Mapping[str, Any]) -> None:
 
 
 def the_weights_are_the_declared_ones(*, declared: str, reported: str) -> None:
-    """Arm 4. The file the server opened is the architecture the entry names.
+    """Case 4. The file the server opened is the architecture the entry names.
 
     Beside the filename assertion `digest.yml` already makes, which says which
     file. This says what that file is. A repackaged GGUF under a familiar name
@@ -1015,7 +1015,7 @@ def the_weights_are_the_declared_ones(*, declared: str, reported: str) -> None:
 
 
 def the_window_is_inside_the_trained_window(*, n_ctx: int, trained: int) -> None:
-    """Arm 5. The configured window is one the model was actually trained for.
+    """Case 5. The configured window is one the model was actually trained for.
 
     `--no-context-shift` refuses a prompt past `n_ctx`. It never refuses one
     past the length the weights were trained at, so a candidate with a short
@@ -1152,7 +1152,7 @@ def _rendered_by_the_server(endpoint: str, *, turns: TurnsConfig, timeout: float
     """The server's own render of the probe conversation, asked for the same way.
 
     Both the keyword and whether reasoning is asked for come from the entry
-    rather than from a literal here. Arm 1 compares our render against this one,
+    rather than from a literal here. Case 1 compares our render against this one,
     so either of them spelled in source would make the probe agree with itself
     while both sides asked the template a question it does not answer.
     """
@@ -1185,7 +1185,7 @@ def _token_ids(endpoint: str, text: str, *, timeout: float) -> list[int]:
 
     Both sides are tokenised the same way, so a sequence token the template
     wrote into its own output arrives as one id on that side and is absent from
-    ours - which is the single leading difference arm 1 allows. Leaving
+    ours - which is the single leading difference case 1 allows. Leaving
     `add_special` on would put one on both and hide a real disagreement.
     """
     body = _ask(
@@ -1214,7 +1214,7 @@ def prove_the_entry(
 ) -> None:
     """Turn the entry's claims into facts, or refuse the run.
 
-    Five arms, in cost order: the two that cost a render and a tokenisation
+    Five cases, in cost order: the two that cost a render and a tokenisation
     first, then the two completions, then the file read and the model list. The
     first refusal stops the rest, because a server whose render disagrees has
     nothing useful to say about its own cache.

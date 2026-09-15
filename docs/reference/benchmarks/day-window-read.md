@@ -1,7 +1,6 @@
 # A 90-day window at month grain against day grain, 2026-09-11
 
-**Last Updated**: 2026-09-11
-
+**Last Updated**: 2026-09-15
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
@@ -23,49 +22,49 @@ hold exactly 90.
 | Box | A developer machine, not a runner. Nothing else heavy was running |
 | Fixture | 120 consecutive days, 3,152 sight rows a day, 378,240 rows in all |
 | Window | 90 days, anchored on 2026-09-07 |
-| Passes | 9 an arm, **interleaved** - month, day, month, day, in one process |
+| Passes | 9 a case, **interleaved** - month, day, month, day, in one process |
 
 The 3,152 rows a day is the median day of the committed sight ledger on
 2026-09-11 (67,205 rows over 20 days), so the fixture is the shape this read
 meets rather than a number somebody liked.
 
-**Both arms read one row list written twice.** The rows are identical and only
-the layout differs, so a difference between the arms is the layout and cannot be
-the data. The month arm is `ledger.load_seen` itself. The day arm is the same
+**Both cases read one row list written twice.** The rows are identical and only
+the layout differs, so a difference between the cases is the layout and cannot be
+the data. The month case is `ledger.load_seen` itself. The day case is the same
 reduction over `<YYYY>/<MM>/<DD>.csv`, written inside the instrument because no
 ledger files sight rows by day yet - which is the change being priced.
 
-**The two arms swapped on 2026-09-13, and the reading above did not move.**
-`state/seen/` filed by day that day, so `ledger.load_seen` is the DAY arm now and
-the month arm is the layout written out inside the instrument. Which arm is the
-ledger's own code says nothing about what either arm costs - both read the same
+**The two cases swapped on 2026-09-13, and the reading above did not move.**
+`state/seen/` filed by day that day, so `ledger.load_seen` is the DAY case now and
+the month case is the layout written out inside the instrument. Which case is the
+ledger's own code says nothing about what either case costs - both read the same
 rows with the same reduction, which is the property this record rests on - but a
 reader running the tool today would otherwise find the sentence above inverted.
 The numbers below stand as taken.
 
-**The arms are interleaved because a stopwatch here measures the page cache.**
+**The cases are interleaved because a stopwatch here measures the page cache.**
 The same bounded reads over one fixture came out 16.6 percent apart minutes
-apart on this project, and every arm that writes more files makes the tree
+apart on this project, and every case that writes more files makes the tree
 warmer for whatever runs next
 ([`../agent-notes/gates-and-builds.md`](../agent-notes/gates-and-builds.md)).
-Running one arm to completion and then the other measures the order they ran in.
+Running one case to completion and then the other measures the order they ran in.
 
-## The arms
+## The cases
 
-| Arm | Files opened | Rows read | Median | Spread |
+| Case | Files opened | Rows read | Median | Spread |
 | --- | --- | --- | --- | --- |
 | month | 4 | 312,048 | 2,826.9 ms | 638.7 ms |
 | day | 91 | 286,832 | 2,727.8 ms | 499.3 ms |
 
-The day arm opens **87 more files** and reads **25,216 fewer rows**, which is
-25.2 thousand rows of the 312.0 thousand the month arm reads - 8.1 percent of
+The day case opens **87 more files** and reads **25,216 fewer rows**, which is
+25.2 thousand rows of the 312.0 thousand the month case reads - 8.1 percent of
 them, and every one of them a day outside the window. The two counts check out
 by hand: 91 day files at 3,152 rows is 286,832 exactly, and the four month
 shards the window touches hold 99 of the fixture's days rather than 91.
 
-The day arm's median is **99.1 ms faster, 3.5 percent**, and both spreads are
-larger than that gap - 22.6 percent of the median on the month arm and 18.3
-percent on the day arm.
+The day case's median is **99.1 ms faster, 3.5 percent**, and both spreads are
+larger than that gap - 22.6 percent of the median on the month case and 18.3
+percent on the day case.
 
 ## What it settles
 
@@ -81,7 +80,7 @@ rows of reading on this box.
 - **Nothing about the other four ledgers.** Sight rows are 118.5 bytes; the
   score row is wider and the seen row is the narrowest of the five, so the
   bytes-saved side of the trade is smallest here and the handle side is the
-  same. This is the arm least favourable to the day grain, which is why it was
+  same. This is the case least favourable to the day grain, which is why it was
   the one measured.
 - **Nothing about a window that is not 90 days.** A 31-day window opens 32 day
   files against at most 2 month shards, so the handle ratio is different.

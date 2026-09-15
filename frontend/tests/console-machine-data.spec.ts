@@ -712,9 +712,9 @@ test.describe('the shard board survives a phone', () => {
 // ---------------------------------------------------------------------------
 // Context headroom, peak memory, and the shape of a run's latency
 //
-// Three panels, three oracles, and each one has an arm that recomputes its
-// figure from the ledger the page was built from and an arm that measures what
-// the page actually drew. Neither arm alone is enough: arithmetic that never
+// Three panels, three oracles, and each one has a case that recomputes its
+// figure from the ledger the page was built from and a case that measures what
+// the page actually drew. Neither case alone is enough: arithmetic that never
 // reaches a screen is a function nobody looks at, and a mark count off a page
 // says nothing about whether the number under it is right.
 // ---------------------------------------------------------------------------

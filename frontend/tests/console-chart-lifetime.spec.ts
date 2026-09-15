@@ -381,15 +381,15 @@ test('THE ORACLE: the page is complete with the engine gone, and nothing is thro
 	// reader on a bad connection is the ordinary case rather than the exotic one.
 	// What the server drew has to stand on its own, and a chart that cannot
 	// hydrate has to say so in the console instead of throwing once per chart at a
-	// reader who can do nothing about it. Both fetches get an arm, because a catch
+	// reader who can do nothing about it. Both fetches get a case, because a catch
 	// on one of them is not a catch on the other.
-	const arms = [
+	const cases = [
 		{ what: 'the engine module', chunk: chunkHolding('data-charts-live') },
 		{ what: 'the chart library', chunk: chunkHolding('_echarts_instance_') }
 	];
 
 	await page.setViewportSize(DESKTOP);
-	for (const arm of arms) {
+	for (const subject of cases) {
 		const thrown: string[] = [];
 		const caught = (error: Error) => thrown.push(String(error));
 		page.on('pageerror', caught);
@@ -404,7 +404,7 @@ test('THE ORACLE: the page is complete with the engine gone, and nothing is thro
 		});
 
 		let blocked = 0;
-		await page.route(arm.chunk, (route) => {
+		await page.route(subject.chunk, (route) => {
 			blocked += 1;
 			return route.abort();
 		});
@@ -415,21 +415,21 @@ test('THE ORACLE: the page is complete with the engine gone, and nothing is thro
 		}
 		await page.waitForTimeout(2500);
 
-		expect(blocked, `${arm.what} was never blocked, so this arm proves nothing`).toBeGreaterThan(0);
+		expect(blocked, `${subject.what} was never blocked, so this case proves nothing`).toBeGreaterThan(0);
 		const complete = await page.evaluate(() => ({
 			hosts: document.querySelectorAll('.chart-host').length,
 			drawn: document.querySelectorAll('.chart-host svg').length,
 			marks: document.querySelectorAll('.chart-host svg *').length,
 			words: (document.body.innerText ?? '').trim().length
 		}));
-		expect(complete.hosts, `${arm.what}: the route drew no chart`).toBeGreaterThan(1);
-		expect(complete.drawn, `${arm.what}: a chart lost its picture`).toBe(complete.hosts);
-		expect(complete.marks, `${arm.what}: the charts are empty frames`).toBeGreaterThan(20);
-		expect(complete.words, `${arm.what}: the page is blank`).toBeGreaterThan(1000);
-		expect(thrown, `${arm.what} failed to load and a chart threw at the reader`).toEqual([]);
+		expect(complete.hosts, `${subject.what}: the route drew no chart`).toBeGreaterThan(1);
+		expect(complete.drawn, `${subject.what}: a chart lost its picture`).toBe(complete.hosts);
+		expect(complete.marks, `${subject.what}: the charts are empty frames`).toBeGreaterThan(20);
+		expect(complete.words, `${subject.what}: the page is blank`).toBeGreaterThan(1000);
+		expect(thrown, `${subject.what} failed to load and a chart threw at the reader`).toEqual([]);
 
 		page.off('pageerror', caught);
-		await page.unroute(arm.chunk);
+		await page.unroute(subject.chunk);
 	}
 });
 

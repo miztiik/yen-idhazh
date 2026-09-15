@@ -42,7 +42,7 @@ export interface DayColumn {
 	squares: RunSquare[];
 }
 
-/** What one day's chart arm cost and what it produced.
+/** What one day's chart drawing cost and what it produced.
  *
  * Four counts and one division. Two gaps carry the whole story: reached against
  * asked is the check that runs before the model, drafted against published is
@@ -58,7 +58,7 @@ export interface ChartDay {
 	asked: number;
 	drafted: number;
 	published: number;
-	/** Items the day published, chart or no chart. The arm's second threshold is
+	/** Items the day published, chart or no chart. Chart drawing's second threshold is
 	 * a share of this, and a share needs its denominator on the page. */
 	items: number;
 	plannerMinutes: number | null;

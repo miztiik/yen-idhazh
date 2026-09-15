@@ -50,7 +50,7 @@ def stage_qualify_canaries(
 ) -> int:
     """Every planted attack alone, against the configured model.
 
-    The arm was reachable only from inside `stage_qualify` at shard zero, so the
+    The case was reachable only from inside `stage_qualify` at shard zero, so the
     only way to see what a canary did was a whole qualification (`CLAUDE.md`
     section 4). The fixtures are the file in, `canaries.json` is the file out,
     and the exit code is the gate.

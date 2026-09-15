@@ -9,7 +9,7 @@ committed set's own answer comes from `build_reference_dataset.py verify`, which
 is an operator surface pytest does not run.
 
 The fixture is six articles over two registrable domains, four on one and two on
-the other, so the same six rows drive both arms the row cares about: the domains
+the other, so the same six rows drive both cases the row cares about: the domains
 come out disjoint, and the split is lopsided enough to fail a floor. A
 disjointness test passes on an empty set, so the floor is the half that has to
 be able to fail.
@@ -160,7 +160,7 @@ def test_the_split_unit_is_the_registered_name_and_not_the_host() -> None:
 def test_the_lopsided_fixture_fails_a_floor_while_its_domains_stay_disjoint(
     rows: list[ReferenceDatasetRow], splits: dict[ReferenceSplit, list[str]]
 ) -> None:
-    """Four rows one side, two the other. The disjointness arm cannot see this."""
+    """Four rows one side, two the other. The disjointness case cannot see this."""
     sizes = sorted(len(keys) for keys in splits.values())
     assert sizes == [2, 4]
     assert not builder.leakage_faults(rows, splits, trained_on=set(), held_out=set())
@@ -1583,7 +1583,7 @@ def test_the_builder_writes_nothing_when_a_floor_would_be_missed(tmp_path: Path)
 def test_the_builder_refuses_a_set_that_overlaps_the_fine_tuning_window(
     tmp_path: Path,
 ) -> None:
-    """The arm that would otherwise pass silently: every number comes out flattering.
+    """The case that would otherwise pass silently: every number comes out flattering.
 
     `overlapping-corpus/` is a real one-row window and a real one-key holdout, so
     the refusal is driven through `corpus.read_rows` rather than around it.

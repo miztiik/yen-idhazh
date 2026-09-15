@@ -1,12 +1,12 @@
 """Plan 28 row #13a. The budget reader's rules, proved without a socket.
 
-Every arm is driven by a committed fixture or a built value and nothing here
+Every case is driven by a committed fixture or a built value and nothing here
 touches the network (Guardrail #7). Every rule has both halves: it passes on the
 agreeing value and refuses on a changed one, with the message naming both sides.
 A check nobody has made fail is a check nobody has tested.
 
 **The token counts are not a vocabulary.** `tests/fixtures/llm/budget-probe.json`
-records a fixed characters-a-token rate and says so, so what these arms prove is
+records a fixed characters-a-token rate and says so, so what these cases prove is
 the probe construction, the arithmetic, the paste block and the refusals - this
 repository's rules, none of them the tokenizer's. Tokenizer agreement is proved
 solely by `measure_budgets.py read` against a live server, which is row #13b.
@@ -286,7 +286,7 @@ def test_the_ratio_is_the_two_totals_divided_and_not_a_mean_of_ratios(
 def test_no_article_text_reaches_the_reading(tokenizer: RecordedTokenizer) -> None:
     """The corpus is fetched text, so counts of it may leave and characters of it may not.
 
-    Guardrail #11 in one arm: every corpus body is checked against the whole
+    Guardrail #11 in one case: every corpus body is checked against the whole
     serialised reading, so a future edit that quoted an article into `probe` or
     into `working` fails here rather than in a published artifact.
     """
@@ -410,7 +410,7 @@ def test_the_check_names_every_stale_site_and_both_digests() -> None:
 
 
 def test_the_check_says_so_when_nothing_is_stale() -> None:
-    """The other half, and on the committed tree this is the arm that fires."""
+    """The other half, and on the committed tree this is the case that fires."""
     subject = SIZED_BY_A_READING_HERE[0].reading.subject
 
     assert readings_awaiting_a_retake(configured_sha256=subject) == ()
@@ -424,7 +424,7 @@ def test_check_exits_non_zero_while_a_reading_is_stale(capsys: pytest.CaptureFix
     It is not a pytest case and no workflow runs it, so a red exit code costs no
     CI run and reaches the one person who asked (`CLAUDE.md` section 13). Driven
     against a config naming weights no reading was taken on, because on the
-    committed tree since row #13b nothing is stale and the interesting arm is
+    committed tree since row #13b nothing is stale and the interesting case is
     the one that fires.
     """
     assert main(["check", "--config", str(CONFIG_DIR)]) == 0
@@ -523,6 +523,6 @@ def test_this_surface_writes_nothing_a_commit_would_carry() -> None:
     """
     source = read_text(REPO_ROOT / "backend" / "utilities" / "measure_budgets.py")
 
-    assert "write_text" in source, "if the writes went, this arm is checking nothing"
+    assert "write_text" in source, "if the writes went, this case is checking nothing"
     for forbidden in ("REPO_ROOT / \"docs\"", "REPO_ROOT / \"config\" /", "git commit"):
         assert forbidden not in source, f"{forbidden} is a committed destination"

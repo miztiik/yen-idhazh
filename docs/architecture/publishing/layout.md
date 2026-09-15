@@ -1,7 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
 What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the score shards that turn into summaries once they age out.
@@ -213,7 +212,7 @@ The vector pass alone left the same story on the page several times. `dolly part
 
 **What is still unmeasured is recall.** Every number above starts from pairs found *by* matching headlines, so it says nothing about same-story pairs whose headlines differ. The measurement that would settle it is a blind hand-label of same-day cross-source pairs drawn without consulting titles; if a large share of true pairs turn out to have different headlines, a title-only encoder returns as a third rule.
 
-**What it changed, replayed through the shipped pass over every committed day.** Both arms call `collapse_same_story`; the only difference between them is the flag, so this is a measurement of the code rather than of a description of it. The unit here is a group, not a pair - a group of five is ten pairs - so these counts are not the 53 above. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 days, 9,353 items, floor 0.94; the pass is deterministic and the counts have no spread.
+**What it changed, replayed through the shipped pass over every committed day.** Both cases call `collapse_same_story`; the only difference between them is the flag, so this is a measurement of the code rather than of a description of it. The unit here is a group, not a pair - a group of five is ten pairs - so these counts are not the 53 above. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 days, 9,353 items, floor 0.94; the pass is deterministic and the counts have no spread.
 
 | | One-headline cross-source groups | Of those, still apart | Groups formed | Items in a group | Largest group |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -232,7 +231,7 @@ The pass is one pass over the day's vectors and it is quadratic in the day's ite
 
 It compares int8 vectors directly rather than decoding them. `embed.dequantise` divides by the quantisation scale and then normalises, so the scale cancels and the angle between two stored vectors is the angle between the unit vectors they decode to - a test asserts that rather than leaving it as a claim.
 
-**The headline rule added 0.5 percent and the readings above stand.** It costs one reduction per item before the pass, which is linear, and inside the pass it is a dictionary lookup and a string comparison that runs *instead of* the cosine whenever it matches. Measured 2026-09-14 on a developer machine / Python 3.14.2 as seven alternating rounds inside one process on 2026-08-24, the largest day: **11.601 s with the vector rule alone, 11.664 s with both, a difference of 0.064 s**. Alternating the arms is what makes that number readable - this box's own run-to-run spread on the same day is 10.8 to 17.5 s, so a between-run comparison could not have seen a difference this size, and an A-against-B inside one process cancels the box instead.
+**The headline rule added 0.5 percent and the readings above stand.** It costs one reduction per item before the pass, which is linear, and inside the pass it is a dictionary lookup and a string comparison that runs *instead of* the cosine whenever it matches. Measured 2026-09-14 on a developer machine / Python 3.14.2 as seven alternating rounds inside one process on 2026-08-24, the largest day: **11.601 s with the vector rule alone, 11.664 s with both, a difference of 0.064 s**. Alternating the cases is what makes that number readable - this box's own run-to-run spread on the same day is 10.8 to 17.5 s, so a between-run comparison could not have seen a difference this size, and an A-against-B inside one process cancels the box instead.
 
 ### The grouping runs before the lead block, and that order is fixed
 
@@ -436,7 +435,7 @@ The staged file is now [../../../schemas/digest-view.schema.json](../../../schem
 
 **From here on, a breaking change to this shape needs the read-side migration in the shell, not only in the build.** Section 11 already required a migration; what is new is that the two halves are not upgraded together, so the migration has to live where the reader is. Additive is unchanged and stays cheap: declare the field optional, stamp the version, append the changelog entry, and an older shell ignores a key it does not know. **Changing the address is not a schema change at all - it is a broken bookmark**, and there is no version to branch on for that.
 
-**Nine names joined the thirteen in the same commit, and each has a named renderer.** Measured 2026-08-31 on a developer machine / / node 24.12.0, 11 committed days and 3,733 items, `gzip -9` over the compact projection, each name added to the thirteen-field arm on its own:
+**Nine names joined the thirteen in the same commit, and each has a named renderer.** Measured 2026-08-31 on a developer machine / / node 24.12.0, 11 committed days and 3,733 items, `gzip -9` over the compact projection, each name added to the thirteen-field case on its own:
 
 | Added | What draws it | Cost |
 | --- | --- | ---: |
@@ -452,9 +451,9 @@ All nine together are +107.42 bytes an item rather than the +109.42 those nine s
 
 **On 2026-09-09 the file gained the day's own facts as well as its stories**, because the document that used to carry them stopped being written. That is recorded with its price under [the served day carries the day's own facts](#the-served-day-carries-the-days-own-facts-2026-09-09).
 
-**What it cost, end to end.** Two builds of this branch, one an arm, back to back on the same machine, over the 11 days and 3,596 items on disk at the time: the staged payloads went 361.98 to 468.51 gzipped bytes an item, 29.4 percent more, and the 178 rendered images were untouched. A day landed while this row was in flight and took the tree to 3,733 items; the same arithmetic over that tree reads 361.10 to 468.58, which is the check that this is a rate and not a level - the two trees agree to 0.2 percent. The projection is still 40.9 percent under the committed day, which compacts to 792.65 gzipped bytes an item. No prerendered page moved: the six routes the bundle gate names read -1 to +6 bytes across the two builds, because a prerendered document reads the committed day and not this file.
+**What it cost, end to end.** Two builds of this branch, one a case, back to back on the same machine, over the 11 days and 3,596 items on disk at the time: the staged payloads went 361.98 to 468.51 gzipped bytes an item, 29.4 percent more, and the 178 rendered images were untouched. A day landed while this row was in flight and took the tree to 3,733 items; the same arithmetic over that tree reads 361.10 to 468.58, which is the check that this is a rate and not a level - the two trees agree to 0.2 percent. The projection is still 40.9 percent under the committed day, which compacts to 792.65 gzipped bytes an item. No prerendered page moved: the six routes the bundle gate names read -1 to +6 bytes across the two builds, because a prerendered document reads the committed day and not this file.
 
-**The runway, re-derived rather than restated (Guardrail #10).** Two arms of `idhazh site-weight` on the machine that publishes - `ubuntu-latest`, 2026-08-31, `main` at `bb7fd4a` against this branch at `82ebd5c`, both over the same 3,733 items in the same 409 files - read **44,009 against 44,700 bytes a published item**, a built site of 156.7 against 159.1 MB, and **129 against 127 published days to the 1024 MB Pages cap** (96 against 94 to the 800 MB alarm). A local pair on a developer machine / the same day read 44,578 to 45,267 and 128 to 126, which agrees to 1.3 percent and is the check that the platform is not the story. Those day figures divide the headroom by `run.safety_ceiling_per_run` - a per-run ceiling of 160 spent as a per-day rate. **Over the committed days a published day holds a median of 334 items and ranges from 4 to 731**, so the same headroom is 60.8 published days against 61.8: **this change costs about one published day of runway, and the cap arrives about 2026-10-31.** Both figures charge `assist/` and `_app/` - 65.6 MB, 41.2 percent of the site, neither of which grows with a day - to the items, so both are floors.
+**The runway, re-derived rather than restated (Guardrail #10).** Two cases of `idhazh site-weight` on the machine that publishes - `ubuntu-latest`, 2026-08-31, `main` at `bb7fd4a` against this branch at `82ebd5c`, both over the same 3,733 items in the same 409 files - read **44,009 against 44,700 bytes a published item**, a built site of 156.7 against 159.1 MB, and **129 against 127 published days to the 1024 MB Pages cap** (96 against 94 to the 800 MB alarm). A local pair on a developer machine / the same day read 44,578 to 45,267 and 128 to 126, which agrees to 1.3 percent and is the check that the platform is not the story. Those day figures divide the headroom by `run.safety_ceiling_per_run` - a per-run ceiling of 160 spent as a per-day rate. **Over the committed days a published day holds a median of 334 items and ranges from 4 to 731**, so the same headroom is 60.8 published days against 61.8: **this change costs about one published day of runway, and the cap arrives about 2026-10-31.** Both figures charge `assist/` and `_app/` - 65.6 MB, 41.2 percent of the site, neither of which grows with a day - to the items, so both are floors.
 
 That is what this row spends. What it buys is the migration, and one day priced on a build of this branch says how much: **2026-08-30 is twelve prerendered documents totalling 8,822,134 bytes raw and 2,528,812 gzipped, against one served payload of 717,709 raw and 194,016 gzipped.** Twelve times the bytes, after this row grew the payload by 62 percent. The documents are the six HTML pages and their six `__data.json` twins, and every one of them carries the whole item list.
 
@@ -462,7 +461,7 @@ That is what this row spends. What it buys is the migration, and one day priced 
 
 The two rows above moved the item list out of a dated document and left the document. This row deletes the document. **116 of them**: 20 for the published days and 96 for their topics, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. `adapter-static`'s fallback, `404.html`, answers every dated address; the client router resolves the route out of the URL; the page fetches the served day.
 
-Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinned across both arms:
+Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinned across both cases:
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
@@ -483,9 +482,9 @@ A topic route is the day filtered to one desk, and until 2026-09-01 the filter r
 
 **The seed is the head of the desk's list, never of the day's.** The day publishes one order per run over the stories that run added ([../../concepts/placement.md](../../concepts/placement.md)), so the head of the whole day is the morning run's best stories rather than one desk's - and a topic route seeded from it would open on a screen holding almost none of its own. **Until 2026-09-13 the reason was a different one and it was stronger**: the published order was desk-blocked, so the head of the day was literally one desk and every other topic route would have opened holding nothing at all. The decision outlived the reason.
 
-**The seed is also the head UNION anything the document has to be able to anchor.** A prefix cannot hold a leading story: the reading-page plan's lead block picks across the whole day, and its five leads on the 601-story arm sat at positions 249, 285, 337, 344 and 493. A lead link into a document that carries only a prefix lands on nothing until the fetch arrives, and on nothing at all when it fails. `dayShell` therefore takes a set of ids to keep whatever their position, and the union is what it seeds.
+**The seed is also the head UNION anything the document has to be able to anchor.** A prefix cannot hold a leading story: the reading-page plan's lead block picks across the whole day, and its five leads on the 601-story case sat at positions 249, 285, 337, 344 and 493. A lead link into a document that carries only a prefix lands on nothing until the fetch arrives, and on nothing at all when it fails. `dayShell` therefore takes a set of ids to keep whatever their position, and the union is what it seeds.
 
-Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 11 committed days, 4,086 items and 51 topic routes. Both arms built with `kit.version.name` pinned to one constant, because it defaults to `Date.now` and rides into every chunk filename ([../../reference/agent-notes/gates-and-builds.md](../../reference/agent-notes/gates-and-builds.md#running-the-gates)). A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
+Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 11 committed days, 4,086 items and 51 topic routes. Both cases built with `kit.version.name` pinned to one constant, because it defaults to `Date.now` and rides into every chunk filename ([../../reference/agent-notes/gates-and-builds.md](../../reference/agent-notes/gates-and-builds.md#running-the-gates)). A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
@@ -513,7 +512,7 @@ Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 11 committ
 
 **Two days of 117 stories priced the leads.** 2026-08-28 has none and saved 79.8 percent; 2026-09-01 has five, four of them past the head, and saved 73.9 percent. Four extra item payloads in the document is what a working leading block costs.
 
-Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 12 committed days and 4,203 items. Two builds of one worktree back to back; the control arm is this branch's own changed files replaced by `main`'s in place, never a fresh extract, which carries its own byte offset from whatever gitignored state differs between two trees. A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
+Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 12 committed days and 4,203 items. Two builds of one worktree back to back; the control case is this branch's own changed files replaced by `main`'s in place, never a fresh extract, which carries its own byte offset from whatever gitignored state differs between two trees. A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
@@ -529,7 +528,7 @@ Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 12 committ
 
 **No story left the first screen.** The stream pages at twelve and the seed is fifteen, so a document still renders exactly what it rendered - what left is the payload behind the pager. The unrendered half is what the numbers above are: 168 item payloads where 4,203 rode along.
 
-**`/` and the topic routes are the control.** `/` read 67,534 gzipped bytes for its HTML on the arm that changed the dated routes, and `/<date>/<topic>/` read 19,371 - both what the previous row left them at.
+**`/` and the topic routes are the control.** `/` read 67,534 gzipped bytes for its HTML on the case that changed the dated routes, and `/<date>/<topic>/` read 19,371 - both what the previous row left them at.
 
 ### The revisit trigger, with a date on it
 
@@ -547,7 +546,7 @@ Almost all of that is the rate rather than the level: the 18.6 MB taken off the 
 
 ## What the composed page got wrong, and what shipped (2026-09-02)
 
-Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both were on a reader's screen. Both are fixed, and the two arms that named them are ordinary assertions now rather than arms written to fail.
+Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both were on a reader's screen. Both are fixed, and the two cases that named them are ordinary assertions now rather than cases written to fail.
 
 Measured 2026-09-02 on a developer machine / / node 24.12.0 and Chromium at 1536x900. The count is read on the 2026-09-01 day, 627 stories over five desks with five leads; the pager is priced on the busiest day the site serves, 2026-08-24 at 731 stories, which is the worst case the committed corpus holds.
 
@@ -569,7 +568,7 @@ Measured after the fix on the same day: `/2026-09-01/` states 627 before hydrati
 
 **The pager now reaches the story the address named.** `DigestList` reads the fragment on mount and on `hashchange`, finds that story's position in the order it is drawing, and pages far enough to draw it - then restores the anchor once, after the element exists. Everything else is untouched: with no fragment the reach is zero, so the prerendered document draws the same twelve it always drew and so does every reader who followed an ordinary link. A lead is zero too, because the seed already carries it and paging the stream down to its position is work a click never needed.
 
-**Nothing about the published documents moved.** A control build of `main`'s source beside this one, both on the same tree back to back with `BUILD_VERSION` pinned so the two are comparable: the busiest committed day, `/2026-08-24/` at 731 stories, drew **twelve stories in the document on both arms**, and its `__data.json` twin was byte-identical at 29,278. The document itself read 74,187 raw bytes against 74,189 - **two bytes**, and the two decompose exactly. The live region the fix adds is 73 characters; 71 come back because the reading page now carries 25 preload links rather than 26, since `DigestList` imports the day loader its own route was already loading and a chunk merged. Gzipped at level 9 the document read 15,408 against 15,434. The seed-and-fetch saving above is intact, because none of this runs at build time.
+**Nothing about the published documents moved.** A control build of `main`'s source beside this one, both on the same tree back to back with `BUILD_VERSION` pinned so the two are comparable: the busiest committed day, `/2026-08-24/` at 731 stories, drew **twelve stories in the document on both cases**, and its `__data.json` twin was byte-identical at 29,278. The document itself read 74,187 raw bytes against 74,189 - **two bytes**, and the two decompose exactly. The live region the fix adds is 73 characters; 71 come back because the reading page now carries 25 preload links rather than 26, since `DigestList` imports the day loader its own route was already loading and a chunk merged. Gzipped at level 9 the document read 15,408 against 15,434. The seed-and-fetch saving above is intact, because none of this runs at build time.
 
 **What it costs is one visit, and only the visit that asked for it.** Following a link to the last story of that 731-story day draws the whole day rather than twelve. Three alternated visits each in a fresh browser context: a plain visit settles in **235 ms** (399, 235, 230) drawing 12 stories on a 5,550 px page, and the deep-linked visit scrolls and focuses in **818 ms** (850, 818, 811) drawing 731 on a 310,781 px page. About six tenths of a second more, on the longest day the corpus holds, for the one reader who followed the link - and nothing at all for anybody else.
 
@@ -609,7 +608,7 @@ A dated URL used to be answered by a document a build wrote for that date, and t
 
 **Every one of them is optional, and that is the read-side rule rather than a softness.** The service worker keeps day payloads, so a shell built after this change can be handed a file written before it, carrying none of the nine. Absent is unknown: a page may not read an absent `partial` as false, an absent `items_failed` as 0, or an absent `verticals` as a day with no desk. `retention_window_months` carries the sharpest version of that - `-1` is the day saying nothing is deleted, and null is the payload not saying, so the footer prints neither sentence for a null.
 
-**What it cost.** Measured 2026-09-09 on a developer machine / over the 20 committed days and 7,967 items, `gzip -9` over the compact projection, both arms built in one process so the nine names are the only difference between them: the served tree went **3,657,996 to 3,664,435 bytes**, which is **6,439 bytes over twenty days - 322 a day on average, 478 on the worst day, and 0.18 percent of what the tree already weighed.** The spread is worth reading: +140 on a four-story day and +478 on a 582-story one, because `verticals` grows with the number of desks and `leads` with how many the day named, and neither grows with the stories. **A day pays this once where an item field pays it per story**, which is why nine names here cost a fifth of what `also_covered_by` cost on its own.
+**What it cost.** Measured 2026-09-09 on a developer machine / over the 20 committed days and 7,967 items, `gzip -9` over the compact projection, both cases built in one process so the nine names are the only difference between them: the served tree went **3,657,996 to 3,664,435 bytes**, which is **6,439 bytes over twenty days - 322 a day on average, 478 on the worst day, and 0.18 percent of what the tree already weighed.** The spread is worth reading: +140 on a four-story day and +478 on a 582-story one, because `verticals` grows with the number of desks and `leads` with how many the day named, and neither grows with the stories. **A day pays this once where an item field pays it per story**, which is why nine names here cost a fifth of what `also_covered_by` cost on its own.
 
 What it buys is the 116 dated and topic documents this row deletes, and the `__data.json` twin each of them had. 6,439 bytes spread across the days a reader opens, against a tree the build rewrites in full on every run.
 

@@ -216,7 +216,7 @@ def test_the_regression_agrees_with_the_stdlib_least_squares() -> None:
     assert fit.prompt_at(3846) == expected.intercept + expected.slope * 3846
 
     # One admitted run leaves two rows, and a line through two points has no
-    # spread to measure - so the spread arm is driven by a built population
+    # spread to measure - so the spread case is driven by a built population
     # instead (`CLAUDE.md` section 13). It is arithmetic and needs no ledger.
     spread = [(500, 1100), (1000, 2150), (2000, 4050), (3846, 7800)]
     over_spread = WordsToTokens.over(spread)

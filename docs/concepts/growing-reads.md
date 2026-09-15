@@ -1,7 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -337,7 +336,7 @@ together. What makes the daily cover hold is that a run appends to one month, so
 the month it names is the only one that can have changed - and the filter is
 skipped for any month whose mirror is missing, which is what lets a fresh clone
 rebuild one it never published and is why no cover in months belongs on the
-`months=None` arm. **Fourteen is not yet a bound on what that arm reads**: the
+`months=None` case. **Fourteen is not yet a bound on what that case reads**: the
 oldest partition on disk is `2026-08` and `retention.prune_telemetry` first has a
 candidate to fold on **2027-10-01**, so today it reads every partition there has
 ever been - two of them, 3,824,328 bytes over 11,143 rows and 20 days on
@@ -350,18 +349,18 @@ command a person runs once on a contract change rather than a per-run cost.
 **The ledger moved to day files on 2026-09-13, and this read got worse in
 handles and not in rows.** `state/item-health/` now files
 `<YYYY>/<MM>/<DD>.csv`, so the publisher folds a month from that month's day
-files through `day_partition.days_by_month`. The daily arm still opens one
-month's worth - at most 31 files rather than one - and the unbounded arm opens
+files through `day_partition.days_by_month`. The daily case still opens one
+month's worth - at most 31 files rather than one - and the unbounded case opens
 every recorded day rather than every month: **2 opens became 20 on 2026-09-13,
 11,223 rows over 20 days, and about 365 a year.** It is declared here under
 Guardrail #12's escape hatch rather than bounded, because the bound belongs on
 the store: the same fourteen-month cap answers it, and a cover in months on the
 read would leave a fresh clone permanently short of a mirror it never published.
 The count is checked rather than asserted in prose -
-`backend/tests/test_publish_telemetry.py` counts the handles both arms open, over
+`backend/tests/test_publish_telemetry.py` counts the handles both cases open, over
 a twelve-month ledger the test builds.
 
-**What the two arms open is counted rather than timed**, in
+**What the two cases open is counted rather than timed**, in
 `backend/tests/test_publish_telemetry.py`, over a twelve-partition ledger the
 test builds: the backfill opens twelve and the daily pass opens one. The count is
 also the tripwire the day-grain move was measured against - `publish`'s glob was
@@ -481,12 +480,12 @@ The ten reads together took **9,570.5 ms uncovered and 2,657.8 ms covered** -
 **3.6 times faster, and 72.2 percent of the time is gone**. The four that cost
 the most: the score ledger 2,124.0 ms against 604.5 ms, the shard primitive
 1,615.0 ms against 597.8 ms, the article counts 1,724.4 ms against 356.7 ms, the
-chart counts 1,718.4 ms against 367.9 ms. Spread was wide on the uncovered arm
+chart counts 1,718.4 ms against 367.9 ms. Spread was wide on the uncovered case
 and narrow on the covered one - the score ledger ran 2,003.8 to 2,817.4 ms
 uncovered and 503.4 to 726.5 ms covered.
 
 **The clock cannot answer the question the cover exists for, and this box proves
-it.** The same covered arm on the same 410-day tree measured 2,657.8 ms inside
+it.** The same covered case on the same 410-day tree measured 2,657.8 ms inside
 the paired run and 3,099.3 ms standalone a few minutes later - 16.6 percent apart
 on identical work, which is more than ten days of archive could ever cost. So the
 oracle is taken on what the reads open, which is arithmetic over the tree and has
@@ -670,8 +669,8 @@ against it and nobody costed it out of the suite.
 It still had to go, and the reason is the one the cost argument does not reach.
 The spec takes the newest day, and on 2026-09-14 the newest day was empty, so
 `items[items.length - 1]` was `undefined`, the `TypeError` fired while the
-module was loading, and both arms of the file died - the guard arm and the
-browser-survives-it arm, neither of which has anything to do with an empty day.
+module was loading, and both cases of the file died - the guard case and the
+browser-survives-it case, neither of which has anything to do with an empty day.
 **A read over a collection a run appends to inherits every shape that collection
 can take**, and the shapes it can take are decided by a pipeline nobody runs
 while writing the test. A canary day cannot surprise a spec, because the spec

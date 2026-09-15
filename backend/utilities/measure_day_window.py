@@ -11,23 +11,23 @@ a runner is a measurement, and nobody had taken it.
 Read-only, offline, and not a stage. It builds its own tree in a temporary
 directory, reads it, and deletes it. It touches nothing under `state/`.
 
-**One arm is always the ledger's own code and the other is always written out
+**One case is always the ledger's own code and the other is always written out
 here.** Which is which changed on 2026-09-13, when `state/seen/` moved to day
-files: the day arm is `ledger.append_seen` and `ledger.load_seen` now, and the
-month arm is the layout spelled out below. The arm that is not the ledger reads
+files: the day case is `ledger.append_seen` and `ledger.load_seen` now, and the
+month case is the layout spelled out below. The case that is not the ledger reads
 the same columns with the same reduction, so the only difference between the
 two is which files each one opens.
 
-**Both arms read one row list, written twice.** The rows are identical; only the
-layout differs. So a difference between the arms is the layout and cannot be the
+**Both cases read one row list, written twice.** The rows are identical; only the
+layout differs. So a difference between the cases is the layout and cannot be the
 data.
 
-**The arms are interleaved in one process** - month, day, month, day - because a
+**The cases are interleaved in one process** - month, day, month, day - because a
 stopwatch here measures the page cache as much as the code. The same bounded
 reads over one fixture came out 16.6 percent apart a few minutes apart on this
-project, and every arm that writes more files makes the tree warmer for whatever
+project, and every case that writes more files makes the tree warmer for whatever
 runs next - `docs/reference/agent-notes/gates-and-builds.md` records it. Running
-one arm to completion and then the other measures the order they ran in.
+one case to completion and then the other measures the order they ran in.
 
 **Two of the three numbers have no spread.** Files opened and rows read are
 arithmetic: a reader either opened a file or it did not. They settle the question
@@ -60,7 +60,7 @@ from idhazh import day_partition, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.seen import SeenRow
 
-#: Days the fixture holds. Wider than the window, so the month arm's oldest
+#: Days the fixture holds. Wider than the window, so the month case's oldest
 #: shard carries days the window never asked for - which is the whole trade.
 DEFAULT_DAYS: Final = 120
 
@@ -81,7 +81,7 @@ ANCHOR: Final = "2026-09-07"
 
 
 @dataclass(frozen=True, slots=True)
-class Arm:
+class Case:
     """One layout's answer: what it opened, what it read, and how long it took."""
 
     grain: str
@@ -150,7 +150,7 @@ def _read_by_month(state: Path, *, today: str, within_days: int) -> dict[str, st
     """`ledger.load_seen`, one layout over.
 
     The same reduction against the same columns - earliest sight wins - so the
-    only difference between the arms is which files it opens.
+    only difference between the cases is which files it opens.
     """
     first_seen: dict[str, str] = {}
     root = state / ledger.SEEN_DIRNAME
@@ -189,8 +189,8 @@ def _data_rows(paths: Iterable[Path]) -> int:
     return total
 
 
-def measure(*, days: int, window: int, rows_a_day: int, repeats: int) -> tuple[Arm, Arm]:
-    """Build both trees, then read them alternately, and report each arm."""
+def measure(*, days: int, window: int, rows_a_day: int, repeats: int) -> tuple[Case, Case]:
+    """Build both trees, then read them alternately, and report each case."""
     dates = _days(ANCHOR, days)
     with tempfile.TemporaryDirectory(prefix="day-window-") as scratch:
         root = Path(scratch)
@@ -217,36 +217,36 @@ def measure(*, days: int, window: int, rows_a_day: int, repeats: int) -> tuple[A
 
             if len(day_answer) > len(month_answer):
                 raise AssertionError(
-                    "the day arm answered about more addresses than the month arm, "
+                    "the day case answered about more addresses than the month case, "
                     "so the two trees do not hold the same rows and nothing below "
                     "is a measurement of the layout"
                 )
 
     return (
-        Arm("month", len(month_paths), month_rows, tuple(month_ms)),
-        Arm("day", len(day_paths), day_rows, tuple(day_ms)),
+        Case("month", len(month_paths), month_rows, tuple(month_ms)),
+        Case("day", len(day_paths), day_rows, tuple(day_ms)),
     )
 
 
-def report(month: Arm, day: Arm, *, window: int, days: int, rows_a_day: int) -> str:
+def report(month: Case, day: Case, *, window: int, days: int, rows_a_day: int) -> str:
     lines = [
         f"A {window}-day window over a {days}-day ledger of {rows_a_day} rows a day.",
-        f"Anchor {ANCHOR}. {len(month.millis)} interleaved passes an arm.",
+        f"Anchor {ANCHOR}. {len(month.millis)} interleaved passes a case.",
         f"{platform.platform()}, Python {platform.python_version()}.",
         "",
         f"{'':<8}{'files':>8}{'rows':>10}{'median ms':>12}{'spread ms':>12}",
     ]
-    for arm in (month, day):
+    for case in (month, day):
         lines.append(
-            f"{arm.grain:<8}{arm.files_opened:>8}{arm.rows_read:>10}"
-            f"{arm.median_ms:>12.1f}{arm.spread_ms:>12.1f}"
+            f"{case.grain:<8}{case.files_opened:>8}{case.rows_read:>10}"
+            f"{case.median_ms:>12.1f}{case.spread_ms:>12.1f}"
         )
 
     handles = day.files_opened - month.files_opened
     rows = month.rows_read - day.rows_read
     lines.append("")
     lines.append(
-        f"The day arm opens {handles} more files and reads {rows} fewer rows - "
+        f"The day case opens {handles} more files and reads {rows} fewer rows - "
         "which is the trade, stated in the two numbers that have no spread."
     )
 
@@ -256,8 +256,8 @@ def report(month: Arm, day: Arm, *, window: int, days: int, rows_a_day: int) -> 
     verdict = "inside the spread, so the clock does not separate them"
     if abs(gap) > widest:
         slower = "slower" if gap > 0 else "faster"
-        verdict = f"outside the spread: the day arm is {abs(share):.1f} percent {slower}"
-    lines.append(f"The day arm's median is {gap:+.1f} ms against the month arm - {verdict}.")
+        verdict = f"outside the spread: the day case is {abs(share):.1f} percent {slower}"
+    lines.append(f"The day case's median is {gap:+.1f} ms against the month case - {verdict}.")
     return "\n".join(lines)
 
 

@@ -1,7 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-12
-
+**Last Updated**: 2026-09-15
 Traps in Playwright, the integrated browser, the service worker, and the Svelte
 components a spec drives. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -55,7 +54,7 @@ The helper exists because seven specs already waited longhand and the eighth, wr
 
 **A polled `page.evaluate` straight after `page.goto` fails on a page that is fine**, with `Execution context was destroyed, most likely because of a navigation` - the client router does its own first navigation under the poll. Two tests failed out of 625 that way on 2026-08-31 with nothing wrong with the page. A locator assertion retries against the live document and does not race: `await expect(page.locator('html')).toHaveAttribute('data-theme', theme)`.
 
-**A page carrying a meta refresh makes three Playwright calls lie.** On 2026-09-02, in order: `page.goto('/evals/')` rejected with `net::ERR_ABORTED; maybe frame was detached?` because the document retired the navigation that delivered it; a locator reading that document timed out having logged the new address; and a multi-route walk reported a `requestfailed` on the destination from every arm, which reads exactly like a dead link in the footer. Poll `page.url`, which is a property rather than an evaluate, and ignore a DOCUMENT request whose failure is `net::ERR_ABORTED`.
+**A page carrying a meta refresh makes three Playwright calls lie.** On 2026-09-02, in order: `page.goto('/evals/')` rejected with `net::ERR_ABORTED; maybe frame was detached?` because the document retired the navigation that delivered it; a locator reading that document timed out having logged the new address; and a multi-route walk reported a `requestfailed` on the destination from every case, which reads exactly like a dead link in the footer. Poll `page.url`, which is a property rather than an evaluate, and ignore a DOCUMENT request whose failure is `net::ERR_ABORTED`.
 
 ```typescript
 await page.goto('/evals/', { waitUntil: 'commit' }).catch( => {});
@@ -64,11 +63,11 @@ await expect.poll( => page.url).toMatch(/\/console\/$/);
 
 **`page.url` read straight after a click still says the page you left**, because every route is prerendered and the client router takes the click - so a smoke reports that a link went nowhere. Wait for the address alongside the click: `await Promise.all([page.waitForURL('**/archive/'), locator.click])`.
 
-**`page.goto` to the same path with a different fragment never re-mounts the shell.** It is a same-document navigation, so `afterNavigate` does not fire and anything the layout does on arrival does not run - a 2026-09-01 restore spec resolved its locator 33 times and never saw the attribute. A repeated arm also measures nothing: three visits read 680, 26 and 30 ms, and the 26 is a navigation that did no work. Navigate somewhere else first, and give every visit its own browser context.
+**`page.goto` to the same path with a different fragment never re-mounts the shell.** It is a same-document navigation, so `afterNavigate` does not fire and anything the layout does on arrival does not run - a 2026-09-01 restore spec resolved its locator 33 times and never saw the attribute. A repeated case also measures nothing: three visits read 680, 26 and 30 ms, and the 26 is a navigation that did no work. Navigate somewhere else first, and give every visit its own browser context.
 
-**A `page.route` pattern written as a glob can intercept nothing and say nothing.** `page.route('**/digest/**/digest.json')` counted zero aborts against a URL it should have matched on 2026-09-01, where the same handler as a `RegExp` counted one. Prefer a `RegExp`, and print the count - a route that never fired is a null result, not a pass. A pattern one segment too wide counts the page's own assets: `**/digest/**` catches an item's picture as well, so an arm asserting "this reached the network for nothing" failed at 2 on a fetch nobody made.
+**A `page.route` pattern written as a glob can intercept nothing and say nothing.** `page.route('**/digest/**/digest.json')` counted zero aborts against a URL it should have matched on 2026-09-01, where the same handler as a `RegExp` counted one. Prefer a `RegExp`, and print the count - a route that never fired is a null result, not a pass. A pattern one segment too wide counts the page's own assets: `**/digest/**` catches an item's picture as well, so a case asserting "this reached the network for nothing" failed at 2 on a fetch nobody made.
 
-**A right pattern also fires zero times when the request never reaches the network**, and this site has two things that serve one: the service worker, and the day store `daysHeldOffline` reads. Both survive `page.goto`, so an abort arm re-run in the same page keeps passing on the answer the FIRST load cached - four attempts on 2026-09-10 reported `blockedCount: 0` and `data-payload-state="ready"` with the route registered correctly, which reads as the page ignoring the interception. The tell is a hit count of zero next to a page that plainly has the data. Clear all three stores in the page before the arm, then navigate:
+**A right pattern also fires zero times when the request never reaches the network**, and this site has two things that serve one: the service worker, and the day store `daysHeldOffline` reads. Both survive `page.goto`, so an abort case re-run in the same page keeps passing on the answer the FIRST load cached - four attempts on 2026-09-10 reported `blockedCount: 0` and `data-payload-state="ready"` with the route registered correctly, which reads as the page ignoring the interception. The tell is a hit count of zero next to a page that plainly has the data. Clear all three stores in the page before the case, then navigate:
 
 ```typescript
 await page.evaluate(async () => {
@@ -80,7 +79,7 @@ await page.evaluate(async () => {
 
 That the day was served from the device is not a bug - it is the offline path working - so do not "fix" it by widening the pattern.
 
-**`page.route` cannot block what the service worker answers.** The worker's fetches do not pass through the page's route table, so an interception arm silently covers nothing: four aborted navigations left a day page fully rendered with `aborted: 0` (2026-09-05), and a `**/*.svg` 404 route let all 43 drawings draw (2026-09-06). Block workers for the spec, and use `context.route` so a page opened later is covered too:
+**`page.route` cannot block what the service worker answers.** The worker's fetches do not pass through the page's route table, so an interception case silently covers nothing: four aborted navigations left a day page fully rendered with `aborted: 0` (2026-09-05), and a `**/*.svg` 404 route let all 43 drawings draw (2026-09-06). Block workers for the spec, and use `context.route` so a page opened later is covered too:
 
 ```javascript
 test.use({ serviceWorkers: 'block' }); // the suite's own default in playwright.config.ts
@@ -106,11 +105,11 @@ const end = t.responseEnd >= 0 ? t.startTime + t.responseEnd : t.startTime;
 
 **Aborting a fetch makes Chrome log a console error of its own**, so a zero-console-error assertion (`CLAUDE.md` section 12) reports a failure the page did not cause. Classify rather than count: match the errors your own abort produced by URL, and report how many of each there were.
 
-**Proving a page survives a missing file is three separate traps, and each one returns a green that means nothing.** `CLAUDE.md` section 12 requires the missing-data arm on every published-site change, so this is the check most often passed without being run. Measured 2026-09-12 while proving the drawing-absent branch of a digest page.
+**Proving a page survives a missing file is three separate traps, and each one returns a green that means nothing.** `CLAUDE.md` section 12 requires the missing-data case on every published-site change, so this is the check most often passed without being run. Measured 2026-09-12 while proving the drawing-absent branch of a digest page.
 
-- **A service worker serves the deleted file from cache, at 200.** The canary preview registers one, so `page.route` never sees the payload fetch and the file you deleted answers anyway. The arm reports "the page rendered fine" because the page did render fine - on the old bytes. Use a fresh origin on a port the worker has never claimed.
+- **A service worker serves the deleted file from cache, at 200.** The canary preview registers one, so `page.route` never sees the payload fetch and the file you deleted answers anyway. The case reports "the page rendered fine" because the page did render fine - on the old bytes. Use a fresh origin on a port the worker has never claimed.
 - **`vite preview` does not serve `frontend/build/`.** It serves `.svelte-kit/output/client/` and `static/`, so hiding a file under `build/` proves nothing at all. There are three copies and all three have to go. `docs/how-to/run-the-gates.md` and this page disagreed about the preview command until 2026-09-12; the form that serves the tree you just built is `npm run preview`.
-- **A null result needs a control.** Delete one file and leave its sibling: `ai-01.svg` must answer 404 while `ai-02.svg` answers 200. Without the sibling, "nothing was drawn" is equally consistent with the arm never having run.
+- **A null result needs a control.** Delete one file and leave its sibling: `ai-01.svg` must answer 404 while `ai-02.svg` answers 200. Without the sibling, "nothing was drawn" is equally consistent with the case never having run.
 
 The green that counts names what the page did instead - here, `[digest] digest/2026/08/20/ai-01.svg: not available (404), so it is not drawn`, all eight stories still rendered, zero `<img>`, no `pageerror`.
 
@@ -140,7 +139,7 @@ await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeE
 
 **Playwright prints the code frame from disk and runs the version loaded at collection**, so after an edit the frame and the behaviour can disagree. Re-run rather than reasoning about the frame.
 
-**One arm of a two-arm test failing is a race, not a regression**, when the other arm passes on the same commit. `layout-overflow.spec.ts` runs the same routes and widths in dark and then light, and a theme changes colour and not text metrics: on 2026-09-01 the dark arm failed in 5.3 s on a `scrollWidth` of 789 while the light arm passed the identical assertions 1.1 min later, and the spec alone passed 6 of 6. A per-day figure and a per-article figure need different degraded arms - emptying every ledger reaches only the whole-surface empty state, so drop one real day and one real item instead.
+**One case of a two-case test failing is a race, not a regression**, when the other case passes on the same commit. `layout-overflow.spec.ts` runs the same routes and widths in dark and then light, and a theme changes colour and not text metrics: on 2026-09-01 the dark case failed in 5.3 s on a `scrollWidth` of 789 while the light case passed the identical assertions 1.1 min later, and the spec alone passed 6 of 6. A per-day figure and a per-article figure need different degraded cases - emptying every ledger reaches only the whole-surface empty state, so drop one real day and one real item instead.
 
 **Two fixtures that both fit inside the narrowest preset make a window oracle pass on a route that ignores the window.** Every preset then selects every row, so the assertion is true for the wrong reason. Pick a fixture with a row only the widest preset can reach; a stronger assertion does not fix it.
 

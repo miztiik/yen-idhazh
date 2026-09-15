@@ -109,8 +109,8 @@ def test_no_two_records_measure_the_same_thing() -> None:
 def test_every_tokenizer_reading_names_the_weights_the_config_still_names() -> None:
     """The whole row in one line: a token count belongs to the vocabulary that counted it.
 
-    There is no arm here for a tokenizer reading that omits its subject, and no
-    arm for a timing record that carries one. `TokenizerMeasured.subject` has no
+    There is no case here for a tokenizer reading that omits its subject, and no
+    case for a timing record that carries one. `TokenizerMeasured.subject` has no
     default and `Measured` has no such field, so `mypy backend` refuses both and
     a runtime test would only repeat it (Fowler, 2026-09-13).
     """
@@ -126,7 +126,7 @@ def test_every_tokenizer_reading_names_the_weights_the_config_still_names() -> N
 
 
 def test_a_reading_taken_against_other_weights_is_refused_and_names_both_digests() -> None:
-    """The arm that proves the gate can fail for the reason it exists.
+    """The case that proves the gate can fail for the reason it exists.
 
     Driven from a built record rather than from the committed ones, so it stays
     true on the day somebody retakes a reading (`CLAUDE.md` section 13).

@@ -80,7 +80,7 @@ def test_an_item_id_reads_in_both_shapes_and_the_pattern_never_contracts() -> No
 
     Every day published before 2026-09-12 addressed its items with ten decimal
     digits, and a published day is frozen. So the decimal branch is not a
-    transitional arm that ages out - it stays for as long as one of those days
+    transitional case that ages out - it stays for as long as one of those days
     survives, and this asserts the branch is still literally in the pattern.
     Driven from two committed fixtures rather than from the archive, because a
     test may not cost more as the archive grows (Guardrail #12).
@@ -310,3 +310,111 @@ def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None
     declared = re.search(r"const COLUMNS = \[(.*?)\];", source, re.DOTALL)
     assert declared is not None, "build-canary.mjs no longer declares a COLUMNS array"
     assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == ItemHealthRow.csv_columns()
+
+
+#: The retired word, on its own. The boundary is letters and digits rather than
+#: `\b`, so `warm`, `alarm`, `harm`, `charm`, `farm`, `swarm`, `armed`, `arm64`,
+#: `Carmack` and `barMaxWidth` are not hits and need no allow-list. An underscore
+#: is deliberately outside the boundary, so `ARM_ROOT` and `_arm_lines` are hits.
+RETIRED_WORD = re.compile(r"(?<![A-Za-z0-9])[Aa]rms?(?![A-Za-z0-9])")
+
+#: The one sense that stays. "At arm's length" is a viewing distance a reader
+#: holds a phone at, not a pass over the same work under different settings.
+ARMS_LENGTH = re.compile(r"(?<![A-Za-z0-9])[Aa]rm's length")
+
+
+def _lines_that_may_still_spell_it(path: Path, text: str) -> set[int]:
+    """Two things have to spell a retired name: a changelog, and the reader that migrates it.
+
+    A changelog entry says what a key used to be called, and a before-validator
+    accepts the old spelling for one release (CLAUDE.md section 11). Both would
+    be impossible to write if the sweep refused the word everywhere, and both are
+    found from the syntax tree rather than from a list of paths, so neither rots
+    when a file moves.
+    """
+    if path.suffix != ".py":
+        return set()
+    allowed: set[int] = set()
+    for node in ast.walk(ast.parse(text, filename=str(path))):
+        span: tuple[int, int | None] | None = None
+        if isinstance(node, ast.Call):
+            called = node.func
+            name = called.id if isinstance(called, ast.Name) else getattr(called, "attr", "")
+            if name == "ChangelogEntry":
+                span = (node.lineno, node.end_lineno)
+        elif isinstance(node, ast.FunctionDef) and node.name.endswith(
+            ("_still_read", "_still_reads")
+        ):
+            span = (node.lineno, node.end_lineno)
+        if span is not None and span[1] is not None:
+            allowed.update(range(span[0], span[1] + 1))
+    return allowed
+
+
+def _word_sweep_files() -> list[Path]:
+    """The directories a person edits, and nothing a run writes.
+
+    Bounded by construction (Guardrail #12): these four trees are curated source,
+    so their size follows what somebody wrote rather than how many days the
+    pipeline has published.
+    """
+    roots = (
+        REPO_ROOT / ".github",
+        REPO_ROOT / "config",
+        REPO_ROOT / "backend" / "idhazh",
+        REPO_ROOT / "backend" / "utilities",
+    )
+    suffixes = {".py", ".sh", ".yml", ".yaml", ".json", ".mjs", ".js", ".md"}
+    found: list[Path] = []
+    for root in roots:
+        for path in sorted(root.rglob("*")):
+            if path.is_file() and path.suffix in suffixes:
+                found.append(path)
+    return found
+
+
+def test_the_retired_word_has_not_come_back() -> None:
+    """`arm` is retired from the workflows, the scripts, the config and the backend.
+
+    It was benchmarking's word for the same work run again under different
+    settings - the arms of an experiment. This project has four plain words for a
+    unit of work, and stage, shard, worker and run all mean something else, so
+    the word was kept and nothing on the page explained it (CLAUDE.md section
+    0b). `case` replaced it, and `chart drawing` replaced it where it named a
+    feature under a kill rule rather than a second pass over anything.
+
+    What this cannot settle: whether the replacement reads naturally. A person
+    reads the sentence; this only refuses the word.
+    """
+    offenders: list[str] = []
+    for path in _word_sweep_files():
+        rel = path.relative_to(REPO_ROOT)
+        text = read_text(path)
+        excused = _lines_that_may_still_spell_it(path, text)
+        for number, line in enumerate(text.split("\n"), start=1):
+            if number in excused:
+                continue
+            without_idiom = ARMS_LENGTH.sub("", line)
+            if RETIRED_WORD.search(without_idiom):
+                offenders.append(f"{rel.as_posix()}:{number}: {line.strip()}")
+    assert not offenders, "the retired word is back:\n" + "\n".join(offenders)
+
+
+def test_every_script_a_workflow_runs_is_on_disk() -> None:
+    """A renamed script with a caller left behind fails in CI and nowhere earlier.
+
+    Two files were renamed when the word went. The workflow names the path as a
+    string, so nothing but a run would have caught a stale one.
+    """
+    named = re.compile(r"(?:bash|sh|\./)\s*(\.github/scripts/[\w./-]+\.sh)")
+    workflows = sorted((REPO_ROOT / ".github" / "workflows").glob("*.y*ml"))
+    assert workflows, "no workflows found, so this test would pass on nothing"
+    missing: list[str] = []
+    seen = 0
+    for workflow in workflows:
+        for script in named.findall(read_text(workflow)):
+            seen += 1
+            if not (REPO_ROOT / script).is_file():
+                missing.append(f"{workflow.name} runs {script}, which is not on disk")
+    assert seen, "no workflow names a script, so this test would pass on nothing"
+    assert not missing, "\n".join(missing)

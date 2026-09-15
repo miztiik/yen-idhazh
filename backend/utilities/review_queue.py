@@ -27,7 +27,7 @@ Carmack and Fowler, 2026-09-13. The reviewer's steps are in
 configuration's render of the same day - is named by the plan that asked for
 this surface and nothing in this build can produce one, so there is no member
 for it and no empty section pretending otherwise. It arrives with the row that
-builds the second arm.
+builds the second case.
 
 **A refused draft has no picture to show, and that is a fact about the
 contract rather than a gap here.** `VisualDecision` refuses a spec on an item

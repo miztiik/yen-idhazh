@@ -25,7 +25,7 @@
  * refusal is our own policy talking. `--csp widened` rewrites the `connect-src`
  * directive in the served document to allow every host the targets use - the
  * change a later row would ship - so a refusal is then the other origin talking.
- * Run both. One arm alone cannot tell the two gates apart.
+ * Run both. One case alone cannot tell the two gates apart.
  *
  * Every response is data (Guardrail #11). Nothing read from a response becomes a
  * shell argument, a file path or a fetched URL: the one value taken from a
@@ -109,7 +109,7 @@ function targetsFor(name, opts) {
 	throw new Error(`unknown target family: ${name}`);
 }
 
-/** Every origin the probe will ask for, so the widened arm allows exactly those and nothing else. */
+/** Every origin the probe will ask for, so the widened case allows exactly those and nothing else. */
 function originsOf(families, opts) {
 	const set = new Set();
 	for (const family of families) {
@@ -205,7 +205,7 @@ async function main() {
 		page: opts.page,
 		documentOrigin: origin,
 		secureContext: secure,
-		cspArm: opts.csp,
+		cspCase: opts.csp,
 		connectSrcInDocument: (documentCsp.match(/connect-src [^;]*/) ?? ['(none)'])[0],
 		families: {}
 	};
@@ -235,7 +235,7 @@ async function main() {
 	const line = (s) => process.stdout.write(`${s}\n`);
 	line(`page          ${report.page}`);
 	line(`origin        ${report.documentOrigin}   secure context: ${report.secureContext}`);
-	line(`csp arm       ${report.cspArm}`);
+	line(`csp case      ${report.cspCase}`);
 	line(`connect-src   ${report.connectSrcInDocument}`);
 	for (const [family, rows] of Object.entries(report.families)) {
 		line('');

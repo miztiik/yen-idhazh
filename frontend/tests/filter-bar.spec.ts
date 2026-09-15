@@ -13,8 +13,8 @@ import type { DigestItem, DigestVerticalRef } from '../src/lib/payload/types';
  * - **Typing costs nothing.** The archive's search runs on a 43 MB encoder
  *   downloaded to the reader's device. Typing narrows the stories already
  *   fetched and asks for nothing; only the `Search` button spends the download,
- *   so the cost is named before it is paid. The counts are printed, because an
- *   arm that sees zero requests may have been watching nothing at all - which
+ *   so the cost is named before it is paid. The counts are printed, because a
+ *   case that sees zero requests may have been watching nothing at all - which
  *   is why the same test asserts the button DOES fetch the weights, exactly
  *   once.
  * - **With no script the field is not there.** A dead input that swallows
@@ -35,10 +35,10 @@ import type { DigestItem, DigestVerticalRef } from '../src/lib/payload/types';
  *   paint.
  *
  * Row #11's oracle lives here too, because the sentence a thin desk prints is
- * drawn by this panel. It has two arms and only one of them can be a browser:
+ * drawn by this panel. It has two cases and only one of them can be a browser:
  * the canary day has one desk, deliberately starved, so a real page shows the
  * line with the real counts - and a healthy desk needs a second desk the
- * fixture cannot hold, so that arm is driven as a pure function, which is what
+ * fixture cannot hold, so that case is driven as a pure function, which is what
  * `frontend/src/lib/day-shape.ts` exists for.
  */
 
@@ -204,7 +204,7 @@ test.describe('the thin-desk rule', () => {
 test('the starved desk on the canary day says why it is thin', async ({ page }) => {
 	// The fixture's one desk published 8 stories against 40 its sources offered,
 	// 31 of them a back catalogue. Both numbers are read off the page rather
-	// than written here, so the arm fails if the payload stops carrying them.
+	// than written here, so the case fails if the payload stops carrying them.
 	await page.goto(`/${DAY}/ai/`);
 	const line = page.locator('[data-desk-shortfall]');
 	await expect(line, 'the starved desk drew no sentence').toHaveCount(1);
@@ -319,7 +319,7 @@ test('typing filters the archive and downloads nothing; the button downloads onc
 	}
 
 	// The whole claim. Printed, because a zero that was never watched is not a
-	// pass - the positive arm below is what proves this counter was watching.
+	// pass - the positive case below is what proves this counter was watching.
 	const beforeClick = asked.count(MODEL_DIR);
 	console.log(`[filter-bar] model-directory requests while typing: ${beforeClick}`);
 	expect(beforeClick, 'typing started the on-device encoder download').toBe(0);
@@ -427,7 +427,7 @@ test('the archive filter narrows the stories that arrive after it was typed', as
  * What a script-free reader gets, and it is two different answers now.
  *
  * **On `/` it is the whole newest day**, filter panel and all, with the dead
- * input taken off the page and one sentence in its place. That is the arm this
+ * input taken off the page and one sentence in its place. That is the case this
  * test used to drive on `/<date>/`, and it moved rather than went: `/` is the
  * page that renders complete with no script at all, and it draws the same
  * `DigestList` with the same `FilterBar`.

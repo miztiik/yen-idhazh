@@ -1,7 +1,6 @@
 # Where the summarize-and-plan call's re-read tokens go, 2026-09-12
 
 **Last Updated**: 2026-09-15
-
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
@@ -30,10 +29,10 @@ rows #3c and #3e).
 
 ## Method
 
-Two arms, because the committed corpus cannot supply the article this reading
+Two cases, because the committed corpus cannot supply the article this reading
 was asked for.
 
-**The corpus arm is the corpus's longest article.** `corpus/corpus.jsonl` holds
+**The corpus case is the corpus's longest article.** `corpus/corpus.jsonl` holds
 1,444 rows spanning 2026-08-23 to 2026-09-10, and its longest body is **3,846
 words** - exactly `int(5000 / 1.3)`, because `extract.truncation_cap_tokens` was
 5,000 until it doubled to 10,000 on 2026-09-09T21:30. So the archive's worst
@@ -41,9 +40,9 @@ case is a fossil of a retired setting and reaches **50.0 percent of the current
 cap**. Three rows sit at that ceiling, dated 2026-08-23, 2026-08-27 and
 2026-09-03.
 
-**The cap arm is BUILT, it is never called a real article, and it is a rendering
+**The cap case is BUILT, it is never called a real article, and it is a rendering
 measurement rather than a run.** Corpus bodies are joined longest first and cut
-by `truncate_to_tokens` itself, so the arm is the cap's worst case by
+by `truncate_to_tokens` itself, so it is the cap's worst case by
 construction and follows the cap the next time it moves. Real prose, so the
 tokenizer sees real vocabulary and real punctuation; the length is the only part
 that is ours. `CLAUDE.md` section 13 rules this: where the awkward shape is the
@@ -76,7 +75,7 @@ trailing turn are prefill facts and are cap-invariant. The template cause is the
 divergence plus the label call's whole reply behind it, so it shrinks with the cap -
 which is why one item runs the label call on its real 900-token budget.
 
-## The corpus arm
+## The corpus case
 
 Three items on one slot, adjacent, in one process.
 
@@ -183,8 +182,8 @@ was an estimate, and it is withdrawn. At the measured 9.85 tokens a second
 The same turn renders to 698 tokens with its chat-template headers, and the
 difference between the two is the floor no prompt edit goes below.
 
-**A share of what.** 687 tokens is 9.3 percent of the corpus arm's 7,419-token
-prompt and 4.8 percent of the cap arm's 14,306. Same waste, two numbers a reader
+**A share of what.** 687 tokens is 9.3 percent of the corpus case's 7,419-token
+prompt and 4.8 percent of the cap case's 14,306. Same waste, two numbers a reader
 would take for two different problems, so no share appears on this page without
 the article length in the same sentence.
 
@@ -197,12 +196,12 @@ the article length in the same sentence.
 - **Nothing about a distribution.** One run, no spread, three articles.
 - **Nothing about what the replies said.** Only item 3's label call ran to a stop;
   every other decode was cut at 16 tokens.
-- **Nothing live at the cap.** The cap arm was rendered, not run, so the label call's
+- **Nothing live at the cap.** The cap case was rendered, not run, so the label call's
   reply length on a cap-length article is unmeasured - and with a denser
   candidate table it may be longer than 96, which would make the template cause
   larger there than the 100 measured here. `--at-cap` settles it in one run, and
   it costs about 45 minutes of prefill on this box.
-- **Nothing about how often a long article arrives.** The cap arm says what one
+- **Nothing about how often a long article arrives.** The cap case says what one
   would cost, never how many there are.
 
 ## See also

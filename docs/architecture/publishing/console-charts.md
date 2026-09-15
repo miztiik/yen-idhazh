@@ -1,7 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 What a chart on the operator console has to conform to: the one coordinate
 frame every chart draws through, the pointer readout every chart with a shared
 column carries, how a missing number is marked rather than drawn as a zero, and
@@ -496,7 +495,7 @@ an answer. Where a drawing chart's span holds no boundary it says so in type
 | What one more article costs | Pipelines | no | Bytes an article are what got published, not how it was written. |
 | Feeds that failed | Voices | no | A feed answered or it did not, before any summary existed. |
 | Sources we may ask | Voices | no | Permission, a rest and a retirement are all decided before a summary is written. |
-| Charts drawn for articles | Pipelines | no | The chart arm is a different model call, judged on its own retirement rule. |
+| Charts drawn for articles | Pipelines | no | Chart drawing is a different model call, judged on its own retirement rule. |
 | Time to write one summary | Summaries | no | A change moves every bar on it. The axis is seconds, so the window is pooled into one distribution and a day has no position to draw at. |
 | Prompt cache | Hardware | no | A change moves it - the prompt is in the stamp - and its engine-drawn axis carries no rule yet. |
 | Context headroom | Hardware | no | One bar a run, so there is no day edge to draw between. |

@@ -1,7 +1,6 @@
 # How often an article states a whole its parts add up to, 2026-09-13
 
-**Last Updated**: 2026-09-13
-
+**Last Updated**: 2026-09-15
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
@@ -80,7 +79,7 @@ of them.
 
 Rule 4's window, swept. `stated` is the definition above. `implied percent`
 counts two to five percentages adding to 100 where the article never writes the
-100. `null` is each arm re-run with every value re-dealt at random from the pool
+100. `null` is each case re-run with every value re-dealt at random from the pool
 for its own unit, keeping every character position, every unit, every article's
 quantity count and every joining word exactly where it was.
 
@@ -134,7 +133,7 @@ all, so nothing in this record turns on it.
 1,444, 4.99 percent - and at most one in sixty-six writes one with the three or
 more parts a circle is for. Both are **upper bounds** and neither is the rate.
 
-**The implied-percent arm is refused, and the measurement is why.** Below 600
+**The implied-percent case is refused, and the measurement is why.** Below 600
 characters it finds fewer articles than its own coincidence floor - 1 against 5,
 then 6 against 11 - so it is detecting nothing. A set of percentages adding to
 100 is what percentages do. Ruling it in would also have the planner assert
@@ -215,7 +214,7 @@ collects it ([`../../../CLAUDE.md`](../../../CLAUDE.md) section 13).
 
 Parsing the 1,444 articles took **0.43 s at best and 3.21 s at worst over six
 separate invocations**, spread 2.78 s, and a whole sweep of five windows and four
-arms finished inside four seconds on the quiet runs. Those are developer-machine
+cases finished inside four seconds on the quiet runs. Those are developer-machine
 durations and an order-of-magnitude check and nothing more
 ([`../measurements.md`](../measurements.md)), taken on **Windows 11 build 26200
 with four other agents working on the box**, which is most of why the worst

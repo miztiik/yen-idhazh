@@ -1,7 +1,6 @@
 # Retired measurements, August 2026
 
-**Last Updated**: 2026-09-10
-
+**Last Updated**: 2026-09-15
 Moved out of [../reference/measurements.md](../reference/measurements.md) on
 2026-08-30, and added to on 2026-09-10. Every number here was true when it was
 taken, on the hardware and date its own section names. None of it is read by
@@ -405,7 +404,7 @@ logging limit, not evidence that reuse did or did not happen.
 **Measured 2026-08-25. The gate was 1.4x. The measurement is 1.055x. Parallel
 decode on 4 vCPU is dead.** A second sequence buys 5.5 percent more aggregate
 decode, worth about 1.9 percent of a run's wall-clock. The whole `-np` line of
-work stops here: no `-np 2` production arm, no in-flight rewrite of the worker,
+work stops here: no `-np 2` production case, no in-flight rewrite of the worker,
 no paired A-B-A run. The numbers, and what they do and do not close, are under
 [Result](#result).
 
@@ -416,7 +415,7 @@ aggregate decode throughput at each parallel level, in one table, from one
 process.
 
 The bench is `Measurements` with `target = batched`, and it ran once, as run
-`32855163822`. The arm lives in `.github/workflows/measure.yml`, runs on
+`32855163822`. The case lives in `.github/workflows/measure.yml`, runs on
 `ubuntu-latest` against the same pinned `b10598` build every other llama.cpp job
 uses, and repeats the whole bench three times inside one job. All three levels
 and all three repeats stay on one host on purpose: prefill spans 3.4x between
@@ -448,7 +447,7 @@ prompt p50 877 and generated p50 279 over their 293 requests (145 + 148),
  measured 1612 to 2694 tokens on the same run. 877 is the shorter quantity -
  what prefill evaluates once the shared system prompt is cached. A bench at the
  full context would leave decode attending over roughly twice the KV, so this
- arm reads the ratio at the light end. It is an operating point, not a
+ case reads the ratio at the light end. It is an operating point, not a
  measurement of the ratio's sensitivity to prompt length.
 
 ### Which two numbers a reader divides
@@ -594,8 +593,8 @@ gate.
 Everything in this section was measured on an **,
 node 24.12.0, CPython 3.12.12, on 2026-08-27**, over the six committed days and
 2,237 items, against `origin/main` before and after PR #171. Two full builds per
-arm plus the restore is three builds; the page figures are the **heaviest of
-five builds** per arm, because a mean fires on half of all builds.
+case plus the restore is three builds; the page figures are the **heaviest of
+five builds** per case, because a mean fires on half of all builds.
 
 ### What a reader downloads
 
@@ -611,7 +610,7 @@ five builds** per arm, because a mean fires on half of all builds.
 reference line that is 0.19 seconds off a 0.47-second document.
 
 **The words on the page did not change.** All 36 prerendered pages match by
-sha256 over their visible text, 309,999 characters in both arms. The raw HTML
+sha256 over their visible text, 309,999 characters in both cases. The raw HTML
 across those 36 pages went from 34,167,655 to 26,673,278 bytes - 21.9 percent -
 so what left was markup and inlined data, not sentences.
 
@@ -1887,7 +1886,7 @@ are inside Guardrail #2. The fourth - every shard's memory peak clear of 16 GB -
 unread rather than failed, and the resident-set figure that stands in for it is a
 per-machine number the shard count does not change.
 
-**The measurement above is on a model that no longer runs.** Both arms of the
+**The measurement above is on a model that no longer runs.** Both cases of the
 1.92x - the four-shard baseline of 2026-08-24 and the eight-shard run of
 2026-08-25 - are `Qwen3-8B-Q4_K_M`, retired on 2026-08-27. Nothing about the
 fan-out argument depends on the weights, but every number in it does, and a
@@ -2133,7 +2132,7 @@ tokenizer prints `Token indices sequence length is longer than the specified
 maximum sequence length for this model (893 > 512)` and the model returns a
 score anyway, at 893 tokens for a 900-word window and roughly 2,500 for a
 1,923-word one. The 512 in the config is vestigial; `predict` never passes
-`truncation=True`. This is what makes the wide arm of the comparison possible at
+`truncation=True`. This is what makes the wide case of the comparison possible at
 all.
 
 ### What this measurement does not say
@@ -2166,7 +2165,7 @@ laptop above.
 
 **One confound was ruled out rather than assumed.** `chunks` re-joins a
 window's words on single spaces while the whole-article pass reads the premise as
-it stands, so the two arms differ in whitespace on multi-window items, and the
+it stands, so the two cases differ in whitespace on multi-window items, and the
 1-slice control cannot see that. Scoring 5 at-cap premises raw and
 whitespace-collapsed moved the score by **0.000000** every time (n=5,
 2026-08-29), which is what SentencePiece collapsing whitespace predicts and is
@@ -3366,26 +3365,26 @@ the same bytes - checked by SHA-256 in `backend/tests/test_entity_gap.py`. Any
 machine at `e0d6724` gets these figures; the hardware is here because Guardrail #10
 asks, not because it moved anything.
 
-### Two arms, because the record disagrees with itself
+### Two cases, because the record disagrees with itself
 
-Both arms use one matcher - `tag.tags` against `Watchlist.entity_terms`, the
+Both cases use one matcher - `tag.tags` against `Watchlist.entity_terms`, the
 same function and the same terms the pipeline tags an item with. They differ
 only in which words they read.
 
-| Arm | Reads | Live on |
+| Case | Reads | Live on |
 | --- | --- | --- |
 | **As published** | the `entities` list each run wrote, over the article's title and whole body | 5 of 11 days, 2026-08-27 to 2026-08-31 |
 | **Re-matched** | the same matcher over the title, the summary and the key points | 10 of 11 days, 2026-08-22 to 2026-08-31 |
 
 The published field was declared on day one and read nowhere until 2026-08-26,
 so it is empty on the first six days. **A zero there is an instrument that was
-switched off, not a subject nobody mentioned**, which is why the second arm
-exists. The second arm reads far less text, and the price of that is measured
+switched off, not a subject nobody mentioned**, which is why the second case
+exists. The second case reads far less text, and the price of that is measured
 rather than claimed: over the five days both are live, of 952 item-entity pairs
 the run wrote, the summary carries 514 and drops **438 - 46.0 percent**. Four
 more pairs go the other way, where the summary names a company the capped body
-did not. **A dropped mention lengthens a gap, so the re-matched arm reports the
-longer of the two readings, never the shorter.** Both arms still say the same
+did not. **A dropped mention lengthens a gap, so the re-matched case reports the
+longer of the two readings, never the shorter.** Both cases still say the same
 thing.
 
 ### Every gap, pooled
@@ -3405,9 +3404,9 @@ all. Days of silence is the gap minus one.
 ### Every entry, by its own median gap
 
 `n` mentions give `n - 1` gaps, so the denominators are not the same. On the
-published arm, 28 of 30 entries were mentioned twice or more and have a gap at
+published case, 28 of 30 entries were mentioned twice or more and have a gap at
 all; `adani` and `asml` were mentioned once each and have none. On the
-re-matched arm all 30 have a gap.
+re-matched case all 30 have a gap.
 
 | Median gap | Days of silence | As published | Re-matched |
 | --- | --- | --- | --- |
@@ -3641,29 +3640,29 @@ half of all builds:
 | `/console/model/` | 44,945 | 44,956 | 44,953 | 44,951 | 44,950 | **44,956** | 11 |
 | `/console/machine/` | 35,821 | 35,819 | 35,819 | 35,822 | 35,816 | **35,822** | 6 |
 
-**The control arm says the copied payload roots build the same site.** Both
-removal arms read their ledgers through `STATE_ROOT`, `TELEMETRY_ROOT` and
+**The control case says the copied payload roots build the same site.** Both
+removal cases read their ledgers through `STATE_ROOT`, `TELEMETRY_ROOT` and
 `DIGEST_ROOT` off a copy in the temp directory, so a copy that built a different
 site would price a day against nothing. A sixth build off that copy with **no day
 removed** read 222,810, 44,945 and 35,813 - 2, 0 and 3 bytes below the bottom of
 the five-build range, so the honest spread is 9, 11 and 9 bytes on pages of 222.8,
 45.0 and 35.8 KB. All three are inside the 64-byte build noise floor. The three
-capped routes no arm can reach moved the same way: `/404` spanned 1,593 to 1,598
+capped routes no case can reach moved the same way: `/404` spanned 1,593 to 1,598
 and `/evals/` 3,103 to 3,107 across the five, with the control inside both.
 
-**Two removal arms, and each one prices all three routes.** A published day is
+**Two removal cases, and each one prices all three routes.** A published day is
 priced by removing a real one, never by cloning one: a clone reads about 18
 percent cheap because gzip sees a near-copy of a block it already holds. Both
-arms drop a mature day - neither the newest nor the oldest, so the 30-day window
+cases drop a mature day - neither the newest nor the oldest, so the 30-day window
 anchor never moves - from the published ledger, `state/scores/`,
 `state/item-health/`, `state/feed-health/`, `state/runtime-counters.csv`,
 `frontend/public/telemetry/` and the day's own directory under
 `frontend/public/digest/`. `frontend/public/assist/` and `source-health.json` are
-copied beside `digest/` in each arm, because `INDEX_ROOT` and
+copied beside `digest/` in each case, because `INDEX_ROOT` and
 `SOURCE_HEALTH_PATH` are derived from `DIGEST_ROOT` and have no switch of their
 own. Both are paired against the control, the same source and the same command.
 
-| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
+| Case | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
 | --- | --- | ---: | ---: | ---: |
 | sixteen days (control) | - | 222,810 | 44,945 | 35,813 |
 | A: without 2026-08-31 | 601 published, 601 scored, 639 item-health, 710 feed-health, 639 telemetry rows, **20 counter rows over 5 runs** | 208,413 | 43,320 | 34,653 |
@@ -3671,12 +3670,12 @@ own. Both are paired against the control, the same source and the same command.
 | B: without 2026-09-01 | 627 published, 627 scored, 676 item-health, 710 feed-health, 676 telemetry rows, **20 counter rows over 5 runs** | 206,786 | 43,311 | 34,554 |
 | **cost of that day** | | **16,024** | **1,634** | **1,259, so 252 a run** |
 
-**Both arms carry counters, which the last pair could not manage, so the run rate
+**Both cases carry counters, which the last pair could not manage, so the run rate
 and the day rate come off the same tree.** On 2026-08-31 the heavy day predated
 the counters entirely and a second, lighter day had to be dropped to get a
 per-run figure at all. Every mature day now runs three to five times, so both
-arms price all three routes and the larger of the two readings is taken on each -
-arm B on all three. Arm A's day is the one row #4 priced on 2026-09-06, and it
+cases price all three routes and the larger of the two readings is taken on each -
+case B on all three. Case A's day is the one row #4 priced on 2026-09-06, and it
 returns 1,625 bytes against the 1,624 recorded there, which is the method
 reproducing itself to one byte.
 

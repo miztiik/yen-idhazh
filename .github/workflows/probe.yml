@@ -48,7 +48,7 @@ jobs:
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           # The whole directory, not one binary: these builds are dynamically
           # linked and a lone binary dies at exec naming a library instead of
-          # the mistake. Same reason and same form as the three runtime arms.
+          # the mistake. Same reason and same form as the three runtime cases.
           SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
           cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server

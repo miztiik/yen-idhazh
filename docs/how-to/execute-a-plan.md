@@ -1,7 +1,6 @@
 # How to execute a plan-doc (the execution contract)
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 The mechanics for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
 ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
@@ -90,7 +89,7 @@ Merging stays serialized - one at a time, re-checking the next branch against th
 
 **A gate that fails only under fan-out is a false red.** Re-run it alone before diagnosing it, and never buy the pass with a raised timeout, an added retry or a relaxed assertion ([gates-and-builds.md](../reference/agent-notes/gates-and-builds.md)).
 
-**A row that MEASURES runs alone.** Any figure a plan produces is a claim about the machine as much as about the change, and a neighbour moves it. Give a measuring row a `Parallel-group` of its own, or hold its arms behind the same lock the gates take.
+**A row that MEASURES runs alone.** Any figure a plan produces is a claim about the machine as much as about the change, and a neighbour moves it. Give a measuring row a `Parallel-group` of its own, or hold its cases behind the same lock the gates take.
 
 ## Escalation (when to pause for the user)
 

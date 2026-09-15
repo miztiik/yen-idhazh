@@ -1,7 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 The operator console reads twelve datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -208,7 +207,7 @@ purpose.
 | The other 28 payload keys | still inlined in the document | Together 97 KB. A fetch each breaks the four-hop cold-load ceiling for a twentieth of what one key cost |
 
 **Measured 2026-09-09**, a developer machine / / node 24, one build
-per arm on the real digest, `stat` on the built file:
+per case on the real digest, `stat` on the built file:
 
 | file | before | after |
 | --- | ---: | ---: |

@@ -1,7 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
@@ -41,7 +40,7 @@ mkdir -p backend/bin backend/models
 unpack the whole `bin` directory into `backend/bin/`.
 
 For a controlled comparison with the hosted model and thread measurements, use
-build `b10598`. That is the build the pipeline, the validation arm and the
+build `b10598`. That is the build the pipeline, the validation case and the
 measurement harness all run, and each verifies the Linux archive against SHA-256
 `d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c`.
 A number from another build is a separate measurement.
@@ -381,9 +380,9 @@ names, at the commit it pins. Those inputs exist for a model config does not
 name, which is what this harness is for; nothing in the workflow file names a
 model itself.
 
-That one dispatch runs both arms. Arm one downloads only that model, runs both
+That one dispatch runs both cases. Case one downloads only that model, runs both
 thread counts and uploads `hardware.txt`, `weights.txt`, `resources.json`,
-`llm.json` and `bench/raw-arm.json` in the `bench-raw` artifact. Arm two then
+`llm.json` and `bench/raw-case.json` in the `bench-raw` artifact. Case two then
 restores those same weights out of the cache, stands a real server up, runs a
 fixed five-article shard three times and uploads
 `bench-server-<runtime_candidate>`, which carries the model dossier's page body

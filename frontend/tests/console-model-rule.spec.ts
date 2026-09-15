@@ -15,14 +15,14 @@ import { readDayShards } from '../src/lib/server/payload';
  * operator to stop reading it, which costs the half where it did mean
  * something.
  *
- * Two arms, and neither is sufficient alone.
+ * Two cases, and neither is sufficient alone.
  *
- * The Node arm states the arithmetic over rows built here, because the canary
+ * The Node case states the arithmetic over rows built here, because the canary
  * ledger writes ONE `pipeline_fingerprint` for its one scored day and therefore
  * cannot draw a rule at all. An oracle that only ever asserted zero would pass
  * against a component that had stopped deriving anything.
  *
- * The browser arm reads the built canary's own ledger, derives the boundary
+ * The browser case reads the built canary's own ledger, derives the boundary
  * dates from it without touching the component's code, and holds every drawn
  * chart to that count. On the canary that count is zero - so what it proves
  * there is the other half of the row: the empty case is a named state and not a

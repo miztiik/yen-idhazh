@@ -96,7 +96,7 @@ def _summary_output_tokens(ask: SummarizeConfig) -> int:
     opens. What the gate saves is a decode, and it is measured where it is spent
     (`docs/architecture/publishing/visuals.md`), not here.
 
-    `ask.asks_for_a_visual_plan` is true in production and is the one arm of the
+    `ask.asks_for_a_visual_plan` is true in production and is the one case of the
     pipeline test workflow that turns it off, beside an empty
     `visuals.enabled_kinds`. The two move together: sizing for a plan that is
     never asked for reserves room for a decode that never happens, and refuses

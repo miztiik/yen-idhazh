@@ -561,9 +561,9 @@ class TestWhereTheSystemTextGoes:
     def test_the_committed_entry_renders_what_it_rendered_before_the_field_existed(
         self,
     ) -> None:
-        """Arm 1, at the unit tier: `own_turn` IS the concatenation it replaced.
+        """Case 1, at the unit tier: `own_turn` IS the concatenation it replaced.
 
-        The fixture tier of the same arm is `test_classify.TestThePromptBytes`,
+        The fixture tier of the same case is `test_classify.TestThePromptBytes`,
         which compares two whole rendered prompts against committed files. This
         one states the expression, so a refactor of the branch fails here with a
         diff a person can read rather than with two long strings.
@@ -579,7 +579,7 @@ class TestWhereTheSystemTextGoes:
     def test_the_fold_puts_the_same_bytes_in_the_first_user_turn(self) -> None:
         """A placement change, never a content change.
 
-        Built rather than committed: the incumbent has a system role, so the arm
+        Built rather than committed: the incumbent has a system role, so the case
         this row exists for has no entry in `config/` and would otherwise be
         untested until the day a model needed it.
         """
@@ -593,7 +593,7 @@ class TestWhereTheSystemTextGoes:
         assert "S" in rendered and "U" in rendered, "the same bytes, one turn earlier"
 
     def test_the_fold_moves_the_digest_runs_stamp_and_not_the_qualification_runs(self) -> None:
-        """Arm 2. Which stamp can see a topology change, and which cannot.
+        """Case 2. Which stamp can see a topology change, and which cannot.
 
         The row expected neither to see it - a placement moves the same bytes to
         a different address, so the argument ran that `prompt_sha256` could not
@@ -608,7 +608,7 @@ class TestWhereTheSystemTextGoes:
         marker, so no field on `turns` can move it. **That is why the envelope is
         declared on the entry and proved against the server at start-up rather
         than inferred from a stamp**: the eleven gates compare two models through
-        a digest that is blind to how their turns were written, and arm 1 of
+        a digest that is blind to how their turns were written, and case 1 of
         `prove_the_entry` is what catches a placement declared wrong.
         """
         own = configured_turns()
@@ -725,8 +725,8 @@ def test_no_module_that_opens_a_model_branches_on_which_model_it_is() -> None:
     """The Oracle for plan 28: a branch on a value is config, a branch on an identity is a fork.
 
     A swap has to cost one line in `config/idhazh.json`. It cannot, if any code
-    asks which model is running: the second model then needs its own arm here,
-    the arm is written for the model somebody had in front of them, and the
+    asks which model is running: the second model then needs its own case here,
+    the case is written for the model somebody had in front of them, and the
     one-line swap silently becomes a source change nobody priced.
 
     Every setting a model needs is already a field - the window, the batch, the
@@ -855,20 +855,20 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
 
 # --- Row 3's oracle: attention is read off the server, not off our flag -----
 
-#: The three arms of the 2026-09-09 reading, and what each one settles. Excerpts
+#: The three cases of the 2026-09-09 reading, and what each one settles. Excerpts
 #: rather than whole captures - the provenance is in each file's own header.
-FLASH_ARMS: Final = {
+FLASH_CASES: Final = {
     "2026-09-09-lv4-fa-on.readings.txt": FlashAttention.ACTIVE,
     "2026-09-09-lv4-no-fa-flag.readings.txt": FlashAttention.ACTIVE,
     "2026-09-09-lv4-fa-off.readings.txt": FlashAttention.REFUSED,
 }
 
 #: Real runner captures, at the runtime default verbosity. They are the fourth
-#: arm and the one that matters: a log with no attention line in it.
+#: case and the one that matters: a log with no attention line in it.
 QUIET_CAPTURES: Final = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt"))
 
 
-@pytest.mark.parametrize(("capture", "expected"), sorted(FLASH_ARMS.items()))
+@pytest.mark.parametrize(("capture", "expected"), sorted(FLASH_CASES.items()))
 def test_the_attention_state_is_read_off_the_servers_own_line(
     capture: str, expected: FlashAttention
 ) -> None:
@@ -876,7 +876,7 @@ def test_the_attention_state_is_read_off_the_servers_own_line(
 
     The committed config pins `-fa on`, and a check that only asserted the flag
     was passed would pass on a build that ignored it. These three readings are
-    the ones llama-server printed at `-lv 4` on 2026-09-09, three runs an arm
+    the ones llama-server printed at `-lv 4` on 2026-09-09, three runs a case
     and zero spread across the three.
     """
     assert flash_attention_state(read_text(FIXTURES_DIR / "runtime" / capture)) is expected
@@ -897,7 +897,7 @@ def test_a_quiet_server_log_fails_the_check_instead_of_answering_it(path: Path) 
 def test_auto_with_no_decision_beside_it_is_not_an_answer() -> None:
     """`flash_attn = auto` states what was asked for. It settles nothing on its own.
 
-    Built by removing one line from the arm that recorded it, so the edit is the
+    Built by removing one line from the case that recorded it, so the edit is the
     whole difference between the two verdicts rather than two files that might
     differ somewhere else.
     """
@@ -914,18 +914,18 @@ def test_the_verdict_agrees_with_the_compute_buffer_it_implies() -> None:
 
     The log grammar is llama.cpp's and moves between builds; the buffer size is
     arithmetic and does not. On these weights at `n_ctx` 8192 it is 112.01 MiB
-    fused and 572.01 MiB not - so every arm this reader calls ACTIVE must carry
-    the small one and the REFUSED arm the large one.
+    fused and 572.01 MiB not - so every case this reader calls ACTIVE must carry
+    the small one and the REFUSED case the large one.
     """
     buffers: dict[FlashAttention, set[float]] = {}
-    for capture, expected in FLASH_ARMS.items():
+    for capture, expected in FLASH_CASES.items():
         text = read_text(FIXTURES_DIR / "runtime" / capture)
         found = re.search(r"CPU compute buffer size\s*=\s*([\d.]+) MiB", text)
         assert found, f"{capture} records no compute buffer to corroborate with"
         buffers.setdefault(expected, set()).add(float(found.group(1)))
 
     fused = buffers[FlashAttention.ACTIVE]
-    assert len(fused) == 1, f"two ACTIVE arms disagree about the buffer: {sorted(fused)}"
+    assert len(fused) == 1, f"two ACTIVE cases disagree about the buffer: {sorted(fused)}"
     assert min(buffers[FlashAttention.REFUSED]) > 4 * max(fused)
 
 
@@ -1816,7 +1816,7 @@ def test_an_absent_reasoning_channel_is_not_a_failure() -> None:
 
 
 class TestTheRefusalsAreConditionalOnTheDeclaration:
-    """Two of the three hard refusals, each with both arms.
+    """Two of the three hard refusals, each with both cases.
 
     A refusal that fires on the normal path is not a control, and a refusal that
     never fires is not one either. Each of these still bites where nothing asked
@@ -1833,7 +1833,7 @@ class TestTheRefusalsAreConditionalOnTheDeclaration:
         )
 
     def test_an_inline_think_block_still_fails_where_nothing_asked_for_one(self) -> None:
-        """Arm one of the parse-side refusal: the flag did not take."""
+        """Case one of the parse-side refusal: the flag did not take."""
         with pytest.raises(ValueError, match="reasoned anyway"):
             parse_draft(f"<think>weighing it up</think>{body()}")
 
@@ -1842,7 +1842,7 @@ class TestTheRefusalsAreConditionalOnTheDeclaration:
         )
 
     def test_an_inline_think_block_is_discarded_where_the_entry_declared_one(self) -> None:
-        """Arm two: what came back is what was asked for, and none of it survives."""
+        """Case two: what came back is what was asked for, and none of it survives."""
         draft = parse_draft(f"<think>weighing it up</think>{body()}", thinking=True)
 
         assert draft.title == TITLE
@@ -1850,16 +1850,16 @@ class TestTheRefusalsAreConditionalOnTheDeclaration:
         assert self.summarised_with("reasoned-anyway", thinking=True).status is SummaryStatus.OK
 
     def test_a_reasoning_channel_still_fails_where_nothing_asked_for_one(self) -> None:
-        """Arm one of the channel refusal, which is the one that would have failed every item."""
+        """Case one of the channel refusal, which is the one that would have failed every item."""
         result = self.summarised_with("reasoning-channel", thinking=False)
 
         assert result.status is SummaryStatus.FAILED
         assert "reasoning channel" in (result.failure_detail or "")
 
     def test_a_reasoning_channel_publishes_where_the_entry_declared_one(self) -> None:
-        """Arm two. The channel is the runtime's own split and the item is fine.
+        """Case two. The channel is the runtime's own split and the item is fine.
 
-        This is the arm Decision 1 is about: with the old refusal unconditional,
+        This is the case Decision 1 is about: with the old refusal unconditional,
         turning reasoning on failed every item on shape.
         """
         result = self.summarised_with("reasoning-channel", thinking=True)
@@ -1867,7 +1867,7 @@ class TestTheRefusalsAreConditionalOnTheDeclaration:
         assert result.status is SummaryStatus.OK
         assert completion("reasoning-channel").reasoned is True
 
-    def test_the_channel_never_reaches_the_payload_on_either_arm(self) -> None:
+    def test_the_channel_never_reaches_the_payload_on_either_case(self) -> None:
         """A discard, not a pass-through. The reasoning is not evidence of anything."""
         result = self.summarised_with("reasoning-channel", thinking=True)
         channel = completion("reasoning-channel").reasoning
@@ -2769,10 +2769,10 @@ def probe_fixture(name: str) -> dict[str, Any]:
 
 
 class TestTheServerProvesTheEntry:
-    """Plan 28 row #5. The entry claims; these five arms make each claim a fact.
+    """Plan 28 row #5. The entry claims; these five cases make each claim a fact.
 
-    Every arm is driven by a constructed or built value and nothing here touches
-    the network (Guardrail #7). Every arm has both halves: with the agreeing
+    Every case is driven by a constructed or built value and nothing here touches
+    the network (Guardrail #7). Every case has both halves: with the agreeing
     value it passes, and with one value changed it refuses and the message names
     both sides. A check nobody has made fail is a check nobody has tested.
 
@@ -2813,7 +2813,7 @@ class TestTheServerProvesTheEntry:
         with pytest.raises(ValueError, match="does not say how to capture it"):
             probe_fixture("mute.json")
 
-    # Arm 1 - the render agrees.
+    # Case 1 - the render agrees.
 
     def test_the_committed_markers_render_the_probe_conversation(self) -> None:
         """Ties the fixture to config: the recorded template is what the entry renders."""
@@ -2846,7 +2846,7 @@ class TestTheServerProvesTheEntry:
         assert "the turn envelope does not render" in said
         assert "10 tokens" in said and "first difference at index 0" in said
 
-    # Arm 2 - the prefix cache is live.
+    # Case 2 - the prefix cache is live.
 
     def test_a_second_call_that_reused_the_prefix_lets_the_run_start(self) -> None:
         the_prefix_cache_is_live(
@@ -2862,7 +2862,7 @@ class TestTheServerProvesTheEntry:
         by the previous prompt's length. Measured 2026-09-14, GitHub
         `ubuntu-latest`, llama.cpp `b10598`, Qwen3.5-9B-Q4_K_M, run 34820209002:
         31 prefilled, checkpoint at position 26, 27 of the second prompt's 60
-        reused, 33 evaluated. Prefill fell; the arm that wanted 31 refused all
+        reused, 33 evaluated. Prefill fell; the case that wanted 31 refused all
         four shards and the day published nothing.
         """
         the_prefix_cache_is_live(
@@ -2881,7 +2881,7 @@ class TestTheServerProvesTheEntry:
         assert "the prompt cache is not holding the prefix" in said
         assert "40 tokens" in said and "reused 0" in said
 
-    # Arm 3 - constrained decoding still constrains.
+    # Case 3 - constrained decoding still constrains.
 
     def test_the_probe_schema_is_built_from_the_schema_the_run_really_sends(self) -> None:
         """Never a fixture: the real schema is generated, so a copy would drift."""
@@ -2908,7 +2908,7 @@ class TestTheServerProvesTheEntry:
         assert json.dumps(only, sort_keys=True) in said
         assert "Sure! Here is the answer." in said
 
-    # Arm 4 - the loaded weights are the declared weights.
+    # Case 4 - the loaded weights are the declared weights.
 
     def test_weights_that_declare_the_entrys_architecture_let_the_run_start(
         self, tmp_path: Path
@@ -2947,7 +2947,7 @@ class TestTheServerProvesTheEntry:
 
         assert "do not say which architecture they are" in str(refusal.value)
 
-    # Arm 5 - the window is inside the trained window.
+    # Case 5 - the window is inside the trained window.
 
     def test_a_window_inside_the_trained_window_lets_the_run_start(self) -> None:
         entry = config.load(CONFIG_DIR).models.summarize
@@ -2966,7 +2966,7 @@ class TestTheServerProvesTheEntry:
         assert "n_ctx is 49152" in said and "trained for 32768" in said
 
     def test_a_server_that_names_no_trained_window_refuses_the_run(self) -> None:
-        """Arm 5 has no skip either. An unread proof is not a proof."""
+        """Case 5 has no skip either. An unread proof is not a proof."""
         trained = trained_context(self.models("a_model_list_that_names_no_trained_window"))
 
         with pytest.raises(ProbeRefusedError) as refusal:

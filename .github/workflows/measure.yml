@@ -22,7 +22,7 @@ on:
       # the models file. Every fact about a candidate is already written there,
       # and a form that asked for them again could bench one set of bytes while
       # the adoption pointed at another. Leave it empty and the bench measures
-      # the model config already names, which is how the arm is checked against
+      # the model config already names, which is how the case is checked against
       # the page it is supposed to reproduce.
       candidate_models_file:
         description: 'Models file under config/, for example models/qwen3.5-9b-q4km.json. Empty benches the configured model.'
@@ -70,7 +70,7 @@ env:
   # and validate.yml make. The runtime job starts its own server from an inline
   # python block rather than through `.github/scripts/start-llama-server.sh`,
   # because it sweeps a setting and needs the process handle - but it reads the
-  # port from here, so no arm of this repository spells the number twice
+  # port from here, so no part of this repository spells the number twice
   # (Guardrail #6).
   LLAMA_PORT: '8080'
 
@@ -85,7 +85,7 @@ jobs:
   # one file and finishes in seconds.
   #
   # It is also where the candidate is decided: the dispatch input where one was
-  # given, the configured model otherwise. One place, so the two arms of the
+  # given, the configured model otherwise. One place, so the two cases of the
   # bench cannot disagree about which bytes they measured.
   models:
     runs-on: ubuntu-latest
@@ -161,7 +161,7 @@ jobs:
 
           # The entry's own declared size. Empty means the entry declares none,
           # which is an entry nobody has fetched yet - the check below skips
-          # rather than refuses, exactly as the validation arm does.
+          # rather than refuses, exactly as the validation case does.
           print(f"candidate_byte_count={entry.get('byte_count') or ''}")
 
           # An entry may name a draft head - a small second model the server
@@ -180,7 +180,7 @@ jobs:
           # The cache holds every file the candidate needs, so the key names
           # every file's digest. A key that named only the target would serve a
           # complete-looking entry with the draft head missing, and the server
-          # arm would fail to start on a cache hit it could not see into. An
+          # case would fail to start on a cache hit it could not see into. An
           # entry with no draft keeps the key it already had, so adding this
           # does not throw away what earlier runs paid to download.
           key = candidate["sha256"]
@@ -189,12 +189,12 @@ jobs:
           print(f"candidate_cache_key={key}")
           PY
 
-  # The bench, arm one: raw prefill and decode throughput with nothing else in
-  # the process. This is the arm that says whether the weights can move tokens
+  # The bench, case one: raw prefill and decode throughput with nothing else in
+  # the process. This is the case that says whether the weights can move tokens
   # at all, and it is the cheap one - it runs first so a model that cannot clear
-  # the bar never costs the server arm a runner hour.
+  # the bar never costs the server case a runner hour.
   #
-  # It also holds the cache both arms read. The entry is keyed on the candidate
+  # It also holds the cache both cases read. The entry is keyed on the candidate
   # digest rather than its filename, because two builds of one model share a
   # name and a key that cannot tell them apart serves the wrong weights under
   # the right alias.
@@ -239,7 +239,7 @@ jobs:
             df -h / /mnt 2>/dev/null | sed -n '1,4p'
           } | tee backend/var/hardware.txt
 
-      # Keyed on the candidate bytes, and shared with the server arm below. One
+      # Keyed on the candidate bytes, and shared with the server case below. One
       # model per entry, so the cache never holds two multi-gigabyte sets of
       # weights at once (Guardrail #2).
       - name: Cache the candidate weights and runtime
@@ -281,8 +281,8 @@ jobs:
           SRC=$(dirname "$(find llama -type f -name 'llama-bench' | head -1)")
           cp -a "$SRC"/. backend/bin/
 
-      # llama-bench never runs a draft head, so this arm does not measure one.
-      # It fetches it anyway, because it fills the cache the server arm reads:
+      # llama-bench never runs a draft head, so this case does not measure one.
+      # It fetches it anyway, because it fills the cache the server case reads:
       # an entry saved here without the draft is a hit there with a file
       # missing, and the server exits at load rather than at fetch. The bytes
       # are tens of megabytes against multi-gigabyte weights.
@@ -303,8 +303,8 @@ jobs:
 
       # No `if:`, for the usual reason: a restored entry is the one case where
       # nobody watched the bytes arrive. It matters more here than anywhere,
-      # because this arm never runs the draft head - the only thing standing
-      # between a corrupt cached copy and the server arm is this line.
+      # because this case never runs the draft head - the only thing standing
+      # between a corrupt cached copy and the server case is this line.
       - name: Verify the draft head
         env:
           DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
@@ -335,7 +335,7 @@ jobs:
 
       # The bench refuses any bytes but the declared ones, so every number it
       # writes is about a model somebody can fetch again (Guardrail #10). It
-      # also writes the raw half of the dossier body the server arm finishes.
+      # also writes the raw half of the dossier body the server case finishes.
       - name: Benchmark the candidate
         env:
           CANDIDATE_REF: ${{ needs.models.outputs.candidate_ref }}
@@ -364,7 +364,7 @@ jobs:
             --quantisation "$CANDIDATE_QUANTISATION" \
             --threads "$THREAD_COUNTS" \
             --binary "$LLAMA_BIN/llama-bench" \
-            --readings backend/var/bench/raw-arm.json
+            --readings backend/var/bench/raw-case.json
 
       # Ninety days, not seven. A dossier is pasted from these numbers weeks
       # after the dispatch that read them, and an artifact that expired is a
@@ -455,11 +455,11 @@ jobs:
           name: bench-corpus
           path: backend/var/corpus.json
 
-  # The bench, arm two: a real llama-server, real fetches, real summaries. Raw
+  # The bench, case two: a real llama-server, real fetches, real summaries. Raw
   # throughput says what the weights can do; this says what a shard of the daily
   # run costs, which is the number the job budget is spent against.
   #
-  # It needs the raw arm rather than running beside it, for two reasons. The
+  # It needs the raw case rather than running beside it, for two reasons. The
   # weights cache is already warm, so this job downloads nothing. And the emit
   # step at the end needs both halves in one place to write the page body.
   runtime:
@@ -510,7 +510,7 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # The same key the raw arm wrote, so this job restores what that job
+      # The same key the raw case wrote, so this job restores what that job
       # already paid for. A miss here is a second download of the same bytes,
       # and download seconds are wall-clock seconds exactly like compute is.
       - name: Restore the candidate weights and runtime
@@ -778,8 +778,8 @@ jobs:
               Every number this job reports is filed under the candidate's id, so a
               server answering under any other alias makes the whole run a
               measurement of something else with the candidate's name on it
-              (Guardrail #10). The validation arm has asked this since it was
-              written; this arm did not, and that is the drift.
+              (Guardrail #10). The validation case has asked this since it was
+              written; this case did not, and that is the drift.
               """
               with urllib.request.urlopen(
                   f"http://127.0.0.1:{SERVER_PORT}/v1/models", timeout=5
@@ -1028,9 +1028,9 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: bench-raw
-          path: backend/var/raw-arm/
+          path: backend/var/raw-case/
 
-      # The whole point of the arm. Two artifacts of numbers are a
+      # The whole point of the job. Two artifacts of numbers are a
       # transcription job; a page body with the numbers already in it is a
       # paste. This step never writes the committed config and never touches
       # `docs/` - a person reads the emitted page and decides.
@@ -1038,7 +1038,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 backend/utilities/measure_llm.py emit \
-            --raw backend/var/raw-arm/bench/raw-arm.json \
+            --raw backend/var/raw-case/bench/raw-case.json \
             --server backend/var/runtime-sweep/runtime-summary.json \
             --corpus 'Five articles' \
             --dossier backend/var/runtime-sweep/dossier.md \
@@ -1096,7 +1096,7 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # The same key the bench arms use, so a dispatch that follows a bench pays
+      # The same key the bench cases use, so a dispatch that follows a bench pays
       # nothing for the weights and one that does not pays once (Guardrail #2).
       - name: Restore the candidate weights and runtime
         id: weights
@@ -1239,7 +1239,7 @@ jobs:
             exit 1
           fi
 
-      # The whole point of the arm. Three artifacts of numbers are a
+      # The whole point of the job. Three artifacts of numbers are a
       # transcription job; a block with the numbers already in it is a paste.
       - name: Retake the budgets a vocabulary sizes
         env:

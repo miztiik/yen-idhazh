@@ -714,7 +714,7 @@ def _one_slot_config(fixture: dict[str, Any]) -> CollectConfig:
 def _one_slot_plan(*, ask: bool = True) -> tuple[dict[str, Any], DeskPlan]:
     """The desk planned once. `ask` is whether the counterfactual weight is supplied.
 
-    The committed lens weights are supplied either way, so the two arms differ
+    The committed lens weights are supplied either way, so the two cases differ
     in one argument and nothing else - which is what makes "it moved nothing"
     an assertion rather than a claim.
     """
@@ -793,7 +793,7 @@ def test_the_recorded_score_is_the_one_that_decided_the_day() -> None:
 def test_the_second_score_differs_by_the_lens_term_and_by_nothing_else() -> None:
     """Every other term is identical, so the whole difference is the lens.
 
-    Both arms are asserted, and the second one is the one that catches a real
+    Both cases are asserted, and the second one is the one that catches a real
     mistake: a story matching no lens must come back with the two scores equal
     to the last decimal place. A counterfactual that moved a story it was not
     asking about would make the ledger unreadable - nobody could tell which

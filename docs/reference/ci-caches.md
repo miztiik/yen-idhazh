@@ -1,7 +1,6 @@
 # CI Caches
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 Every cache this repository keeps, what it holds, who reads it, and the bar a
 new one has to clear. Read this before adding one: the ceiling is shared, it is
 nearly full, and the entry a careless addition evicts is the one the daily
@@ -79,8 +78,8 @@ name, so it hits on run one and fills nothing.
 `qualify` is one case and `measure.yml`'s bench is the other. Both are
 dispatched a handful of times a month, so neither ever hits from a previous run
 - but `qualify`'s matrix means the first shard downloads the candidate weights
-and every other shard of that same run restores them, and the bench's raw arm
-downloads the candidate so its server arm can restore it a step later. The
+and every other shard of that same run restores them, and the bench's raw case
+downloads the candidate so its server case can restore it a step later. The
 reader is the sibling job, not the next week. Both entries age out unread within
 the week and give their bytes back, which is why two 5 GB entries on top of the
 daily ones do not have to fit under the 10 GB ceiling at once: GitHub evicts the
@@ -105,7 +104,7 @@ against its container, and a missing font changes what fontconfig substitutes
 and therefore what the browser measures. The failure that risks is a check that
 goes on passing in CI while disagreeing with a developer box, which is worse
 than 15 s. An unmeasured number may not justify a design (Guardrail #10), so this
-stays as it is until somebody runs the arm.
+stays as it is until somebody runs the case.
 
 **`measure.yml` `image`'s CPU-only torch install.** It installs from a separate
 package index and shares no dependency file with anything else, so it would need

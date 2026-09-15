@@ -16,7 +16,7 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
  * A day that no reader can read: refused before it merges, survived when it
  * somehow arrives.
  *
- * **Both arms are here on purpose.** Prerendering used to serialise every story
+ * **Both cases are here on purpose.** Prerendering used to serialise every story
  * a day published, so a story the contract refused failed the build and reached
  * nobody. A reading document has carried a seed since 2026-09-01 and the browser
  * fetches the rest, so the build never opens the stories past it. Two things
@@ -24,24 +24,24 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
  * validate-days` stops the day, and the loader survives one that got past it. A
  * test proving either alone would leave the other free to rot.
  *
- * Arm one runs the real command as a process and reads its exit code, over a
+ * Case one runs the real command as a process and reads its exit code, over a
  * real pipeline-written day broken three ways. A day composed by hand drifts
  * from the one the pipeline writes, and a guard that only ever refuses proves
  * nothing - so the same command over the unbroken day has to come back clean.
  *
- * Arm two serves broken bytes to the shipped loader in a real browser, over a
+ * Case two serves broken bytes to the shipped loader in a real browser, over a
  * real network interception, and prints what it intercepted. Its payloads are
  * small on purpose: the loader reads four names off a story and nothing else,
- * so a whole day here would be testing the fixture. A degraded arm that
+ * so a whole day here would be testing the fixture. A degraded case that
  * intercepts nothing is a null result, not a pass.
  *
- * **The day arm one breaks is the canary day, not a committed one** (2026-09-14).
+ * **The day case one breaks is the canary day, not a committed one** (2026-09-14).
  * It used to take the newest day under `frontend/public/digest`, which is a walk
  * over a collection every run appends to - banned by `CLAUDE.md` section 13 and
  * Guardrail #12 - and it cost more than a rule: on 2026-09-14 the pipeline
  * published an empty day, `items[items.length - 1]!` was `undefined`, and the
- * `TypeError` fired while the module was loading and took all of arm one and all
- * of arm two down with it. The canary day is written by the same contract models
+ * `TypeError` fired while the module was loading and took all of case one and all
+ * of case two down with it. The canary day is written by the same contract models
  * and the same producer, so the "a hand-composed day drifts" intent holds, and it
  * is fixed in size.
  *
@@ -50,7 +50,7 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
  * carried that story. The canary day is shorter than the seed, so that
  * demonstration is gone and nothing on the canary tree can replace it - there is
  * one hostile article per file under `tests/fixtures/canaries` and the day is as
- * long as that list. What arm one still proves, and what was always the
+ * long as that list. What case one still proves, and what was always the
  * load-bearing half, is that `validate-days` projects EVERY story through the
  * served contract and names that contract when one fails.
  */
@@ -107,7 +107,7 @@ function canaryDay(): Day {
 	}
 	if (carrying.length !== 1) {
 		throw new Error(
-			`the canary tree holds ${carrying.length} days with stories, not 1, so arm one ` +
+			`the canary tree holds ${carrying.length} days with stories, not 1, so case one ` +
 				'cannot say which day it broke'
 		);
 	}
@@ -121,7 +121,7 @@ function broken(day: Day, how: (payload: Record<string, unknown>) => void): stri
 	return JSON.stringify(payload);
 }
 
-/** A day that was never JSON. Shared by both arms, so it is not built from one. */
+/** A day that was never JSON. Shared by both cases, so it is not built from one. */
 const NOT_JSON = '{ this was never JSON';
 
 /** Three ways a published day is broken.
@@ -194,9 +194,9 @@ function treeHolding(day: Day, name: string, payload: string): string {
  * `--state-root` travels with `--digest-root` and the command refuses the pair
  * unless it does. A receipt records a payload's length and a day is settled on
  * that length, never on a re-read, so the committed receipts would settle these
- * scratch days without opening them - and the `unbroken` arm, which is here
+ * scratch days without opening them - and the `unbroken` case, which is here
  * because a guard that only ever refuses proves nothing, would pass on a receipt
- * about a different file. It did: measured 2026-09-13, this arm reported `0 of
+ * about a different file. It did: measured 2026-09-13, this case reported `0 of
  * them opened`. The same forgotten flag also filed receipts about scratch trees
  * into the tracked `state/day-validations.csv`, which
  * [build-state.ts](../scripts/build-state.ts) fingerprints, so the group changed
@@ -249,11 +249,11 @@ const SERVED: Record<string, string> = {
 test('a malformed day is refused before it merges, and survived if it arrives', async ({
 	page
 }) => {
-	// --- Arm one: the guard refuses it, and names the day and the contract.
+	// --- Case one: the guard refuses it, and names the day and the contract.
 	//
-	// The fixture is read here rather than at module load. A fixture this arm
+	// The fixture is read here rather than at module load. A fixture this case
 	// cannot use has to fail this test with a sentence naming the builder, not
-	// throw while the file is loading and take arm two down with it - which is
+	// throw while the file is loading and take case two down with it - which is
 	// exactly what the committed-archive version did on 2026-09-14.
 	const day = canaryDay();
 	const shapes = brokenShapes(day);
@@ -284,10 +284,10 @@ test('a malformed day is refused before it merges, and survived if it arrives', 
 		'the failure did not name the contract that refused it'
 	).toContain('digest-view.schema.json');
 
-	// --- Arm two: the same shapes reach a browser anyway, and nothing breaks.
+	// --- Case two: the same shapes reach a browser anyway, and nothing breaks.
 	//
 	// Not hypothetical. `ci.yml` never starts from a push the pipeline made, so
-	// arm one is a merge gate first and a publish gate second - and either way a
+	// case one is a merge gate first and a publish gate second - and either way a
 	// reader's browser is the last thing standing.
 	await page.addInitScript({ content: await loaderSource('malformed-day') });
 
@@ -338,11 +338,11 @@ test('a malformed day is refused before it merges, and survived if it arrives', 
 		}
 
 		// The page a reader is on is still a page. A white screen is the failure
-		// this arm exists to rule out (`CLAUDE.md` section 12).
+		// this case exists to rule out (`CLAUDE.md` section 12).
 		await expect(page.locator('main').first()).toBeVisible();
 	}
 
-	// Printed, because an arm that intercepted nothing served nothing and proves
+	// Printed, because a case that intercepted nothing served nothing and proves
 	// nothing about a malformed day.
 	console.log(`[malformed-day] payload interceptions: ${served.count}`);
 	expect(

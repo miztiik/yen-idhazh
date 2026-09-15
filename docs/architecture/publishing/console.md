@@ -1,7 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -868,7 +867,7 @@ shifted back a month each, 8,000 rows in all:
 | After | 2,252,783 | 490,912 | 0 |
 
 That is 18% off the gzipped document and 35% off the raw one, and the saving
-grows with every month committed. One build per arm; a prerender is
+grows with every month committed. One build per case; a prerender is
 deterministic, and a control pair that the window could not affect differed by
 7 gzipped bytes, which is the noise floor here.
 
@@ -1168,7 +1167,7 @@ Authority: Carmack (Engine & Runtime) on the two clocks and the axis, Fowler
 (Architecture) on one binning shared by four panels, Reader on the sentence
 beside the share; plan 03 Row #2, 2026-09-05.
 
-## The chart arm is a flow, and every drop leaves it as a named branch
+## The chart drawing is a flow, and every drop leaves it as a named branch
 
 `Visuals drawn for articles` opens with one diagram of where items go between the
 work stage reaching one and a visual reaching a page. It is drawn left to
@@ -1230,7 +1229,7 @@ taken in the browser on 2026-08-30:
  widest line is the name alone.
 - **The right margin is 170 pixels, not a share of the width.** A label does not
  shrink with the frame, so a percentage leaves too little on a narrow screen -
- the first arm reserved 30 percent and still clipped `Did not survive the
+ the first case reserved 30 percent and still clipped `Did not survive the
  checks`, which measures 151px at 12px type.
 - **The node gap is 34 pixels, against the engine's default of 14.** `Published`
  and `Did not survive the checks` are 13.8px and 2.2px tall over the committed
@@ -1243,7 +1242,7 @@ beside the last stage's.
 
 **The Sankey layout cost 5,672 gzipped bytes of lazy chart chunk**, measured
 2026-08-30 by registering `SankeyChart` in place of `FunnelChart` - the whole of
-the difference, with both arms byte-identical on every build. That left **2,439
+the difference, with both cases byte-identical on every build. That left **2,439
 bytes under the 200,000-byte line** the chart vocabulary is held to, which is
 1.2 percent: **the next chart type registered crosses it**, and the answer then
 is to measure what the current set costs before adding to it. The option builder
@@ -1263,10 +1262,10 @@ gzipped, re-measured in the same commit.)
 
 Authority: the shape, Jony, 2026-08-30; the chunk, Carmack, 2026-08-30.
 
-## The chart arm is judged against its own rule, and the daily rows come second
+## The chart drawing is judged against its own rule, and the daily rows come second
 
 `Visuals drawn for articles` is the only console section carrying a written
-decision rule in its own prose: over a stated span the arm is retired if the
+decision rule in its own prose: over a stated span chart drawing is retired if the
 median day spends more than a set number of minutes per published visual, or
 puts a visual on fewer than a set share of the items it published. Until
 2026-08-30 the section printed that rule in a paragraph and then showed none of
@@ -1281,7 +1280,7 @@ and `4.2 and rising` are different pictures and a single number is neither. One
 sentence above them states both figures and which side of its threshold each
 fell on.
 
-**The sentence and the two bars are one computation.** `chartArm` in
+**The sentence and the two bars are one computation.** `chartRule` in
 [frontend/src/lib/charts/glance.ts](../../../frontend/src/lib/charts/glance.ts)
 returns the medians, both bars' geometry, both trends and the sentence together,
 and the browser suite asserts the printed sentence is byte-identical to the one
@@ -1289,13 +1288,13 @@ the module builds. A verdict written in the template could say `inside` while
 the bar beside it drew a fill past its marker, and nothing on the page would
 look wrong.
 
-**All three numbers are config.** `console.chart_arm_rule_days`,
-`console.chart_arm_minutes_target` and `console.chart_arm_coverage_pct` live in
+**All three numbers are config.** `console.chart_rule_days`,
+`console.chart_minutes_target` and `console.chart_coverage_pct` live in
 `config/appearance.json`, bounded by `ConsoleConfig`. They were constants in a
 TypeScript module until 2026-08-30, which made the one section that states a
 threshold the one section an operator could not move a threshold on (Guardrail #6).
 The contract also refuses a preset list whose widest span cannot reach
-`chart_arm_rule_days`: a rule no preset can show would print the
+`chart_rule_days`: a rule no preset can show would print the
 widen-the-window notice at every setting of the control, which reads as a broken
 surface rather than as a narrow window.
 
@@ -1303,7 +1302,7 @@ surface rather than as a narrow window.
 has no share at all.** The denominator is the item count on the day's own
 `digest.json`, read in the same pass that counts its charts, so no new telemetry
 column was published to answer this. A quiet day returns null rather than zero
-percent: zero would say the arm ran and reached nobody, and nineteen quiet days
+percent: zero would say chart drawing ran and reached nobody, and nineteen quiet days
 would drag the median of a healthy fortnight onto the floor. This is the
 null-is-not-zero rule the timing medians already follow
 ([../../concepts/design-system.md](../../concepts/design-system.md)).
@@ -1315,12 +1314,12 @@ judgement nobody agreed to, which is the same mistake as a chart borrowing the
 band tokens.
 
 **Below the rule's own span the section prints the notice and no number.** The
-window control governs the medians, and under `chart_arm_rule_days` the section
+window control governs the medians, and under `chart_rule_days` the section
 says `The rule reads 14 days. Widen the window to see it.` and draws no bar. It
 is the same sentence and the same reason as the glance card next to it: a median
 of the wrong span is the same figure with a different meaning, and nothing on
 the page would say which one is being read. The section carries
-`data-windowed="chart-arm"` and states its span in words at every setting, so
+`data-windowed="chart-drawing"` and states its span in words at every setting, so
 the window oracle in `frontend/tests/console-window.spec.ts` holds it to the
 control like every other windowed surface.
 
@@ -1367,7 +1366,7 @@ per-DAY reading of a window-level picture: it is the only place a printed rate
 can be checked against the two counts it was divided from, and the only way to
 attribute a window aggregate to a day. Authority: Susan, 2026-08-31.
 
-**On Pipelines it ends `[data-windowed="chart-arm"]` rather than hanging below
+**On Pipelines it ends `[data-windowed="chart-drawing"]` rather than hanging below
 it.** It answers the section above it, and a table that has to be found is a
 table nobody reads. On Summaries the placement was already right, so only the
 chrome, the name and the span changed.
@@ -1385,7 +1384,7 @@ Authority: Susan, 2026-08-31.
 
 The Summaries table declares `data-windowed="daily-figures"`, so the window
 oracle holds it to the control like every other windowed surface. The Pipelines
-one declares nothing of its own: it sits inside `chart-arm`, which already
+one declares nothing of its own: it sits inside `chart-drawing`, which already
 declares the span and prints it in words.
 
 ## What the cap costs, and the four places the console says it
@@ -1551,7 +1550,7 @@ console that can already see it, or Guardrail #10 defeats the change.
 
 **`Visuals published` counts only items whose `visual` is a `chart` in state
 `rendered`**, which is what [visuals.md](visuals.md) requires so a diagram never
-lands on the chart arm's bill. Measured 2026-08-31 over the eleven committed
+lands on the chart drawing's bill. Measured 2026-08-31 over the eleven committed
 published days: 185 visuals, 185 of them charts, no other kind and no other
 state - so the heading and the count agree today. The day a non-chart visual
 publishes for real, either the count widens or the heading narrows;

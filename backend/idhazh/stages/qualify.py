@@ -311,7 +311,7 @@ def stage_qualify(
 ) -> QualificationShard:
     """Freeze this shard's slice of the corpus, then replay it N times.
 
-    Capture once and replay is the whole design. The old validation arm replanned
+    Capture once and replay is the whole design. The old validation case replanned
     and refetched for every model it scored, so two numbers could differ because
     a publisher edited a page rather than because the weights differed. There is
     only one model here now, and the same argument still holds against the three

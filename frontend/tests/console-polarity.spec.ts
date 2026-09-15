@@ -171,7 +171,7 @@ for (const theme of THEMES) {
 		}
 
 		// A polarity nobody declared is the defect coming back under a default.
-		// `higher-is-better` is not required here: whether the chart-arm coverage
+		// `higher-is-better` is not required here: whether the chart-drawing coverage
 		// delta draws at all depends on the ledger - a window whose first day
 		// published nothing has no ratio to move from - and a test that passes
 		// only while today's data cooperates is not a test. The rendered-card

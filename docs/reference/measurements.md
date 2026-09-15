@@ -1,7 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 Every number this project's design rests on, with the date it was taken and the
 spread. Guardrail #10 in one page: **an unmeasured number is labelled an estimate and
 may not be used to justify a design.**
@@ -29,7 +28,7 @@ first reading which model a row was about - and a figure that needs that is a
 figure Guardrail #10's one-current-reading rule cannot check.
 
 **A benchmark run does not get appended to this page.** A run that sweeps a
-setting, prices a candidate or races two arms is written up as its own record
+setting, prices a candidate or races two cases is written up as its own record
 under `docs/reference/benchmarks/`, named for what it measured and nothing else
 - a re-run replaces that record rather than adding a second one. This page then
 carries **the one figure that is now in force** and a link to the record behind
@@ -149,7 +148,7 @@ The screen is deterministic and no model reads anything: a total and two to five
 parts in the same unit, adding up within 0.5 percent, every part above zero and
 below the total, all of them inside 600 characters, and one of the article's own
 joining words between the first and the last. **What it cannot do is tell a
-stated composition from a numeric coincidence.** Its own null arm - every value
+stated composition from a numeric coincidence.** Its own null case - every value
 re-dealt at random within its unit, every position and every joining word left
 where it was - still finds 14 articles, 0.97 percent, and that null under-states
 chance rather than estimating it. Three figures are quoted together here and
@@ -180,15 +179,15 @@ that often would be drawing a circle out of three unrelated market indices.
 
 **A 90-day sight window opens 4 files and reads 312,048 rows at month grain, and
 91 files and 286,832 rows at day grain** - 87 more file handles for 25,216 fewer
-rows, 8.1 percent of what the month arm reads. The wall clock does not separate
-them: the day arm's median was 99.1 ms faster, 3.5 percent, against spreads of
-638.7 and 499.3 ms. CPython 3.14.2, 9 interleaved passes an arm, over a built
+rows, 8.1 percent of what the month case reads. The wall clock does not separate
+them: the day case's median was 99.1 ms faster, 3.5 percent, against spreads of
+638.7 and 499.3 ms. CPython 3.14.2, 9 interleaved passes a case, over a built
 120-day ledger of 3,152 rows a day.
 
 The milliseconds are a developer-machine reading and an order-of-magnitude check
 by the rule above, so they name the box that took them: **Intel Core i7-1265U,
 Windows 11 build 26200**. The two counts are arithmetic and travel, so they name
-only the interpreter. The full record - conditions, method, both arms, and what
+only the interpreter. The full record - conditions, method, both cases, and what
 it does not settle - is
 [benchmarks/day-window-read.md](benchmarks/day-window-read.md).
 Re-run it with `python backend/utilities/measure_day_window.py`.
@@ -399,7 +398,7 @@ needs it, and that objection is now the only one.
 ## What the window costs the summarizer, 2026-09-13
 
 **The projection above was exact at 32,768 and stays linear to 65,536.** Three
-arms, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
+cases, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
 own flags, read off the load log at `log_verbosity` 4.
 
 | `n_ctx` | KV buffer | Recurrent state | Compute buffer | Model buffers | Total |
@@ -409,7 +408,7 @@ own flags, read off the load log at `log_verbosity` 4.
 | 65,536 | 2,048.00 MiB | 50.25 MiB | 160.02 MiB | 8,024.61 MiB | 10,282.88 MiB = 10.04 GiB |
 
 **KV is exact arithmetic at 32 KiB a token**, and the compute buffer grows 16.00
-MiB per 16,384 tokens across the arms. Nothing else in the row moves with the
+MiB per 16,384 tokens across the cases. Nothing else in the row moves with the
 window.
 
 So **65,536 costs 1,584 MiB more than 16,384**, against the 6.84 GiB low-water
@@ -431,10 +430,10 @@ window. Ruled by Carmack, 2026-09-13.
 and carry a fixed 50.25 MiB whatever the window is, which is why doubling the
 window does not double the footprint and why the 32 KiB a token above is the
 figure over the attention layers rather than over all of them. `n_ctx_train` is
-262,144, so none of these arms scaled RoPE.
+262,144, so none of these cases scaled RoPE.
 
 Hardware: a developer laptop, i7-1265U, 32 GiB, with four other agents live.
-Peak working set ran 6.05, 8.47 and 9.47 GiB across the three arms and is the
+Peak working set ran 6.05, 8.47 and 9.47 GiB across the three cases and is the
 weaker number of the two - it counts the memory-mapped weights, which the OS may
 evict, and it moves with what else the box was doing. The llama.cpp buffer sizes
 are arithmetic over the model's own architecture and carry to a runner unchanged.
@@ -749,7 +748,7 @@ cache. Byte figures are from one representative run of each level.
 
 ### `-fa on` versus `-fa off`: three observables, all of them in the log
 
-Three runs of each arm. **Every figure below was identical in all three, so the
+Three runs of each case. **Every figure below was identical in all three, so the
 spread is zero.**
 
 | Reading, at `-lv 4` | no `-fa` flag, as committed | `-fa on` | `-fa off` |
@@ -767,7 +766,7 @@ spread is zero.**
 no flag it says `auto`, which is the state row 3 exists to refuse to accept as
 an answer. `resolve_fused_ops: Flash Attention enabled` is the decision, and it
 appears only when there was a decision to make, so it is absent from both
-explicit arms. The two together cover all three cases and nothing else does.
+explicit settings. The two together cover all three cases and nothing else does.
 
 **The committed config resolves to flash attention ON.** `flash_attention` is
 `null` in `config/idhazh.json`, so `server_argv` passes no `-fa` at all, so the
@@ -798,21 +797,21 @@ Corroboration is worth the line because the log grammar is llama.cpp's and moves
 between builds, while the buffer difference is arithmetic and does not.
 
 **Written, 2026-09-09.** `idhazh.llm.server.flash_attention_state` is that
-reader and returns those three states by those names. Its four arms are driven
+reader and returns those three states by those names. Its four cases are driven
 from committed fixtures and never from a live server (Guardrail #7): the three
 `tests/fixtures/runtime/2026-09-09-lv4-*.readings.txt` excerpts carry the
-readings above, and the `UNREADABLE` arm is driven by the four real
+readings above, and the `UNREADABLE` case is driven by the four real
 `2026-08-29-3-shard-*.server-head.txt` captures, which are runner logs taken
 before the verbosity knob existed and therefore hold no attention line at all.
-A fifth case removes the `resolve_fused_ops` line from the recorded `auto` arm
-and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
+A fifth case removes the `resolve_fused_ops` line from the recorded `auto`
+readings and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
 being read as a yes.
 
 ### `/props` settles the build and the window, and cannot settle flash attention
 
 `/props` is the right instrument for three questions and the wrong one for this
 one. It carries no key matching `flash`, `attn`, `kv` or `buf` anywhere in the
-document, and the five arms are byte-identical once the per-process
+document, and the five cases are byte-identical once the per-process
 `media_marker` nonce is normalised out.
 
 | `/props` field | Value on this run | What it settles |
@@ -1109,7 +1108,7 @@ cannot check. The retired incumbent's rows stay above, where they were taken.
 **The verdict is on the model's own page.**
 [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) carries run
 `33016222069` of 2026-08-26 gate by gate - the nine that passed, the two that
-failed, the band counts, and the fact that no comparison arm was ever run against
+failed, the band counts, and the fact that no comparison case was ever run against
 the retired incumbent.
 
 What stays here is what one of those gates taught about the instrument rather
@@ -1185,7 +1184,7 @@ turned that string into a security finding.
 **The second-order cost is the finding worth keeping: Guardrail #11 has no live
 evidence today.** An instrument that cannot separate a breach from a blank reply
 can never confirm the rule it exists to confirm. This is a statement about the
-canary arm alone - the nine passing gates above are unaffected.
+canary case alone - the nine passing gates above are unaffected.
 
 **The live marker check on a `sanitizer`-neutralised canary cannot fail, by
 construction.** `sanitize` runs inside `untrusted_block` before any request
@@ -1205,7 +1204,7 @@ function that `backend/tests/test_canaries.py` already asserts on every commit
 at no cost, and it would spend about 95 minutes of wall clock and a second 5 GB
 weights entry against a cache already at 8.11 GB of the 10 GB cap in Guardrail #2.
 
-**What replaces it:** land the failure code, then re-run the canary arm alone
+**What replaces it:** land the failure code, then re-run the canary case alone
 against the configured 9B - five calls, no corpus freeze, no repeats, weights
 already warm. That is the outstanding measurement, and it is the only thing that
 turns this gate back into a reading.
@@ -2052,7 +2051,7 @@ Four Playwright workers, measured 2026-09-05 on runs `33989034726` and
 | Runner, 4 vCPU, nothing else on it | 344 s | 207 s | **40 percent faster** |
 | a shared developer box, six other checkouts building | 135.5 s | 233.7 s | **72 percent slower** |
 
-Both arms passed all 268 tests, so the local result reads as a clean measurement
+Both cases passed all 268 tests, so the local result reads as a clean measurement
 of a regression that is not there. Two performance cores shared with six sibling
 agents have no spare capacity to hand a second worker. The knob is
 `PLAYWRIGHT_WORKERS` and the figure that decides it is the runner's.
@@ -2100,14 +2099,14 @@ to justify a design decision.
 | --- | --- | --- |
 | **How many articles really state a whole its parts add up to** | **bounded, not measured: at most 72 of 1,444, 4.99 percent** | the deterministic screen cannot tell a stated composition from a numeric coincidence, and its own examples show it failing at that - three unrelated stock indices whose two smaller moves sum to the larger pass it ([How often an article states a whole its parts add up to](#how-often-an-article-states-a-whole-its-parts-add-up-to-2026-09-13)). One person marks all 72 hits genuine or not against the written definition; the instrument already emits them with `python backend/utilities/measure_declared_wholes.py --window 600 --examples 72 --json`, so it needs no new code and costs one to two hours of one person's attention. Record the count with a Wilson interval - the true rate is 4.99 percent times that precision. Nothing may use the 4.99 as a rate until then, and nothing may use the agent's three-of-twelve reading at all. |
 | **How long a reader waits for a console panel's payload** | **`console.shimmer_after_ms` ships at 400, a declared estimate and not a measurement** | the shell-and-fetch migration was meant to settle this and **could not, for a reason that is a ruling rather than an omission.** The knob decides when a reserved box starts to shimmer, so the number it needs is the median time a payload takes to reach a **reader** - and the same plan scoped out a reader-facing timing measurement (owner, 2026-09-08). Everything measured instead is localhost: that migration counted 3 serial round trips and 303,306 payload bytes on a cold `/console/` over `vite preview`, where arrival is a few milliseconds and any threshold derived from it would be a threshold nobody ever crosses. Two things settle it, and both need the owner to reopen that scope-out: throttle a Playwright context to a named profile and read the median arrival over the default window, which measures a chosen network rather than a reader's; or accept a reader-facing timing measurement and take it on the live origin. Until one of them, 400 stays and stays labelled. |
-| **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **answered 2026-09-10, and half the question is void** | the site ships at 98.7 MB in 581 files with 727 published days of runway, measured four times on the runner with zero spread ([What the shell migration saved](measurements-site.md#what-the-shell-migration-saved-and-the-run-that-got-it-wrong-2026-09-10)). The encoder weights never left, so there is no second arm to measure - row #17 was descoped on 2026-09-09. The harness this row used to prescribe measured a tree that was never built and is deleted. |
+| **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **answered 2026-09-10, and half the question is void** | the site ships at 98.7 MB in 581 files with 727 published days of runway, measured four times on the runner with zero spread ([What the shell migration saved](measurements-site.md#what-the-shell-migration-saved-and-the-run-that-got-it-wrong-2026-09-10)). The encoder weights never left, so there is no second case to measure - row #17 was descoped on 2026-09-09. The harness this row used to prescribe measured a tree that was never built and is deleted. |
 | **Whether a subject the registry does not name goes quiet for long enough to matter** | **bounded, not measured: 75.2 percent of published items carry no registry name** | the 30 registry names are all covered near-daily, so nothing in the record supports a fade rate ([How long we go quiet about a registry name](../archive/measurements-2026-08.md#how-long-we-go-quiet-about-a-registry-name-2026-08-31)). Whether a quiet subject exists in the other three items in four cannot be read from a closed vocabulary, and this repository has no entity recogniser. Two things settle it, in order: put one real subject in `config/watchlist.json` and re-run `python backend/utilities/entity_gap.py` for that entry alone; or, if the question is ever worth a model, score the model on the gap as well as the coverage, because a recogniser that splits one subject across three names raises coverage and shortens every gap. |
 | **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](../archive/measurements-2026-08.md#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |
 | **A work shard's fixed cost on more than one run** | **one run measured: 335.1 s a shard, 5.6 minutes** | only run `2026-08-29-2` has four clocks and one execution each; `2026-08-29-3` filed six counter rows for four shards and cannot be joined, and the six runs before 2026-08-29 have no `job_seconds` cell at all ([Three figures the ledgers already held](../archive/measurements-2026-08.md#three-figures-the-ledgers-already-held-2026-08-30)). Re-run `python backend/utilities/measure_ledgers.py` after a few more clocked days, and read the spread rather than the single figure. | | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Whether a day at eight work shards publishes** | **answered 2026-08-27: it does** | run `33114410534` published the 2026-08-27 day at `shards = 8`, with 25 charts over 25 distinct paths and 25 files in the tree ([Eight work shards, paired](../archive/measurements-2026-08.md#eight-work-shards-paired-2026-08-27)). What remains is a decision about `run.max_parallel`, not a measurement. |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `stages.plan._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](../archive/measurements-2026-08.md#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
-| **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two arms of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](measurements-site.md#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
+| **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two cases of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](measurements-site.md#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs off the runner ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). A developer box measures itself, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
 | **What holds the 1.5 GiB a work shard's own python holds** | **bounded, not attributed: 1.49 to 1.55 GiB over four captured shards, in one process nothing names** | two dispatches of `.github/workflows/digest.yml`, no code. The first with `faithfulness: false`: the install step then takes `.` instead of `.[faithfulness]` and `_scorer` returns nothing, so the difference in `python_peak_rss_bytes` between that run and a scored one **is** the scorer's resident share, on the runner. The second at the default, to read the new per-process roll-call in **What memory this shard used** and confirm what the other two pythons are ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). Do the second one first - it costs nothing extra and it says whether the 4 percent attributed to the host is really the host. |
 | **What makes a visuals host 21 s or 38 s an item** | **void: the job retired on 2026-09-13** | it was a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The nine runs that name a CPU rule the CPU model out rather than confirming it ([The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Plan 11 row #6 deleted the job, so nothing will ever add to that population. The same swing, if it is a property of the host rather than of the model, will show up in the `work` job's own prefill rate; that is where to look for it, and it is a new question with a new denominator rather than this one continued. |
@@ -2122,7 +2121,7 @@ to justify a design decision.
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
 | A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)). It is a resident set and not a demand, and the marks it recorded are on the configured model's own page ([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)). **That cell is llama-server alone**; the job also holds 1.49 to 1.55 GiB of its own python at the same time, and subtracting the sum of the two from the machine's total does not yield headroom ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). |
-| **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary arm alone against the configured 9B - five calls, no corpus freeze, no repeats. |
+| **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary case alone against the configured 9B - five calls, no corpus freeze, no repeats. |
 | Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The qualification's faithfulness mean ([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)) is one model on one corpus and is not a delta. |
 
 ## How to add a row here

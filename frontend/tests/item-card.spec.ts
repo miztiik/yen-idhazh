@@ -12,7 +12,7 @@
  *    2px rise promises a click the card does not answer - repeated on every
  *    row of a day that has published up to 621 items. `prefers-reduced-motion`
  *    zeroes durations, which turns a rise into a jump rather than removing it,
- *    so the reduced-motion arm measures the box rather than the duration.
+ *    so the reduced-motion case measures the box rather than the duration.
  * 3. **The edge is visible on the ground it sits on.** Measured by the WCAG
  *    relative-luminance formula over the tokens the live document resolves,
  *    because a hairline that reads 1.36:1 on the dark ground is not an edge.

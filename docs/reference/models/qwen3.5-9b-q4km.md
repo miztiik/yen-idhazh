@@ -1,7 +1,6 @@
 # Qwen3.5-9B-Q4_K_M
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 **Status: incumbent.** It has summarized every published item since 2026-08-27.
 `incumbent` is one of three words a dossier's status line may hold - `evaluated`,
 `incumbent`, `superseded` - and this line is the only place this model's
@@ -247,7 +246,7 @@ Band counts across `min_source_words` 0 / 60 / 700 / 2000: **6 / 11 / 10 / 3**.
 The top band is populated because the band comes from the source body rather than
 the post-truncation count.
 
-**No comparison arm was run.** Nothing above was measured against the retired
+**No comparison case was run.** Nothing above was measured against the retired
 incumbent Qwen3-8B-Q4_K_M: no paired corpus, no side-by-side scores, no human
 review. The faithfulness mean in that table is one model on one corpus and is not
 a delta, and nothing on this page may be cited as if it were (Guardrail #10).

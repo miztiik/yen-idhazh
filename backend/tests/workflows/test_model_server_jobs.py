@@ -75,7 +75,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     existed for one reason: `digest.yml` started its server before
     `pip install -e .` ran, so the package was not importable yet. The install
     moved one step earlier and the copy went. While it existed the two halves
-    drifted, and the arm that drifted was the one nobody diffed - `validate.yml`
+    drifted, and the case that drifted was the one nobody diffed - `validate.yml`
     qualified a candidate on a server the daily run does not run.
 
     The install ordering is the whole reason, so it is asserted here rather than
@@ -629,9 +629,9 @@ def test_every_counters_step_says_which_job_it_is(job_name: str) -> None:
 def _uncommented(text: str) -> str:
     """The lines a runner acts on, without the ones explaining why.
 
-    A comment that says "there is no incumbent arm" is documentation worth
+    A comment that says "there is no incumbent case" is documentation worth
     keeping; an assertion that greps the whole file cannot tell it apart from
-    an incumbent arm.
+    an incumbent case.
     """
     return "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith("#")

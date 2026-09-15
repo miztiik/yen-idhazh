@@ -1,7 +1,6 @@
 # Search Quality
 
-**Last Updated**: 2026-09-10
-
+**Last Updated**: 2026-09-15
 Whether the archive's on-device search finds the right story: the metric, the
 label set, the bar it has to clear, and what it costs to keep that bar honest as
 the archive grows.
@@ -110,7 +109,7 @@ those is a surprise once you hold one thing constant at a time.** The bar was
 backfill took that to 99.9% and the gate failed at 0.767. Four measurements,
 same 47 queries, same labels, same ranking code, separate the causes:
 
-| Arm | recall@10 | Effect |
+| Case | recall@10 | Effect |
 | --- | --- | --- |
 | A - archive before the backfill | 0.902 +/- 0.036 | the old baseline, reproduced |
 | A' - same 944 items, today's re-encoded vectors | 0.910 +/- 0.034 | re-encode **+0.007** |
@@ -158,7 +157,7 @@ the index lost information the day payload carried.
 Measured on the same checkout, same 60 queries, same labels, same ranking, same
 embedded queries - the only difference is which file the vectors came out of:
 
-| Arm | recall@10 | MRR | Corpus |
+| Case | recall@10 | MRR | Corpus |
 | --- | ---: | ---: | --- |
 | Day payloads, the surface being deleted | 0.756 +/- 0.037 | 0.816 | 2,235 of 2,237 carry a vector |
 | Month index, the surface being shipped | 0.756 +/- 0.037 | 0.816 | 2,235 of 2,237 carry a vector |
@@ -170,7 +169,7 @@ rather than a constant, so nothing about the arithmetic changed.
 
 **The reader-facing number moved from 0.767 to 0.756, and the index is not
 why.** The baseline above was taken over 2,121 published items; this checkout
-holds 2,237. Both arms moved together, which is exactly the pooling drift the
+holds 2,237. Both cases moved together, which is exactly the pooling drift the
 paragraphs above predict - 116 more items competing for the same ten slots
 against a frozen label set, and 66.6 percent of filled slots now hold an item no
 labeller judged, up from 65.6 percent. 0.756 is 0.3 standard errors under the
@@ -178,7 +177,7 @@ baseline and 0.066 above the `assist.recall_min` bar of that day, which was
 0.69. The bar has since moved to 0.61 for the reason the next section gives.
 
 `backend/tests/test_retrieval_eval.py` holds the comparison rather than this
-page: it fails when the two arms disagree by more than one standard error, so
+page: it fails when the two cases disagree by more than one standard error, so
 the day the index starts losing something, a gate says so instead of a byte
 count looking like a win.
 
@@ -186,18 +185,18 @@ count looking like a win.
 
 The eleventh published day landed and the gate failed at **0.68978 against a bar
 of 0.69** - short by 0.00022, which is one percent of one standard error. The
-drop is real and it is not the ranking. The same four arms as 2026-08-26, over
+drop is real and it is not the ranking. The same four cases as 2026-08-26, over
 the same 60 queries, the same labels and the same ranking code, on,
 `onnxruntime` 1.29.0, alone on the machine:
 
-| Arm | recall@10 | Effect |
+| Case | recall@10 | Effect |
 | --- | --- | --- |
 | A - the archive at the last green commit, 3,485 items | 0.69163 +/- 0.04092 | that baseline, reproduced |
 | A' - the same 3,485 items, today's vectors | 0.69163 +/- 0.04092 | re-encode **+0.00000** |
 | B - the whole 3,596-item archive, old denominator | 0.68978 +/- 0.04124 | competition **-0.00185** |
 | C - the whole archive, as gated | 0.68978 +/- 0.04124 | denominator **+0.00000** |
 
-**There is no ranking regression, and A' is the arm that says so.** Reading the
+**There is no ranking regression, and A' is the case that says so.** Reading the
 same 3,485 addresses with today's committed vectors gives the identical number
 to five decimal places, because **0 of the 10 older day payloads changed a
 byte** - published days are immutable and the hashes prove it. The whole
@@ -210,7 +209,7 @@ labelled answer is another right answer nobody judged.
 since 2026-08-26.** Then, coverage went from 44.5 percent to 99.9 percent and
 the summed ceiling grew from 85 slots to 246. Now the label set is frozen and
 every labelled answer already carries a vector, so the ceiling is 294 slots in
-both arms and B equals C exactly. Competition is the only mechanism left.
+both cases and B equals C exactly. Competition is the only mechanism left.
 
 **The slide has a rate, and the rate is the point.** Measured over all eleven
 committed days on one instrument in one run - the eleven points, their corpus
@@ -355,7 +354,7 @@ and said why: past 0.35 the cost in right answers becomes larger than this
 instrument's own spread. Authority: Andre, Guardrail #10.
 
 **The bar was re-derived rather than lowered, and the difference is the four
-arms above (2026-08-26).** A gate that fails after a fix landed can be met two
+cases above (2026-08-26).** A gate that fails after a fix landed can be met two
 ways: move the number until it passes, or find out what changed. Holding the
 corpus, the labels and the vectors constant one at a time showed the ranking had
 not moved at all, so 0.85 was never the system's number - it was the number of
@@ -379,7 +378,7 @@ Andre, Fowler.
 (2026-08-31).** The first re-derivation set 0.69 correctly and then said only
 that it had "about 0.077 of room". Room with no rate is not a fact anybody can
 act on: five published days later the room was gone, the gate failed on `main`,
-and every open pull request was blocked by it. So the same four arms ran again,
+and every open pull request was blocked by it. So the same four cases ran again,
 and a fifth measurement ran beside them - recall at every one of the eleven
 committed corpus sizes, which turns the room into a date. The bar is 0.61 and it
 lasts about six published days. Two things follow. The number is written with
@@ -408,7 +407,7 @@ from what a reader gets for the same week. Authority: Andre, Guardrail #10.
 | Merge with this gate red, or mark it expected-to-fail | A gate that is allowed to fail is not a gate, and it was blocking every open pull request - so the next person's real regression would have arrived in a suite that was already red. | owner |
 | Round the derived 0.60731 down to 0.60 rather than to 0.61 | Both are two decimal places. 0.61 is the nearest, and it is the stronger bar, so it is the one that cannot hide a regression the derivation would have caught. The 0.01 costs less than one published day of room. | Andre |
 | Stop the gate reading days published after the labels closed | It would hold the number still, and it would measure a 2,237-item archive nobody has searched since 2026-08-26 - so a ranking change that only hurt recent stories would pass. The gate exists to notice the archive. What has to change is the labels, not the corpus. | Andre |
-| Gate on the gap between arm A' and arm A instead of on a level | It is the right instrument for "did the ranking regress" and it needs two committed corpora to compare, which the repository does not keep. Building that is a bigger change than this row, and it does not remove the need for the labels. | Andre, Fowler |
+| Gate on the gap between case A' and case A instead of on a level | It is the right instrument for "did the ranking regress" and it needs two committed corpora to compare, which the repository does not keep. Building that is a bigger change than this row, and it does not remove the need for the labels. | Andre, Fowler |
 
 ## See also
 

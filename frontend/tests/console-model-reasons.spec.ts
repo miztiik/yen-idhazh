@@ -28,7 +28,7 @@ import {
  *
  * The arithmetic is driven from days written here rather than from the committed
  * archive, which Guardrail #12 refuses and which would cost more every day the
- * pipeline publishes. It is also the stronger arm: these days carry an unknown
+ * pipeline publishes. It is also the stronger case: these days carry an unknown
  * reason and a day of pure absence, neither of which the archive has ever
  * produced. The browser half then re-derives the drawn numbers from the tree the
  * site was actually built from, so nothing here is checked only against itself.
@@ -332,7 +332,7 @@ test.describe('the panel, in a browser', () => {
 	});
 
 	test('THE ORACLE: what the page drew is what the built tree holds', async ({ page }) => {
-		// The fixture decides which arm runs, and the fixture is read here rather
+		// The fixture decides which case runs, and the fixture is read here rather
 		// than counted off the page. A skip that reads a locator count switches
 		// itself off the day the attribute is renamed.
 		const fixture = daysOf(CANARY);

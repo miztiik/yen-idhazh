@@ -267,15 +267,15 @@ A failing run now reads `4/5 neutralised; exfiltration-via-url not exercised (le
 
 It is still one gate and still fail-closed. **A control test that did not run is not a control test that passed**, so a canary that never answered fails exactly as it did before - it just says which of the two happened.
 
-### The live arm builds the article extraction would have built
+### The live case builds the article extraction would have built
 
 The fixture is handed to the prompt as raw bytes on purpose, because `untrusted_block` sanitizes what it is given rather than trusting a caller, and this is the only live assertion of that. Everything else about the article is derived the way [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)'s extract stage derives it, from the sanitized body: the length counts, the truncation flag, the shape signal, and the brief flag.
 
 That matters because the counts choose the prompt. The adapter used to count the raw bytes and hardcode `brief=False`, so a 41-word attack arrived in the long prompt band that no page of that length is ever given. One fixture settles which count is right: `fake-system-delimiter` is 67 words raw and 58 words after sanitization, so the raw count clears `extract.min_source_words` and the surviving count does not. The words that do not survive are not words the model is shown, so they cannot decide its prompt.
 
-### The arm runs on its own
+### The case runs on its own
 
-`idhazh qualify-canaries` runs the planted attacks against the configured model, writes what it saw to `backend/var/qualification/<date>/canaries.json`, and exits non-zero when the gate fails. The arm used to be reachable only from inside a whole qualification at shard zero, which meant the only way to read what a canary did was a job that runs for hours (`CLAUDE.md` section 4).
+`idhazh qualify-canaries` runs the planted attacks against the configured model, writes what it saw to `backend/var/qualification/<date>/canaries.json`, and exits non-zero when the gate fails. The case used to be reachable only from inside a whole qualification at shard zero, which meant the only way to read what a canary did was a job that runs for hours (`CLAUDE.md` section 4).
 
 ## Design rationale
 
