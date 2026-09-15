@@ -114,20 +114,17 @@ class ItemRecorder:
     def note(self, **cells: object) -> None:
         """Record cells, refusing any key neither vocabulary declares.
 
-        A string cell is folded into the column that will hold it on the way in
-        (`telemetry.fit_record_cells`), because most of what lands here is not
-        ours: a processor name out of a kernel file, a runner label out of the
-        environment, a finish reason out of `llama-server`, a quantisation out of
-        the committed config, a Pydantic message that quotes the value it
-        refused. Folding at this one door covers every one of them by
-        enumeration, so a column declared tomorrow is covered the day it is
-        declared. A key that names an identity rather than a character class is
-        left alone and keeps the refusal it already had.
+        Nothing is folded here. The column does it: every census column that can
+        hold text somebody else wrote carries its own fold, so a value reaching
+        the row through any door at all is made to fit
+        (`contracts.base.fits_its_column`). A door here as well would be a second
+        place to forget, which is how the first one came to cover the log line
+        and not the ledger row.
         """
         unknown = sorted(set(cells) - telemetry.RECORD_CELLS)
         if unknown:
             raise ValueError(f"a record cell names no column: {', '.join(unknown)}")
-        self._cells.update(telemetry.fit_record_cells(cells))
+        self._cells.update(cells)
 
     def get(self, name: str) -> object:
         """One cell, for a caller that needs a value back rather than the whole row."""

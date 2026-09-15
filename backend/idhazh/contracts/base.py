@@ -18,7 +18,14 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar, Final, Self, get_args
 
 from annotated_types import MaxLen, MinLen
-from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 from pydantic.fields import FieldInfo
 
 JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
@@ -314,6 +321,45 @@ def fit_field(text: str, *, model: type[BaseModel], field: str, absent: str) -> 
     one line, and it cannot drift from the field the way a restated `[:200]` can.
     """
     return fit_cell(text, column=field_column(model.model_fields[field]), absent=absent)
+
+
+def fits_its_column(constraints: StringConstraints, *, absent: str) -> BeforeValidator:
+    """The validator that makes a string column fit whatever it is handed.
+
+    Every helper above is a door a producer has to find. This is the column
+    itself, so there is no door to miss: `fit_cell` runs inside validation, for
+    the stage that builds the row, for a re-file that reads an old heading, for a
+    test harness and for a writer nobody has written yet.
+
+    **Declare it AFTER the constraints it folds into, and never before.** A
+    `BeforeValidator` wraps everything that precedes it in the `Annotated` list,
+    so constraints written first are checked second, which is the order that lets
+    the fold rescue a value. Written first instead, the constraints become
+    predicates over a function schema: the value is checked before the fold can
+    reach it, and `pattern` disappears from the generated JSON Schema - which
+    would move every `schemas/` file that carries such a column.
+    `tests/contracts/test_cell_shapes.py` pins both halves.
+
+    `constraints` is the same object the alias declares, so the bound is written
+    once and the fold reads it off the column rather than restating it
+    (Guardrail #6). `absent` belongs to the column rather than to the caller: a
+    value that folds away to nothing still has to say something was there, and
+    letting each producer choose the words is how two producers end up saying it
+    differently in one file.
+
+    An empty string is passed through untouched, so `min_length` still decides
+    what an empty cell means. A cell that arrived with nothing in it is a reading
+    nobody took, which is a different fact from a reading that could not be
+    printed, and these columns are nullable for exactly that reason.
+    """
+    column = Annotated[str, constraints]
+
+    def fold(value: Any) -> Any:
+        if not isinstance(value, str) or not value:
+            return value
+        return fit_cell(value, column=column, absent=absent)
+
+    return BeforeValidator(fold)
 
 
 def canonical_json(payload: Any) -> str:

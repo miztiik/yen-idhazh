@@ -16,6 +16,7 @@ import csv
 import importlib
 import io
 import json
+import logging
 import os
 import pkgutil
 import shutil
@@ -27,7 +28,7 @@ from typing import Annotated, Any, Union, get_args, get_origin
 
 import pytest
 from conftest import REPO_ROOT
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BeforeValidator, StringConstraints, TypeAdapter, ValidationError
 
 import idhazh.contracts as contracts_package
 from idhazh.contracts import base
@@ -144,6 +145,33 @@ def _foldable_columns() -> list[tuple[type[Contract], str, Any]]:
     return chosen
 
 
+def _annotation_parts(column: Any) -> list[Any]:
+    """Every metadata object on a column, through unions and nested `Annotated`.
+
+    A nullable column is `Annotated[str, ...] | None`, so its constraints sit one
+    level down. Reading only the top level finds nothing and makes every test
+    below vacuously green, which is the failure this walk exists to prevent.
+    """
+    found: list[Any] = []
+    pending: list[Any] = [column]
+    while pending:
+        for part in get_args(pending.pop()):
+            if isinstance(part, BeforeValidator | StringConstraints):
+                found.append(part)
+            else:
+                pending.append(part)
+    return found
+
+
+def _self_folding_columns() -> list[tuple[type[Contract], str, Any]]:
+    """Every string column that folds its own cell, found by the validator it carries."""
+    return [
+        (model, name, column)
+        for model, name, column in _string_columns()
+        if any(isinstance(part, BeforeValidator) for part in _annotation_parts(column))
+    ]
+
+
 #
 # The structural guarantee. Everything below it is a consequence.
 #
@@ -178,6 +206,116 @@ def test_the_walk_reaches_every_csv_contract() -> None:
 
     assert len(models) >= 20, f"only {len(models)} CSV contracts found; the walk is broken"
     assert len(_foldable_columns()) >= 20, "no constrained string columns found; the walk is broken"
+    assert len(_self_folding_columns()) >= 10, "no self-folding columns found; the walk is broken"
+
+
+def test_the_constraints_are_declared_before_the_fold_and_the_fold_runs_first() -> None:
+    """Annotation order is the whole mechanism, and it reads backwards.
+
+    A `BeforeValidator` wraps everything that PRECEDES it in the `Annotated`
+    list, so the constraints have to be written first to be checked second.
+    Written the other way round they become predicates over a function schema:
+    the value is checked before the fold can rescue it, and `pattern` vanishes
+    from the generated schema, which would move every `schemas/` file that
+    carries such a column. Both halves are pinned, because the second one is the
+    one a green test suite would not otherwise notice.
+    """
+    for model, name, column in _self_folding_columns():
+        parts = _annotation_parts(column)
+        where = [index for index, part in enumerate(parts) if isinstance(part, BeforeValidator)]
+        constrained = [
+            index for index, part in enumerate(parts) if isinstance(part, StringConstraints)
+        ]
+        assert constrained and where, f"{model.__name__}.{name} lost half its annotation"
+        assert max(constrained) < min(where), (
+            f"{model.__name__}.{name} declares its fold before its constraints, so the "
+            "constraints are checked first and the fold can rescue nothing"
+        )
+
+        declared = column_bounds(column)[0]
+        assert declared is not None, f"{model.__name__}.{name} folds into no character class"
+        emitted = TypeAdapter(column).json_schema(mode="validation")
+        assert declared in json.dumps(emitted), (
+            f"{model.__name__}.{name} no longer emits its pattern; the generated schema moved"
+        )
+
+        fitted = TypeAdapter(column).validate_python(HOSTILE["em_dash"])
+        assert fitted, f"{model.__name__}.{name} folded a printable value away"
+        assert "\u2014" not in fitted, f"{model.__name__}.{name} ran its constraints first"
+
+
+#: The census columns that hold text somebody else wrote - a kernel file, an
+#: environment variable, a runtime's finish reason, a Pydantic message quoting
+#: the value it refused. Named here rather than walked, because the point of the
+#: two tests below is that the row is built by hand with no helper in the way.
+FOREIGN_CENSUS_CELLS: tuple[str, ...] = (
+    "detail",
+    "time_source",
+    "label_finish_reason",
+    "summary_finish_reason",
+    "cpu_model",
+    "runner_name",
+    "model_id",
+    "model_quantisation",
+    "failed_field",
+    "failed_rule",
+)
+
+
+def _failed_census_row(**cells: Any) -> Any:
+    """One item-health row, built by calling the contract and nothing else."""
+    from idhazh.contracts.item_health import (
+        FailureCode,
+        ItemHealthRow,
+        ItemOutcome,
+        ItemStage,
+    )
+
+    built: dict[str, Any] = {
+        "version": ItemHealthRow.schema_version(),
+        "date": "2026-09-15",
+        "run_id": "2026-09-15-1",
+        "item_id": "world-abcdefghjkmnpqrs",
+        "url_key": "a" * 64,
+        "canonical_url": "https://example.com/a",
+        "vertical": "world",
+        "source_id": "a-source",
+        "stage": ItemStage.SUMMARIZE,
+        "outcome": ItemOutcome.FAILED,
+        "code": FailureCode.BAD_SHAPE,
+    }
+    built.update(cells)
+    return ItemHealthRow(**built)
+
+
+@pytest.mark.parametrize("case", sorted(HOSTILE))
+def test_a_row_built_by_hand_still_gets_the_fold(case: str) -> None:
+    """The column folds, so there is no door a producer can go round.
+
+    This is the arm that says the guarantee is structural. It calls the contract
+    directly - no recorder, no writer, no helper - with the value in every column
+    that holds text somebody else wrote, and asks for a row back rather than a
+    refusal. A helper the producer has to remember can be forgotten; a type
+    cannot.
+    """
+    raw = HOSTILE[case]
+    row = _failed_census_row(**dict.fromkeys(FOREIGN_CENSUS_CELLS, raw))
+
+    for name in FOREIGN_CENSUS_CELLS:
+        cell = getattr(row, name)
+        assert cell, f"{name} folded away to nothing"
+        assert len(cell.splitlines()) == 1, f"{name} kept a line break"
+        assert cell.isascii(), f"{name} kept a character the column refuses"
+
+
+def test_a_row_built_by_hand_still_refuses_a_crooked_identity() -> None:
+    """Folding an address would invent one, so an identity column keeps its refusal."""
+    with pytest.raises(ValidationError, match="item_id"):
+        _failed_census_row(item_id="NOT an item id \u2014 at all")
+
+    with pytest.raises(ValidationError, match="url_key"):
+        _failed_census_row(url_key="NOT a digest \u2014 at all")
+
 
 
 @pytest.mark.parametrize("case", sorted(HOSTILE))
@@ -270,7 +408,7 @@ def test_the_fold_refuses_a_column_that_names_an_identity() -> None:
 def test_the_failure_detail_writer_fits_its_column() -> None:
     """`detail_cell` is the helper the live defect was in."""
     from idhazh import telemetry
-    from idhazh.contracts.item_health import ItemHealthDetail
+    from idhazh.contracts.item_health import UNSPECIFIED, ItemHealthDetail
 
     adapter = TypeAdapter(ItemHealthDetail)
     for case, raw in HOSTILE.items():
@@ -279,37 +417,49 @@ def test_the_failure_detail_writer_fits_its_column() -> None:
         assert cell, f"{case} produced an empty detail"
         assert len(cell.splitlines()) == 1, f"{case} produced more than one line"
 
-    assert telemetry.detail_cell("") == telemetry.UNSPECIFIED
-    assert telemetry.detail_cell("   ") == telemetry.UNSPECIFIED
+    assert telemetry.detail_cell("") == UNSPECIFIED
+    assert telemetry.detail_cell("   ") == UNSPECIFIED
 
 
-def test_the_recorder_fits_every_cell_a_stage_hands_it() -> None:
-    """One door: a stage's instrument cells are folded on the way into the record.
+def test_the_recorder_passes_a_stage_cell_through_untouched() -> None:
+    """The recorder folds nothing, because the column does it.
 
-    The recorder is where this has to happen, because the cells reaching it come
-    from a kernel file, an environment variable, a runtime's finish reason and a
-    Pydantic message quoting text it refused - four producers, one door.
+    A record cell is a log line, and the same name on the census row is a column
+    that folds its own cell. Folding in both places would be two rules over one
+    value, and it was one rule over the wrong value before: the fold lived here
+    and the census row was built somewhere that never called it.
     """
-    from idhazh import telemetry
+    from idhazh import itemrecord, telemetry
+
+    recorder = itemrecord.ItemRecorder(
+        run_id="2026-09-15-1",
+        flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+        now=lambda: "2026-09-15T00:00:00Z",
+        log=logging.getLogger("test"),
+    )
+    recorder.note(cpu_model=HOSTILE["em_dash"], item_id=HOSTILE["curly_quote"])
+
+    assert recorder.get("cpu_model") == HOSTILE["em_dash"]
+    assert recorder.get("item_id") == HOSTILE["curly_quote"]
+    with pytest.raises(ValueError, match="names no column"):
+        recorder.note(not_a_column="anything")
+    assert "cpu_model" in telemetry.RECORD_CELLS
+
+
+def test_the_census_row_fits_every_cell_a_stage_hands_it() -> None:
+    """The cells a stage records reach the ledger through the row, and it folds.
+
+    They come from a kernel file, an environment variable, a runtime's finish
+    reason and a Pydantic message quoting text it refused - four producers, and
+    the column is what covers all of them.
+    """
     from idhazh.contracts.item_health import ItemHealthRow
 
     for case, raw in HOSTILE.items():
-        fitted = telemetry.fit_record_cells(
-            {
-                "cpu_model": raw,
-                "runner_name": raw,
-                "model_id": raw,
-                "model_quantisation": raw,
-                "failed_field": raw,
-                "failed_rule": raw,
-                "summary_finish_reason": raw,
-                "label_finish_reason": raw,
-                "time_source": raw,
-                "detail": raw,
-            }
-        )
-        for name, value in fitted.items():
+        row = _failed_census_row(**dict.fromkeys(FOREIGN_CENSUS_CELLS, raw))
+        for name in FOREIGN_CENSUS_CELLS:
             column = field_column(ItemHealthRow.model_fields[name])
+            value = getattr(row, name)
             TypeAdapter(column).validate_python(value)
             assert value, f"{case} emptied {name}"
 
@@ -317,16 +467,23 @@ def test_the_recorder_fits_every_cell_a_stage_hands_it() -> None:
 def test_the_recorder_leaves_a_minted_identity_alone() -> None:
     """An item id that arrived wrong stays wrong, and the row still refuses it.
 
-    Folding here would turn a bug in identity into a row that validates and
-    points at nothing.
+    Folding it would turn a bug in identity into a row that validates and points
+    at nothing. `test_a_row_built_by_hand_still_refuses_a_crooked_identity` is
+    the other half: the log line keeps the value, and the ledger row raises.
     """
-    from idhazh import telemetry
+    from idhazh import itemrecord
 
     crooked = "NOT an item id \u2014 at all"
-    fitted = telemetry.fit_record_cells({"item_id": crooked, "url_key": crooked})
+    recorder = itemrecord.ItemRecorder(
+        run_id="2026-09-15-1",
+        flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+        now=lambda: "2026-09-15T00:00:00Z",
+        log=logging.getLogger("test"),
+    )
+    recorder.note(item_id=crooked, url_key=crooked)
 
-    assert fitted["item_id"] == crooked
-    assert fitted["url_key"] == crooked
+    assert recorder.get("item_id") == crooked
+    assert recorder.get("url_key") == crooked
 
 
 def test_the_processor_name_fits_its_column() -> None:

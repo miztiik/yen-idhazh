@@ -84,7 +84,7 @@ from idhazh.contracts.base import (
     DateStamp,
     RunId,
     Timestamp,
-    fit_cell,
+    fits_its_column,
 )
 
 #: The one spelling a payload timestamp leaves the process in, as `strptime`
@@ -92,17 +92,18 @@ from idhazh.contracts.base import (
 #: an instant so the row's own clock can be measured against its own scrape.
 _SCRAPED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
 
-#: One line of printable ASCII. `state/runtime-counters.csv` is merged with the
-#: union driver, which works line by line, so a cell that could hold a newline
-#: could split one row across a merge. The value is a kernel file read with
-#: `errors="replace"` on one platform and `platform.processor()` on another, so
-#: `from_metrics_text` folds it through `base.fit_cell` rather than trusting it.
-CpuModel = Annotated[str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=120)]
-
 #: What a `cpu_model` that folded away to nothing records. A processor name the
 #: host printed in bytes nothing could read is still the fact that a probe ran,
 #: and an empty cell would say the probe did not.
 UNPRINTABLE_CPU: Final = "unprintable"
+
+#: One line of printable ASCII. `state/runtime-counters.csv` is merged with the
+#: union driver, which works line by line, so a cell that could hold a newline
+#: could split one row across a merge. The value is a kernel file read with
+#: `errors="replace"` on one platform and `platform.processor()` on another, so
+#: the column folds its own cell rather than trusting whoever built the row.
+_CPU_MODEL: Final = StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=120)
+CpuModel = Annotated[str, _CPU_MODEL, fits_its_column(_CPU_MODEL, absent=UNPRINTABLE_CPU)]
 
 #: The workflow job that wrote a row. Lowercase, because it is the job's own id
 #: in `.github/workflows/digest.yml` rather than a display name - a display name
@@ -762,11 +763,10 @@ def _cpu_model_cell(cpu_model: str | None) -> str | None:
 
     A probe that reported nothing still records nothing: an empty cell means the
     reading was not taken, which is a different fact from a reading that could
-    not be printed.
+    not be printed. That is the one rule the column cannot state for itself, so
+    it is the only one left here - the fold belongs to `CpuModel`.
     """
-    if not (cpu_model or "").strip():
-        return None
-    return fit_cell(cpu_model or "", column=CpuModel, absent=UNPRINTABLE_CPU)
+    return None if not (cpu_model or "").strip() else cpu_model
 
 
 def _number(series: str, field: str, raw: str) -> float | int:
