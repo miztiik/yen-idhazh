@@ -14,8 +14,10 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import day_partition
-from idhazh.contracts.app_config import CollectConfig, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 from idhazh.retention import oldest_month_kept, prune_scores

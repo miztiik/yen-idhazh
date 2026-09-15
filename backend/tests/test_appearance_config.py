@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import AppConfig, ThemeChoice, UiConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import (
     DARK_CONFIDENCE_RAMP,
     FRAME_CONSOLE_MIN_PX,
@@ -40,6 +40,7 @@ from idhazh.contracts.appearance_config import (
     MotionConfig,
     ThemeConfig,
 )
+from idhazh.contracts.knobs.ui import ThemeChoice, UiConfig
 
 pytestmark = pytest.mark.contract
 

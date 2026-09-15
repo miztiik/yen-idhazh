@@ -22,9 +22,6 @@ from idhazh import (
     source_health,
     tag,
 )
-from idhazh.contracts.app_config import (
-    CollectConfig,
-)
 from idhazh.contracts.base import fit_field
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import (
@@ -32,6 +29,7 @@ from idhazh.contracts.feed_health import (
     FetchOutcome,
     derive_endpoint_key,
 )
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, PublishedAgeBand, RunPlan, VerticalPlan
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.sources import FeedDef

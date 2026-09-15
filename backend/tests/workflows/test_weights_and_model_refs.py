@@ -48,7 +48,7 @@ from ._harness import (
     _weights_fetch_steps,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_every_weights_fetch_fails_loudly() -> None:

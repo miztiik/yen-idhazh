@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from conftest import CONFIG_DIR
 
 from idhazh import assemble, config
@@ -16,9 +15,6 @@ from ._builders import (
     row,
     summary,
 )
-
-pytestmark = pytest.mark.slow
-
 
 #
 # Row #6 of TODO/20260910-23-article-classification-plan.md, at the stage that

@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 
 from idhazh import ledger, publish_day_metrics
-from idhazh.contracts.app_config import ModelRef
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.day_metrics import DayInstrument, DayMetrics, DayStageTiming
 from idhazh.contracts.digest_day import (
@@ -42,6 +41,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
+from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.run_manifest import (
     ModelRole,
     ModelUse,

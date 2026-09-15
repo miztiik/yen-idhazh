@@ -14,12 +14,10 @@ from idhazh import (
     publish_telemetry,
     retention,
 )
-from idhazh.contracts.app_config import (
-    CollectConfig,
-    LensWeightsConfig,
-    ObservabilityConfig,
-    RetentionConfig,
-)
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.placement import LensWeightsConfig
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.evals import archive as score_archive
 from idhazh.stages import common
 from idhazh.stages.common import LOG

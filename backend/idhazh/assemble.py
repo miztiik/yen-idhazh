@@ -29,7 +29,6 @@ from operator import mul
 from pathlib import Path
 from typing import Final, Literal
 
-from idhazh.contracts.app_config import AssembleConfig, PlacementConfig, UiConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import (
@@ -44,6 +43,8 @@ from idhazh.contracts.digest_day import (
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
+from idhazh.contracts.knobs.placement import AssembleConfig, PlacementConfig
+from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
     ModelUse,

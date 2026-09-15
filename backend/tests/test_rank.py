@@ -23,10 +23,11 @@ import pytest
 from conftest import FIXTURES_DIR, read_text
 
 from idhazh.config import REPO_ROOT, load
-from idhazh.contracts.app_config import AssistConfig, CollectConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.knobs.assist import AssistConfig
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, TimeSource, VerticalPlan
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef

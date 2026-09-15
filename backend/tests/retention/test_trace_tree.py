@@ -11,7 +11,9 @@ from typing import Final
 import pytest
 
 from idhazh import telemetry
-from idhazh.contracts.app_config import CollectConfig, ObservabilityConfig, RetentionConfig
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.retention import TracePruneResult, prune_traces
 from idhazh.stages.prune_state import stage_prune_state
 
@@ -19,9 +21,6 @@ from ._trees import (
     RUN_ID,
     TODAY,
 )
-
-pytestmark = pytest.mark.slow
-
 
 #: A day inside the committed window's own month, so the fixtures below read as a
 #: recent run rather than one the seen tests already use.
