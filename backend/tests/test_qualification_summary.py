@@ -111,7 +111,7 @@ def test_a_failed_call_is_named_by_its_code_rather_than_counted_away() -> None:
 
     page = qualification_summary.render_shard(shard.model_copy(update={"observations": broken}))
 
-    assert "Why calls failed" in page
+    assert "Why items failed" in page
     assert "`model_refused` 1" in page
 
 
