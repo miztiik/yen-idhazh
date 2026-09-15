@@ -168,6 +168,12 @@ class FailureCode(StrEnum):
     HTTP_SERVER_ERROR = "http_server_error"
     NETWORK_ERROR = "network_error"
     NO_TEXT = "no_text"
+    #: The item reached extract with no headline - the feed carried none, or the
+    #: one it carried was whitespace. Separate from `no_text` because the fix is
+    #: a different one: `no_text` sends an operator to the extractor or the page,
+    #: and this sends them to the feed. Reusing `no_text` would also file a feed
+    #: metadata fault under the extractor in the source-health yield.
+    NO_TITLE = "no_title"
     TOO_SHORT = "too_short"
     NOT_PROSE = "not_prose"
     BOILERPLATE = "boilerplate"
@@ -200,6 +206,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.HTTP_SERVER_ERROR: frozenset({ItemStage.FETCH}),
         FailureCode.NETWORK_ERROR: frozenset({ItemStage.FETCH}),
         FailureCode.NO_TEXT: frozenset({ItemStage.EXTRACT}),
+        FailureCode.NO_TITLE: frozenset({ItemStage.EXTRACT}),
         FailureCode.TOO_SHORT: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
         FailureCode.NOT_PROSE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
         FailureCode.BOILERPLATE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
@@ -248,6 +255,24 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T04:15",
+            change="FailureCode gained no_title, an extract-stage member.",
+            why=(
+                "An item with no headline could not be recorded at all. The extractor "
+                "built an ok article carrying the planned item's title, the Article "
+                "contract refuses an ok article with no title, and nothing caught the "
+                "refusal - so one headline-less item raised out of the per-item loop "
+                "and took its whole shard with it. That is reachable from a real feed: "
+                "discover.clean_title returns None for an absent, empty or "
+                "whitespace headline and rank.plan_vertical plans the item anyway.\n\n"
+                "Widening only. Every row an earlier run wrote still reads, and no row "
+                "carries this code because no run could ever finish an item that would "
+                "have earned it. It counts against the source, beside no_text: a feed "
+                "publishing entries with no headline is publishing stories we can never "
+                "print."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-15T00:00",
             change=(

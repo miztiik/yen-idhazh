@@ -4536,6 +4536,17 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15",
+            change="The failure vocabulary this config names gained no_title.",
+            why=(
+                "Extract gained a refusal for an item whose feed carried no headline. No "
+                "knob changed; the vocabulary is inlined into this schema, so the "
+                "generated file's bytes move and the change is stamped here rather than "
+                "left to the drift gate to announce (section 11). Additive: a config "
+                "written before today names none of the new values and still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-14T14:00",
             change=(
                 "summarize gains asks_for_a_visual_plan, default true. It is the value "

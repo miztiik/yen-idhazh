@@ -63,6 +63,17 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T04:30",
+            change="The failure vocabulary this payload publishes gained no_title.",
+            why=(
+                "Extract gained a refusal for an item whose feed carried no headline. No "
+                "field here changed; the vocabulary is inlined into this schema, so the "
+                "generated file's bytes move and the change is stamped here rather than "
+                "left to the drift gate to announce (section 11). Additive: a payload "
+                "written before today names none of the new values and still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T00:00",
             change=(
                 "The six first-call cells are named for what the call does - call_1_* "

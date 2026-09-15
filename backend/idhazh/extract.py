@@ -340,6 +340,26 @@ def to_article_with_source(
             "",
         )
 
+    # Last, because every other reason is the more useful one to record. An item
+    # with no body and no headline is a `no_text` item; this is the one that read
+    # fine and has nothing to head it with.
+    #
+    # `Article` refuses an ok payload with no title, so building one here raised
+    # out of the per-item loop and took the whole shard with it. A headline the
+    # feed never carried is one article's data being thin, which degrades that
+    # article and no other (`CLAUDE.md` section 1a).
+    if not (item.title or "").strip():
+        return Extracted(
+            _failed(
+                item,
+                status=ArticleStatus.EXTRACT_FAILED,
+                detail="the item carries no headline to publish",
+                fetched_at=fetched_at,
+                failure_code=FailureCode.NO_TITLE,
+            ),
+            "",
+        )
+
     return Extracted(
         Article(
             version=Article.schema_version(),

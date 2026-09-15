@@ -33,6 +33,7 @@
         "http_server_error",
         "network_error",
         "no_text",
+        "no_title",
         "too_short",
         "not_prose",
         "boilerplate",
@@ -96,6 +97,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "FailureCode gained no_title, an extract-stage member.",
+      "version": "2026-09-15T04:15",
+      "why": "An item with no headline could not be recorded at all. The extractor built an ok article carrying the planned item's title, the Article contract refuses an ok article with no title, and nothing caught the refusal - so one headline-less item raised out of the per-item loop and took its whole shard with it. That is reachable from a real feed: discover.clean_title returns None for an absent, empty or whitespace headline and rank.plan_vertical plans the item anyway.\n\nWidening only. Every row an earlier run wrote still reads, and no row carries this code because no run could ever finish an item that would have earned it. It counts against the source, beside no_text: a feed publishing entries with no headline is publishing stories we can never print."
+    },
     {
       "change": "The twelve per-call cells are named for what each call does - call_1_* became label_*, call_2_* became summary_*. Seventy columns were appended: why the item was selected, where its time went, what the cache and the decoder did, what it ran on, what it ran with, and which field and rule refused it. detail widened from 200 to 2,000 characters and is now allowed on any failed row.",
       "version": "2026-09-15T00:00",
@@ -1569,7 +1575,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15T00:00",
+      "default": "2026-09-15T04:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1660,5 +1666,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-15T00:00"
+  "version": "2026-09-15T04:15"
 }

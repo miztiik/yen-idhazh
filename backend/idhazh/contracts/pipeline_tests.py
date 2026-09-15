@@ -28,10 +28,11 @@ publishes.
 from __future__ import annotations
 
 import hashlib
-from typing import ClassVar, Self
+from typing import Annotated, ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
+from idhazh.contracts.article import UNTRUSTED_LINE_MAX
 from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url, records_json
 
 #: How many candidates the list holds at its smallest. Two articles drawn from
@@ -40,6 +41,15 @@ from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url, re
 #: rather than a tunable: a list of five would make the draw decorative, and
 #: nobody should be able to switch that off with a config edit.
 MINIMUM_CANDIDATES: int = 20
+
+#: A headline, capped where a feed's headline is capped. `\S` is the whole point
+#: of declaring a type here rather than reusing `UntrustedLine`: a minimum length
+#: of one accepts `"   "`, and a headline of three spaces is not refused anywhere
+#: downstream - it reaches the summarizer's prompt and the digest's card as a
+#: blank line. This file is hand-edited, so this is where that typo happens.
+Headline = Annotated[
+    str, StringConstraints(min_length=1, max_length=UNTRUSTED_LINE_MAX, pattern=r"\S")
+]
 
 
 class PipelineTestCandidate(Model):
@@ -57,6 +67,16 @@ class PipelineTestCandidate(Model):
             "The feed in `config/sources.json` that carried it. Everything else the "
             "run needs about the address - the vertical, the tier, the form - is read "
             "off that feed, so it is declared once and this file cannot disagree."
+        )
+    )
+    title: Headline = Field(
+        description=(
+            "The page's own headline. A daily run reads this off the feed entry, and a "
+            "dispatch has no feed to read - the address is pinned and has long since "
+            "fallen out of its feed's window. So it is declared here, and the plan step "
+            "fills it in exactly where `discover` would have. Required rather than "
+            "optional: an item with no headline is one the extractor now refuses, so an "
+            "optional field would let a dispatch draw a candidate it cannot summarize."
         )
     )
 
@@ -113,6 +133,24 @@ class PipelineTestsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "pipeline-tests-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15",
+            change="A candidate carries the page's headline, and a blank one is refused.",
+            why=(
+                "The plan step built its items with no title at all, so every dispatch "
+                "died in the extractor before it summarized anything. The headline has "
+                "to come from somewhere, and this file is the only place that knows it: "
+                "the address is pinned and has fallen out of its feed's window, so "
+                "reading the feed would find nothing, and having the extractor fall "
+                "back to the page's own title would put a branch in production code "
+                "that only the test rig ever takes.\n\n"
+                "Required rather than optional, so the refusal lands on the config edit "
+                "rather than three stages later. The type refuses a whitespace-only "
+                "headline as well as an empty one - `UntrustedLine` accepts `'   '`, "
+                "and this file is hand-edited. No payload is migrated: nothing but "
+                "`config/pipeline-tests.json` uses this shape and it is committed here."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14",
             change="Initial shape: candidate addresses, the draw size and the arms.",

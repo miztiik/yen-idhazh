@@ -778,6 +778,52 @@ def test_every_failure_is_a_state_of_the_payload(
     assert article.failure_detail == "recorded reason"
 
 
+@pytest.mark.parametrize(
+    ("headline", "what"),
+    [(None, "carried no title element"), ("   ", "carried a title of three spaces")],
+    ids=["absent", "whitespace"],
+)
+def test_an_item_with_no_headline_degrades_rather_than_raising(
+    headline: str | None, what: str
+) -> None:
+    """A feed entry with no headline used to kill the whole shard, not one item.
+
+    `Article` refuses an ok payload whose title is None, and this function used
+    to build one - so the refusal came out of the extractor as a ValueError, and
+    the per-item loop above it does not catch one. Both shapes reach here from a
+    real feed: `discover.clean_title` returns None for an absent headline and for
+    one that is only whitespace, and nothing between it and here fills the gap.
+
+    The page is the real one, so the body extracts and every other refusal has
+    already declined - what is left is the missing headline and nothing else.
+    """
+    headless = ITEM.model_copy(update={"title": headline})
+
+    article = to_article(headless, ok("article.html"), config=ExtractConfig(), fetched_at=FETCHED_AT)
+
+    assert article.status is ArticleStatus.EXTRACT_FAILED, what
+    assert article.failure_code is FailureCode.NO_TITLE
+    assert article.failure_detail == "the item carries no headline to publish"
+    assert article.text is None
+
+
+def test_a_headline_of_one_character_is_enough_to_publish() -> None:
+    """The guard tests for a printable character, not for a good headline.
+
+    Editorial quality is not the extractor's question, and a rule that refused a
+    thin headline would refuse a real one - `Ida`, `Q3`, `Fire`.
+    """
+    article = to_article(
+        ITEM.model_copy(update={"title": "x"}),
+        ok("article.html"),
+        config=ExtractConfig(),
+        fetched_at=FETCHED_AT,
+    )
+
+    assert article.status is ArticleStatus.OK
+    assert article.title == "x"
+
+
 def test_a_short_extraction_publishes_as_brief() -> None:
     """Length is not an editorial test."""
     thin = FetchResult(

@@ -265,10 +265,19 @@ jobs:
 
           from idhazh import assemble, config, discover, rank
           from idhazh.contracts.base import derive_url_key
+          from idhazh.contracts.pipeline_tests import PipelineTestsConfig
           from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 
           settings = config.load(Path("config"))
           feeds = {feed.id: feed for feed in settings.sources.feeds}
+          tests = PipelineTestsConfig.from_json(
+              Path("config/pipeline-tests.json").read_text(encoding="utf-8")
+          )
+          # The headline a daily run reads off the feed entry. These addresses
+          # fell out of their feeds' windows long ago, so the list is where it
+          # comes from - and a missing one is a KeyError here rather than a
+          # degraded item four steps later.
+          headlines = {candidate.url: candidate.title for candidate in tests.candidates}
           addresses = os.environ["PICKED_ADDRESSES"].split()
           chosen = os.environ["PICKED_FEEDS"].split()
           date = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -288,6 +297,7 @@ jobs:
                       tier=feed.tier,
                       source_form=feed.form,
                       vertical=feed.vertical,
+                      title=headlines[address],
                       rank_score=0.0,
                   )
               )

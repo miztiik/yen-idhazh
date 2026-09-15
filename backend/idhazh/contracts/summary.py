@@ -54,6 +54,18 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15",
+            change="failure_code may now carry no_title.",
+            why=(
+                "Extract gained a refusal for an item whose feed carried no headline, "
+                "and summarize can never write that value. No field on this payload "
+                "changed; the failure vocabulary is inlined into this schema, so the "
+                "generated file's bytes move and the change is stamped here rather than "
+                "left to the drift gate to announce (section 11). Additive: a payload "
+                "written before today names none of the new values and still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:00",
             change="Removed pipeline_fingerprint. BREAKING, and no read-side migration is owed.",
             why=(
