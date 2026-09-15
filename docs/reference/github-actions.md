@@ -719,6 +719,27 @@ on an old major, fails CI.
 `setup-node` still selects Node 22 for the frontend commands. That is the
 application runtime and is unrelated to the runtime an action itself declares.
 
+### One action is ours, and it is not pinned to a major
+
+`.github/actions/candidate-config` is a composite action this repository owns.
+A `./`-prefixed action resolves to this repository at the commit the run checked
+out, so there is no major to approve and nothing for a version pin to add - it
+is already the code under test. The contract test asserts the directory exists
+rather than asserting a version, and a second test reads the shell it runs.
+
+It builds the scratch config: a copy of `config/` whose `models_file` points at
+the candidate, and which differs from the committed tree in that one line and
+nothing else. `measure.yml` and `validate.yml` both call it. They carried
+byte-identical copies of the step until 2026-09-15, differing only in the job
+they read the models file from - and a step duplicated across two files is a
+step that drifts the day one of them is edited, which had already happened twice
+in these two workflows.
+
+**What the extraction cost, stated rather than implied.** The two workflows are
+47 lines shorter and there is one new file a reader has to open, plus 36 lines
+of test machinery that teaches the harness to read a composite action. It does
+not remove a check; it removes the second place the step could be edited.
+
 ## The inference runtime is pinned, and the cache key says which build
 
 `digest.yml`, `validate.yml`, `measure.yml`, `idhazh-pipeline-tests.yaml` and
