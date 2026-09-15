@@ -46,7 +46,7 @@ Three blocks follow: **measure the candidate**, **adopt**, **revert**.
 flowchart TB
  subgraph FACTS["1.1 - read the facts, never recall them"]
   HUB["the hub's own API<br/>commit, SHA-256, byte count"] --> FILE
-  HDR["a range read of the GGUF header<br/>general.architecture"] --> FILE
+  HDR["the GGUF header itself<br/>general.architecture"] --> FILE
   TMPL["the model's chat template<br/>the four turn markers"] --> FILE
   FILE[("config/models/NAME.json")]
  end
@@ -57,7 +57,7 @@ flowchart TB
   SERVE --> DOSSIER["a dossier body,<br/>ready to paste"]
  end
 
- subgraph READ["1.4 - retake what the vocabulary sizes"]
+ subgraph READ["1.4 - measure.yml target budgets"]
   FILE --> BUDGETS["target budgets<br/>three tokenizer readings"]
  end
 
@@ -69,12 +69,15 @@ flowchart TB
   REPLAY --> GATES{"every gate green?"}
  end
 
+ subgraph CALL["1.6 - Decide"]
+  DECIDE{"a person reads<br/>the gates"} -->|"adopt"| ADOPT["Block 2:<br/>move models_file"]
+  DECIDE -->|"no"| REJECT["not adopted"]
+ end
+
  DOSSIER --> DECIDE
  BUDGETS --> DECIDE
- GATES -->|"no"| REJECT["not adopted"]
- GATES -->|"yes"| DECIDE{"a person reads<br/>the gates"}
- DECIDE -->|"adopt"| ADOPT["Block 2:<br/>move models_file"]
- DECIDE -->|"no"| REJECT
+ GATES -->|"yes"| DECIDE
+ GATES -->|"no"| REJECT
 
  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
@@ -91,9 +94,14 @@ flowchart TB
  class FILE store;
  class ADOPT yes;
  class STOP,REJECT no;
- class FACTS sysOps;
+ class FACTS,CALL sysOps;
  class BENCH,READ,QUAL sysEval;
 ```
+
+**Every node sits inside a box, and that is deliberate rather than tidy.** A box
+paints the surface the palette assumes, so a node left outside one is drawn on
+whatever the page behind it happens to be - fine on a dark page, and a dark
+node stranded on white anywhere else.
 
 **The three dashed boxes are somebody else's.** Every fact in 1.1 is read out of
 the model publisher's own bytes rather than out of a model card or a memory, and
@@ -158,10 +166,16 @@ here refuses the shard with a named cause instead of quietly producing worse
 summaries. That is the difference between a guess that costs a dispatch and a
 guess that costs a month of degraded output.
 
-**`inference` is the one block with no external source.** Nothing about a
-candidate has been measured yet, so start from the incumbent's numbers with the
-window matched - a throughput comparison at two different windows measures the
-window, not the model - and let 1.3 and 1.4 replace them with readings.
+**`inference` is the one block with no external source, and one external
+ceiling.** Nothing about a candidate has been measured yet, so start from the
+incumbent's numbers with the window matched - a throughput comparison at two
+different windows measures the window, not the model - and let 1.3 and 1.4
+replace them with readings. The ceiling is `max_position_embeddings` in the base
+repository's `config.json`: a candidate whose base declares less than the window
+you were going to match cannot be compared like for like, and the only other
+place that fact turns up is a server that quietly serves a shorter context than
+the entry asked for. Both candidates written on 2026-09-14 cleared it with room
+- 262,144 and 131,072 against a matched 65,536.
 
 **`inference.declared_for` and `turns.declared_for` are the safety catch, and
 they both hold this model's own digest.** Config load refuses an entry whose
@@ -202,10 +216,19 @@ One dispatch, two arms, and one field naming the candidate:
 
 ```bash
 gh workflow run measure.yml \
+ --ref '<the branch holding the candidate file>' \
  -f target=bench \
  -f candidate_models_file='models/<name>.json' \
  -f threads='4'
 ```
+
+**`--ref` is what lets a candidate be measured before it is merged.** The
+dispatch reads the file out of the ref it runs on, so the candidate file only
+has to be committed and pushed - not on `main`. That matters because the reading
+is what decides whether the file is worth keeping: merging first would put an
+unmeasured candidate in the tree, and a candidate that measures badly is then a
+revert rather than a closed pull request. Omit `--ref` and the run reads `main`,
+which is right for a re-measurement of something already adopted.
 
 **The file is the only thing the form asks for.** Write the candidate's
 `config/models/<name>.json` first and commit it - the repository, the
