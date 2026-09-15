@@ -23,14 +23,16 @@ So nothing raised in the session that produced this plan falls off the end.
 | C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | needs owner sign-off, Level 5 |
 | C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | not started |
 | C11 | The CPU lottery - owner ruled to keep drawing | task T6 | owner ruled, not started |
-| C12 | Whether `measure.yml` and `validate.yml` should be one workflow | task T7 | answered, work not started |
-| C13 | Two real drift defects between those two workflows | task T7 | **found this session, not fixed** |
-| C14 | Merge the two ready pull requests | task T8 | not started |
-| C15 | `digest.yml` validates draft fields loosely | task T9 | not started |
-| C16 | `model_unreachable` is a misleading failure code | task T9 | not started |
+| C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | found this session, not fixed |
+| C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | answered, needs owner ruling |
+| C14 | Merge the two ready pull requests | task T9 | not started |
+| C15 | `digest.yml` validates draft fields loosely | task T10 | not started |
+| C16 | `model_unreachable` is a misleading failure code | task T10 | not started |
 | C17 | The owner's "old code" suspicion about item ids | section 7 | answered, no defect |
+| C18 | Free memory has no value - record a peak, never a remainder | section 2, section 3 | owner ruled 2026-09-15 |
+| C19 | The GitHub cache is GitHub's to manage, not ours | task T8 | owner ruled 2026-09-15 |
 
-Tasks T1, T3, T4 and T6 are unblocked and can start today. T5 and T7 need a person's ruling first, and each says so where it sits.
+Tasks T1, T2, T3, T4, T6 and T7 are unblocked and can start today. T5 and T8 need a person's ruling first, and each says so where it sits.
 
 ## 0. What this project is, and the five minutes of reading you owe
 
@@ -48,17 +50,34 @@ Four things bite first: the runner budget (4 vCPU, 6 h a job, 10 GB cache), fetc
 
 ## 1. Where the work is right now
 
+**Start by making your own worktree. Do not adopt the one below.**
+
+The work in this section shipped on a branch that is meant to be merged and deleted (task T9). By the time you read this it may already be gone, and a worktree pointing at a deleted branch is a trap that wastes an hour. It is recorded here so you can find the commits and read the diffs, not so you can work in it.
+
+```powershell
+$root = 'c:\Users\kumarsnaveen\Downloads\NawiN\personal\gitrepos\yen-idhazh'
+Set-Location $root
+git worktree list                       # see what already exists; several siblings run at once
+git fetch origin
+git worktree add ..\yen-idhazh.worktrees\<short-name> -b <your-branch> origin/main
+```
+
+One branch per task in the list below, not one branch for the plan. Several of these tasks touch the same workflow files, so a single long-lived branch will collide with itself. [`docs/how-to/ship-a-pr.md`](../docs/how-to/ship-a-pr.md) has the transfer, pull request and cleanup steps.
+
+### The branch this plan was written on
+
 | Thing | Value |
 | --- | --- |
 | Worktree | `yen-idhazh.worktrees/p28-cands` |
 | Branch | `feat/two-candidate-models` |
-| Pull request | #737, MERGEABLE, four commits |
-| Head commit | `5adf36c0` Fetch the draft head every arm that starts a server needs |
-| Tree | clean |
+| Pull request | #737 |
+| Commits | `2cd717c5` sanitizer, `6caa123e` the missing import, `5adf36c0` the draft head, plus this plan |
 
-Other open pull requests, none of them this thread's work: #753, #745, #736, #730. **#736 (`docs/distil-plan-28`) is this thread's and is ready to merge.**
+If #737 is already merged, read those commits on `main` and remove the stale worktree with `git worktree remove` from the shared checkout. If it is not merged, T9 says how.
 
-The shared checkout is at `yen-idhazh/`. **Do not edit it.** Code changes go in a dedicated worktree and named branch - see [`docs/how-to/ship-a-pr.md`](../docs/how-to/ship-a-pr.md).
+Other open pull requests at the time of writing, none of them this thread's work: #753, #745, #730. **#736 (`docs/distil-plan-28`) is this thread's and is ready to merge.**
+
+The shared checkout is at `yen-idhazh/`. **Do not edit it.** Code changes go in a dedicated worktree and named branch.
 
 ### Environment, and the traps
 
@@ -141,7 +160,7 @@ That docstring did its job - it warned that naming an unsupported type gives you
 Three facts from the publisher's guide that bear on whether this is worth doing at all, and which belong in whatever gets written up:
 
 - The claimed speedup is **1.4x to 2.2x**, and the guide says it is "especially effective on GPUs" and that "gains are smaller on devices with lower memory bandwidth". We run on 4 CPU cores. Expect the low end or nothing.
-- **MTP costs about 2 GB of extra memory.** Ornith already peaked at 9.33 GiB against the runner's 16 GB, so this is not free headroom.
+- **MTP costs about 2 GB of extra memory, and that is not an argument against it.** The owner ruled on 2026-09-15: *"there is no price in having, saving, keeping free memory - it exists to be used, not maximising up to OOM is a crime - wastage of resources allocated and not used."* The runner has 16 GB whether we use one or fifteen, and memory left idle is bought and thrown away. The only thing that can go wrong is running out, which kills the job. So the question to ask of the 2 GB is never "can we afford it" - it is "does the peak plus 2 GB still fit". Ornith peaked at 9.33 GiB, so the answer today is yes with room to spare.
 - `--spec-draft-n-max 2` is the recommended starting point and the guide says explicitly not to assume 2 is optimal - anything from 1 to 6 may win, and it is hardware-dependent. Our entry currently says `n_max: 3`.
 - The guide's build instructions point at llama.cpp PR #22673. **Whether pinned build b10598 contains it is the one thing still unknown**, and T1 says how to settle it cheaply.
 
@@ -179,7 +198,9 @@ Ornith, run `34938565911`, 2026-09-15, EPYC 7763, 4 threads, 3 repeats. The benc
 | A summarize call, median | 452.61 +/- 1.09 s |
 | A summarize call, longest | 921.95 +/- 9.24 s |
 
-Seven and a half minutes for a median summarize call, and over fifteen for the longest. Against 9.33 GiB peak on a runner with 16 GB. Whoever writes this up should say what that means for a real day's item count rather than just quoting the seconds.
+Seven and a half minutes for a median summarize call, and over fifteen for the longest. Whoever writes this up should say what that means for a real day's item count rather than just quoting the seconds.
+
+**On the 9.33 GiB: report it, do not editorialise about it.** The owner's standing ruling is that free memory has no value - a runner has 16 GB whether a job touches one or fifteen, and the unused part was paid for and wasted. A model that uses more memory and goes faster is the better model. The only number that matters is the margin before an out-of-memory kill, because that ends the job and costs the whole run. So write "peak 9.33 GiB of 16 available" and move on; never write "only 6.7 GiB left" as though something were being spent.
 
 Neither the incumbent nor Gemma has a completed arm 2. The incumbent's committed dossier [`docs/reference/models/qwen3.5-9b-q4km.md`](../docs/reference/models/qwen3.5-9b-q4km.md) predates the `hashlib` defect and carries arm-1 numbers plus separately-sourced figures.
 
@@ -207,7 +228,7 @@ Ruled this session, in the owner's own words where it matters:
 Still open and needing the owner:
 
 - Whether to collapse `idhazh qualify` onto `idhazh work`'s call path (task T5). This is a Level 5 change - a persisted contract and the model pick. It needs a person's sign-off.
-- Whether to build the composite action that would de-duplicate `measure.yml` and `validate.yml` (task T7). The two defects that task names should be fixed either way.
+- Whether to build the composite action that would de-duplicate `measure.yml` and `validate.yml` (task T8). The two defects that review found are task T7 and need no ruling - fix them either way.
 
 ## 5. The advisor debate the owner asked for
 
@@ -275,7 +296,7 @@ Averaging over it estimates today's fleet mix, which is a number that changes wh
 | **Paired bench: candidate and incumbent in ONE job, emit the ratio** | about a day of workflow work plus 2 jobs | absolute tok/s on "the" runner |
 | 10-20 solo runs per model | 30-60 jobs | rots on the next fleet rotation |
 
-He recommends the paired bench. One caveat he names: the weights cache key is one model's digest, so a two-model job needs a key covering both or it thrashes - and two multi-gigabyte models in one entry pushes at the 10 GB ceiling.
+He recommends the paired bench. One caveat he names: the weights cache key is one model's digest, so a two-model job needs a key covering both.
 
 **The owner overruled this on 2026-09-15 and the ruling is what binds** - keep drawing solo runs and infer from the distribution. Task T6 carries the instruction and keeps his caveat next to it.
 
@@ -307,7 +328,7 @@ While you are in that file, reconsider `n_max`. It currently says 3; the publish
 
 **Step 3, bench it twice.** One dispatch with the head, one with `draft: null`. That pair is the only honest way to say what the head is worth, and both runs land on whatever processor the runner gives them, so run them close together and record both CPU names.
 
-Set expectations in whatever you write up. The publisher claims 1.4x to 2.2x, says it is especially effective on GPUs, and says gains are smaller where memory bandwidth is lower. We are on 4 CPU cores. It also costs about 2 GB of extra memory, and Ornith already peaked at 9.33 GiB against the runner's 16 GB.
+Set expectations in whatever you write up. The publisher claims 1.4x to 2.2x, says it is especially effective on GPUs, and says gains are smaller where memory bandwidth is lower. We are on 4 CPU cores. It also costs about 2 GB of extra memory, which is a fact to record and not an objection - see the owner's ruling in section 2. Ornith peaked at 9.33 GiB of the 16 available, so the head fits.
 
 Done when: the `--help` answer is recorded; and either Gemma has a completed server arm with and without the head, or there is a written note saying the pinned build cannot do it and what a build bump would cost.
 
@@ -368,11 +389,24 @@ What to do:
 
 The advisor's objection is recorded here rather than acted on, because a later reader deserves it: a mean over three unknown-weight machine types moves when GitHub rotates hardware and tells nobody, so any fleet number this produces carries a date and expires. Write that sentence next to the number rather than dropping it.
 
-The paired bench remains a good idea nobody has rejected - it is simply not what the owner asked for first. If it is ever picked up, the one caveat to remember is that the weights cache key is one model's digest today, so a two-model job needs a key covering both or it thrashes against the 10 GB ceiling.
+The paired bench remains a good idea nobody has rejected - it is simply not what the owner asked for first. If it is ever picked up, the one thing to remember is that the weights cache key is one model's digest today, so a two-model job needs a key naming both.
 
 Done when: each model has at least three recorded draws, the plan's measurement table carries every draw with its processor, and the write-up quotes a median with its sample size and date.
 
-### T7 - Decide what to do about `measure.yml` and `validate.yml`, and fix the drift either way. TWO REAL DEFECTS HERE.
+### T7 - Fix two defects the bench has today. UNBLOCKED, AND THE MOST VALUABLE SMALL THING HERE.
+
+Found on 2026-09-15 by diffing `measure.yml` against `validate.yml`. They are independent of the structural question in T8 and should be fixed whatever is decided there - the architecture advisor was explicit that if only one thing gets done, it is these: twenty lines against two hundred.
+
+| id | Defect | What it means |
+| --- | --- | --- |
+| D1 | `measure.yml` verifies the weights by SHA-256 only. `validate.yml` also checks the entry's declared `byte_count` | The stricter check already exists in the repository and one arm does not use it |
+| D2 | **`measure.yml`'s health check never asserts which model answered.** `validate.yml` polls `/v1/models` and asserts the served alias; `measure.yml` waits for a 200 and starts measuring | A bench can measure a server answering under a different alias and file the numbers under the candidate. That is a Guardrail #10 failure - the number would not be about the model it names |
+
+D2 is the serious one, and it is exactly the class of bug the repository has been bitten by before. `backend/tests/workflows/test_model_server_jobs.py` carries the line "the arm that drifted was the one nobody diffed - `validate.yml`". This time the drift runs the other way.
+
+Done when: both arms verify the digest and the declared byte count, both assert the served alias before measuring, and a workflow test pins the parity so the next drift fails locally rather than on a runner.
+
+### T8 - Decide whether `measure.yml` and `validate.yml` share their setup. NEEDS THE OWNER.
 
 The owner asked: *"why do we need two pipelines `measure.yml` and `validate.yml` aren't they having purpose to exist separately or can be gated in the same that can be config driven?"*
 
@@ -380,28 +414,21 @@ The architecture advisor read both files on 2026-09-15 and answered: **they do n
 
 His recommendation is a **composite action** rather than a reusable workflow, because a reusable workflow replaces whole jobs and cannot inject steps into `qualify`, which must fan out by shard and then run gates. A composite action injects steps into an existing job, which is the shape needed. It would hold: resolving the candidate from its models file, the weights cache and llama.cpp fetch, the digest verification, the scratch config copy, and the health check. Roughly 200 lines removed, one new `.github/actions/llama-candidate/action.yml`, correction level 3. No dispatch URL or documentation reference changes, because both files keep their names and inputs.
 
-**Two defects he found on the way matter more than the refactor, and they should be fixed first whatever the owner decides about the structure.** He is explicit that if only one thing gets done, it is these - twenty lines against two hundred.
+One of his findings is **not** a reason to act, and the owner said so directly on 2026-09-15: *"gh cache is not in our control they maintain it."* He observed that the two workflows keep two separate multi-gigabyte cache entries for identical bytes under different key prefixes. GitHub evicts by least-recently-used on its own schedule; nothing here prunes a cache and nothing needs to. **The only real cost of an extra entry is that an eviction makes the next run re-download, and that cost is measured rather than guessed: 316 s for 6.19 GiB.** Say it in download seconds if it ever needs saying, never as a ceiling somebody must manage.
 
-| id | Defect | What it means |
-| --- | --- | --- |
-| D1 | `measure.yml` verifies the weights by SHA-256 only. `validate.yml` also checks the entry's declared `byte_count` | The stricter check exists and one arm does not use it |
-| D2 | **`measure.yml`'s health check never asserts which model answered.** `validate.yml` polls `/v1/models` and asserts the served alias; `measure.yml` just waits for a 200 | A bench can measure a server answering under a different alias and file the numbers under the candidate. That is a Guardrail #10 failure - the number would not be about the model it names |
+His objection to his own recommendation, recorded so it is not lost: the drift is already partly caught by a test, so extraction buys less than it looks, and a composite action is a third file a reader must open.
 
-D2 is the serious one. There is also a third, smaller finding: the two workflows keep **two separate five-gigabyte cache entries for identical bytes**, keyed `bench-<sha>-<build>` and `qualify-<sha>-<build>`, against a 10 GB ceiling that [`docs/reference/ci-caches.md`](../docs/reference/ci-caches.md) records as having about 1.4 GB of headroom.
+Smallest first step if the owner says yes: extract only the scratch-config block, which is already byte-identical between the two files, so the extraction cannot change behaviour. It ships alone, reverts alone, and proves the mechanism.
 
-The advisor's objection to his own recommendation, recorded so it is not lost: the drift is already partly caught by a test - `backend/tests/workflows/test_model_server_jobs.py` carries the line "the arm that drifted was the one nobody diffed - `validate.yml`" - so extraction buys less than it looks, and a composite action is a third file a reader must open.
+Done when: the owner has ruled, and if the answer is yes, the scratch-config extraction has shipped on its own.
 
-Smallest first step he names: extract only the scratch-config block, which is already byte-identical between the two files, so the extraction cannot change behaviour. It ships alone, reverts alone, and proves the mechanism.
-
-Done when: D1 and D2 are fixed with tests, and the owner has ruled on whether the composite action gets built.
-
-### T8 - Merge what is ready
+### T9 - Merge what is ready
 
 #736 (`docs/distil-plan-28`) and #737 (`feat/two-candidate-models`) are both MERGEABLE.
 
 Re-check mergeability between merges - a stale CLEAN is how a bad merge lands. `gh pr merge --squash --delete-branch` often exits 1 from inside a worktree *while having merged*; read `gh pr view <n> --json state,mergedAt` rather than trusting the exit code. Remove the worktree before merging so the branch delete does not fail.
 
-### T9 - The smaller things this session found and did not fix
+### T10 - The smaller things this session found and did not fix
 
 - **`digest.yml` validates draft fields loosely.** It uses `if value and value.split() != [value]`, which lets an entry declare a draft head with a missing digest and then download it unchecked. The two bench workflows now refuse that. Production has the looser check. One-line fix, its own commit.
 - **`model_unreachable` is a misleading failure code** for a server that answered with an error. It maps from `HTTPError`. Worth splitting so a decode failure does not read as a network failure.
