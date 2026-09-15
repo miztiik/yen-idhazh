@@ -1,0 +1,79 @@
+name: Runtime probe
+
+# What the pinned runtime accepts, asked of the runtime rather than of a
+# release note. The question that made this file: whether build b10598 takes
+# the speculation kind a Gemma multi-token head needs. A models entry naming a
+# kind the build cannot drive fails late and quietly - the server starts, loads
+# the head, drafts nothing - so the answer costs an hour of bench time to learn
+# the expensive way and about a minute to learn here.
+#
+# There is no input for a different build, on purpose. This probes the same
+# three pinned variables the three runtime workflows declare, so its answer is
+# about the binary production runs and cannot drift from it. Probing a
+# candidate build is a branch that moves the pin, dispatched with `--ref`,
+# which is the same commit somebody would have to make to adopt it anyway.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LLAMA_CPP_BUILD: b10598
+  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
+  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+
+jobs:
+  speculation:
+    name: What the runtime accepts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install pinned llama.cpp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
+            exit 1
+          fi
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
+          # The whole directory, not one binary: these builds are dynamically
+          # linked and a lone binary dies at exec naming a library instead of
+          # the mistake. Same reason and same form as the three runtime arms.
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
+          chmod +x backend/bin/llama-server
+
+      # The whole help text is the artifact, so the next question about this
+      # build is answered by downloading it rather than by a second run.
+      - name: Ask the runtime what it accepts
+        run: |
+          set -euo pipefail
+          LD_LIBRARY_PATH=backend/bin ./backend/bin/llama-server --help > help.txt 2>&1 || true
+          if [ ! -s help.txt ]; then
+            echo "the runtime printed nothing" >&2
+            exit 1
+          fi
+          {
+            echo "## What ${LLAMA_CPP_BUILD} accepts for speculation"
+            echo
+            echo '```'
+            grep -i -- 'spec' help.txt || echo 'nothing about speculation'
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the answer
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-probe
+          path: help.txt
+          retention-days: 30
