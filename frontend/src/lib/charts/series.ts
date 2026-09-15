@@ -38,7 +38,24 @@ export const TELEMETRY_COLUMNS = [
 	'summary_decode_ms',
 	'summary_input_tokens',
 	'summary_output_tokens',
-	'summary_cached_tokens'
+	'summary_cached_tokens',
+	'queue_wait_ms',
+	'label_ms',
+	'summary_ms',
+	'visual_plan_ms',
+	'visual_plan_ms_is_estimate',
+	'faithfulness_ms',
+	'model_wait_ms',
+	'item_total_ms',
+	'stage_gap_ms',
+	'visual_plan_tokens_written',
+	'label_prefill_tokens_per_s',
+	'label_decode_tokens_per_s',
+	'summary_prefill_tokens_per_s',
+	'summary_decode_tokens_per_s',
+	'cpu_model',
+	'cpu_busy_pct',
+	'load_1m'
 ] as const;
 
 export type TelemetryColumn = (typeof TELEMETRY_COLUMNS)[number];
@@ -105,6 +122,47 @@ export interface TelemetryRow {
 	summary_input_tokens: number | null;
 	summary_output_tokens: number | null;
 	summary_cached_tokens: number | null;
+	/** How long the item waited before its worker started it. */
+	queue_wait_ms: number | null;
+	/** Wall time of the label call. A slice of `summarize_ms`, never an addition
+	 * to it - which is why neither this nor `summary_ms` is one of the stages
+	 * `stage_gap_ms` subtracts. */
+	label_ms: number | null;
+	/** Wall time of the summarize-and-plan call. The other slice. */
+	summary_ms: number | null;
+	/** Wall time attributed to the visual plan, which is decoded inside the
+	 * second call. A share of `summary_ms` and not a clock of its own. */
+	visual_plan_ms: number | null;
+	/** `'True'` where `visual_plan_ms` was apportioned rather than timed. A page
+	 * that draws the plan's share has to be able to mark it as an estimate. */
+	visual_plan_ms_is_estimate: string;
+	/** Wall time of the model-free faithfulness scorers. */
+	faithfulness_ms: number | null;
+	/** Time spent waiting on the model server rather than being served. Inside
+	 * `summarize_ms`, so a rising wait with a flat decode rate is a queue. */
+	model_wait_ms: number | null;
+	/** Wall time from the item starting to the item ending. The denominator every
+	 * stage share is taken against. */
+	item_total_ms: number | null;
+	/** `item_total_ms` minus fetch, extract, summarize and faithfulness. The only
+	 * cell that can catch a regression in a step nobody named, and signed on
+	 * purpose: negative means two clocks overlapped. */
+	stage_gap_ms: number | null;
+	/** Output tokens of the second call that belong to the plan, not the summary. */
+	visual_plan_tokens_written: number | null;
+	/** Per-call throughput. A total cannot say whether the model slowed or the
+	 * work grew; a rate beside the tokens written can. */
+	label_prefill_tokens_per_s: number | null;
+	label_decode_tokens_per_s: number | null;
+	summary_prefill_tokens_per_s: number | null;
+	summary_decode_tokens_per_s: number | null;
+	/** The processor the runner reported. A throughput number with no machine
+	 * beside it is not a measurement. Empty where the run recorded none. */
+	cpu_model: string;
+	/** Mean busy share of every processor over this item. */
+	cpu_busy_pct: number | null;
+	/** One-minute load average when the item ended. */
+	load_1m: number | null;
 }
 
 /** One mark on the compression plot, derived in the browser from a telemetry
@@ -508,6 +566,127 @@ export interface StageFailureSeries {
 
 export const FAILURE_STAGES: StageFailureSeries['stage'][] = ['fetch', 'extract', 'summarize'];
 
+/** The steps an item's clock is split into, bottom of the stack first.
+ *
+ * `key` is what a test names and `label` is what a reader sees. The order is
+ * the order the work happens in, so reading the stack bottom to top is reading
+ * the item's life in order.
+ *
+ * **`gap` is the one that matters most.** It is `stage_gap_ms` - the item's own
+ * wall clock minus every stage the pipeline named - so anything a later change
+ * adds without timing it lands there and is visible the day it appears. A
+ * split that dropped it would look complete and be wrong by however much
+ * nobody measured.
+ *
+ * `model` is the same idea one level down: the summarize stage's time that
+ * neither call claimed. On a run that published no per-call split it is the
+ * whole stage, which is the honest reading - the stage was timed, the calls
+ * inside it were not.
+ */
+export const TIME_BANDS = [
+	{ key: 'fetch', label: 'Fetch' },
+	{ key: 'extract', label: 'Extract' },
+	{ key: 'label', label: 'Label call' },
+	{ key: 'summary', label: 'Summary' },
+	{ key: 'plan', label: 'Visual plan' },
+	{ key: 'model', label: 'Model, unsplit' },
+	{ key: 'faithfulness', label: 'Faithfulness' },
+	{ key: 'gap', label: 'Unattributed' }
+] as const;
+
+export type TimeBandKey = (typeof TIME_BANDS)[number]['key'];
+
+/** One day of the item-time split.
+ *
+ * `ms` is the MEAN milliseconds an item spent in each band, not the median, and
+ * that is the whole reason this shape exists. Medians do not add: a stack of
+ * per-stage medians draws a column whose height is not the median item, so
+ * every share it prints is wrong by an amount nobody can see. Means add
+ * exactly, so the bands sum to `total` and a reader can take a share off the
+ * chart. The spread is answered elsewhere - the stage-timing chart is a median
+ * with its quartiles - and this one answers composition.
+ *
+ * `items` counts the rows that carried `item_total_ms`, and it is the
+ * denominator of every band. A row with no item clock is not in the average at
+ * all: counting it would divide real milliseconds by items nobody timed and
+ * shrink every band on the day a new instrument was rolled out.
+ *
+ * A band can be negative. `stage_gap_ms` is signed on purpose - below zero
+ * means two named stages overlapped or two clocks disagreed - and clamping it
+ * would hide exactly the fault it exists to show.
+ */
+export interface TimeSplitDay {
+	date: string;
+	/** Rows on this day that carried an item clock. */
+	items: number;
+	/** Mean milliseconds an item took, end to end. The sum of `ms`. */
+	total: number;
+	/** Mean milliseconds an item spent in each band, in `TIME_BANDS` order. */
+	ms: number[];
+}
+
+function msCell(value: number | null): number {
+	return value ?? 0;
+}
+
+/** One item's milliseconds, split into the bands, in `TIME_BANDS` order.
+ *
+ * The bands are built to add up to `item_total_ms` whatever the row carries.
+ * `label_ms` and `summary_ms` are a split of `summarize_ms` rather than stages
+ * beside it, so they are taken out of the stage and what is left is `model`;
+ * `visual_plan_ms` is decoded inside the second call, so it is taken out of
+ * `summary`. A row missing any of those reads the missing cell as zero and the
+ * time stays in the wider band it belongs to, which is why an unsplit run draws
+ * its whole model stage as `model` rather than losing it.
+ */
+export function itemTimeBands(row: TelemetryRow): number[] {
+	const summarize = msCell(row.summarize_ms);
+	const label = msCell(row.label_ms);
+	const summary = msCell(row.summary_ms);
+	const plan = msCell(row.visual_plan_ms);
+	return [
+		msCell(row.fetch_ms),
+		msCell(row.extract_ms),
+		label,
+		summary - plan,
+		plan,
+		summarize - label - summary,
+		msCell(row.faithfulness_ms),
+		msCell(row.stage_gap_ms)
+	];
+}
+
+/** Where the day's items spent their time, one entry per day in the window.
+ *
+ * A day with no timed row is present with `items: 0` and every band at zero, so
+ * the column keeps its place on the axis: a day dropped from the array shifts
+ * every day after it and draws a gap as if it were the next day along.
+ */
+export function timeSplit(rows: TelemetryRow[], window: TimeWindow): TimeSplitDay[] {
+	const summed = new Map<string, { items: number; ms: number[] }>();
+	for (const row of rowsInWindow(rows, window)) {
+		if (row.item_total_ms === null) continue;
+		let day = summed.get(row.date);
+		if (day === undefined) {
+			day = { items: 0, ms: TIME_BANDS.map(() => 0) };
+			summed.set(row.date, day);
+		}
+		day.items += 1;
+		const bands = itemTimeBands(row);
+		for (let index = 0; index < bands.length; index += 1) {
+			day.ms[index] += bands[index];
+		}
+	}
+	return daysInWindow(window).map((date) => {
+		const day = summed.get(date);
+		if (day === undefined || day.items === 0) {
+			return { date, items: 0, total: 0, ms: TIME_BANDS.map(() => 0) };
+		}
+		const ms = day.ms.map((total) => total / day.items);
+		return { date, items: day.items, total: ms.reduce((sum, band) => sum + band, 0), ms };
+	});
+}
+
 function parseCsv(text: string): string[][] {
 	const rows: string[][] = [];
 	let row: string[] = [];
@@ -593,7 +772,24 @@ export function parseTelemetryCsv(text: string): TelemetryRow[] {
 		summary_decode_ms: numberCell(cells[28] ?? ''),
 		summary_input_tokens: numberCell(cells[29] ?? ''),
 		summary_output_tokens: numberCell(cells[30] ?? ''),
-		summary_cached_tokens: numberCell(cells[31] ?? '')
+		summary_cached_tokens: numberCell(cells[31] ?? ''),
+		queue_wait_ms: numberCell(cells[32] ?? ''),
+		label_ms: numberCell(cells[33] ?? ''),
+		summary_ms: numberCell(cells[34] ?? ''),
+		visual_plan_ms: numberCell(cells[35] ?? ''),
+		visual_plan_ms_is_estimate: cells[36] ?? '',
+		faithfulness_ms: numberCell(cells[37] ?? ''),
+		model_wait_ms: numberCell(cells[38] ?? ''),
+		item_total_ms: numberCell(cells[39] ?? ''),
+		stage_gap_ms: numberCell(cells[40] ?? ''),
+		visual_plan_tokens_written: numberCell(cells[41] ?? ''),
+		label_prefill_tokens_per_s: numberCell(cells[42] ?? ''),
+		label_decode_tokens_per_s: numberCell(cells[43] ?? ''),
+		summary_prefill_tokens_per_s: numberCell(cells[44] ?? ''),
+		summary_decode_tokens_per_s: numberCell(cells[45] ?? ''),
+		cpu_model: cells[46] ?? '',
+		cpu_busy_pct: numberCell(cells[47] ?? ''),
+		load_1m: numberCell(cells[48] ?? '')
 	}));
 }
 

@@ -24,6 +24,7 @@
 		grouped,
 		parseTelemetryCsv,
 		rowsInWindow,
+		timeSplit,
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import {
@@ -81,6 +82,8 @@
 		runHealth,
 		siteCost,
 		sizeGain,
+		timeSplitChart,
+		timeSplitColumns,
 		type Skyline,
 		type SkylineBar
 	} from '$lib/charts/glance';
@@ -642,6 +645,29 @@
 	 * fills as each one does. The panel says which of those two it is in.
 	 */
 	const mixSeries = $derived(failureSeriesFor(rows));
+	/** Where the time went, over the same span the mix chart reads and for the
+	 * same reason: derived from the rows in hand, so the two panels can never be
+	 * drawn over different days.
+	 *
+	 * Trimmed at both ENDS to the days that timed an item, and never in the
+	 * middle. A run before the item clock was published carries no
+	 * `item_total_ms` at all, so leading and trailing columns of eight zeroes
+	 * would say the item took no time rather than that nothing timed it. A gap
+	 * inside the span is kept: closing it up would slide every later day one
+	 * column left and draw the hole as if it were the next day along.
+	 */
+	const timeDays = $derived.by(() => {
+		const dates = datesIn(rows);
+		if (dates.length === 0) return [];
+		const days = timeSplit(rows, { start: dates[0], end: dates[dates.length - 1] });
+		const first = days.findIndex((day) => day.items > 0);
+		if (first === -1) return [];
+		const last = days.findLastIndex((day) => day.items > 0);
+		return days.slice(first, last + 1);
+	});
+	/** The server drew stacked, like the mix chart. Picking `Lines` redraws the
+	 * identical values. */
+	let timeShape = $state<StackShape>('bars');
 	/** The share of planned items that finished, drawn from the manifests the
 	 * page already carries. Built here rather than on the server: the shape is
 	 * the engine's and the numbers are two, so drawing it at build time put a
@@ -948,6 +974,59 @@
 				     what one stage did on its own, which a stack hides when one band
 				     halves while its neighbour doubles. Same array either way. -->
 				<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
+			{/if}
+		</Reserved>
+	</Panel>
+
+	<!-- The note is not a restatement of the encoding - the strip under the chart
+	     already prints every band at the hovered day. It is there for the one
+	     thing the shape cannot say: that the top band is time no step claimed,
+	     and that it is the band to look at first. -->
+	<Panel
+		title="Where an item's time went"
+		note="One column is one day and its height is the mean item's whole clock, split by what claimed it. The top band is time no named step claimed, so a step nobody thought to time shows up there rather than nowhere."
+	>
+		<!-- Same reserved box as the mix chart above, so this panel and everything
+		     under it stay where they were drawn whether the months are still
+		     arriving, absent, refused, or read and holding nothing. -->
+		<Reserved
+			panelState={timeDays.length === 0 ? telemetryState : 'ready'}
+			height={data.console.chart_height}
+			width={data.console.chart_width}
+			name="time-split"
+			label="Mean milliseconds an item spent in each step, per day"
+		>
+			{#if timeDays.length === 0}
+				<!-- The months were read and no row carries an item clock. That is a
+				     different answer from "no month arrived", and it is the one an
+				     operator needs: the instrument has not reached this data yet. -->
+				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-time-split-empty="none">
+					No item in the months this session has read carries an end-to-end clock, so
+					there is no time to split.
+				</p>
+			{:else}
+				<Chart
+					svg=""
+					option={timeSplitChart(timeDays, timeShape).option}
+					width={760}
+					height={220}
+					label="Mean milliseconds an item spent in each step, per day. One column is one day and its height is the mean item's whole clock. The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed. Drawn as lines instead, each step is its own milliseconds a day and the whole clock is not shown."
+					columns={timeSplitColumns(timeDays)}
+					readoutName="time-split"
+					readoutMaxShare={data.chart.readout_max_share}
+					restingNote=", the newest day"
+					hint="Point at a day to read every step at once. Left and Right step through the days, Escape returns to the newest."
+					pending="The split is drawn once the engine loads. Every step's milliseconds and share are in the strip below it."
+					fetched
+				/>
+				<!-- Stacked answers what the split is and whether the item got slower;
+				     lines answer what one step did on its own, which a stack hides when
+				     one band halves while its neighbour doubles. Same array either way. -->
+				<ShapeSwitch
+					bind:shape={timeShape}
+					name="time-split"
+					label="How to draw the item time split"
+				/>
 			{/if}
 		</Reserved>
 	</Panel>

@@ -190,8 +190,64 @@ function writeItemHealthCanary() {
 			cached_tokens: model[4],
 			source_words_before_cap: cut?.[2],
 			...extraction(id),
-			...perCall(model, calls)
+			...perCall(model, calls),
+			...clock(id, [fetchMs, extractMs, summarizeMs], model, calls)
 		});
+
+	/** The item's own clock, the per-call rates, and what it ran on.
+	 *
+	 * **Fixture, and derived from the milliseconds already on the row.** The run
+	 * this canary was taken from predates the item clock, so `item_total_ms` and
+	 * `stage_gap_ms` cannot be read off it - but a panel that draws where an
+	 * item's time went is a panel no test can reach without them.
+	 *
+	 * The contract refuses a row whose gap is not what the named stages left
+	 * over, so the total is built from the stages rather than the other way
+	 * round: fetch, extract, summarize and faithfulness, plus a remainder that
+	 * varies by item id so the top band is not a flat ribbon across the chart.
+	 *
+	 * The rates are each call's own tokens over its own milliseconds, rounded
+	 * the way `stages/work.py` rounds them. Those milliseconds are the server's
+	 * real numbers, so they are used for the rates and NOT for the bands: this
+	 * canary's stage clock is a fixture and its model clock is a measurement, so
+	 * `prefill_ms + decode_ms` is far larger than `summarize_ms` on the rows that
+	 * carry both. The bands split `summarize_ms` in the calls' own proportion
+	 * instead, which keeps the stack adding up to the item rather than drawing a
+	 * band tens of seconds below the axis.
+	 *
+	 * `cpu_model` is the processor the shard counters below already name, so one
+	 * page cannot say the run drew two different machines.
+	 */
+	const clock = (id, [fetchMs, extractMs, summarizeMs], model, calls) => {
+		const spread = [...id].reduce((total, letter) => total + letter.charCodeAt(0), 0);
+		const faithfulness = 20 + (spread % 40);
+		const gap = 60 + (spread % 120);
+		const rate = (tokens, ms) => (ms > 0 ? Math.round(((1000 * tokens) / ms) * 100) / 100 : '');
+		const [label, summary] = calls ?? [];
+		const wire = (calls ?? []).reduce((total, call) => total + call[1] + call[2], 0);
+		const labelMs = label && wire > 0 ? Math.round((summarizeMs * (label[1] + label[2])) / wire) : '';
+		const summaryMs = summary ? summarizeMs - labelMs : '';
+		const planMs = summary ? Math.round(summaryMs * 0.18) : '';
+		return {
+			queue_wait_ms: spread % 900,
+			faithfulness_ms: faithfulness,
+			model_wait_ms: Math.round(summarizeMs * 0.02),
+			item_total_ms: fetchMs + extractMs + summarizeMs + faithfulness + gap,
+			stage_gap_ms: gap,
+			label_ms: labelMs,
+			summary_ms: summaryMs,
+			visual_plan_ms: planMs,
+			visual_plan_ms_is_estimate: summary ? 'True' : '',
+			visual_plan_tokens_written: summary ? Math.round(summary[4] * 0.2) : '',
+			label_prefill_tokens_per_s: label ? rate(label[3], label[1]) : '',
+			label_decode_tokens_per_s: label ? rate(label[4], label[2]) : '',
+			summary_prefill_tokens_per_s: summary ? rate(summary[3], summary[1]) : '',
+			summary_decode_tokens_per_s: summary ? rate(summary[4], summary[2]) : '',
+			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cpu_busy_pct: Math.round((60 + (spread % 3500) / 100) * 100) / 100,
+			load_1m: Math.round((2 + (spread % 600) / 100) * 100) / 100
+		};
+	};
 
 	/** The two calls one item took, as the ledger's flat cells.
 	 *
