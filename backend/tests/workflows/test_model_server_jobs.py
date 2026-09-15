@@ -28,7 +28,7 @@ from ._harness import (
     LLAMA_PORT_ENV,
     LLAMA_PORT_READ,
     LLAMA_PORT_VALUE,
-    LLAMA_RUNTIME_WORKFLOWS,
+    LLAMA_SERVER_WORKFLOWS,
     MEMORY_PEAK_FILE,
     MEMORY_SUMMARY_STEP,
     METRICS_ENDPOINT,
@@ -442,11 +442,11 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
             assert f"127.0.0.1:{LLAMA_PORT_VALUE}" not in text, (
                 f"{filename} writes the port into an address instead of reading it back"
             )
-    assert declaring == set(LLAMA_RUNTIME_WORKFLOWS), (
+    assert declaring == set(LLAMA_SERVER_WORKFLOWS), (
         "every workflow that starts a llama-server declares the port and nothing else does"
     )
 
-    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
+    for filename in sorted(LLAMA_SERVER_WORKFLOWS):
         for line in read_text(WORKFLOWS_DIR / filename).splitlines():
             if re.search(rf"\b{LLAMA_PORT_VALUE}\b", line):
                 assert LLAMA_PORT_ENV in line, (
