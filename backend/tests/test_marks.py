@@ -123,6 +123,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_stream_order",
         "test_summarise_bench",
         "test_summarize",
+        "test_sweep_verdict",
         "test_sweep_worktrees",
         "test_tag",
         "test_telemetry",
