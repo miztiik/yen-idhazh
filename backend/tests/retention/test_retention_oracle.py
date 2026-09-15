@@ -8,13 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from idhazh import day_partition, ledger, publish_telemetry
+from idhazh import day_partition, ledger
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.retention import month_shards
 from idhazh.stages.prune_state import stage_prune_state
+from idhazh.telemetry.publish import public_telemetry
 
 from ._trees import (
     CONSOLE_MAX_WINDOW_DAYS,
@@ -57,7 +58,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     item_health_history(state, months)
     feed_health_history(state, months)
     public = tmp_path / "frontend" / "public" / "telemetry"
-    publish_telemetry.publish(state_root=state, public_root=public)
+    public_telemetry.publish(state_root=state, public_root=public)
     doomed_texts = [
         day.read_text(encoding="utf-8")
         for day in item_health_days(state)
@@ -89,7 +90,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     assert totals_from_aggregate(ledger.load_telemetry_aggregate(aggregate)) == totals_from_shard(
         doomed_texts
     )
-    assert not publish_telemetry.shard_path(public, expired).exists()
+    assert not public_telemetry.shard_path(public, expired).exists()
     assert not ledger.health_path(state, f"{expired}-11").exists()
 
     # Every window a 366-day console read can select still names a file that is
@@ -100,7 +101,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
         for stem in ledger.shards_in_window(anchor, CONSOLE_MAX_WINDOW_DAYS):
             if stem < months[0] or stem > months[-1]:
                 continue
-            assert publish_telemetry.shard_path(public, stem).exists(), (
+            assert public_telemetry.shard_path(public, stem).exists(), (
                 f"a {CONSOLE_MAX_WINDOW_DAYS}-day read anchored on {anchor} names "
                 f"{stem}, which this prune deleted"
             )
@@ -144,7 +145,7 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     item_health_history(state, months)
     feed_health_history(state, months)
     public = tmp_path / "frontend" / "public" / "telemetry"
-    publish_telemetry.publish(state_root=state, public_root=public)
+    public_telemetry.publish(state_root=state, public_root=public)
     expired = months[0]
 
     with caplog.at_level(logging.INFO):
@@ -187,7 +188,7 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     )
     assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
     assert all((state.parent / relpath).exists() for relpath in expired_days)
-    assert publish_telemetry.shard_path(public, expired).exists()
+    assert public_telemetry.shard_path(public, expired).exists()
     assert ledger.health_path(state, f"{expired}-11").exists()
 
 

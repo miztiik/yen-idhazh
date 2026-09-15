@@ -12,16 +12,7 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import (
-    assemble,
-    config,
-    discover,
-    fetch,
-    ledger,
-    rank,
-    source_health,
-    tag,
-)
+from idhazh import assemble, config, discover, fetch, ledger, rank, tag
 from idhazh.contracts.base import fit_field
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import (
@@ -37,6 +28,7 @@ from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.embed import Embedder
 from idhazh.stages import common
 from idhazh.stages.common import LOG, Fetcher, _load_day, _load_manifest
+from idhazh.telemetry import source_health
 
 #: Why a feed was not asked, in the one cell a later reader has. A rest ends on
 #: its own and a retirement does not, so the two sentences are different.

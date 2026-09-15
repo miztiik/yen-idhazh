@@ -299,7 +299,7 @@ planner sees it ([elements.md](../architecture/extraction/elements.md)). That
 reading puts three cells on the item-health census row - whether every span
 still cut its own characters, how many facts were kept, and which of three
 classes the article's numbers put it in - and
-[`backend/idhazh/publish_day_metrics.py`](../../backend/idhazh/publish_day_metrics.py)
+[`backend/idhazh/telemetry/publish/day_metrics.py`](../../backend/idhazh/telemetry/publish/day_metrics.py)
 folds them into the day record's `extraction` block, joined against the
 published day so a chartable article that never published is not counted as one
 the planner passed over.

@@ -377,7 +377,7 @@ export function evalDays(
 			// The distinct-published count where the run settled one, the ledger-row
 			// count otherwise. A re-scored item keeps two rows and a scored-then-
 			// dropped item keeps one, so the row count is not the count of summaries
-			// the day published (backend/idhazh/publish_day_metrics.py).
+			// the day published (backend/idhazh/telemetry/publish/day_metrics.py).
 			scored: settled?.scored ?? group.length,
 			matched: match.length,
 			matchLow: match.length === 0 ? null : pct(at(match, 0.25)),
