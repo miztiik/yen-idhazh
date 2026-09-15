@@ -979,6 +979,31 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      # What each model call was sent and what came back. The census row says a
+      # reply was 1,158 tokens where it used to be 229; it cannot say what the
+      # model was asked, so it cannot say whether the prompt moved, the article
+      # was longer, or the decoder simply ran on. That question was open for six
+      # days on the regression this exists for, and it was open because the only
+      # copy of the text was on a runner that had already been deleted.
+      #
+      # Ninety days, which is the longest window anything here keeps and is
+      # deliberate: a regression is found by comparing today with a run from
+      # weeks ago, and fourteen days would put the comparison run out of reach
+      # exactly when it is wanted. It is bounded by the two flags that fill it -
+      # `logging.capture_prompts` and `logging.capture_replies` - and with both
+      # off the directory is empty and this line is a green no-op.
+      #
+      # Never committed, and deliberately not named in any commit-and-push.sh
+      # call: a rendered prompt carries the article body inside it, and an
+      # article body is not ours to republish (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: captures-${{ matrix.shard }}
+          path: backend/var/run/${{ needs.plan.outputs.date }}/captures/
+          retention-days: 90
+          if-no-files-found: ignore
+
   assemble:
     needs: [plan, work]
     # Always runs, even when a worker failed. A run that publishes nothing on a
