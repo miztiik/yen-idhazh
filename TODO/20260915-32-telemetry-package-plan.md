@@ -53,6 +53,102 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 
 **Column arithmetic.** 43 of 113 carry a value today; `telemetry._row` names 31 fields and `_flatten_calls` adds the call cells, 44 written of which one is always empty. Row 6 fills 58, row 7 fills 6, row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question.
 
+## Section 1a - What every row delivers, without being asked
+
+A row is not done when its code works. Each row below ships all five of these or it does not merge. Owner ruling, 2026-09-15.
+
+| Part | Rule |
+| --- | --- |
+| The change | the code the row's Scope names |
+| The tests | at the tier matching the surface (CLAUDE.md section 13), in the same commit |
+| **The removal** | the module, the test and the doc paragraph the change makes dead go in the SAME commit. A row that adds a producer and leaves the old one is a row that doubled the sprawl it was written to end |
+| **The docs** | the page that owns the surface, updated. A page answers ONE question; where the row's answer does not fit the page's question, it gets its own page rather than a section (`docs/reference/documentation-structure.md`) |
+| The diagram | where the row changes what flows where, the diagram in section 1b moves with it |
+
+**No row is allowed to leave a deprecation.** There is no shim, no `_old` suffix, no "kept for compatibility" and no commented-out block. If the old thing still has a caller, the row that removes the caller is a dependency, not a follow-up.
+
+## Section 1b - What the package looks like when the plan is done
+
+```mermaid
+flowchart TB
+    subgraph stages["backend/idhazh/stages/ - the producers"]
+        plan_s["plan"]
+        work_s["work"]
+        record_s["record"]
+        assemble_s["assemble"]
+    end
+
+    subgraph tel["backend/idhazh/telemetry/ - the instrument"]
+        events["events.py<br/>one envelope, one log line"]
+        record_m["record.py<br/>ItemRecorder -> ItemHealthRow"]
+        census["census.py<br/>classify_item, the fallback"]
+        spans["spans.py<br/>the span tree, the file sink"]
+        rollup["rollup.py<br/>roll_up_spans"]
+        host["host.py<br/>cpu, memory, runner"]
+        prune_m["prune.py<br/>target + range, atomic"]
+        cli_m["cli.py<br/>idhazh telemetry ..."]
+        subgraph pub["publish/ - one dispatcher, nine projections"]
+            dispatch["dispatch.py"]
+            proj["telemetry, scores, feed_health,<br/>day_metrics, machine, run_days,<br/>span_rollup, console, console_band,<br/>source_health"]
+        end
+    end
+
+    subgraph contracts["backend/idhazh/contracts/ - the shapes"]
+        ihr["ItemHealthRow<br/>113 columns"]
+        srr["SpanRollupRow"]
+        rtr["RunTimelineRow<br/>row 1"]
+    end
+
+    subgraph state["state/ - committed, never published"]
+        ih[("item-health/<br/>day files")]
+        sr[("span-rollup/<br/>month files")]
+        tr[("traces/<br/>7-day window")]
+        rc[("runtime-counters.csv")]
+    end
+
+    subgraph public["frontend/public/ - published, redacted"]
+        ptel[("telemetry/")]
+        pspan[("span-rollup/")]
+        pcon[("console/")]
+        ptime[("run-timeline/<br/>row 1")]
+    end
+
+    console["console routes<br/>+ the run timeline, row 14"]
+
+    work_s -->|"cells"| record_m
+    work_s --> spans
+    work_s --> host
+    plan_s --> events
+    record_m -->|"validated row"| ihr
+    record_m -->|"items/*.health.json"| record_s
+    record_s --> census
+    assemble_s --> census
+    census -->|"prefers persisted,<br/>falls back"| ihr
+    ihr --> ih
+    spans --> tr
+    spans --> rollup
+    rollup --> srr --> sr
+    host --> rc
+    ih --> dispatch
+    sr --> dispatch
+    rc --> dispatch
+    rtr --> dispatch
+    dispatch --> proj
+    proj --> ptel & pspan & pcon & ptime
+    ptel & pspan & ptime --> console
+    prune_m -.->|"--target --since --until"| state
+    cli_m --> prune_m & dispatch & rollup
+
+    classDef gone fill:#3a1f1f,stroke:#a33,color:#eee
+    classDef new fill:#1f3a2a,stroke:#3a7,color:#eee
+    class rtr,ptime,prune_m,cli_m,dispatch new
+```
+
+Green is new in this plan. Everything else is a move, not a rewrite.
+
+**What leaves.** `backend/idhazh/telemetry.py`, `itemrecord.py`, `machine.py`, `stages/counters.py` and nine `publish_*.py` modules are deleted by the row that moves them, not left beside their replacement. `frontend/public/scores/` and `frontend/public/feed-health/` are deleted by row 15.
+
+
 ---
 
 ## Section 2 - Row #1 - The shape the timeline reads, settled first
