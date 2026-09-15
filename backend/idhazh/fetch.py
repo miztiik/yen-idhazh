@@ -38,8 +38,8 @@ from urllib.parse import urlsplit
 
 from protego import Protego
 
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
+from idhazh.contracts.knobs.extract import ExtractConfig
 
 #: Bumped when fetch policy changes. `-2` reads robots.txt with `protego`
 #: rather than `urllib.robotparser`, which changes what some files mean - see

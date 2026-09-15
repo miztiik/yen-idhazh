@@ -12,24 +12,18 @@ from pydantic import ValidationError
 
 from idhazh.classify import dag
 from idhazh.classify.calls import label_budget_tokens, summarize_and_plan_budget_tokens
-from idhazh.contracts.app_config import (
-    PAGES_HARD_CAP_MB,
-    AppConfig,
-    CollectConfig,
-    ConsoleConfig,
-    EvaluationConfig,
-    InferenceConfig,
-    LoggingConfig,
-    LogLevel,
-    ModelsConfig,
-    ObservabilityConfig,
-    RetentionConfig,
-    UiConfig,
-    VisualSide,
-    months_a_window_can_touch,
-)
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
+from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
+from idhazh.contracts.knobs.ui import UiConfig, VisualSide
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields
 from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD

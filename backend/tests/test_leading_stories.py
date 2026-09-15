@@ -18,9 +18,9 @@ import logging
 import pytest
 
 from idhazh.assemble import leading_stories, subject_clusters
-from idhazh.contracts.app_config import UiConfig
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.watchlist import EntityDef, Watchlist

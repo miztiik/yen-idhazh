@@ -17,8 +17,6 @@ from ._builders import (
     plan,
 )
 
-pytestmark = pytest.mark.slow
-
 
 def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
     """Band order groups identical system prompts without changing item identity."""

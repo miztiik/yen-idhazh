@@ -42,7 +42,7 @@ from ._harness import (
     _triggers,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_the_harvest_runs_where_the_article_text_still_is() -> None:

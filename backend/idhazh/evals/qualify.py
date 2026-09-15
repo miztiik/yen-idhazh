@@ -25,13 +25,11 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from idhazh.contracts.app_config import (
-    EvaluationConfig,
-    InferenceConfig,
-    RunConfig,
-    SummarizeConfig,
-    TurnsConfig,
-)
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.knobs.summarize import SummarizeConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
     CorpusItem,

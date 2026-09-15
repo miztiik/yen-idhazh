@@ -31,9 +31,10 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import telemetry
-from idhazh.contracts.app_config import AppConfig, VisualsConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, VisualPlan, VisualType
 from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import (

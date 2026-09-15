@@ -66,16 +66,14 @@ from idhazh.classify.calls import (
     summarize_and_plan_schema,
     summarize_and_plan_user_turn,
 )
-from idhazh.contracts.app_config import (
-    ElementsConfig,
-    InferenceConfig,
-    ModelEntry,
-    SummarizeConfig,
-    TurnsConfig,
-    VisualsConfig,
-)
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable, Extractor
+from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.models import ModelEntry
+from idhazh.contracts.knobs.summarize import SummarizeConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
 from idhazh.contracts.visual_decision import NoneReason, VisualKind
