@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-15",
+  "extract_ms": null,
+  "fetch_ms": 9400,
+  "item_id": "world-0f8e7d6c5b4a3210",
+  "item_total_ms": 9412,
+  "label_ms": null,
+  "plan_ms": null,
+  "publish_ms": null,
+  "residual_ms": 12,
+  "run_id": "2026-09-15-34941020965",
+  "score_ms": null,
+  "shard": 0,
+  "start_offset_ms": 0,
+  "summary_ms": null,
+  "version": "2026-09-15",
+  "visual_plan_ms": null
+}
