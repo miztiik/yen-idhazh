@@ -1,10 +1,6 @@
 """Which of a bench's repeats may be compared with each other, and did anything drift?
 
-Split from the sweep that runs them because it is the half with no server, no
-subprocess and no clock in it - so it can be driven from built readings and
-asked about cases the runner has never produced. It spent its whole life inside
-a YAML heredoc, where no test could reach it, and the one time it mattered it
-threw away two complete dispatches.
+No server, no subprocess and no clock, so it can be driven from built readings.
 """
 
 from __future__ import annotations

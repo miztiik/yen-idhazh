@@ -53,29 +53,10 @@ jobs:
               exit 1
             fi
           done
-          python - <<'PY' | tee drift.txt
-          import datetime, os, pathlib
-          from idhazh.config import load
-          from idhazh.drift import issue_body, read_windows, report
-
-          windows = read_windows(
-              pathlib.Path("state"),
-              today=datetime.datetime.now(datetime.UTC).date(),
-              recent_days=int(os.environ["RECENT_DAYS"]),
-              baseline_days=int(os.environ["BASELINE_DAYS"]),
-          )
-          config = load().app.drift
-          text, status = report(windows, config=config)
-          print(text)
-          if status == 0:
-              run_url = (
-                  f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
-                  f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-              )
-              body = issue_body(windows, config=config, run_url=run_url)
-              pathlib.Path("drift-issue.txt").write_text(body, encoding="utf-8", newline="\n")
-          raise SystemExit(status)
-          PY
+          echo "comparing the last ${RECENT_DAYS} days against the last ${BASELINE_DAYS}"
+          python3 backend/utilities/drift_report.py \
+            --recent-days "$RECENT_DAYS" \
+            --baseline-days "$BASELINE_DAYS" | tee drift.txt
 
       - name: Open an issue when something moved
         if: success()
