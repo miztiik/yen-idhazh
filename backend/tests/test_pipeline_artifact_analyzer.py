@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from utilities import read_captures
+from utilities import pipeline_artifact_analyzer as analyzer
 
 
 def capture_of(
@@ -27,9 +27,9 @@ def capture_of(
     decode_split: dict[str, object] | None = None,
     finish_reason: str = "stop",
     about: dict[str, object] | None = None,
-) -> read_captures.Capture:
+) -> analyzer.Capture:
     """One capture as `idhazh.capture` writes it, read back through `load`."""
-    return read_captures.Capture(
+    return analyzer.Capture(
         item_id="india-5tnmq7gb",
         call=call,
         prompt=prompt,
@@ -38,13 +38,13 @@ def capture_of(
         reply_chars=len(reply),
         prompt_sha256="a" * 64,
         finish_reason=finish_reason,
-        cost=read_captures.cost_of(cost),
-        split=read_captures.split_of(decode_split),
-        about=read_captures.about_of(about),
+        cost=analyzer.cost_of(cost),
+        split=analyzer.split_of(decode_split),
+        about=analyzer.about_of(about),
     )
 
 
-def priced_pair() -> dict[str, read_captures.Capture]:
+def priced_pair() -> dict[str, analyzer.Capture]:
     """Both calls, each saying what it cost, as a run writes them today."""
     return {
         "label": capture_of(
@@ -88,7 +88,7 @@ def headings(document: str) -> list[str]:
 
 def test_the_cost_table_holds_both_calls_and_their_total() -> None:
     """The first question a reader has is what it cost, so it is the first table."""
-    document = read_captures.render(priced_pair(), head=0, tail=0)
+    document = analyzer.render(priced_pair(), head=0, tail=0)
 
     assert "| 1 | label | 12.0 s | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
     assert "| 2 | summary (summarize_and_plan) | 9.4 s |" in document
@@ -110,14 +110,14 @@ def test_a_decode_measured_in_minutes_is_printed_in_minutes() -> None:
         },
     )
 
-    document = read_captures.render(pair, head=0, tail=0)
+    document = analyzer.render(pair, head=0, tail=0)
 
     assert "| 2 | summary (summarize_and_plan) | 17m 07s |" in document
 
 
 def test_the_cache_saving_is_stated_in_tokens_and_in_characters() -> None:
     """A percentage with no numerator is a number nobody can check (Guardrail #10)."""
-    document = read_captures.render(priced_pair(), head=0, tail=0)
+    document = analyzer.render(priced_pair(), head=0, tail=0)
 
     assert "reused 3,886 of the summarize-and-plan call's 4,214 prompt tokens (92.2%)" in document
     assert "read 328 of them" in document
@@ -125,7 +125,7 @@ def test_the_cache_saving_is_stated_in_tokens_and_in_characters() -> None:
 
 def test_the_picture_gets_its_own_share_of_the_second_decode() -> None:
     """Two halves of one decode, and the row says which of them is an estimate."""
-    document = read_captures.render(priced_pair(), head=0, tail=0)
+    document = analyzer.render(priced_pair(), head=0, tail=0)
 
     assert "| the summary | 2,010 | 320 | 62.5% |" in document
     assert "| the visual plan | 1,178 | 192 | 37.5% |" in document
@@ -134,7 +134,7 @@ def test_the_picture_gets_its_own_share_of_the_second_decode() -> None:
 
 def test_the_raw_text_comes_after_everything_that_reads_it() -> None:
     """Signal before noise: the bytes are kept whole and are read last."""
-    document = read_captures.render(priced_pair(), head=0, tail=0)
+    document = analyzer.render(priced_pair(), head=0, tail=0)
 
     assert document.index("## 3. What the calls cost") < document.index("## 6. The raw text")
     assert document.index("## 4. What the label call sent back") < document.index("## 6. ")
@@ -144,7 +144,7 @@ def test_the_raw_text_comes_after_everything_that_reads_it() -> None:
 
 def test_every_heading_carries_its_number_in_order() -> None:
     """A numbered heading a reader can cite, and no gap where a section was skipped."""
-    document = read_captures.render(priced_pair(), head=0, tail=0)
+    document = analyzer.render(priced_pair(), head=0, tail=0)
 
     tops = [line for line in headings(document) if line.startswith("## ")]
     assert [line.split(".")[0] for line in tops] == [
@@ -163,7 +163,7 @@ def test_a_reply_that_will_not_parse_says_where_it_broke() -> None:
     pair = priced_pair()
     pair["label"] = capture_of("label", reply='{"labels": [{"element_id": "e1",')
 
-    document = read_captures.render(pair, head=0, tail=0)
+    document = analyzer.render(pair, head=0, tail=0)
 
     assert "**This reply cannot be read as JSON**" in document
     assert "the JSON stops being readable at character" in document
@@ -175,7 +175,7 @@ def test_a_decoder_that_could_not_stop_is_named_at_the_top() -> None:
     pair = priced_pair()
     pair["label"] = capture_of("label", reply='{"a": "' + "x" * 900 + '"}')
 
-    document = read_captures.render(pair, head=0, tail=0)
+    document = analyzer.render(pair, head=0, tail=0)
     verdict = document.split("## 3.")[0]
 
     assert "900-character unbroken lowercase run" in verdict
@@ -186,7 +186,7 @@ def test_a_cut_reply_is_named_before_any_number() -> None:
     pair = priced_pair()
     pair["summary"] = capture_of("summary", finish_reason="length")
 
-    verdict = read_captures.render(pair, head=0, tail=0).split("## 3.")[0]
+    verdict = analyzer.render(pair, head=0, tail=0).split("## 3.")[0]
 
     assert "stopped on `length`" in verdict
 
@@ -205,7 +205,7 @@ def test_a_list_of_objects_becomes_one_table_and_a_list_of_words_a_list() -> Non
         ),
     )
 
-    document = read_captures.render(pair, head=0, tail=0)
+    document = analyzer.render(pair, head=0, tail=0)
 
     assert "| # | element_id | salience |" in document
     assert "| 1 | e1 | high |" in document
@@ -235,9 +235,9 @@ def test_an_older_capture_fills_its_costs_from_the_day_ledger(tmp_path: Path) ->
     ledger = day_ledger(tmp_path / "14.csv")
     pair = {"label": capture_of("label"), "summary": capture_of("summary")}
 
-    rows = read_captures.from_ledger(ledger)
-    filled = read_captures.merged(pair, rows["india-5tnmq7gb"])
-    document = read_captures.render(filled, head=0, tail=0)
+    rows = analyzer.from_ledger(ledger)
+    filled = analyzer.merged(pair, rows["india-5tnmq7gb"])
+    document = analyzer.render(filled, head=0, tail=0)
 
     assert "| 1 | label | 12.0 s | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
     assert "| the visual plan | 1,178 | 192 |" in document
@@ -249,9 +249,9 @@ def test_the_report_names_the_story_so_the_summary_can_be_checked(tmp_path: Path
     ledger = day_ledger(tmp_path / "14.csv")
     pair = {"label": capture_of("label"), "summary": capture_of("summary")}
 
-    rows = read_captures.from_ledger(ledger)
-    document = read_captures.render(
-        read_captures.merged(pair, rows["india-5tnmq7gb"]), head=0, tail=0
+    rows = analyzer.from_ledger(ledger)
+    document = analyzer.render(
+        analyzer.merged(pair, rows["india-5tnmq7gb"]), head=0, tail=0
     )
 
     assert document.index("## 1. The story these calls read") < document.index("## 2. ")
@@ -270,14 +270,14 @@ def test_the_capture_keeps_the_link_the_ledger_would_have_been_pruned_of() -> No
         about={"canonical_url": "https://example.org/wind-farm", "source_id": "dna-india"},
     )
 
-    document = read_captures.render(pair, head=0, tail=0)
+    document = analyzer.render(pair, head=0, tail=0)
 
     assert "| link | <https://example.org/wind-farm> |" in document
 
 
 def test_a_report_with_no_link_says_which_flag_would_find_one() -> None:
     """A section that renders nothing teaches a reader the tool is broken."""
-    document = read_captures.render(priced_pair(), head=0, tail=0)
+    document = analyzer.render(priced_pair(), head=0, tail=0)
 
     assert "This capture does not say which story it was about" in document
 
@@ -286,7 +286,7 @@ def test_a_pair_with_no_costs_says_so_and_names_the_flag_that_fixes_it() -> None
     """A section that silently renders nothing teaches a reader the tool is broken."""
     pair = {"label": capture_of("label"), "summary": capture_of("summary")}
 
-    document = read_captures.render(pair, head=0, tail=0)
+    document = analyzer.render(pair, head=0, tail=0)
 
     assert "No call in this pair recorded what it cost" in document
     assert "--health state/item-health/<yyyy>/<mm>/<dd>.csv" in document
@@ -297,7 +297,7 @@ def test_a_prompt_holding_a_code_fence_does_not_break_out_of_its_block() -> None
     pair = priced_pair()
     pair["label"] = capture_of("label", prompt="the article said\n```python\nx = 1\n```\nand ended")
 
-    document = read_captures.render(pair, head=0, tail=0)
+    document = analyzer.render(pair, head=0, tail=0)
 
     assert "````text" in document
     assert "```python" in document
@@ -338,7 +338,7 @@ def test_a_capture_file_round_trips_through_load(tmp_path: Path) -> None:
         newline="\n",
     )
 
-    loaded = read_captures.load(path)
+    loaded = analyzer.load(path)
 
     assert loaded.cost is not None
     assert loaded.cost.read_tokens == 328
