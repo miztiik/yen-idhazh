@@ -1029,6 +1029,67 @@ of these names the flip the way it would name a hardware change, and reads no tr
 across it. The switch is `config/idhazh.json` `observability.tracing_enabled`; the
 reasoning is in [`../concepts/telemetry.md`](../concepts/telemetry.md).
 
+## What making both model calls unconditional cost, 2026-09-14
+
+Commit `e067db60` retired the flag that let a run make one model call an item,
+so the two-call sequence became unconditional. These two runs are either side of
+it, both on stock `ubuntu-latest`, both the same weights and the same window.
+
+| Quantity | Run `34745383977`, 2026-09-13 | Run `34852763827`, 2026-09-14 | Move |
+| --- | ---: | ---: | ---: |
+| Median model time an item | 97,879 ms | 475,890 ms | **4.9x** |
+| Median output tokens an item | 229 | 1,158 | **5.1x** |
+| Items that made two calls | 0 of 76 | 58 of 66 | |
+| Wall clock | 97 min | 206 min, 3 of 4 shards killed | |
+
+**The two multipliers agree within 4 percent, and that is the finding.** The
+decode rate did not move; the volume of decoded tokens did. The model is not
+slower - it is writing five times as much. A design that proposes to make this
+faster is arguing about how many tokens to ask for, not about throughput.
+
+Prompt caching was measured in the same run and was never the problem: the
+summarize-and-plan call re-read 76 fresh tokens an article and reused **98.2
+percent** of its 240,814 prompt tokens, which is 0.8 percent of the run's model
+time. The label call reused 53.6 percent of 184,371 - that is the shared system
+scaffold, and the article itself is new each item and must be read once.
+
+Where the model time went, same run, all four shards: label prefill 21.6
+percent, label decode 39.3, summarize prefill 0.8, summarize decode 38.2.
+
+Two runs are two runs. The per-item spread inside each is not reported here
+because the medians are what the comparison rests on; a design that needs the
+tail should take it from `state/item-health/` rather than from this page.
+
+## What a ledger row costs to check, 2026-09-15
+
+Taken to settle whether every appended row should be validated against its
+contract. **12th Gen Intel Core i7-1265U, Windows, Python 3.14.2, pydantic
+2.13.4**, 40 repeats after 5 warm-up discarded, interleaved arms in one process
+so the box cancels. A developer machine is an order-of-magnitude check and never
+a runner reading.
+
+| Operation, 113 columns | Median | Spread |
+| --- | ---: | ---: |
+| Validate a row through `from_csv_row` | 42.85 us | 22.63 |
+| Serialise it through `csv_row` | 17.56 us | 3.77 |
+| Write it through `DictWriter` | 22.65 us | 6.35 |
+| Compare a row's width to the header | 0.04 us | 0.32 |
+
+**Validating a row costs 1.07x what writing it already costs** - the same order,
+not ten times it. Against a run of 80 items that is 3.43 ms, set beside 38,071
+seconds of item work: **one part in 11.1 million.**
+
+Cost is therefore not the argument either way, and the design decision does not
+rest on it. Per-row validation on append was refused because a row Python writes
+was validated when its model was constructed, so the check cannot fail unless
+the round-trip test is already red - and that test proves it once, on a fixture,
+for every row for ever. The reasoning sits beside `migrate_header` in
+`backend/idhazh/ledger.py`, where the next person about to add it will read it.
+
+A first pass without warm-up read the same operation at 107.66 us and 74.81 us
+inside one process, 44 percent apart. That spread was the shared box and cold
+caches, not the code. Quote 42.85.
+
 ## Inference throughput
 
 `llama-bench -m <model> -p 730,1800,4850 -n 250 -t 4`, at the three input
