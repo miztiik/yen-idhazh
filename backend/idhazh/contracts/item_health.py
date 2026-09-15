@@ -199,6 +199,8 @@ class FailureCode(StrEnum):
     BOILERPLATE = "boilerplate"
     PAYWALLED = "paywalled"
     UNSUPPORTED_FORM = "unsupported_form"
+    #: Nothing answered at the model's address - the process is gone, the port is
+    #: closed, the connection was refused.
     MODEL_UNREACHABLE = "model_unreachable"
     #: The server answered, and the answer was an error it could not explain as
     #: a context overflow. A different morning from `model_unreachable`: that
@@ -207,6 +209,15 @@ class FailureCode(StrEnum):
     #: named the wrong speculation kind on 2026-09-15 and every item read as a
     #: network fault while the server was up and answering.
     MODEL_REFUSED = "model_refused"
+    #: The server took the request and did not answer inside
+    #: `request_timeout_minutes`. **Not the same finding as `model_unreachable`,
+    #: and the difference is where an operator should look.** Unreachable sends
+    #: them to the process; this sends them to the output budget, because a call
+    #: that times out is almost always one decoding more tokens than the clock
+    #: admits. The two were one code until 2026-09-15, because a socket timeout
+    #: is an `OSError` and the handler caught the parent: 30 items across three
+    #: days were filed as a dead server that was serving their neighbours fine.
+    MODEL_TIMED_OUT = "model_timed_out"
     CONTEXT_EXCEEDED = "context_exceeded"
     OUTPUT_TRUNCATED = "output_truncated"
     #: The two-call path's labelling reply ran out of its own output budget, so
@@ -219,6 +230,12 @@ class FailureCode(StrEnum):
     LENGTH_OUT_OF_RANGE = "length_out_of_range"
     COPIED_SOURCE = "copied_source"
     LEAKED_ADDRESS = "leaked_address"
+    #: The worker ran out of its own clock before this item's model work began.
+    #: Distinct from `not_attempted`, which is the run's plan never reaching the
+    #: item at all: this one was planned, fetched and extracted, and the shard
+    #: chose not to start work it could not finish. Naming it apart is what lets
+    #: an operator tell a supply problem from a throughput problem.
+    SHARD_OUT_OF_TIME = "shard_out_of_time"
     UNKNOWN = "unknown"
 
 
@@ -241,6 +258,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.UNSUPPORTED_FORM: frozenset({ItemStage.EXTRACT}),
         FailureCode.MODEL_UNREACHABLE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.MODEL_REFUSED: frozenset({ItemStage.SUMMARIZE}),
+        FailureCode.MODEL_TIMED_OUT: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.CONTEXT_EXCEEDED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.OUTPUT_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LABELS_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
@@ -248,6 +266,9 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.LENGTH_OUT_OF_RANGE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.COPIED_SOURCE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LEAKED_ADDRESS: frozenset({ItemStage.SUMMARIZE}),
+        # An item the worker's own clock stopped. It is recorded at the stage it
+        # was waiting to enter, which is the one it never got to run.
+        FailureCode.SHARD_OUT_OF_TIME: frozenset({ItemStage.SUMMARIZE}),
         # The catch-all covers every stage an item can stop at, and no more. It
         # read `frozenset(ItemStage)` until 2026-09-14, which meant a stage
         # added for any other reason became a legal census row the day it was
@@ -266,6 +287,8 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.TOO_SHORT,
         FailureCode.MODEL_UNREACHABLE,
         FailureCode.MODEL_REFUSED,
+        FailureCode.MODEL_TIMED_OUT,
+        FailureCode.SHARD_OUT_OF_TIME,
         FailureCode.CONTEXT_EXCEEDED,
         FailureCode.NOT_PROSE,
         FailureCode.BOILERPLATE,
@@ -284,6 +307,28 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T22:10",
+            change=(
+                "FailureCode gained model_timed_out and shard_out_of_time."
+            ),
+            why=(
+                "Both were being reported under a name that sends an operator to the wrong "
+                "place.\n\nA socket timeout is a TimeoutError, which subclasses OSError, so the "
+                "handler that meant 'nothing answered' caught 'the server answered too slowly' as "
+                "well. Thirty items across 2026-09-13, 09-14 and 09-15 were filed as a dead model "
+                "server that was serving their neighbours fine: on one shard nine of the fourteen "
+                "items after the first such failure published normally. The fix an operator needs "
+                "is the output budget, and model_unreachable sends them to the process "
+                "instead.\n\nshard_out_of_time is the worker stopping on its own clock rather than "
+                "being killed on the platform's. not_attempted already means the run's plan never "
+                "reached the item; this means the item was planned, fetched, extracted, and the "
+                "shard declined to start work it could not finish. Filing both under one name "
+                "would hide a throughput problem inside a supply one.\n\nWidening only. No row an "
+                "earlier run wrote carries either code, because no run could emit one, and every "
+                "reader takes the enum by value."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-15T20:00",
             change=(

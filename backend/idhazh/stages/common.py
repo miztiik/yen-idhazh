@@ -417,6 +417,13 @@ def _ask_the_model(
                 else FailureCode.MODEL_REFUSED
             )
             _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
+        except TimeoutError as error:
+            # Before OSError, which TimeoutError also subclasses. A server that ran
+            # out of clock was serving, and filing it as unreachable sends an
+            # operator to the process instead of to the output budget.
+            completion = None
+            no_reply = FailureCode.MODEL_TIMED_OUT
+            _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
         except OSError as error:
             completion = None
             _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
@@ -526,6 +533,9 @@ def _one_call(
             if is_context_exceeded(body)
             else FailureCode.MODEL_REFUSED
         )
+    except TimeoutError:
+        completion = None
+        no_reply = FailureCode.MODEL_TIMED_OUT
     except OSError:
         completion = None
     seconds = time.monotonic() - started

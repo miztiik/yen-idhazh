@@ -243,6 +243,23 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
+        case FailureCode.MODEL_TIMED_OUT | FailureCode.SHARD_OUT_OF_TIME:
+            # Both are a clock running out rather than a reply arriving, and they
+            # differ only in whose clock: the request's, or the worker's.
+            failed_summary = summarize.to_summary(
+                ok_article,
+                None,
+                model_id="qwen3-8b",
+                generated_at="2026-08-21T06:00:00Z",
+                no_reply=code,
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=ok_article,
+                summary=failed_summary,
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
         case FailureCode.CONTEXT_EXCEEDED:
             failed_summary = summarize.to_summary(
                 ok_article,

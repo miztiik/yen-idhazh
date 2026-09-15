@@ -94,6 +94,23 @@ class AppConfig(Contract):
             ),
         ),
         ChangelogEntry(
+            version="2026-09-15T22:10",
+            change=(
+                "run.shard_wrap_up_minutes, an integer defaulting to 12 minutes."
+            ),
+            why=(
+                "A worker killed at run.shard_timeout_minutes uploads nothing, so the items it had "
+                "already finished die with the ones it had not started. On 2026-09-15 two of four "
+                "shards ended that way and the day published 66 stories against a plan of 80 - and "
+                "75.5 minutes of one of those shards had gone to four decoder stalls that produced "
+                "nothing.\n\nThis knob is how much of the platform's timeout the worker keeps back "
+                "so it can stop itself, write its records and upload them. It stops starting items "
+                "once the time left is less than the slowest item it has already finished, which "
+                "needs no estimate and calibrates itself to whichever processor the shard "
+                "drew.\n\nAdditive with a default, so a config file that omits it loads unchanged."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T22:00",
             change=(
                 "run.trial_state_dirname and retention.trial_state_days, both "
