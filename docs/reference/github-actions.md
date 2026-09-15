@@ -820,6 +820,37 @@ downloads by reading every workflow file rather than by consulting a list, and
 fails when the set it finds differs from the set it pins. A tenth workflow that
 downloads weights fails the test until it carries the same pair of steps.
 
+### The digest settles the bytes, and the declared size settles the document
+
+`sha256sum` says the file on disk is the file the entry named. It says nothing
+about whether the entry is internally consistent, so both arms that resolve a
+candidate also compare `stat -c %s` against the entry's own `byte_count`. An
+entry that declares no size skips the check, because that is an entry nobody has
+fetched yet rather than an entry that disagrees with itself.
+
+`validate.yml` has done this since it was written and `measure.yml` had not. The
+drift was found on 2026-09-15 by diffing the two files, which is the same way the
+last one was found and the reason both are now held by one test.
+
+### Healthy says a server replied, not which weights replied
+
+Every number a bench reports is filed under the candidate's id, so a server
+answering under any other alias makes the whole run a measurement of something
+else wearing the candidate's name (Guardrail #10). Nothing in the report would
+look wrong: every figure would be internally consistent.
+
+Four server starts exist across the workflows and **all four now ask
+`GET /v1/models` before anything is measured** - the daily run's worker, the
+bench's runtime arm, the bench's vocabulary arm, and both starts in
+`idhazh-pipeline-tests.yaml`. Two of those learned it on 2026-09-15; the daily
+run and the validation arm already did it.
+
+The alias comes from the same config the server's flags came from, never from a
+second copy, so the two cannot disagree (Guardrail #6). The test is discovery-
+based rather than a list: every step whose script waits on `/health` must also
+name `/v1/models`, so an arm added later is held to the rule whether or not
+anybody remembered it.
+
 ## One place writes a production model ref, and it is config
 
 `config/models/<name>.json` holds `models.summarize`, and `config/idhazh.json`

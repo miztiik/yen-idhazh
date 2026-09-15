@@ -113,6 +113,32 @@ def test_the_health_check_names_the_weights_that_answered() -> None:
     assert _plan_output("summarize_file") in script
 
 
+def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
+    """The Oracle. A number is about a model only if that model produced it.
+
+    `validate.yml` has asked `/v1/models` since it was written. `measure.yml`
+    waited for a 200 and started the clock, so a server answering under any
+    other alias would have had its throughput filed under the candidate - which
+    is a Guardrail #10 failure that no gate would have caught, because every
+    number in the report would be internally consistent and wrong.
+
+    Discovery is over every step that waits for `/health`, so an arm added later
+    is held to the same rule whether or not anybody remembered it. The drift this
+    catches has run in both directions: `test_model_server_jobs` records the last
+    time it was `validate.yml` that nobody diffed.
+    """
+    for filename, workflow in sorted(_load_workflows().items()):
+        for job_name in _mapping(workflow.get("jobs"), f"{filename} jobs"):
+            for step in _steps(workflow, job_name):
+                script = step.get("run")
+                if not isinstance(script, str) or "/health" not in script:
+                    continue
+                where = f"{filename}/{job_name}/{step.get('name')}"
+                assert "/v1/models" in script, (
+                    f"{where} waits for health and never asks which model answered"
+                )
+
+
 def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
     """The Oracle. One place writes a production model ref, and it is config.
 
