@@ -18,14 +18,25 @@ from idhazh.contracts.knobs.turns import TurnsConfig
 class SpeculationType(StrEnum):
     """Which kind of speculation the runtime is told to use.
 
-    Only the two this project can actually stand up. `llama-server` accepts a
-    longer list - eagle3, mtp, dflash, dspark and five ngram variants - and each
-    of those either needs a purpose-built draft head we do not have or a lookup
-    cache nothing here writes. A closed choice is what stops an operator naming
-    one of them and getting a server that starts and drafts nothing.
+    Only the three this project can actually stand up. Build b10598 accepts
+    eleven - the full list is `none`, `draft-simple`, `draft-eagle3`,
+    `draft-mtp`, `draft-dflash`, `draft-dspark` and five `ngram-*` variants,
+    read off `llama-server --help` by `.github/workflows/probe.yml` on
+    2026-09-15. The ones left out either need a purpose-built draft head
+    nobody has published for our weights, or a lookup cache nothing here
+    writes. A closed choice is what stops an operator naming one of them and
+    getting a server that starts and drafts nothing.
+
+    `draft-mtp` is here because the head now exists: Unsloth publishes a
+    multi-token-prediction head for the Gemma entry, and the publisher's guide
+    names this exact value. Naming `draft-simple` for that head instead is not
+    a slow server, it is a dead one - every request failed on
+    `decode() failed: failed to process speculative batch`, five of five, on
+    run 34941400155.
     """
 
     DRAFT_SIMPLE = "draft-simple"
+    DRAFT_MTP = "draft-mtp"
     NGRAM_SIMPLE = "ngram-simple"
 
 
@@ -283,6 +294,25 @@ class ModelsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T12:30",
+            change=(
+                "models.<role>.draft.spec_type accepts a third value, draft-mtp, "
+                "beside draft-simple and ngram-simple. Additive: nothing that "
+                "validated yesterday stops validating, and the default is unchanged."
+            ),
+            why=(
+                "The closed choice held two values because the other nine either "
+                "needed a draft head nobody had published for our weights or a lookup "
+                "cache nothing here writes. Unsloth now publishes a multi-token "
+                "head for the Gemma entry, so that premise is false for this one "
+                "value. Naming draft-simple for that head is not a slow server, it "
+                "is a dead one - every request failed on 'decode() failed: failed to "
+                "process speculative batch', five of five, on run 34941400155. The "
+                "pinned build accepts the value: .github/workflows/probe.yml read it "
+                "off llama-server --help on 2026-09-15."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T07:00",
             change=(

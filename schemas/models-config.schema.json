@@ -426,9 +426,10 @@
       "type": "object"
     },
     "SpeculationType": {
-      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the two this project can actually stand up. `llama-server` accepts a\nlonger list - eagle3, mtp, dflash, dspark and five ngram variants - and each\nof those either needs a purpose-built draft head we do not have or a lookup\ncache nothing here writes. A closed choice is what stops an operator naming\none of them and getting a server that starts and drafts nothing.",
+      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the three this project can actually stand up. Build b10598 accepts\neleven - the full list is `none`, `draft-simple`, `draft-eagle3`,\n`draft-mtp`, `draft-dflash`, `draft-dspark` and five `ngram-*` variants,\nread off `llama-server --help` by `.github/workflows/probe.yml` on\n2026-09-15. The ones left out either need a purpose-built draft head\nnobody has published for our weights, or a lookup cache nothing here\nwrites. A closed choice is what stops an operator naming one of them and\ngetting a server that starts and drafts nothing.\n\n`draft-mtp` is here because the head now exists: Unsloth publishes a\nmulti-token-prediction head for the Gemma entry, and the publisher's guide\nnames this exact value. Naming `draft-simple` for that head instead is not\na slow server, it is a dead one - every request failed on\n`decode() failed: failed to process speculative batch`, five of five, on\nrun 34941400155.",
       "enum": [
         "draft-simple",
+        "draft-mtp",
         "ngram-simple"
       ],
       "title": "SpeculationType",
@@ -548,6 +549,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "models.<role>.draft.spec_type accepts a third value, draft-mtp, beside draft-simple and ngram-simple. Additive: nothing that validated yesterday stops validating, and the default is unchanged.",
+      "version": "2026-09-15T12:30",
+      "why": "The closed choice held two values because the other nine either needed a draft head nobody had published for our weights or a lookup cache nothing here writes. Unsloth now publishes a multi-token head for the Gemma entry, so that premise is false for this one value. Naming draft-simple for that head is not a slow server, it is a dead one - every request failed on 'decode() failed: failed to process speculative batch', five of five, on run 34941400155. The pinned build accepts the value: .github/workflows/probe.yml read it off llama-server --help on 2026-09-15."
+    },
+    {
       "change": "models.<role>.draft, optional: a second, smaller set of weights that drafts tokens this entry's model then verifies. It carries its own repo, revision, file, sha256 and byte_count, a closed spec_type of draft-simple or ngram-simple, and the three drafting knobs n_max, n_min and p_min. Null is the default and means one model and no speculation, so every models file written before today still loads and every committed run.json still reads.",
       "version": "2026-09-14T07:00",
       "why": "Plan 28 row 2a, returned to scope 2026-09-14. It is the one feature a candidate brings that this plan's pointer-swap could not switch on, so leaving it out contradicted the plan's own intent. It is priced on cost and revert rather than on a quality measurement because speculative decoding is output-identical by construction - the target verifies every drafted token - so there is no quality to measure (Guardrail #10, amended 2026-09-14). The block sits beside inference rather than inside it because it names weights to fetch, and a block that fetches a file is not a decoding knob."
@@ -584,7 +590,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-14T07:00",
+      "default": "2026-09-15T12:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -595,5 +601,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-14T07:00"
+  "version": "2026-09-15T12:30"
 }
