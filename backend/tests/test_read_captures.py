@@ -88,9 +88,29 @@ def test_the_cost_table_holds_both_calls_and_their_total() -> None:
     """The first question a reader has is what it cost, so it is the first table."""
     document = read_captures.render(priced_pair(), head=0, tail=0)
 
-    assert "| 1 | label | 12.0 | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
-    assert "| 2 | summary (summarize_and_plan) | 9.4 |" in document
-    assert "**2 calls** | **21.4** | **12,394** | **9,049** | **8,100** | **3,886**" in document
+    assert "| 1 | label | 12.0 s | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
+    assert "| 2 | summary (summarize_and_plan) | 9.4 s |" in document
+    assert "**2 calls** | **21.4 s** | **12,394** | **9,049** | **8,100** | **3,886**" in document
+
+
+def test_a_decode_measured_in_minutes_is_printed_in_minutes() -> None:
+    """`1021.0` is a number a reader divides; `17m 07s` is one they read."""
+    pair = priced_pair()
+    pair["summary"] = capture_of(
+        "summary",
+        cost={
+            "kind": "summarize_and_plan",
+            "prefill_ms": 6060,
+            "decode_ms": 1020913,
+            "input_tokens": 3712,
+            "output_tokens": 4735,
+            "cached_tokens": 3661,
+        },
+    )
+
+    document = read_captures.render(pair, head=0, tail=0)
+
+    assert "| 2 | summary (summarize_and_plan) | 17m 07s |" in document
 
 
 def test_the_cache_saving_is_stated_in_tokens_and_in_characters() -> None:
@@ -199,10 +219,11 @@ def test_an_older_capture_fills_its_costs_from_the_day_ledger(tmp_path: Path) ->
     )
     pair = {"label": capture_of("label"), "summary": capture_of("summary")}
 
-    filled = read_captures.merged(pair, read_captures.from_ledger(ledger, "india-5tnmq7gb"))
+    rows = read_captures.from_ledger(ledger)
+    filled = read_captures.merged(pair, rows["india-5tnmq7gb"])
     document = read_captures.render(filled, head=0, tail=0)
 
-    assert "| 1 | label | 12.0 | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
+    assert "| 1 | label | 12.0 s | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
     assert "| the visual plan | 1,178 | 192 |" in document
     assert "| the summary | 2,010 | 320 |" in document
 

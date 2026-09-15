@@ -214,27 +214,27 @@ def ledger_split(row: Mapping[str, str]) -> Split | None:
     )
 
 
-def from_ledger(path: Path, item_id: str) -> dict[str, tuple[Cost, Split | None, str]]:
-    """The cost numbers the run wrote to its item-health row, for one item.
+def from_ledger(path: Path) -> dict[str, dict[str, tuple[Cost, Split | None, str]]]:
+    """The cost numbers the run wrote to its item-health rows, by item and call.
 
     The fallback for a capture taken before this utility recorded its own. Both
     sources are the same five numbers off the same reply, so a capture that
     carries them wins and this fills only what it left empty.
 
-    One named day file and never the tree, because a read whose cost grows with
-    the archive has to justify itself (Guardrail #12). The last matching row
-    wins: a day can hold two runs over one item, and the later one is the one a
-    reader downloading today's artifact is asking about.
+    One named day file, read once for the whole directory. A read whose cost
+    grows with the archive has to justify itself (Guardrail #12), and one that
+    reopens the same file once an item is just slow. The last matching row wins:
+    a day can hold two runs over one item, and the later one is the one a reader
+    downloading today's artifact is asking about.
     """
-    found: dict[str, tuple[Cost, Split | None, str]] = {}
+    found: dict[str, dict[str, tuple[Cost, Split | None, str]]] = {}
     with path.open(encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
-            if row.get("item_id") != item_id:
-                continue
+            item_id = row.get("item_id") or ""
             for call in CALL_ORDER:
                 if not row.get(f"{call}_input_tokens"):
                     continue
-                found[call] = (
+                found.setdefault(item_id, {})[call] = (
                     Cost(
                         kind=str(row.get(f"{call}_kind") or ""),
                         prefill_ms=whole(row.get(f"{call}_prefill_ms")),
@@ -379,9 +379,17 @@ def quantity(value: int) -> str:
     return f"{value:,}"
 
 
-def seconds(ms: int) -> str:
-    """Milliseconds as seconds, because a reader compares calls in seconds."""
-    return f"{ms / 1000:.1f}"
+def clock(ms: int) -> str:
+    """One duration in the unit a reader compares in, with that unit attached.
+
+    Seconds up to two minutes and minutes past it. A decode that ran for
+    1,020,913 ms reads as `17m 01s` rather than as `1021.0`, and the difference
+    is whether the number is read or divided.
+    """
+    if ms < 120_000:
+        return f"{ms / 1000:.1f} s"
+    minutes, rest = divmod(round(ms / 1000), 60)
+    return f"{minutes}m {rest:02d}s"
 
 
 def share(part: int, whole_of: int) -> str:
@@ -507,7 +515,7 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         [
             str(index),
             call if money.kind in {"", call} else f"{call} ({money.kind})",
-            seconds(money.total_ms),
+            clock(money.total_ms),
             quantity(money.prefill_ms),
             quantity(money.decode_ms),
             quantity(money.input_tokens),
@@ -524,7 +532,7 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         [
             "",
             f"**{counted(len(spent), 'call', 'calls')}**",
-            f"**{seconds(sum(money.total_ms for money in spent))}**",
+            f"**{clock(sum(money.total_ms for money in spent))}**",
             f"**{quantity(sum(money.prefill_ms for money in spent))}**",
             f"**{quantity(sum(money.decode_ms for money in spent))}**",
             f"**{quantity(sum(money.input_tokens for money in spent))}**",
@@ -539,7 +547,7 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         [
             "#",
             "call",
-            "model s",
+            "model time",
             "prefill ms",
             "decode ms",
             "in tok",
@@ -553,7 +561,7 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         align="rlrrrrrrrrl",
     )
     out += [
-        "`model s` is the server's own clock - prefill plus decode - and not the item's "
+        "`model time` is the server's own clock - prefill plus decode - and not the item's "
         "wall clock, which also holds the queue and the HTTP round trip. `read tok` is "
         "what the server really evaluated: the prompt minus the part it answered out of "
         "its cache, and the only token count a prefill time can fairly be judged against.",
@@ -799,7 +807,7 @@ def summarise(found: Mapping[str, Mapping[str, Capture]]) -> str:
     """One line an item, so a reader can pick the one worth opening."""
     header = (
         f"{'item_id':<30} {'label sent':>10} {'label back':>11} "
-        f"{'summ sent':>10} {'summ back':>10} {'model s':>8} {'out tok':>8}"
+        f"{'summ sent':>10} {'summ back':>10} {'model time':>10} {'out tok':>8}"
     )
     rows = [header, "-" * len(header)]
     for item_id, pair in found.items():
@@ -811,7 +819,7 @@ def summarise(found: Mapping[str, Mapping[str, Capture]]) -> str:
             f"{label.reply_chars if label else 0:>11,} "
             f"{summary.prompt_chars if summary else 0:>10,} "
             f"{summary.reply_chars if summary else 0:>10,} "
-            f"{seconds(sum(money.total_ms for money in spent)) if spent else '-':>8} "
+            f"{clock(sum(money.total_ms for money in spent)) if spent else '-':>10} "
             f"{sum(money.output_tokens for money in spent):>8,}"
         )
     return "\n".join(rows)
@@ -857,8 +865,14 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if not args.item:
-        print(summarise(found))
-        print(f"\n{len(found)} item(s). Add --item <id> to read one.")
+        listed = found
+        if args.health is not None:
+            rows = from_ledger(args.health)
+            listed = {
+                item_id: merged(pair, rows.get(item_id, {})) for item_id, pair in found.items()
+            }
+        print(summarise(listed))
+        print(f"\n{len(listed)} item(s). Add --item <id> to read one.")
         return 0
 
     wanted = [item_id for item_id in found if args.item in item_id]
@@ -866,11 +880,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"no item id contains {args.item!r}. Run without --item to list them")
 
     head = 0 if args.full else args.head
+    rows = from_ledger(args.health) if args.health is not None else {}
     documents = []
     for item_id in wanted:
-        pair = dict(found[item_id])
-        if args.health is not None:
-            pair = merged(pair, from_ledger(args.health, item_id))
+        pair = merged(found[item_id], rows.get(item_id, {}))
         documents.append(render(pair, head=head, tail=args.tail))
     text = "\n\n".join(documents)
     if args.out:
