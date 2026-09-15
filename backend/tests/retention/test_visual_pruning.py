@@ -13,8 +13,10 @@ from typing import Any, Final
 import pytest
 
 from idhazh import ledger, retention
-from idhazh.contracts.app_config import CollectConfig, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.retention import SiteSize, measure, oldest_visual, prune, prune_row, visuals_older_than
 from idhazh.stages.prune_state import stage_prune_state
@@ -23,8 +25,6 @@ from ._trees import (
     PRUNE_RUN_ID,
     site,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def test_only_visuals_are_candidates(tmp_path: Path) -> None:

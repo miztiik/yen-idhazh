@@ -7,18 +7,16 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
-import pytest
 from conftest import CONFIG_DIR, read_text
 
-from idhazh.contracts.app_config import AppConfig, RetentionConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.retention import cutoff, prune, visuals_older_than
 
 from ._trees import (
     site,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def test_retention_is_off_by_default() -> None:

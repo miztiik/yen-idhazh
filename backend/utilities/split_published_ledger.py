@@ -44,7 +44,7 @@ from typing import Final
 
 from idhazh import ledger
 from idhazh.assemble import write_atomic
-from idhazh.contracts.app_config import UNBOUNDED_WINDOW
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.seen import PublishedRow
 
 #: The file this cutover empties and removes. Spelled here rather than asked of

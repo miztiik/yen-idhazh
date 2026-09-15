@@ -26,10 +26,10 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals import evidence as evidence_writer
 from idhazh.evals import writer as score_writer
 from utilities import grader_length_bias as bias

@@ -26,7 +26,7 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, fetch, ledger
-from idhazh.contracts.app_config import AppConfig, RunConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
     FetchOutcome,
@@ -41,6 +41,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources

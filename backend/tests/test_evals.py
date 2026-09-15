@@ -24,11 +24,12 @@ from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh import cli, day_partition, ledger
-from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.score_archive import ScoreCohort

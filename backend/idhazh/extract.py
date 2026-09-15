@@ -19,11 +19,11 @@ from urllib.parse import urlsplit
 import trafilatura
 from trafilatura.metadata import extract_metadata
 
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource, UntrustedLine
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.discover import clean_title

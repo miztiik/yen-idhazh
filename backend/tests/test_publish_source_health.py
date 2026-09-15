@@ -17,7 +17,6 @@ import pytest
 from pydantic import ValidationError
 
 from idhazh import config, day_partition, ledger, publish_source_health
-from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -26,6 +25,7 @@ from idhazh.contracts.feed_health import (
     derive_endpoint_key,
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.source_health_view import (
     FORBIDDEN_FIELDS,
     SourceAvailability,

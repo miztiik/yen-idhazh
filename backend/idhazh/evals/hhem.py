@@ -32,7 +32,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Protocol
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 
 #: Pinned to an immutable revision, not to a branch. The model card requires
 #: remote code, which is code executed on the build machine, so "latest" is a

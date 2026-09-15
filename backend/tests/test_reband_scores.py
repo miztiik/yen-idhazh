@@ -12,7 +12,7 @@ from typing import Any, cast
 
 import pytest
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "evals" / "scores-reband.csv"

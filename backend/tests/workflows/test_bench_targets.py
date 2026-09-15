@@ -37,7 +37,7 @@ from ._harness import (
     _string_list,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:

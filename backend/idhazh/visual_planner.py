@@ -20,13 +20,11 @@ from collections.abc import Mapping, Sequence
 from math import ceil
 from typing import NamedTuple
 
-from idhazh.contracts.app_config import (
-    VisualsConfig,
-)
 from idhazh.contracts.element import (
     Element,
     ElementTable,
 )
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual import (
     EncodingRole,

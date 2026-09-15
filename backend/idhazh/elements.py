@@ -52,7 +52,6 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import ElementsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.element import (
@@ -65,6 +64,7 @@ from idhazh.contracts.element import (
     derive_element_id,
 )
 from idhazh.contracts.item_health import ElementClass
+from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.evals.metrics import _SENTENCE_SPLIT
 
 # A number with optional thousands separators, an optional decimal part, an

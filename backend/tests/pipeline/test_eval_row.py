@@ -8,9 +8,10 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh import extract
-from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.evals import metrics
 from idhazh.evals.score import to_eval_row
 from idhazh.fetch import FetchResult
@@ -23,8 +24,6 @@ from ._builders import (
     row,
     summary,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def test_a_row_carries_everything_needed_to_read_it_years_later() -> None:

@@ -39,8 +39,10 @@ from enum import StrEnum
 from typing import Final, NamedTuple
 
 from idhazh.classify import calls
-from idhazh.contracts.app_config import ElementsConfig, InferenceConfig, SummarizeConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.measured import (
     LABEL_BODY_TOKENS_A_WORD,

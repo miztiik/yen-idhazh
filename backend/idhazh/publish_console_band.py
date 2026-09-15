@@ -57,12 +57,6 @@ from idhazh import (
     publish_span_rollup,
     publish_telemetry,
 )
-from idhazh.contracts.app_config import (
-    CollectConfig,
-    ConsoleConfig,
-    RunConfig,
-    months_a_window_can_touch,
-)
 from idhazh.contracts.console_band import (
     BandRun,
     BandSize,
@@ -75,6 +69,10 @@ from idhazh.contracts.console_band import (
 )
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import month_files

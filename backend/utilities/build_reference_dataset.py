@@ -71,10 +71,11 @@ from urllib.parse import urlsplit
 from courlan import extract_domain
 
 from idhazh import config, corpus, extract, fetch
-from idhazh.contracts.app_config import ExtractConfig, ReferenceDatasetConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_text_digest, derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
+from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.knobs.finetune import ReferenceDatasetConfig
 from idhazh.contracts.reference_dataset import (
     ReferenceCleaningSettings,
     ReferenceCleaningTotals,

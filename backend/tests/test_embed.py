@@ -21,9 +21,10 @@ from typing import Any, Final
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh.contracts.app_config import AppConfig, AssistConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import SLUG_PATTERN
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
+from idhazh.contracts.knobs.assist import AssistConfig
 from idhazh.embed import (
     DIMENSIONS,
     DTYPE,

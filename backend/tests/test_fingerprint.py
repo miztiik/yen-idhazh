@@ -33,15 +33,11 @@ from conftest import CONFIG_DIR
 
 from idhazh import config
 from idhazh.classify import calls
-from idhazh.contracts.app_config import (
-    InferenceConfig,
-    ModelEntry,
-    ModelRef,
-    ModelsConfig,
-    TurnsConfig,
-)
 from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
     MACHINE_INPUTS,

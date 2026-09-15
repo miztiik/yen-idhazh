@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
 
 pytestmark = pytest.mark.slow

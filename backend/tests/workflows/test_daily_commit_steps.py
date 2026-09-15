@@ -29,7 +29,7 @@ from ._harness import (
     _substitute,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:

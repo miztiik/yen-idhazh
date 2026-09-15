@@ -16,13 +16,11 @@ from idhazh import (
     extract,
     summarize,
 )
-from idhazh.contracts.app_config import (
-    EvaluationConfig,
-    InferenceConfig,
-    TurnsConfig,
-)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
     CorpusItem,

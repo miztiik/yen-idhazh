@@ -6,7 +6,7 @@ from collections import Counter
 
 import pytest
 
-from idhazh.contracts.app_config import PlacementConfig
+from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.placement import stream_order
 
 from ._days import (

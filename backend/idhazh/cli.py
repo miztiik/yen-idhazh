@@ -40,10 +40,8 @@ from idhazh import (
     assemble,
     config,
 )
-from idhazh.contracts.app_config import (
-    ObservabilityConfig,
-    RunConfig,
-)
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )

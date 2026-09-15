@@ -29,12 +29,15 @@ from idhazh import (
     publish_scores,
     publish_span_rollup,
 )
-from idhazh.contracts.app_config import CollectConfig, ConsoleConfig, ModelRef, RunConfig
 from idhazh.contracts.console_band import Health, RouteId
 from idhazh.contracts.day_metrics import DayBands, DayMetrics, DayReasons, DaySource
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.models import ModelRef
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.public_eval import PublicEvalRow
 from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.run_manifest import (

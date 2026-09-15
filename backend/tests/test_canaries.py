@@ -38,10 +38,10 @@ from contracts._fixtures import copy_config, entry_with
 from pydantic import ValidationError
 
 from idhazh import cli, config, extract, telemetry
-from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource
 from idhazh.contracts.base import Model, derive_output_digest, derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.qualification import CanaryObservation
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary, SummaryStatus

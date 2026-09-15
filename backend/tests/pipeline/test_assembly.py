@@ -9,9 +9,9 @@ from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
 from idhazh import cli, config
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals.score import band
 from idhazh.stages import common

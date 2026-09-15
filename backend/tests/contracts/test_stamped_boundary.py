@@ -11,11 +11,6 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, SCHEMAS_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import (
-    ConsoleConfig,
-    ObservabilityConfig,
-    months_a_window_can_touch,
-)
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
@@ -23,6 +18,9 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.export import CONTRACTS
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.public_eval import PublicEvalRow
 from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay

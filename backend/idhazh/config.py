@@ -23,15 +23,11 @@ from typing import Final
 
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import (
-    TURN_ROLE,
-    AppConfig,
-    ModelEntry,
-    ModelsConfig,
-    TurnsConfig,
-    months_a_window_can_touch,
-)
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
+from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
+from idhazh.contracts.knobs.turns import TURN_ROLE, TurnsConfig
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy

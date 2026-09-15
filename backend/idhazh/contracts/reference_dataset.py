@@ -40,7 +40,6 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -55,6 +54,7 @@ from idhazh.contracts.base import (
     UrlKey,
     derive_url_key,
 )
+from idhazh.contracts.knobs.extract import ExtractConfig
 
 
 class ReferenceSplit(StrEnum):

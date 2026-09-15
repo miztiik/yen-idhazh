@@ -28,8 +28,8 @@ from dataclasses import dataclass
 from typing import Final
 
 from idhazh import telemetry
-from idhazh.contracts.app_config import LoggingConfig
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.knobs.observability import LoggingConfig
 
 #: The stages `stage_gap_ms` subtracts from the item's own wall clock. Four, and
 #: they tile the item without overlapping: `label_ms` and `summary_ms` are a

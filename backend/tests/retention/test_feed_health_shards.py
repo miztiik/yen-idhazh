@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from idhazh import day_partition, ledger
-from idhazh.contracts.app_config import ObservabilityConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.retention import oldest_month_kept, prune_feed_health
 
 from ._trees import (
@@ -18,8 +18,6 @@ from ._trees import (
     feed_health_months,
     months_back,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def feed_health_days(state_dir: Path) -> list[Path]:

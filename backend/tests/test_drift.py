@@ -28,7 +28,8 @@ import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import AppConfig, DriftConfig
+from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.evaluation import DriftConfig
 from idhazh.drift import (
     Alert,
     Observation,

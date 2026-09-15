@@ -11,7 +11,7 @@ from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
 from idhazh import assemble, cli, config
-from idhazh.contracts.app_config import ObservabilityConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.evals import sampling, writer

@@ -26,7 +26,6 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, elements, extract, publish_day_metrics, telemetry
-from idhazh.contracts.app_config import ModelRef
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.day_metrics import DayMetrics
@@ -40,6 +39,7 @@ from idhazh.contracts.digest_day import (
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import ElementClass, ItemHealthRow
+from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.run_manifest import (
     ModelRole,
     ModelUse,

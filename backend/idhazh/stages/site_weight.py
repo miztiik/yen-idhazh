@@ -11,9 +11,7 @@ from pathlib import Path
 from idhazh import (
     retention,
 )
-from idhazh.contracts.app_config import (
-    RetentionConfig,
-)
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.stages.common import LOG
 
 

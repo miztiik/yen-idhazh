@@ -27,9 +27,9 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.derived import DisplayedValue
 from idhazh.contracts.element import Element, ElementId, ElementTable
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 from idhazh.contracts.visual_data import (
     RENDERER_VERSION,

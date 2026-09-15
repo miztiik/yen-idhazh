@@ -664,7 +664,7 @@ jobs:
           from pathlib import Path
 
           from idhazh import config
-          from idhazh.contracts.app_config import ModelsConfig
+          from idhazh.contracts.knobs.models import ModelsConfig
           from idhazh.llm.server import server_argv
 
           CANDIDATE = os.environ["RUNTIME_CANDIDATE"]

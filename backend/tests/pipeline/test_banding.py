@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals.score import band, verdict
 
 pytestmark = pytest.mark.slow

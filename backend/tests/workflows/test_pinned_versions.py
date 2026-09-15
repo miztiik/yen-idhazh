@@ -26,7 +26,7 @@ from ._harness import (
     _setup_python_versions,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:

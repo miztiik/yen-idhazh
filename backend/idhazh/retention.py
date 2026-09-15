@@ -151,9 +151,10 @@ from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
 from idhazh import day_partition, ledger, month_partition, publish_telemetry, telemetry
-from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.contracts.visual_decision import VisualState
 from idhazh.contracts.visual_prune import VisualPruneRow

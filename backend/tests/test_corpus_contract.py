@@ -14,10 +14,11 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh import config, corpus
-from idhazh.contracts.app_config import AppConfig, FinetuneConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.knobs.finetune import FinetuneConfig
 from idhazh.contracts.summary import Summary
 
 pytestmark = pytest.mark.contract

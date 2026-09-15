@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections import Counter
 
-from idhazh.contracts.app_config import PlacementConfig
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.placement import DeskBounds, place, refile, stream_order
 
 #: The five desks the taxonomy declares today.

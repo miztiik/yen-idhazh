@@ -26,7 +26,7 @@ from statistics import median
 from typing import Final
 from urllib.parse import urlsplit
 
-from idhazh.contracts.app_config import DriftConfig
+from idhazh.contracts.knobs.evaluation import DriftConfig
 from idhazh.day_partition import days_in_window
 from idhazh.evals.writer import ledger_path, ledger_relpath
 

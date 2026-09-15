@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from idhazh.config import load
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals import archive, writer
 from idhazh.evals.score import band
 

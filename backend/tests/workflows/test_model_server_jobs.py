@@ -65,7 +65,7 @@ from ._harness import (
     requires_bash,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:

@@ -10,10 +10,10 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts import canonical_json
-from idhazh.contracts.app_config import UiConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.digest_view import DigestView
+from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.run_plan import RunPlan, TimeSource
 
 pytestmark = pytest.mark.contract

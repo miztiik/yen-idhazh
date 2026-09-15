@@ -41,8 +41,8 @@ from string import Template
 from typing import Final, Protocol
 
 from idhazh import config, summarize
-from idhazh.contracts.app_config import SummarizeConfig
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.evals.metrics import (
     hedge_dropped,
     lead_coverage,

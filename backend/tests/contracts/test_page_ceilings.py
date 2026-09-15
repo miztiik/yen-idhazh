@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 from conftest import CONFIG_DIR, read_text
 
-from idhazh.contracts.app_config import AppConfig, PageWeightConfig
+from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.page_weight import PageWeightConfig
 
 pytestmark = pytest.mark.contract
 

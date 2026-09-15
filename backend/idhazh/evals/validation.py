@@ -18,8 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.base import fit_field
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
 
 #: What an empty or unprintable runner label and an empty verdict detail record.

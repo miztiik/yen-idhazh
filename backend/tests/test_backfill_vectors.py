@@ -20,8 +20,8 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import assemble
-from idhazh.contracts.app_config import AssistConfig
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
+from idhazh.contracts.knobs.assist import AssistConfig
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
 from idhazh.stages.backfill_vectors import (

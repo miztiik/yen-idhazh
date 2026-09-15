@@ -28,13 +28,11 @@ from typing import ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.app_config import (
-    AssistConfig,
-    ConsoleConfig,
-    UiConfig,
-    refuse_an_archive_window_no_preset_offers,
-)
+from idhazh.contracts.app_config import refuse_an_archive_window_no_preset_offers
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
+from idhazh.contracts.knobs.assist import AssistConfig
+from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.ui import UiConfig
 
 #: The measure, in characters, outside which a line stops being comfortable to
 #: read. Bracketing rather than taste: below about 50 the eye returns too often,
