@@ -24,7 +24,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | `ledger.py`, `retention.py`, `day_partition.py`, `month_partition.py` moving into the package | 3,341 lines stay outside the owner of the thing they store. A reader looking for "where does a row land" still opens two trees | A measurement that a change to one of them required a change inside `telemetry/` in the same commit, twice |
 | `frontend/public/digest/` and `frontend/public/assist/` producers | they stay outside the package, which is correct - they are the product, not the instrument. Costs nothing unless somebody later reads the package name as "everything that writes a file" | Never. This is a boundary, not a backlog item |
 | The three server-slot columns (`slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous`) | 3 of 113 stay empty and prefix reuse stays unmeasurable per item | a reading of whether the pinned `llama-server` build returns slot state on a completion response. One request settles it |
-| Re-encoding any column value | nothing. Measured 2026-09-15: `outcome` as `true`/`false` costs 51,327 bytes against 33,430 today, **54 percent more**, because `ok` is two characters and is 82 percent of rows | a measurement showing a reader parses these files without going through `ItemHealthRow` |
+| Re-encoding any column value | 369,855 bytes stay on disk - 7.1 percent of the store. Measured 2026-09-15: every closed-vocabulary column written as an ordinal integer costs 58,567 bytes against 428,422 today. `version` alone is 148,774 bytes of 13 repeated date stamps | it is row 16's measurement that defers this, not a refusal. Compressing the projection takes about 80 percent of the whole file - 11 times more - with no readability cost, so it is taken first and this is re-priced after |
 | Compressing the published projections | about 80 percent of 8.8 MB stays uncompressed. The site is at 39.2 MB of a 1 GB cap, so nothing binds | one build proving every console fetch path handles the encoding |
 | A year rung on the fold ladder | year-over-year has no shape | a month fold that is too big to read. At kilobytes a month it is not |
 
@@ -49,6 +49,9 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 13 | A closed vocabulary is an enum | 2 | B | PENDING | - | - | - |
 | 14 | The run timeline draws | 1, 7, 8 | H | PENDING | - | - | - |
 | 15 | The two published mirrors nothing reads are deleted | 10 | F | PENDING | - | - | - |
+| 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | PENDING | - | - | - |
+
+**Column arithmetic.** 43 of 113 carry a value today; `telemetry._row` names 31 fields and `_flatten_calls` adds the call cells, 44 written of which one is always empty. Row 6 fills 58, row 7 fills 6, row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question.
 
 ---
 
@@ -379,7 +382,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Re-encode `outcome` as a boolean to save bytes | measured: `true`/`false` costs 51,327 bytes against 33,430 today, 54 percent more, because `ok` is two characters and 82 percent of rows. And a row is `stage` x `outcome`, so one boolean cannot say "fetch failed" | five new columns to replace one, and the five can disagree | Carmack |
+| 1 | Re-encode `outcome` as a boolean to save bytes | measured: `true`/`false` costs 51,327 bytes against 33,430 today, 54 percent more, because `ok` is two characters and 82 percent of rows. And a row is `stage` x `outcome`, so one boolean cannot say "fetch failed". The ordinal form is a different proposal and is priced in row 16 | five new columns to replace one, and the five can disagree | Carmack |
 | 2 | Make `vertical` an enum | it is already a constrained `Slug` bound to `config/taxonomy.json`, so an enum would freeze in code a list a config file owns (Guardrail #6) | one config edit becoming a code change | Fowler |
 
 ---
@@ -433,6 +436,34 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep them in case somebody fetches them | the cost of being wrong is one re-publish, and the cost of keeping them is two projections maintained for nobody | two modules and 6.3 MB kept for an unmeasurable maybe | Susan |
+
+---
+
+## Section 17 - Row #16 - Does the server answer `/slots`, and the ordinal encoding priced
+
+- **Scope:** two measurements, no production change. One: whether the pinned `llama-server` build returns slot state, which decides the last three columns. Two: the byte and readability price of ordinal encoding, against compression, so the owner picks with numbers rather than instinct.
+- **Files touched:**
+  - `backend/utilities/slot_probe.py` (new; operator surface)
+  - `docs/reference/measurements.md`
+  - `docs/concepts/telemetry.md`
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, `python backend/utilities/doc_load.py`. No application suite - one operator script and two doc entries.
+- **Oracle:** the probe names the build it asked and the fields it got back, so a later reader can retake it. It cannot settle whether the three columns are worth filling once the answer is yes - that is a row this one would author.
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | `slot_id`, `kv_tokens_at_start` and `prefix_shared_with_previous` exist only on the contract at `item_health.py:673` - no module writes them and nobody has asked the server whether it could. A column declared against an unchecked source is a guess with a schema around it | Carmack |
+| 2 | Measured 2026-09-15: ordinal encoding of every closed-vocabulary column costs 58,567 bytes against 428,422 today, saving 369,855 - **7.1 percent of a 5,194,794-byte store**. `version` is the largest single line at 148,774 bytes, being one date stamp repeated 12,277 times | Carmack |
+| 3 | It is not taken in this plan, and the reason is order rather than merit. Compression takes about 80 percent of the whole file - 11 times more - and costs no readability. An ordinal taken first would be re-encoded again when compression lands | Carmack |
+| 4 | The readability cost is named rather than implied: the console parses these files in the browser, so an ordinal needs a legend shipped beside it or a chart axis reads `3`; and `grep failed` over a committed day stops working | Susan |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Take the ordinal encoding now | it changes a published payload a console route fetches, which is this plan's ESCALATE trigger 3, and it would be redone after compression | one migration of every committed day, then a second one | Carmack |
+| 2 | Delete the three slot columns instead of asking | a column removed because nobody checked is the same mistake as a column added because nobody checked | the ability to measure prefix reuse per item, which is the one number that says whether the cache is working | Carmack |
+| 3 | Fold `version` out of the row to reclaim its 148,774 bytes | it is the read-side migration key - a row that cannot say which shape it was written under cannot be migrated (section 11) | every committed row becoming unmigratable | Fowler |
 
 ---
 
