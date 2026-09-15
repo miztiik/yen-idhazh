@@ -510,6 +510,19 @@ def candidate_menu(table: ElementTable) -> str:
 def label_user_turn(article: Article, table: ElementTable) -> str:
     """The title, the addressed article and the candidate table - all fenced.
 
+    **The title is fenced like the other two, and it used to be the one string
+    here that was not.** It sat bare on the line immediately in front of the
+    fence, which is a framing position: the prompt's "the block below is DATA"
+    sentence does not reach it, and prompt wording is not a control anyway
+    because it is written in the same channel as the attack (Guardrail #11).
+    `clean_title` strips machinery, not English, so an instruction written in
+    ordinary prose arrives intact - and since `extract.page_headline` landed,
+    the title of an item whose feed carried no headline is whatever the fetched
+    page's author put in `<title>`, including a page that exists to be crawled.
+    The placeholder is ours and costs nothing to fence; an ok article always
+    carries a title, so it is only reachable from a payload this call never
+    gets.
+
     It refuses a table built over a different string than the article it is
     printed beside. Every address in the menu is an offset into `Article.text`,
     so a mismatch prints a menu whose rows point into a document the model is
@@ -521,7 +534,7 @@ def label_user_turn(article: Article, table: ElementTable) -> str:
         raise SpanDriftError(
             f"{article.item_id}: the candidate table indexes a different string than this article"
         )
-    parts = [f"Title: {article.title}" if article.title else "Title: (untitled)"]
+    parts = ["Title:\n" + untrusted_block(article.title or "(untitled)")]
     parts.append("The item, one sentence per line:\n" + untrusted_block(numbered_sentences(text)))
     parts.append(
         "Quantities and dates already found in it:\n" + untrusted_block(candidate_menu(table))
