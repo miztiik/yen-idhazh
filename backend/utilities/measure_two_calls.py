@@ -393,7 +393,7 @@ def decompose(one: Completion, two: Completion) -> Spend:
     prefills.
 
     **The sum is an identity, so it is a reading aid and not the oracle.**
-    `boundary` cancels: the two call-2 causes always come to
+    `boundary` cancels: the summarize-and-plan call's two causes always come to
     `two.prompt_tokens - two.cached_tokens` whichever branch of the `max` runs,
     so a check that they add up cannot fail and proves nothing. What can fail is
     `Checks` below - whether the cache actually reached where the two rendered
@@ -710,7 +710,7 @@ def pick_samples(
     wanted: int,
     prompt_ceiling: int,
 ) -> list[tuple[Sample, int]]:
-    """The longest corpus articles whose call-1 prompt still fits.
+    """The longest corpus articles whose label-call prompt still fits.
 
     Longest, because every share this prints is a share of a prompt and the
     design's worst case is its longest one. Measured rather than estimated: the
@@ -741,7 +741,7 @@ def pick_samples(
                 print(
                     f"chose {wanted} article(s) after rendering {seen} of {len(samples)}; "
                     f"the longest that fits is {chosen[0][0].article.word_count} words "
-                    f"and a {chosen[0][1]}-token call-1 prompt",
+                    f"and a {chosen[0][1]}-token label-call prompt",
                     flush=True,
                 )
                 return chosen
@@ -987,7 +987,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(
             f"an article AT the cap is {built.article.word_count} words and a "
-            f"{at_cap_tokens}-token call-1 prompt, against the {ceiling}-token ceiling "
+            f"{at_cap_tokens}-token label-call prompt, against the {ceiling}-token ceiling "
             f"above - the corpus cannot supply one, so this case is BUILT",
             flush=True,
         )

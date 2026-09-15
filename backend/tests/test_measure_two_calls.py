@@ -77,7 +77,7 @@ def test_the_three_causes_always_sum_and_that_is_why_they_are_not_the_oracle(
 ) -> None:
     """The sum holds for every input, so a check on it proves nothing.
 
-    `boundary` cancels out of the two call-2 causes in both branches of the
+    `boundary` cancels out of the summarize-and-plan call's two causes in both branches of the
     `max`, so they come to `two.prompt_tokens - two.cached_tokens` whatever the
     numbers are. It is here as documentation: a reader who takes the printed
     total for a verification would trust a number they should not. What the run

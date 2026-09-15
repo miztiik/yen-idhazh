@@ -405,7 +405,7 @@ token from behind the article to in front of it changes where it sits, never how
 many there are, and the wording the move needed - two conditioning clauses on the
 plan half, a two-job opening on the elements half, and the pointer itself - came
 to 47 tokens more than it removed. The longest article the window admits is
-therefore **47 tokens shorter**, not 597 longer: the harness's call-1 prompt
+therefore **47 tokens shorter**, not 597 longer: the harness's label-call prompt
 ceiling did widen by 650, but the prompt it bounds now carries the 697 that
 moved into it. Measured the same day: the article's own room went from 8,735
 tokens to 8,688.
@@ -598,7 +598,7 @@ unmeasured and a denser candidate table may make it longer, so the saving at the
 cap is unknown and probably larger.
 
 **On a later item the system turn is free.** Items 2 and 3 each reused **1,362
-tokens** of their call-1 prompt with no work - the label call's system prompt, which is
+tokens** of the label call's prompt with no work - its system prompt, which is
 byte-identical on every item - and the server erased the previous item's copy of
 the summarize-and-plan call's question as invalidated. That is the steady state a shard spends its
 life in, and it had never been observed before this run.
@@ -859,9 +859,9 @@ than expected lengths - `ADDRESS_MAX` is 48 where a real address is
 here and barely at all on the summarize-and-plan call, whose structure is keys and enums at their
 real length.
 
-That ceiling is converted at **the one measured density of real call-1 output**:
-2,805 characters over 900 tokens, read off the reply that made this budget
-necessary, on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding,
+That ceiling is converted at **the one measured density of real label-call
+output**: 2,805 characters over 900 tokens, read off the reply that made this
+budget necessary, on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding,
 2026-09-12, one reply, no spread. **The budget is 6,491 tokens**, which is 7.2
 times the reply that was lost and 68 times an ordinary one. The density is held
 in source as the two numbers it was read from rather than as a decimal, it is
@@ -908,7 +908,7 @@ window has moved since and the ruling has not: what says the window did it is
 `NoneReason.WINDOW_EXHAUSTED`, written at the call site where the numbers are
 already in hand, rather than a constant that changed shape at import.
 
-**Rejected: recording a cut call-1 reply as the existing `output_truncated`.**
+**Rejected: recording a cut label-call reply as the existing `output_truncated`.**
 The counter is how anybody sees whether the derived budget worked, and folded in
 with the summarize-and-plan call's cuts it moves for reasons that have nothing to do with the label call.
 Refused by Fowler, 2026-09-13.
