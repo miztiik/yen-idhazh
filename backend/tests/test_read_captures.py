@@ -26,6 +26,7 @@ def capture_of(
     cost: dict[str, object] | None = None,
     decode_split: dict[str, object] | None = None,
     finish_reason: str = "stop",
+    about: dict[str, object] | None = None,
 ) -> read_captures.Capture:
     """One capture as `idhazh.capture` writes it, read back through `load`."""
     return read_captures.Capture(
@@ -39,6 +40,7 @@ def capture_of(
         finish_reason=finish_reason,
         cost=read_captures.cost_of(cost),
         split=read_captures.split_of(decode_split),
+        about=read_captures.about_of(about),
     )
 
 
@@ -134,8 +136,8 @@ def test_the_raw_text_comes_after_everything_that_reads_it() -> None:
     """Signal before noise: the bytes are kept whole and are read last."""
     document = read_captures.render(priced_pair(), head=0, tail=0)
 
-    assert document.index("## 2. What the calls cost") < document.index("## 5. The raw text")
-    assert document.index("## 3. What the label call sent back") < document.index("## 5. ")
+    assert document.index("## 3. What the calls cost") < document.index("## 6. The raw text")
+    assert document.index("## 4. What the label call sent back") < document.index("## 6. ")
     assert "<details>" in document
     assert "system turn\narticle\nnow summarize" in document
 
@@ -145,7 +147,14 @@ def test_every_heading_carries_its_number_in_order() -> None:
     document = read_captures.render(priced_pair(), head=0, tail=0)
 
     tops = [line for line in headings(document) if line.startswith("## ")]
-    assert [line.split(".")[0] for line in tops] == ["## 1", "## 2", "## 3", "## 4", "## 5"]
+    assert [line.split(".")[0] for line in tops] == [
+        "## 1",
+        "## 2",
+        "## 3",
+        "## 4",
+        "## 5",
+        "## 6",
+    ]
     assert headings(document)[0] == "# india-5tnmq7gb"
 
 
@@ -167,7 +176,7 @@ def test_a_decoder_that_could_not_stop_is_named_at_the_top() -> None:
     pair["label"] = capture_of("label", reply='{"a": "' + "x" * 900 + '"}')
 
     document = read_captures.render(pair, head=0, tail=0)
-    verdict = document.split("## 2.")[0]
+    verdict = document.split("## 3.")[0]
 
     assert "900-character unbroken lowercase run" in verdict
 
@@ -177,7 +186,7 @@ def test_a_cut_reply_is_named_before_any_number() -> None:
     pair = priced_pair()
     pair["summary"] = capture_of("summary", finish_reason="length")
 
-    verdict = read_captures.render(pair, head=0, tail=0).split("## 2.")[0]
+    verdict = read_captures.render(pair, head=0, tail=0).split("## 3.")[0]
 
     assert "stopped on `length`" in verdict
 
@@ -204,19 +213,26 @@ def test_a_list_of_objects_becomes_one_table_and_a_list_of_words_a_list() -> Non
     assert "Nothing came back under `claims`." in document
 
 
-def test_an_older_capture_fills_its_costs_from_the_day_ledger(tmp_path: Path) -> None:
-    """A capture written before costs were recorded still answers what it cost."""
-    ledger = tmp_path / "14.csv"
-    ledger.write_text(
-        "run_id,item_id,label_kind,label_prefill_ms,label_decode_ms,label_input_tokens,"
+def day_ledger(path: Path) -> Path:
+    """One item-health row, with the cells this report joins on and no others."""
+    path.write_text(
+        "run_id,item_id,shard,outcome,failure_code,canonical_url,source_id,source_words,"
+        "summary_words,label_kind,label_prefill_ms,label_decode_ms,label_input_tokens,"
         "label_output_tokens,label_cached_tokens,label_finish_reason,summary_kind,"
         "summary_prefill_ms,summary_decode_ms,summary_input_tokens,summary_output_tokens,"
         "summary_cached_tokens,summary_finish_reason,visual_plan_ms,visual_plan_tokens_written\n"
-        "34852763827,india-5tnmq7gb,label,6180,5861,3886,279,0,stop,summarize_and_plan,"
+        "34852763827,india-5tnmq7gb,2,ok,,https://example.org/wind-farm,dna-india,353,95,"
+        "label,6180,5861,3886,279,0,stop,summarize_and_plan,"
         "6214,3188,4214,512,3886,length,1178,192\n",
         encoding="utf-8",
         newline="\n",
     )
+    return path
+
+
+def test_an_older_capture_fills_its_costs_from_the_day_ledger(tmp_path: Path) -> None:
+    """A capture written before costs were recorded still answers what it cost."""
+    ledger = day_ledger(tmp_path / "14.csv")
     pair = {"label": capture_of("label"), "summary": capture_of("summary")}
 
     rows = read_captures.from_ledger(ledger)
@@ -226,6 +242,44 @@ def test_an_older_capture_fills_its_costs_from_the_day_ledger(tmp_path: Path) ->
     assert "| 1 | label | 12.0 s | 6,180 | 5,861 | 3,886 | 0 | 3,886 | 279 |" in document
     assert "| the visual plan | 1,178 | 192 |" in document
     assert "| the summary | 2,010 | 320 |" in document
+
+
+def test_the_report_names_the_story_so_the_summary_can_be_checked(tmp_path: Path) -> None:
+    """A summary is right or wrong against a source, so the source is section 1."""
+    ledger = day_ledger(tmp_path / "14.csv")
+    pair = {"label": capture_of("label"), "summary": capture_of("summary")}
+
+    rows = read_captures.from_ledger(ledger)
+    document = read_captures.render(
+        read_captures.merged(pair, rows["india-5tnmq7gb"]), head=0, tail=0
+    )
+
+    assert document.index("## 1. The story these calls read") < document.index("## 2. ")
+    assert "| link | <https://example.org/wind-farm> |" in document
+    assert "| outlet | dna-india |" in document
+    assert "| length | 353 words of article, 95 words of summary |" in document
+    assert "| run | 34852763827, shard 2 |" in document
+    assert "read section 5 beside it" in document
+
+
+def test_the_capture_keeps_the_link_the_ledger_would_have_been_pruned_of() -> None:
+    """The artifact outlives the row, so the link travels with the prompt."""
+    pair = priced_pair()
+    pair["label"] = capture_of(
+        "label",
+        about={"canonical_url": "https://example.org/wind-farm", "source_id": "dna-india"},
+    )
+
+    document = read_captures.render(pair, head=0, tail=0)
+
+    assert "| link | <https://example.org/wind-farm> |" in document
+
+
+def test_a_report_with_no_link_says_which_flag_would_find_one() -> None:
+    """A section that renders nothing teaches a reader the tool is broken."""
+    document = read_captures.render(priced_pair(), head=0, tail=0)
+
+    assert "This capture does not say which story it was about" in document
 
 
 def test_a_pair_with_no_costs_says_so_and_names_the_flag_that_fixes_it() -> None:
@@ -255,6 +309,11 @@ def test_a_capture_file_round_trips_through_load(tmp_path: Path) -> None:
     path.write_text(
         json.dumps(
             {
+                "about": {
+                    "canonical_url": "https://example.org/wind-farm",
+                    "source_id": "dna-india",
+                    "title": "A wind farm starts sending power",
+                },
                 "call": "summary",
                 "cost": {
                     "kind": "summarize_and_plan",
@@ -286,3 +345,4 @@ def test_a_capture_file_round_trips_through_load(tmp_path: Path) -> None:
     assert loaded.split is not None
     assert loaded.split.plan_ms == 1178
     assert loaded.finish_reason == "length"
+    assert loaded.about.canonical_url == "https://example.org/wind-farm"
