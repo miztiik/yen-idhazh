@@ -237,6 +237,7 @@
     "safety_ceiling_per_run": 120,
     "shard_size": 3,
     "shard_timeout_minutes": 90,
+    "shard_wrap_up_minutes": 7,
     "success_floor_pct": 80,
     "trial_state_dirname": "a-trial-nobody-runs"
   },

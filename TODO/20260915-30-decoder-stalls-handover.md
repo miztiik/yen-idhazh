@@ -39,27 +39,13 @@ then spent a quarter of an hour drawing one.
 
 ## 2. The branch waiting for you
 
-**Branch**: `fix/a-worker-gets-a-clock`, off `247e386a`.
-**Pull request**: [#766](https://github.com/miztiik/yen-idhazh/pull/766), open as a
-**draft on purpose** - three tests still fail. Do not merge it as it stands.
-**CI has never run on it** - see section 8. Run the suite yourself.
+**Worktree**: `yen-idhazh.worktrees/p31-clock`. **Branch**:
+`fix/a-worker-gets-a-clock`, off `247e386a`. **Pull request
+[#766](https://github.com/miztiik/yen-idhazh/pull/766)**, out of draft.
 
-**Somebody may already be carrying this.** As of 2026-09-15 a second agent had
-committed `A skipped item says so in the ledger, not only in the log` on top of
-the pushed tip, unpushed, in a worktree at `p31-clock`. Check
-`git log --oneline origin/fix/a-worker-gets-a-clock..` and the worktree list
-before you start, so two of you do not fix the same three tests.
-
-Make your own worktree, on a path nobody else has been told to use:
-
-```powershell
-cd c:\...\yen-idhazh
-git fetch origin
-git worktree add ..\yen-idhazh.worktrees\<your-own-name> -b <your-own-branch> origin/fix/a-worker-gets-a-clock
-```
-
-`ruff` and `mypy` are clean on it. The three failures are all one mechanical
-class: a new enum member needs its fixtures and its docs.
+`ruff` and `mypy` are clean and every test passes. The suite was run locally on
+the merge commit; read CI's own verdict before merging, because a local pass and
+an absent check are not the same thing (section 8).
 
 ### What the branch contains
 
@@ -79,9 +65,11 @@ class: a new enum member needs its fixtures and its docs.
 - A new `test_a_shard_out_of_clock_stops_itself_instead_of_being_killed`
 - Five contract changelog entries stamped `2026-09-15T22:10`
 
-### The three failures left, and exactly what each needs
+### The three failures, and what closed them
 
-Six failed when the branch was written; three are fixed. Re-run with:
+All six are closed. The branch is green: `ruff` 0, `mypy` 0 over 354 files, the
+schema drift gate byte-clean, and the whole backend suite exit 0 on
+2026-09-15. Re-run with:
 
 ```powershell
 $w = 'c:\...\yen-idhazh.worktrees\p31-clock'
@@ -89,20 +77,18 @@ cd $w; $env:PYTHONPATH="$w\backend"
 ..\..\yen-idhazh\.venv\Scripts\python.exe -m pytest backend/tests -n auto -q
 ```
 
-| id | Failing test | The exact assertion, and what it needs |
+| id | Failing test | What closed it |
 | --- | --- | --- |
-| B1 | `test_telemetry.py::test_every_failure_code_has_a_real_fixture_writer[shard_out_of_time]` | `row_for` has no `case` producing this code. The `MODEL_TIMED_OUT` case beside it works because that code is in `_NO_REPLY_DETAIL` in `backend/idhazh/summarize.py`; `SHARD_OUT_OF_TIME` is not. **Fix: add it to `_NO_REPLY_DETAIL` with its own sentence, and add it to the `case` already written for `MODEL_TIMED_OUT`.** Or rule that a code written by `ItemRecorder.note` rather than by `telemetry.classify_item` does not belong in this enum - that is a real design question and the cheaper answer may be the second one |
-| B2 | `test_taxonomy_and_prompts.py::test_recorded_item_health_codes_never_count_against_a_source` | `assert 18 == 16`. The enum now has 18 source-neutral codes and something still says 16. `docs/architecture/sources/item-health.md` line 336 is already changed to "Eighteen"; **find the second place that counts them** - grep `Sixteen\|16` across `docs/` and `backend/tests/contracts/test_taxonomy_and_prompts.py` |
-| B3 | `test_taxonomy_and_prompts.py::test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum` | A set comparison; "Extra items in the right set: `shard_out_of_time`, `model_timed_out`". A page that lists the summarize codes still omits them. `item-health.md` lines 284 and 336 are done, so look at `docs/architecture/summarize/model-boundary.md`, `docs/how-to/troubleshoot-one-url.md` and `docs/architecture/sources/freshness.md` line 200 - the test names the page it read |
+| B1 | `test_telemetry.py::test_every_failure_code_has_a_real_fixture_writer[shard_out_of_time]` | **The code had no `ItemHealthRow` writer at all, so adding it to `_NO_REPLY_DETAIL` alone would have been a fixture nothing produces.** A skipped item wrote the code into its log record and no summary payload, and the census row is built from the payloads - so `telemetry.classify_item` filed it `unknown` carrying "summary payload missing", a throughput problem reported as a mystery. `stage_work` now writes the refusal as a summary payload as well, which is what makes `shard_out_of_time` reach the ledger the code was minted for. The new test's "no `.summary.json` was written" assertion was a proxy for "nothing was asked of the model"; it now asserts that directly, on `call_1 is None` |
+| B2 | `test_taxonomy_and_prompts.py::test_recorded_item_health_codes_never_count_against_a_source` | The second counter was the test's own literal. `docs/architecture/sources/item-health.md` already carried the word. The set is 19 with `model_refused` merged in from `main` |
+| B3 | `test_taxonomy_and_prompts.py::test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum` | `docs/how-to/troubleshoot-one-url.md` gained a row for each code, each naming the knob an operator should read next |
 
-Already fixed and passing: the app-config fixture (`shard_wrap_up_minutes: 7`),
-the `model_timed_out` fixture writer, and the schema drift gate.
-
-Also done: `docs/concepts/config.md` line 1195 now says a hung request records
+Also done: the app-config fixture (`shard_wrap_up_minutes: 7`), the
+`model_timed_out` fixture writer, the schema drift gate, and
+`docs/concepts/config.md` line 1195 saying a hung request records
 `model_timed_out`.
 
-When green: push, open the PR, and say in the body that this is **Level 5** -
-it crosses contracts, config and a stage loop.
+This is **Level 5** - it crosses contracts, config and a stage loop.
 
 ---
 
@@ -113,7 +99,7 @@ it crosses contracts, config and a stage loop.
 | F1 | **The budget can never fire before the clock.** `request_timeout_minutes` is 22.1 minutes (1,326 s). The summary budget of 4,735 tokens needs 954 s on an EPYC and **1,259 s on a Xeon - 5% headroom**. The label budget of 6,491 tokens needs 1,284 s to 1,699 s and **fits on no machine**. Hitting the budget is graceful (`recovered_completion` keeps the summary); hitting the clock loses the whole item | 4 items lost on shard 1 of run 34943695821 | Make the budget derived: `min(widest_json_budget, timeout_seconds * floor_decode_rate)`, plus an import-time check. `backend/idhazh/classify/calls.py` |
 | F2 | **The job log and the committed ledger disagree** about whether the label call ran. The log records `label_finish_reason: stop` with `label_ms` filled; the ledger leaves both empty and carries only `label_output_tokens` | Same four items | Find where the failed row is projected into `state/item-health/`. `backend/idhazh/telemetry.py`, `backend/idhazh/stages/record.py` |
 | F3 | **Six label fields reach no reader**, and two may never reach one | Section 5 below | Section 5 |
-| F4 | **`not_attempted` covers two different things** - items the plan never reached, and items the clock never reached | 248 rows on 09-14 | Half-fixed by the branch's `SHARD_OUT_OF_TIME` |
+| F4 | **`not_attempted` covers two different things** - items the plan never reached, and items the clock never reached | 248 rows on 09-14 | **Closed.** An item the clock never reached now records `shard_out_of_time` in `state/item-health/` as well as in the log, because the worker writes the refusal as a summary payload and the census row is built from the payloads |
 | F5 | **The element-column docs are five rows where fifteen are needed** | `docs/architecture/extraction/elements.md` line 331 | Section 5's table is written; paste it |
 | F6 | **`copied_source` at 0.817** - one summary was 81.7% a single unbroken run copied from the article | `india-fas136vmnffehhzp`, 09-15 | Not investigated. May or may not be the same decoder failure wearing a different coat |
 | F7 | **Sort the model loop by exact word count, not just by band.** `_summarize_band_sort_key` already sorts ascending by length band; inside a band the order is arbitrary. With the branch's deadline, exact ascending order means whatever the clock cuts is always the longest and least likely to publish | Section 4a: failure rises from 11.7% under 300 words to 53.8% over 1,500 | One line in `backend/idhazh/stages/work.py:137` |

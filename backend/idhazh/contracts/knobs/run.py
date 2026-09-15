@@ -79,6 +79,25 @@ class RunConfig(Model):
             "this."
         ),
     )
+    shard_wrap_up_minutes: int = Field(
+        default=12,
+        ge=0,
+        description=(
+            "How much of shard_timeout_minutes the worker keeps back for itself, so "
+            "it stops on its own clock instead of being killed on the platform's. A "
+            "worker killed at shard_timeout_minutes uploads nothing, so every item it "
+            "had already finished dies with the ones it had not started: on 2026-09-15 "
+            "two of four shards went that way and the day published 66 stories against "
+            "a plan of 80.\n\n"
+            "What the worker does with it: once the time left is less than the slowest "
+            "item this shard has already finished, it starts no more. That needs no "
+            "estimate and calibrates itself to whichever processor the shard drew, "
+            "which is worth 24 percent between an EPYC and a Xeon. This reserve covers "
+            "what happens after the last item - writing the records, the manifest, and "
+            "the artifact upload. It is the one number here that is not derived: raise "
+            "it if an upload is ever cut off, and never lower it to fit one more story."
+        ),
+    )
     success_floor_pct: int = Field(
         default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
     )
