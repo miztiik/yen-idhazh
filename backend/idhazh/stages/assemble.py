@@ -47,6 +47,7 @@ from idhazh.stages.common import (
     _item_payloads,
     _load_day,
     _load_manifest,
+    _recovered,
     _run_dir,
 )
 
@@ -166,6 +167,7 @@ def stage_assemble(
             date=plan.date,
             run_id=run_id,
             extraction=_extraction_health(payload.article, settings),
+            recovered=_recovered(payload.decision_path),
         )
         for payload in _item_payloads(plan, items_dir)
     ]

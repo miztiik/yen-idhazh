@@ -16,7 +16,14 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.evals import writer
 from idhazh.stages import common
-from idhazh.stages.common import LOG, _extraction_health, _item_payloads, _run_dir, shard_of
+from idhazh.stages.common import (
+    LOG,
+    _extraction_health,
+    _item_payloads,
+    _recovered,
+    _run_dir,
+    shard_of,
+)
 
 
 def stage_record(
@@ -60,6 +67,7 @@ def stage_record(
                 run_id=plan.run_id,
                 shard=shard,
                 extraction=_extraction_health(payload.article, settings),
+                recovered=_recovered(payload.decision_path),
             )
         )
         if payload.eval_path.exists():

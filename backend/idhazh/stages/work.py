@@ -18,10 +18,14 @@ from pydantic import ValidationError
 
 from idhazh import (
     assemble,
+    capture,
     config,
     elements,
     extract,
+    fingerprint,
+    itemrecord,
     ledger,
+    machine,
     summarize,
     telemetry,
     visual_planner,
@@ -33,7 +37,7 @@ from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.item_health import FailureCode, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import PlanDecision, VisualPlan
@@ -123,11 +127,176 @@ class _FetchedWorkItem(NamedTuple):
     extract_ms: int
     started: float
     original_index: int
+    #: The item's own record, opened when it was fetched and still open. The
+    #: model loop runs in a different order from the fetch loop, so an item's
+    #: cells have to travel with the item rather than sitting in a list the
+    #: second loop indexes by position.
+    recorder: itemrecord.ItemRecorder
 
 
 def _summarize_band_sort_key(work: _FetchedWorkItem, settings: config.Settings) -> tuple[int, int]:
     band = settings.app.summarize.band_for(work.article.band_source_words)
     return band.min_source_words, work.original_index
+
+
+def _shard_cells(settings: config.Settings, *, shard: int, shard_item_count: int) -> dict[str, Any]:
+    """What was true of this shard before it read a single article.
+
+    Read once and noted on every item, because the question these answer is
+    asked of ONE row: a reader looking at a 475,890 ms item wants the context
+    size and the output budget that item ran under, and a shard-grain ledger
+    somewhere else makes them join two files to get it.
+
+    **Every one of them is config, so none of them is a measurement.** They are
+    the settings the run was given, which is exactly what a person comparing two
+    runs needs - the readings are the machine cells beside them.
+    """
+    model = settings.models.summarize
+    inference = model.inference
+    return {
+        "shard": shard,
+        "shard_item_count": shard_item_count,
+        "cpu_model": fingerprint.host_cpu() or None,
+        "runner_name": machine.runner_name(),
+        "model_id": model.id,
+        "model_quantisation": model.quantisation,
+        "n_ctx_configured": inference.n_ctx,
+        "n_parallel": inference.n_parallel,
+        "n_threads": inference.n_threads,
+        "n_batch": inference.n_batch,
+        "max_output_tokens": inference.max_answer_tokens,
+        "label_budget_tokens": calls.label_budget_tokens(),
+        "summary_budget_tokens": calls.summarize_and_plan_budget_tokens(settings.app.summarize),
+        "temperature": inference.temperature,
+    }
+
+
+def _planned_cells(item: PlannedItem, *, index: int) -> dict[str, Any]:
+    """Which item this is, and every term that put it in the run.
+
+    The ranker computes these and throws all but the total away, so an item that
+    published for one reason and an item that published for another are
+    indistinguishable afterwards. Carried onto the record they are the answer to
+    "why was this one here at all" - which is the first question asked of an
+    item that cost eight minutes.
+    """
+    return {
+        "item_id": item.item_id,
+        "url_key": item.url_key,
+        "canonical_url": item.canonical_url,
+        "vertical": item.vertical.value if hasattr(item.vertical, "value") else item.vertical,
+        "source_id": item.source_id,
+        "item_index": index,
+        "selection_score": item.rank_score,
+        "authority_score": item.authority_score,
+        "tier_score": item.tier_score,
+        "feed_weight": item.feed_weight,
+        "feed_reliability": item.feed_reliability,
+        "lens_bonus": item.lens_bonus,
+        "recency_bonus": item.recency_bonus,
+        "carriage_step": item.carriage_step,
+        "watchlist_bonus": item.watchlist_bonus,
+        "carried_by": item.carried_by,
+        "watchlist_hit": item.watchlist_hit,
+        "on_front_page": item.on_front_page,
+        "tier": item.tier,
+        "source_form": item.source_form,
+        "published_at": item.published_at,
+        "time_source": item.time_source,
+    }
+
+
+def _article_cells(article: Article) -> dict[str, Any]:
+    """What the fetch and the extract settled about the text.
+
+    `truncation_cap_tokens` is the article's own `truncated_at_tokens` and never
+    the configured cap, because the two disagree the moment the cap moves and
+    the row has to say which one did the cutting. It is null on an uncut item,
+    which is what the column declares.
+    """
+    text = article.text or ""
+    return {
+        "source_chars": len(text),
+        "source_words": article.word_count,
+        "source_words_before_cap": article.source_word_count,
+        "truncation_cap_tokens": article.truncated_at_tokens,
+    }
+
+
+def _call_cells(slot: str, reply: Completion) -> dict[str, Any]:
+    """One model call's numbers, under the slot's own column names.
+
+    Six the server reported, one wall clock, two rates and a cache share. The
+    rates are derived here rather than left to whoever reads the row, because a
+    reader deriving them is a reader who has to know which milliseconds go with
+    which token count - and the regression this exists to catch is exactly a
+    decode rate moving while a wall clock stayed put.
+    """
+    prefill_s = reply.prefill_ms / 1000
+    decode_s = reply.decode_ms / 1000
+    return {
+        f"{slot}_prefill_ms": reply.prefill_ms,
+        f"{slot}_decode_ms": reply.decode_ms,
+        f"{slot}_input_tokens": reply.prompt_tokens,
+        f"{slot}_output_tokens": reply.completion_tokens,
+        f"{slot}_cached_tokens": min(reply.cached_tokens, reply.prompt_tokens),
+        f"{slot}_finish_reason": reply.finish_reason,
+        f"{slot}_ms": reply.prefill_ms + reply.decode_ms,
+        f"{slot}_cache_pct": (
+            round(100 * min(reply.cached_tokens, reply.prompt_tokens) / reply.prompt_tokens, 2)
+            if reply.prompt_tokens
+            else None
+        ),
+        f"{slot}_prefill_tokens_per_s": (
+            round(reply.prompt_tokens / prefill_s, 2) if prefill_s > 0 else None
+        ),
+        f"{slot}_decode_tokens_per_s": (
+            round(reply.completion_tokens / decode_s, 2) if decode_s > 0 else None
+        ),
+    }
+
+
+def _ms(cell: object) -> int:
+    """One duration cell as a number, and zero where the stage never filled it."""
+    return cell if isinstance(cell, int) else 0
+
+
+def _heartbeat(recorder: itemrecord.ItemRecorder) -> Callable[[float], None]:
+    """The tick this item's watch calls while a model call is in flight.
+
+    A function that closes over one recorder rather than a lambda in the loop,
+    because a lambda in a loop closes over the LOOP VARIABLE - every item's
+    watch would tick the last item's record, and a heartbeat naming the wrong
+    item is worse than no heartbeat.
+    """
+
+    def tick(seconds: float) -> None:
+        recorder.waiting("summarize", seconds)
+
+    return tick
+
+
+def _slowest(finished: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The item that cost the shard most, and enough to find it again.
+
+    Four cells and not the row: a shard record carrying 113 columns of one item
+    buries the totals beside it, and the item's own completion record is already
+    in the log for anyone who wants the rest.
+
+    **The address is the URL and the source, never the title.** A title is
+    fetched text and a log line is read by a person, which is the one place
+    untrusted text most wants to be believed (Guardrail #11).
+    """
+    timed_items = [cells for cells in finished if isinstance(cells.get("item_total_ms"), int)]
+    if not timed_items:
+        return None
+    worst = max(timed_items, key=lambda cells: int(cells["item_total_ms"]))
+    return {
+        "item_id": worst.get("item_id"),
+        "canonical_url": worst.get("canonical_url"),
+        "source_id": worst.get("source_id"),
+        "item_total_ms": worst.get("item_total_ms"),
+    }
 
 
 def stage_work(
@@ -188,9 +357,28 @@ def stage_work(
         len(mine),
         model.id,
     )
+    flags = itemrecord.Flags.of(settings.app.logging)
+    # Read once per shard and noted on every item. The process table scan and
+    # the CPU model read are each a few file opens; doing them per item would be
+    # 80 scans for an answer that cannot change inside a shard.
+    server_pid = machine.llama_server_pid()
+    shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine))
+    failures: dict[str, int] = {}
+    finished: list[dict[str, Any]] = []
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
         started = time.monotonic()
+        recorder = itemrecord.ItemRecorder(
+            run_id=plan.run_id, flags=flags, now=assemble.utc_now, log=LOG
+        )
+        recorder.note(
+            date=plan.date,
+            run_id=plan.run_id,
+            item_started_at=assemble.utc_now(),
+            **shard_cells,
+            **_planned_cells(item, index=original_index),
+        )
+        recorder.start()
         with (
             tracer.trace(_trace_id(plan.run_id, item)),
             tracer.span(telemetry.SpanName.ITEM) as span,
@@ -199,9 +387,26 @@ def stage_work(
             article, source_text, fetch_ms, extract_ms = _fetch_one(
                 item, settings, read_url, tracer
             )
+        # One reading of the pair, split across the two cells the stage records
+        # separately, so the stage lines and the census row cannot disagree about
+        # which milliseconds belonged to which half.
+        recorder.note(fetch_ms=fetch_ms, extract_ms=extract_ms, **_article_cells(article))
+        recorder.stage_done(ItemStage.FETCH, fetch_ms)
+        recorder.stage_done(ItemStage.EXTRACT, extract_ms)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
+            recorder.note(
+                stage=ItemStage.EXTRACT.value,
+                outcome=ItemOutcome.FAILED.value,
+                code=article.failure_code.value if article.failure_code else None,
+                detail=telemetry.detail_cell(article.failure_detail)
+                if article.failure_detail
+                else None,
+            )
+            finished.append(recorder.done())
+            code = str(recorder.get("code") or FailureCode.UNKNOWN.value)
+            failures[code] = failures.get(code, 0) + 1
             continue
         ready.append(
             _FetchedWorkItem(
@@ -212,15 +417,26 @@ def stage_work(
                 extract_ms=extract_ms,
                 started=started,
                 original_index=original_index,
+                recorder=recorder,
             )
         )
 
     for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
         item = work.item
         article = work.article
+        recorder = work.recorder
+        # The gap between the fetch loop finishing this item and the model loop
+        # reaching it. The two loops run in different orders, so this is real
+        # time an item spent on a list and it is the only place it is visible.
+        recorder.note(queue_wait_ms=int((time.monotonic() - work.started) * 1000) - work.fetch_ms)
         with (
             tracer.trace(_trace_id(plan.run_id, item)),
             tracer.span(telemetry.SpanName.ITEM) as item_span,
+            machine.Watch(
+                interval_s=flags.waiting_heartbeat_seconds,
+                server_pid=server_pid,
+                on_tick=_heartbeat(recorder),
+            ) as watch,
         ):
             telemetry.item_attributes(item_span, item, run_id=plan.run_id, shard=shard)
             model_started = time.monotonic()
@@ -231,8 +447,19 @@ def stage_work(
                 endpoint=model_endpoint,
                 run_id=plan.run_id,
                 tracer=tracer,
+                recorder=recorder,
             )
             summarize_ms = int((time.monotonic() - model_started) * 1000)
+            # What the stage spent NOT being served: the window check, the
+            # prompt render, the parse, the element anchoring and the draw. The
+            # two calls report their own prefill and decode, so anything left is
+            # this process rather than the server, and a regression in one looks
+            # nothing like a regression in the other.
+            served = _ms(recorder.get("label_ms")) + _ms(recorder.get("summary_ms"))
+            recorder.note(
+                summarize_ms=summarize_ms, model_wait_ms=max(summarize_ms - served, 0)
+            )
+            recorder.stage_done(ItemStage.SUMMARIZE, summarize_ms)
             summary = summary.model_copy(
                 update={
                     "duration_ms": int((time.monotonic() - work.started) * 1000),
@@ -242,6 +469,33 @@ def stage_work(
                 }
             )
             assemble.write_atomic(items_dir / f"{item.item_id}.summary.json", summary.to_json())
+            recorder.note(
+                summary_words=len((summary.summary or "").split()),
+                model_calls=2 if summary.call_2 is not None else 1,
+                stage=ItemStage.SUMMARIZE.value,
+                outcome=(
+                    ItemOutcome.OK.value
+                    if summary.status is SummaryStatus.OK
+                    else ItemOutcome.FAILED.value
+                ),
+                code=summary.failure_code.value if summary.failure_code else None,
+                # The shape failure already wrote a detail naming the field and
+                # the rule; the summary's own is the generic one behind it. The
+                # narrower answer wins, and an item that did not fail carries
+                # neither - `detail_cell("")` is the string "unspecified
+                # failure", which on a passing row reads as a failure nobody had.
+                detail=recorder.get("detail")
+                or (
+                    telemetry.detail_cell(summary.failure_detail)
+                    if summary.failure_detail
+                    else None
+                ),
+                prefill_ms=summary.prefill_ms,
+                decode_ms=summary.decode_ms,
+                input_tokens=summary.input_tokens,
+                output_tokens=summary.output_tokens,
+                cached_tokens=summary.cached_tokens,
+            )
             if decision is not None:
                 assemble.write_atomic(
                     items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}", decision.to_json()
@@ -255,6 +509,10 @@ def stage_work(
                     decision.decision_ms,
                 )
             if summary.status is not SummaryStatus.OK or scorer is None:
+                recorder.note(**watch.close().cells())
+                finished.append(recorder.done())
+                code = str(recorder.get("code") or FailureCode.UNKNOWN.value)
+                failures[code] = failures.get(code, 0) + 1
                 continue
 
             seen = article.text or ""
@@ -288,6 +546,8 @@ def stage_work(
                 )
                 row = row.model_copy(update={"score_ms": score_ms})
                 score_span.set(telemetry.AttrKey.BAND, row.band.value)
+            recorder.note(faithfulness_ms=score_ms, stage=ItemStage.PUBLISH.value)
+            recorder.stage_done(ItemStage.PUBLISH, score_ms)
             assemble.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
             _write_evidence(row, premise=seen, summary=summary.summary or "")
             LOG.info(
@@ -299,6 +559,26 @@ def stage_work(
                 summarize_ms,
                 score_ms,
             )
+            recorder.note(**watch.close().cells())
+            finished.append(recorder.done())
+    # Every item that was fetched, never reached by the loop above and therefore
+    # never closed. Today the loop cannot exit early, so this is empty on every
+    # run - and it is what makes an early exit added later say so rather than
+    # dropping the items silently.
+    for work in ready:
+        if work.recorder.get("item_ended_at") is None:
+            work.recorder.abandoned("the shard ended before this item ran")
+            failures["abandoned"] = failures.get("abandoned", 0) + 1
+    itemrecord.shard_done(
+        run_id=plan.run_id,
+        shard=shard,
+        flags=flags,
+        now=assemble.utc_now,
+        log=LOG,
+        items=len(mine),
+        failures=failures,
+        slowest=_slowest(finished),
+    )
     tracer.flush()
     if tracing:
         # Fed by every span (the CollectingSink saw them all), reconciled to the
@@ -502,6 +782,106 @@ class _Progress:
 _NodeBody = Callable[[dag.CallNode], "_TwoCalls | None"]
 
 
+def _silent_recorder() -> itemrecord.ItemRecorder:
+    """A recorder that collects cells and emits nothing.
+
+    `_two_calls_one_item` is called directly by tests and by the canary runner,
+    which have no shard around them to open a real one. Every flag off rather
+    than a null object, so the same code path runs and there is no second
+    implementation to keep in step (Guardrail #7).
+    """
+    return itemrecord.ItemRecorder(
+        run_id="",
+        flags=itemrecord.Flags(
+            item_lines=False,
+            stage_lines=False,
+            waiting_heartbeat_seconds=0,
+            capture_prompts=False,
+            capture_replies=False,
+        ),
+        now=assemble.utc_now,
+        log=LOG,
+    )
+
+
+def _shape_cells(error: Exception) -> dict[str, Any]:
+    """Which field of a reply broke which rule, out of the exception that says so.
+
+    Pydantic already knows both and puts them in `errors()`; until now the stage
+    threw that away and logged the class name. `ValidationError` on twenty-two
+    items is a count, not a diagnosis, and the reply that would have explained it
+    has been discarded by the time anybody reads the row.
+
+    The first error rather than all of them, because the columns are singular and
+    a reply that broke five rules broke the first one first. A plain `ValueError`
+    carries no structure, so the field and the rule stay empty and `detail`
+    carries the message - which is still the whole of what is knowable.
+    """
+    detail = telemetry.detail_cell(str(error))
+    if not isinstance(error, ValidationError):
+        return {"detail": detail, "failed_field": None, "failed_rule": None}
+    first = next(iter(error.errors()), None)
+    if first is None:
+        return {"detail": detail, "failed_field": None, "failed_rule": None}
+    return {
+        "detail": detail,
+        "failed_field": ".".join(str(part) for part in first.get("loc", ())) or None,
+        "failed_rule": str(first.get("type") or "") or None,
+    }
+
+
+def _split_cells(two: Completion) -> dict[str, Any]:
+    """The picture's share of the summarize-and-plan call, apportioned.
+
+    The two halves are decoded one after the other and never at once, so the
+    boundary in the bytes is a boundary in time - `calls.split_the_decode` owns
+    the arithmetic and this is where its answer lands on the row.
+
+    `visual_plan_ms_is_estimate` is always True and is written anyway. A column
+    that is filled only when a number is doubtful reads as clean data on every
+    row where somebody forgot it (Guardrail #10).
+    """
+    split = calls.split_the_decode(two)
+    if split is None:
+        return {}
+    return {
+        "visual_plan_ms": split.plan_ms,
+        "visual_plan_ms_is_estimate": split.is_estimate,
+        "visual_plan_tokens_written": split.plan_tokens,
+    }
+
+
+def _kept_call(
+    recorder: itemrecord.ItemRecorder,
+    call: str,
+    date: str,
+    item_id: str,
+    prompt: str,
+    reply: str | None,
+) -> None:
+    """Measure one call's text, keep whichever halves the flags allow, and say so.
+
+    Called on the path where the reply never came back as well as the one where
+    it did, because a call that timed out is exactly the call whose prompt is
+    worth reading - and `reply=None` is what tells the two apart in the record.
+
+    The root is derived from the run directory rather than from the repository,
+    so a test that redirects `VAR_ROOT` redirects this with it - the same root
+    every other output of this stage is written under.
+    """
+    kept = capture.of(
+        root=_run_dir(date) / common.CAPTURES_DIRNAME,
+        item_id=item_id,
+        call=call,
+        prompt=prompt,
+        reply=reply or "",
+        keep_prompt=recorder.flags.capture_prompts,
+        keep_reply=recorder.flags.capture_replies and reply is not None,
+        write=assemble.write_atomic,
+    )
+    recorder.call_done(call, kept.cells())
+
+
 def _two_calls_one_item(
     article: Article,
     settings: config.Settings,
@@ -510,6 +890,7 @@ def _two_calls_one_item(
     endpoint: str = DEFAULT_ENDPOINT,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
+    recorder: itemrecord.ItemRecorder | None = None,
 ) -> _TwoCalls:
     """One article read once, labelled, summarized and drawn - in two adjacent calls.
 
@@ -554,6 +935,7 @@ def _two_calls_one_item(
     both are a cell in the census rather than a silence.
     """
     trace = tracer if tracer is not None else silent_tracer()
+    kept = recorder if recorder is not None else _silent_recorder()
     model = settings.models.summarize
     inference = model.inference
     model_id = model.id
@@ -642,8 +1024,11 @@ def _two_calls_one_item(
                 max_think_tokens=inference.max_think_tokens,
             )
             if one is None:
+                _kept_call(kept, "label", date, article.item_id, rendered, None)
                 return failed(no_reply)
             so_far.one = one
+            kept.note(**_call_cells("label", one))
+            _kept_call(kept, "label", date, article.item_id, rendered, one.content)
             if one.hit_the_budget:
                 LOG.warning(
                     "the labelling reply ran out of its output budget id=%s tokens=%s",
@@ -663,11 +1048,18 @@ def _two_calls_one_item(
                     entity_slugs=_watchlist_slugs(settings),
                 )
             except (ValidationError, ValueError, json.JSONDecodeError) as error:
+                # The exception's own message, and the field and the rule it
+                # names. Until 2026-09-15 this printed the class name alone -
+                # `ValidationError` on 22 items with 22 different causes, which
+                # is a count rather than a diagnosis, and the reply that would
+                # have explained it was already gone.
                 LOG.warning(
-                    "the labelling reply did not hold its shape id=%s reason=%s",
+                    "the labelling reply did not hold its shape id=%s reason=%s detail=%s",
                     article.item_id,
                     type(error).__name__,
+                    telemetry.detail_cell(str(error)),
                 )
+                kept.note(**_shape_cells(error))
                 return failed(FailureCode.BAD_SHAPE, one)
             return None
 
@@ -708,8 +1100,15 @@ def _two_calls_one_item(
                 max_think_tokens=inference.max_think_tokens,
             )
             if two is None:
+                _kept_call(kept, "summary", date, article.item_id, second_rendered, None)
                 return failed(no_reply, one)
             so_far.two = two
+            kept.note(
+                run_visual_decision=so_far.wants_a_plan,
+                **_call_cells("summary", two),
+                **_split_cells(two),
+            )
+            _kept_call(kept, "summary", date, article.item_id, second_rendered, two.content)
 
             with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
                 half = calls.recovered_completion(two)
@@ -723,6 +1122,10 @@ def _two_calls_one_item(
                         article.item_id,
                         two.completion_tokens,
                     )
+                # Filled on every item and not only on the cut ones, because
+                # `recovered` answers "was this summary salvaged" and an empty
+                # cell makes an ordinary item and an unmigrated row look alike.
+                kept.note(recovered=bool(two.hit_the_budget and half is not None))
                 so_far.summary = _split_the_cost(
                     summarize.to_summary(
                         article,
@@ -775,6 +1178,7 @@ def _two_calls_one_item(
             stamp=stamp,
             wants_a_plan=wants_a_plan,
             run_id=run_id,
+            recorder=kept,
         )
         decision = decision.model_copy(
             update={"decision_ms": int((time.monotonic() - started) * 1000)}
@@ -797,6 +1201,7 @@ def _decide_the_visual(
     stamp: Mapping[str, str],
     wants_a_plan: bool,
     run_id: str | None,
+    recorder: itemrecord.ItemRecorder | None = None,
 ) -> VisualDecision:
     """Which of the routes to a picture, or to none, this reply took.
 
@@ -836,11 +1241,17 @@ def _decide_the_visual(
             brief=article.brief,
         )
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
+        # The message, the field and the rule, for the reason written over the
+        # labelling reply's own shape failure: a class name is a count and not a
+        # diagnosis, and the reply it came from is already gone.
         LOG.warning(
-            "the plan half did not hold its shape id=%s reason=%s",
+            "the plan half did not hold its shape id=%s reason=%s detail=%s",
             summary.item_id,
             type(error).__name__,
+            telemetry.detail_cell(str(error)),
         )
+        if recorder is not None:
+            recorder.note(**_shape_cells(error))
         return visual_planner.not_drawable_here(
             summary,
             why="the plan half of the reply did not hold the shape a plan has to hold",

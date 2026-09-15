@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR
 
-from idhazh import config
+from idhazh import config, itemrecord
 from idhazh.contracts.article import Article
 from idhazh.stages.work import _FetchedWorkItem, _summarize_band_sort_key
 
@@ -30,11 +31,20 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
         # has to agree with the prompt it is grouping.
         return base.model_copy(update={"word_count": words, "source_word_count": words})
 
+    def quiet() -> itemrecord.ItemRecorder:
+        """A recorder the sort never reads. It travels with the item, so it has to exist."""
+        return itemrecord.ItemRecorder(
+            run_id="r",
+            flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+            now=lambda: "2026-09-15T00:00:00Z",
+            log=logging.getLogger("test"),
+        )
+
     candidates = [
-        _FetchedWorkItem(items[0], sized(2000), "", 0, 0, 0.0, 0),
-        _FetchedWorkItem(items[1], sized(10), "", 0, 0, 0.0, 1),
-        _FetchedWorkItem(items[2], sized(800), "", 0, 0, 0.0, 2),
-        _FetchedWorkItem(items[3], sized(100), "", 0, 0, 0.0, 3),
+        _FetchedWorkItem(items[0], sized(2000), "", 0, 0, 0.0, 0, quiet()),
+        _FetchedWorkItem(items[1], sized(10), "", 0, 0, 0.0, 1, quiet()),
+        _FetchedWorkItem(items[2], sized(800), "", 0, 0, 0.0, 2, quiet()),
+        _FetchedWorkItem(items[3], sized(100), "", 0, 0, 0.0, 3, quiet()),
     ]
 
     ordered = sorted(candidates, key=lambda candidate: _summarize_band_sort_key(candidate, settings))

@@ -49,7 +49,7 @@ from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, NoneReason, VisualDecision
 from idhazh.evals import evidence
 from idhazh.fingerprint import (
     text_digest,
@@ -79,6 +79,16 @@ QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualificatio
 #: A sibling of `VAR_ROOT` rather than a child, because the run never reads it
 #: back and no downstream job downloads it. A test redirects it the same way.
 EVIDENCE_ROOT: Final = config.REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
+
+
+#: Where one run's model-call captures go: beside its items rather than inside
+#: them. Inside would put every rendered prompt in the `items-<shard>` artifact
+#: that `assemble` downloads whole, which is a different retention window and a
+#: job that has no use for the text. Derived from the run directory rather than
+#: from the repository root, so redirecting `VAR_ROOT` redirects this too - a
+#: capture root a test could not move wrote prompts into the working tree on
+#: every suite run (2026-09-15).
+CAPTURES_DIRNAME: Final = "captures"
 
 
 #: The planted attacks, run live against a candidate before it is adopted.
@@ -572,6 +582,32 @@ def _item_payloads(
             eval_path=items_dir / f"{item.item_id}.eval.json",
             decision_path=items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}",
         )
+
+
+def _recovered(decision_path: Path) -> bool | None:
+    """Did this item's summary have to be salvaged from a reply that was cut?
+
+    The decision payload already knows. `recovered_completion` runs exactly when
+    the summarize-and-plan reply hit its ceiling and the summary object behind
+    the cut was still closed, and that is the same condition that makes the
+    picture's `none_reason` one of the two cut reasons - the budget's, or the
+    window's.
+
+    **Read from the payload rather than recomputed**, because recomputing means
+    re-deriving the budget the run used from the config the ledger is being
+    written under, and those are two different days the moment a bound moves.
+
+    Nothing comes back where there is no payload: an item that never reached the
+    second call has no picture decision, so the question was never asked and an
+    empty cell is the honest answer rather than `false`.
+    """
+    if not decision_path.exists():
+        return None
+    try:
+        decision = VisualDecision.read(decision_path)
+    except (OSError, ValueError):
+        return None
+    return decision.none_reason in {NoneReason.OUTPUT_BUDGET_CUT, NoneReason.WINDOW_EXHAUSTED}
 
 
 def _extraction_health(

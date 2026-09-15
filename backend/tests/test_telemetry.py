@@ -878,9 +878,16 @@ def test_the_concept_page_names_no_event_the_code_cannot_emit() -> None:
     So the list read as a promise, and nothing told a reader which names fire.
     This is the check that stops the page and the vocabulary drifting apart
     again, in either direction.
+
+    **The prefix list is read off the vocabulary rather than written out.** It
+    was `run|stage|item` and the six flat records added 2026-09-15 brought two
+    more prefixes with them, so a hand-written alternation would have let
+    `model.waiting` and `shard.done` go unnamed on the page while the test
+    stayed green - which is the exact failure it exists to catch.
     """
     page = (REPO_ROOT / "docs" / "concepts" / "telemetry.md").read_text(encoding="utf-8")
-    named = set(re.findall(r"`((?:run|stage|item)\.[a-z.]+)`", page))
+    prefixes = "|".join(sorted({name.value.split(".")[0] for name in telemetry.EventName}))
+    named = set(re.findall(rf"`((?:{prefixes})\.[a-z.]+)`", page))
 
     assert named == {name.value for name in telemetry.EventName}
 

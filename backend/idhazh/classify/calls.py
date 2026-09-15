@@ -1467,17 +1467,11 @@ def parse_summarize_and_plan(
     return SummarizeAndPlanReply(summary=draft, visual=plan_made)
 
 
-def summary_object(raw: str) -> str | None:
-    """The closed `summary` object out of a reply that never closed, or nothing.
+def _summary_bounds(raw: str) -> tuple[str, int, int] | None:
+    """The reply's decoded body and where the closed `summary` object sits in it.
 
-    `summary` is the first property of the reply shape, so a decode that got far
-    enough to be cut got past it: the object is complete, balanced and sitting
-    at a known place in the bytes. `json.JSONDecoder().raw_decode` reads exactly
-    one value from a position and ignores whatever follows, which is the whole
-    of the recovery - no repair, no bracket counting, no second request.
-
-    Nothing is returned when the cut landed inside the summary itself, which is
-    the case where there is genuinely nothing to publish.
+    One walk over the bytes, shared by the two callers that need it: the
+    recovery, which wants the object, and the split, which wants the boundary.
     """
     content = _THINK.sub("", raw).strip()
     fenced = _FENCED_JSON.match(content)
@@ -1493,10 +1487,89 @@ def summary_object(raw: str) -> str | None:
     while start < len(content) and content[start].isspace():
         start += 1
     try:
-        body, _ = json.JSONDecoder().raw_decode(content, start)
+        body, end = json.JSONDecoder().raw_decode(content, start)
     except json.JSONDecodeError:
         return None
-    return json.dumps(body) if isinstance(body, dict) else None
+    if not isinstance(body, dict):
+        return None
+    return json.dumps(body), start, end
+
+
+def summary_object(raw: str) -> str | None:
+    """The closed `summary` object out of a reply that never closed, or nothing.
+
+    `summary` is the first property of the reply shape, so a decode that got far
+    enough to be cut got past it: the object is complete, balanced and sitting
+    at a known place in the bytes. `json.JSONDecoder().raw_decode` reads exactly
+    one value from a position and ignores whatever follows, which is the whole
+    of the recovery - no repair, no bracket counting, no second request.
+
+    Nothing is returned when the cut landed inside the summary itself, which is
+    the case where there is genuinely nothing to publish.
+    """
+    found = _summary_bounds(raw)
+    return None if found is None else found[0]
+
+
+class DecodeSplit(NamedTuple):
+    """One reply's decode, apportioned between the summary and the picture.
+
+    Four numbers and a flag, because the flag is the honest half: the two halves
+    were never timed separately and `is_estimate` is what stops the milliseconds
+    being quoted as though they were (Guardrail #10).
+    """
+
+    summary_ms: int
+    plan_ms: int
+    summary_tokens: int
+    plan_tokens: int
+    is_estimate: bool = True
+
+
+def split_the_decode(completion: Completion) -> DecodeSplit | None:
+    """Apportion the summarize-and-plan call's decode between its two halves.
+
+    **The method is the field order, and the field order is why it works.**
+    `summary` is declared before `visual` and field order is decode order, so
+    the summary is written and closed before the plan is started - the halves do
+    not interleave, and a boundary in the bytes really is a boundary in time.
+    What is apportioned is the decode alone: the prefill read the prompt, which
+    belongs to neither half.
+
+    The share is the plan half's characters over the whole reply's. Tokens are
+    apportioned first and the milliseconds follow the tokens, so the two agree
+    by construction rather than by two roundings that happen to match, and each
+    pair sums to exactly what the server reported.
+
+    **It is an estimate and it says so.** Timing the boundary exactly needs the
+    reply streamed and the `visual` key timestamped, which is a new request path
+    and a second timeout policy for a decision this coarse (Carmack,
+    2026-09-14). `visual_plan_ms_is_estimate` carries the method onto the row,
+    because a number whose method is recorded somewhere else is a number that
+    gets quoted without it.
+
+    Nothing comes back where there is no boundary to find: a reply the gate
+    narrowed to the summary alone, a cut that landed inside the summary, or a
+    decode the server reported as zero tokens.
+    """
+    found = _summary_bounds(completion.content)
+    if found is None or completion.completion_tokens <= 0:
+        return None
+    _, start, end = found
+    whole = len(_THINK.sub("", completion.content).strip())
+    summary_chars = max(end - start, 0)
+    plan_chars = max(whole - end, 0)
+    if summary_chars + plan_chars <= 0:
+        return None
+    plan_tokens = round(completion.completion_tokens * plan_chars / (summary_chars + plan_chars))
+    summary_tokens = completion.completion_tokens - plan_tokens
+    plan_ms = round(completion.decode_ms * plan_tokens / completion.completion_tokens)
+    return DecodeSplit(
+        summary_ms=completion.decode_ms - plan_ms,
+        plan_ms=plan_ms,
+        summary_tokens=summary_tokens,
+        plan_tokens=plan_tokens,
+    )
 
 
 def recovered_completion(completion: Completion) -> Completion | None:

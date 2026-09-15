@@ -573,7 +573,7 @@ class RuntimeCountersRow(Contract):
                 "job": job,
                 "job_seconds": _elapsed(scraped_at, job_started_at),
                 "cpu_model": (cpu_model or "").strip() or None,
-                "cpu_busy_pct": _cpu_busy_pct(cpu_stat_at_start, cpu_stat_at_end),
+                "cpu_busy_pct": cpu_busy_pct_between(cpu_stat_at_start, cpu_stat_at_end),
                 "peak_rss_bytes": _peak_bytes(rss_samples, _RSS_PEAK_COLUMN),
                 "model_load_ms": _model_load_ms(server_log),
                 "n_ctx_configured": _n_ctx_configured(server_log),
@@ -584,13 +584,20 @@ class RuntimeCountersRow(Contract):
         )
 
 
-def _cpu_ticks(text: str | None) -> dict[str, int] | None:
+def cpu_ticks(text: str | None) -> dict[str, int] | None:
     """The aggregate `cpu` line of `/proc/stat`, by field name.
 
     Reads the line out of whatever it is handed - the workflow passes that one
     line, and a whole capture of the file is the same fact with the per-processor
     lines still attached. Anything else - an empty variable, a truncated read -
     is absent rather than a zero reading.
+
+    **Public because the work stage reads the same file per item.** The shard
+    grain cannot attribute a slow item to a noisy neighbour, so `idhazh.machine`
+    takes the same two readings around one item - and a second copy of this
+    parsing would be a second thing to keep in step (Guardrail #5). Nothing
+    below `contracts/` is imported to do it: this stays a pure function over
+    text the caller opened.
     """
     if not text:
         return None
@@ -607,16 +614,19 @@ def _cpu_ticks(text: str | None) -> dict[str, int] | None:
     return None
 
 
-def _cpu_busy_pct(at_start: str | None, at_end: str | None) -> float | None:
+def cpu_busy_pct_between(at_start: str | None, at_end: str | None) -> float | None:
     """Busy processor time as a share of processor time available, between two reads.
 
     Differencing two reads is what makes this the job's number rather than the
     host's: `/proc/stat` counts since boot, and a runner boots minutes of mostly
     idle time before the job starts. The denominator is every processor's time,
     so nothing here needs to know how many there are.
+
+    Public for the same reason `cpu_ticks` is: the work stage differences the
+    same two readings around one item rather than around a whole shard.
     """
-    start = _cpu_ticks(at_start)
-    end = _cpu_ticks(at_end)
+    start = cpu_ticks(at_start)
+    end = cpu_ticks(at_end)
     if start is None or end is None:
         return None
     totals = []

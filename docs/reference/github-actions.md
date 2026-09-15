@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -1083,16 +1083,13 @@ Verified 2026-08-20.
  `run.shard_timeout_minutes`, and 33 items their ledger steps had already
  recorded as published never reached `assemble`. **Fixing one step in a file is
  not fixing the file.**
-- **Every `digest.yml` artifact is gone within 14 days, and the ones a re-render
- needs are gone within one - so "re-render the day from its decisions" is not a
- repair option for any day older than 24 hours.** Read off `digest.yml` on
- 2026-09-14, it keeps six: `plan` 1 day, `shard-visuals-<shard>` 1 - that one
+- **Every `digest.yml` artifact a re-render needs is gone within one day, so "re-render the day from its decisions" is not a repair option for any day older than 24 hours.** Read off `digest.yml` on 2026-09-15, it keeps seven: `plan` 1 day, `shard-visuals-<shard>` 1 - that one
  carries this run's rendered charts - `runtime-log-<shard>` 2, `items-<shard>`
- 7, `review` 7, and `evidence-<shard>` 14. **The re-render window is set by the
+ 7, `review` 7, `evidence-<shard>` 14, and `captures-<shard>` 90. **The re-render window is set by the
  shortest of those and never by the longest**, which is the trap in reading the
  list: `assemble` downloads `plan`, `items-*` and `shard-visuals-*` and needs
  all three, so a week-old `items-*` repairs nothing once the other two have
- gone. Nothing under `backend/var/` is committed either: `.gitignore` line 52
+ gone - and a 90-day `captures-*` repairs nothing at all, because it holds what the model was asked rather than what the day published. Nothing under `backend/var/` is committed either: `.gitignore` line 52
  is `backend/var/`, and `git ls-files backend/var` returns no files. **The
  committed record of a run is the digest under `frontend/public/digest/` plus
  the rows under `state/`, and never the intermediates.** Repairing an older day
@@ -1100,11 +1097,7 @@ Verified 2026-08-20.
  again - there is no cheaper path, and a
  plan that assumes one is proposing something that cannot be done. Job *logs*
  are the exception: they outlive every artifact here, which is why a question
- about what a past run did is asked with `gh run view --job <id> --log`. A
- seventh artifact at 90 days, holding each call's prompt and reply behind a
- config flag, is row 8 of
- [../../TODO/20260914-27-pipeline-observability-plan.md](../../TODO/20260914-27-pipeline-observability-plan.md)
- and has not landed.
+ about what a past run did is asked with `gh run view --job <id> --log`. **`captures-<shard>` is the one artifact that outlives the day it describes**, and it is the odd one on purpose: a regression is found by comparing today with a run from weeks ago, so a window shorter than the comparison is a window that closes exactly when it is wanted. It holds each call's rendered prompt and raw reply behind `logging.capture_prompts` and `logging.capture_replies`; with both off the directory is empty and the upload is a green no-op. It is never committed and is named in no `commit-and-push.sh` call, because a rendered prompt carries the article body inside it ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
 - **A re-run is per job, never per step, and it reuses the original commit.**
  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
  again from its first step; there is no way to resume at the step that failed.
