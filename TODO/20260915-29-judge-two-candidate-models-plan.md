@@ -15,24 +15,25 @@ So nothing raised in the session that produced this plan falls off the end.
 | C1 | Sanitizer could not hold Gemma's one-sided turn markers | section 2 | shipped, `2cd717c5` |
 | C2 | The bench's server arm had never finished - missing `hashlib` import | section 2 | shipped, `6caa123e` |
 | C3 | No measurement arm fetched the draft head | section 2 | shipped, `5adf36c0` |
-| C4 | Gemma's draft block named the wrong speculation type | section 2, task T1 | **root cause found, fix not written** |
-| C5 | Bench Gemma and get a completed server arm | task T1 | not started |
-| C6 | Write the model dossiers | task T2 | not started |
-| C7 | Markdown job summary for qualify and decide (owner approved "yes for D3") | task T3 | not started |
-| C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | not started |
-| C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | needs owner sign-off, Level 5 |
-| C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | not started |
-| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | owner ruled, not started |
-| C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | found this session, not fixed |
-| C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | answered, needs owner ruling |
-| C14 | Merge the two ready pull requests | task T9 | not started |
-| C15 | `digest.yml` validates draft fields loosely | task T10 | not started |
-| C16 | `model_unreachable` is a misleading failure code | task T10 | not started |
+| C4 | Gemma's draft block named the wrong speculation type | section 2, task T1 | **shipped, #759.** The pinned build does accept `draft-mtp`; run `34971210901` recorded its `--spec-type` list and a test holds the contract against it |
+| C5 | Bench Gemma and get a completed server arm | task T1 | **done, with a finding.** Runs `34972996987` and `34973005911` both completed their work and both were refused by the bench's own input-drift guard. See T1 below |
+| C6 | Write the model dossiers | task T2 | **shipped.** Both pages, plus the index row and the warning that a number on one may not be divided by a number on another |
+| C7 | Markdown job summary for qualify and decide (owner approved "yes for D3") | task T3 | **shipped, #763** |
+| C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | **shipped, #764.** `samples-{shard}.json`, worst faithfulness first, its own artifact |
+| C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | **shipped, #765 #769 #773.** All three steps |
+| C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | **shipped, #769** as `run.trial_state_dirname`, a named directory rather than a fixed one |
+| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **blocked, and the block is new.** The drift guard fails a run outright. See T1 |
+| C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | **shipped, #760.** The oracle found a third workflow, so six server starts assert the served alias where two did |
+| C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | **shipped, #762.** The scratch-config block only, as the smallest first step |
+| C14 | Merge the two ready pull requests | task T9 | shipped |
+| C15 | `digest.yml` validates draft fields loosely | task T10 | **shipped, #761** |
+| C16 | `model_unreachable` is a misleading failure code | task T10 | **shipped, #761** as `model_refused` |
 | C17 | The owner's "old code" suspicion about item ids | section 7 | answered, no defect |
 | C18 | Free memory has no value - record a peak, never a remainder | section 2, section 3 | owner ruled 2026-09-15 |
 | C19 | The GitHub cache is GitHub's to manage, not ours | task T8 | owner ruled 2026-09-15 |
+| C20 | **The bench refetches article text on every repeat, so any long run can be refused** | task T1, and it blocks T6 | **found 2026-09-15, needs a ruling** |
 
-Tasks T1, T2, T3, T4, T6 and T7 are unblocked and can start today. T5 and T8 need a person's ruling first, and each says so where it sits.
+Everything above has landed except C11 and C20, and C11 waits on C20. C20 is the one open decision and it is written up at the end of T1.
 
 ## 0. What this project is, and the five minutes of reading you owe
 
@@ -332,6 +333,46 @@ Set expectations in whatever you write up. The publisher claims 1.4x to 2.2x, sa
 
 Done when: the `--help` answer is recorded; and either Gemma has a completed server arm with and without the head, or there is a written note saying the pinned build cannot do it and what a build bump would cost.
 
+#### What happened, 2026-09-15
+
+**Step 1 answered yes.** Build `b10598` lists eleven values for `--spec-type` and `draft-mtp` is one of them. The `--help` text was captured by a `workflow_dispatch` workflow that installs the same pinned asset the measuring arms install, run `34971210901`, and is committed at `tests/fixtures/runtime/b10598-llama-server-help.txt`. A test asserts that every member of `SpeculationType` appears in it, so moving the pin fails locally on a missing file rather than on a runner.
+
+**Step 2 shipped** as #759. `spec_type` is `draft-mtp` and `n_max` is 2, as this row asked.
+
+**Step 3 ran and cannot answer the question.** Both dispatches completed all five items in all three repeats. Both were then refused by the bench's own guard, and separately, GitHub put them on different processors.
+
+| Arm | Run | Processor, arm 2 | A whole repeat, median |
+| --- | --- | --- | --- |
+| `draft-mtp`, `n_max` 2 | `34972996987` | AMD EPYC 7763 | 3,970 s |
+| `draft: null` | `34973005911` | AMD EPYC 9V74 | 4,192 s |
+
+The 5.3 percent between them is not the head. **The confound was measured rather than asserted**: the `llama-bench` arm of both runs used the same weights on machines both reporting EPYC 7763, and its 250-token decode differed by 8.8 percent between the two - 9.676 against 10.532 tok/s. A 5.3 percent difference read across two runs sits under an 8.8 percent between-run spread, so the pair says nothing about the head. Both dossiers say so in those words.
+
+**The instrument that could answer it** is a paired arm: both configurations alternating inside one job on one machine, which cancels the machine. `measure.yml` already runs that shape through the `runtime_candidate` input, and it needs no second download because both arms open the same weights file. What stops it today is that `candidate_update` returns a patch applied to `summarize.inference`, and the draft head is a sibling of `inference` rather than a knob inside it. Lifting a `draft` key out of the patch in `write_config` is about six lines and changes no existing arm.
+
+Two things have to move with it. Three repeats of two arms is roughly 6.7 hours against a 330-minute job timeout, so a paired run needs a repeat count it can be told (Guardrail #2 - the limit is GitHub's, so the design is what gives). And the drift guard below has to stop failing the job.
+
+#### C20 - the bench refetches article text on every repeat
+
+**This is what refused both runs, and it will refuse most long ones.** `fixed_corpus` freezes the plan - which five addresses - and nothing freezes the text. Every repeat fetches the pages again, and `rejected_input_drift` fires when any article's text digest differs from repeat 1's. On both dispatches the same two of five articles were edited by their publishers inside the 3.3-hour window. For a news corpus that is ordinary rather than unlucky.
+
+The guard's reason is sound: a timing difference must not be blamed on the model when a publisher moved the text. What is wrong is the consequence. **Failing the job throws away three complete repeats instead of reporting which of them are comparable** - and here repeats 2 and 3 agreed with each other exactly, in both runs, so a comparable pair existed and was discarded.
+
+This is the same defect the qualification was designed against. `stage_qualify`'s own docstring names it: *"The old validation case replanned and refetched for every model it scored, so two numbers could differ because a publisher edited a page rather than because the weights differed."* The qualification freezes the fetched article and replays it. The bench does not.
+
+**It blocks T6.** The owner ruled on 2026-09-15 to keep drawing bench runs and infer from the distribution. A harness that refuses a draw whenever a publisher edits a page cannot produce a distribution.
+
+Options, for a person to rule on:
+
+| id | Option | Cost | What it gives up |
+| --- | --- | --- | --- |
+| A1 | Freeze the text: keep repeat 1's articles and replay them for repeats 2..N | The largest change - the bench has to hand the pipeline an article it already has, which is a capability `stage_work` does not expose today | Nothing about the measurement. It is what the qualification already does |
+| A2 | Report the drift instead of failing: the verdict names the items whose text moved and the timing stands with that caveat attached | About ten lines. Output drift still fails, so a nondeterministic model is still caught | A weaker guard. A repeat that summarized different text sits in the same median as one that did not |
+| A3 | Time only the largest set of repeats that share one input, and fail only when fewer than two agree | About twenty lines. Keeps the guard's reason exactly and stops discarding good repeats | Nothing obvious, but it is new logic rather than removed logic, so it is the option most likely to be wrong in a way nobody notices |
+| A4 | Leave it and re-dispatch until a run gets lucky | Nothing to write. Roughly one job in two is wasted, at 3.3 hours each | The owner's T6 ruling in practice, and it gets worse as repeats rise |
+
+**Recommended: A3**, then the six-line paired arm above. A3 keeps the guard's reason - never compare across different text - while ending the behaviour that throws away a finished run, and it is what makes T6 possible at all. A1 is the better answer eventually and is a larger piece of work than this plan should absorb.
+
 ### T2 - Write the dossiers for the models that have numbers
 
 `docs/reference/models/` holds only `qwen3.5-9b-q4km.md` today. Ornith has a complete arm 2 and needs `ornith-1.5-9b-q5km.md`; Gemma needs `gemma-4-e4b-qat.md` once T1 produces one.
@@ -341,6 +382,12 @@ The bench emits a `dossier.md` inside the `bench-server-baseline` artifact, writ
 Every number carries its hardware, date and spread (Guardrail #10), and the page must not rank the models against each other while they sit on different processors - say the processor next to the number and stop there.
 
 Done when: both pages exist, `python backend/utilities/doc_load.py` is clean, and no page implies a cross-model ranking the measurements cannot support.
+
+#### What happened, 2026-09-15
+
+Both pages exist. Ornith's was pasted from the `dossier.md` in run `34938565911`'s artifact, as this row intended. **Gemma's could not be**, because the bench writes `dossier.md` after the verdict step and that step exited 1 - so Gemma's readings were recomputed from `runtime-summary.json` and `llm.json` in the artifacts of run `34972996987`, in the same shape and with the same spreads.
+
+Neither page carries a licence row and neither carries a qualification verdict, and both say so under "What this page still owes". `models.md` gained both rows and one sentence that does the work this row asked for: a number on one dossier may not be divided by a number on another, because these three pages carry readings from at least two processor families.
 
 ### T3 - Build the qualify and decide markdown summaries. OWNER APPROVED ("yes for D3").
 

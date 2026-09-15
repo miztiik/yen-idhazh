@@ -8,9 +8,17 @@ hardware that took it, the date and the spread.
 | Model | Status | Role | Dossier |
 | --- | --- | --- | --- |
 | Qwen3.5-9B-Q4_K_M | `incumbent` | summarizer | [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) |
+| Gemma-4-E4B-it-qat-UD-Q4_K_XL | `evaluated` | summarizer candidate | [models/gemma-4-e4b-qat.md](models/gemma-4-e4b-qat.md) |
+| Ornith-1.5-9B-Q5_K_M | `evaluated` | summarizer candidate | [models/ornith-1.5-9b-q5km.md](models/ornith-1.5-9b-q5km.md) |
 
-Today there is one. The table is short because a swap is rare, not because it is
-incomplete.
+One serves. The other two have been benched and neither has been qualified, so
+neither may be adopted: a bench says how fast, and only the qualification says
+whether the writing is good enough to publish.
+
+**A number on one dossier may not be divided by a number on another.** GitHub
+places each job where it likes, and these three pages carry readings from at
+least two processor families - EPYC 7763 and EPYC 9V74. Every table says which
+machine took it, and a comparison that ignores that is measuring the fleet.
 
 ## What the status word means
 
@@ -78,6 +86,8 @@ definitions.
 ## See also
 
 - [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) - the configured summarizer.
+- [models/gemma-4-e4b-qat.md](models/gemma-4-e4b-qat.md) - a benched candidate, and the one that declares a draft head.
+- [models/ornith-1.5-9b-q5km.md](models/ornith-1.5-9b-q5km.md) - a benched candidate.
 - [measurements.md](measurements.md) - the instrument log: everything measured that is not a property of one model.
 - [documentation-structure.md](documentation-structure.md) - where each kind of page lives, and what a dossier may not hold.
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - measure a candidate, adopt it in one line, and put the old one back in the same line.
