@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from idhazh import ledger, source_health
+from idhazh import ledger
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
     FetchOutcome,
@@ -26,6 +26,7 @@ from idhazh.contracts.feed_health import (
 from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
+from idhazh.telemetry import source_health
 
 DATE = "2026-09-02"
 FEED_URL = "https://trade.example-press.net/feed"

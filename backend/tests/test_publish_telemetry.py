@@ -19,7 +19,8 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.public_telemetry import GAP_NAMED_STAGES, PublicTelemetryRow
 from idhazh.itemrecord import NAMED_STAGE_MS
-from idhazh.publish_telemetry import (
+from idhazh.telemetry.publish.dispatch import publish_all
+from idhazh.telemetry.publish.public_telemetry import (
     DEFAULT_PUBLIC_ROOT,
     FORBIDDEN_COLUMNS,
     PUBLIC_COLUMNS,
@@ -29,7 +30,6 @@ from idhazh.publish_telemetry import (
     shard_path,
     shard_relpath,
 )
-from idhazh.stages.assemble import stage_assemble
 
 
 def _row(**overrides: object) -> ItemHealthRow:
@@ -263,12 +263,13 @@ def test_the_pipeline_never_writes_the_committed_telemetry_projection(tmp_path: 
     pipeline from a temporary tree still truncated the committed projection in
     `frontend/public/telemetry/`. A dirty tree is what aborts the publish push
     and discards a day, so the default must never reach a caller that passed
-    its own roots.
+    its own roots. The call moved into the dispatcher, so the claim moved with
+    it: that is the one place the root is now spelled.
     """
-    source = inspect.getsource(stage_assemble)
+    source = inspect.getsource(publish_all)
 
-    assert "publish_telemetry.publish(" in source
-    assert "public_root=" in source.split("publish_telemetry.publish(", 1)[1][:200]
+    assert "public_telemetry.publish(" in source
+    assert "public_root=" in source.split("public_telemetry.publish(", 1)[1][:200]
 
 
 def test_the_projection_carries_the_contract_header_and_no_version_cell() -> None:

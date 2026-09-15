@@ -581,7 +581,7 @@ function writeRuntimeCountersCanary() {
 		scraped_at: `${rowDate}T2${run}:0${index}:00Z`,
 		n_busy_slots_per_decode: '1.0',
 		// This page is the `work` series and only that series. The visuals job
-		// writes counters rows of its own from 2026-09-12 and `publish_machine`
+		// writes counters rows of its own from 2026-09-12 and `machine`
 		// keeps them out of the published mirror, so a canary carrying one would
 		// build a state the real site cannot reach.
 		job: 'work',
@@ -721,7 +721,7 @@ writeRuntimeCountersCanary();
 writeSpanRollupCanary();
 execFileSync(
 	process.env.IDHAZH_PYTHON || 'python',
-	['-m', 'idhazh.publish_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],
+	['-m', 'idhazh.telemetry.publish.public_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],
 	{
 		stdio: 'inherit',
 		shell: false,
