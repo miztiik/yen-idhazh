@@ -15,9 +15,9 @@ is elided unless `--head` asks for it.
 An operator surface, not a test: pytest does not collect `backend/utilities/`,
 so walking a directory here is not a growing read (`CLAUDE.md` section 13).
 
-    python backend/utilities/read_captures.py <captures-dir>
-    python backend/utilities/read_captures.py <captures-dir> --item india-5tnmq7gb
-    python backend/utilities/read_captures.py <captures-dir> --item india --out pair.md
+    python backend/utilities/pipeline_artifact_analyzer.py <captures-dir>
+    python backend/utilities/pipeline_artifact_analyzer.py <captures-dir> --item india-5tnmq7gb
+    python backend/utilities/pipeline_artifact_analyzer.py <captures-dir> --item india --out pair.md
 
 Get the directory from a finished run with:
 
