@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -330,6 +330,9 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 - **Soft retirement before hard.** Drop a source's weight, watch what changes, then retire it. Reversible in one field.
 - **A candidate that failed research never enters `retired`.** That list preserves the ids of feeds this project configured and later stopped asking, so that an item already published under one still resolves a name. An address nobody ever ran is not a tombstone, and filling the list with them makes it stop meaning anything.
 - **A retirement date is the last day a plan could select the feed**, read off the committed health record rather than chosen. An earlier date claims a stop that did not happen.
+- **A feed can answer every read, deliver items, publish them, and still serve no article.** Reliability asks whether the door opened and yield asks whether anything was behind it ([health.md](health.md#per-source-yield-is-measured-and-since-2026-09-06-it-speaks)); a host that serves one template page to every address passes both. What gives it away is the body: near enough the same short length on every row, under one extraction code. So this retirement is read off `state/item-health/**` - the `code` cell and the extracted length - and never off the words in a body, which would put fetched text in charge of curation (`CLAUDE.md` Guardrail #11).
+- **Read the whole feed's rows, not the rows that failed.** A feed's failures always look like a template host, because that is what a failure is. The question is what share of the feed they are, and the only reading that answers it counts the rows carrying no code as well. A feed that serves chrome four times in five is a different decision from one that serves it every time, and the subset hides which one you have.
+- **Retiring a feed orphans every address recorded against it.** `config/pipeline-tests.json` names a feed per candidate and the dispatch resolves the vertical and the tier off the live list, so a candidate left behind is a `KeyError` 40 minutes into a test dispatch. Drop the candidate in the same change, and keep the list above its floor.
 
 ## Feed Admission Check
 
