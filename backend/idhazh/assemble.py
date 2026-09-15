@@ -824,9 +824,11 @@ def collapse_same_story(
     key, or when the vectors the day carries score above `similarity_min`.
     Either way **every pair inside a group has to clear the bar**. The headline
     is the load-bearing one: the vector is built from `title. summary`, the
-    summary is our own prose about ONE article and is most of that string, so
-    two honest tellings of one story are pulled apart by the part that is
-    guaranteed to differ. Measured 2026-09-14, the cosine over fifty-three
+    summary is our own prose about ONE article and is 87 percent of what the
+    encoder reads - a median 16 tokens of headline in a median 121, measured
+    2026-09-14 - so two honest tellings of one story are pulled apart by the
+    part that is guaranteed to differ. Measured the same day, the cosine over
+    fifty-three
     cross-source pairs that share a headline has a median of 0.9177, which is
     below a pair a person marked as two different stories - so no threshold
     separates them and the text is what was wrong.

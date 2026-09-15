@@ -260,7 +260,8 @@ def test_the_count_is_of_other_sources_and_not_of_other_items() -> None:
 # --- one headline, two outlets ---------------------------------------------
 #
 # The cosine is taken over `title. summary`, and the summary is our own prose
-# about ONE article and is most of that string, so two honest tellings of one
+# about ONE article and is 87 percent of what the encoder reads - a median 16
+# tokens of headline in a median 121 - so two honest tellings of one
 # story are pulled apart by the part that is guaranteed to differ. Measured
 # 2026-09-14 over the twenty-five committed days: the fifty-three cross-source
 # pairs that share a headline have a median cosine of 0.9177, and the pair
