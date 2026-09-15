@@ -1,6 +1,6 @@
 # Data Growth Audit
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-15
 
 Status: review and redesign proposal, not an implemented architecture. No application
 code, contracts, configuration, tests or stored publication data changed in this
@@ -381,7 +381,7 @@ assets already skip unchanged writes; search vectors already use byte offsets.
 
 | Shortcut | Why It Does Not Meet The Request |
 | --- | --- |
-| Put all dates, manifests or keys in one JSON file and the label call read | The bytes, parse and deserialization still grow with history. |
+| Put all dates, manifests or keys in one JSON file and read it once | The bytes, parse and deserialization still grow with history. |
 | Replace CSV with one unbounded SQLite blob and call the system constant-time | Indexed queries improve, but cold restore, Git persistence, file limits and transfer can still grow with the entire database. |
 | Move work to a browser worker, native vector kernel or parallel job | It can change latency and responsiveness. It does not by itself remove data-dependent work or transfer. |
 | Stop vector ranking after K acceptable hits | A later vector can be better. The executed fixture demonstrates that failure. |
