@@ -363,10 +363,26 @@ jobs:
       # Arm one. The production path exactly as the daily run walks it: both
       # calls, the visual decision on, one slot on the server. Every other arm is
       # read against this one, so it runs first and it changes nothing.
+      #
+      # `bash <path>`, which is what seven of the nine calls this repository
+      # already makes into `.github/scripts/` do. The bare path works only while
+      # the file carries the executable bit, a file mode is invisible to the
+      # tests that read this YAML and to the shellcheck step that reads the
+      # script, and the first dispatch of this workflow died on exactly that -
+      # exit 126, `Permission denied`, on a script committed 100644. Handing the
+      # file to bash asks nothing of the mode.
+      #
+      # `!cancelled()` on every arm, because a rig exists to say what happened.
+      # On that first dispatch one broken call took all three arms with it, so
+      # the run read as a baseline problem where it had a script problem; three
+      # arms failing the same way would have named the cause on the run page.
+      # An arm still needs the one plan, and the script refuses by name without
+      # it rather than summarizing nothing quietly.
       - name: Arm baseline
+        if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: .github/scripts/run-pipeline-test-arm.sh baseline "$RUN_DATE"
+        run: bash .github/scripts/run-pipeline-test-arm.sh baseline "$RUN_DATE"
 
       # Arm two. No picture is reachable, so the summarize-and-plan call comes
       # back with the summary alone and the plan's decode is not spent. The
@@ -374,14 +390,20 @@ jobs:
       # start-time setting - so what the difference measures is the decode and
       # nothing else.
       - name: Arm no-visual-decision
+        if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: .github/scripts/run-pipeline-test-arm.sh no-visual-decision "$RUN_DATE"
+        run: bash .github/scripts/run-pipeline-test-arm.sh no-visual-decision "$RUN_DATE"
 
       # The slot count is fixed when the process starts, so this arm costs a
       # restart and a second model load. That load is itself one of the numbers
       # worth having: it is the fixed cost `run.shard_size` exists to amortise.
+      #
+      # It carries an id because arm three reads its outcome, and it runs after a
+      # failed arm for the same reason the arms do.
       - name: Restart the model with two slots
+        id: restart
+        if: ${{ !cancelled() }}
         env:
           LLAMA_WEIGHTS: backend/models/${{ steps.models.outputs.summarize_file }}
         run: |
@@ -426,10 +448,17 @@ jobs:
 
       # Arm three. Two slots, and the window doubled with them so each slot
       # still holds what the production gate admits articles against.
+      #
+      # The one arm that reads a step rather than only `!cancelled()`, and the
+      # difference is what a failed restart leaves behind: a healthy one-slot
+      # server. This arm would then run against one slot and publish the number
+      # under `parallel-2`, which is a wrong answer that looks like a right one.
+      # A failed restart fails the job, so nothing is hidden by the skip.
       - name: Arm parallel-2
+        if: ${{ !cancelled() && steps.restart.conclusion == 'success' }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: .github/scripts/run-pipeline-test-arm.sh parallel-2 "$RUN_DATE"
+        run: bash .github/scripts/run-pipeline-test-arm.sh parallel-2 "$RUN_DATE"
 
       - name: Stop the model
         if: always()
@@ -446,6 +475,12 @@ jobs:
       # between them mean anything. An address that could not be fetched is
       # reported by name rather than passed over: a stale list is the expected
       # way this workflow decays.
+      #
+      # Two different failures, and only one of them is this step's to raise. An
+      # arm that recorded nothing failed or was skipped, its own step is red and
+      # the job is red with it, so the report names it and moves on. An arm that
+      # recorded articles which are not the pair the draw chose has produced
+      # numbers nobody may subtract, and that is what raises here.
       - name: Say what the three arms measured
         if: always()
         env:
@@ -465,6 +500,7 @@ jobs:
           expected = os.environ["EXPECTED_ITEM_IDS"].split()
           print("| arm | items | summaries | model ms | failed |")
           print("| --- | --- | --- | --- | --- |")
+          silent = []
           disagreed = []
           for arm in settings.arms:
               items = Path("backend/var/arms") / arm.id / "run" / "items"
@@ -477,14 +513,19 @@ jobs:
                   spent += summary.get("summarize_ms") or 0
                   if summary.get("status") != "ok":
                       failed.append(f"{path.name.split('.')[0]}:{summary.get('failure_code')}")
-              print(
-                  f"| {arm.id} | {len(landed)} | {len(summaries)} | {spent} | "
-                  f"{', '.join(failed) or '-'} |"
-              )
-              if landed != sorted(expected):
+              note = ", ".join(failed) or "-"
+              if not landed:
+                  silent.append(arm.id)
+                  note = "nothing recorded"
+              elif landed != sorted(expected):
                   disagreed.append(f"{arm.id} recorded {landed}")
+              print(
+                  f"| {arm.id} | {len(landed)} | {len(summaries)} | {spent} | {note} |"
+              )
           print("")
           print(f"the draw asked every arm for {' and '.join(expected)}")
+          if silent:
+              print(f"these arms produced nothing: {', '.join(silent)}")
           if disagreed:
               raise SystemExit(
                   "the arms did not all read the same two articles, so nothing here "
