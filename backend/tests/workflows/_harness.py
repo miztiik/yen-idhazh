@@ -207,6 +207,18 @@ WEIGHTS_CHECKS: Final = {
         "Measure runtime candidate",
         "${{ needs.models.outputs.candidate_sha256 }}",
     ),
+    # The raw arm downloads the draft head and never runs it - llama-bench has
+    # no speculative path. It fetches it to fill the cache the server arm
+    # restores, which is why the check matters more here than the reader does:
+    # nothing in this job would notice a corrupt copy, and the arm that loads it
+    # is a different job on a different machine. The bench step is named below
+    # as the ordering anchor, not as a reader of these bytes.
+    ("measure.yml", "llm"): (
+        "Fetch the draft head",
+        "Verify the draft head",
+        "Benchmark the candidate",
+        "${{ needs.models.outputs.candidate_draft_sha256 }}",
+    ),
     ("measure.yml", "batched"): (
         "Download the summarizer weights",
         "Verify the weights",
@@ -295,7 +307,7 @@ BENCH_RAW_JOB: Final = "llm"
 BENCH_SERVER_JOB: Final = "runtime"
 
 BENCH_CACHE_KEY: Final = (
-    "bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}"
+    "bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}"
 )
 
 BENCH_ARTIFACTS: Final = {
