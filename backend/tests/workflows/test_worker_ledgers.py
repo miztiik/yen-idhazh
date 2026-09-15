@@ -11,7 +11,7 @@ from typing import Final
 import pytest
 from conftest import REPO_ROOT, read_text
 
-from idhazh import ledger
+from idhazh import ledger, telemetry
 from idhazh.evals import writer as score_writer
 
 from ._harness import (
@@ -190,11 +190,18 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
 
 
 def test_every_path_the_work_shard_stages_is_union_merged() -> None:
-    """Eight shards append to one branch, so both ledgers need the union driver.
+    """Eight shards append to one branch, so every shared file needs the union driver.
 
     Asked of git rather than of a pattern matcher written here: `.gitattributes`
     is the file that decides, and a second implementation of its globbing could
     agree with this test and disagree with the merge.
+
+    `state/traces` is the one staged path deliberately outside the driver, so it
+    is asserted to be outside rather than left unmentioned. A trace file is named
+    for one shard of one run, so two shards never write one path and there is
+    nothing for a merge driver to settle. Unioning them would also be wrong: the
+    file is JSON lines, and a union of two different runs' spans is a tree that
+    reconciles against neither shard's clock.
     """
     # The file each staged path resolves to. All four directories file by day
     # now, so the union driver has to reach a nested path - `state/**/*.csv` is
@@ -207,17 +214,23 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
         "state/runtime-counters.csv": "state/runtime-counters.csv",
         "state/span-rollup": ledger.span_rollup_relpath(SUBSTITUTED_DATE[:7]),
     }
-    assert set(written) == set(COMMIT_STAGED_PATHS["work"])
+    per_shard = {
+        "state/traces": telemetry.committed_trace_relpath(f"{SUBSTITUTED_DATE}-1", 1),
+    }
+    assert set(written) | set(per_shard) == set(COMMIT_STAGED_PATHS["work"])
 
     answered = subprocess.run(
-        ["git", "check-attr", "merge", "--", *written.values()],
+        ["git", "check-attr", "merge", "--", *written.values(), *per_shard.values()],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
     ).stdout.splitlines()
 
-    assert answered == [f"{path}: merge: union" for path in written.values()]
+    assert answered == [
+        *(f"{path}: merge: union" for path in written.values()),
+        *(f"{path}: merge: unspecified" for path in per_shard.values()),
+    ]
 
 
 #: Where each ledger the work stage appends to directly lands, as the staged path
@@ -226,6 +239,12 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
 #: turns a helper name into a path.
 WORK_STAGE_APPENDS: Final = {
     "append_span_rollup": "state/span-rollup",
+}
+
+#: The same, for the writers that are not ledger appends. `stage_work` opens a
+#: file sink straight onto the trace path, so no `ledger.append_*` call names it.
+WORK_STAGE_SINKS: Final = {
+    "committed_trace_path": "state/traces",
 }
 
 
@@ -237,47 +256,63 @@ def test_every_ledger_the_work_stage_appends_to_is_staged_by_the_work_job() -> N
     step named the path, so every fold died with its runner, and assemble - on
     another machine, projecting a directory that was never there - published a
     header row and no data for nine days. Nothing failed; the instrument simply
-    reported nothing.
+    reported nothing. `state/traces`, the raw evidence the fold is taken from, was
+    missed the same way and is covered here for the same reason.
 
     The two lists this compares are written by different people at different
     times: one is a call in a stage, the other is an argument in a workflow. This
     is the test that makes the second follow the first.
     """
     source = read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "work.py")
+    expected = WORK_STAGE_APPENDS | WORK_STAGE_SINKS
     called = set(re.findall(r"\bledger\.(append_[a-z_]+)\(", source))
-    assert called, "the work stage appends to no ledger - has the call moved?"
-    assert called <= set(WORK_STAGE_APPENDS), (
-        f"the work stage appends to {sorted(called - set(WORK_STAGE_APPENDS))}, "
-        "which this test cannot say a staged path for. Add it to WORK_STAGE_APPENDS "
-        "and to the work job's commit step."
+    called |= {
+        name for name in WORK_STAGE_SINKS if re.search(rf"\btelemetry\.{name}\(", source)
+    }
+    assert called, "the work stage writes no ledger - has the call moved?"
+    assert called <= set(expected), (
+        f"the work stage writes {sorted(called - set(expected))}, which this test "
+        "cannot say a staged path for. Add it to WORK_STAGE_APPENDS or "
+        "WORK_STAGE_SINKS, and to the work job's commit step."
+    )
+    assert set(WORK_STAGE_SINKS) <= called, (
+        "the trace sink is no longer opened in stage_work - if it moved, move this "
+        "entry with it rather than deleting the guard"
     )
     staged = set(COMMIT_STAGED_PATHS["work"])
     for helper in sorted(called):
-        assert WORK_STAGE_APPENDS[helper] in staged, (
-            f"stage_work calls ledger.{helper} but the work job never stages "
-            f"{WORK_STAGE_APPENDS[helper]}, so the rows die with the runner"
+        assert expected[helper] in staged, (
+            f"stage_work calls {helper} but the work job never stages "
+            f"{expected[helper]}, so the rows die with the runner"
         )
 
 
 def test_the_span_rollup_ships_with_a_header_so_the_commit_step_can_name_it() -> None:
     """`git add` on a path that is not there aborts the whole step.
 
-    The commit step runs under `set -euo pipefail` and stages four ledgers in one
-    call, so a missing `state/span-rollup` would take item-health, the scores and
-    the runtime counters down with it on every fresh clone. The same reason
-    `state/feed-retirements.csv` and `state/counterfactual-scores/` ship with a
-    header and no rows.
+    The commit step runs under `set -euo pipefail` and stages six paths in one
+    call, so a missing `state/span-rollup` or `state/traces` would take
+    item-health, the scores and the runtime counters down with it on every fresh
+    clone. The same reason `state/feed-retirements.csv` and
+    `state/counterfactual-scores/` ship with a header and no rows.
+
+    The trace directory ships a keep-file rather than a sample trace: a trace is
+    evidence with a seven-day window, so a committed sample would be the one file
+    in it the prune could never justify keeping.
     """
-    relative = f"{ledger.STATE_DIRNAME}/{ledger.SPAN_ROLLUP_DIRNAME}"
-    assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
-    committed = subprocess.run(
-        ["git", "ls-files", relative],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
-    assert committed, f"{relative} must hold at least one committed file"
+    for relative in (
+        f"{ledger.STATE_DIRNAME}/{ledger.SPAN_ROLLUP_DIRNAME}",
+        f"{ledger.STATE_DIRNAME}/{telemetry.TRACES_DIRNAME}",
+    ):
+        assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
+        committed = subprocess.run(
+            ["git", "ls-files", relative],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        assert committed, f"{relative} must hold at least one committed file"
 
 
 def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
