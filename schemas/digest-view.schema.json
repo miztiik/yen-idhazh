@@ -486,9 +486,9 @@
       "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
-      "change": "Added DigestViewItem.desk, so a served item says which topic the day.",
+      "change": "Added DigestViewItem.desk, so a served item says which topic it sat under.",
       "version": "2026-09-12T06:56",
-      "why": "This is the copy a browser fetches, and the reading page is what groups stories."
+      "why": "A browser fetches this copy, and the reading page groups stories by desk."
     },
     {
       "change": "lenses on a served item is a list of Slug rather than of the closed LensId.",

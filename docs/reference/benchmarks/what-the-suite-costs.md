@@ -1,7 +1,6 @@
 # What the test suite spends its time on, 2026-09-14
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 Living, one question one answer. The reading below was taken on one day and the
 date is in the title; a re-run REPLACES this page and moves **Last Updated**, and
 git history holds what it said.
@@ -126,4 +125,4 @@ same answer: the same 53 unmarked modules and the same 33/38/7/14 modules a mark
 
 - [`../measurements.md`](../measurements.md) - the instrument log, which carries the figure now in force and links here.
 - [`../test-execution-audit.md`](../test-execution-audit.md) - which tests were run unnecessarily, a different question from what they cost.
-- [`../../how-to/run-the-gates.md`](../../how-to/run-the-gates.md) - the commands, and which arm is authoritative.
+- [`../../how-to/run-the-gates.md`](../../how-to/run-the-gates.md) - the commands, and which case is authoritative.

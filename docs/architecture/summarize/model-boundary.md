@@ -63,8 +63,8 @@ flowchart LR
 
   subgraph meas["Performance measurement - manual dispatch, never a merge gate"]
     direction TB
-    B1["arm 1 - llama-bench<br/><i>raw prefill and decode, no server</i>"]
-    B2["arm 2 - llama-server + real work<br/><i>samples drawn from corpus/holdout.txt</i>"]
+    B1["case 1 - llama-bench<br/><i>raw prefill and decode, no server</i>"]
+    B2["case 2 - llama-server + real work<br/><i>samples drawn from corpus/holdout.txt</i>"]
     B1 --> B2
   end
 
@@ -162,7 +162,7 @@ the content-only digest from `summarize.prompt_inputs`, which takes no envelope
 and carries no turn marker, so nothing on `turns` can move it - and the eleven
 gates are what adopt a model. A candidate compared through a digest that is
 blind to how its turns were written needs the envelope stated on the entry and
-checked against the running server, which is arm 1 of the start-up proof.
+checked against the running server, which is case 1 of the start-up proof.
 
 ## Two shapes, and which one a run writes down
 
@@ -210,7 +210,7 @@ Three steps, in order, all reading the entry and never a model name.
    behind a declared joiner. A closed choice of two, because each is a turn
    topology and a free-form string would be a template language in config. The
    joiner is required under the fold and refused beside a system turn, so the
-   field is never set on the arm that would ignore it.
+   field is never set on the case that would ignore it.
 2. **Wrap the turns.** Substitute the role into the opening, append the
    closing, and end with the reply opening the model expects.
 3. **Build the request.** Attach the output schema, ask for the prompt cache,
@@ -237,7 +237,7 @@ a wrong marker renders a prompt with no turn structure that the grammar still
 accepts - worse summaries and no error anywhere. So the server is asked, once,
 before the first item:
 
-| Arm | Question | Refuses |
+| Case | Question | Refuses |
 | --- | --- | --- |
 | 1 | Does our render match the server's own render of the same turns? | Compared as token ids, not bytes, so a leading sequence token is not counted twice |
 | 2 | Did the slot reuse any of the previous call's prefix? | A silent doubling of prefill cost per item |
@@ -251,14 +251,14 @@ model list that names no trained length, or a weights file whose header cannot
 be read stops the run exactly as a disagreement does.
 
 `idhazh.llm.server.prove_the_entry` is the whole of it, and `digest.yml` calls
-it in the work job between the health check and the first item. Each arm is a
+it in the work job between the health check and the first item. Each case is a
 function of its own over recorded values, so each is driven from a fixture in
 both directions - once with the agreeing value, once with one value changed -
 and every refusal names what was declared beside what was reported.
 
-**Where each arm reads its fact.** Arms 1, 2, 3 and 5 read the running server:
+**Where each case reads its fact.** Cases 1, 2, 3 and 5 read the running server:
 `/apply-template` and `/tokenize` for the render, two `/completions` calls for
-the cache and the grammar, `/v1/models` for the trained length. Arm 4 reads the
+the cache and the grammar, `/v1/models` for the trained length. Case 4 reads the
 weights file itself, because llama-server does not publish an architecture.
 `/props` carries the path, the alias, the file type, the build and the window;
 `/v1/models` adds the vocabulary, the embedding width, the parameter count and
@@ -268,13 +268,13 @@ not a size that follows the model - beside the `/props` filename assertion
 `digest.yml` already makes. The filename says which file; the header says what
 that file is.
 
-**Arm 3 builds its schema from the one the run really sends.** The reply schema
+**Case 3 builds its schema from the one the run really sends.** The reply schema
 is generated from a model, so a committed probe schema would be a second copy
 that drifts. `prove_the_entry` takes the schema as an argument instead - which
 is also what keeps the model layer at the bottom of the dependency graph, since
 the module that builds that schema imports this one.
 
-**Arm 2 asks whether the slot reused anything, not whether it reused all of
+**Case 2 asks whether the slot reused anything, not whether it reused all of
 it.** The first version wanted the second call's reused count to reach the first
 call's prompt length, on the reasoning that the first prompt is a byte prefix of
 the second one. The premise is true and the conclusion does not follow: the slot
@@ -283,7 +283,7 @@ checkpoint written part way through it and resumes from there. Where the
 checkpoint sits is the runtime's business and it moves with the build, so there
 is no count to demand and no threshold that would not be an invented number
 (Guardrail #10). Zero is the whole of the line, and it is enough - the four
-failures the arm exists to catch (a flipped prompt-cache default, a seam that
+failures the case exists to catch (a flipped prompt-cache default, a seam that
 re-splits, a leading-token mismatch, a slot lost to parallelism) all reuse
 nothing rather than a little less than everything.
 
@@ -296,7 +296,7 @@ published none.
 
 ### Design rationale - a start-up proof runs against the runtime, not against a model of it
 
-Arm 2 passed every test and every rehearsal and was wrong in production, because
+Case 2 passed every test and every rehearsal and was wrong in production, because
 its rule was derived from what the prompt bytes must be rather than from what
 the server does with them. The general shape: a proof over a runtime's internal
 bookkeeping states the property the bookkeeping is *for* - here, that the prefix
@@ -362,8 +362,8 @@ the KV budget. And the draft's own digest in the run record, so a day that was
 drafted can be told from a day that was not - a run that cannot answer that
 cannot explain its own throughput.
 
-**Every arm that starts a server fetches it, and that had to be made true.** The
-daily run always did. The two measurement arms below and the qualification arm
+**Every case that starts a server fetches it, and that had to be made true.** The
+daily run always did. The two measurement cases below and the qualification case
 did not: each downloaded exactly one file, so the first entry ever to declare a
 draft head benched by starting `llama-server` against a path that did not exist.
 The server exits during load, which surfaces as a health check that never passes
@@ -373,15 +373,15 @@ as well as on a fresh download, because a restored entry is the one copy nobody
 watched arrive.
 
 **The cache key names the head's digest too, or the fetch never runs.** Both
-bench arms share one cache entry so the second does not download the weights the
+bench cases share one cache entry so the second does not download the weights the
 first already has. An entry keyed on the target alone is a complete-looking hit
 with the head missing: the fetch step is skipped because the cache reported a
 hit, and the server fails at load anyway. So the key is the target's digest, and
 the head's where an entry declares one. An entry that declares no head keeps the
 key it already had, which is what stops this costing every other model a
-refetch. The raw arm never runs a draft head - `llama-bench` has no speculative
-path - and fetches it regardless, because it is the arm that fills the cache the
-server arm restores.
+refetch. The raw case never runs a draft head - `llama-bench` has no speculative
+path - and fetches it regardless, because it is the case that fills the cache the
+server case restores.
 
 **The flag spellings are the trap, and they are not the ones on most pages.**
 `--draft-max` and `--draft-min` were removed from llama.cpp; the pinned build
@@ -415,13 +415,13 @@ against a binary nobody runs.
 pinned asset, runs `--help` and keeps the output. It exists because the
 alternative way to learn what a build accepts is the hour the Gemma run spent.
 
-## The two measurement arms
+## The two measurement cases
 
 Both are manual dispatch. Neither gates a merge: the fastest and slowest shard
 of one run differ by up to 4.35 times on prefill, so a merge gate on a
 throughput number is a gate on the runner lottery.
 
-### Arm 1 - llama-bench
+### Case 1 - llama-bench
 
 Raw prefill and decode rates at several prompt lengths, against a pinned
 runtime build verified by digest. No server, no pipeline, no prompt.
@@ -430,7 +430,7 @@ It answers one question well: how fast does this model move tokens on this
 class of machine. It cannot answer seconds per item, and it never observes a
 resident set, because it never starts the server the pipeline talks to.
 
-### Arm 2 - llama-server with real samples
+### Case 2 - llama-server with real samples
 
 The server starts through the same argv builder production uses, at the
 candidate's declared window, and real pipeline work runs against it.
@@ -442,7 +442,7 @@ summarization. The rows themselves are in `corpus/corpus.jsonl`, and
 `corpus/corpus.meta.json` records how many models contributed - a count worth
 reading before training, because a swap makes the corpus mixed-teacher.
 
-What arm 2 records that arm 1 cannot:
+What case 2 records that case 1 cannot:
 
 | Quantity | Why the server is needed |
 | --- | --- |
@@ -452,7 +452,7 @@ What arm 2 records that arm 1 cannot:
 | Prompt-cache hit between calls | Only observable on the real call sequence |
 | Output digests | Determinism, by replaying the same rows |
 
-Arm 2 never scores quality. The eleven gates are the quality arm and they live
+Case 2 never scores quality. The eleven gates judge quality and they live
 elsewhere; a scorer inside a bench becomes the thing that selects, and the
 alarm stops being able to detect drift.
 
@@ -508,7 +508,7 @@ and since 2026-09-14 the five proofs above reconcile it against the running
 server before the first item - so a wrong marker now refuses the shard instead
 of yielding worse summaries with nothing red.
 
-**The entry declares its architecture, and arm 4 is what makes that a fact.**
+**The entry declares its architecture, and case 4 is what makes that a fact.**
 `arch` is the `general.architecture` key written inside the GGUF - `qwen35` for
 the configured weights, `gemma4` for a Gemma 4 entry. It is required with no
 default, for the same reason `turns` is: an entry that inherits the incumbent's

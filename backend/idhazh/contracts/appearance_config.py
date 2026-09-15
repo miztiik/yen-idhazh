@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T10:00",
+            change="console.chart_arm_rule_days, console.chart_arm_minutes_target.",
+            why="`arm` came from benchmarking and reads as a limb on a reader-facing page.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T23:00",
             change="digest.pill_move_min added, defaulting to 2 and bounded 1 to 3.",
             why="The topic row reorders five times a day and needed a margin to stay still.",
@@ -510,13 +515,8 @@ class AppearanceConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-12",
-            change="frame.zone_time_rem is REMOVED, and so are its bounds ZONE_TIME_MIN_REM.",
+            change="frame.zone_time_rem is REMOVED, and so are its bounds.",
             why="The day's time rail is deleted.",
-        ),
-        ChangelogEntry(
-            version="2026-09-10T09:00",
-            change="assist gains model_base_url, model_cdn_origins, model_revision, model_digests.",
-            why="The encoder gains a second origin for when this site cannot serve the weights.",
         ),
         ChangelogEntry(
             version="2026-08-29",

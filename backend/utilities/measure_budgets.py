@@ -67,7 +67,7 @@ CORPUS: Final = REPO_ROOT / "corpus" / "corpus.jsonl"
 PLAN_FIXTURES: Final = REPO_ROOT / "tests" / "fixtures" / "contracts" / "visual-plan"
 
 #: The two committed plans, declining first. The empty-role cost is a per-role
-#: rate and the declining plan is where every role is empty, so it is the arm
+#: rate and the declining plan is where every role is empty, so it is the case
 #: that fixes the rate; the four-bar one is what says the rate holds when two
 #: roles are filled.
 PLAN_PROBES: Final = ("declined.json", "bar-chart.json")

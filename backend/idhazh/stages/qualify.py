@@ -20,18 +20,21 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
     CorpusItem,
     ItemObservation,
     ItemScore,
+    QualificationSamples,
     QualificationShard,
     ScorerIdentity,
+    SummarySample,
 )
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.evals import metrics, qualify
+from idhazh.evals import metrics, qualification_summary, qualify
 from idhazh.evals.hhem import (
     HHEM_REVISION,
     HHEM_SCORER_ID,
@@ -52,7 +55,7 @@ from idhazh.llm.server import (
     props,
 )
 from idhazh.sanitize import SANITIZER_VERSION
-from idhazh.stages import common
+from idhazh.stages import common, two_calls
 from idhazh.stages.common import (
     LOG,
     Fetcher,
@@ -236,34 +239,87 @@ def _stratified(
 def _observe(
     article: Article,
     summary: Summary,
-    completion: Completion | None,
+    replies: Sequence[Completion | None],
     *,
     repeat: int,
     inference: InferenceConfig,
     turns: TurnsConfig,
     seconds: float,
 ) -> ItemObservation:
-    reply = completion or Completion(content="")
-    inline = summarize.split_thinking(reply.content)[1] or ""
+    """One item at one repeat, folded from every reply the path produced.
+
+    **A budget met anywhere cuts the item**, so `length` beats a later `stop`:
+    a pair whose first call was truncated did not finish, whatever its second
+    call reported. The token counts are the pair's sum for the same reason the
+    ledger sums them - both calls really spent what they spent.
+    """
+    answered = [reply for reply in replies if reply is not None] or [Completion(content="")]
+    inline = "".join(summarize.split_thinking(reply.content)[1] or "" for reply in answered)
+    last = answered[-1]
     return ItemObservation(
         item_id=article.item_id,
         repeat=repeat,
         ok=summary.status is SummaryStatus.OK,
         failure_code=summary.failure_code.value if summary.failure_code else None,
-        finish_reason=reply.finish_reason,
-        reasoning_channel_used=bool(reply.reasoning.strip()),
+        finish_reason="length" if any(r.hit_the_budget for r in answered) else last.finish_reason,
+        reasoning_channel_used=any(reply.reasoning.strip() for reply in answered),
         think_block_words=len(inline.split()),
         schema_valid=summary.status is SummaryStatus.OK,
-        # One call, one reply. The gate wants zero repair attempts, so the
-        # column exists to be asserted rather than to be filled in later.
+        # The gate wants zero repair attempts, so the column exists to be
+        # asserted rather than to be filled in later. Neither path repairs.
         repaired=summary.attempt > 1,
         output_digest=summary.output_digest,
         summary_word_count=len((summary.summary or "").split()),
-        prompt_tokens=reply.prompt_tokens,
-        completion_tokens=reply.completion_tokens,
+        prompt_tokens=sum(reply.prompt_tokens for reply in answered),
+        completion_tokens=sum(reply.completion_tokens for reply in answered),
         fits_context_predicted=summarize.fits_context(article, inference, turns=turns),
         summarize_seconds=seconds,
     )
+
+
+class _Answer(NamedTuple):
+    """One item summarized, and what it took - however many calls that was."""
+
+    summary: Summary
+    replies: tuple[Completion | None, ...]
+    seconds: float
+
+
+def calls_per_item(run: RunConfig) -> int:
+    """How many inference calls one observation in this run is folded from.
+
+    One function so the switch and the number a shard records cannot disagree.
+    A shard that claimed one call while making two would invite a reader to
+    compare it against a shard that really made one (Guardrail #10).
+    """
+    return 2 if run.qualify_on_the_production_path else 1
+
+
+def _answer_one_item(
+    article: Article, settings: config.Settings, *, date: str, endpoint: str
+) -> _Answer:
+    """Summarize one corpus item the way this run is configured to summarize.
+
+    **`run.qualify_on_the_production_path` is the whole of the difference.** On
+    the digest's path the article is labelled and then summarized, and the
+    second prompt replays the first reply - so the model reads its own words
+    back, which the single call never does and which is exactly what the gate
+    was not measuring. The picture the pair also plans is dropped here: the
+    qualification scores writing, and drawing it would cost a decode per item
+    to produce something no gate reads.
+
+    The clock is this function's rather than the call's. On the pair it has to
+    be - the two calls are timed separately and the seam between them is real
+    time the item spent - and taking it the same way on both sides keeps the
+    two readings comparable to each other, even though neither is comparable
+    across the switch.
+    """
+    started = time.monotonic()
+    if not settings.app.run.qualify_on_the_production_path:
+        summary, completion, seconds = _one_call(article, settings, endpoint=endpoint)
+        return _Answer(summary, (completion,), seconds)
+    both = two_calls.two_calls_one_item(article, settings, date=date, endpoint=endpoint)
+    return _Answer(both.summary, (both.label_reply, both.answer_reply), time.monotonic() - started)
 
 
 def _score_item(
@@ -294,6 +350,24 @@ def _score_item(
     )
 
 
+def _sample(frozen: _Frozen, summary: Summary, score: ItemScore) -> SummarySample:
+    """The writing, beside the two numbers a reviewer cross-checks it against.
+
+    Self-contained: a reviewer asking whether 0.61 is believable should not have
+    to join three files to learn the item was a truncated long read.
+    """
+    return SummarySample(
+        item_id=frozen.row.item_id,
+        title=summary.title,
+        summary=summary.summary or "",
+        source_url=frozen.row.canonical_url,
+        band_index=frozen.row.band_index,
+        truncated=frozen.row.truncated,
+        hhem=score.hhem,
+        compression=score.compression,
+    )
+
+
 def stage_qualify(
     *,
     settings: config.Settings,
@@ -311,7 +385,7 @@ def stage_qualify(
 ) -> QualificationShard:
     """Freeze this shard's slice of the corpus, then replay it N times.
 
-    Capture once and replay is the whole design. The old validation arm replanned
+    Capture once and replay is the whole design. The old validation case replanned
     and refetched for every model it scored, so two numbers could differ because
     a publisher edited a page rather than because the weights differed. There is
     only one model here now, and the same argument still holds against the three
@@ -386,24 +460,26 @@ def stage_qualify(
 
     observations: list[ItemObservation] = []
     scores: list[ItemScore] = []
+    samples: list[SummarySample] = []
     # Repeats on the outside, items on the inside. The other order would let
     # each repeat land on a warm prompt cache, and an identical reply that
     # skipped its own prefill is weaker evidence of determinism than one that
     # did the arithmetic again.
     for repeat in range(1, repeats + 1):
         for entry in frozen:
-            summary, completion, seconds = _one_call(
-                entry.article, settings, endpoint=model_endpoint
+            answer = _answer_one_item(
+                entry.article, settings, date=date, endpoint=model_endpoint
             )
+            summary = answer.summary
             observations.append(
                 _observe(
                     entry.article,
                     summary,
-                    completion,
+                    answer.replies,
                     repeat=repeat,
                     inference=inference,
                     turns=model.turns,
-                    seconds=seconds,
+                    seconds=answer.seconds,
                 )
             )
             LOG.info(
@@ -411,10 +487,12 @@ def stage_qualify(
                 entry.row.item_id,
                 repeat,
                 summary.status is SummaryStatus.OK,
-                seconds,
+                answer.seconds,
             )
             if repeat == 1 and summary.status is SummaryStatus.OK:
-                scores.append(_score_item(entry, summary, scorer, settings.app.evaluation))
+                score = _score_item(entry, summary, scorer, settings.app.evaluation)
+                scores.append(score)
+                samples.append(_sample(entry, summary, score))
 
     canaries = _run_canaries(settings, endpoint=model_endpoint) if shard == 0 else []
 
@@ -426,6 +504,7 @@ def stage_qualify(
         shard=shard,
         shards=shards,
         repeats=repeats,
+        calls_per_item=calls_per_item(settings.app.run),
         candidate=candidate,
         scorer=scorer_identity,
         inputs=inputs,
@@ -438,6 +517,23 @@ def stage_qualify(
         elapsed_seconds=time.monotonic() - started,
     )
     assemble.write_atomic(common.QUALIFICATION_ROOT / f"shard-{shard}.json", result.to_json())
+    assemble.write_atomic(
+        common.QUALIFICATION_ROOT / f"shard-{shard}.md",
+        qualification_summary.render_shard(result),
+    )
+    # Worst faithfulness first, because that is the order a reviewer reads in.
+    # Its own file and its own artifact: a gate that learned to read this would
+    # be a gate reading text it also scored.
+    assemble.write_atomic(
+        common.QUALIFICATION_ROOT / f"samples-{shard}.json",
+        QualificationSamples(
+            version=QualificationSamples.schema_version(),
+            date=date,
+            shard=shard,
+            candidate=candidate,
+            samples=sorted(samples, key=lambda sample: sample.hhem),
+        ).to_json(),
+    )
     LOG.info(
         "qualification shard done shard=%s frozen=%s calls=%s scored=%s minutes=%.1f",
         shard,

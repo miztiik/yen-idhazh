@@ -30,6 +30,8 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
+        "model_timed_out",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -37,6 +39,7 @@
         "length_out_of_range",
         "copied_source",
         "leaked_address",
+        "shard_out_of_time",
         "unknown"
       ],
       "title": "FailureCode",
@@ -70,6 +73,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "FailureCode gained model_timed_out and shard_out_of_time.",
+      "version": "2026-09-15T22:10",
+      "why": "Both were being reported under a name that sends an operator to the wrong place."
+    },
+    {
+      "change": "The failure vocabulary gained model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row, where the vocabulary is declared."
+    },
+    {
       "change": "Four columns keep their names and change what they mean.",
       "version": "2026-09-15T19:40",
       "why": "Queue wait now sits outside the item total rather than inside it."
@@ -78,16 +91,6 @@
       "change": "Appended seventeen nullable cells.",
       "version": "2026-09-15T08:20",
       "why": "The census records far more columns than this projection was publishing."
-    },
-    {
-      "change": "The failure vocabulary this payload publishes gained no_title.",
-      "version": "2026-09-15T04:30",
-      "why": "Extract gained a refusal for an item whose feed carried no headline."
-    },
-    {
-      "change": "The six first-call cells are named for what the call does.",
-      "version": "2026-09-15T00:00",
-      "why": "A positional name says which call ran, never what it was for."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -657,7 +660,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-15T19:40",
+      "default": "2026-09-15T22:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -720,5 +723,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-15T19:40"
+  "version": "2026-09-15T22:10"
 }

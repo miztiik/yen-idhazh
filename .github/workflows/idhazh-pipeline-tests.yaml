@@ -1,34 +1,34 @@
-# Two articles, three arms, one runner - the loop a person can close in the
+# Two articles, three cases, one runner - the loop a person can close in the
 # hour they wrote the change in.
 #
 # A production run takes about 200 minutes and has been cancelling shards, so a
 # change to the pipeline was tested the next day, against a day of eighty
 # articles whose spread hid whatever the change did. This dispatch runs the real
 # path - the real fetcher, the real extractor, the real two calls, the real
-# model server - over two articles and reports what each arm cost.
+# model server - over two articles and reports what each case cost.
 #
-# Three arms, in sequence, on ONE runner, over the SAME two articles, and never
+# Three cases, in sequence, on ONE runner, over the SAME two articles, and never
 # a matrix. Between two GitHub-hosted runners prefill spans 4.2x
-# (docs/reference/measurements.md), which is larger than anything an arm here is
+# (docs/reference/measurements.md), which is larger than anything a case here is
 # looking for, so a matrix would report the hosts it drew rather than the change
 # it ran. Sequential on one box cancels the host.
 #
 # The two articles are DRAWN, not fixed, from `config/pipeline-tests.json`. The
 # draw is made once, in `Pick the two articles`, seeded from the run id GitHub
-# allocated, and every arm reads that step's output - so the three arms record
+# allocated, and every case reads that step's output - so the three cases record
 # the same two item ids and the comparison between them is valid. A fixed pair
 # would pass for as long as those two pages stayed up and say nothing about
 # anything else the extractor meets.
 #
 # It publishes nothing. No step writes `frontend/public/`, no step commits, and
-# nothing here is on any reader's path. What the arms produced leaves as an
+# nothing here is on any reader's path. What the cases produced leaves as an
 # artifact.
 #
 # Two things one dispatch cannot settle. Whether two articles are
 # representative of the eighty a production day carries - they are not, and the
 # draw is what stops them being representative of nothing. And the faithfulness
-# scorer, which every arm skips: it is a second model download, it is identical
-# across the arms so it cancels from every comparison here, and it is not what
+# scorer, which every case skips: it is a second model download, it is identical
+# across the cases so it cancels from every comparison here, and it is not what
 # the two-call path is being measured for.
 name: Pipeline tests
 
@@ -41,7 +41,7 @@ on:
 permissions:
   contents: read
 
-# One at a time. The arms are read against each other by wall clock, and two
+# One at a time. The cases are read against each other by wall clock, and two
 # dispatches sharing a runner pool is the one confound the sequential design
 # exists to remove.
 concurrency:
@@ -55,7 +55,7 @@ env:
   LLAMA_PORT: '8080'
 
 jobs:
-  arms:
+  cases:
     runs-on: ubuntu-latest
     # The whole promise of this workflow, and `pipeline-tests.budget_minutes`
     # is where it is written. A test holds the two together.
@@ -74,7 +74,7 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # The draw, made ONCE, before any arm runs. `github.run_id` is allocated
+      # The draw, made ONCE, before any case runs. `github.run_id` is allocated
       # by GitHub and nothing in the run can compute it, so two dispatches read
       # different articles and this line says which pair a result belongs to.
       #
@@ -178,18 +178,18 @@ jobs:
           fi
           echo "${EXPECTED}  backend/models/${{ steps.models.outputs.summarize_file }}" | sha256sum --check
 
-      # One config root per arm, built from the committed `config/` and
-      # differing only in what that arm changes. The committed config is never
-      # edited: an arm that edited it would leave the next arm reading whatever
+      # One config root per case, built from the committed `config/` and
+      # differing only in what that case changes. The committed config is never
+      # edited: a case that edited it would leave the next case reading whatever
       # the last one wrote.
       #
-      # Two files move, and the arm declares one intention that moves both.
+      # Two files move, and the case declares one intention that moves both.
       # `visuals.enabled_kinds` empty is what makes no picture reachable, so the
       # gate takes the plan fields off the summarize-and-plan call's grammar;
       # `summarize.asks_for_a_visual_plan` false is what sizes the window for
       # the call that is really sent. Apart they disagree, and the disagreement
       # refuses articles that fit.
-      - name: Write each arm's config
+      - name: Write each case's config
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -202,8 +202,8 @@ jobs:
           settings = PipelineTestsConfig.from_json(
               Path("config/pipeline-tests.json").read_text(encoding="utf-8")
           )
-          for arm in settings.arms:
-              root = Path("backend/var/arms") / arm.id / "config"
+          for case in settings.cases:
+              root = Path("backend/var/cases") / case.id / "config"
               if root.exists():
                   shutil.rmtree(root)
               root.parent.mkdir(parents=True, exist_ok=True)
@@ -212,12 +212,12 @@ jobs:
               app_path = root / "idhazh.json"
               app = json.loads(app_path.read_text(encoding="utf-8"))
               # Through `.get`, because the committed config carries only what
-              # differs from a default - so a block this arm moves may not be
+              # differs from a default - so a block this case moves may not be
               # in the file at all.
               summarize = dict(app.get("summarize") or {})
-              summarize["asks_for_a_visual_plan"] = arm.asks_for_a_visual_plan
+              summarize["asks_for_a_visual_plan"] = case.asks_for_a_visual_plan
               app["summarize"] = summarize
-              if not arm.asks_for_a_visual_plan:
+              if not case.asks_for_a_visual_plan:
                   visuals = dict(app.get("visuals") or {})
                   visuals["enabled_kinds"] = []
                   app["visuals"] = visuals
@@ -229,21 +229,21 @@ jobs:
               models = json.loads(models_path.read_text(encoding="utf-8"))
               entry = dict(models["summarize"])
               inference = dict(entry["inference"])
-              if arm.n_parallel is not None:
-                  inference["n_parallel"] = arm.n_parallel
-              if arm.n_ctx is not None:
-                  inference["n_ctx"] = arm.n_ctx
+              if case.n_parallel is not None:
+                  inference["n_parallel"] = case.n_parallel
+              if case.n_ctx is not None:
+                  inference["n_ctx"] = case.n_ctx
               entry["inference"] = inference
               models["summarize"] = entry
               models_path.write_text(
                   json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8"
               )
-              print(f"{arm.id}={root.as_posix()}")
+              print(f"{case.id}={root.as_posix()}")
           PY
 
-      # One plan, written once, from the addresses the draw chose. The arms all
+      # One plan, written once, from the addresses the draw chose. The cases all
       # run it, so the two item ids are fixed before the first request and the
-      # three arms are comparing the same work.
+      # three cases are comparing the same work.
       #
       # Everything but the address comes off the feed in `config/sources.json` -
       # the vertical, the tier, the form - so this step invents nothing about a
@@ -334,8 +334,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p backend/var
-          # Every flag comes from the first arm's config, so the server this arm
-          # measures is the server that arm's config describes (Guardrail #6).
+          # Every flag comes from the first case's config, so the server this case
+          # measures is the server that case's config describes (Guardrail #6).
           python - <<'PY' > backend/var/llama-argv
           import os
           import sys
@@ -344,7 +344,7 @@ jobs:
           from idhazh import config
           from idhazh.llm.server import server_argv
 
-          settings = config.load(Path("backend/var/arms/baseline/config"))
+          settings = config.load(Path("backend/var/cases/baseline/config"))
           argv = server_argv(
               binary=Path("backend/bin/llama-server"),
               weights=Path(os.environ["LLAMA_WEIGHTS"]),
@@ -363,17 +363,17 @@ jobs:
             sleep 5
           done
           # Assert it, do not hope. Without this the loop simply ends, every
-          # item fails as "model unreachable", and three arms agree on nothing.
+          # item fails as "model unreachable", and three cases agree on nothing.
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
             echo "the model never became healthy" >&2
             tail -50 llama-server.log >&2
             exit 1
           }
           # Healthy says a server answers. It does not say which weights it
-          # answers for, and every arm's numbers are read against arm one's
+          # answers for, and every case's numbers are read against case one's
           # alias whether or not the server agrees. The alias comes from the
           # same config the flags came from, so the two cannot disagree.
-          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/arms/baseline/config") / json.load(open("backend/var/arms/baseline/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
+          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/cases/baseline/config") / json.load(open("backend/var/cases/baseline/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
@@ -381,8 +381,8 @@ jobs:
             exit 1
           }
 
-      # Arm one. The production path exactly as the daily run walks it: both
-      # calls, the visual decision on, one slot on the server. Every other arm is
+      # Case one. The production path exactly as the daily run walks it: both
+      # calls, the visual decision on, one slot on the server. Every other case is
       # read against this one, so it runs first and it changes nothing.
       #
       # `bash <path>`, which is what seven of the nine calls this repository
@@ -393,35 +393,35 @@ jobs:
       # exit 126, `Permission denied`, on a script committed 100644. Handing the
       # file to bash asks nothing of the mode.
       #
-      # `!cancelled()` on every arm, because a rig exists to say what happened.
-      # On that first dispatch one broken call took all three arms with it, so
+      # `!cancelled()` on every case, because a rig exists to say what happened.
+      # On that first dispatch one broken call took all three cases with it, so
       # the run read as a baseline problem where it had a script problem; three
-      # arms failing the same way would have named the cause on the run page.
-      # An arm still needs the one plan, and the script refuses by name without
+      # cases failing the same way would have named the cause on the run page.
+      # A case still needs the one plan, and the script refuses by name without
       # it rather than summarizing nothing quietly.
-      - name: Arm baseline
+      - name: Case baseline
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-arm.sh baseline "$RUN_DATE"
+        run: bash .github/scripts/run-pipeline-test-case.sh baseline "$RUN_DATE"
 
-      # Arm two. No picture is reachable, so the summarize-and-plan call comes
+      # Case two. No picture is reachable, so the summarize-and-plan call comes
       # back with the summary alone and the plan's decode is not spent. The
-      # server is the same process arm one used - nothing about this arm is a
+      # server is the same process case one used - nothing about this case is a
       # start-time setting - so what the difference measures is the decode and
       # nothing else.
-      - name: Arm no-visual-decision
+      - name: Case no-visual-decision
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-arm.sh no-visual-decision "$RUN_DATE"
+        run: bash .github/scripts/run-pipeline-test-case.sh no-visual-decision "$RUN_DATE"
 
-      # The slot count is fixed when the process starts, so this arm costs a
+      # The slot count is fixed when the process starts, so this case costs a
       # restart and a second model load. That load is itself one of the numbers
       # worth having: it is the fixed cost `run.shard_size` exists to amortise.
       #
-      # It carries an id because arm three reads its outcome, and it runs after a
-      # failed arm for the same reason the arms do.
+      # It carries an id because case three reads its outcome, and it runs after a
+      # failed case for the same reason the cases do.
       - name: Restart the model with two slots
         id: restart
         if: ${{ !cancelled() }}
@@ -434,7 +434,7 @@ jobs:
             kill -0 "$(cat llama-server.pid)" 2>/dev/null || break
             sleep 1
           done
-          mv llama-server.log backend/var/arms/baseline/llama-server.log
+          mv llama-server.log backend/var/cases/baseline/llama-server.log
           python - <<'PY' > backend/var/llama-argv
           import os
           import sys
@@ -443,7 +443,7 @@ jobs:
           from idhazh import config
           from idhazh.llm.server import server_argv
 
-          settings = config.load(Path("backend/var/arms/parallel-2/config"))
+          settings = config.load(Path("backend/var/cases/parallel-2/config"))
           argv = server_argv(
               binary=Path("backend/bin/llama-server"),
               weights=Path(os.environ["LLAMA_WEIGHTS"]),
@@ -469,7 +469,7 @@ jobs:
           # The same question the first start asks, and it matters more on a
           # restart: a second server can come up on stale flags or stale weights
           # and still answer 200.
-          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/arms/parallel-2/config") / json.load(open("backend/var/arms/parallel-2/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
+          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/cases/parallel-2/config") / json.load(open("backend/var/cases/parallel-2/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
@@ -477,19 +477,19 @@ jobs:
             exit 1
           }
 
-      # Arm three. Two slots, and the window doubled with them so each slot
+      # Case three. Two slots, and the window doubled with them so each slot
       # still holds what the production gate admits articles against.
       #
-      # The one arm that reads a step rather than only `!cancelled()`, and the
+      # The one case that reads a step rather than only `!cancelled()`, and the
       # difference is what a failed restart leaves behind: a healthy one-slot
-      # server. This arm would then run against one slot and publish the number
+      # server. This case would then run against one slot and publish the number
       # under `parallel-2`, which is a wrong answer that looks like a right one.
       # A failed restart fails the job, so nothing is hidden by the skip.
-      - name: Arm parallel-2
+      - name: Case parallel-2
         if: ${{ !cancelled() && steps.restart.conclusion == 'success' }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-arm.sh parallel-2 "$RUN_DATE"
+        run: bash .github/scripts/run-pipeline-test-case.sh parallel-2 "$RUN_DATE"
 
       - name: Stop the model
         if: always()
@@ -498,21 +498,21 @@ jobs:
           if [ -f llama-server.pid ]; then
             kill "$(cat llama-server.pid)" 2>/dev/null || true
           fi
-          cp llama-server.log backend/var/arms/parallel-2/llama-server.log 2>/dev/null || true
+          cp llama-server.log backend/var/cases/parallel-2/llama-server.log 2>/dev/null || true
 
       # The runtime half of the Oracle. The workflow-shape half asserts that one
-      # step draws and every arm reads it; this asserts the arms really did land
+      # step draws and every case reads it; this asserts the cases really did land
       # on the same two items, which is the thing that makes a comparison
       # between them mean anything. An address that could not be fetched is
       # reported by name rather than passed over: a stale list is the expected
       # way this workflow decays.
       #
-      # Two different failures, and only one of them is this step's to raise. An
-      # arm that recorded nothing failed or was skipped, its own step is red and
-      # the job is red with it, so the report names it and moves on. An arm that
+      # Two different failures, and only one of them is this step's to raise. A
+      # case that recorded nothing failed or was skipped, its own step is red and
+      # the job is red with it, so the report names it and moves on. A case that
       # recorded articles which are not the pair the draw chose has produced
       # numbers nobody may subtract, and that is what raises here.
-      - name: Say what the three arms measured
+      - name: Say what the three cases measured
         if: always()
         env:
           EXPECTED_ITEM_IDS: ${{ steps.plan.outputs.item_ids }}
@@ -529,12 +529,12 @@ jobs:
               Path("config/pipeline-tests.json").read_text(encoding="utf-8")
           )
           expected = os.environ["EXPECTED_ITEM_IDS"].split()
-          print("| arm | items | summaries | model ms | failed |")
+          print("| case | items | summaries | model ms | failed |")
           print("| --- | --- | --- | --- | --- |")
           silent = []
           disagreed = []
-          for arm in settings.arms:
-              items = Path("backend/var/arms") / arm.id / "run" / "items"
+          for case in settings.cases:
+              items = Path("backend/var/cases") / case.id / "run" / "items"
               landed = sorted(path.name.split(".")[0] for path in items.glob("*.article.json"))
               summaries = sorted(items.glob("*.summary.json"))
               spent = 0
@@ -546,20 +546,20 @@ jobs:
                       failed.append(f"{path.name.split('.')[0]}:{summary.get('failure_code')}")
               note = ", ".join(failed) or "-"
               if not landed:
-                  silent.append(arm.id)
+                  silent.append(case.id)
                   note = "nothing recorded"
               elif landed != sorted(expected):
-                  disagreed.append(f"{arm.id} recorded {landed}")
+                  disagreed.append(f"{case.id} recorded {landed}")
               print(
-                  f"| {arm.id} | {len(landed)} | {len(summaries)} | {spent} | {note} |"
+                  f"| {case.id} | {len(landed)} | {len(summaries)} | {spent} | {note} |"
               )
           print("")
-          print(f"the draw asked every arm for {' and '.join(expected)}")
+          print(f"the draw asked every case for {' and '.join(expected)}")
           if silent:
-              print(f"these arms produced nothing: {', '.join(silent)}")
+              print(f"these cases produced nothing: {', '.join(silent)}")
           if disagreed:
               raise SystemExit(
-                  "the arms did not all read the same two articles, so nothing here "
+                  "the cases did not all read the same two articles, so nothing here "
                   "compares: " + "; ".join(disagreed)
               )
           PY
@@ -571,10 +571,10 @@ jobs:
       # `backend/var/` is committed and nothing here reaches a reader, so this
       # is an artifact an operator downloads rather than anything republished
       # (CLAUDE.md section 0a).
-      - name: Upload what the arms produced
+      - name: Upload what the cases produced
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: pipeline-tests-${{ github.run_id }}
-          path: backend/var/arms/
+          path: backend/var/cases/
           retention-days: 90

@@ -13,12 +13,12 @@ Three mechanisms are live and none of them has a reading.
   is a thousand tokens of attention spent on text that is identical for every
   item.
 - **Ordering.** A model asked to pick from a list is not indifferent to the
-  list's order. The permuted arm is the one worth the run: if permuting moves
+  list's order. The permuted case is the one worth the run: if permuting moves
   the answer, the definitions are being read as an ordering and not as
   definitions, and every figure the other three produce is about the list rather
   than about the words in it.
 - **Cross-task interference.** Definitions in the shared turn sit in front of
-  the summariser on both calls, and the summary is what a reader reads. That arm
+  the summariser on both calls, and the summary is what a reader reads. That case
   scores summaries rather than labels, because a label nobody sees going one
   percent better does not pay for a summary going worse.
 
@@ -35,7 +35,7 @@ null on all 641 rows as of 2026-09-13. It refuses by name rather than printing a
 clean zero, because an unlabelled set scores 0.0 percent on all four variants and
 that reads as a finding.
 
-**It is an operator tool and never a test.** The agreement arm needs a
+**It is an operator tool and never a test.** The agreement case needs a
 multi-gigabyte GGUF that `backend/models/` does not commit and a `llama-server`
 binary that `backend/bin/` does not either, and it runs a real model for minutes
 (`CLAUDE.md` section 13). Nothing in CI calls it.
@@ -43,8 +43,8 @@ binary that `backend/bin/` does not either, and it runs a real model for minutes
 deliberately the same one.
 
 **Nothing it produces selects what publishes or grades a published summary.**
-The four label arms score a model's answer against a human's, which is a
-measurement of the model and not a verdict on an item; the summary arm scores
+The four label cases score a model's answer against a human's, which is a
+measurement of the model and not a verdict on an item; the summary case scores
 `idhazh.evals.metrics`, which are deterministic and model-free. `CLAUDE.md`
 section 0a.
 
@@ -80,7 +80,7 @@ DEV_SPLIT: Final = REPO_ROOT / "corpus" / "reference-dataset-1" / "splits" / "de
 #: cheap end is the baseline and not an afterthought.
 VARIANTS: Final = ("ids_only", "one_line", "full", "full_permuted")
 
-#: What the label arms agree or disagree about. Both are top-1 - one answer, one
+#: What the label cases agree or disagree about. Both are top-1 - one answer, one
 #: right answer - because a set-valued vocabulary like the lenses turns
 #: agreement into a similarity measure and a similarity measure needs its own
 #: argument about the threshold.
@@ -145,7 +145,7 @@ def definition_text(taxonomy: Taxonomy, variant: str, *, seed: int = 7) -> str:
     """The vocabulary, written the way this variant writes it.
 
     All four are built from `Taxonomy.definition_block()` rather than from four
-    hand-written strings, so the arms differ in exactly the dimension being
+    hand-written strings, so the cases differ in exactly the dimension being
     measured and in nothing else. A hand-written cheap variant would also be a
     differently worded one, and the reading would carry both changes with no way
     to tell them apart.
@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     missing = [named for named in (args.binary, args.weights) if not named.exists()]
     if missing:
         print(
-            "the agreement arm needs a real model and these are not on disk: "
+            "the agreement case needs a real model and these are not on disk: "
             + ", ".join(named.as_posix() for named in missing),
             file=sys.stderr,
         )

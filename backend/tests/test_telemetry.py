@@ -243,6 +243,23 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
+        case FailureCode.MODEL_TIMED_OUT | FailureCode.SHARD_OUT_OF_TIME:
+            # Both are a clock running out rather than a reply arriving, and they
+            # differ only in whose clock: the request's, or the worker's.
+            failed_summary = summarize.to_summary(
+                ok_article,
+                None,
+                model_id="qwen3-8b",
+                generated_at="2026-08-21T06:00:00Z",
+                no_reply=code,
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=ok_article,
+                summary=failed_summary,
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
         case FailureCode.CONTEXT_EXCEEDED:
             failed_summary = summarize.to_summary(
                 ok_article,
@@ -250,6 +267,21 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 model_id="qwen3-8b",
                 generated_at="2026-08-21T06:00:00Z",
                 no_reply=FailureCode.CONTEXT_EXCEEDED,
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=ok_article,
+                summary=failed_summary,
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
+        case FailureCode.MODEL_REFUSED:
+            failed_summary = summarize.to_summary(
+                ok_article,
+                None,
+                model_id="qwen3-8b",
+                generated_at="2026-08-21T06:00:00Z",
+                no_reply=FailureCode.MODEL_REFUSED,
             )
             return telemetry.classify_item(
                 planned=item(),
@@ -800,7 +832,7 @@ def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path)
 
 
 def flagged_article() -> Article:
-    """An article extract kept and flagged, so the degraded-but-done arm has a payload."""
+    """An article extract kept and flagged, so the degraded-but-done case has a payload."""
     return extract.to_article(
         item(),
         FetchResult(
@@ -824,7 +856,7 @@ def refused_summary() -> Summary:
     )
 
 
-def every_arm() -> dict[str, tuple[Article | None, Summary | None]]:
+def every_case() -> dict[str, tuple[Article | None, Summary | None]]:
     """One payload pair for each place `classify_item` builds a row."""
     return {
         "nothing reached it": (None, None),
@@ -836,14 +868,14 @@ def every_arm() -> dict[str, tuple[Article | None, Summary | None]]:
     }
 
 
-def test_every_arm_of_the_classifier_carries_the_shard() -> None:
+def test_every_case_of_the_classifier_carries_the_shard() -> None:
     """Six places build a row and a shard missed on one is a hole in the join.
 
     The hole would not raise: the cell reads empty, which is the same thing an
     unclaimed row says, so a per-shard figure would quietly drop those items and
     still add up to a plausible number.
     """
-    for name, (payload, reply) in every_arm().items():
+    for name, (payload, reply) in every_case().items():
         row = telemetry.classify_item(
             planned=item(),
             article=payload,

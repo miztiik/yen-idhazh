@@ -26,11 +26,11 @@ exist is a workflow artifact a week old, and a re-run rebuilds it. So a shape
 change here owes a re-run, never a read-side migration.
 
 **Three populations, because three have a producer.** A fourth - a second
-configuration's render of the same day, the config-B arm - is named by the plan
+configuration's render of the same day, the config-B case - is named by the plan
 that asked for this surface and nothing in this build can produce one. A member
 for it would be a word nobody can write, nobody can retire and nobody can tell
 from a bug, which is the rule `NoneReason` already states for the same reason.
-It arrives with the row that builds the second arm.
+It arrives with the row that builds the second case.
 
 Every text field here is untrusted (Guardrail #11). It came off the open web or out
 of a model, it is bounded by `UntrustedLine`, and the renderer escapes it on the

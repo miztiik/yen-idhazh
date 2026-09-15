@@ -40,6 +40,8 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
+        "model_timed_out",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -47,6 +49,7 @@
         "length_out_of_range",
         "copied_source",
         "leaked_address",
+        "shard_out_of_time",
         "unknown"
       ],
       "title": "FailureCode",
@@ -98,6 +101,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "FailureCode gained model_timed_out and shard_out_of_time.",
+      "version": "2026-09-15T22:10",
+      "why": "Both were being reported under a name that sends an operator to the wrong place."
+    },
+    {
+      "change": "failure_code may now carry model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "model_unreachable was doing two jobs."
+    },
+    {
       "change": "Three columns keep their names and change what they mean.",
       "version": "2026-09-15T19:40",
       "why": "Queue wait now sits outside the item total rather than inside it."
@@ -106,16 +119,6 @@
       "change": "FailureCode gained no_title, an extract-stage member.",
       "version": "2026-09-15T04:15",
       "why": "An item with no headline could not be recorded at all."
-    },
-    {
-      "change": "The twelve per-call cells are named for what each call does.",
-      "version": "2026-09-15T00:00",
-      "why": "A positional name says which call ran, never what it was for."
-    },
-    {
-      "change": "Added nullable truncation_cap_tokens at the end of the row.",
-      "version": "2026-09-14T02:00",
-      "why": "source_words_before_cap says a cut happened; nothing said which cap did it."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -1515,7 +1518,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15T19:40",
+      "default": "2026-09-15T22:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1606,5 +1609,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-15T19:40"
+  "version": "2026-09-15T22:10"
 }

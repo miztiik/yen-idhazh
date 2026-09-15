@@ -78,24 +78,24 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-15T10:00",
-            change="Prose only: the ui and collect knob descriptions drop their readings.",
-            why="A rule carries its reason, never its evidence (Guardrail #10).",
+            version="2026-09-15T23:30",
+            change="run.qualify_on_the_production_path, additive, default true.",
+            why="A candidate is only qualified on the path production actually runs.",
         ),
         ChangelogEntry(
-            version="2026-09-15T09:00",
-            change="Prose only: six blocks drop their inlined readings and provenance.",
-            why="A rule carries its reason, never its evidence (Guardrail #10).",
+            version="2026-09-15T22:10",
+            change="run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
+            why="A worker killed at its timeout uploads nothing, so the items are lost.",
         ),
         ChangelogEntry(
-            version="2026-09-15",
-            change="The failure vocabulary this config names gained no_title.",
-            why="Extract gained a refusal for an item whose feed carried no headline.",
+            version="2026-09-15T22:00",
+            change="run.trial_state_dirname and retention.trial_state_days, both additive.",
+            why="A trial run needs its own state tree, and that tree needs an expiry.",
         ),
         ChangelogEntry(
-            version="2026-09-14T14:00",
-            change="summarize gains asks_for_a_visual_plan, default true.",
-            why="A test arm with no picture reachable was sizing its window for one anyway.",
+            version="2026-09-15T20:00",
+            change="The embedded failure vocabulary gained model_refused.",
+            why="It follows item-health-row, where the vocabulary is declared.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -99,7 +99,10 @@ PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 
 
-STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
+#: Not `Final`: `cli` points it at `state/<run.trial_state_dirname>/` before any
+#: stage opens a ledger, and the suite has always redirected it the same way so
+#: a test cannot write a committed file.
+STATE_ROOT: Path = config.REPO_ROOT / ledger.STATE_DIRNAME
 
 
 #: Where a shard leaves its recorded input manifest for the assemble stage.
@@ -407,8 +410,19 @@ def _ask_the_model(
             # refused. It is a stream, so read it once.
             completion = None
             with error:
-                if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
-                    no_reply = FailureCode.CONTEXT_EXCEEDED
+                body = error.read().decode("utf-8", errors="replace")
+            no_reply = (
+                FailureCode.CONTEXT_EXCEEDED
+                if is_context_exceeded(body)
+                else FailureCode.MODEL_REFUSED
+            )
+            _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
+        except TimeoutError as error:
+            # Before OSError, which TimeoutError also subclasses. A server that ran
+            # out of clock was serving, and filing it as unreachable sends an
+            # operator to the process instead of to the output budget.
+            completion = None
+            no_reply = FailureCode.MODEL_TIMED_OUT
             _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
         except OSError as error:
             completion = None
@@ -517,8 +531,11 @@ def _one_call(
         no_reply = (
             FailureCode.CONTEXT_EXCEEDED
             if is_context_exceeded(body)
-            else FailureCode.MODEL_UNREACHABLE
+            else FailureCode.MODEL_REFUSED
         )
+    except TimeoutError:
+        completion = None
+        no_reply = FailureCode.MODEL_TIMED_OUT
     except OSError:
         completion = None
     seconds = time.monotonic() - started

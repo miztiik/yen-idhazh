@@ -75,6 +75,16 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T22:10",
+            change="FailureCode gained model_timed_out and shard_out_of_time.",
+            why="Both were being reported under a name that sends an operator to the wrong place.",
+        ),
+        ChangelogEntry(
+            version="2026-09-15T20:00",
+            change="The failure vocabulary gained model_refused.",
+            why="It follows item-health-row, where the vocabulary is declared.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T19:40",
             change="Four columns keep their names and change what they mean.",
             why="Queue wait now sits outside the item total rather than inside it.",
@@ -83,16 +93,6 @@ class PublicTelemetryRow(Contract):
             version="2026-09-15T08:20",
             change="Appended seventeen nullable cells.",
             why="The census records far more columns than this projection was publishing.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T04:30",
-            change="The failure vocabulary this payload publishes gained no_title.",
-            why="Extract gained a refusal for an item whose feed carried no headline.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T00:00",
-            change="The six first-call cells are named for what the call does.",
-            why="A positional name says which call ran, never what it was for.",
         ),
         ChangelogEntry(
             version="2026-09-02",

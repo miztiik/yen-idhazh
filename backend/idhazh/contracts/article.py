@@ -71,6 +71,16 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T22:10",
+            change="FailureCode gained model_timed_out and shard_out_of_time.",
+            why="Both were being reported under a name that sends an operator to the wrong place.",
+        ),
+        ChangelogEntry(
+            version="2026-09-15T20:00",
+            change="The embedded failure vocabulary gained model_refused.",
+            why="It follows item-health-row, where the vocabulary is declared.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T12:00",
             change="title_source records a trust decision, not provenance alone.",
             why="A page headline and a feed headline are not equally trustworthy.",
@@ -79,16 +89,6 @@ class Article(Contract):
             version="2026-09-15T06:19",
             change="Added title_source: feed or page, the headline's provenance.",
             why="Extract now falls back to the page's own headline when the feed carried none.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15",
-            change="failure_code may now carry no_title.",
-            why="Extract gained a refusal: an item whose feed carried no headline.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13",
-            change="Added secondary_desk: the one other desk the article's own reading names.",
-            why="The desk ceiling sends an over-ceiling story to a second desk, unnamed.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -13,26 +13,27 @@ So nothing raised in the session that produced this plan falls off the end.
 | id | Item | Where it is dealt with | State |
 | --- | --- | --- | --- |
 | C1 | Sanitizer could not hold Gemma's one-sided turn markers | section 2 | shipped, `2cd717c5` |
-| C2 | The bench's server arm had never finished - missing `hashlib` import | section 2 | shipped, `6caa123e` |
-| C3 | No measurement arm fetched the draft head | section 2 | shipped, `5adf36c0` |
-| C4 | Gemma's draft block named the wrong speculation type | section 2, task T1 | **root cause found, fix not written** |
-| C5 | Bench Gemma and get a completed server arm | task T1 | not started |
-| C6 | Write the model dossiers | task T2 | not started |
-| C7 | Markdown job summary for qualify and decide (owner approved "yes for D3") | task T3 | not started |
-| C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | not started |
-| C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | needs owner sign-off, Level 5 |
-| C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | not started |
-| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | owner ruled, not started |
-| C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | found this session, not fixed |
-| C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | answered, needs owner ruling |
-| C14 | Merge the two ready pull requests | task T9 | not started |
-| C15 | `digest.yml` validates draft fields loosely | task T10 | not started |
-| C16 | `model_unreachable` is a misleading failure code | task T10 | not started |
+| C2 | The bench's server case had never finished - missing `hashlib` import | section 2 | shipped, `6caa123e` |
+| C3 | No measurement case fetched the draft head | section 2 | shipped, `5adf36c0` |
+| C4 | Gemma's draft block named the wrong speculation type | section 2, task T1 | **shipped, #759.** The pinned build does accept `draft-mtp`; run `34971210901` recorded its `--spec-type` list and a test holds the contract against it |
+| C5 | Bench Gemma and get a completed server case | task T1 | **done, with a finding.** Runs `34972996987` and `34973005911` both completed their work and both were refused by the bench's own input-drift guard. See T1 below |
+| C6 | Write the model dossiers | task T2 | **shipped.** Both pages, plus the index row and the warning that a number on one may not be divided by a number on another |
+| C7 | Markdown job summary for qualify and decide (owner approved "yes for D3") | task T3 | **shipped, #763** |
+| C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | **shipped, #764.** `samples-{shard}.json`, worst faithfulness first, its own artifact |
+| C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | **shipped, #765 #769 #773.** All three steps |
+| C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | **shipped, #769** as `run.trial_state_dirname`, a named directory rather than a fixed one |
+| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **blocked, and the block is new.** The drift guard fails a run outright. See T1 |
+| C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | **shipped, #760.** The oracle found a third workflow, so six server starts assert the served alias where two did |
+| C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | **shipped, #762.** The scratch-config block only, as the smallest first step |
+| C14 | Merge the two ready pull requests | task T9 | shipped |
+| C15 | `digest.yml` validates draft fields loosely | task T10 | **shipped, #761** |
+| C16 | `model_unreachable` is a misleading failure code | task T10 | **shipped, #761** as `model_refused` |
 | C17 | The owner's "old code" suspicion about item ids | section 7 | answered, no defect |
 | C18 | Free memory has no value - record a peak, never a remainder | section 2, section 3 | owner ruled 2026-09-15 |
 | C19 | The GitHub cache is GitHub's to manage, not ours | task T8 | owner ruled 2026-09-15 |
+| C20 | **The bench refetches article text on every repeat, so any long run can be refused** | task T1, and it blocks T6 | **found 2026-09-15, needs a ruling** |
 
-Tasks T1, T2, T3, T4, T6 and T7 are unblocked and can start today. T5 and T8 need a person's ruling first, and each says so where it sits.
+Everything above has landed except C11 and C20, and C11 waits on C20. C20 is the one open decision and it is written up at the end of T1.
 
 ## 0. What this project is, and the five minutes of reading you owe
 
@@ -116,17 +117,17 @@ Along the way four real defects surfaced. Three are fixed and pushed. One is ope
 
 Gemma 4 spells a turn with a pipe on one side only: `<|turn>` opens, `<turn|>` closes. Neither matched the existing families, so `config/models/gemma-4-e4b-qat.json` was **refused at config load** by `refuse_markers_the_boundary_cannot_hold`. That refusal is the design working - a model whose turn markers the sanitizer cannot strip is a model an article could forge a turn against (Guardrail #11). Widened the pattern, moved `SANITIZER_VERSION` from `idhazh-sanitizer-2` to `-3`, added three tests, recorded the family in [`docs/architecture/sources/trust-boundary.md`](../docs/architecture/sources/trust-boundary.md).
 
-### Fixed, commit `6caa123e` - the bench's server arm had never once finished
+### Fixed, commit `6caa123e` - the bench's server case had never once finished
 
-`collect_digests` in the `runtime` job's inline program called `hashlib.sha256`, and the program imported ten modules but not `hashlib`. So the arm started the server, summarized all five articles, then died on the collecting line about fifty minutes in. **Broken since the digest comparison landed in PR #42.** Every server-arm bench since then burned a runner hour and threw the measurement away.
+`collect_digests` in the `runtime` job's inline program called `hashlib.sha256`, and the program imported ten modules but not `hashlib`. So the case started the server, summarized all five articles, then died on the collecting line about fifty minutes in. **Broken since the digest comparison landed in PR #42.** Every server-case bench since then burned a runner hour and threw the measurement away.
 
 No gate could catch it: a heredoc is not imported, so ruff never reads it and mypy never sees it. Added [`backend/tests/workflows/test_inline_python_imports.py`](../backend/tests/workflows/test_inline_python_imports.py), which walks every inline program in every workflow and asks whether a name used as a standard-library module is imported. Removing the import turns it red and names `hashlib`.
 
-### Fixed, commit `5adf36c0` - no measurement arm fetched the draft head
+### Fixed, commit `5adf36c0` - no measurement case fetched the draft head
 
-A models entry may declare a `draft` block: a small second GGUF the server runs ahead of the target. `digest.yml` (production) always fetched it. The two bench arms, the budgets arm and the qualification arm never did - each downloaded exactly one file. Gemma is the first entry ever to declare one, so it started llama-server against a path that did not exist. The server exits during load, which surfaces as a health check that never passes rather than as a missing file.
+A models entry may declare a `draft` block: a small second GGUF the server runs ahead of the target. `digest.yml` (production) always fetched it. The two bench cases, the budgets case and the qualification case never did - each downloaded exactly one file. Gemma is the first entry ever to declare one, so it started llama-server against a path that did not exist. The server exits during load, which surfaces as a health check that never passes rather than as a missing file.
 
-All four arms now fetch and verify it. The cache key moved with it, and that half matters: both bench arms share one cache entry, so an entry keyed on the target alone is a complete-looking hit with the head missing - the fetch is skipped because the cache reported a hit, and the server fails at load anyway. The key is now the target's digest plus the head's where one is declared. **An entry with no head keeps the key it already had**, which is what stops this costing every other model a refetch; there is a test pinning exactly that.
+All four cases now fetch and verify it. The cache key moved with it, and that half matters: both bench cases share one cache entry, so an entry keyed on the target alone is a complete-looking hit with the head missing - the fetch is skipped because the cache reported a hit, and the server fails at load anyway. The key is now the target's digest plus the head's where one is declared. **An entry with no head keeps the key it already had**, which is what stops this costing every other model a refetch; there is a test pinning exactly that.
 
 ### OPEN - Gemma's draft block names a speculation type that cannot run
 
@@ -166,9 +167,9 @@ Three facts from the publisher's guide that bear on whether this is worth doing 
 
 ## 3. The only measurements that exist
 
-**Arm 1** is `llama-bench`: raw prefill and decode with nothing else running. **Arm 2** is the real pipeline over a fixed five-article corpus through `llama-server`.
+**case one** is `llama-bench`: raw prefill and decode with nothing else running. **case two** is the real pipeline over a fixed five-article corpus through `llama-server`.
 
-### Arm 1, raw throughput
+### case one, raw throughput
 
 All at 4 threads, llama.cpp b10598 (`56db501e7`), 3 repeats, GitHub-hosted `ubuntu-latest`.
 
@@ -184,9 +185,9 @@ All tok/s. **Do not rank these models against each other.** Three models landed 
 
 The two same-model repeats ARE fair, and they are the bench's repeatability: Gemma 15.52 against 15.74 (1.4 percent apart), Ornith 4.41 against 4.54 (2.9 percent apart). Both on the same CPU as their own earlier run. The bench is quiet on a fixed box.
 
-Note `llama-bench` never loads a draft head, so **both Gemma arm-1 numbers are already draft-free.** The MTP problem has never touched arm 1.
+Note `llama-bench` never loads a draft head, so **both Gemma case-1 numbers are already draft-free.** The MTP problem has never touched case one.
 
-### Arm 2, the five-article server run - ONE model has ever completed this
+### case two, the five-article server run - ONE model has ever completed this
 
 Ornith, run `34938565911`, 2026-09-15, EPYC 7763, 4 threads, 3 repeats. The bench emits a ready-to-paste dossier body; do not retype these.
 
@@ -202,19 +203,19 @@ Seven and a half minutes for a median summarize call, and over fifteen for the l
 
 **On the 9.33 GiB: report it, do not editorialise about it.** The owner's standing ruling is that free memory has no value - a runner has 16 GB whether a job touches one or fifteen, and the unused part was paid for and wasted. A model that uses more memory and goes faster is the better model. The only number that matters is the margin before an out-of-memory kill, because that ends the job and costs the whole run. So write "peak 9.33 GiB of 16 available" and move on; never write "only 6.7 GiB left" as though something were being spent.
 
-Neither the incumbent nor Gemma has a completed arm 2. The incumbent's committed dossier [`docs/reference/models/qwen3.5-9b-q4km.md`](../docs/reference/models/qwen3.5-9b-q4km.md) predates the `hashlib` defect and carries arm-1 numbers plus separately-sourced figures.
+Neither the incumbent nor Gemma has a completed case two. The incumbent's committed dossier [`docs/reference/models/qwen3.5-9b-q4km.md`](../docs/reference/models/qwen3.5-9b-q4km.md) predates the `hashlib` defect and carries case-1 numbers plus separately-sourced figures.
 
 ### The runs, for the record
 
-| Run | Model | Arm 1 | Arm 2 | Why it ended that way |
+| Run | Model | case one | case two | Why it ended that way |
 | --- | --- | --- | --- | --- |
 | 34901484508 | Ornith | success | failure | the `hashlib` defect, 51 minutes in |
 | 34901487530 | Gemma | success | failure | refused at config load, the turn markers |
 | 34905960781 | Gemma | success | failure | server would not start, draft head never downloaded |
-| 34938565911 | Ornith | success | **success** | the first complete arm 2 |
+| 34938565911 | Ornith | success | **success** | the first complete case two |
 | 34941400155 | Gemma | success | failure | `failed to process speculative batch`, the MTP spec type |
 
-Artifacts live on the runs at 90-day retention. `bench-raw` holds arm 1; `bench-server-baseline` holds arm 2 including `dossier.md`. **None of this is in the repository.** `gh run download <id> -n <artifact> -D <dir>`.
+Artifacts live on the runs at 90-day retention. `bench-raw` holds case one; `bench-server-baseline` holds case two including `dossier.md`. **None of this is in the repository.** `gh run download <id> -n <artifact> -D <dir>`.
 
 ## 4. What the owner ruled, and what is still open
 
@@ -268,7 +269,7 @@ His objections to his own recommendation, which you must carry forward: `_one_ca
 
 Confirmed by reading the contracts: `ItemObservation` records ok, failure code, finish reason, reasoning flags, schema validity, repaired, `output_digest`, word count, tokens, context fit and seconds. `ItemScore` records hhem, verbatim run, extractiveness, compression, lead coverage, unsupported numbers and densities.
 
-**The summary text is never persisted. The title is never persisted, not even its length.** The text is hashed into a digest and scored into floats, then dropped. The frozen source articles ARE written to disk but never uploaded. The owner's read is correct: today's arm is non-functional testing only.
+**The summary text is never persisted. The title is never persisted, not even its length.** The text is hashed into a digest and scored into floats, then dropped. The frozen source articles ARE written to disk but never uploaded. The owner's read is correct: today's case is non-functional testing only.
 
 `work` has the equivalent already - `_kept_call` sends each rendered prompt and raw reply to `backend/idhazh/capture.py` behind `logging.capture_prompts` and `capture_replies`, and `digest.yml` uploads the captures at 90-day retention, uncommitted.
 
@@ -288,7 +289,7 @@ Inside one run, `llama-bench` at 3 repeats gives a spread of 0.6 percent of the 
 
 Averaging over it estimates today's fleet mix, which is a number that changes when GitHub rotates hardware and tells nobody. Stabilising a fleet mean across three unknown-weight machine types would take roughly 10 to 20 runs per model - **an estimate, not a measurement** - and the answer expires on the next rotation.
 
-**The thing actually wanted - is Gemma faster than Qwen - is a ratio the box cancels out of.** Guardrail #10 says this outright: an A-against-B on one box cancels the box. The runtime arm already does this, running baseline and candidate in one job. The bench arm does not: it takes one `candidate_models_file`.
+**The thing actually wanted - is Gemma faster than Qwen - is a ratio the box cancels out of.** Guardrail #10 says this outright: an A-against-B on one box cancels the box. The runtime case already does this, running baseline and candidate in one job. The bench case does not: it takes one `candidate_models_file`.
 
 | Option | Cost | What it gives up |
 | --- | --- | --- |
@@ -330,17 +331,63 @@ While you are in that file, reconsider `n_max`. It currently says 3; the publish
 
 Set expectations in whatever you write up. The publisher claims 1.4x to 2.2x, says it is especially effective on GPUs, and says gains are smaller where memory bandwidth is lower. We are on 4 CPU cores. It also costs about 2 GB of extra memory, which is a fact to record and not an objection - see the owner's ruling in section 2. Ornith peaked at 9.33 GiB of the 16 available, so the head fits.
 
-Done when: the `--help` answer is recorded; and either Gemma has a completed server arm with and without the head, or there is a written note saying the pinned build cannot do it and what a build bump would cost.
+Done when: the `--help` answer is recorded; and either Gemma has a completed server case with and without the head, or there is a written note saying the pinned build cannot do it and what a build bump would cost.
+
+#### What happened, 2026-09-15
+
+**Step 1 answered yes.** Build `b10598` lists eleven values for `--spec-type` and `draft-mtp` is one of them. The `--help` text was captured by a `workflow_dispatch` workflow that installs the same pinned asset the measuring cases install, run `34971210901`, and is committed at `tests/fixtures/runtime/b10598-llama-server-help.txt`. A test asserts that every member of `SpeculationType` appears in it, so moving the pin fails locally on a missing file rather than on a runner.
+
+**Step 2 shipped** as #759. `spec_type` is `draft-mtp` and `n_max` is 2, as this row asked.
+
+**Step 3 ran and cannot answer the question.** Both dispatches completed all five items in all three repeats. Both were then refused by the bench's own guard, and separately, GitHub put them on different processors.
+
+| Case | Run | Processor, case two | A whole repeat, median |
+| --- | --- | --- | --- |
+| `draft-mtp`, `n_max` 2 | `34972996987` | AMD EPYC 7763 | 3,970 s |
+| `draft: null` | `34973005911` | AMD EPYC 9V74 | 4,192 s |
+
+The 5.3 percent between them is not the head. **The confound was measured rather than asserted**: the `llama-bench` case of both runs used the same weights on machines both reporting EPYC 7763, and its 250-token decode differed by 8.8 percent between the two - 9.676 against 10.532 tok/s. A 5.3 percent difference read across two runs sits under an 8.8 percent between-run spread, so the pair says nothing about the head. Both dossiers say so in those words.
+
+**The instrument that could answer it** is a paired case: both configurations alternating inside one job on one machine, which cancels the machine. `measure.yml` already runs that shape through the `runtime_candidate` input, and it needs no second download because both cases open the same weights file. What stops it today is that `candidate_update` returns a patch applied to `summarize.inference`, and the draft head is a sibling of `inference` rather than a knob inside it. Lifting a `draft` key out of the patch in `write_config` is about six lines and changes no existing case.
+
+Two things have to move with it. Three repeats of two cases is roughly 6.7 hours against a 330-minute job timeout, so a paired run needs a repeat count it can be told (Guardrail #2 - the limit is GitHub's, so the design is what gives). And the drift guard below has to stop failing the job.
+
+#### C20 - the bench refetches article text on every repeat
+
+**This is what refused both runs, and it will refuse most long ones.** `fixed_corpus` freezes the plan - which five addresses - and nothing freezes the text. Every repeat fetches the pages again, and `rejected_input_drift` fires when any article's text digest differs from repeat 1's. On both dispatches the same two of five articles were edited by their publishers inside the 3.3-hour window. For a news corpus that is ordinary rather than unlucky.
+
+The guard's reason is sound: a timing difference must not be blamed on the model when a publisher moved the text. What is wrong is the consequence. **Failing the job throws away three complete repeats instead of reporting which of them are comparable** - and here repeats 2 and 3 agreed with each other exactly, in both runs, so a comparable pair existed and was discarded.
+
+This is the same defect the qualification was designed against. `stage_qualify`'s own docstring names it: *"The old validation case replanned and refetched for every model it scored, so two numbers could differ because a publisher edited a page rather than because the weights differed."* The qualification freezes the fetched article and replays it. The bench does not.
+
+**It blocks T6.** The owner ruled on 2026-09-15 to keep drawing bench runs and infer from the distribution. A harness that refuses a draw whenever a publisher edits a page cannot produce a distribution.
+
+Options, for a person to rule on:
+
+| id | Option | Cost | What it gives up |
+| --- | --- | --- | --- |
+| A1 | Freeze the text: keep repeat 1's articles and replay them for repeats 2..N | The largest change - the bench has to hand the pipeline an article it already has, which is a capability `stage_work` does not expose today | Nothing about the measurement. It is what the qualification already does |
+| A2 | Report the drift instead of failing: the verdict names the items whose text moved and the timing stands with that caveat attached | About ten lines. Output drift still fails, so a nondeterministic model is still caught | A weaker guard. A repeat that summarized different text sits in the same median as one that did not |
+| A3 | Time only the largest set of repeats that share one input, and fail only when fewer than two agree | About twenty lines. Keeps the guard's reason exactly and stops discarding good repeats | Nothing obvious, but it is new logic rather than removed logic, so it is the option most likely to be wrong in a way nobody notices |
+| A4 | Leave it and re-dispatch until a run gets lucky | Nothing to write. Roughly one job in two is wasted, at 3.3 hours each | The owner's T6 ruling in practice, and it gets worse as repeats rise |
+
+**Recommended: A3**, then the six-line paired case above. A3 keeps the guard's reason - never compare across different text - while ending the behaviour that throws away a finished run, and it is what makes T6 possible at all. A1 is the better answer eventually and is a larger piece of work than this plan should absorb.
 
 ### T2 - Write the dossiers for the models that have numbers
 
-`docs/reference/models/` holds only `qwen3.5-9b-q4km.md` today. Ornith has a complete arm 2 and needs `ornith-1.5-9b-q5km.md`; Gemma needs `gemma-4-e4b-qat.md` once T1 produces one.
+`docs/reference/models/` holds only `qwen3.5-9b-q4km.md` today. Ornith has a complete case two and needs `ornith-1.5-9b-q5km.md`; Gemma needs `gemma-4-e4b-qat.md` once T1 produces one.
 
 The bench emits a `dossier.md` inside the `bench-server-baseline` artifact, written to be **pasted, not transcribed**. Download it, paste it, add the licence row and the qualification verdict if there is one.
 
 Every number carries its hardware, date and spread (Guardrail #10), and the page must not rank the models against each other while they sit on different processors - say the processor next to the number and stop there.
 
 Done when: both pages exist, `python backend/utilities/doc_load.py` is clean, and no page implies a cross-model ranking the measurements cannot support.
+
+#### What happened, 2026-09-15
+
+Both pages exist. Ornith's was pasted from the `dossier.md` in run `34938565911`'s artifact, as this row intended. **Gemma's could not be**, because the bench writes `dossier.md` after the verdict step and that step exited 1 - so Gemma's readings were recomputed from `runtime-summary.json` and `llm.json` in the artifacts of run `34972996987`, in the same shape and with the same spreads.
+
+Neither page carries a licence row and neither carries a qualification verdict, and both say so under "What this page still owes". `models.md` gained both rows and one sentence that does the work this row asked for: a number on one dossier may not be divided by a number on another, because these three pages carry readings from at least two processor families.
 
 ### T3 - Build the qualify and decide markdown summaries. OWNER APPROVED ("yes for D3").
 
@@ -399,12 +446,12 @@ Found on 2026-09-15 by diffing `measure.yml` against `validate.yml`. They are in
 
 | id | Defect | What it means |
 | --- | --- | --- |
-| D1 | `measure.yml` verifies the weights by SHA-256 only. `validate.yml` also checks the entry's declared `byte_count` | The stricter check already exists in the repository and one arm does not use it |
+| D1 | `measure.yml` verifies the weights by SHA-256 only. `validate.yml` also checks the entry's declared `byte_count` | The stricter check already exists in the repository and one case does not use it |
 | D2 | **`measure.yml`'s health check never asserts which model answered.** `validate.yml` polls `/v1/models` and asserts the served alias; `measure.yml` waits for a 200 and starts measuring | A bench can measure a server answering under a different alias and file the numbers under the candidate. That is a Guardrail #10 failure - the number would not be about the model it names |
 
-D2 is the serious one, and it is exactly the class of bug the repository has been bitten by before. `backend/tests/workflows/test_model_server_jobs.py` carries the line "the arm that drifted was the one nobody diffed - `validate.yml`". This time the drift runs the other way.
+D2 is the serious one, and it is exactly the class of bug the repository has been bitten by before. `backend/tests/workflows/test_model_server_jobs.py` carries the line "the case that drifted was the one nobody diffed - `validate.yml`". This time the drift runs the other way.
 
-Done when: both arms verify the digest and the declared byte count, both assert the served alias before measuring, and a workflow test pins the parity so the next drift fails locally rather than on a runner.
+Done when: both cases verify the digest and the declared byte count, both assert the served alias before measuring, and a workflow test pins the parity so the next drift fails locally rather than on a runner.
 
 ### T8 - Decide whether `measure.yml` and `validate.yml` share their setup. NEEDS THE OWNER.
 
@@ -446,7 +493,7 @@ Re-check mergeability between merges - a stale CLEAN is how a bad merge lands. `
 
 - [`CLAUDE.md`](../CLAUDE.md) - the contract.
 - [`docs/how-to/evaluate-new-summarizer-model.md`](../docs/how-to/evaluate-new-summarizer-model.md) - the runbook, with a flowchart of Block 1.
-- [`docs/architecture/summarize/model-boundary.md`](../docs/architecture/summarize/model-boundary.md) - the models entry, the draft head, and which arms fetch it.
+- [`docs/architecture/summarize/model-boundary.md`](../docs/architecture/summarize/model-boundary.md) - the models entry, the draft head, and which cases fetch it.
 - [`docs/architecture/sources/trust-boundary.md`](../docs/architecture/sources/trust-boundary.md) - the turn-marker families the sanitizer strips.
 - [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) - what may and may not grade a summary.
 - <https://unsloth.ai/docs/models/mtp> - the publisher's guide to running an MTP head under llama.cpp. It names `--spec-type draft-mtp`, the `--spec-draft-n-max` starting point, the memory cost and the build the flag needs. Read it before theorising about task T1.

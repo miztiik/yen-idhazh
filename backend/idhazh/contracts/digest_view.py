@@ -224,8 +224,8 @@ class DigestView(Contract):
         ),
         ChangelogEntry(
             version="2026-09-12T06:56",
-            change="Added DigestViewItem.desk, so a served item says which topic the day.",
-            why="This is the copy a browser fetches, and the reading page is what groups stories.",
+            change="Added DigestViewItem.desk, so a served item says which topic it sat under.",
+            why="A browser fetches this copy, and the reading page groups stories by desk.",
         ),
         ChangelogEntry(
             version="2026-09-12T03:55",

@@ -1,7 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -9,7 +8,7 @@ The swap is one line in `config/idhazh.json`:
 ```
 
 Point it at another file in `config/models/` and everything follows it: the
-daily run, the qualification arm and the bench all read the entry that file
+daily run, the qualification case and the bench all read the entry that file
 holds. **The revert is the same line back.**
 
 The rest of this page is what to do before you write that line and what to check
@@ -52,8 +51,8 @@ flowchart TB
  end
 
  subgraph BENCH["1.3 - Measurements, measure.yml target bench"]
-  FILE --> RAW["arm 1: raw throughput<br/>llama-bench, no server"]
-  RAW --> SERVE["arm 2: a real server<br/>five fixed articles"]
+  FILE --> RAW["case one: raw throughput<br/>llama-bench, no server"]
+  RAW --> SERVE["case two: a real server<br/>five fixed articles"]
   SERVE --> DOSSIER["a dossier body,<br/>ready to paste"]
  end
 
@@ -127,7 +126,7 @@ a fact about them.
 | `draft` | a second, smaller set of weights that guesses ahead. Null unless the publisher ships one |
 
 Declaring a `draft` block is all a candidate has to do to be measured with one.
-The bench and the qualification arm read it from the same entry, download it,
+The bench and the qualification case read it from the same entry, download it,
 check its digest and name that digest in the weights cache key. Nothing else in
 this runbook changes, and an entry that declares none is unaffected -
 [`model-boundary.md`](../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead)
@@ -155,7 +154,7 @@ is the first key in the header, so a range request for the first megabyte
 answers it - a few kilobytes of transfer against five gigabytes of weights. Read
 it rather than guessing from the family name: Gemma 4's main weights read
 `gemma4` and its MTP head reads `gemma4-assistant`, which are two different
-answers from one repository. Row #5's fourth arm compares this field against the
+answers from one repository. Row #5's fourth case compares this field against the
 file the server opened, so a wrong value fails the run rather than degrading it.
 
 **The four turn markers come from the model's own chat template**, which the
@@ -219,7 +218,7 @@ default silently.
 
 ### 1.3 Bench it - how fast
 
-One dispatch, two arms, and one field naming the candidate:
+One dispatch, two cases, and one field naming the candidate:
 
 ```bash
 gh workflow run measure.yml \
@@ -259,7 +258,7 @@ copies of the same facts can disagree, which means benching one set of bytes and
 adopting another with every gate green. They now take the models file and read
 the rest out of it, which is the same string the swap itself writes.
 
-**Arm one, artifact `bench-raw`** - raw prefill and decode with nothing else in
+**Case one, artifact `bench-raw`** - raw prefill and decode with nothing else in
 the process:
 
 - `hardware.txt`: CPU topology, cgroup limits and runtime identity;
@@ -268,10 +267,10 @@ the process:
 - `resources.json`: wall time, CPU pressure, throttling and memory events.
  Cgroup `memory.peak` can be absent or cumulative; it is not a per-model RSS
  comparison; and
-- `bench/raw-arm.json`: the same numbers as readings, which is what arm two
+- `bench/raw-case.json`: the same numbers as readings, which is what case two
  folds into the page.
 
-**Arm two, artifact `bench-server-<runtime_candidate>`** - a real llama-server,
+**Case two, artifact `bench-server-<runtime_candidate>`** - a real llama-server,
 real fetches, real summaries over a fixed five-article corpus:
 
 - `runtime-summary.json`: per-repeat startup, work and per-item timings, the
@@ -309,6 +308,36 @@ python backend/utilities/measure_llm.py compare \
 
 A quantity reproduces when the two values are closer than the two spreads added.
 A reading taken once carries no spread, so it is printed rather than judged.
+
+**Two dispatches are two machines, and that is usually the larger effect.**
+GitHub puts each job where it likes. On 2026-09-15 two dispatches of the same
+weights differed by 8.8 percent on the same `llama-bench` decode test, on
+machines both reporting EPYC 7763 - so a 5 percent difference read across two
+runs says nothing at all. **When the question is what one setting is worth,
+dispatch a paired case instead**: `runtime_candidate` alternates a baseline
+against a named variant inside one job, on one machine, which cancels the
+machine.
+
+```bash
+gh workflow run measure.yml --ref <branch> \
+ -f target=bench \
+ -f candidate_models_file='models/<name>.json' \
+ -f runtime_candidate=no_draft \
+ -f runtime_repeats=2
+```
+
+`runtime_repeats` is 2 here and not 3 on purpose. A named case runs two cases, so
+three repeats is roughly twice the 330-minute job timeout (Guardrail #2 - the
+limit is GitHub's, so the design is what gives).
+
+**A repeat whose article a publisher edited is dropped, not fatal.** Every
+repeat refetches, and a news page moving inside a multi-hour job is ordinary: on
+2026-09-15 it happened to two of five articles on both of two dispatches. The
+bench times the largest set of repeats that read the same text, names the rest
+in `problems` as `input_drift_dropped`, and records `repeats_timed` beside
+`repeats` so the dossier says which denominator it had. It refuses the run only
+when an case has fewer than two agreeing repeats left, because a median over one
+reading is not a reading.
 
 A laptop result is a laptop result. It can reject a candidate quickly and cannot
 select production.
@@ -353,7 +382,7 @@ gh workflow run validate.yml \
  -f job_budget_minutes='330'
 ```
 
-The arm builds a candidate config under gitignored
+The case builds a candidate config under gitignored
 `backend/var/candidate-config` - the committed tree with `models_file` moved and
 nothing else touched, so it runs the exact line an adoption later moves - checks
 the SHA-256 and the entry's declared byte count **before
@@ -382,6 +411,21 @@ in a way worth repeating here, because they are the ones a fast model fails:
 
 **Do not raise a timeout or lower a threshold to make a candidate pass.** Find
 the cause or reject the candidate.
+
+**You do not have to download an artifact to read any of this.** Each qualify
+shard prints what it measured to its own job page, and `decide` prints the
+eleven gates with failures first. Both pages are rendered from the payload the
+stage already wrote, so nothing there is a second measurement that could
+disagree with the artifact - and neither page spells a model name, so it cannot
+describe a model the run did not serve.
+
+What the shard page carries that the gates do not: **which items drifted**. The
+determinism gate reports a count, and a count sends the next reader to the
+artifact to diff digests by hand. The shard page names them.
+
+Both steps run under `if: always()`, on purpose. A run that died half way is
+exactly the one whose counts somebody wants, and `decide` exits non-zero on an
+ESCALATE - which is precisely the verdict the reader opened the page for.
 
 ### 1.6 Decide
 
@@ -501,7 +545,7 @@ learning mostly from a teacher that no longer serves.
 weights cache key carries the file and its revision. A cache miss is 5.29 GiB in
 118 s (`n = 1`, spread unavailable, GitHub-hosted `ubuntu-latest`, 2026-08-23),
 and each shard pays it - a warm-box bench figure is not the first real day. The
-bench reports a cold arm for exactly this reason; read that one.
+bench reports a cold case for exactly this reason; read that one.
 
 The steady-state cache holds one model. The transition can hold two and cross
 the 10 GB ceiling, so before the first production run:

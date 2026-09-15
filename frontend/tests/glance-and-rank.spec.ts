@@ -11,7 +11,7 @@
  * get wrong on. **The work no longer grows with the field** - the counted halves
  * put a read counter on each entry, double the field sixteen-fold, and assert
  * the bounded pass reads an entry a flat number of times while the sort it
- * replaced climbs by about log2 of the field. The counted arm is the red this
+ * replaced climbs by about log2 of the field. The counted case is the red this
  * row turned green: run it against the pre-row code and the flat assertion fails.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
@@ -130,7 +130,7 @@ test.describe('the ranked list caps without a full sort', () => {
 			`the bounded selection climbed by ${boundedClimb.toFixed(2)} reads an entry over a 16x field`
 		).toBeLessThan(2);
 
-		// The full sort it replaced climbs about four. Asserted so the arm above
+		// The full sort it replaced climbs about four. Asserted so the case above
 		// cannot pass by measuring nothing: if the sort stopped growing, this
 		// oracle would prove nothing about the bounded pass.
 		const sortedClimb = perEntry(sortSliceRank, 6400) - perEntry(sortSliceRank, 400);

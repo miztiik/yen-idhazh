@@ -361,8 +361,8 @@ def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(
     through config, because that is now the only way to move it - the step reads
     `retention.pages_hard_cap_mb` and takes no override.
 
-    This is also the permitted arm of the bound. `contracts/test_app_config.py` holds
-    refusal, and neither arm alone is a bound: one shows the number can be lowered
+    This is also the permitted case of the bound. `contracts/test_app_config.py` holds
+    refusal, and neither case alone is a bound: one shows the number can be lowered
     and the other shows it cannot be raised.
     """
     tree = built_site(tmp_path / "build", 3)

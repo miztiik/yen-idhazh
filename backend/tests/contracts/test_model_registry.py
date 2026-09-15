@@ -285,7 +285,7 @@ def test_a_refused_model_file_is_named_by_the_loader(tmp_path: Path) -> None:
     """Every model has a file of its own, so a refusal has to say which one.
 
     The validator cannot: it is handed a payload, not a path. So the loader adds
-    the address, and this is the arm that proves it rather than trusting it - an
+    the address, and this is the case that proves it rather than trusting it - an
     operator with two model files on disk and a refusal naming neither has to
     guess which one they broke.
     """

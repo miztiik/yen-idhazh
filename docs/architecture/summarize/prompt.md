@@ -1,7 +1,6 @@
 # The summarizer prompt
 
 **Last Updated**: 2026-09-15
-
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
 
@@ -406,7 +405,7 @@ token from behind the article to in front of it changes where it sits, never how
 many there are, and the wording the move needed - two conditioning clauses on the
 plan half, a two-job opening on the elements half, and the pointer itself - came
 to 47 tokens more than it removed. The longest article the window admits is
-therefore **47 tokens shorter**, not 597 longer: the harness's call-1 prompt
+therefore **47 tokens shorter**, not 597 longer: the harness's label-call prompt
 ceiling did widen by 650, but the prompt it bounds now carries the 697 that
 moved into it. Measured the same day: the article's own room went from 8,735
 tokens to 8,688.
@@ -477,7 +476,7 @@ name the runtime is told. `system_role` is a closed choice of two, because each
 value is a turn topology - a code path - and a free-form string here would be a
 template language in config. `system_joiner` is required under
 `fold_into_first_user` and refused under `own_turn`, so it is never set on the
-arm that ignores it. `thinking_kwarg` null means this template reads no
+case that ignores it. `thinking_kwarg` null means this template reads no
 variables at all, the request then carries no `chat_template_kwargs`, and the
 entry refuses that beside a declared `thinking_close` - a claim nothing can
 satisfy.
@@ -546,7 +545,7 @@ make the summarize-and-plan call re-read its whole prompt with no line in any lo
 both rendered prompts as plain files and one rendering recorded from the server
 that applies the template, so three things are checked without a model running:
 the summarize-and-plan call's prompt opens with the label call's prompt and its reply; the markers reproduce
-the template's own generation prompt byte for byte, on both reasoning arms; and
+the template's own generation prompt byte for byte, on both reasoning cases; and
 the template's continuation does **not** have the property ours does. That last
 pair is the row's argument as an assertion rather than a paragraph.
 
@@ -599,7 +598,7 @@ unmeasured and a denser candidate table may make it longer, so the saving at the
 cap is unknown and probably larger.
 
 **On a later item the system turn is free.** Items 2 and 3 each reused **1,362
-tokens** of their call-1 prompt with no work - the label call's system prompt, which is
+tokens** of the label call's prompt with no work - its system prompt, which is
 byte-identical on every item - and the server erased the previous item's copy of
 the summarize-and-plan call's question as invalidated. That is the steady state a shard spends its
 life in, and it had never been observed before this run.
@@ -697,7 +696,7 @@ article in twenty.
 
 **What the window costs is memory, and memory is not what chose it.**
 [`../../reference/measurements.md`](../../reference/measurements.md) carries the
-arms; the short version is that KV runs 32 KiB a token over 8 attention layers
+cases; the short version is that KV runs 32 KiB a token over 8 attention layers
 of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the
 window is - so 65,536 is 2,048.00 MiB of KV against 512.00 at 16,384, and 1,584
 MiB more all told. The runner's measured low-water free is 6.84 GiB against a
@@ -860,9 +859,9 @@ than expected lengths - `ADDRESS_MAX` is 48 where a real address is
 here and barely at all on the summarize-and-plan call, whose structure is keys and enums at their
 real length.
 
-That ceiling is converted at **the one measured density of real call-1 output**:
-2,805 characters over 900 tokens, read off the reply that made this budget
-necessary, on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding,
+That ceiling is converted at **the one measured density of real label-call
+output**: 2,805 characters over 900 tokens, read off the reply that made this
+budget necessary, on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding,
 2026-09-12, one reply, no spread. **The budget is 6,491 tokens**, which is 7.2
 times the reply that was lost and 68 times an ordinary one. The density is held
 in source as the two numbers it was read from rather than as a decimal, it is
@@ -909,7 +908,7 @@ window has moved since and the ruling has not: what says the window did it is
 `NoneReason.WINDOW_EXHAUSTED`, written at the call site where the numbers are
 already in hand, rather than a constant that changed shape at import.
 
-**Rejected: recording a cut call-1 reply as the existing `output_truncated`.**
+**Rejected: recording a cut label-call reply as the existing `output_truncated`.**
 The counter is how anybody sees whether the derived budget worked, and folded in
 with the summarize-and-plan call's cuts it moves for reasons that have nothing to do with the label call.
 Refused by Fowler, 2026-09-13.
@@ -1034,7 +1033,7 @@ model's own template writes that prompt and there is nothing of ours to stop and
 continue. Its budget is the two added together. That is the route the
 qualification harness sends.
 
-**Three refusals are conditional on the declaration, and each has both arms.** An
+**Three refusals are conditional on the declaration, and each has both cases.** An
 inline think block and a reasoning channel both fail an item where the entry
 declared no closing marker - the flag did not take - and are discarded where it
 did. The `reasoning_leakage` gate counts the same zero either way and says which
@@ -1043,7 +1042,7 @@ failure it found: reasoning nobody asked for, or a discard that did not happen.
 **What proves thinking helped is the eleven gates on the frozen corpus**,
 incumbent against incumbent-with-thinking. No new instrument: faithfulness alone
 rewards bland copying, and entity survival, compression ratio and source overlap
-are the arms that move. A model judge remains banned
+are the cases that move. A model judge remains banned
 ([../../concepts/evaluation.md](../../concepts/evaluation.md)).
 
 ## Model compatibility is mechanical

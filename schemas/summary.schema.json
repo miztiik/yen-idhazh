@@ -79,6 +79,8 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
+        "model_timed_out",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -86,6 +88,7 @@
         "length_out_of_range",
         "copied_source",
         "leaked_address",
+        "shard_out_of_time",
         "unknown"
       ],
       "title": "FailureCode",
@@ -117,6 +120,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "FailureCode gained model_timed_out and shard_out_of_time.",
+      "version": "2026-09-15T22:10",
+      "why": "Both were being reported under a name that sends an operator to the wrong place."
+    },
+    {
+      "change": "failure_code may now carry model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row."
+    },
+    {
       "change": "failure_code may now carry no_title.",
       "version": "2026-09-15",
       "why": "Extract gained a refusal for an item whose feed carried no headline."
@@ -125,16 +138,6 @@
       "change": "Removed pipeline_fingerprint.",
       "version": "2026-09-13T22:00",
       "why": "It gated a skip nothing was ever wired to, and no writer has filled it since."
-    },
-    {
-      "change": "A summary that failed on its reply records call_1 and the five cost cells.",
-      "version": "2026-09-13T14:20",
-      "why": "Every gate below 'the model never answered' refuses text already paid for."
-    },
-    {
-      "change": "pipeline_fingerprint is optional and nothing sets it.",
-      "version": "2026-09-12T21:00",
-      "why": "Skip-if-fingerprint-matches was never wired to a caller, so the stamp cost bytes."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -346,7 +349,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15",
+      "default": "2026-09-15T22:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -362,5 +365,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-09-15"
+  "version": "2026-09-15T22:10"
 }

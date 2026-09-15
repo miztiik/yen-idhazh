@@ -240,7 +240,7 @@
     },
     "ItemObservation": {
       "additionalProperties": false,
-      "description": "One inference call: one corpus item at one repeat.\n\nEvery call is recorded, including the ones that failed. A failure that\nvanishes from the record takes the denominator with it, and the success rate\nthen describes the survivors rather than the run.",
+      "description": "One corpus item at one repeat, as the run's own call path produced it.\n\nEvery attempt is recorded, including the ones that failed. A failure that\nvanishes from the record takes the denominator with it, and the success rate\nthen describes the survivors rather than the run.\n\n**A row is one item and not one call, and `QualificationShard.calls_per_item`\nis what says how many calls are behind it.** On the path that makes two,\nevery column here is the item's answer over the pair: a budget either call\nhit cuts the item, a reasoning channel either call opened is a channel the\nitem used, and the token counts are the pair's sum. Reading a two-call row\nas a single call halves the cost and reports a decode as clean when the\nfirst of its two was truncated.",
       "properties": {
         "completion_tokens": {
           "minimum": 0,
@@ -260,6 +260,7 @@
           "title": "Failure Code"
         },
         "finish_reason": {
+          "description": "How the decode ended. Over a pair, `length` where either call met its budget, because an item cut anywhere is a cut item.",
           "minLength": 1,
           "title": "Finish Reason",
           "type": "string"
@@ -284,13 +285,13 @@
           "type": "string"
         },
         "prompt_tokens": {
-          "description": "The complete chat-templated request, as counted by the runtime.",
+          "description": "The complete rendered request, as counted by the runtime.",
           "minimum": 0,
           "title": "Prompt Tokens",
           "type": "integer"
         },
         "reasoning_channel_used": {
-          "description": "The runtime split a reasoning channel off the content.",
+          "description": "The runtime split a reasoning channel off the content, in any call.",
           "title": "Reasoning Channel Used",
           "type": "boolean"
         },
@@ -319,7 +320,7 @@
           "type": "integer"
         },
         "think_block_words": {
-          "description": "Words inside inline `<think>` blocks. Any is a leak.",
+          "description": "Words inside inline `<think>` blocks, summed. Any is a leak.",
           "minimum": 0,
           "title": "Think Block Words",
           "type": "integer"
@@ -605,6 +606,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added calls_per_item, defaulting to 1.",
+      "version": "2026-09-15T23:30",
+      "why": "Qualification can now run the call path the digest runs, which calls twice."
+    },
+    {
       "change": "inputs gains turn_markers_sha256, optional.",
       "version": "2026-09-14T04:00",
       "why": "The turn envelope is a control, so a verdict has to record which one it ran."
@@ -620,11 +626,6 @@
       "why": "Two candidates are only comparable when the run records what it held still."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
-      "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-26",
       "why": "A changelog says what moved lately; git is the archive."
@@ -632,6 +633,13 @@
   ],
   "description": "What one capture-and-replay job uploads.\n\nThe corpus is hashed and written before the first inference call, so the\npre-registration is an ordering the code enforces rather than a promise in a\ndocument.",
   "properties": {
+    "calls_per_item": {
+      "default": 1,
+      "description": "Inference calls behind one observation. 1 is the qualification's own single call; 2 is the path the digest runs, which labels the article and then summarizes it. Recorded because it decides what every per-item number in this shard means, and two shards that disagree on it are not comparable.",
+      "minimum": 1,
+      "title": "Calls Per Item",
+      "type": "integer"
+    },
     "canaries": {
       "items": {
         "$ref": "#/$defs/CanaryObservation"
@@ -727,7 +735,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-09-14T04:00",
+      "default": "2026-09-15T23:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -748,5 +756,5 @@
   ],
   "title": "QualificationShard",
   "type": "object",
-  "version": "2026-09-14T04:00"
+  "version": "2026-09-15T23:30"
 }

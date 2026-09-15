@@ -1,7 +1,6 @@
 # GitHub Actions Workflows
 
 **Last Updated**: 2026-09-15
-
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -37,7 +36,7 @@ the commit it made afterwards.
 
 `measure-migrated-tree.yml` was on this list and it is gone. It ran once, on
 2026-09-08, to answer what the site would weigh once the prerendered dated
-documents and the committed encoder weights left it. **Its second arm deleted
+documents and the committed encoder weights left it. **Its second case deleted
 the weights and did not delete the dated directories**, so the number it
 reported describes a tree nobody built; the real figure was taken off the
 ordinary `site` job instead, because the site as it ships is the migrated tree
@@ -550,7 +549,7 @@ Each Measurements dispatch selects exactly one target:
 | `llm` | GGUF download timing and `llama-bench` throughput | `models`, `threads` |
 | `image` | CPU image-model candidates | none |
 | `corpus` | Live article-length sampling | `corpus_links` |
-| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
+| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_repeats`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
 | `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |
 
 The form keeps all target-specific inputs visible. A job reads only the inputs
@@ -645,43 +644,43 @@ prints the seed beside the pair. A fixed pair would pass for as long as those
 two pages stayed up and say nothing about anything else the extractor meets; a
 draw with no seed printed could not be replayed.
 
-**The draw happens once, before any arm starts.** One step draws, one step turns
-the pair into a run plan, and all three arms run that one plan - so the three
+**The draw happens once, before any case starts.** One step draws, one step turns
+the pair into a run plan, and all three cases run that one plan - so the three
 record the same two item ids and the numbers between them can be subtracted. The
-final step compares what each arm recorded against what the plan asked for and
+final step compares what each case recorded against what the plan asked for and
 fails the job when they disagree, because an address that 404s would otherwise
-leave one arm with one item and three rows of plausible numbers.
+leave one case with one item and three rows of plausible numbers.
 
-**Three arms, in sequence, on one runner, and never a matrix.** Prefill spans
+**Three cases, in sequence, on one runner, and never a matrix.** Prefill spans
 4.2x between GitHub-hosted runners ([measurements.md](measurements.md)), which
-is larger than anything an arm here is looking for, so three jobs would report
+is larger than anything a case here is looking for, so three jobs would report
 the three hosts they drew. Sequential on one box cancels the host.
 
-| Arm | What it changes | What the difference prices |
+| Case | What it changes | What the difference prices |
 | --- | --- | --- |
 | `baseline` | nothing - the production path exactly | the number the other two are read against |
 | `no-visual-decision` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
 | `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
 
-Each arm is a step rather than an iteration of a loop, so the run page shows
-each arm's own wall clock. Every arm setting is in config (Guardrail #6): the
+Each case is a step rather than an iteration of a loop, so the run page shows
+each case's own wall clock. Every case setting is in config (Guardrail #6): the
 addresses, the draw size, the job bound, the slot counts and the windows. One
-step writes a config root per arm from the committed `config/`, differing only
-in what that arm changes, and the committed config is never edited - an arm that
-edited it would leave the next arm reading whatever the last one wrote.
+step writes a config root per case from the committed `config/`, differing only
+in what that case changes, and the committed config is never edited - a case that
+edited it would leave the next case reading whatever the last one wrote.
 
-**The parallel arm doubles `n_ctx` because llama-server divides the window it is
+**The parallel case doubles `n_ctx` because llama-server divides the window it is
 given between its slots.** Two slots on the committed 65,536 is a 32,768-token
 slot, and the worst article the truncation cap admits needs 54,887 - so leaving
-the window alone would make that arm a test of a smaller window wearing a
-concurrency arm's name. The slot count is fixed when the process starts, which
-is why that arm costs a restart and a second model load.
+the window alone would make that case a test of a smaller window wearing a
+concurrency case's name. The slot count is fixed when the process starts, which
+is why that case costs a restart and a second model load.
 
 Two things one dispatch cannot settle. **Whether two articles are representative
 of the eighty a production day carries - they are not**, and the draw is what
 stops them being representative of nothing instead. And the faithfulness scorer,
-which every arm skips: it is a second model download, it is identical across the
-arms so it cancels from every comparison here, and it is not what the two-call
+which every case skips: it is a second model download, it is identical across the
+cases so it cancels from every comparison here, and it is not what the two-call
 path is being measured for.
 
 ## Display names and files
@@ -720,466 +719,46 @@ on an old major, fails CI.
 `setup-node` still selects Node 22 for the frontend commands. That is the
 application runtime and is unrelated to the runtime an action itself declares.
 
-## The inference runtime is pinned, and the cache key says which build
-
-`digest.yml`, `validate.yml`, `measure.yml`, `idhazh-pipeline-tests.yaml` and
-`probe.yml` run one llama.cpp build. Each declares the same three variables, and
-each checks the archive against its digest before it unpacks anything.
-
-| Variable | Value |
-| --- | --- |
-| `LLAMA_CPP_BUILD` | `b10598` |
-| `LLAMA_CPP_ASSET` | `llama-b10598-bin-ubuntu-x64.tar.gz` |
-| `LLAMA_CPP_SHA256` | `d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c` |
-
-The SHA-256 is the release API's own `digest` for that asset. It was confirmed
-on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
-
-The weights cache key names the build: `llm-<weights>-<build>-v4` in the two
-`digest.yml` jobs, `validate-<challenger>-<build>-v3` in `validate.yml`. The
-`digest.yml` suffix moved to `v4` when the weights half stopped coming from a
-workflow variable, so the first run after that refetched once rather than
-restoring an entry nobody could attribute. `v3` was the same move for the build.
-
-**The key matters more than the pin.** The fetch step runs only on a cache
-miss. Keyed on the weights alone, the cache froze one binary and then served a
-different one the first time the entry was evicted - the instability of
-following the newest release with none of its freshness, and no record on the
-run of which build served the day. A throughput number measured in `measure.yml`
-now describes the binary that writes the digest (Guardrail #10).
-
-The run manifest is not fixed by this. It still records `runtime_build` as the
-fixed string `llama-server-local`, so the manifest does not yet name the build.
-
-A workflow contract test pins the three variables, the digest check on every
-fetch path, and the build inside every runtime cache key.
-
-### `probe.yml` asks the build what it accepts
-
-The pin says which binary runs. It does not say what that binary understands,
-and a models entry naming a speculation kind the build cannot drive fails late
-and quietly: the server starts, loads the draft head, drafts nothing, and the
-job spends its hour before anybody reads the flag back. `probe.yml` installs the
-same asset the three runtime arms install, runs `llama-server --help`, prints
-the speculation lines to the job summary, and keeps the whole help text as a
-30-day artifact - so the next question about this build is answered by
-downloading that artifact rather than by a second run.
-
-It is a `workflow_dispatch` with no scheduled trigger and it loads no weights,
-so it costs about a minute of runner time. It takes no input for a build,
-either: it reads the same three pinned variables the runtime arms read and is
-held to them by the same test, so its answer cannot describe a binary
-production does not run. Probing a candidate build is a branch that moves the
-pin, dispatched with `--ref` - the same commit somebody would have to make to
-adopt it.
-
-The question that made it was whether `b10598` accepts the kind a Gemma
-multi-token head needs, and that is the shape of every question it answers:
-read the runtime's own answer rather than a release note's.
-
-## Every download fails loudly, and every weight is checked
-
-Every download in every workflow is spelled `curl -fsSL --retry 3
---retry-all-errors`, and the release lookups that find the llama.cpp archive are
-spelled `curl -fsS`. `-f` is the letter that matters. Without it curl treats a
-403 or a 502 as a successful transfer: it writes the HTTP error body into the
-output file and exits 0. Nothing downstream looks at the file until a server
-tries to open it.
-
-In the daily run that is worse than a failed step, because `backend/models` is a
-cache path. A rate-limited minute writes a page of error text where the weights
-should be, `actions/cache` saves it under the pinned key, and every later run
-restores that same page until the entry is evicted. The retries are the cheap
-half of the fix; `-f` is the half that stops the bad file being written at all.
-
-The digest check is what catches the other failure, a transfer that dies
-mid-body. That is a 200 response, so curl has nothing to retry and the file on
-disk is simply short. Every job that downloads weights therefore runs
-`sha256sum --check` against a recorded digest, after the fetch and before
-anything reads the file. **No check carries an `if:`.** The fetch step is
-skipped on a cache hit, and a restored entry is the one case where nobody
-watched the bytes arrive - so it is the case that most needs the check.
-
-| Workflow and job | Weights | Digest read from |
-| --- | --- | --- |
-| `digest.yml` / `work` | the summarizer | `models.summarize.sha256` |
-| `measure.yml` / `runtime` | the bench candidate | the `models` job's `candidate_sha256` |
-| `measure.yml` / `batched` | the summarizer | `models.summarize.sha256` |
-| `validate.yml` / `qualify` | the candidate | the `plan` job's `candidate_sha256` |
-
-The two config digests are the same field, `ModelRef.sha256` in the file
-`config/idhazh.json`'s `models_file` points at. The other two are the exception,
-and deliberately: an operator can point the bench and the validation arm at a
-model config does not name, so each resolves the digest once - from the dispatch
-input, or from config when there is none - and republishes it as a job output
-the whole run reads. The bench's raw arm checks the same digest a step earlier,
-inside `measure_llm.py`, against the Hub's own record for that commit.
-
-The workflow contract test that holds this open is closed-world. It finds the
-downloads by reading every workflow file rather than by consulting a list, and
-fails when the set it finds differs from the set it pins. A tenth workflow that
-downloads weights fails the test until it carries the same pair of steps.
-
-### The digest settles the bytes, and the declared size settles the document
-
-`sha256sum` says the file on disk is the file the entry named. It says nothing
-about whether the entry is internally consistent, so both arms that resolve a
-candidate also compare `stat -c %s` against the entry's own `byte_count`. An
-entry that declares no size skips the check, because that is an entry nobody has
-fetched yet rather than an entry that disagrees with itself.
-
-`validate.yml` has done this since it was written and `measure.yml` had not. The
-drift was found on 2026-09-15 by diffing the two files, which is the same way the
-last one was found and the reason both are now held by one test.
-
-### Healthy says a server replied, not which weights replied
-
-Every number a bench reports is filed under the candidate's id, so a server
-answering under any other alias makes the whole run a measurement of something
-else wearing the candidate's name (Guardrail #10). Nothing in the report would
-look wrong: every figure would be internally consistent.
-
-Four server starts exist across the workflows and **all four now ask
-`GET /v1/models` before anything is measured** - the daily run's worker, the
-bench's runtime arm, the bench's vocabulary arm, and both starts in
-`idhazh-pipeline-tests.yaml`. Two of those learned it on 2026-09-15; the daily
-run and the validation arm already did it.
-
-The alias comes from the same config the server's flags came from, never from a
-second copy, so the two cannot disagree (Guardrail #6). The test is discovery-
-based rather than a list: every step whose script waits on `/health` must also
-name `/v1/models`, so an arm added later is held to the rule whether or not
-anybody remembered it.
-
-## One place writes a production model ref, and it is config
-
-`config/models/<name>.json` holds `models.summarize`, and `config/idhazh.json`
-says which of those files is active through `models_file`. None of the
-three workflows that load weights - `digest.yml`, `measure.yml`, `validate.yml` -
-holds a model repository, a weights filename or a publisher name of its own.
-Grepping all three for a `.gguf` name, a Hugging Face repository or a branch in a
-download path returns nothing, and a workflow contract test asserts exactly that.
-None of them names the model file either: each one reads the pointer and follows
-it, so a swap is one line for a workflow as well.
-
-Each one reads config in a `models` step and publishes job outputs. `digest.yml`
-does it inside `plan`, which `work` already needs; `measure.yml` has
-a small `models` job of its own that every target depends on, and that job also
-decides the bench candidate - the dispatch input where one was given, the
-configured model otherwise - so both bench arms read one answer rather than
-repeating the fallback; `validate.yml`
-resolves the candidate once inside `plan`. **The `needs` context resolves before
-a job's first step while `steps` does not**, which is the whole reason the refs
-travel as job outputs: it is what lets a cache key and a job-scoped `env` name
-the weights they hold. A step cannot.
-
-That second copy was the defect. The alias came from config while the repository
-and the filename came from workflow `env`, so editing one served the old bytes
-under the new alias and filed every eval row under a model that never ran
-(Guardrail #10). Changing the model is now one edit to config, and the cache key moves
-with it.
-
-### A dispatch input is not a copy
-
-`measure.yml` exists to benchmark a model config does not name, and `validate.yml`
-exists to qualify one. Both keep their inputs, and an input always wins. What was
-removed is the literal DEFAULT behind it. A dispatch that fills nothing in now
-measures, or re-qualifies, the model config names.
-
-The values for a model under adoption live in
-[measurements.md](measurements.md), where a target is declared - not in a
-workflow file, where nothing would ever check them against the run.
-
-### Every download names a commit
-
-Each ref carries a `revision`, and every fetch path uses it. A branch hands back
-whatever was uploaded last, so the bytes can move under a config that still
-records the old `sha256`; the run would then fail a check nobody had changed, or
-in `measure.yml`, which had no checksum step, quietly measure a different model.
-
-The revision is in the weights cache key for the same reason the build is. The
-fetch step runs only on a cache miss, so a key that cannot tell two uploads of
-one filename apart would hold a repinned config on a hit whose bytes fail the
-checksum on every run until the entry expires.
-
-The `models` step asserts each value is one bare word before it writes it. Every
-ref is substituted straight into a shell command downstream, and that step is the
-only point between config and those commands where a value carrying a space, a
-quote or a newline can be stopped.
-
-`measure.yml` and `validate.yml` keep their own candidate variables on purpose:
-benching or validating a model means naming one that is deliberately not in
-config yet. Each keys its own weights entry on the candidate digest rather than
-on the production ref, so the two never share an entry with the daily run and a
-dispatch that names nothing simply keys on the configured model's digest.
-
-## One function builds the server command, and one variable says the port
-
-`digest.yml`, `validate.yml` and `measure.yml` each stand up a `llama-server`,
-and none of them writes a flag. Every one imports `server_argv` from
-`backend/idhazh/llm/server.py`, which renders the whole command from
-`config/idhazh.json`. A contract test holds that from both sides: exactly one
-Python file spells those flags, and no command in any workflow spells one.
-
-There used to be a second renderer, `backend/utilities/llama_server_argv.py`,
-and it existed for exactly one reason. Both `digest.yml` inference jobs ran
-`Start the model` before `Install`, so `pip install -e.` had not run and the
-package was not importable yet. `Install` now runs one step earlier, straight
-after `setup-python`, and the copy is gone. Moving a step within a job is the
-same work in a different position, so no wall-clock claim is made for it
-(Guardrail #10).
-
-While the copy existed the two halves drifted, and the arm that drifted is the
-one nobody diffed. `validate.yml` never needed the utility - its `Install`
-already ran before its server started - so for two changes it qualified
-candidates on a server the daily run does not run.
-
-**The port is one `env: LLAMA_PORT` per workflow.** It was nine literals in
-`digest.yml` and three in `validate.yml`, and all of them had to move together
-or the job failed in a way that reads as an unreachable model (Guardrail #6).
-`server_argv` takes it as an argument; every `/health`, `/v1/models`, `/props`
-and `/metrics` probe reads it; and `idhazh.llm.server` reads the same variable
-for the address the summarize stage posts to, so the server and its client
-cannot end up on different ports. It is not a config field. It decides nothing
-about the words, so `idhazh.fingerprint` has nothing to classify and the run's
-recorded inputs do not move.
-
-## Every dispatch input has a shape, and one of them decides a published address
-
-A `workflow_dispatch` form is free text unless somebody constrained it. The
-seven workflows declare 24 inputs between them. Until 2026-08-27 one of those
-24 was constrained by nothing at all, and it was the one that decides where a
-day is published.
-
-**`digest.yml`'s `date` is the expensive one.** It becomes the day's directory,
-five artifact paths, two commit messages and six `--date` arguments.
-`2026-8-27`, `2026/08/27`, `2026-13-45` and a trailing space all read as a date
-to a person, and none of them fails anywhere in the run: every stage takes the
-string, the commit lands, and the day is published to an address the site never
-looks at. A run takes 164-184 minutes, so one keystroke costs a digest nobody
-sees for about three hours.
-
-**This is a correctness boundary, not a privilege boundary.** `digest.yml`
-carries `permissions: contents: write`, and only a dispatch reaches the form, so
-whoever fills it in can already commit to `main` by hand. The pattern is worth
-having because the mistake is silent, not because the person is untrusted.
-
-The check runs where the value first becomes a fact - the `decide` step of the
-`plan` job - and it runs **after** the empty-string default resolves. That is
-what makes the scheduled path the case the pattern is proved against rather than
-the case nobody ever ran it on: a schedule passes no inputs, `date -u +%F`
-writes `2026-08-27`, and the same pattern accepts it. The month and the day are
-bounded as well as counted, because `2026-13-45` publishes exactly as well as a
-real day does.
-
-The value arrives as `DISPATCH_DATE` in the step's `env` rather than pasted into
-the script. A pasted value is text before it is a value, so a pattern written
-under the paste is reading a script the input has already edited.
-
-### Three shapes, and a closed list
-
-Every one of the 24 inputs is one of three things, and a contract test finds
-them by reading the workflow files rather than by consulting a list - so a new
-input fails the test until somebody says which one it is and the test finds the
-evidence in the file.
-
-| Shape | What it means | Count |
-| --- | --- | --- |
-| Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 5 |
-| Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 9 |
-| Matched | The workflow matches the value against an anchored pattern before anything acts on it. | 10 |
-
-The named inputs:
-
-- **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
- `measure.target`, `measure.runtime_candidate`.
-- **Read by name** - `measure.models`, `measure.runtime_threads`,
- `measure.runtime_threads_batch`, and `candidate_models_file` on both
- `measure.yml` and `validate.yml`. That one becomes a file path, so the step
- resolves it and proves it sits inside `config/` rather than matching its
- spelling, then asserts every field it republishes is one bare word.
-- **Matched** - `digest.date`, `drift.recent_days`, `drift.baseline_days`,
- `measure.corpus_links`, `measure.threads`, `validate.shards`,
- `validate.repeats`, `validate.corpus_per_shard`,
- `validate.job_budget_minutes`.
-
-`validate.yml` shapes its four numbers in one step of the `plan` job, which is
-the job every other job needs, so "before its first use" is anywhere after that
-step - the qualify matrix, the job bound and the gate all read them later. The
-byte check reads the size the candidate's own entry declares, not a number the
-form carried.
-
-`drift.yml` was the other one worth fixing. Its two window sizes were pasted
-into a Python program inside the step, so a value that is not a number was a
-value the program was built from. They now arrive through `env` and the program
-reads them with `os.environ`. That step also gained the `set -euo pipefail`
-every other step in the repository starts with, so a crash inside the comparison
-now turns the step red instead of passing through `tee` as a success and
-skipping the issue step on `if: success`.
-
-### The linter reads scripts, and the test reads the rest
-
-CI runs `shellcheck --severity=style.github/scripts/*.sh` in the gates job.
-`ruff` and `mypy` stop at Python, and that directory holds the retry loop both
-daily commit steps run - the one whose failure costs a whole day's digest.
-`--severity=style` is the strictest level, so a warning fails the build rather
-than becoming a note somebody scrolls past.
-
-It arrives as `shellcheck-py` in the `dev` extra, pinned by the same manifest
-that pins `ruff` and `mypy`. A CI step that downloaded the binary would be an
-unpinned fetch, which is the shape this repository has already had to remove
-once. Measured 2026-08-27 on Python 3.12: 34,782,285 installed
-bytes from an 8.0 MB wheel - a statically linked Haskell binary, and about
-48 times the size of the next-largest dev dependency. One observation, so no
-spread, and a Linux runner installs a different wheel.
-
-**`shellcheck` cannot read a `run:` body**, because a `run:` body is a string
-inside YAML, not a file. The tool that can read one is `actionlint`, a Go binary
-this repository does not fetch. The inline shell is held by the contract tests
-in `backend/tests/workflows/` instead, which execute the real steps
-rather than grep them.
-
-## Repository settings these workflows depend on
-
-Read from the repository API on 2026-08-25.
-
-| Setting | Value | Why |
-| --- | --- | --- |
-| `allow_squash_merge` | true | The default. One entry on `main` per PR. |
-| `allow_merge_commit` | true | For a PR carrying several independent intents, so each stays revertible. |
-| `allow_rebase_merge` | true | Same reason. History looks squash-only, but rebase is available. |
-| `allow_update_branch` | true | A PR can be brought up to date from `main` without a local push. |
-| `delete_branch_on_merge` | true | The remote branch goes away on merge. |
-| `allow_auto_merge` | true | Turned on 2026-08-31. See below. |
-| `squash_merge_commit_title` | `PR_TITLE` | The subject is the PR title. GitHub appends the PR number. |
-| `squash_merge_commit_message` | `PR_BODY` | The body is the PR body. Branch commit bodies are never concatenated. See below. |
-| `merge_commit_title` | `MERGE_MESSAGE` | The merge path, when a PR carries several intents. |
-| `merge_commit_message` | `PR_TITLE` | Neither merge-commit setting reads a branch commit body, so that path was never affected. |
-
-**`main` is not a protected branch, and protecting it would break
-publication.** `digest.yml` and `validate.yml` push their state commits straight
-to `main` - the eval ledger, the seen-URL store, feed health, the digest
-payload. A branch-protection rule makes those pushes fail, and a scheduled run
-that cannot commit has done its work for nothing. Protecting `main` is possible,
-but only after the direct pushes in those two workflows are redesigned or
-explicitly exempted.
-
-**`allow_auto_merge` was turned on on 2026-08-31, and on its own it buys
-nothing. Measured, not assumed.** The setting was off on the argument that
-GitHub's auto-merge needs branch protection, and that argument is right.
-`gh pr merge 303 --squash --delete-branch --auto` was run against a pull request
-whose four checks were still in flight: it **exited 0 and queued nothing**.
-`autoMergeRequest` read `null` and `mergeStateStatus` read `UNSTABLE`, with
-`rulesets` empty and `branches/main/protection` answering 404. A zero exit code
-is not evidence here - read `autoMergeRequest` through the GraphQL API instead.
-
-The reason is that auto-merge queues a merge behind something that BLOCKS it.
-With no required status check nothing blocks, so there is nothing to queue
-behind, and GitHub declines rather than waiting for checks it was never told to
-care about.
-
-**What would make it work, and what that costs.** A repository ruleset on `main`
-requiring the `gates` and `site` checks, with `github-actions[bot]` on its
-bypass list. The bypass is load-bearing: `digest.yml` and `validate.yml` push
-state commits straight to `main` with the job's own token - the eval ledger, the
-seen-URL store, feed health, the digest payload - and a ruleset that forgets it
-stops the digest publishing that night. The setting stays on because it is free
-and is the half that cannot break anything; the ruleset is written here as the
-next step rather than taken quietly.
-
-**A squash commit takes its message from the pull request, not from the branch
-commits.** `squash_merge_commit_message` was `COMMIT_MESSAGES` until 2026-08-25.
-That value concatenates every branch commit body into the landed message, so a
-`Co-authored-by` attribution trailer written on a branch commit reaches `main`
-by itself. `CLAUDE.md` section 8 forbids that trailer, and PR #71 stayed clean
-only because the message was passed by hand at merge time. `PR_BODY` removes the
-path instead of relying on the person merging to notice.
-
-The cost is that the pull request body is now the commit body. Write it as a
-commit message - plain prose, ASCII, no heading markup - because whatever it
-contains lands on `main`. Wrap it at 72 columns. GitHub re-wraps a wider body
-and leaves an orphan word on its own line: PR #72 was written at 80 columns and
-landed with a longest line of 72, measured 2026-08-25. `main` is unprotected, so
-no check can block a bad message; this setting is what makes the good outcome
-the default one.
-
-## Platform limits that shape the workflows
-
-The ceilings themselves are stated once, in `CLAUDE.md` Guardrail #2. What follows is
-the behaviour behind them, which is what actually decides a workflow's shape.
-Verified 2026-08-20.
-
-- **Actions minutes are free and unmetered**, because this repository is public.
- The widely quoted 2,000 minutes per month is a private-repository figure and
- does not apply. Wall-clock is the constraint, not a monthly balance.
-- **A cache entry unread for 7 days is deleted**, and a restore is paid once per
- *job* rather than once per run. That is why `digest.yml` gives a worker a
- shard of several items instead of fanning out one job per item: the weights
- restore is the largest fixed cost, and every extra job pays it again. Which
- entry each workflow fills, and the bar a new one clears against the shared
- 10 GB ceiling, is in [ci-caches.md](ci-caches.md).
-- **`GITHUB_TOKEN` allows 1,000 API requests per hour per repository**, shared
- across every job of every concurrently running workflow. A step that polls in
- a loop spends a budget the scheduled pipeline also needs.
-- **The Pages deploy itself times out at 10 minutes**, separately from the job
- timeout, and separately from the 1 GB site cap.
-- **A job stopped by `timeout-minutes` is *cancelled*, and a cancelled job skips
- every step that carries no condition.** `if: failure` does not run either -
- only `if: always` does. So an artifact upload written the ordinary way is
- silently dropped exactly when a long job most needed to hand over what it
-  made. Observed 2026-08-25 on the since-retired `visuals` job in `digest.yml`, run
- `32804437110`: the step list records the render step as `cancelled`, the log
- upload (which has `always`) as `success`, and the decisions upload as
- **`skipped`**.
- 88 planning decisions and 9 rendered charts existed on that runner and none of
- them left it. **Any upload step that carries a job's only copy of its output
- needs `if: always`.** The rule was written and three sibling steps in the same
- file never got it: on 2026-09-14, run `34852763827`, the `work` job's three
- uploads still carried no condition, three of four shards were cancelled at
- `run.shard_timeout_minutes`, and 33 items their ledger steps had already
- recorded as published never reached `assemble`. **Fixing one step in a file is
- not fixing the file.**
-- **Every `digest.yml` artifact a re-render needs is gone within one day, so "re-render the day from its decisions" is not a repair option for any day older than 24 hours.** Read off `digest.yml` on 2026-09-15, it keeps seven: `plan` 1 day, `shard-visuals-<shard>` 1 - that one
- carries this run's rendered charts - `runtime-log-<shard>` 2, `items-<shard>`
- 7, `review` 7, `evidence-<shard>` 14, and `captures-<shard>` 90. **The re-render window is set by the
- shortest of those and never by the longest**, which is the trap in reading the
- list: `assemble` downloads `plan`, `items-*` and `shard-visuals-*` and needs
- all three, so a week-old `items-*` repairs nothing once the other two have
- gone - and a 90-day `captures-*` repairs nothing at all, because it holds what the model was asked rather than what the day published. Nothing under `backend/var/` is committed either: `.gitignore` line 52
- is `backend/var/`, and `git ls-files backend/var` returns no files. **The
- committed record of a run is the digest under `frontend/public/digest/` plus
- the rows under `state/`, and never the intermediates.** Repairing an older day
- therefore means reading its articles again and paying the whole work stage
- again - there is no cheaper path, and a
- plan that assumes one is proposing something that cannot be done. Job *logs*
- are the exception: they outlive every artifact here, which is why a question
- about what a past run did is asked with `gh run view --job <id> --log`. **`captures-<shard>` is the one artifact that outlives the day it describes**, and it is the odd one on purpose: a regression is found by comparing today with a run from weeks ago, so a window shorter than the comparison is a window that closes exactly when it is wanted. It holds each call's rendered prompt and raw reply behind `logging.capture_prompts` and `logging.capture_replies`; with both off the directory is empty and the upload is a green no-op. It is never committed and is named in no `commit-and-push.sh` call, because a rendered prompt carries the article body inside it ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
-
- **Read it with `backend/utilities/read_captures.py`, not with a text editor.** A capture file is one JSON object holding a 15,000-character prompt on one line, so a reader opening it by hand sees a wall. The utility prints an item's two calls in the order the run made them - label prompt, label reply, summarize-and-plan prompt, summarize-and-plan reply - elides the middle of each unless `--full` is passed, reports how much of the second prompt is the first one character for character, and names any unbroken lowercase run over 200 characters, which is what a decoder stuck in a loose grammar looks like.
-
- ```powershell
- gh run download <run-id> --repo miztiik/yen-idhazh --name captures-<shard> --dir captures
- python backend/utilities/read_captures.py captures
- python backend/utilities/read_captures.py captures --item <part-of-an-item-id> --out pair.md
- ```
-- **A re-run is per job, never per step, and it reuses the original commit.**
- `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
- again from its first step; there is no way to resume at the step that failed.
- That is survivable here only because the expensive jobs are separate: a failed
- `assemble` re-runs alone - 82 s in run `33270983446` - while `plan` and the
- `work` shards keep their results and are not repeated. It works
- for one day, because `plan` and `shard-visuals-*`, two of the three artifacts
- `assemble` downloads, carry
- `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
- workflow file as the original event**, so it cannot pick up a fix that landed
- afterwards, and a job that failed against a `main` which has since moved will
- re-measure the tree it started from rather than the one that is published now.
- A re-run that goes green for that reason has laundered the failure rather than
- answered it.
+### One action is ours, and it is not pinned to a major
+
+`.github/actions/candidate-config` is a composite action this repository owns.
+A `./`-prefixed action resolves to this repository at the commit the run checked
+out, so there is no major to approve and nothing for a version pin to add - it
+is already the code under test. The contract test asserts the directory exists
+rather than asserting a version, and a second test reads the shell it runs.
+
+It builds the scratch config: a copy of `config/` whose `models_file` points at
+the candidate, and which differs from the committed tree in that one line and
+nothing else. `measure.yml` and `validate.yml` both call it. They carried
+byte-identical copies of the step until 2026-09-15, differing only in the job
+they read the models file from - and a step duplicated across two files is a
+step that drifts the day one of them is edited, which had already happened twice
+in these two workflows.
+
+**What the extraction cost, stated rather than implied.** The two workflows are
+47 lines shorter and there is one new file a reader has to open, plus 36 lines
+of test machinery that teaches the harness to read a composite action. It does
+not remove a check; it removes the second place the step could be edited.
+
+## What is not on this page
+
+This page answers one question: which workflows exist, when each runs, and what
+each does. Three things these workflows depend on are exact values rather than
+behaviour, and each has its own page.
+
+| Question | Page |
+| :--- | :--- |
+| How does a job get the inference runtime and the weights, and how does it prove it got the right ones? | [ci-model-runtime.md](ci-model-runtime.md) |
+| What shape must a `workflow_dispatch` input have, and which shapes exist? | [ci-dispatch-inputs.md](ci-dispatch-inputs.md) |
+| What repository settings and platform limits decide how these workflows behave? | [ci-environment.md](ci-environment.md) |
 
 ## See also
 
+- [ci-model-runtime.md](ci-model-runtime.md) - the runtime pin, the cache key, the weight digests, and where the production model ref is written.
+- [ci-dispatch-inputs.md](ci-dispatch-inputs.md) - the three input shapes, and the one that decides a published address.
+- [ci-environment.md](ci-environment.md) - the repository settings these workflows need, and the platform limits that shape them.
 - [ci-caches.md](ci-caches.md) - every cache these workflows keep, what it costs against the 10 GB ceiling, and when a new job earns one.
+- [../how-to/analyze-a-pipeline-artifact.md](../how-to/analyze-a-pipeline-artifact.md) - how to read what the model was asked and what it answered, out of the `captures-<shard>` artifact.
 - [../architecture/overview.md](../architecture/overview.md) - how CI, committed payloads, and the static site fit together.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each pipeline stage owns.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - how to run the same stages locally.

@@ -352,33 +352,33 @@
           "title": "Band Outlier Rows",
           "type": "integer"
         },
-        "chart_arm_coverage_pct": {
+        "chart_coverage_pct": {
           "default": 5.0,
-          "description": "The share of a day's published items that must carry a chart, in whole percent. Below this on the median day the arm is retired: an arm that reaches almost nothing is paying for a capability the digest does not use.",
+          "description": "The share of a day's published items that must carry a chart, in whole percent. Below this on the median day chart drawing is retired: drawing that reaches almost nothing is paying for a capability the digest does not use.",
           "exclusiveMinimum": 0.0,
           "maximum": 100.0,
-          "title": "Chart Arm Coverage Pct",
+          "title": "Chart Coverage Pct",
           "type": "number"
-        },
-        "chart_arm_minutes_target": {
-          "default": 6.0,
-          "description": "Router minutes per published chart above which the median day retires the chart arm. Drawn as a marker on the bar, never as a subtraction the reader performs.",
-          "exclusiveMinimum": 0.0,
-          "title": "Chart Arm Minutes Target",
-          "type": "number"
-        },
-        "chart_arm_rule_days": {
-          "default": 14,
-          "description": "The span the chart arm's retirement rule is stated over. A median taken over any other span is the same figure with a different meaning and nothing on the page to say which one is being read, so under this many days the section prints the rule's own span and no number at all.",
-          "minimum": 1,
-          "title": "Chart Arm Rule Days",
-          "type": "integer"
         },
         "chart_height": {
           "default": 220,
           "description": "The drawn height of a console chart, in CSS pixels. The same number `chart.height_px` carries: both were raised from 180 when the frame widened, because a chart that grows in one dimension only flattens its own signal. `config/appearance.json` owns the value, as `console.chart_height`.",
           "minimum": 120,
           "title": "Chart Height",
+          "type": "integer"
+        },
+        "chart_minutes_target": {
+          "default": 6.0,
+          "description": "Router minutes per published chart above which the median day retires chart drawing. Drawn as a marker on the bar, never as a subtraction the reader performs.",
+          "exclusiveMinimum": 0.0,
+          "title": "Chart Minutes Target",
+          "type": "number"
+        },
+        "chart_rule_days": {
+          "default": 14,
+          "description": "The span the chart retirement rule is stated over. A median taken over any other span is the same figure with a different meaning and nothing on the page to say which one is being read, so under this many days the section prints the rule's own span and no number at all.",
+          "minimum": 1,
+          "title": "Chart Rule Days",
           "type": "integer"
         },
         "chart_width": {
@@ -811,6 +811,8 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
+        "model_timed_out",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -818,6 +820,7 @@
         "length_out_of_range",
         "copied_source",
         "leaked_address",
+        "shard_out_of_time",
         "unknown"
       ],
       "title": "FailureCode",
@@ -1384,6 +1387,13 @@
           "minimum": 1,
           "title": "Site Budget Mb",
           "type": "integer"
+        },
+        "trial_state_days": {
+          "default": 90,
+          "description": "How long a trial run's ledgers under `state/<run.trial_state_dirname>/` are kept. Ninety days because it is the artifact retention this project already uses everywhere else, so a trial's rows outlive the run's own artifacts by nothing and a question asked of one can still be asked of the other. Nothing reads these rows - no published series, no gate, no console band - so the window is about disk and about a reader who opens `state/` and wonders what a directory is, rather than about evidence.",
+          "minimum": 1,
+          "title": "Trial State Days",
+          "type": "integer"
         }
       },
       "title": "RetentionConfig",
@@ -1398,6 +1408,12 @@
           "minimum": 1,
           "title": "Max Parallel",
           "type": "integer"
+        },
+        "qualify_on_the_production_path": {
+          "default": true,
+          "description": "Whether `idhazh qualify` summarizes the way the digest does. True is the digest's own path: the article is labelled and then summarized, in two adjacent calls. False is the qualification's own single call, which is what it did until 2026-09-15 and what every shard before that date measured. True by default because a gate that clears a call path nothing publishes has cleared nothing, and the switch exists so a run that goes wrong on it can be put back without a code change. Moving it moves every per-item number in a shard, so `QualificationShard.calls_per_item` records which side produced one.",
+          "title": "Qualify On The Production Path",
+          "type": "boolean"
         },
         "safety_ceiling_per_run": {
           "default": 80,
@@ -1420,6 +1436,13 @@
           "title": "Shard Timeout Minutes",
           "type": "integer"
         },
+        "shard_wrap_up_minutes": {
+          "default": 12,
+          "description": "How much of shard_timeout_minutes the worker keeps back for itself, so it stops on its own clock instead of being killed on the platform's. A worker killed at shard_timeout_minutes uploads nothing, so every item it had already finished dies with the ones it had not started: on 2026-09-15 two of four shards went that way and the day published 66 stories against a plan of 80.\n\nWhat the worker does with it: once the time left is less than the slowest item this shard has already finished, it starts no more. That needs no estimate and calibrates itself to whichever processor the shard drew, which is worth 24 percent between an EPYC and a Xeon. This reserve covers what happens after the last item - writing the records, the manifest, and the artifact upload. It is the one number here that is not derived: raise it if an upload is ever cut off, and never lower it to fit one more story.",
+          "minimum": 0,
+          "title": "Shard Wrap Up Minutes",
+          "type": "integer"
+        },
         "success_floor_pct": {
           "default": 70,
           "description": "Below this, the run additionally opens an issue.",
@@ -1427,6 +1450,20 @@
           "minimum": 0,
           "title": "Success Floor Pct",
           "type": "integer"
+        },
+        "trial_state_dirname": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where a trial run's ledgers go, under `state/`. Null is production and is the default, so a run that says nothing writes where it always did. Set it and every day shard this run appends lands under `state/<name>/` instead - the seen store, feed health, item health, the published ledger, the traces and the rollups, all of them, because a run that split them would put half a trial in the published series. Owner decision, 2026-09-15: a run that exists to exercise production's code path must not be readable as a production day. `retention.trial_state_days` is what empties it again.",
+          "title": "Trial State Dirname"
         }
       },
       "title": "RunConfig",
@@ -1438,7 +1475,7 @@
       "properties": {
         "asks_for_a_visual_plan": {
           "default": true,
-          "description": "Whether the two-call sequence is sized for a summarize-and-plan call that asks for a picture. True is what the production run does and what ships. It exists so an arm of the pipeline test workflow can run the summary-only path end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields off that call's grammar, and this takes the plan's decode budget out of the window sizing beside it. The two move together or the sizing is wrong in the expensive direction - it reserves room for a decode that never happens, and refuses articles that would have fitted.",
+          "description": "Whether the two-call sequence is sized for a summarize-and-plan call that asks for a picture. True is what the production run does and what ships. It exists so a case of the pipeline test workflow can run the summary-only path end to end: setting `visuals.enabled_kinds` to nothing takes the plan fields off that call's grammar, and this takes the plan's decode budget out of the window sizing beside it. The two move together or the sizing is wrong in the expensive direction - it reserves room for a decode that never happens, and refuses articles that would have fitted.",
           "title": "Asks For A Visual Plan",
           "type": "boolean"
         },
@@ -1840,7 +1877,7 @@
           "type": "array"
         },
         "enabled_kinds": {
-          "description": "Kinds the planner may choose. `none` is always available and never listed. Chart is the only one left: the diagram arm shipped off - the model drafted it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made the planner's own pre-filter unfireable, because a diagram's steps come from prose and nothing about it is decidable in advance - and its renderer was deleted with the Mermaid round trip on 2026-09-05.",
+          "description": "Kinds the planner may choose. `none` is always available and never listed. Chart is the only one left: diagram drawing shipped off - the model drafted it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made the planner's own pre-filter unfireable, because a diagram's steps come from prose and nothing about it is decidable in advance - and its renderer was deleted with the Mermaid round trip on 2026-09-05.",
           "items": {
             "$ref": "#/$defs/VisualKind"
           },
@@ -1917,24 +1954,24 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Prose only: the ui and collect knob descriptions drop their readings.",
-      "version": "2026-09-15T10:00",
-      "why": "A rule carries its reason, never its evidence (Guardrail #10)."
+      "change": "run.qualify_on_the_production_path, additive, default true.",
+      "version": "2026-09-15T23:30",
+      "why": "A candidate is only qualified on the path production actually runs."
     },
     {
-      "change": "Prose only: six blocks drop their inlined readings and provenance.",
-      "version": "2026-09-15T09:00",
-      "why": "A rule carries its reason, never its evidence (Guardrail #10)."
+      "change": "run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
+      "version": "2026-09-15T22:10",
+      "why": "A worker killed at its timeout uploads nothing, so the items are lost."
     },
     {
-      "change": "The failure vocabulary this config names gained no_title.",
-      "version": "2026-09-15",
-      "why": "Extract gained a refusal for an item whose feed carried no headline."
+      "change": "run.trial_state_dirname and retention.trial_state_days, both additive.",
+      "version": "2026-09-15T22:00",
+      "why": "A trial run needs its own state tree, and that tree needs an expiry."
     },
     {
-      "change": "summarize gains asks_for_a_visual_plan, default true.",
-      "version": "2026-09-14T14:00",
-      "why": "A test arm with no picture reachable was sizing its window for one anyway."
+      "change": "The embedded failure vocabulary gained model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row, where the vocabulary is declared."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2009,7 +2046,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-15T10:00",
+      "default": "2026-09-15T23:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2020,5 +2057,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-15T10:00"
+  "version": "2026-09-15T23:30"
 }

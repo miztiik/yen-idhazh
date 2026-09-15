@@ -19,11 +19,31 @@ regression really asks: did the prompt change between these two runs?
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from idhazh.contracts.base import canonical_json, derive_text_digest
+from idhazh.contracts.call_cost import CallCost
+
+
+@dataclass(frozen=True, slots=True)
+class About:
+    """Which story the call was about, in the three cells that identify it.
+
+    Here because a prompt nobody can trace back to a source is a prompt nobody
+    can check the summary against. The same three are on the item-health row,
+    and that row is pruned to a reading window while this artifact is kept for
+    90 days - so on the old run somebody is comparing against, the row has gone
+    and the prompt has not.
+
+    `title` is fetched text and stays data: it is written into the artifact and
+    never into a prompt, a path or a URL (CLAUDE.md Guardrail #11).
+    """
+
+    canonical_url: str = ""
+    source_id: str = ""
+    title: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +90,10 @@ def of(
     keep_prompt: bool,
     keep_reply: bool,
     write: Callable[[Path, str], object],
+    cost: CallCost | None = None,
+    decode_split: Mapping[str, int | bool] | None = None,
+    finish_reason: str = "",
+    about: About | None = None,
 ) -> Capture:
     """Measure the pair, write whichever halves the flags allow, and report both.
 
@@ -80,6 +104,13 @@ def of(
     is designed to survive: the digest and the two counts are computed either
     way, because they are what the log record carries and the log record is the
     copy that outlives the runner.
+
+    **What the call cost travels with the text, and that is why it is here.**
+    The same five numbers are on the item-health row, but `state/` is pruned to
+    a reading window while this artifact is kept for 90 days - so on the old run
+    a regression is compared against, the row has gone and the prompt has not. A
+    capture that cannot say how long its own reply took makes the reader join two
+    sources to answer the first question they have.
     """
     digest = derive_text_digest(prompt)
     if not (keep_prompt or keep_reply):
@@ -93,7 +124,11 @@ def of(
         path_for(root, item_id, call),
         canonical_json(
             {
+                "about": None if about is None else asdict(about),
                 "call": call,
+                "cost": None if cost is None else cost.model_dump(mode="json"),
+                "decode_split": None if decode_split is None else dict(decode_split),
+                "finish_reason": finish_reason,
                 "item_id": item_id,
                 "prompt": prompt if keep_prompt else None,
                 "prompt_chars": len(prompt),

@@ -85,7 +85,20 @@ _SENTENCE = re.compile(r"[^.!?]*[.!?]+[\"')\]]*\s*|[^.!?]+$")
 # prompt, and those are different mornings.
 _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
     FailureCode.MODEL_UNREACHABLE: (
-        "the model server was unreachable, so there was no reply to parse"
+        "nothing answered at the model's address, so there was no reply to parse"
+    ),
+    FailureCode.MODEL_TIMED_OUT: (
+        "the model server took the request and did not answer inside "
+        "request_timeout_minutes, so the call was cut off mid-decode. It was "
+        "serving; it was writing more tokens than the clock admits"
+    ),
+    FailureCode.SHARD_OUT_OF_TIME: (
+        "the worker stopped starting items before it reached this one, so nothing "
+        "was ever asked. The article was fetched and extracted; the shard ran out "
+        "of its own clock"
+    ),
+    FailureCode.MODEL_REFUSED: (
+        "the model server answered with an error, so there was no reply to parse"
     ),
     FailureCode.CONTEXT_EXCEEDED: (
         "the prompt did not fit the served context window, so the server refused it"
@@ -413,7 +426,7 @@ def parse_draft(
     curiosity. With `thinking` true the block is what the entry asked for: it is
     stripped here and never returned, so nothing downstream can read a word of
     it. A refusal that fires on the normal path is not a control, which is why
-    this arm is conditional rather than deleted.
+    this case is conditional rather than deleted.
 
     `source_words` and `brief` pick the same band the reply was asked under, so
     the decoder validates a key-point count against the band that requested it.

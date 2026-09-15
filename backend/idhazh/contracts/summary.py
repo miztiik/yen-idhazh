@@ -54,6 +54,16 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T22:10",
+            change="FailureCode gained model_timed_out and shard_out_of_time.",
+            why="Both were being reported under a name that sends an operator to the wrong place.",
+        ),
+        ChangelogEntry(
+            version="2026-09-15T20:00",
+            change="failure_code may now carry model_refused.",
+            why="It follows item-health-row.",
+        ),
+        ChangelogEntry(
             version="2026-09-15",
             change="failure_code may now carry no_title.",
             why="Extract gained a refusal for an item whose feed carried no headline.",
@@ -62,16 +72,6 @@ class Summary(Contract):
             version="2026-09-13T22:00",
             change="Removed pipeline_fingerprint.",
             why="It gated a skip nothing was ever wired to, and no writer has filled it since.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T14:20",
-            change="A summary that failed on its reply records call_1 and the five cost cells.",
-            why="Every gate below 'the model never answered' refuses text already paid for.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T21:00",
-            change="pipeline_fingerprint is optional and nothing sets it.",
-            why="Skip-if-fingerprint-matches was never wired to a caller, so the stamp cost bytes.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -29,6 +29,8 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
+        "model_timed_out",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -36,6 +38,7 @@
         "length_out_of_range",
         "copied_source",
         "leaked_address",
+        "shard_out_of_time",
         "unknown"
       ],
       "title": "FailureCode",
@@ -74,6 +77,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "FailureCode gained model_timed_out and shard_out_of_time.",
+      "version": "2026-09-15T22:10",
+      "why": "Both were being reported under a name that sends an operator to the wrong place."
+    },
+    {
+      "change": "The embedded failure vocabulary gained model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row, where the vocabulary is declared."
+    },
+    {
       "change": "title_source records a trust decision, not provenance alone.",
       "version": "2026-09-15T12:00",
       "why": "A page headline and a feed headline are not equally trustworthy."
@@ -82,16 +95,6 @@
       "change": "Added title_source: feed or page, the headline's provenance.",
       "version": "2026-09-15T06:19",
       "why": "Extract now falls back to the page's own headline when the feed carried none."
-    },
-    {
-      "change": "failure_code may now carry no_title.",
-      "version": "2026-09-15",
-      "why": "Extract gained a refusal: an item whose feed carried no headline."
-    },
-    {
-      "change": "Added secondary_desk: the one other desk the article's own reading names.",
-      "version": "2026-09-13",
-      "why": "The desk ceiling sends an over-ceiling story to a second desk, unnamed."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -345,7 +348,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15T12:00",
+      "default": "2026-09-15T22:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -380,5 +383,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-09-15T12:00"
+  "version": "2026-09-15T22:10"
 }

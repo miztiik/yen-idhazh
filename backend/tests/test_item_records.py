@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from idhazh import capture, itemrecord, telemetry
+from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 
 
@@ -274,3 +275,64 @@ def test_a_captured_call_keeps_only_the_half_its_flag_allows(tmp_path: Path) -> 
     assert payload["reply"] is None
     assert payload["reply_chars"] == len("the reply")
     assert kept.captured is True
+
+
+def test_a_capture_carries_what_its_own_call_cost(tmp_path: Path) -> None:
+    """The artifact outlives the ledger row, so it says what the call cost itself."""
+    written: list[str] = []
+
+    capture.of(
+        root=tmp_path,
+        item_id="ai-01",
+        call="summary",
+        prompt="the rendered prompt",
+        reply="the reply",
+        keep_prompt=True,
+        keep_reply=True,
+        write=lambda path, text: written.append(text),
+        cost=CallCost(
+            kind=CallKind.SUMMARIZE_AND_PLAN,
+            prefill_ms=6214,
+            decode_ms=3188,
+            input_tokens=4214,
+            output_tokens=512,
+            cached_tokens=3886,
+        ),
+        decode_split={"summary_ms": 2010, "plan_ms": 1178, "is_estimate": True},
+        finish_reason="length",
+        about=capture.About(
+            canonical_url="https://example.org/wind-farm",
+            source_id="dna-india",
+            title="A wind farm starts sending power",
+        ),
+    )
+
+    payload = json.loads(written[0])
+    assert payload["cost"]["kind"] == "summarize_and_plan"
+    assert payload["cost"]["cached_tokens"] == 3886
+    assert payload["decode_split"]["plan_ms"] == 1178
+    assert payload["finish_reason"] == "length"
+    assert payload["about"]["canonical_url"] == "https://example.org/wind-farm"
+    assert payload["about"]["source_id"] == "dna-india"
+
+
+def test_a_capture_with_no_cost_still_names_the_key(tmp_path: Path) -> None:
+    """An absent key and a zero cost are two findings, so they cannot look alike."""
+    written: list[str] = []
+
+    capture.of(
+        root=tmp_path,
+        item_id="ai-01",
+        call="label",
+        prompt="the rendered prompt",
+        reply="",
+        keep_prompt=True,
+        keep_reply=False,
+        write=lambda path, text: written.append(text),
+    )
+
+    payload = json.loads(written[0])
+    assert payload["cost"] is None
+    assert payload["decode_split"] is None
+    assert payload["finish_reason"] == ""
+    assert payload["about"] is None

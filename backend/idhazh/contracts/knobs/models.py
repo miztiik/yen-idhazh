@@ -300,6 +300,11 @@ class ModelsConfig(Contract):
             why="A model that predicts its own next tokens needs no second set of weights.",
         ),
         ChangelogEntry(
+            version="2026-09-15T10:00",
+            change="console.chart_arm_rule_days, console.chart_arm_minutes_target.",
+            why="`arm` came from benchmarking and reads as a limb on a reader-facing page.",
+        ),
+        ChangelogEntry(
             version="2026-09-14T07:00",
             change="models.<role>.draft, optional: a smaller set of weights that drafts tokens.",
             why="Speculative decoding is a property of the model, so it belongs on the entry.",
@@ -308,11 +313,6 @@ class ModelsConfig(Contract):
             version="2026-09-14T06:00",
             change="models.<role>.byte_count, optional: how many bytes the weights are.",
             why="The size sat on a qualification report, which is not where a swap reads it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14T04:00",
-            change="models.<role>.turns gains thinking_close.",
-            why="The turn envelope is a fact about somebody else's weights, so it sits with them.",
         ),
         ChangelogEntry(
             version="2026-09-14",

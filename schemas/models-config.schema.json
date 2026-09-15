@@ -165,7 +165,7 @@
             }
           ],
           "default": null,
-          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
+          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs a case and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
           "title": "Log Verbosity"
         },
         "max_answer_tokens": {
@@ -485,13 +485,13 @@
             }
           ],
           "default": null,
-          "description": "What sits between the system text and the article when the two share a turn. Required under fold_into_first_user and refused under own_turn: a field that is read on one arm and ignored on the other is a field somebody will set and trust. It may not be empty, because folding with no separator runs the last instruction into the opening fence of the untrusted block on one line, and the grammar still accepts the reply.",
+          "description": "What sits between the system text and the article when the two share a turn. Required under fold_into_first_user and refused under own_turn: a field that is read on one case and ignored on the other is a field somebody will set and trust. It may not be empty, because folding with no separator runs the last instruction into the opening fence of the untrusted block on one line, and the grammar still accepts the reply.",
           "title": "System Joiner"
         },
         "system_role": {
           "$ref": "#/$defs/SystemPlacement",
           "default": "own_turn",
-          "description": "Where this model's template takes the system text - its own turn, or folded into the first user turn. It is read by idhazh.llm.server.render_prompt, which never reads a model id: without this field a model with no system role could not be configured at all, only coded for. It has a default where the markers beside it have none, because the default is the topology of every template that HAS a system role rather than the incumbent's own string, and because arm 1 of idhazh.llm.server.prove_the_entry refuses a run whose render disagrees with the server's own render of the same turns - so a placement declared wrong is caught before the first item rather than inherited in silence."
+          "description": "Where this model's template takes the system text - its own turn, or folded into the first user turn. It is read by idhazh.llm.server.render_prompt, which never reads a model id: without this field a model with no system role could not be configured at all, only coded for. It has a default where the markers beside it have none, because the default is the topology of every template that HAS a system role rather than the incumbent's own string, and because case 1 of idhazh.llm.server.prove_the_entry refuses a run whose render disagrees with the server's own render of the same turns - so a placement declared wrong is caught before the first item rather than inherited in silence."
         },
         "thinking_close": {
           "anyOf": [
@@ -554,6 +554,11 @@
       "why": "A model that predicts its own next tokens needs no second set of weights."
     },
     {
+      "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target.",
+      "version": "2026-09-15T10:00",
+      "why": "`arm` came from benchmarking and reads as a limb on a reader-facing page."
+    },
+    {
       "change": "models.<role>.draft, optional: a smaller set of weights that drafts tokens.",
       "version": "2026-09-14T07:00",
       "why": "Speculative decoding is a property of the model, so it belongs on the entry."
@@ -562,11 +567,6 @@
       "change": "models.<role>.byte_count, optional: how many bytes the weights are.",
       "version": "2026-09-14T06:00",
       "why": "The size sat on a qualification report, which is not where a swap reads it."
-    },
-    {
-      "change": "models.<role>.turns gains thinking_close.",
-      "version": "2026-09-14T04:00",
-      "why": "The turn envelope is a fact about somebody else's weights, so it sits with them."
     },
     {
       "change": "Earlier changes are in this file's git history.",

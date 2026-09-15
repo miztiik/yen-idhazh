@@ -8,7 +8,7 @@ from typing import Any, Final
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import Model
+from idhazh.contracts.base import Model, Slug
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 
@@ -79,8 +79,57 @@ class RunConfig(Model):
             "this."
         ),
     )
+    shard_wrap_up_minutes: int = Field(
+        default=12,
+        ge=0,
+        description=(
+            "How much of shard_timeout_minutes the worker keeps back for itself, so "
+            "it stops on its own clock instead of being killed on the platform's. A "
+            "worker killed at shard_timeout_minutes uploads nothing, so every item it "
+            "had already finished dies with the ones it had not started: on 2026-09-15 "
+            "two of four shards went that way and the day published 66 stories against "
+            "a plan of 80.\n\n"
+            "What the worker does with it: once the time left is less than the slowest "
+            "item this shard has already finished, it starts no more. That needs no "
+            "estimate and calibrates itself to whichever processor the shard drew, "
+            "which is worth 24 percent between an EPYC and a Xeon. This reserve covers "
+            "what happens after the last item - writing the records, the manifest, and "
+            "the artifact upload. It is the one number here that is not derived: raise "
+            "it if an upload is ever cut off, and never lower it to fit one more story."
+        ),
+    )
     success_floor_pct: int = Field(
         default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
+    )
+    trial_state_dirname: Slug | None = Field(
+        default=None,
+        description=(
+            "Where a trial run's ledgers go, under `state/`. Null is production and is "
+            "the default, so a run that says nothing writes where it always did. Set it "
+            "and every day shard this run appends lands under `state/<name>/` instead - "
+            "the seen store, feed health, item health, the published ledger, the traces "
+            "and the rollups, all of them, because a run that split them would put half "
+            "a trial in the published series. Owner decision, 2026-09-15: a run that "
+            "exists to exercise production's code path must not be readable as a "
+            "production day. `retention.trial_state_days` is what empties it again."
+        ),
+    )
+    # Remove this knob once one qualification has cleared `decide` on the production
+    # path; the losing branch goes with it, and `_one_call` stays because the
+    # injection canaries are the one caller that wants a single call.
+    qualify_on_the_production_path: bool = Field(
+        default=True,
+        description=(
+            "Whether `idhazh qualify` summarizes the way the digest does. True is the "
+            "digest's own path: the article is labelled and then summarized, in two "
+            "adjacent calls. False is the qualification's own single call, which is "
+            "what it did until 2026-09-15 and what every shard before that date "
+            "measured. True by default because a gate that clears a call path nothing "
+            "publishes has cleared nothing, and the switch exists so a run that goes "
+            "wrong on it can be put back without a code change. Moving it moves every "
+            "per-item number in a shard, so `QualificationShard.calls_per_item` records "
+            "which side produced one."
+        ),
     )
 
     @model_validator(mode="before")
