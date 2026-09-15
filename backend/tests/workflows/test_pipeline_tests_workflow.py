@@ -344,14 +344,20 @@ def test_the_address_list_can_still_answer_a_draw() -> None:
     the run would have to invent a vertical and a tier for. The plan step reads
     both off the feed, so an orphan candidate is a `KeyError` 40 minutes into a
     dispatch rather than a failure here.
+
+    The live list, never the file's text. The dispatch builds its map from
+    `settings.sources.feeds`, so a candidate whose feed has moved to `retired`
+    is that same `KeyError` while a search of the whole file still finds the id
+    on the tombstone shelf. It would also have the test workflow request a
+    source we decided to stop asking.
     """
     settings = _settings()
     assert len(settings.candidates) >= MINIMUM_CANDIDATES
 
-    sources = read_text(CONFIG_DIR / "sources.json")
+    live = {feed.id for feed in config.load(CONFIG_DIR).sources.feeds}
     for candidate in settings.candidates:
-        assert f'"id": "{candidate.source_id}"' in sources, (
-            f"{candidate.source_id} is not a feed in config/sources.json"
+        assert candidate.source_id in live, (
+            f"{candidate.source_id} is not a live feed in config/sources.json"
         )
 
 
