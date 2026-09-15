@@ -163,7 +163,10 @@ The plan, when the question below asks for one.
   dropped things the table still holds.
 <|im_end|>
 <|im_start|>user
-Title: Example Lab releases a smaller model
+Title:
+<<<UNTRUSTED_SOURCE_TEXT>>>
+Example Lab releases a smaller model
+<<<END_UNTRUSTED_SOURCE_TEXT>>>
 
 The item, one sentence per line:
 <<<UNTRUSTED_SOURCE_TEXT>>>
