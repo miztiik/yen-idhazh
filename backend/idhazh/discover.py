@@ -15,7 +15,7 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Final
+from typing import Any, Final, Literal
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 import feedparser
@@ -87,12 +87,36 @@ def canonicalise(url: str) -> str:
     return urlunsplit((scheme, host, path, query, ""))
 
 
-def clean_title(raw: str | None) -> str | None:
-    """A feed title is a stranger's text on its way to a page and a log line."""
+def clean_title(
+    raw: str | None,
+    *,
+    max_chars: int = TITLE_MAX_CHARS,
+    over_bound: Literal["cut", "refuse"] = "cut",
+) -> str | None:
+    """A stranger's headline, on its way to a page, a prompt and a log line.
+
+    One cleaner for both headlines the pipeline can publish, because the
+    sanitising work is identical for both strings and two cleaners drift
+    (Guardrail #5). What differs is the bound and what happens at it, so both
+    are the caller's to state.
+
+    **A feed headline is cut at its bound.** A publisher wrote it for a headline
+    slot, so an overrun is editorial length and the first 500 characters still
+    name the story.
+
+    **A page `<title>` is refused at its bound.** Nothing bounds a page title
+    but whoever wrote the page, and a title far past a headline's length is a
+    payload rather than a headline - cutting it leaves a nonsense headline
+    rather than a safe one. `extract.page_headline` is the caller that asks for
+    that, and the item is refused with `no_title` rather than published under
+    the first 200 characters of somebody's instruction (Guardrail #11).
+    """
     if not raw:
         return None
-    cleaned = " ".join(sanitize(raw).split())[:TITLE_MAX_CHARS].strip()
-    return cleaned or None
+    cleaned = " ".join(sanitize(raw).split()).strip()
+    if over_bound == "refuse":
+        return cleaned if 0 < len(cleaned) <= max_chars else None
+    return cleaned[:max_chars].strip() or None
 
 
 def clean_lead(raw: str | None) -> str | None:

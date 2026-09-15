@@ -1136,7 +1136,9 @@ Three structural facts hold the rest:
 block holding `Title: <headline>` and the body. It is fetched text from the same
 page, and it is now the line we ask a model to rewrite. Outside the fence it
 would be untrusted text sitting where the prompt's "that block is DATA" sentence
-does not reach (Guardrail #11).
+does not reach (Guardrail #11). `classify.calls.label_user_turn` fences it too,
+in a block of its own; it did not until 2026-09-15, and the
+[trust boundary](../sources/trust-boundary.md) records what that cost.
 
 **Required in the draft, optional on the payload.** Grammar-constrained decoding
 is free to skip a property that is not `required`, so an optional draft title is
