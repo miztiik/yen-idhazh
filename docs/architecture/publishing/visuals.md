@@ -550,7 +550,7 @@ ceiling, which is 80 percent of it.
 **A ceiling is not a measurement of seconds, so here is one.** The "21 measured seconds" this page
 used to quote was a saving for skipping a whole call, which cannot happen, and that figure is
 withdrawn rather than re-used. What the gate really saves is the plan's decode. Measured 2026-09-11
-by tokenising the committed call-2 reply with `Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`: the
+by tokenising the summarize-and-plan call's committed reply with `Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`: the
 whole reply is **327 tokens**, the summary alone is **152**, and the plan half is **176** - so a
 plan is 54 percent of what an ordinary reply decodes. At the 6.01 tok/s the summarizer decodes at
 (`ubuntu-latest`, 2026-08-23) that is **29.3 seconds an item**, on the items the gate fires for.
@@ -1424,7 +1424,7 @@ no reader-visible cost, and the one case that needs a corpus is the one case tha
 alternative - hold the whole mechanism back until `state/visuals/` lands - would put the edge table
 and the invariance rules into the same commit as the ledger, where a review has to hold both.
 
-**Why the call-2 prompt lost its plan half.** A turn that asks for fields the grammar cannot hold is
+**Why the summarize-and-plan prompt lost its plan half.** A turn that asks for fields the grammar cannot hold is
 not ignored: constrained decoding renormalises onto the allowed tokens, so the text goes into the
 only channel still open, which is the summary a reader reads. The same rule already governs the key
 points, where asking for more than the grammar admits "would lose the item for doing what it was
@@ -1575,7 +1575,7 @@ file before it can be enabled.
 | Skip the summarize-and-plan call entirely when the gate refuses | The summarize-and-plan call is the call that writes the summary, so skipping it costs the item the thing a reader came for. The gate suppresses the plan fields inside the call and never the call (O43). |
 | Suppress the plan with a smaller budget and leave the grammar whole | The decoder starts the plan and meets the cap part-way through, which spends the decode the gate exists to save and hands back a cut reply. The grammar is the control; a budget is a request. |
 | Derive the suppressed budget as the full one minus the plan's characters | Two ways of computing one quantity, which disagree the first time a bound moves - and the one that is wrong is the one nobody reads. Both come off the same two-half arithmetic over their own schema. |
-| Leave the plan half in the call-2 prompt when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |
+| Leave the plan half in the summarize-and-plan prompt when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |
 | `confidence` as the ladder's escalating floor | The contract says it gates nothing, it is the one free number the model writes, and a model may not select what publishes (`CLAUDE.md` section 0a). Gating it would also destroy it as a diagnostic. |
 | Waive the floor when no depth-0 visuals have been published | Depth 1 would publish on the validator alone, which is depth 1 quietly becoming the default path - the failure the escalating floor exists to prevent. |
 | A separate on-off flag beside the ladder's rungs | Two knobs that can disagree about one thing. Zero rungs is already an unambiguous no, and the rung count is already the maximum depth. |

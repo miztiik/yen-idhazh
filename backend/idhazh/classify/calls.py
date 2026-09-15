@@ -333,7 +333,7 @@ def label_schema() -> dict[str, Any]:
     return LabelReply.model_json_schema()
 
 
-#: The one reading of how densely a real call-1 reply tokenises, kept as the two
+#: The one reading of how densely a real label-call reply tokenises, kept as the two
 #: numbers it was read from rather than as a decimal, so nobody takes 3.12 for a
 #: tuned value. The reply that made this budget necessary decoded exactly 900
 #: tokens and `parse_label` failed at character 2,805 of it - measured
