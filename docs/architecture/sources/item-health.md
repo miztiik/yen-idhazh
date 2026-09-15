@@ -632,6 +632,17 @@ What a reader loses: the exact characters. A Cyrillic headline quoted inside a
 refusal message reads as `?` in the ledger. The trade is one `?` against a
 missing row, and `backend/tests/contracts/test_cell_shapes.py` holds it.
 
+**The fold does not reach a column whose vocabulary is ours.** `time_source`
+says which clock a story's time came off, and the three answers - `feed`,
+`first_seen`, `unknown` - are minted in this repository rather than read off
+somebody's page. So the column is the `TimeSource` enum and not a token shaped
+like one: a producer selects a member, and a fourth spelling is refused at the
+boundary instead of being folded into a legal-looking cell nobody declared.
+Folding here would keep the row and lose the answer, which is the opposite trade
+to `detail`. A reader loses nothing by it, because there was never a foreign
+value in this column to rescue. `backend/tests/contracts/test_closed_vocabularies.py`
+holds that.
+
 ## Design rationale
 
 A failure-only file cannot produce a rate. The ledger writes successes and

@@ -12,7 +12,6 @@ so is where a story sits against every other story of the day.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from enum import StrEnum
 from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
@@ -31,31 +30,9 @@ from idhazh.contracts.base import (
     UrlKey,
     derive_url_key,
 )
+from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
-
-
-class TimeSource(StrEnum):
-    """Which clock the time on an item came from.
-
-    `rank.appeared_at` prefers the feed's own date and falls back to when we
-    first saw the address. Both answers used to land in one field, so nothing
-    downstream could tell them apart - and the fallback is the one a reader
-    would want flagged, because it is our clock and not the publisher's.
-    """
-
-    #: The feed's own publish date.
-    FEED = "feed"
-    #: When this project first saw the address. The feed gave no usable date.
-    FIRST_SEEN = "first_seen"
-    #: Neither clock gave a time, so the item carries none.
-    UNKNOWN = "unknown"
-
-    @property
-    def names_a_clock(self) -> bool:
-        """`unknown` is the one member that goes with no time at all."""
-        return self is not TimeSource.UNKNOWN
-
 
 #: The day edges the already-published histogram is cut on, counted from the
 #: date an address was first published to the date of the run that refused it.
