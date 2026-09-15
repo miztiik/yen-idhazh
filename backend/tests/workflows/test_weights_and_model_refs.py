@@ -220,7 +220,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
 
     models = _committed_models()
     # The draft refs are published empty while no entry declares a draft head,
-    # which is the arm that matters: a guard that refused the absent case would
+    # which is the case that matters: a guard that refused an absent ref would
     # take down every run this repository makes, and `"".split()` is `[]`
     # rather than `[""]`, so the obvious shape check does exactly that.
     assert _run_the_inline_program(script, REPO_ROOT) == {

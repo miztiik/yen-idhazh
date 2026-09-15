@@ -1,8 +1,4 @@
 {
-  "arms": [
-    {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": false,"id": "no-picture","n_ctx": null,"n_parallel": null}
-  ],
   "articles_a_dispatch": 1,
   "budget_minutes": 20,
   "candidates": [
@@ -26,6 +22,10 @@
     {"source_id": "feed-17","title": "Fixture story 17","url": "https://example.test/17"},
     {"source_id": "feed-18","title": "Fixture story 18","url": "https://example.test/18"},
     {"source_id": "feed-19","title": "Fixture story 19","url": "https://example.test/19"}
+  ],
+  "cases": [
+    {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": false,"id": "no-picture","n_ctx": null,"n_parallel": null}
   ],
   "version": "2026-09-14"
 }

@@ -236,7 +236,7 @@ def sample_at_the_cap(samples: Sequence[Sample], *, cap_tokens: int) -> Sample:
 
     Real prose, so the tokenizer sees real vocabulary and real punctuation; the
     length is the only part that is ours. The bodies are joined longest first
-    and then cut by `truncate_to_tokens` itself, so the arm is the cap's worst
+    and then cut by `truncate_to_tokens` itself, so the case is the cap's worst
     case by construction and follows the cap the next time it moves.
     """
     words: list[str] = []
@@ -988,17 +988,17 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"an article AT the cap is {built.article.word_count} words and a "
             f"{at_cap_tokens}-token call-1 prompt, against the {ceiling}-token ceiling "
-            f"above - the corpus cannot supply one, so this arm is BUILT",
+            f"above - the corpus cannot supply one, so this case is BUILT",
             flush=True,
         )
         if args.at_cap:
             chosen.append((built, at_cap_tokens or 0))
 
         for index, (sample, prompt_tokens) in enumerate(chosen, start=1):
-            built_arm = args.at_cap and index == len(chosen)
-            uncapped = built_arm or (args.uncapped_item and index == wanted)
+            built_case = args.at_cap and index == len(chosen)
+            uncapped = built_case or (args.uncapped_item and index == wanted)
             label = f"item {index}"
-            if built_arm:
+            if built_case:
                 label += " - at the cap, BUILT"
             elif uncapped:
                 label += " - the label call uncapped"

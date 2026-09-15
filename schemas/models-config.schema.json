@@ -165,7 +165,7 @@
             }
           ],
           "default": null,
-          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
+          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs a case and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
           "title": "Log Verbosity"
         },
         "max_answer_tokens": {
@@ -485,13 +485,13 @@
             }
           ],
           "default": null,
-          "description": "What sits between the system text and the article when the two share a turn. Required under fold_into_first_user and refused under own_turn: a field that is read on one arm and ignored on the other is a field somebody will set and trust. It may not be empty, because folding with no separator runs the last instruction into the opening fence of the untrusted block on one line, and the grammar still accepts the reply.",
+          "description": "What sits between the system text and the article when the two share a turn. Required under fold_into_first_user and refused under own_turn: a field that is read on one case and ignored on the other is a field somebody will set and trust. It may not be empty, because folding with no separator runs the last instruction into the opening fence of the untrusted block on one line, and the grammar still accepts the reply.",
           "title": "System Joiner"
         },
         "system_role": {
           "$ref": "#/$defs/SystemPlacement",
           "default": "own_turn",
-          "description": "Where this model's template takes the system text - its own turn, or folded into the first user turn. It is read by idhazh.llm.server.render_prompt, which never reads a model id: without this field a model with no system role could not be configured at all, only coded for. It has a default where the markers beside it have none, because the default is the topology of every template that HAS a system role rather than the incumbent's own string, and because arm 1 of idhazh.llm.server.prove_the_entry refuses a run whose render disagrees with the server's own render of the same turns - so a placement declared wrong is caught before the first item rather than inherited in silence."
+          "description": "Where this model's template takes the system text - its own turn, or folded into the first user turn. It is read by idhazh.llm.server.render_prompt, which never reads a model id: without this field a model with no system role could not be configured at all, only coded for. It has a default where the markers beside it have none, because the default is the topology of every template that HAS a system role rather than the incumbent's own string, and because case 1 of idhazh.llm.server.prove_the_entry refuses a run whose render disagrees with the server's own render of the same turns - so a placement declared wrong is caught before the first item rather than inherited in silence."
         },
         "thinking_close": {
           "anyOf": [
@@ -552,6 +552,11 @@
       "change": "models.<role>.draft.spec_type accepts a third value, draft-mtp, beside draft-simple and ngram-simple. Additive: nothing that validated yesterday stops validating, and the default is unchanged.",
       "version": "2026-09-15T12:30",
       "why": "The closed choice held two values because the other nine either needed a draft head nobody had published for our weights or a lookup cache nothing here writes. Unsloth now publishes a multi-token head for the Gemma entry, so that premise is false for this one value. Naming draft-simple for that head is not a slow server, it is a dead one - every request failed on 'decode() failed: failed to process speculative batch', five of five, on run 34941400155. The pinned build accepts the value: .github/workflows/probe.yml read it off llama-server --help on 2026-09-15."
+    },
+    {
+      "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct are now console.chart_rule_days, console.chart_minutes_target and console.chart_coverage_pct. A config spelling the old key still reads.",
+      "version": "2026-09-15T10:00",
+      "why": "`arm` came from benchmarking - the arms of an experiment - and it means the same work run again under different settings. The chart section is a feature under a kill rule rather than a second run of anything, so the word was doing no work and explaining nothing (`CLAUDE.md` section 0b). Every sentence around these three keys moved in the same commit, so leaving the keys would have made a config file the one place a person still had to type it.\n\n`ConsoleConfig._the_old_chart_keys_still_read` carries the old spelling for one release, which is what a renamed config knob gets: a config file is a file somebody can edit, so the alias buys the edit time and is then replaced by a refusal (section 11). `config/appearance.json` and the three committed fixtures moved in this commit, so nothing on disk relies on the alias today."
     },
     {
       "change": "models.<role>.draft, optional: a second, smaller set of weights that drafts tokens this entry's model then verifies. It carries its own repo, revision, file, sha256 and byte_count, a closed spec_type of draft-simple or ngram-simple, and the three drafting knobs n_max, n_min and p_min. Null is the default and means one model and no speculation, so every models file written before today still loads and every committed run.json still reads.",

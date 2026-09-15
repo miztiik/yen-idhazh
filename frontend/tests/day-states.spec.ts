@@ -26,7 +26,7 @@ import { loadDay, publishedDates } from '../src/lib/server/payload';
  * rather than by pinning a colour, because the claim is "the same tokens the
  * item uses", not "this hex".
  *
- * The third input has no browser arm here and cannot have one: the canary tree
+ * The third input has no browser case here and cannot have one: the canary tree
  * is written by `build_canary_day.py` through the contract, so it cannot hold a
  * corrupt file. That input is driven against the loader itself, which is where
  * the difference between a designed screen and a dead build is decided.
@@ -158,7 +158,7 @@ async function card(page: Page, selector: string) {
 /** Every console error and page error the visit produced.
  *
  * A 404 the browser reports itself is the request failing, not our code. The
- * missing-day arm asks for a data file that is deliberately not there, so that
+ * missing-day case asks for a data file that is deliberately not there, so that
  * line is expected and everything else on the list would be ours.
  */
 function watchErrors(page: Page): string[] {

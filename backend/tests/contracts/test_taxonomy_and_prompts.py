@@ -70,7 +70,7 @@ def test_editing_one_definition_moves_the_prompt_and_nothing_else() -> None:
 
     A vocabulary that needs a code change to move its own definition is not
     config, whatever file it lives in. This test is what says so out loud: no
-    Python is edited between the two arms and no schema is regenerated, and the
+    Python is edited between the two cases and no schema is regenerated, and the
     block the labelling prompt is built from still moves.
     """
     a = taxonomy_fixture("definitions-a")
@@ -768,7 +768,7 @@ def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_wri
     writes the file agree about the line, and that the word that step writes when
     the kernel file is missing leaves the cell empty rather than raising.
     `/sys/fs/cgroup/memory.peak` has measured absent on a GitHub-hosted runner
-    every time this project has looked, so `unavailable` is the arm to expect.
+    every time this project has looked, so `unavailable` is the case to expect.
     """
     workflow = read_text(REPO_ROOT / ".github" / "workflows" / "digest.yml")
     assert "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" in workflow

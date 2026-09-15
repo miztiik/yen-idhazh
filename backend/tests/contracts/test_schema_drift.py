@@ -160,7 +160,7 @@ def test_a_manifest_written_before_the_two_spans_still_reads() -> None:
 
 
 def test_a_settings_block_that_carries_both_budget_spellings_is_refused() -> None:
-    """The arm that stops the migration turning `extra=forbid` into `extra=ignore`.
+    """The case that stops the migration turning `extra=forbid` into `extra=ignore`.
 
     A rename written as "whichever key is there wins" would silently drop one of
     two numbers an operator wrote. A payload claiming both budgets is not one

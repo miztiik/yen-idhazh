@@ -92,7 +92,7 @@ class InferenceConfig(Model):
             "buffer or the compute buffer. At 4 the whole model-loader block comes back, "
             "which is what lets a check read the attention state off the server's own "
             "line instead of off the flag we passed it. Measured 2026-09-09 on a 12th "
-            "Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and "
+            "Gen Intel Core i7-1265U against llama.cpp b10444, three runs a case and "
             "zero spread: one server start goes from 12 lines and 1,085 bytes to about "
             "206 lines and 16,011 bytes. That is a job artifact kept for two days, never "
             "a committed file. It changes what the server says about itself and nothing "

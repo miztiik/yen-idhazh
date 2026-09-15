@@ -12,7 +12,7 @@
  * **The base is a project path on purpose.** It is not the empty string the
  * preview server serves from, so a URL the loader built without `base` cannot
  * match the pattern a spec routes on, and the intercept count would be zero -
- * which every arm here fails on.
+ * which every case here fails on.
  *
  * UMD rather than a bare IIFE, because a UMD wrapper assigns the global itself
  * instead of relying on how an injected script scopes a `var`. `write: false`

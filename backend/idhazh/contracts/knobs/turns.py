@@ -106,7 +106,7 @@ class TurnsConfig(Model):
             "this field a model with no system role could not be configured at all, "
             "only coded for. It has a default where the markers beside it have none, "
             "because the default is the topology of every template that HAS a system "
-            "role rather than the incumbent's own string, and because arm 1 of "
+            "role rather than the incumbent's own string, and because case 1 of "
             "idhazh.llm.server.prove_the_entry refuses a run whose render disagrees "
             "with the server's own render of the same turns - so a placement declared "
             "wrong is caught before the first item rather than inherited in silence."
@@ -118,7 +118,7 @@ class TurnsConfig(Model):
         description=(
             "What sits between the system text and the article when the two share a "
             "turn. Required under fold_into_first_user and refused under own_turn: a "
-            "field that is read on one arm and ignored on the other is a field "
+            "field that is read on one case and ignored on the other is a field "
             "somebody will set and trust. It may not be empty, because folding with no "
             "separator runs the last instruction into the opening fence of the "
             "untrusted block on one line, and the grammar still accepts the reply."

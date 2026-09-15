@@ -1,7 +1,7 @@
 """The fold key, and the four questions a folded month still has to answer.
 
 The fold deletes the full-grain shard, so a term left out of the key is a
-breakdown nobody can ever ask for again. That makes the interesting arms here
+breakdown nobody can ever ask for again. That makes the interesting cases here
 the negative ones: for each of the eight key terms, two attempts that differ in
 that term ALONE must stay two groups. A key missing a term merges them, the
 oracle reads one number where there were two, and no later code change can undo
@@ -49,7 +49,7 @@ RUN: Final = "2026-09-11-17421903"
 
 
 def attempt(n: int, **overrides: object) -> VisualAttemptRow:
-    """One built attempt. Every key term has a default, so an arm names one term."""
+    """One built attempt. Every key term has a default, so a case names one term."""
     fields: dict[str, object] = {
         "version": VisualAttemptRow.schema_version(),
         "date": DATE,
@@ -108,7 +108,7 @@ def test_every_key_term_is_named_once_and_the_row_agrees() -> None:
     assert len(FOLD_KEY) == 8
     assert set(FOLD_KEY) <= set(VisualAggregateRow.model_fields)
     assert [name for name, _ in ONE_TERM_EACH] == list(FOLD_KEY), (
-        "a key term with no arm below is a term nothing proves earns its place"
+        "a key term with no case below is a term nothing proves earns its place"
     )
 
 
@@ -116,7 +116,7 @@ def test_every_key_term_is_named_once_and_the_row_agrees() -> None:
 def test_two_attempts_differing_in_one_key_term_stay_two_groups(
     term: str, override: dict[str, object]
 ) -> None:
-    """The arm that proves the key is wide enough, one term at a time.
+    """The case that proves the key is wide enough, one term at a time.
 
     Merged, the two attempts would fold to one row and the difference between
     them would be gone from the archive - not hidden, gone, because the fold
@@ -140,7 +140,7 @@ def test_two_identical_attempts_fold_to_one_group() -> None:
 def test_the_fold_can_only_shrink_the_store() -> None:
     """A group holds at least one attempt, so the row count never rises.
 
-    The pathological month - every attempt in a group of its own - is the arm
+    The pathological month - every attempt in a group of its own - is the case
     worth having, because that is the month where a wide key could have cost
     more than it bought. It folds to the same number of rows, each one narrower.
     """

@@ -394,7 +394,7 @@ def test_load_published_keeps_the_earliest_date_two_days_hold(
     """One address in two day files on two dates. The answer cannot follow read order.
 
     Asserted both ways round because a reader that simply overwrote would pass
-    one arm and fail the other, and which arm it passed would depend on which
+    one case and fail the other, and which case it passed would depend on which
     day file it happened to open first.
     """
     state = tmp_path / "state"
@@ -424,7 +424,7 @@ def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
 
     A glob would answer "what matched" and say nothing about what did not, so a
     stray file would sit in a state directory unread and unmentioned - which is
-    how a reader starts missing rows without anyone noticing. Every arm here
+    how a reader starts missing rows without anyone noticing. Every case here
     holds a real published row, so the refusal is about the name and not about
     the contents.
     """
@@ -437,7 +437,7 @@ def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
 
 #: Six day files over six months, and two addresses that appear twice. Built
 #: rather than read off `state/published/`, which spans 16 days and could never
-#: carry the case these arms are about (Guardrail #12, section 13).
+#: carry the case these tests are about (Guardrail #12, section 13).
 #:
 #: `_address(6)` is the one that matters: it was published in April and again in
 #: July, so the unwindowed read answers April and a 120-day cover answers July.
@@ -450,13 +450,13 @@ _SIX_MONTHS: Final = {
     "2026-08-21": (5,),
     "2026-09-03": (5,),
 }
-#: The day both arms are anchored on. Fixed, so nothing here expires when the
+#: The day both cases are anchored on. Fixed, so nothing here expires when the
 #: calendar moves past it. 120 days back from it is 2026-05-11.
 _ANCHOR: Final = "2026-09-08"
 
 
 def _six_months(state: Path) -> None:
-    """Write the fixture. What it owes is spelled out in each arm, not returned here."""
+    """Write the fixture. What it owes is spelled out in each case, not returned here."""
     for on, numbers in _SIX_MONTHS.items():
         _published_file(_day_file(state, on), {_address(number): on for number in numbers})
 
@@ -464,7 +464,7 @@ def _six_months(state: Path) -> None:
 def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
     tmp_path: Path,
 ) -> None:
-    """Oracle, first arm: shipping `-1` leaves the guarantee where it was.
+    """Oracle, first case: shipping `-1` leaves the guarantee where it was.
 
     The cover is machinery and this row ships it open, so the assertion that
     matters is the one saying nothing moved: every address the tree holds, at
@@ -517,7 +517,7 @@ def _opened(monkeypatch: pytest.MonkeyPatch, state: Path) -> list[str]:
 def test_a_finite_cover_opens_the_days_in_range_and_no_others(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Oracle, second arm: a cover of 120 days never opens an April or a May file.
+    """Oracle, second case: a cover of 120 days never opens an April or a May file.
 
     Proved by what the reader asked for rather than by how long it took. The
     fixture spans six months, so 120 days back from the anchor cuts it in the
@@ -564,7 +564,7 @@ def test_the_unbounded_cover_opens_every_day_file_and_only_those(
 
     Six files exist and six are opened - no path is named for a day that was
     never published, because this path lists rather than names. That is the
-    difference the two arms measure: 121 paths to read four files against six
+    difference the two cases measure: 121 paths to read four files against six
     paths to read six.
     """
     state = tmp_path / "state"
@@ -700,7 +700,7 @@ def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Pa
     """The Oracle: the day files answer what the flat file held, before and after.
 
     Four rows over three days and two months, one address published twice, so
-    the arms that matter are all here: a day file holds exactly its own rows,
+    the cases that matter are all here: a day file holds exactly its own rows,
     two months are two directories, and the earliest date still wins for an
     address the flat file held twice.
 
@@ -735,7 +735,7 @@ def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Pa
     }
     assert (report.rows_in, report.rows_out, report.days) == (4, 4, 3)
     assert report.digest == split_ledger.digest(before), (
-        "the flat file has to hold a repeat or the earliest-wins arm proves nothing"
+        "the flat file has to hold a repeat or the earliest-wins case proves nothing"
     )
     assert not _flat_file(state).exists(), "the flat file is retired, not left beside the tree"
     assert sorted(_tree(state)) == [
@@ -1456,7 +1456,7 @@ def test_a_cleanup_pass_writes_only_its_own_day_file(tmp_path: Path) -> None:
     """The layout oracle: a pass touches one file, and it is the one its date names.
 
     The second pass crosses a month boundary on purpose. A writer that filed by
-    month would pass a same-month arm and still put October's row in with
+    month would pass a same-month case and still put October's row in with
     September's, and a writer that kept one file would fail the byte comparison
     that follows.
     """
@@ -1483,7 +1483,7 @@ def test_load_visual_prunes_reports_every_day_the_tree_holds_oldest_first(
     Written out of order and across two months, because "oldest first" is what a
     reader of this ledger uses to answer whether the backlog is shrinking. A walk
     that returned whatever order the filesystem handed back would pass a
-    one-month arm and mislead on a two-month one.
+    one-month case and mislead on a two-month one.
     """
     state = tmp_path / "state"
     for on in ("2026-10-01", "2026-09-07", "2026-09-06"):
@@ -1516,7 +1516,7 @@ def test_load_visual_prunes_refuses_a_file_it_cannot_place_in_the_day_tree(
     entirely: the rows are fine and the reader simply never opened them. Only a
     walk can tell the two apart, which is why there is no glob here.
 
-    `20260907.csv` is the arm worth having. Every character in it is a digit and
+    `20260907.csv` is the case worth having. Every character in it is a digit and
     it is a real date, so a digits-only check would take it and file eleven
     months of passes under one day. `\\d{2}` is what refuses it.
     """
@@ -1757,7 +1757,7 @@ def health_rows(state: Path) -> list[FeedHealthRow]:
 
 #: Wider than `ledger.HEALTH_WINDOW_DAYS` (31), so a 31-day window has something
 #: to exclude and a grain that read too far shows up as rows the window did not
-#: name. It spans two months as well, so the month arm below really holds two.
+#: name. It spans two months as well, so the month case below really holds two.
 PARITY_DAYS: Final = 40
 
 #: One feed a reading, chosen so the three cases the reliability reduction
@@ -1819,7 +1819,7 @@ def month_grain_tree(root: Path, rows: list[FeedHealthRow]) -> None:
 
 
 def month_grain_read(root: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
-    """`load_health` as it read the month shards, spelled out so both arms exist.
+    """`load_health` as it read the month shards, spelled out so both cases exist.
 
     A deliberate copy of the retired reader rather than a call into it: the claim
     is that the answer did not move, and a claim about two grains needs the old
@@ -1847,9 +1847,9 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
 
     Built at both grains from ONE row list, so a difference can only come from
     the reading. Forty days against a 31-day window, so the window has eight days
-    to exclude - and the month arm is what proves the exclusion is real: two
+    to exclude - and the month case is what proves the exclusion is real: two
     month shards hold all forty days, so the old reader hands back rows the
-    window never named. The day arm hands back exactly the days it named, which
+    window never named. The day case hands back exactly the days it named, which
     is the trade the grain makes - more file handles for fewer rows.
 
     The reliability maps are compared over the SAME rows on both sides, because
@@ -1874,7 +1874,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
 
     assert len(list(day_partition.day_files(day_tree / ledger.HEALTH_DIRNAME))) == PARITY_DAYS
     assert len(named) == window + 1, "both ends are named, so a cover of n is n + 1 days"
-    assert {row.date for row in from_days} == named, "the day arm read a day the window did not name"
+    assert {row.date for row in from_days} == named, "the day case read a day the window did not name"
     assert len(from_days) == len(named) * len(PARITY_FEEDS)
     assert len(from_months) > len(from_days), (
         "the month shards have to hold rows outside the window or the trade is not shown"
@@ -2072,7 +2072,7 @@ def test_more_history_does_not_make_the_ordinary_settlement_read_more(tmp_path: 
     it unbounded.
 
     The operator's pass is measured beside it and is expected to rise, because a
-    comparison where both arms were flat would prove the fixture broken rather
+    comparison where both cases were flat would prove the fixture broken rather
     than the bound real.
 
     Measured on the fixture below, 2026-09-15: the run's cover opens 8 files at
@@ -2105,7 +2105,7 @@ def test_more_history_does_not_make_the_ordinary_settlement_read_more(tmp_path: 
 
     assert reads[("run", 1)] == reads[("run", 12)] == 8, f"the settlement read the archive: {reads}"
     assert reads[("every-shard", 12)] > reads[("every-shard", 1)], (
-        f"the operator's pass is the arm that does read the archive: {reads}"
+        f"the operator's pass is the case that does read the archive: {reads}"
     )
 
 
@@ -2214,7 +2214,7 @@ def test_a_shard_whose_server_was_gone_still_counts_as_a_shard(tmp_path: Path) -
 def _counters_fixture(path: Path, *, runs: int, shards: int) -> list[RuntimeCountersRow]:
     """One row per shard for `runs` runs. Returns what run `RUN_ID` owes, in shard order.
 
-    Only the run id changes from run to run, so both arms of the peak check hold
+    Only the run id changes from run to run, so both cases of the peak check hold
     the same answer and the file is the only thing that differs. The shard rows
     are built through the contract once and rewritten under each run id, so a
     fixture line is the shape a real work job appends.
@@ -2269,8 +2269,8 @@ def test_loading_one_runs_counters_costs_the_run_and_not_the_file(tmp_path: Path
     4,800 lines carrying the same eight shard rows. Before, three runs each:
     2,197,419 B of peak against 4,237,123 B - the file doubled and the cost went
     with it, 1.93x. After: 193,513 B against 193,481 B, a ratio of 1.000. So the
-    4,800-line arm peaks 21.9 times lower and stops moving when the file grows.
-    Spread over the three runs was 32 B or less on every arm. On the committed
+    4,800-line case peaks 21.9 times lower and stops moving when the file grows.
+    Spread over the three runs was 32 B or less on every case. On the committed
     ledger as it stands - 209 rows, 35,950 B - the newest run's read went from
     429,441 B to 173,831 B, 2.47 times lower.
 
@@ -2286,7 +2286,7 @@ def test_loading_one_runs_counters_costs_the_run_and_not_the_file(tmp_path: Path
     owed_small = _counters_fixture(ledger.runtime_counters_path(small), runs=300, shards=shards)
     owed_large = _counters_fixture(ledger.runtime_counters_path(large), runs=600, shards=shards)
 
-    assert owed_small == owed_large, "both arms must owe one answer or this proves nothing"
+    assert owed_small == owed_large, "both cases must owe one answer or this proves nothing"
     assert len(owed_large) == shards, "the answer is a run's shards, and one row would prove less"
 
     counted_small, peak_small = _peak_of_load_runtime_counters(small)
