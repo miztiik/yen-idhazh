@@ -1175,12 +1175,15 @@ Verified 2026-08-20.
  are the exception: they outlive every artifact here, which is why a question
  about what a past run did is asked with `gh run view --job <id> --log`. **`captures-<shard>` is the one artifact that outlives the day it describes**, and it is the odd one on purpose: a regression is found by comparing today with a run from weeks ago, so a window shorter than the comparison is a window that closes exactly when it is wanted. It holds each call's rendered prompt and raw reply behind `logging.capture_prompts` and `logging.capture_replies`; with both off the directory is empty and the upload is a green no-op. It is never committed and is named in no `commit-and-push.sh` call, because a rendered prompt carries the article body inside it ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
- **Read it with `backend/utilities/read_captures.py`, not with a text editor.** A capture file is one JSON object holding a 15,000-character prompt on one line, so a reader opening it by hand sees a wall. The utility prints an item's two calls in the order the run made them - label prompt, label reply, summarize-and-plan prompt, summarize-and-plan reply - elides the middle of each unless `--full` is passed, reports how much of the second prompt is the first one character for character, and names any unbroken lowercase run over 200 characters, which is what a decoder stuck in a loose grammar looks like.
+ **Read it with `backend/utilities/read_captures.py`, not with a text editor.** A capture file is one JSON object holding a 15,000-character prompt on one line, so a reader opening it by hand sees a wall. The utility writes one numbered markdown document an item, in the order the questions get asked rather than the order the run produced them: section 1 is what looks wrong, section 2 is what the calls cost - one row a call, carrying the server's own clock, the tokens in, the tokens the cache answered, the tokens it really read, the tokens out and the reason each call stopped - sections 3 and 4 read each reply as tables of what it says, and section 5 carries every prompt and every reply whole, folded into a `<details>` block. The bytes are all still there; they are just not what a reader scrolls past to reach the numbers.
+
+ **Each capture carries the five numbers its own call spent**, so section 2 works on a 90-day-old artifact whose `state/` rows were pruned long ago. A capture written before 2026-09-15 has none: point `--health` at the day's item-health ledger and the section fills from the row that run did write. `--head N` brings back the old eliding behaviour for the raw blocks, which are printed whole by default.
 
  ```powershell
  gh run download <run-id> --repo miztiik/yen-idhazh --name captures-<shard> --dir captures
  python backend/utilities/read_captures.py captures
  python backend/utilities/read_captures.py captures --item <part-of-an-item-id> --out pair.md
+ python backend/utilities/read_captures.py captures --item <id> --health state/item-health/2026/09/14.csv
  ```
 - **A re-run is per job, never per step, and it reuses the original commit.**
  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job

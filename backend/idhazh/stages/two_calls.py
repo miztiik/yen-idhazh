@@ -128,6 +128,22 @@ def _watchlist_slugs(settings: config.Settings) -> dict[str, str]:
     }
 
 
+def _cost(kind: CallKind, reply: Completion) -> CallCost:
+    """One reply's five numbers, under the kind of call that spent them.
+
+    The kind is passed rather than read off the slot the reply arrived in: a
+    slot says which call ran first and only the kind says what it was.
+    """
+    return CallCost(
+        kind=kind,
+        prefill_ms=reply.prefill_ms,
+        decode_ms=reply.decode_ms,
+        input_tokens=reply.prompt_tokens,
+        output_tokens=reply.completion_tokens,
+        cached_tokens=min(reply.cached_tokens, reply.prompt_tokens),
+    )
+
+
 def _split_the_cost(summary: Summary, one: Completion, two: Completion | None) -> Summary:
     """The item's five numbers, recorded as the calls that really spent them.
 
@@ -147,26 +163,10 @@ def _split_the_cost(summary: Summary, one: Completion, two: Completion | None) -
     and the items that die here are the expensive ones: a labelling reply is cut
     off precisely because the article was long.
     """
-    first = CallCost(
-        kind=CallKind.LABEL,
-        prefill_ms=one.prefill_ms,
-        decode_ms=one.decode_ms,
-        input_tokens=one.prompt_tokens,
-        output_tokens=one.completion_tokens,
-        cached_tokens=min(one.cached_tokens, one.prompt_tokens),
-    )
+    first = _cost(CallKind.LABEL, one)
     spent = [first]
     if two is not None:
-        spent.append(
-            CallCost(
-                kind=CallKind.SUMMARIZE_AND_PLAN,
-                prefill_ms=two.prefill_ms,
-                decode_ms=two.decode_ms,
-                input_tokens=two.prompt_tokens,
-                output_tokens=two.completion_tokens,
-                cached_tokens=min(two.cached_tokens, two.prompt_tokens),
-            )
-        )
+        spent.append(_cost(CallKind.SUMMARIZE_AND_PLAN, two))
     return Summary.model_validate(
         summary.model_dump(mode="json")
         | {
@@ -302,7 +302,7 @@ def _shape_cells(error: Exception) -> dict[str, Any]:
     }
 
 
-def _split_cells(two: Completion) -> dict[str, Any]:
+def _split_cells(split: calls.DecodeSplit | None) -> dict[str, Any]:
     """The picture's share of the summarize-and-plan call, apportioned.
 
     The two halves are decoded one after the other and never at once, so the
@@ -313,7 +313,6 @@ def _split_cells(two: Completion) -> dict[str, Any]:
     that is filled only when a number is doubtful reads as clean data on every
     row where somebody forgot it (Guardrail #10).
     """
-    split = calls.split_the_decode(two)
     if split is None:
         return {}
     return {
@@ -325,11 +324,14 @@ def _split_cells(two: Completion) -> dict[str, Any]:
 
 def _kept_call(
     recorder: itemrecord.ItemRecorder,
-    call: str,
     date: str,
     item_id: str,
+    *,
+    call: str,
+    kind: CallKind,
     prompt: str,
-    reply: str | None,
+    reply: Completion | None,
+    split: calls.DecodeSplit | None = None,
 ) -> None:
     """Measure one call's text, keep whichever halves the flags allow, and say so.
 
@@ -346,10 +348,13 @@ def _kept_call(
         item_id=item_id,
         call=call,
         prompt=prompt,
-        reply=reply or "",
+        reply="" if reply is None else reply.content,
         keep_prompt=recorder.flags.capture_prompts,
         keep_reply=recorder.flags.capture_replies and reply is not None,
         write=assemble.write_atomic,
+        cost=None if reply is None else _cost(kind, reply),
+        decode_split=None if split is None else split._asdict(),
+        finish_reason="" if reply is None else reply.finish_reason,
     )
     recorder.call_done(call, kept.cells())
 
@@ -497,11 +502,27 @@ def two_calls_one_item(
                 max_think_tokens=inference.max_think_tokens,
             )
             if one is None:
-                _kept_call(kept, "label", date, article.item_id, rendered, None)
+                _kept_call(
+                    kept,
+                    date,
+                    article.item_id,
+                    call="label",
+                    kind=CallKind.LABEL,
+                    prompt=rendered,
+                    reply=None,
+                )
                 return failed(no_reply)
             so_far.one = one
             kept.note(**_call_cells("label", one))
-            _kept_call(kept, "label", date, article.item_id, rendered, one.content)
+            _kept_call(
+                kept,
+                date,
+                article.item_id,
+                call="label",
+                kind=CallKind.LABEL,
+                prompt=rendered,
+                reply=one,
+            )
             if one.hit_the_budget:
                 LOG.warning(
                     "the labelling reply ran out of its output budget id=%s tokens=%s",
@@ -574,15 +595,33 @@ def two_calls_one_item(
                 max_think_tokens=inference.max_think_tokens,
             )
             if two is None:
-                _kept_call(kept, "summary", date, article.item_id, second_rendered, None)
+                _kept_call(
+                    kept,
+                    date,
+                    article.item_id,
+                    call="summary",
+                    kind=CallKind.SUMMARIZE_AND_PLAN,
+                    prompt=second_rendered,
+                    reply=None,
+                )
                 return failed(no_reply, one)
             so_far.two = two
+            split = calls.split_the_decode(two)
             kept.note(
                 run_visual_decision=so_far.wants_a_plan,
                 **_call_cells("summary", two),
-                **_split_cells(two),
+                **_split_cells(split),
             )
-            _kept_call(kept, "summary", date, article.item_id, second_rendered, two.content)
+            _kept_call(
+                kept,
+                date,
+                article.item_id,
+                call="summary",
+                kind=CallKind.SUMMARIZE_AND_PLAN,
+                prompt=second_rendered,
+                reply=two,
+                split=split,
+            )
 
             with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
                 half = calls.recovered_completion(two)
