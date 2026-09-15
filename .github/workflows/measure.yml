@@ -102,6 +102,11 @@ jobs:
       candidate_quantisation: ${{ steps.models.outputs.candidate_quantisation }}
       candidate_ref: ${{ steps.models.outputs.candidate_ref }}
       candidate_models_file: ${{ steps.models.outputs.candidate_models_file }}
+      candidate_draft_repo: ${{ steps.models.outputs.candidate_draft_repo }}
+      candidate_draft_revision: ${{ steps.models.outputs.candidate_draft_revision }}
+      candidate_draft_file: ${{ steps.models.outputs.candidate_draft_file }}
+      candidate_draft_sha256: ${{ steps.models.outputs.candidate_draft_sha256 }}
+      candidate_cache_key: ${{ steps.models.outputs.candidate_cache_key }}
     steps:
       - uses: actions/checkout@v6
 
@@ -152,6 +157,30 @@ jobs:
               "candidate_ref="
               f"{candidate['repo']}@{candidate['revision']}:{candidate['file']}"
           )
+
+          # An entry may name a draft head - a small second model the server
+          # runs ahead of the big one. It is optional, so all four values are
+          # empty when there is none, and each is held to the same one-bare-word
+          # rule as the target because it reaches a shell the same way.
+          draft = entry.get("draft") or {}
+          for field in ("repo", "revision", "file", "sha256"):
+              value = draft.get(field) or ""
+              if draft and value.split() != [value]:
+                  raise SystemExit(
+                      f"{candidate_file} summarize.draft.{field} is empty or not one word"
+                  )
+              print(f"candidate_draft_{field}={value}")
+
+          # The cache holds every file the candidate needs, so the key names
+          # every file's digest. A key that named only the target would serve a
+          # complete-looking entry with the draft head missing, and the server
+          # arm would fail to start on a cache hit it could not see into. An
+          # entry with no draft keeps the key it already had, so adding this
+          # does not throw away what earlier runs paid to download.
+          key = candidate["sha256"]
+          if draft:
+              key = f"{key}-{draft['sha256']}"
+          print(f"candidate_cache_key={key}")
           PY
 
   # The bench, arm one: raw prefill and decode throughput with nothing else in
@@ -214,7 +243,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
 
       # The measurement runtime is immutable even while production still
       # follows the latest compatible release. A candidate and an incumbent
@@ -245,6 +274,40 @@ jobs:
           # ship versioned shared objects as symlinks and `-type f` skips one.
           SRC=$(dirname "$(find llama -type f -name 'llama-bench' | head -1)")
           cp -a "$SRC"/. backend/bin/
+
+      # llama-bench never runs a draft head, so this arm does not measure one.
+      # It fetches it anyway, because it fills the cache the server arm reads:
+      # an entry saved here without the draft is a hit there with a file
+      # missing, and the server exits at load rather than at fetch. The bytes
+      # are tens of megabytes against multi-gigabyte weights.
+      - name: Fetch the draft head
+        if: >-
+          steps.weights.outputs.cache-hit != 'true'
+          && needs.models.outputs.candidate_draft_file != ''
+        env:
+          DRAFT_REPO: ${{ needs.models.outputs.candidate_draft_repo }}
+          DRAFT_REVISION: ${{ needs.models.outputs.candidate_draft_revision }}
+          DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+          DRAFT_SHA256: ${{ needs.models.outputs.candidate_draft_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/models
+          curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
+            "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
+
+      # No `if:`, for the usual reason: a restored entry is the one case where
+      # nobody watched the bytes arrive. It matters more here than anywhere,
+      # because this arm never runs the draft head - the only thing standing
+      # between a corrupt cached copy and the server arm is this line.
+      - name: Verify the draft head
+        env:
+          DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${{ needs.models.outputs.candidate_draft_sha256 }}  backend/models/${DRAFT_FILE}" \
+              | sha256sum --check
+          fi
 
       # No `if:`. A restored entry is the one case where nobody watched the
       # bytes arrive, so this runs on a cache hit too and the hardware record
@@ -405,6 +468,10 @@ jobs:
       CANDIDATE_SHA256: ${{ needs.models.outputs.candidate_sha256 }}
       CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
       CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
+      DRAFT_REPO: ${{ needs.models.outputs.candidate_draft_repo }}
+      DRAFT_REVISION: ${{ needs.models.outputs.candidate_draft_revision }}
+      DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+      DRAFT_SHA256: ${{ needs.models.outputs.candidate_draft_sha256 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -447,7 +514,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
 
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
@@ -471,16 +538,25 @@ jobs:
           cp -a "$SRC"/. backend/bin/
           curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${CANDIDATE_FILE}" \
             "https://huggingface.co/${CANDIDATE_REPO}/resolve/${CANDIDATE_REVISION}/${CANDIDATE_FILE}?download=true"
+          if [ -n "${DRAFT_FILE}" ]; then
+            curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
+              "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
+          fi
 
       # A throughput number is about a model only if it names the bytes that
       # produced it (Guardrail #10). No `if:`, because a restored cache entry is
-      # the one case where nobody watched the bytes arrive.
+      # the one case where nobody watched the bytes arrive. The draft head is
+      # checked on the same terms: the server loads it, so it is part of what
+      # the number is about.
       - name: Verify the weights
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
           echo "${{ needs.models.outputs.candidate_sha256 }}  backend/models/${CANDIDATE_FILE}" \
             | sha256sum --check
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
+          fi
 
       - name: Record input identity
         env:
@@ -495,6 +571,12 @@ jobs:
             echo "model_revision=${CANDIDATE_REVISION}"
             stat -c 'model_bytes=%s' "backend/models/${CANDIDATE_FILE}"
             sha256sum "backend/models/${CANDIDATE_FILE}"
+            if [ -n "${DRAFT_FILE}" ]; then
+              echo "draft_repo=${DRAFT_REPO}"
+              echo "draft_revision=${DRAFT_REVISION}"
+              stat -c 'draft_bytes=%s' "backend/models/${DRAFT_FILE}"
+              sha256sum "backend/models/${DRAFT_FILE}"
+            fi
           } | tee backend/var/runtime-sweep/cache-state.txt
 
       # The committed config still names the incumbent, and a bench does not
@@ -963,6 +1045,10 @@ jobs:
       CANDIDATE_SHA256: ${{ needs.models.outputs.candidate_sha256 }}
       CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
       CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
+      DRAFT_REPO: ${{ needs.models.outputs.candidate_draft_repo }}
+      DRAFT_REVISION: ${{ needs.models.outputs.candidate_draft_revision }}
+      DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+      DRAFT_SHA256: ${{ needs.models.outputs.candidate_draft_sha256 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -984,7 +1070,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
 
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
@@ -1008,6 +1094,10 @@ jobs:
           cp -a "$SRC"/. backend/bin/
           curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${CANDIDATE_FILE}" \
             "https://huggingface.co/${CANDIDATE_REPO}/resolve/${CANDIDATE_REVISION}/${CANDIDATE_FILE}?download=true"
+          if [ -n "${DRAFT_FILE}" ]; then
+            curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
+              "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
+          fi
 
       # A reading is about a vocabulary only if it names the bytes that carry it
       # (Guardrail #10). No `if:`, because a restored cache entry is the one case
@@ -1018,6 +1108,9 @@ jobs:
           chmod +x backend/bin/llama-server
           echo "${{ needs.models.outputs.candidate_sha256 }}  backend/models/${CANDIDATE_FILE}" \
             | sha256sum --check
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
+          fi
 
       # The committed config still names the incumbent and a measurement does
       # not edit it. The scratch copy differs in the active model file and

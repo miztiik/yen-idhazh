@@ -126,6 +126,13 @@ a fact about them.
 | `turns` | where the system text goes, what opens and closes a turn, and which keyword turns thinking off |
 | `draft` | a second, smaller set of weights that guesses ahead. Null unless the publisher ships one |
 
+Declaring a `draft` block is all a candidate has to do to be measured with one.
+The bench and the qualification arm read it from the same entry, download it,
+check its digest and name that digest in the weights cache key. Nothing else in
+this runbook changes, and an entry that declares none is unaffected -
+[`model-boundary.md`](../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead)
+says what the head costs and how to read whether it paid.
+
 #### Where each fact comes from
 
 **None of these is recalled or copied off a model card.** A card is prose a

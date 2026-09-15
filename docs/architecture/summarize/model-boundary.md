@@ -354,6 +354,27 @@ the KV budget. And the draft's own digest in the run record, so a day that was
 drafted can be told from a day that was not - a run that cannot answer that
 cannot explain its own throughput.
 
+**Every arm that starts a server fetches it, and that had to be made true.** The
+daily run always did. The two measurement arms below and the qualification arm
+did not: each downloaded exactly one file, so the first entry ever to declare a
+draft head benched by starting `llama-server` against a path that did not exist.
+The server exits during load, which surfaces as a health check that never passes
+rather than as a missing file, and the job that hit it had already paid for its
+download. All four now fetch the head and check its digest - on a restored cache
+as well as on a fresh download, because a restored entry is the one copy nobody
+watched arrive.
+
+**The cache key names the head's digest too, or the fetch never runs.** Both
+bench arms share one cache entry so the second does not download the weights the
+first already has. An entry keyed on the target alone is a complete-looking hit
+with the head missing: the fetch step is skipped because the cache reported a
+hit, and the server fails at load anyway. So the key is the target's digest, and
+the head's where an entry declares one. An entry that declares no head keeps the
+key it already had, which is what stops this costing every other model a
+refetch. The raw arm never runs a draft head - `llama-bench` has no speculative
+path - and fetches it regardless, because it is the arm that fills the cache the
+server arm restores.
+
 **The flag spellings are the trap, and they are not the ones on most pages.**
 `--draft-max` and `--draft-min` were removed from llama.cpp; the pinned build
 exits telling the operator to use `--spec-draft-n-max` and `--spec-draft-n-min`.
