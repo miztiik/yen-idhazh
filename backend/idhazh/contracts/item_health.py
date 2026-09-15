@@ -16,6 +16,8 @@ from typing import Annotated, Any, ClassVar, Final, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
+    LOWER_TOKEN_PATTERN,
+    PRINTABLE_LINE_PATTERN,
     ChangelogEntry,
     Contract,
     DateStamp,
@@ -37,20 +39,27 @@ CALL_SLOTS: Final = ("label", "summary")
 
 #: One line of printable ASCII. A newline would break `merge=union` on the day
 #: file, and a control character would break the CSV, so the shape is the
-#: control rather than a promise in a docstring.
-OneLine = Annotated[str, StringConstraints(min_length=1, max_length=200, pattern=r"^[ -~]+$")]
+#: control rather than a promise in a docstring. The class is declared once in
+#: `contracts.base` and `base.fit_cell` folds a value into it, so a producer
+#: cannot hand this column something the column refuses.
+OneLine = Annotated[
+    str, StringConstraints(min_length=1, max_length=200, pattern=PRINTABLE_LINE_PATTERN)
+]
 
 #: A whole exception message, which is what a person debugging a failure
 #: actually needs. Longer than a label and still one line for the same reason.
 ItemHealthDetail = Annotated[
-    str, StringConstraints(min_length=1, max_length=2000, pattern=r"^[ -~]+$")
+    str, StringConstraints(min_length=1, max_length=2000, pattern=PRINTABLE_LINE_PATTERN)
 ]
 
-#: A lowercase token the pipeline itself minted - a model id, a finish reason,
-#: a clock name. Never fetched text (Guardrail #11): the pattern is what makes
-#: that true rather than the comment.
+#: A lowercase token the pipeline, the runtime or the config minted - a model id,
+#: a finish reason, a clock name. Never fetched prose (Guardrail #11): the
+#: pattern is what makes that true rather than the comment. It is not a promise
+#: that the value arrives in the class either - `llama-server` mints its own
+#: finish reasons and the config spells a quantisation `Q4_K_M` - so a producer
+#: folds through `base.fit_cell` rather than hoping.
 Token = Annotated[
-    str, StringConstraints(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_.+-]*$")
+    str, StringConstraints(min_length=1, max_length=64, pattern=LOWER_TOKEN_PATTERN)
 ]
 
 #: Headings a day file an earlier run wrote still carries, and the column each
