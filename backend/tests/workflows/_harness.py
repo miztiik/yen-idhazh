@@ -341,6 +341,12 @@ BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
 
 BENCH_CONFIG_STEP: Final = "Build the candidate config"
 
+#: The one composite action in this repository. The step above was byte-identical
+#: in two workflows apart from the job it read the models file from, and a step
+#: duplicated across two files is a step that drifts the day one of them is
+#: edited - which has happened twice in these two.
+CANDIDATE_CONFIG_ACTION: Final = "candidate-config"
+
 BENCH_EMIT_STEP: Final = "Emit the dossier body"
 
 
@@ -1190,6 +1196,27 @@ def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
             assert isinstance(uses, str), f"job {job_name} 'uses' must be a string"
             references.append((job_name, uses))
     return references
+
+
+def _composite_action_script(name: str) -> str:
+    """The shell a repository-local composite action runs, as one string.
+
+    A `./`-prefixed action resolves to this repository at the commit the run
+    checked out, so what it runs is in the tree the tests already read - but it
+    is not in `.github/workflows/`, so every oracle that globs that directory
+    stops seeing it. This is what keeps those oracles pointed at the shell after
+    it moves out of a workflow file.
+    """
+    path = WORKFLOWS_DIR.parent / "actions" / name / "action.yml"
+    document = yaml.safe_load(read_text(path))
+    runs = _mapping(_mapping(document, path.name).get("runs"), f"{name} runs")
+    assert runs.get("using") == "composite", f"{name} must be a composite action"
+    steps = runs.get("steps")
+    assert isinstance(steps, list), f"{name} must declare steps"
+
+    scripts = [step["run"] for step in steps if isinstance(step, dict) and "run" in step]
+    assert scripts, f"{name} runs no shell"
+    return "\n".join(scripts)
 
 
 def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> list[int] | None:

@@ -18,11 +18,13 @@ from ._harness import (
     BENCH_TARGET,
     BUDGETS_EMIT_STEP,
     BUDGETS_JOB,
+    CANDIDATE_CONFIG_ACTION,
     COMMIT_SCRIPT,
     MEASUREMENT_TARGETS,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
     _artifact_upload,
+    _composite_action_script,
     _declared_dispatch_inputs,
     _expression,
     _job,
@@ -152,12 +154,18 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
     `repo`, `revision`, `file`, `id` and `quantisation` onto the copied entry
     and overwrite both `declared_for` digests, which asserted that numbers
     measured for one model held for another.
+
+    The shell moved into a composite action on 2026-09-15, because the bench and
+    the validation arm carried byte-identical copies of it. This reads the
+    action, and the call site is asserted below.
     """
     workflow = _load_workflows()["measure.yml"]
-    script = _script(
-        _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP),
-        f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_CONFIG_STEP}",
+    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP)
+    assert step.get("uses") == f"./.github/actions/{CANDIDATE_CONFIG_ACTION}", (
+        "the bench builds its scratch config through the shared action"
     )
+
+    script = _composite_action_script(CANDIDATE_CONFIG_ACTION)
     assert f"cp -a config {BENCH_CANDIDATE_CONFIG}" in script
     assert MODELS_POINTER_KEY in script, "through the pointer, never by filename"
     for field in ("sha256", "declared_for", "quantisation", "revision"):
