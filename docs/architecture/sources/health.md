@@ -329,7 +329,7 @@ four places and were published in none, so the console re-derived the two it
 could reach in TypeScript and simply could not see the other two. Since
 2026-09-03 the run writes them together, once, to
 `frontend/public/source-health.json` through
-`backend/idhazh/publish_source_health.py`. The console panel that draws them is
+`backend/idhazh/telemetry/publish/source_health.py`. The console panel that draws them is
 on `/console/voices/` since 2026-09-14, headed `Sources we may ask, and what
 they yield`.
 
@@ -420,7 +420,7 @@ still produce planned items that fail at fetch, extract or summarize.
 returns almost nothing.** Two knobs set the bar and both live in
 `config/idhazh.json`: `collect.source_yield_alarm_point`, the yield below which
 a source is named, and `collect.source_yield_alarm_min_decisions`, the evidence
-it needs first. `publish_source_health.yield_alarm` reads the view this page
+it needs first. `source_health.yield_alarm` reads the view this page
 describes and emits one line per run, worst first, naming each source and both
 its counts.
 

@@ -3,7 +3,7 @@ import { daysBetween, daysInWindow, type TimeWindow } from './viewport';
 
 /** The published projection's header, in `PUBLIC_COLUMNS` order.
  *
- * `backend/idhazh/publish_telemetry.py` owns the list. This is the reader's
+ * `backend/idhazh/telemetry/publish/public_telemetry.py` owns the list. This is the reader's
  * copy of it, and `parseTelemetryCsv` refuses a file whose header disagrees.
  */
 export const TELEMETRY_COLUMNS = [
