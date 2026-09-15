@@ -92,25 +92,37 @@ label.
 
 ## The producers
 
-Seven modules under `backend/idhazh/`, one dataset each, all called from
-`stages.assemble.stage_assemble` at the publication step. None of them spells a path, a
-write rule or a prune of its own: `publish_console.py` owns those and every
-producer obeys the same three rules from the same place.
+Seven modules under `backend/idhazh/telemetry/publish/`, one dataset each. None
+of them spells a path, a write rule or a prune of its own: `series.py` owns
+those and every producer obeys the same three rules from the same place.
+
+`stages.assemble.stage_assemble` calls none of them directly. It calls
+`dispatch.publish_all`, and `dispatch.PROJECTIONS` is the one place the order is
+written down - the tuple the dispatcher walks, so a projection listed there runs
+exactly once and one that is not listed never runs. The dispatcher holds routing
+and nothing else: it names each unit and hands over the roots, the month and the
+day the run is publishing, and every projection's body stays in its own module
+(CLAUDE.md section 1a).
 
 | Producer | Writes | Reads |
 | --- | --- | --- |
-| `publish_console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, the counters file |
-| `publish_scores.py` | `scores/<YYYY-MM>.csv` | `state/scores/<YYYY>/<MM>/<DD>.csv`, a month folded from its day files |
-| `publish_feed_health.py` | `feed-health/<YYYY-MM>.csv` | `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
-| `publish_run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
-| `publish_day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
-| `publish_machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |
-| `publish_span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
+| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, the counters file |
+| `scores.py` | `scores/<YYYY-MM>.csv` | `state/scores/<YYYY>/<MM>/<DD>.csv`, a month folded from its day files |
+| `feed_health.py` | `feed-health/<YYYY-MM>.csv` | `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
+| `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
+| `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
+| `machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |
+| `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
 
-`publish_telemetry.py` is the eighth and it predates this page. It keeps its own
+`public_telemetry.py` is the eighth and it predates this page. It keeps its own
 path helper because `retention.prune_telemetry` deletes a shard through the same
 function that writes one, and two spellings of `<month>.csv` would delete a
 month nobody published and leave the published one behind.
+
+`source_health.py` is the ninth. It writes `source-health.json`, the one entry
+in the table above that nothing fetches, and it sits here rather than beside the
+digest because a feed's reliability is an observation about the run and not a
+product surface.
 
 ### The three rules
 
@@ -135,7 +147,7 @@ pass.
 ### The band is a reduction of the payloads beside it
 
 `console-shell.ts` derives the band at build time from six committed ledgers and
-inlines it into three prerendered documents. `publish_console_band.py` is the
+inlines it into three prerendered documents. `console_band.py` is the
 same derivation, ported sentence for sentence, and row 10 deletes the
 TypeScript one. Two things about where it reads from:
 

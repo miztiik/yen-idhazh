@@ -52,7 +52,7 @@ Pipelines answered three questions until 2026-09-14 and its description said so:
 *did the runs work, which feeds broke, and what each stage cost*. The middle
 clause went with the four feed and source panels that moved to Voices. The
 description is written in two places -
-[publish_console_band.py](../../../backend/idhazh/publish_console_band.py) for
+[console_band.py](../../../backend/idhazh/telemetry/publish/console_band.py) for
 the published band and
 [band.ts](../../../frontend/src/lib/console/band.ts) for the fallback - and both
 moved in the same commit, because the strip a reader sees is whichever one
@@ -172,7 +172,7 @@ higher would publish a threshold this project has not taken.
 band prints the one worst thing across every route, so a loud rule on Judgement
 or Voices would take the band away from a failed run - and then a skewed day and
 a failed run print the same sentence, which is the band's whole job undone. A
-skewed day still published; a failed run did not. `publish_console_band.editorial`
+skewed day still published; a failed run did not. `console_band.editorial`
 is where the cap is applied, because the band is derived once and read
 everywhere. Authority: Carmack, 2026-09-11.
 

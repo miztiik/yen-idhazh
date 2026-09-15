@@ -9,11 +9,7 @@ from __future__ import annotations
 from datetime import date as date_type
 from pathlib import Path
 
-from idhazh import (
-    ledger,
-    publish_telemetry,
-    retention,
-)
+from idhazh import ledger, retention
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.placement import LensWeightsConfig
@@ -22,6 +18,7 @@ from idhazh.contracts.knobs.run import RunConfig
 from idhazh.evals import archive as score_archive
 from idhazh.stages import common
 from idhazh.stages.common import LOG
+from idhazh.telemetry.publish import public_telemetry
 
 
 def stage_prune_state(
@@ -91,7 +88,7 @@ def stage_prune_state(
     # run is the failure this pairing exists to stop.
     public = public_root
     if public is None and state_dir is None:
-        public = publish_telemetry.DEFAULT_PUBLIC_ROOT
+        public = public_telemetry.DEFAULT_PUBLIC_ROOT
     # The day payloads pair with the state tree the same way and for the same
     # reason: a test that named its own state must not have this one default to
     # the committed archive.
@@ -129,7 +126,7 @@ def stage_prune_state(
             ", ".join(result.hard_deleted) or "no month",
         )
         removed += list(result.days_removed)
-        removed += [publish_telemetry.shard_relpath(stem) for stem in result.public_deleted]
+        removed += [public_telemetry.shard_relpath(stem) for stem in result.public_deleted]
         removed += [
             ledger.telemetry_aggregate_relpath(stem) for stem in result.hard_deleted
         ]

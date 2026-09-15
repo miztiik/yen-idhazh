@@ -464,7 +464,7 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
 ) -> None:
     """The Oracle, second half: two writers, one row per item per run.
 
-    A repeat is not free. `publish_telemetry` copies every row into the file the
+    A repeat is not free. `public_telemetry` copies every row into the file the
     console reads, and `merge=union` keeps the lines from both sides rather than
     collapsing them - so a second copy is one item counted twice on the
     dashboard, forever, in a ledger that cannot correct a row.

@@ -618,7 +618,7 @@ run with no spread, so it says where the re-read tokens go and it sizes no day.
 `Completion.cached_tokens` comes off `timings.cache_n` in
 [`../../../backend/idhazh/llm/server.py`](../../../backend/idhazh/llm/server.py),
 `Summary.cached_tokens` persists it per call since plan 11 row #3b, and
-[`../../../backend/idhazh/publish_day_metrics.py`](../../../backend/idhazh/publish_day_metrics.py)
+[`../../../backend/idhazh/telemetry/publish/day_metrics.py`](../../../backend/idhazh/telemetry/publish/day_metrics.py)
 already derives `input_tokens - cached_tokens`. What is missing is a summarize-and-plan call to
 read it from: nothing dispatches either call, and the wiring is row #5b of
 [`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md).

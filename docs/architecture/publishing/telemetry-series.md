@@ -7,7 +7,7 @@ never read `state/item-health/` directly.
 
 ## Published shards
 
-`backend/idhazh/publish_telemetry.py` reads
+`backend/idhazh/telemetry/publish/public_telemetry.py` reads
 `state/item-health/<YYYY>/<MM>/<DD>.csv` and writes
 `frontend/public/telemetry/<YYYY-MM>.csv`. The browser fetches these monthly
 shards on demand as the operator pans the viewport.
@@ -101,7 +101,7 @@ Two consequences worth stating plainly:
 - **`version` is a field of the shape and never a cell.** The header check below
  is a prefix, so one more name at position zero would shift every position the
  console reads. `schemas/public-telemetry.schema.json` is where the stamp lives.
-- **A published shard has to load, not merely parse.** `publish_telemetry
+- **A published shard has to load, not merely parse.** `public_telemetry
  --migrate` reads every committed shard back through the contract and rewrites
  it, and a test runs the same round trip on a copy of the committed files. Run
  2026-09-05 on this checkout, after the eight timing and token columns landed:
@@ -560,7 +560,7 @@ below reach a page as numbers, never as rows.
 
 **This page is the `work` series, and the ledger held two between 2026-09-12 and
 2026-09-13.** The `visuals` job filed a row of its own for the small model it
-served, and `publish_machine.PUBLISHED_JOB` keeps it out of the published
+served, and `machine.PUBLISHED_JOB` keeps it out of the published
 mirror: the figures below pool a run's tokens over a run's seconds, and the two
 jobs served different weights, so one pooled rate over both would describe no
 model. Plan 11 row #6 retired that job, so `work` is the only series a run

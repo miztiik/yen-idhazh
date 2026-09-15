@@ -303,7 +303,7 @@ def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None
 
     `frontend/scripts/build-canary.mjs` restates the column names because it is
     JavaScript and the contract is Python. A name added to the row and not to
-    that array writes a canary `publish_telemetry` refuses, and until this test
+    that array writes a canary `public_telemetry` refuses, and until this test
     existed the only thing that caught it was a frontend build in CI.
     """
     source = read_text(REPO_ROOT / "frontend" / "scripts" / "build-canary.mjs")

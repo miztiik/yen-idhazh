@@ -603,7 +603,7 @@ export function itemHealthForDay(
  * re-count them by walking the whole score ledger. All three count the day's
  * *distinct published* items, never score-ledger rows: the ledger dedupes by
  * measurement, so one item re-scored under a new stamp keeps both rows, and a
- * run may score an item it then drops (`backend/idhazh/publish_day_metrics.py`).
+ * run may score an item it then drops (`backend/idhazh/telemetry/publish/day_metrics.py`).
  * The measurement distributions the console draws still read every row - only
  * these per-item counts join the published set, so only these are read here. The
  * whole record shape is `schemas/day-metrics.schema.json`; this is the slice the

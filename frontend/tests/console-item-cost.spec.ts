@@ -215,9 +215,10 @@ test.describe('what one item cost, as arithmetic', () => {
 
 /** The projection the built tree published, read cell by cell.
  *
- * The canary's own copy, written by `idhazh publish_telemetry` from the canary
- * ledger - the same producer and the same shape as the committed months, over a
- * fixture a test may read (`backend/tests/test_archive_readers.py`).
+ * The canary's own copy, written by `idhazh.telemetry.publish.public_telemetry`
+ * from the canary ledger - the same producer and the same shape as the committed
+ * months, over a fixture a test may read
+ * (`backend/tests/test_archive_readers.py`).
  */
 function projection(): Record<string, string>[] {
 	const dir = join(CANARY, 'state', 'telemetry');

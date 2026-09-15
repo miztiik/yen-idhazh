@@ -9,12 +9,13 @@ from typing import Final
 
 import pytest
 
-from idhazh import day_partition, ledger, publish_telemetry
+from idhazh import day_partition, ledger
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.telemetry_aggregate import percentile
 from idhazh.evals import archive as score_archive
 from idhazh.retention import fold_month, month_shards, oldest_month_kept, prune_telemetry
+from idhazh.telemetry.publish import public_telemetry
 
 from ._trees import (
     HISTORY_MONTHS,
@@ -334,7 +335,7 @@ def a_published_tree(tmp_path: Path) -> tuple[Path, Path]:
     """
     state = a_state_tree(tmp_path)
     public = tmp_path / "frontend" / "public" / "telemetry"
-    publish_telemetry.publish(state_root=state, public_root=public)
+    public_telemetry.publish(state_root=state, public_root=public)
     return state, public
 
 
@@ -357,7 +358,7 @@ def test_the_browser_copy_goes_with_the_month_it_copies(tmp_path: Path) -> None:
         stem for stem in months_back(TODAY, HISTORY_MONTHS) if stem >= kept
     ]
     for stem in result.public_deleted:
-        assert not publish_telemetry.shard_path(public, stem).exists()
+        assert not public_telemetry.shard_path(public, stem).exists()
 
 
 def test_a_copy_whose_source_is_already_gone_is_still_taken(tmp_path: Path) -> None:
@@ -371,10 +372,10 @@ def test_a_copy_whose_source_is_already_gone_is_still_taken(tmp_path: Path) -> N
     state = tmp_path / "state"
     public = tmp_path / "telemetry"
     public.mkdir(parents=True)
-    orphan = publish_telemetry.shard_path(public, "2024-01")
-    orphan.write_text(",".join(publish_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
-    live = publish_telemetry.shard_path(public, TODAY.strftime("%Y-%m"))
-    live.write_text(",".join(publish_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
+    orphan = public_telemetry.shard_path(public, "2024-01")
+    orphan.write_text(",".join(public_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
+    live = public_telemetry.shard_path(public, TODAY.strftime("%Y-%m"))
+    live.write_text(",".join(public_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
 
     result = prune_telemetry(state, ObservabilityConfig(), TODAY, public_root=public)
 
@@ -450,5 +451,5 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
         prune_telemetry(state, config, TODAY, public_root=public)
 
     assert doomed[0].exists(), "the first day file was unlinked after an unverified write"
-    assert publish_telemetry.shard_path(public, day_partition.month_of(doomed[0])).exists()
+    assert public_telemetry.shard_path(public, day_partition.month_of(doomed[0])).exists()
     assert len(month_shards(public)) == HISTORY_MONTHS

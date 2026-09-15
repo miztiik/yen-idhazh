@@ -128,7 +128,7 @@ An item is read by more than one model call, so from 2026-09-12 `Summary`,
 `state/item-health/` and the published projection record the five cost numbers
 per call as well as for the item. **The five flat cells are the sum over the
 calls the row records**, which is what keeps every reader that pools them -
-`publish_day_metrics`, `publish_console_band`, `backend/utilities/reconcile_prefill.py`
+`day_metrics`, `console_band`, `backend/utilities/reconcile_prefill.py`
 and the console's own rates - correct with no edit of its own on the day a
 second call starts being recorded. The contract refuses a row where they are
 not, so the property is enforced rather than described.

@@ -105,8 +105,7 @@ const MODULE_TESTS: Record<string, string[]> = {
 		'backend/tests/test_publish_telemetry.py',
 		'backend/tests/test_publish_source_health.py'
 	],
-	telemetry: ['backend/tests/test_telemetry.py', 'backend/tests/test_publish_telemetry.py'],
-	publish_telemetry: ['backend/tests/test_publish_telemetry.py', 'backend/tests/test_telemetry.py']
+	telemetry: ['backend/tests/test_telemetry.py', 'backend/tests/test_publish_telemetry.py']
 };
 
 export function selectPaths(paths: readonly string[]): Selection {
@@ -155,7 +154,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 				for (const name of tests) backendFiles.add(name);
 				selected = ['backend'];
 				if (['extract', 'sanitize'].includes(module)) selected.push('logic', 'publishing');
-				if (['ledger', 'telemetry', 'publish_telemetry'].includes(module)) selected.push(...FRONTEND_GROUPS);
+				if (['ledger', 'telemetry'].includes(module)) selected.push(...FRONTEND_GROUPS);
 				reason = 'module tests and declared consumers';
 			} else {
 				selected = ALL;

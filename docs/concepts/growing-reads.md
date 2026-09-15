@@ -290,8 +290,8 @@ read".
 **`frontend/public/telemetry/` is the one directory where that bound is declared
 and not yet enforced, and it says so here rather than in a sentence that would be
 wrong.** Six of the seven series are trimmed on every assemble, because their
-publishers reach `publish_console.publish_series`, which calls `prune_months`.
-`publish_telemetry.publish` does not: its deletion lives in
+publishers reach `series.publish_series`, which calls `prune_months`.
+`public_telemetry.publish` does not: its deletion lives in
 `retention.prune_telemetry`, inside the workflow step that ships `--dry-run`. So
 `public_telemetry_keep_months` is 14 and the directory holds every month it has
 ever published - 2 files on 2026-09-13, gaining one a month. Every listing of it
@@ -302,22 +302,22 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `publish_console.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
-| `publish_scores.publish`, `publish_feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
-| `publish_span_rollup.publish` | the state shard for the month named | the month the run appended to |
-| `publish_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
-| `publish_day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
-| `publish_run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
-| `publish_console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards | `max(console.window_presets)`, committed at 90 |
+| `series.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
+| `scores.publish`, `feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
+| `span_rollup.publish` | the state shard for the month named | the month the run appended to |
+| `public_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
+| `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
+| `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
+| `console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards | `max(console.window_presets)`, committed at 90 |
 
 **Two of them list a tree to learn which months exist**, and that residue is
-named rather than hidden: `publish_run_days.months_published` and
-`publish_day_metrics.months_recorded` cost one directory entry a year plus one a
+named rather than hidden: `run_days.months_published` and
+`day_metrics.months_recorded` cost one directory entry a year plus one a
 month, for ever. Deriving the newest stem from today's date instead would answer
 nothing at all for a tree whose last run was two months ago - the same reason
 `payload.readShards` lists its own directory.
 
-**One is unbounded on purpose.** `publish_machine.months_on_file` streams
+**One is unbounded on purpose.** `machine.months_on_file` streams
 `state/runtime-counters.csv`, which is one appended file with no shards and no
 prune, so a run that wants September's rows walks every row ever appended to
 find them. No cover in days, no cover in months and no identity set answers
@@ -328,7 +328,7 @@ already opens for one run - and what it WRITES is bounded: a row below
 into a file the prune would delete on the next pass.
 
 **The eighth answers to a different knob, and that knob has never bitten,
-2026-09-12.** `publish_telemetry.publish` is the odd member of this block: it
+2026-09-12.** `public_telemetry.publish` is the odd member of this block: it
 reads the **source ledger** rather than a published directory, so what caps it is
 `observability.item_health_full_grain_months` and not one of the
 `public_*_keep_months` the other seven answer to. The two are held **equal** by
@@ -343,7 +343,7 @@ candidate to fold on **2027-10-01**, so today it reads every partition there has
 ever been - two of them, 3,824,328 bytes over 11,143 rows and 20 days on
 2026-09-12, which is 186.7 KB a day and exact. Fourteen partitions at that rate
 would be 58 to 80 MB, an **estimate** whose range is source yield rather than
-measurement noise. `publish_telemetry.migrate` is the module's other growing read
+measurement noise. `public_telemetry.migrate` is the module's other growing read
 and declares `-1`: rewriting every shard is the job, and it is an operator
 command a person runs once on a contract change rather than a per-run cost.
 

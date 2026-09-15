@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from idhazh import config, day_partition, ledger, publish_source_health
+from idhazh import config, day_partition, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -35,6 +35,7 @@ from idhazh.contracts.source_health_view import (
 )
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.telemetry.publish import source_health
 
 DATE = "2026-08-20"
 COLLECT = CollectConfig()
@@ -116,7 +117,7 @@ def fold(
     retired_on: dict[str, str] | None = None,
     date: str = DATE,
 ) -> SourceHealthView:
-    return publish_source_health.build(
+    return source_health.build(
         feeds=feeds,
         collect=COLLECT,
         health=health_rows,
@@ -455,8 +456,8 @@ def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  
         [health("wire", date=DATE, n=1, outcome=FetchOutcome.OK, items=3)],
     )
     settings = config.load()
-    path = tmp_path / "public" / publish_source_health.PUBLIC_FILENAME
-    returned = publish_source_health.publish(
+    path = tmp_path / "public" / source_health.PUBLIC_FILENAME
+    returned = source_health.publish(
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         collect=settings.app.collect,
@@ -467,11 +468,11 @@ def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  
         path=path,
     )
     assert path.name == "source-health.json"
-    assert publish_source_health.public_relpath() == "frontend/public/source-health.json"
+    assert source_health.public_relpath() == "frontend/public/source-health.json"
     view = SourceHealthView.from_json(path.read_text(encoding="utf-8"))
     assert view.to_json() == returned.to_json()
     assert len(view.sources) == len(
-        publish_source_health.active_feeds(
+        source_health.active_feeds(
             settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
         )
     )
@@ -484,7 +485,7 @@ def test_the_active_census_is_exactly_the_addresses_a_run_would_ask() -> None:
     one about this repository rather than about a fixture.
     """
     settings = config.load()
-    counted = publish_source_health.active_feeds(
+    counted = source_health.active_feeds(
         settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
     )
     names = {feed.id for feed in counted}
@@ -507,7 +508,7 @@ def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  
     state = tmp_path / "state"
     settings = config.load()
     collect = settings.app.collect
-    known = publish_source_health.active_feeds(
+    known = source_health.active_feeds(
         settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
     )
     assert len(known) >= 2, "the committed config needs two addresses for this to bite"
@@ -528,7 +529,7 @@ def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  
         state, stale, [health(bad, date=stale, n=9, outcome=FetchOutcome.OK, items=7)]
     )
 
-    view = publish_source_health.publish(
+    view = source_health.publish(
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         collect=collect,
@@ -536,7 +537,7 @@ def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  
         run_id=f"{DATE}-1",
         generated_at=f"{DATE}T06:20:00Z",
         state_root=state,
-        path=tmp_path / "public" / publish_source_health.PUBLIC_FILENAME,
+        path=tmp_path / "public" / source_health.PUBLIC_FILENAME,
     )
     ranked = ledger.reliability(
         state,
@@ -627,14 +628,14 @@ def test_the_headline_and_the_operator_alarm_name_the_same_sources() -> None:
     """One predicate under both, so the line and the list below it cannot disagree."""
     feeds, health_rows, items = _yielding("wire", published=2, lost=40)
     view = fold(feeds=[feeds], health_rows=health_rows, items=items)
-    named = publish_source_health.below_the_yield_bar(
+    named = source_health.below_the_yield_bar(
         view.sources,
         alarm_point=COLLECT.source_yield_alarm_point,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,
     )
     assert [row.source_id for row in named] == ["wire"]
     assert view.headline_sentence.startswith("1 of 1 sources decided 30 or more addresses")
-    alarm = publish_source_health.yield_alarm(
+    alarm = source_health.yield_alarm(
         view,
         alarm_point=COLLECT.source_yield_alarm_point,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,
@@ -691,7 +692,7 @@ def test_a_source_that_answers_but_does_not_read_is_named() -> None:
     assert row.decisions == 111
     assert row.source_yield == pytest.approx(4 / 111)
 
-    alarm = publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=30)
+    alarm = source_health.yield_alarm(view, alarm_point=0.5, min_decisions=30)
     assert alarm is not None
     assert "wall 4/111 (4%)" in alarm
     assert "probe_feeds.py" in alarm, "an alarm that names no next step is a nag"
@@ -709,7 +710,7 @@ def test_a_thin_record_is_never_named_however_bad_it_looks() -> None:
     view = fold(feeds=[thin], health_rows=thin_health, items=thin_items)
 
     assert only(view).source_yield == pytest.approx(1 / 7)
-    assert publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=30) is None
+    assert source_health.yield_alarm(view, alarm_point=0.5, min_decisions=30) is None
 
 
 def test_a_source_is_not_charged_for_a_failure_it_does_not_own() -> None:
@@ -744,7 +745,7 @@ def test_a_source_is_not_charged_for_a_failure_it_does_not_own() -> None:
     assert row.source_failures == 0
     assert row.decisions == 1, "only the address the source itself decided"
     assert row.source_yield == 1.0
-    assert publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=1) is None
+    assert source_health.yield_alarm(view, alarm_point=0.5, min_decisions=1) is None
 
 
 def test_a_source_nobody_asked_has_no_yield_rather_than_a_zero() -> None:
@@ -765,7 +766,7 @@ def test_a_source_nobody_asked_has_no_yield_rather_than_a_zero() -> None:
     row = only(view)
     assert row.decisions == 0
     assert row.source_yield is None
-    assert publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=0) is None
+    assert source_health.yield_alarm(view, alarm_point=0.5, min_decisions=0) is None
 
 
 def test_a_rested_or_retired_source_is_left_out_of_the_alarm() -> None:
@@ -793,7 +794,7 @@ def test_a_rested_or_retired_source_is_left_out_of_the_alarm() -> None:
         "the rest has to be the only reason this one is left out"
     )
     assert only(rested).availability is SourceAvailability.RESTING
-    assert publish_source_health.yield_alarm(rested, alarm_point=0.5, min_decisions=1) is None
+    assert source_health.yield_alarm(rested, alarm_point=0.5, min_decisions=1) is None
 
     retired = fold(
         feeds=[resting],
@@ -802,14 +803,14 @@ def test_a_rested_or_retired_source_is_left_out_of_the_alarm() -> None:
         retired_on={derive_endpoint_key(resting.url): DATE},
     )
     assert only(retired).retired
-    assert publish_source_health.yield_alarm(retired, alarm_point=0.5, min_decisions=1) is None
+    assert source_health.yield_alarm(retired, alarm_point=0.5, min_decisions=1) is None
 
 
 def test_a_healthy_source_raises_nothing_and_the_worst_is_named_first() -> None:
     """Silence when nothing is wrong, and an order a person can act down."""
     good, good_health, good_items = _yielding("good", published=95, lost=5)
     assert (
-        publish_source_health.yield_alarm(
+        source_health.yield_alarm(
             fold(feeds=[good], health_rows=good_health, items=good_items),
             alarm_point=0.5,
             min_decisions=30,
@@ -819,7 +820,7 @@ def test_a_healthy_source_raises_nothing_and_the_worst_is_named_first() -> None:
 
     bad, bad_health, bad_items = _yielding("bad", published=0, lost=73)
     worse, worse_health, worse_items = _yielding("mid", published=26, lost=72)
-    alarm = publish_source_health.yield_alarm(
+    alarm = source_health.yield_alarm(
         fold(
             feeds=[good, bad, worse],
             health_rows=[*good_health, *bad_health, *worse_health],
@@ -896,8 +897,8 @@ def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
     settings = config.load()
     run_id = f"{_GAP_TODAY}-1"
     generated_at = f"{_GAP_TODAY}T06:20:00Z"
-    reference = publish_source_health.build(
-        feeds=publish_source_health.active_feeds(
+    reference = source_health.build(
+        feeds=source_health.active_feeds(
             settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
         ),
         collect=_GAP_SHORT,
@@ -908,8 +909,8 @@ def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
         run_id=run_id,
         generated_at=generated_at,
     )
-    path = tmp_path / "public" / publish_source_health.PUBLIC_FILENAME
-    view = publish_source_health.publish(
+    path = tmp_path / "public" / source_health.PUBLIC_FILENAME
+    view = source_health.publish(
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         collect=_GAP_SHORT,
@@ -951,7 +952,7 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
 
     monkeypatch.setattr(ledger, "load_item_health_shard", spy)
     settings = config.load()
-    publish_source_health.publish(
+    source_health.publish(
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         collect=_GAP_SHORT,
@@ -959,7 +960,7 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
         run_id=f"{_GAP_TODAY}-1",
         generated_at=f"{_GAP_TODAY}T06:20:00Z",
         state_root=state,
-        path=tmp_path / "public" / publish_source_health.PUBLIC_FILENAME,
+        path=tmp_path / "public" / source_health.PUBLIC_FILENAME,
     )
     assert set(opened) == {_day_relpath(date) for date in _GAP_SELECTED}
     assert len(opened) == _GAP_KEEP, "one file a selected date, and not one more"
@@ -985,7 +986,7 @@ def test_a_calendar_window_undercounts_the_census_a_recorded_selection_restores(
     generated_at = f"{_GAP_TODAY}T06:20:00Z"
 
     windowed = ledger.load_item_health(state, today=_GAP_TODAY, within_days=_GAP_KEEP)
-    short = publish_source_health.build(
+    short = source_health.build(
         feeds=[feed("wire")],
         collect=_GAP_SHORT,
         health=[],
@@ -998,9 +999,9 @@ def test_a_calendar_window_undercounts_the_census_a_recorded_selection_restores(
     assert short.complete_dates < _GAP_KEEP, "the calendar window is short across the gap"
     assert only(short).opportunities < 6, "and its per-source census is short with it"
 
-    selected = publish_source_health._recent_item_health(state, today=_GAP_TODAY, keep=_GAP_KEEP)
+    selected = source_health._recent_item_health(state, today=_GAP_TODAY, keep=_GAP_KEEP)
     assert sorted({row.date for row in selected}) == list(_GAP_SELECTED)
-    full = publish_source_health.build(
+    full = source_health.build(
         feeds=[feed("wire")],
         collect=_GAP_SHORT,
         health=[],

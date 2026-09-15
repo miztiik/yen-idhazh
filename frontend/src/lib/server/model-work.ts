@@ -235,7 +235,7 @@ function day(
 		// count otherwise. A re-scored item keeps two rows and a scored-then-
 		// dropped item keeps one, so the row count runs high on a day either
 		// happened; the record counts the published set once
-		// (backend/idhazh/publish_day_metrics.py). Null still means the scorer
+		// (backend/idhazh/telemetry/publish/day_metrics.py). Null still means the scorer
 		// never ran, which a count of zero cannot say.
 		summaries: scored ? (settled?.scored ?? scores.length) : null,
 		notSure: count((row) => row.band === 'low'),

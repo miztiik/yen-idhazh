@@ -44,14 +44,14 @@ See
 working?" One row per feed per run, read through `HEALTH_WINDOW_DAYS`. It files
 by day, because a run writes one day and taking a day back is one `rm`. The
 console reads it a month at a time through the published projection, which stays
-monthly: `publish_feed_health.publish` folds a month from that month's day
+monthly: `feed_health.publish` folds a month from that month's day
 files.
 
 `state/item-health/<YYYY>/<MM>/<DD>.csv` answers "what did every planned item
 do?" One row per planned item per run - the fastest-growing of the four. It
 files by day, because a run writes one day and taking a day back is one `rm`.
 The console reads it a month at a time through the published projection, which
-stays monthly: `publish_telemetry.publish` folds a month from that month's day
+stays monthly: `public_telemetry.publish` folds a month from that month's day
 files.
 
 `state/runtime-counters.csv` answers "what did the model server itself count?"
@@ -983,7 +983,7 @@ def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]
     writers. The `work` job commits a row the moment its item settles, so the
     rows survive a run that dies before it publishes; `stage_assemble` then
     writes the whole day's census, which covers the same items again. A repeat is
-    not free: `publish_telemetry` copies every row into the file the console
+    not free: `public_telemetry` copies every row into the file the console
     reads, so one duplicated row is one item counted twice on the dashboard.
 
     `merge=union` on the shard cannot help - it keeps the lines from both sides,

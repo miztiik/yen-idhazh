@@ -722,7 +722,7 @@ jobs:
       # what it commits, so it carries none of the refresh settings.
       #
       # Appending the same row twice is the one thing that would make this worse
-      # than the loss it fixes, because `publish_telemetry` copies every row into
+      # than the loss it fixes, because `public_telemetry` copies every row into
       # the file the console reads. Each of the three ledgers keys a row -
       # `ledger.append_item_health` by run and item, `evals.writer.append` by
       # observation, `ledger.append_runtime_counters` by run and shard - so

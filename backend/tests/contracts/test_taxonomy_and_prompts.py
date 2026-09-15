@@ -21,7 +21,7 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.runtime_counters import SERIES, WORK_JOB, RuntimeCountersRow
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
-from idhazh.publish_telemetry import PUBLIC_COLUMNS
+from idhazh.telemetry.publish.public_telemetry import PUBLIC_COLUMNS
 
 from ._fixtures import (
     DOC_ITEM_HEALTH,
@@ -181,7 +181,7 @@ def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None
     names = tuple(re.findall(r"'([^']+)'", declared.group(1)))
     assert names, "TELEMETRY_COLUMNS matched but held no column names"
     assert names == PUBLIC_COLUMNS[: len(names)], (
-        "series.ts and publish_telemetry.py disagree about the telemetry header: "
+        "series.ts and public_telemetry.py disagree about the telemetry header: "
         f"the console reads {list(names)}, the writer writes "
         f"{list(PUBLIC_COLUMNS[: len(names)])} in those positions"
     )
@@ -327,7 +327,7 @@ def test_the_census_refuses_a_stage_an_item_cannot_stop_at(stage: ItemStage) -> 
 
     An item whose picture failed still reaches the digest. A `visual` row here
     would say it did not, and would take one off the `publish` count that
-    `publish_day_metrics` and the console read off this same file.
+    `day_metrics` and the console read off this same file.
 
     Parametrized over whatever is not terminal rather than over `visual`, so the
     next stage name added for a log line or a clock arrives here already asked

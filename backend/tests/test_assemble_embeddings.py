@@ -26,7 +26,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pytest import MonkeyPatch
 
-from idhazh import assemble, config, embed, publish_day_metrics
+from idhazh import assemble, config, embed
 from idhazh.contracts.article import Article
 from idhazh.contracts.day_metrics import DayDistribution, DayLabelSimilarity, DayMetrics
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
@@ -38,6 +38,7 @@ from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.common import _load_day
+from idhazh.telemetry.publish import day_metrics
 from utilities import build_canary_day
 
 
@@ -503,7 +504,7 @@ class TestTheAlarmCostsTheRunNothing:
         vectors = committed_vectors()
         counter = Counter(monkeypatch)
 
-        written = publish_day_metrics.publish(
+        written = day_metrics.publish(
             state_root=tmp_path / "state",
             date=date,
             day=day,
@@ -527,7 +528,7 @@ class TestTheAlarmCostsTheRunNothing:
             pytest.skip("the encoder is not committed in this checkout")
         date, day, manifest = canary_payloads(tmp_path / "digest")
 
-        written = publish_day_metrics.publish(
+        written = day_metrics.publish(
             state_root=tmp_path / "state",
             date=date,
             day=day,
@@ -548,7 +549,7 @@ class TestTheAlarmCostsTheRunNothing:
             pytest.skip("the encoder is not committed in this checkout")
         date, day, manifest = canary_payloads(tmp_path / "digest")
 
-        written = publish_day_metrics.publish(
+        written = day_metrics.publish(
             state_root=tmp_path / "state",
             date=date,
             day=day,
@@ -570,7 +571,7 @@ class TestTheAlarmCostsTheRunNothing:
             pytest.skip("the encoder is not committed in this checkout")
         date, day, manifest = canary_payloads(tmp_path / "digest")
 
-        written = publish_day_metrics.publish(
+        written = day_metrics.publish(
             state_root=tmp_path / "state",
             date=date,
             day=day.model_copy(update={"embeddings": None}),
@@ -586,7 +587,7 @@ class TestTheAlarmCostsTheRunNothing:
             pytest.skip("the encoder is not committed in this checkout")
         date, day, manifest = canary_payloads(tmp_path / "digest")
 
-        written = publish_day_metrics.publish(
+        written = day_metrics.publish(
             state_root=tmp_path / "state", date=date, day=day, manifest=manifest
         )
 
@@ -605,7 +606,7 @@ class TestTheAlarmCostsTheRunNothing:
         if not Embedder(REPO_ROOT).available:
             pytest.skip("the encoder is not committed in this checkout")
         date, day, manifest = canary_payloads(tmp_path / "digest")
-        written = publish_day_metrics.publish(
+        written = day_metrics.publish(
             state_root=tmp_path / "state",
             date=date,
             day=day,

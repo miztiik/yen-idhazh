@@ -159,7 +159,7 @@ Expect to redo it on every rebase. Two guards make the redo safe: refuse to writ
 
 ```powershell
 git restore --source=origin/main -- frontend/public/telemetry
-python -m idhazh.publish_telemetry
+python -m idhazh.telemetry.publish.public_telemetry
 ```
 
 Before merging anything that rewrites `frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run in flight and wait it out.

@@ -4,9 +4,9 @@
 fetches and what may not cross with each. This module says WHERE each one is
 written and HOW: one file per calendar month, written only when its bytes move,
 and deleted once it is past its own configured age. Seven producer modules sit
-on top of it - `publish_scores`, `publish_feed_health`, `publish_run_days`,
-`publish_day_metrics`, `publish_machine`, `publish_span_rollup` and
-`publish_console_band` - and none of them spells a path or a prune of its own.
+on top of it - `scores`, `feed_health`, `run_days`,
+`day_metrics`, `machine`, `span_rollup` and
+`console_band` - and none of them spells a path or a prune of its own.
 
 **The root is derived, never spelled.** Every path here hangs off the digest
 root the caller hands in, the way `INDEX_ROOT` and `SOURCE_HEALTH_PATH` hang off
@@ -55,7 +55,7 @@ SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 
 #: Every root this module owns, with the suffix its month files take. The
 #: telemetry projection is not here: it predates this module and
-#: `publish_telemetry` owns its own path so that the fold which deletes a shard
+#: `public_telemetry` owns its own path so that the fold which deletes a shard
 #: and the publish which writes one cannot spell `<month>.csv` two ways.
 MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
     (SCORES_DIRNAME, ".csv"),
@@ -164,7 +164,7 @@ def months_to_write(
     so treating it as missing would read it, write it and delete it again -
     every run, for ever, on a month no console window can reach.
 
-    This is `publish_telemetry.publish`'s rule, lifted so five more producers
+    This is `public_telemetry.publish`'s rule, lifted so five more producers
     obey it rather than each restating it (Guardrail #12, decision 4 of the row).
     """
     wanted: list[str] = []

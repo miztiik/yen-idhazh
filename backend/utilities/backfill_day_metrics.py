@@ -1,7 +1,7 @@
 """Write the day-metrics record for every already-published day, once.
 
 The pipeline writes one record per published day at publication
-(`idhazh.publish_day_metrics`). The days already on disk were published before
+(`idhazh.telemetry.publish.day_metrics`). The days already on disk were published before
 that producer existed, so this one-time pass gives each of them the same record
 a fresh publication would - read from the committed day and its committed ledger
 slice, written to `state/day-metrics/<YYYY>/<MM>/<DD>.json`.
@@ -21,9 +21,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from idhazh import config, ledger, publish_day_metrics
+from idhazh import config, ledger
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.telemetry.publish import day_metrics
 
 
 def published_days(digest_root: Path) -> list[Path]:
@@ -38,7 +39,7 @@ def backfill(digest_root: Path, state_root: Path) -> list[Path]:
         day = DigestDay.read(digest_path)
         manifest = RunManifest.read(digest_path.parent / "run.json")
         written.append(
-            publish_day_metrics.publish(
+            day_metrics.publish(
                 state_root=state_root, date=day.date, day=day, manifest=manifest
             )
         )

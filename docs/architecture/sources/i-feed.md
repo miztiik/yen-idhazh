@@ -888,7 +888,7 @@ writing them as a plan earlier states decisions nobody made.
 | Existing location | Where to continue |
 | --- | --- |
 | [probe_feeds.py](../../../backend/utilities/probe_feeds.py) | Improve the admission report. Preserve production fetch/extraction behavior; replace the any-one-success admission interpretation. |
-| [publish_source_health.py](../../../backend/idhazh/publish_source_health.py) and [item health](item-health.md) | Reuse source-outcome definitions carefully. The public view's maturity is global, not each feed's history, and the public JSON is not planner control state. |
+| [source_health.py](../../../backend/idhazh/telemetry/publish/source_health.py) and [item health](item-health.md) | Reuse source-outcome definitions carefully. The public view's maturity is global, not each feed's history, and the public JSON is not planner control state. |
 | [stages/plan.py](../../../backend/idhazh/stages/plan.py) and [rank.py](../../../backend/idhazh/rank.py) | Put temporary article-access decisions before spending the next article slot. Check the owning path when implementation starts; do not use a later warning as the control. |
 | [sources.py](../../../backend/idhazh/contracts/sources.py) | Define the feed-specific catalog changes and migration first. Keep `added_on`, `retired_on` and a typed `retirement_reason`; no `retirement_note`. |
 | [discover.py](../../../backend/idhazh/discover.py) | Fix host/path matching separately from identity-changing query cleanup. There is no `/news/` allowlist to remove. |

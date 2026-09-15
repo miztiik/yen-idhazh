@@ -25,7 +25,7 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import config, elements, extract, publish_day_metrics, telemetry
+from idhazh import config, elements, extract, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.day_metrics import DayMetrics
@@ -53,6 +53,7 @@ from idhazh.contracts.taxonomy import SourceTier
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import metrics
 from idhazh.fetch import FetchResult
+from idhazh.telemetry.publish import day_metrics
 
 APP: Final = config.load(CONFIG_DIR).app
 ELEMENTS: Final = APP.elements
@@ -240,7 +241,7 @@ def _manifest() -> RunManifest:
 
 
 def _record() -> DayMetrics:
-    return publish_day_metrics.build(
+    return day_metrics.build(
         date=DATE,
         day=_day(),
         manifest=_manifest(),
@@ -339,7 +340,7 @@ def test_a_day_whose_rows_never_ran_the_pass_carries_no_block() -> None:
         {**row.csv_row(), "span_integrity": "", "elements_found": "", "element_class": ""}
         for row in _health_rows()
     ]
-    record = publish_day_metrics.build(
+    record = day_metrics.build(
         date=DATE,
         day=_day(),
         manifest=_manifest(),

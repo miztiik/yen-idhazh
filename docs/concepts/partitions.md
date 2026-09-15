@@ -15,7 +15,7 @@ state ledger is derived from the published tree:
 | --- | --- |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` |
-| `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `publish_day_metrics.write` |
+| `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` |
 | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` |
 | `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` |
 
@@ -172,12 +172,12 @@ Authority: owner, 2026-09-06.
 | Feed health | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_health` | Partitioned by **day** since 2026-09-13. The same one-date append, then it settles that one day file against `FEED_HEALTH_KEY`. Closed once the run's date leaves the day. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. Its mirror under `frontend/public/feed-health/` stays monthly, folded from that month's day files. |
 | Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
 | Counterfactual scores | `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` | Partitioned by **day** since 2026-09-14. The plan stage appends the run's own digest date and nothing else, so the day closes when the day's last run finishes. It is the one collection here whose day file is created even when the run has no rows for it: the plan job's commit step names the directory, and `git add` under `set -e` aborts on a path that is not there. Its only reader opens a trailing window, and `retention.prune_counterfactual_scores` deletes what falls below it. |
-| Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
+| Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `telemetry.publish.public_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.fold_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the fold is where the two grains meet, reading at most 31 day files and writing one. Closed the moment it is written; the days it summarises are gone, so there is nothing left to append. No file is committed yet. |
 | Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of that month's day files. It stays **monthly** while the ledger below it files by day, for the reason the folded item health gives: it summarises a month. Closed the moment it is written. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `stages.assemble.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
-| Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `publish_day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
+| Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
 | Visual prunes | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` | Partitioned by **day**, and the one collection here whose read will never carry a window - the question is the whole series. It files by day anyway, for the two things the grain buys with no read time at all: two runs collide on a file only when they are the same day, and taking a day back off the record is one `rm` rather than an edit inside a shared file, which `merge=union` cannot express. |
 
 The two collections with nothing committed are not aspirational. Both writers ship and
@@ -188,7 +188,7 @@ both ages are fourteen months.
 
 The telemetry projection `frontend/public/telemetry/<YYYY-MM>.csv` was the one
 place in the tree where the layout existed and the rule did not:
-`publish_telemetry.publish` globbed `state/item-health/` and rewrote every month
+`public_telemetry.publish` globbed `state/item-health/` and rewrote every month
 it found, on every run, for an answer it already had. That was
 [audit finding 11](../reference/data-growth-audit.md), and row 19 of the
 [constant-cost-reads plan](../../TODO/20260906-constant-cost-reads-plan.md)
@@ -213,14 +213,14 @@ their grain from different things.
  month grain the widest preset fetches five; at day grain it would fetch ninety.
 
 **So somebody has to bridge them, and it is the publisher.**
-`publish_telemetry.publish` folds a month from that month's day files through
+`public_telemetry.publish` folds a month from that month's day files through
 `day_partition.days_by_month`, and `retention.prune_telemetry` folds and deletes
 on the same boundary. A month's input is at most 31 files, so the bridge is a
 store-bounded read rather than a growing one.
 
 **A day tree's filenames are an index of which days the store holds, and a
 bridge reads that index instead of doing calendar arithmetic.**
-`publish_source_health._recent_item_health` wants the newest
+`source_health._recent_item_health` wants the newest
 `source_yield_min_complete_days` dates the ledger actually recorded, which is not
 the set a calendar window of the same width names - a gap in the record leaves
 the window short, and widening it until it is long enough reads back to the first
@@ -230,7 +230,7 @@ not do this: it says only that the store holds records somewhere inside that
 month.
 
 What the day grain costs, stated rather than implied: the unbounded case of
-`publish_telemetry.publish` opens about thirty times as many file handles for the
+`public_telemetry.publish` opens about thirty times as many file handles for the
 same rows, and every listing of the store names one entry a recorded day instead
 of one a month. What it buys is the two properties in the first bullet, and a
 windowed read that opens exactly the days it names - where a 90-day cover over
@@ -309,7 +309,7 @@ commitment to convert any of them.
 | Feed retirements | `state/feed-retirements.csv` | `ledger.append_retirements` | A retirement is permanent for one address. A run that forgot one would start asking a dead server again. |
 | Day validations | `state/day-validations.csv` | `stages.validate_days.stage_validate_days`, through `stages.validate_days._record_receipts` | A receipt file, read once a run. No window, so a partition would open every file anyway. |
 | Model validation | `state/validation-<YYYY-MM-DD>.csv` | `evals.writer.append_validation`, path from `evals.golden` | Dated, not partitioned: one file per validation, which is a one-off rather than a series. |
-| Source health view | `frontend/public/source-health.json` | `publish_source_health` | One document, rewritten whole each run. The read behind it was [audit finding 12](../reference/data-growth-audit.md); row 20 of the constant-cost-reads plan bounded it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
+| Source health view | `frontend/public/source-health.json` | `telemetry.publish.source_health` | One document, rewritten whole each run. The read behind it was [audit finding 12](../reference/data-growth-audit.md); row 20 of the constant-cost-reads plan bounded it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
 | Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by `prune.yml`, not by a calendar. Deliberately not `merge=union`, because the union of two rolls holds evicted rows again. |
 | Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` | Partitioned by **day**, and listed here because it is the tree the day grain came from rather than because it is unpartitioned. A day is frozen the moment it is written. The month partitions above are keyed off this tree, and so is `state/published/`. |
 

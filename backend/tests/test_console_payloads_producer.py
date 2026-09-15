@@ -19,16 +19,7 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import (
-    publish_console,
-    publish_console_band,
-    publish_day_metrics,
-    publish_feed_health,
-    publish_machine,
-    publish_run_days,
-    publish_scores,
-    publish_span_rollup,
-)
+from idhazh import config
 from idhazh.contracts.console_band import Health, RouteId
 from idhazh.contracts.day_metrics import DayBands, DayMetrics, DayReasons, DaySource
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
@@ -56,6 +47,17 @@ from idhazh.contracts.source_health_view import (
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import writer as score_writer
+from idhazh.telemetry.publish import (
+    console_band,
+    day_metrics,
+    dispatch,
+    feed_health,
+    machine,
+    run_days,
+    scores,
+    series,
+    span_rollup,
+)
 
 #: These are the published shapes and the committed digest tree, which is what
 #: the `contract` selector is for. Its three sibling producer modules are in
@@ -370,22 +372,22 @@ def opened(tmp_path: Path) -> Iterator[list[str]]:
 
 
 def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
-    publish_scores.publish(
+    scores.publish(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
-    publish_feed_health.publish(
+    feed_health.publish(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
-    publish_machine.publish(
+    machine.publish(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
-    publish_span_rollup.publish(
+    span_rollup.publish(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
-    publish_day_metrics.publish_public(
+    day_metrics.publish_public(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
-    publish_run_days.publish(
+    run_days.publish(
         digest_root=digest, keep_months=14, today=TODAY, months=months
     )
 
@@ -420,12 +422,12 @@ def test_the_first_run_reads_every_month_and_the_second_writes_nothing(
 ) -> None:
     """Byte equality, not a timestamp: a re-derived month is not rewritten."""
     state, digest = tree
-    first = publish_scores.publish(
+    first = scores.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
     )
     assert len(first) == len(MONTHS)
 
-    again = publish_scores.publish(
+    again = scores.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
     )
 
@@ -441,12 +443,12 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
     console asking for it would get a 404 it cannot tell from a broken deploy.
     """
     state, digest = tree
-    publish_scores.publish(
+    scores.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
     )
-    publish_scores.shard_path(digest, MONTHS[0]).unlink()
+    scores.shard_path(digest, MONTHS[0]).unlink()
 
-    written = publish_scores.publish(
+    written = scores.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months={NEWEST}
     )
 
@@ -459,12 +461,12 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
 @pytest.mark.parametrize(
     ("dirname", "suffix"),
     [
-        (publish_scores.DIRNAME, ".csv"),
-        (publish_feed_health.DIRNAME, ".csv"),
-        (publish_machine.DIRNAME, ".csv"),
-        (publish_span_rollup.DIRNAME, ".csv"),
-        (publish_day_metrics.PUBLIC_DIRNAME, ".json"),
-        (publish_run_days.DIRNAME, ".json"),
+        (scores.DIRNAME, ".csv"),
+        (feed_health.DIRNAME, ".csv"),
+        (machine.DIRNAME, ".csv"),
+        (span_rollup.DIRNAME, ".csv"),
+        (day_metrics.PUBLIC_DIRNAME, ".json"),
+        (run_days.DIRNAME, ".json"),
     ],
 )
 def test_every_series_is_pruned_to_its_own_knob(
@@ -475,7 +477,7 @@ def test_every_series_is_pruned_to_its_own_knob(
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    kept = publish_console.published_months(digest, dirname, suffix)
+    kept = series.published_months(digest, dirname, suffix)
 
     assert kept == list(MONTHS[-14:]), kept
 
@@ -485,7 +487,7 @@ def test_a_knob_below_one_month_would_delete_the_month_being_written(
 ) -> None:
     _state, digest = tree
     with pytest.raises(ValueError, match="fewer than one month"):
-        publish_console.prune_months(digest, "scores", ".csv", keep_months=0, today=TODAY)
+        series.prune_months(digest, "scores", ".csv", keep_months=0, today=TODAY)
 
 
 # --- the trust boundary ------------------------------------------------------
@@ -499,13 +501,13 @@ def test_the_score_projection_drops_the_address_and_the_fetched_title(
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    shard = publish_scores.shard_path(digest, NEWEST)
+    shard = scores.shard_path(digest, NEWEST)
     with shard.open("r", encoding="utf-8", newline="") as handle:
         header = tuple(csv.DictReader(handle).fieldnames or ())
 
     assert header == PublicEvalRow.csv_columns()
-    assert not (publish_scores.FORBIDDEN_COLUMNS & set(header))
-    assert publish_scores.read_shard(shard)[0].item_id == "energy-01"
+    assert not (scores.FORBIDDEN_COLUMNS & set(header))
+    assert scores.read_shard(shard)[0].item_id == "energy-01"
 
 
 def test_the_feed_projection_drops_the_hashed_address_and_keeps_our_own_reason(
@@ -514,7 +516,7 @@ def test_the_feed_projection_drops_the_hashed_address_and_keeps_our_own_reason(
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    rows = publish_feed_health.read_shard(publish_feed_health.shard_path(digest, NEWEST))
+    rows = feed_health.read_shard(feed_health.shard_path(digest, NEWEST))
 
     assert "endpoint_key" not in PublicFeedRow.csv_columns()
     assert {row.feed_id for row in rows} == {"grid-news", "wire-co"}
@@ -530,12 +532,12 @@ def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path])
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    assert len(publish_scores.read_shard(publish_scores.shard_path(digest, NEWEST))) == 1
-    assert len(publish_span_rollup.read_shard(publish_span_rollup.shard_path(digest, NEWEST))) == 1
-    assert len(publish_machine.read_shard(publish_machine.shard_path(digest, NEWEST))) == 2
-    assert len(publish_run_days.read_shard(publish_run_days.shard_path(digest, NEWEST))) == 1
+    assert len(scores.read_shard(scores.shard_path(digest, NEWEST))) == 1
+    assert len(span_rollup.read_shard(span_rollup.shard_path(digest, NEWEST))) == 1
+    assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
+    assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1
     assert (
-        len(publish_day_metrics.read_public_shard(publish_day_metrics.public_shard_path(digest, NEWEST)))
+        len(day_metrics.read_public_shard(day_metrics.public_shard_path(digest, NEWEST)))
         == 1
     )
 
@@ -552,7 +554,7 @@ def test_the_run_day_row_counts_the_page_and_not_the_planner(
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    row = publish_run_days.read_shard(publish_run_days.shard_path(digest, NEWEST))[0]
+    row = run_days.read_shard(run_days.shard_path(digest, NEWEST))[0]
 
     assert row.date == NEWEST_DAY
     assert row.published_items == 3
@@ -571,9 +573,9 @@ def test_a_day_with_no_manifest_costs_the_month_that_day_and_no_more(
         _day(f"{NEWEST}-02", items=1, charts=0).to_json(), encoding="utf-8"
     )
 
-    publish_run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=None)
+    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=None)
 
-    rows = publish_run_days.read_shard(publish_run_days.shard_path(digest, NEWEST))
+    rows = run_days.read_shard(run_days.shard_path(digest, NEWEST))
     assert [row.date for row in rows] == [NEWEST_DAY]
 
 
@@ -582,7 +584,7 @@ def test_a_day_with_no_manifest_costs_the_month_that_day_and_no_more(
 
 def _band(state: Path, digest: Path) -> Any:
     _publish_all(state, digest, months=None)
-    publish_console_band.publish(
+    console_band.publish(
         state_root=state,
         digest_root=digest,
         generated_at=f"{NEWEST_DAY}T19:00:00Z",
@@ -591,7 +593,7 @@ def _band(state: Path, digest: Path) -> Any:
         run=RUN,
         collect=COLLECT,
     )
-    return publish_console_band.read_band(publish_console_band.band_path(digest))
+    return console_band.read_band(console_band.band_path(digest))
 
 
 def test_the_band_names_the_newest_day_in_every_sentence(tree: tuple[Path, Path]) -> None:
@@ -639,9 +641,9 @@ def test_a_feed_that_failed_its_way_into_a_rest_is_the_loudest_thing_on_the_stri
         for n in range(1, 7)
     ]
 
-    trouble = publish_console_band.feed_trouble(rows, COLLECT.availability_strikes_before_rest)
-    worst = publish_console_band.worst_of(
-        publish_console_band.pipelines_candidates(
+    trouble = console_band.feed_trouble(rows, COLLECT.availability_strikes_before_rest)
+    worst = console_band.worst_of(
+        console_band.pipelines_candidates(
             None,
             trouble,
             floor_pct=RUN.success_floor_pct,
@@ -665,7 +667,7 @@ def test_a_feed_read_only_through_a_robots_answer_is_unread_and_not_working() ->
         for n in range(1, 4)
     ]
 
-    trouble = publish_console_band.feed_trouble(rows, COLLECT.availability_strikes_before_rest)
+    trouble = console_band.feed_trouble(rows, COLLECT.availability_strikes_before_rest)
 
     assert (trouble.rested, trouble.failed, trouble.unread) == (0, 0, 1)
 
@@ -712,14 +714,14 @@ def test_a_gate_at_either_end_of_its_decline_rate_ranks_broken() -> None:
     The row carried only the zero end until 2026-09-11, and a classifier that
     had stopped answering would have printed a reassuring tab.
     """
-    dead_low = publish_console_band.dead_gate_candidates({"desk": 0.0})
-    dead_high = publish_console_band.dead_gate_candidates({"desk": 1.0})
-    alive = publish_console_band.dead_gate_candidates({"desk": 0.4})
-    unmeasured = publish_console_band.dead_gate_candidates({"desk": None})
+    dead_low = console_band.dead_gate_candidates({"desk": 0.0})
+    dead_high = console_band.dead_gate_candidates({"desk": 1.0})
+    alive = console_band.dead_gate_candidates({"desk": 0.4})
+    unmeasured = console_band.dead_gate_candidates({"desk": None})
 
-    assert [c.severity for c in dead_low] == [publish_console_band.BROKEN]
+    assert [c.severity for c in dead_low] == [console_band.BROKEN]
     assert dead_low[0].text == "desk declines nothing"
-    assert [c.severity for c in dead_high] == [publish_console_band.BROKEN]
+    assert [c.severity for c in dead_high] == [console_band.BROKEN]
     assert dead_high[0].text == "desk declines everything"
     assert alive == []
     # The fraction is null until plan 23 row #10 lands, so the rule costs
@@ -734,9 +736,9 @@ def test_the_bounds_the_dead_gate_rule_reads_are_arguments_and_not_literals() ->
     asserts the hand-off works: a caller that passes its own floor and ceiling
     changes what fires, which is what that row will do and nothing else.
     """
-    inside = publish_console_band.dead_gate_candidates({"desk": 0.05})
-    outside = publish_console_band.dead_gate_candidates({"desk": 0.05}, floor=0.1)
-    ceiling = publish_console_band.dead_gate_candidates({"desk": 0.95}, ceiling=0.9)
+    inside = console_band.dead_gate_candidates({"desk": 0.05})
+    outside = console_band.dead_gate_candidates({"desk": 0.05}, floor=0.1)
+    ceiling = console_band.dead_gate_candidates({"desk": 0.95}, ceiling=0.9)
 
     assert inside == []
     assert [c.text for c in outside] == ["desk declines nothing"]
@@ -750,20 +752,20 @@ def test_an_editorial_fault_never_takes_the_band_from_a_failed_run() -> None:
     round it, so this drives both: a loud editorial figure is demoted to
     `EDITORIAL_CAP` with its words intact, and a dead gate keeps BROKEN.
     """
-    loud = publish_console_band.Candidate(
+    loud = console_band.Candidate(
         text="one desk holds the day",
         sentence="One desk holds most of the day, so the page reads as one story.",
-        severity=publish_console_band.BROKEN,
+        severity=console_band.BROKEN,
     )
 
-    capped = publish_console_band.editorial([loud])
+    capped = console_band.editorial([loud])
 
-    assert [c.severity for c in capped] == [publish_console_band.EDITORIAL_CAP]
+    assert [c.severity for c in capped] == [console_band.EDITORIAL_CAP]
     assert capped[0].text == loud.text and capped[0].sentence == loud.sentence
-    assert publish_console_band.EDITORIAL_CAP < publish_console_band.BROKEN
+    assert console_band.EDITORIAL_CAP < console_band.BROKEN
     assert [
-        c.severity for c in publish_console_band.dead_gate_candidates({"desk": 1.0})
-    ] == [publish_console_band.BROKEN]
+        c.severity for c in console_band.dead_gate_candidates({"desk": 1.0})
+    ] == [console_band.BROKEN]
 
 
 def test_voices_names_a_feed_the_ranker_has_discounted_as_far_as_it_goes() -> None:
@@ -781,14 +783,14 @@ def test_voices_names_a_feed_the_ranker_has_discounted_as_far_as_it_goes() -> No
         _source("quiet-co", publications=40, failures=0, reliability=1.0, reliability_reads=0),
     ]
 
-    found = publish_console_band.voices_candidates(
+    found = console_band.voices_candidates(
         rows,
         reliability_floor=COLLECT.reliability_floor,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,
     )
 
     assert [c.text for c in found] == ["1 feed discounted to the floor"]
-    assert found[0].severity == publish_console_band.WORTH_A_LOOK
+    assert found[0].severity == console_band.WORTH_A_LOOK
     assert "50% floor" in found[0].sentence
 
 
@@ -808,15 +810,15 @@ def test_a_source_too_thin_to_judge_carries_its_denominator_and_is_ranked_lower(
         _source("gone-co", publications=0, failures=0, retired=True),
     ]
 
-    found = publish_console_band.voices_candidates(
+    found = console_band.voices_candidates(
         rows,
         reliability_floor=COLLECT.reliability_floor,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,
     )
 
     assert [c.text for c in found] == ["1 of 2 sources too thin to judge"]
-    assert found[0].severity == publish_console_band.WORTH_KNOWING
-    assert found[0].severity < publish_console_band.WORTH_A_LOOK
+    assert found[0].severity == console_band.WORTH_KNOWING
+    assert found[0].severity < console_band.WORTH_A_LOOK
 
 
 def test_the_strip_carries_five_routes_and_every_one_answers_at_its_own_address(
@@ -913,7 +915,7 @@ def test_the_band_is_written_only_when_its_bytes_move(tree: tuple[Path, Path]) -
     state, digest = tree
     _publish_all(state, digest, months=None)
     stamp = f"{NEWEST_DAY}T19:00:00Z"
-    first = publish_console_band.publish(
+    first = console_band.publish(
         state_root=state,
         digest_root=digest,
         generated_at=stamp,
@@ -923,7 +925,7 @@ def test_the_band_is_written_only_when_its_bytes_move(tree: tuple[Path, Path]) -
         collect=COLLECT,
     )
 
-    again = publish_console_band.publish(
+    again = console_band.publish(
         state_root=state,
         digest_root=digest,
         generated_at=stamp,
@@ -944,33 +946,33 @@ def test_the_band_payload_is_small_enough_to_arrive_first(tree: tuple[Path, Path
     state, digest = tree
     _band(state, digest)
 
-    assert publish_console_band.band_path(digest).stat().st_size <= 8 * 1024
+    assert console_band.band_path(digest).stat().st_size <= 8 * 1024
 
 
 # --- words -------------------------------------------------------------------
 
 
 def test_a_total_that_rounds_to_nothing_still_says_it_ran() -> None:
-    assert publish_console_band.clock(None) is None
-    assert publish_console_band.clock(0) is None
-    assert publish_console_band.clock(1_000) == "<1 m"
-    assert publish_console_band.clock(90 * 60_000) == "1 h 30 m"
+    assert console_band.clock(None) is None
+    assert console_band.clock(0) is None
+    assert console_band.clock(1_000) == "<1 m"
+    assert console_band.clock(90 * 60_000) == "1 h 30 m"
 
 
 def test_a_count_prints_at_the_precision_its_basis_supports() -> None:
     """Three significant figures stops a large answer claiming a hundred
     articles of accuracy nothing measured (Guardrail #10)."""
-    assert publish_console_band.roughly(0) == "0"
-    assert publish_console_band.roughly(7) == "7"
-    assert publish_console_band.roughly(306_712) == "307,000"
+    assert console_band.roughly(0) == "0"
+    assert console_band.roughly(7) == "7"
+    assert console_band.roughly(306_712) == "307,000"
 
 
 def test_the_band_root_list_and_the_published_series_agree() -> None:
     """One list of roots, so a series added without a seed cannot pass the
     fresh-checkout guard by being absent from it."""
-    series = {dirname for dirname, _suffix in publish_console.MONTH_SERIES}
+    dirnames = {dirname for dirname, _suffix in series.MONTH_SERIES}
 
-    assert series | {publish_console.CONSOLE_DIRNAME} == set(publish_console.PUBLISHED_ROOTS)
+    assert dirnames | {series.CONSOLE_DIRNAME} == set(series.PUBLISHED_ROOTS)
 
 
 def test_every_published_root_is_derived_from_the_digest_root(tmp_path: Path) -> None:
@@ -978,10 +980,10 @@ def test_every_published_root_is_derived_from_the_digest_root(tmp_path: Path) ->
     tree, and every canary assertion non-deterministic."""
     canary = tmp_path / "canary" / "digest"
 
-    for dirname, suffix in publish_console.MONTH_SERIES:
-        path = publish_console.month_path(canary, dirname, "2026-09", suffix)
+    for dirname, suffix in series.MONTH_SERIES:
+        path = series.month_path(canary, dirname, "2026-09", suffix)
         assert path.is_relative_to(tmp_path / "canary")
-    assert publish_console_band.band_path(canary).is_relative_to(tmp_path / "canary")
+    assert console_band.band_path(canary).is_relative_to(tmp_path / "canary")
 
 
 def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
@@ -993,7 +995,7 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
     _publish_all(state, digest, months=None)
 
     payload = json.loads(
-        publish_run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8")
+        run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8")
     )
 
     assert isinstance(payload, list)
@@ -1001,3 +1003,50 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
         __import__("idhazh.contracts.public_run_day", fromlist=["PublicRunDay"])
         .PublicRunDay.schema_version()
     }
+
+
+# --- the dispatcher ----------------------------------------------------------
+
+
+def test_the_dispatcher_routes_every_registered_projection_exactly_once(
+    tree: tuple[Path, Path],
+) -> None:
+    """The route it took, held against the route it declares.
+
+    `PROJECTIONS` is what `publish_all` walks, so a projection listed there runs
+    and one that is not listed never does. What a hand-written registry can still
+    get wrong is a repeated name - two entries would collide on one writer and
+    the second would silently run the first again - so the count and the order
+    are both asserted, not just the set.
+    """
+    state, digest = tree
+    published = dispatch.publish_all(
+        state_root=state,
+        digest_root=digest,
+        date=NEWEST_DAY,
+        month=NEWEST,
+        today=TODAY,
+        run_id=f"{NEWEST_DAY}-1",
+        generated_at=f"{NEWEST_DAY}T18:00:00Z",
+        day=_day(NEWEST_DAY, items=3, charts=1),
+        manifest=_manifest(NEWEST_DAY, planned=4, succeeded=3, failed=1, site_bytes=1_000_000),
+        settings=config.load(),
+        taxonomy_vectors=None,
+    )
+
+    declared = tuple(projection.name for projection in dispatch.PROJECTIONS)
+    assert published.dispatched == declared
+    assert len(set(declared)) == len(declared), "two entries would share one writer"
+
+
+def test_every_module_in_the_publish_package_is_reachable_from_the_dispatcher() -> None:
+    """A projection nobody registered is a payload no run writes.
+
+    Two modules are deliberately absent: `dispatch` itself, and `series`, which
+    is the write rule the month-sharded payloads obey rather than a payload of
+    its own.
+    """
+    package = Path(dispatch.__file__).parent
+    modules = {path.stem for path in package.glob("*.py")} - {"__init__", "dispatch", "series"}
+
+    assert {projection.module for projection in dispatch.PROJECTIONS} == modules

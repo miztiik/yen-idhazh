@@ -18,11 +18,12 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger, month_partition, publish_console
+from idhazh import ledger, month_partition
 from idhazh.contracts.span_rollup import SpanRollupRow
+from idhazh.telemetry.publish import series
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = SpanRollupRow.csv_columns()
-DIRNAME: Final = publish_console.SPAN_ROLLUP_DIRNAME
+DIRNAME: Final = series.SPAN_ROLLUP_DIRNAME
 SUFFIX: Final = ".csv"
 
 __all__ = [
@@ -39,12 +40,12 @@ __all__ = [
 
 def shard_path(digest_root: Path, month: str) -> Path:
     """The browser's copy of one span-rollup month."""
-    return publish_console.month_path(digest_root, DIRNAME, month, SUFFIX)
+    return series.month_path(digest_root, DIRNAME, month, SUFFIX)
 
 
 def shard_relpath(month: str) -> str:
     """`frontend/public/span-rollup/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return publish_console.relpath(DIRNAME, f"{month}{SUFFIX}")
+    return series.relpath(DIRNAME, f"{month}{SUFFIX}")
 
 
 def project(source: Path) -> list[SpanRollupRow]:
@@ -87,9 +88,9 @@ def publish(
 
     def encode(month: str) -> bytes:
         rows = project(source_dir / f"{month}{SUFFIX}")
-        return publish_console.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
+        return series.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
 
-    return publish_console.publish_series(
+    return series.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,

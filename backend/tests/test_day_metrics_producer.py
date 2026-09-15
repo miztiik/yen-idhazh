@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from idhazh import ledger, publish_day_metrics
+from idhazh import ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.day_metrics import DayInstrument, DayMetrics, DayStageTiming
 from idhazh.contracts.digest_day import (
@@ -51,6 +51,7 @@ from idhazh.contracts.run_manifest import (
 )
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import writer as eval_writer
+from idhazh.telemetry.publish import day_metrics
 
 DATE = "2026-08-20"
 
@@ -319,11 +320,11 @@ def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
     eval_writer.append(state_root, _scores())
     ledger.append_item_health(state_root, DATE, _timed_health())
 
-    path = publish_day_metrics.day_metrics_path(state_root, DATE)
+    path = day_metrics.day_metrics_path(state_root, DATE)
     # RED: no producer has run, so the record does not exist.
     assert not path.exists()
 
-    written = publish_day_metrics.publish(
+    written = day_metrics.publish(
         state_root=state_root, date=DATE, day=_day(), manifest=_manifest()
     )
 
@@ -384,7 +385,7 @@ def test_throughput_sums_only_the_timed_items(tmp_path: Path) -> None:
     ledger.append_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
-        publish_day_metrics.publish(
+        day_metrics.publish(
             state_root=state_root, date=DATE, day=_day(), manifest=_manifest()
         )
     )
@@ -406,7 +407,7 @@ def test_stage_timing_counts_the_failed_fetch(tmp_path: Path) -> None:
     ledger.append_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
-        publish_day_metrics.publish(
+        day_metrics.publish(
             state_root=state_root, date=DATE, day=_day(), manifest=_manifest()
         )
     )
@@ -433,7 +434,7 @@ def test_instruments_are_nearest_rank_quartiles(tmp_path: Path) -> None:
     ledger.append_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
-        publish_day_metrics.publish(
+        day_metrics.publish(
             state_root=state_root, date=DATE, day=_day(), manifest=_manifest()
         )
     )
@@ -461,7 +462,7 @@ def test_a_correction_rewrites_the_record_whole(tmp_path: Path) -> None:
     eval_writer.append(state_root, _scores())
     ledger.append_item_health(state_root, DATE, _timed_health())
 
-    publish_day_metrics.publish(
+    day_metrics.publish(
         state_root=state_root, date=DATE, day=_day(), manifest=_manifest()
     )
 
@@ -475,7 +476,7 @@ def test_a_correction_rewrites_the_record_whole(tmp_path: Path) -> None:
             ]
         }
     )
-    path = publish_day_metrics.publish(
+    path = day_metrics.publish(
         state_root=state_root, date=DATE, day=_day(), manifest=corrected
     )
 
@@ -492,7 +493,7 @@ def test_a_day_that_timed_nothing_has_no_throughput(tmp_path: Path) -> None:
     # No item-health ledger at all, as on the injection canary day.
 
     metrics = DayMetrics.read(
-        publish_day_metrics.publish(
+        day_metrics.publish(
             state_root=state_root, date=DATE, day=_day(), manifest=_manifest()
         )
     )
@@ -551,7 +552,7 @@ def test_scored_counts_distinct_published_items_not_ledger_rows(tmp_path: Path) 
     )
 
     metrics = DayMetrics.read(
-        publish_day_metrics.publish(
+        day_metrics.publish(
             state_root=state_root, date=DATE, day=day, manifest=manifest
         )
     )

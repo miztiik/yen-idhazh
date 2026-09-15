@@ -36,7 +36,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger, publish_console
+from idhazh import ledger
 from idhazh.assemble import TaxonomyVectors, nearest_label_cosines, write_atomic
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.day_metrics import (
@@ -59,6 +59,7 @@ from idhazh.contracts.run_manifest import ModelRole, RunManifest
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import writer as eval_writer
 from idhazh.evals.metrics import extractable_but_unused_rate, span_integrity_rate
+from idhazh.telemetry.publish import series
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -717,18 +718,18 @@ def backfill(state_root: Path, days: Iterable[tuple[str, DigestDay, RunManifest]
 # every day of the month an operator is panning over.
 
 
-PUBLIC_DIRNAME: Final = publish_console.DAY_METRICS_DIRNAME
+PUBLIC_DIRNAME: Final = series.DAY_METRICS_DIRNAME
 PUBLIC_SUFFIX: Final = ".json"
 
 
 def public_shard_path(digest_root: Path, month: str) -> Path:
     """The browser's copy of one month of day records."""
-    return publish_console.month_path(digest_root, PUBLIC_DIRNAME, month, PUBLIC_SUFFIX)
+    return series.month_path(digest_root, PUBLIC_DIRNAME, month, PUBLIC_SUFFIX)
 
 
 def public_shard_relpath(month: str) -> str:
     """`frontend/public/day-metrics/<YYYY-MM>.json` - the POSIX form, for a log line."""
-    return publish_console.relpath(PUBLIC_DIRNAME, f"{month}{PUBLIC_SUFFIX}")
+    return series.relpath(PUBLIC_DIRNAME, f"{month}{PUBLIC_SUFFIX}")
 
 
 def records_in_month(state_root: Path, month: str) -> list[DayMetrics]:
@@ -791,7 +792,7 @@ def publish_public(
         rows = records_in_month(state_root, month)
         return canonical_json([row.model_dump(mode="json") for row in rows]).encode("utf-8")
 
-    return publish_console.publish_series(
+    return series.publish_series(
         digest_root=digest_root,
         dirname=PUBLIC_DIRNAME,
         suffix=PUBLIC_SUFFIX,

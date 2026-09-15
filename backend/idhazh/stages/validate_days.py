@@ -17,24 +17,24 @@ from typing import Final
 
 from pydantic import ValidationError
 
-from idhazh import (
-    ledger,
-    publish_console,
-    publish_console_band,
-    publish_day_metrics,
-    publish_feed_health,
-    publish_machine,
-    publish_run_days,
-    publish_scores,
-    publish_span_rollup,
-    publish_telemetry,
-)
+from idhazh import ledger
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.render.write import assets_in_day
 from idhazh.stages.common import LOG, published_days
+from idhazh.telemetry.publish import (
+    console_band,
+    day_metrics,
+    feed_health,
+    machine,
+    public_telemetry,
+    run_days,
+    scores,
+    series,
+    span_rollup,
+)
 
 
 def _picture_faults(public_root: Path, day: DigestDay) -> list[str]:
@@ -431,7 +431,7 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
     point of that case, because a contract change can invalidate any file.
 
     Six of the seven directories are trimmed on every assemble by
-    `publish_console.prune_months`, so the sweep opens at most their own
+    `series.prune_months`, so the sweep opens at most their own
     `public_*_keep_months` files. `telemetry` is the exception and says so here
     rather than in a sentence that would be wrong: its deletion lives in
     `retention.prune_telemetry`, inside the workflow step that ships
@@ -445,33 +445,33 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
     """
     faults: list[str] = []
     readers: tuple[tuple[str, str, Callable[[Path], object]], ...] = (
-        (publish_scores.DIRNAME, publish_scores.SUFFIX, publish_scores.read_shard),
-        (publish_feed_health.DIRNAME, publish_feed_health.SUFFIX, publish_feed_health.read_shard),
-        (publish_machine.DIRNAME, publish_machine.SUFFIX, publish_machine.read_shard),
-        (publish_span_rollup.DIRNAME, publish_span_rollup.SUFFIX, publish_span_rollup.read_shard),
+        (scores.DIRNAME, scores.SUFFIX, scores.read_shard),
+        (feed_health.DIRNAME, feed_health.SUFFIX, feed_health.read_shard),
+        (machine.DIRNAME, machine.SUFFIX, machine.read_shard),
+        (span_rollup.DIRNAME, span_rollup.SUFFIX, span_rollup.read_shard),
         (
-            publish_day_metrics.PUBLIC_DIRNAME,
-            publish_day_metrics.PUBLIC_SUFFIX,
-            publish_day_metrics.read_public_shard,
+            day_metrics.PUBLIC_DIRNAME,
+            day_metrics.PUBLIC_SUFFIX,
+            day_metrics.read_public_shard,
         ),
-        (publish_run_days.DIRNAME, publish_run_days.SUFFIX, publish_run_days.read_shard),
-        (publish_telemetry.PUBLIC_TELEMETRY_DIRNAME, ".csv", publish_telemetry.read_shard),
+        (run_days.DIRNAME, run_days.SUFFIX, run_days.read_shard),
+        (public_telemetry.PUBLIC_TELEMETRY_DIRNAME, ".csv", public_telemetry.read_shard),
     )
     for dirname, suffix, read in readers:
-        for month in publish_console.published_months(root, dirname, suffix):
+        for month in series.published_months(root, dirname, suffix):
             if months is not None and month not in months:
                 continue
-            path = publish_console.month_path(root, dirname, month, suffix)
+            path = series.month_path(root, dirname, month, suffix)
             try:
                 read(path)
             except (ValueError, ValidationError, OSError) as fault:
-                faults.append(f"{publish_console.relpath(dirname, path.name)}: {fault}")
-    band = publish_console_band.band_path(root)
+                faults.append(f"{series.relpath(dirname, path.name)}: {fault}")
+    band = console_band.band_path(root)
     if band.is_file():
         try:
-            publish_console_band.read_band(band)
+            console_band.read_band(band)
         except (ValueError, ValidationError, OSError) as fault:
-            faults.append(f"{publish_console_band.BAND_RELPATH}: {fault}")
+            faults.append(f"{console_band.BAND_RELPATH}: {fault}")
     elif band.parent.is_dir():
         # A console directory with no band in it is a producer that ran and
         # wrote nothing, which is a fault. No console directory at all is a tree
@@ -479,7 +479,7 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
         # and this gate cannot tell that from broken, so it says nothing. What
         # guarantees the real tree has one is the committed seed, which
         # `test_every_path_the_day_stages_exists_in_a_fresh_checkout` asks for.
-        faults.append(f"{publish_console_band.BAND_RELPATH} is missing")
+        faults.append(f"{console_band.BAND_RELPATH} is missing")
     return faults
 
 
