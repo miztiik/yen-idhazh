@@ -98,41 +98,32 @@ Fire it with `gh workflow run idhazh-pipeline-tests.yaml --ref main`. It publish
 
 `item.abandoned` is wired but unreachable - the model loop cannot exit early, so the sweep over unclosed recorders is always empty. It is there so that an early exit added later says so rather than dropping items silently.
 
-## 4. The ten tests that read committed data
+## 4. The ten tests that read committed data - closed
 
-CLAUDE.md section 13 forbids a test that reads committed data to ask whether the data is well formed. An audit found twelve. Two are already gone, deleted by #755 once the settlement pass took over their question. Ten remain.
+CLAUDE.md section 13 forbids a test that reads committed data to ask whether the data is well formed. An audit found twelve. Two were deleted by #755 once the settlement pass took over their question. **The remaining ten landed on 2026-09-15 and this section is the record of what each one became.**
 
-**A fourth case the rule does not name, and it is the biggest group here:** a test asking a legitimate question about *code* that happens to be driven from committed data. That is not a data-hygiene check. It is a good test wired to the wrong input, and the fix is to build the input.
+**A fourth case the rule does not name, and it was the biggest group here:** a test asking a legitimate question about *code* that happens to be driven from committed data. That is not a data-hygiene check. It is a good test wired to the wrong input, and the fix was to build the input.
 
-### Group A - build the input (six)
-
-Each asks about code. Each reads the archive to get its input. Each fires on a date nobody chose.
-
-| # | Where | What it really asks | What fires it |
+| # | Where | What it really asked | What it reads now |
 | --- | --- | --- | --- |
-| 1 | `backend/tests/test_ledger.py` - the prefill-rate oracle needs `2026-08-26` to hold over 100 parts | does the oracle compute a rate | **a retention roll.** Its own message says so. An armed fuse on a calendar date |
-| 2 | `backend/tests/test_telemetry.py` - the newest item-health shard still takes a row | does the read-side migration work | a widening landing before that shard migrates |
-| 3 | `backend/tests/pipeline/test_eval_ledger.py`, `_newest_committed_day` | same, for `EvalRow` | same |
-| 4 | `backend/tests/test_publish_telemetry.py` - the newest published shard reads back and is LF | same, for `PublicTelemetryRow` | same |
-| 5 | `backend/tests/test_measure_budgets.py` - the corpus yields the samples asked for | does the sampler sample | a prune shrinking the corpus |
-| 6 | `backend/tests/contracts/test_committed_days.py` - three callers want one day that validates | does the validator validate | a short or shallow checkout |
+| 1 | `backend/tests/test_ledger.py` - the prefill-rate oracle | does the oracle compute a rate | run `2026-08-26-5`'s 160 rows, captured under `tests/fixtures/state/prefill-oracle/`. Pools to the same 11.1755 tok/s the committed file did, so the fixture is the same evidence rather than a smaller one |
+| 2 | `backend/tests/test_telemetry.py` - the item-health append | does the read-side migration work | a day file written under a header from before the truncation counters existed. The old row's `source_words_before_cap` has to migrate to empty, which the archive no longer holds an example of |
+| 3 | `backend/tests/pipeline/test_eval_ledger.py` | same, for `EvalRow` | **deleted.** `test_appending_under_a_stale_header_fails_loudly` and `test_the_ledger_writes_its_header_once` already prove both halves from built files |
+| 4 | `backend/tests/test_publish_telemetry.py` | same, for `PublicTelemetryRow` | **deleted.** Two built shards already prove the prefix read and the refusal. Its one unique claim, LF, moved onto a shard the test publishes |
+| 5 | `backend/tests/test_measure_budgets.py` - five tests | does the sampler sample | a corpus the test writes from the committed `corpus-row` fixture, ten rows of different lengths |
+| 6 | `backend/tests/contracts/test_committed_days.py` - three callers | does the validator validate | the day the seed case already proves the gate accepts whole. The default is still followed: `common.PUBLIC_ROOT` is redirected to a built tree |
+| 7 | `backend/tests/workflows/test_staged_paths.py` | - | the `exists()` assertion is **deleted**. Staging `state` whole is correct whether or not the two late stores have appeared |
+| 8 | `backend/tests/contracts/test_run_plan.py` - `min_feeds` | - | **moved to the producer.** `stages/plan._plan_desks` warns by name when an active desk goes silent on its floor |
+| 9 | `backend/tests/test_search_index.py` - four tests | does the writer hold its bijection | a month built to carry a vector, a gap and a day with no embeddings block. The archive has never held all three at once |
+| 10 | `backend/tests/test_ledger.py` - seeded stores | - | **moved to `backend/utilities/check_seeded_stores.py`**, which pytest does not collect. The path and header assertions stayed, because a code change can break those |
 
-**Rows 2, 3 and 4 are the same test three times, and all three are written backwards.** A read-side migration is proved by REMOVING the key from a built fixture, which cannot age out. That is already written into CLAUDE.md section 13; these three predate it.
+**Two of the same kind were left, and neither was on the audit's list.** `test_staged_paths.py::test_every_path_the_day_stages_exists_in_a_fresh_checkout` is a larger clone check that also shells out to `git ls-files`. `test_search_index.py::TestTheCommittedShard` is explicitly about the published shard agreeing with the published days, which is a reader-facing claim and wants a producer home rather than a fixture.
 
-### Group B - move the question or delete it (four)
+### The pattern still worth writing into the contract
 
-| # | Where | Fate | Why |
-| --- | --- | --- | --- |
-| 7 | `backend/tests/workflows/test_staged_paths.py` - asserts `state/telemetry-aggregate/` and `state/score-archive/` do **not** exist | **delete** | Its own message says it asserts the wrong thing. It fires the day production first writes either store |
-| 8 | `backend/tests/contracts/test_run_plan.py` - every active vertical clears `min_feeds` | **producer** | A feed-health question. Belongs in `idhazh validate-days` or the health surface. Fires on a source outage |
-| 9 | `backend/tests/test_search_index.py` - every item of the current month appears once and decodes the same | **producer** | `validate-days` already walks each day it writes |
-| 10 | `backend/tests/test_ledger.py` - seeded stores exist in a fresh checkout | **operator surface** under `backend/utilities/`, which pytest does not run | It is a clone check, not a code check |
+Three of these - rows 1, 7 and the one already fixed - asserted something **production owns**: a retention roll, a store being created, a day being long enough. **None can be fired by a code change, so none was catchable in review.** They went red on a pull request that did not touch them.
 
-### The pattern worth writing into the contract
-
-Three of these - rows 1, 7 and the one already fixed - assert something **production owns**: a retention roll, a store being created, a day being long enough. **None can be fired by a code change, so none is catchable in review.** They go red on a pull request that did not touch them.
-
-CLAUDE.md section 13 already names the migration case. It does not name this one. Proposing that sentence is a legitimate part of this work.
+CLAUDE.md section 13 already names the migration case. It does not name this one. **Proposing that sentence is still open, and it is the owner's to approve.**
 
 ## 5. Casual observations, none of them urgent
 
@@ -151,7 +142,7 @@ CLAUDE.md section 13 already names the migration case. It does not name this one
 | 1 | **Fix the slowdown how?** The instrument is built and the diagnosis is settled. The fix will touch an output budget, a truncation cap, or the call sequence | Section 3.1's escalation line. **Level 5** |
 | 2 | **Should the label call still ask for `keyphrases` and `lede_sentence_ids`?** Zero consumers, and the call is 39.3 percent of model time | Editor rules what the digest carries |
 | 3 | **Is a story with no headline dropped or published untitled?** It is dropped today. Every downstream surface already has an "Untitled item" fallback, so publishing is a one-line revert | Editor rules what runs, CLAUDE.md section 14 |
-| 4 | Plan the ten tests in section 4, or just execute them? | A day of mechanical work against a clear spec |
+| 4 | ~~Plan the ten tests in section 4, or just execute them?~~ **Closed 2026-09-15: executed.** Section 4 is now the record of what each became | - |
 | 5 | Should the published telemetry mirror move from month grain to day, to match `state/`? | The console's 90-day view is 5 fetches at month grain and up to 90 at day grain. **Level 5** - the day-sharding plan lists it as an escalation trigger |
 | 6 | Is `n_parallel: 2` worth taking to production? | Unmeasured. Section 3.3's rig answers it in 140 minutes |
 
