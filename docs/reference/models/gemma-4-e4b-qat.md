@@ -13,7 +13,7 @@ each figure is the one the instrument recorded, moved rather than restated.
 
 **This page says how fast, and it does not say how good.** The bench reads
 throughput, memory and wall-clock. It does not grade a summary and it does not
-decide whether this model publishes - that is the qualification arm, which runs
+decide whether this model publishes - that is the qualification case, which runs
 separately and has not run against these weights. Read every number here as a
 cost, never as a recommendation.
 
@@ -127,24 +127,24 @@ A second dispatch of the same weights with `draft` set to null ran 5 seconds
 later on 2026-09-15. It is not on this page as a comparison, and the reason is
 the instrument rather than the result.
 
-| Arm | Processor | A whole repeat, median |
+| Case | Processor | A whole repeat, median |
 | --- | --- | --- |
 | With the `draft-mtp` head | AMD EPYC 7763 | 3,970 s |
 | With no draft head | AMD EPYC 9V74 | 4,192 s |
 
-**GitHub put the two arms on different processors, so the 5.3 percent between
+**GitHub put the two cases on different processors, so the 5.3 percent between
 them is not attributable to the head.** The size of the confound is measurable
 and was measured: the same `llama-bench` decode test, on the same weights, on
 two machines both reporting EPYC 7763, differed by 8.8 percent between these two
 runs - 9.676 against 10.532 tok/s. A 5.3 percent difference read across two runs
 sits under an 8.8 percent between-run spread, so this pair says nothing.
 
-**The instrument that could answer it is a paired arm**: both configurations
+**The instrument that could answer it is a paired case**: both configurations
 alternating inside one job, on one machine, which cancels the machine. The bench
 already runs that shape - `runtime_candidate` alternates a baseline against a
 named variant - but every variant it offers today is an `inference` knob, and the
 draft head is a sibling of `inference` rather than a knob inside it. No second
-download is needed, because both arms open the same weights file.
+download is needed, because both cases open the same weights file.
 
 Until that runs, this project has no reading of what the draft head is worth, and
 none may be quoted.
@@ -152,7 +152,7 @@ none may be quoted.
 ## What this page still owes
 
 - **The qualification verdict.** Nothing here says the model writes a faithful
-  summary. Until the qualification arm has run, this model may not be adopted.
+  summary. Until the qualification case has run, this model may not be adopted.
 - **The licence row.** Gemma ships under its own terms rather than an SPDX
   identifier, and nobody has read them against this project's use yet.
 - **The tokenizer cost.** Tokens a word decides how much article fits the window,
@@ -164,7 +164,7 @@ none may be quoted.
 | What | Where |
 | --- | --- |
 | The bench dispatch behind every reading above | GitHub Actions run `34972996987`, 2026-09-15 |
-| The no-draft arm quoted and set aside | GitHub Actions run `34973005911`, 2026-09-15 |
+| The no-draft case quoted and set aside | GitHub Actions run `34973005911`, 2026-09-15 |
 | The recorded `--spec-type` list the pinned build accepts | `tests/fixtures/runtime/b10598-llama-server-help.txt`, from run `34971210901` |
 | The declared identity | `config/models/gemma-4-e4b-qat.json` |
 
