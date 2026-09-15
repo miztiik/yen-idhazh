@@ -30,6 +30,7 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -69,6 +70,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "The failure vocabulary gained model_refused. Additive, so every published month still reads.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row, where the vocabulary is declared. A published series that cannot say a server answered with an error reports it as a network fault instead."
+    },
     {
       "change": "queue_wait_ms, item_total_ms and the two prefill rates keep their names and change what they mean, following the census columns they are projected from.",
       "version": "2026-09-15T19:40",
@@ -672,7 +678,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-15T19:40",
+      "default": "2026-09-15T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -735,5 +741,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-15T19:40"
+  "version": "2026-09-15T20:00"
 }

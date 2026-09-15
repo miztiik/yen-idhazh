@@ -407,8 +407,12 @@ def _ask_the_model(
             # refused. It is a stream, so read it once.
             completion = None
             with error:
-                if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
-                    no_reply = FailureCode.CONTEXT_EXCEEDED
+                body = error.read().decode("utf-8", errors="replace")
+            no_reply = (
+                FailureCode.CONTEXT_EXCEEDED
+                if is_context_exceeded(body)
+                else FailureCode.MODEL_REFUSED
+            )
             _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
         except OSError as error:
             completion = None
@@ -517,7 +521,7 @@ def _one_call(
         no_reply = (
             FailureCode.CONTEXT_EXCEEDED
             if is_context_exceeded(body)
-            else FailureCode.MODEL_UNREACHABLE
+            else FailureCode.MODEL_REFUSED
         )
     except OSError:
         completion = None

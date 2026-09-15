@@ -286,6 +286,7 @@ Interpret them in this order:
 | Article is `ok` with `too_short`, `not_prose` or `boilerplate` | This is a recorded shape signal. The item can still continue, usually as `brief`. |
 | Article is `ok`, no summary file | The process stopped between extraction and the model result. Check server health and stderr. |
 | Summary `model_unreachable` | Nothing is listening at `127.0.0.1:8080`, or the local server died. |
+| Summary `model_refused` | The server answered, and the answer was an error. It is up, so do not restart it - read the last 50 lines of `llama-server.log` and check the flags the entry declares. A wrong `draft.spec_type` fails every request this way. |
 | Summary `context_exceeded` | The server answered HTTP 400: the prompt plus the reply budget did not fit `--ctx-size`. Shorten the source, not the server. |
 | Summary `output_truncated` | The model exhausted the configured output budget before closing its JSON. |
 | Summary `labels_truncated` | The labelling call exhausted ITS output budget, so the call that writes the summary was never sent. That budget is derived from the labelling grammar in `classify.calls.label_budget_tokens`, not from `models.summarize.inference.max_answer_tokens`. |

@@ -71,6 +71,11 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T20:00",
+            change="The embedded failure vocabulary gained model_refused.",
+            why="It follows item-health-row, where the vocabulary is declared.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T12:00",
             change="title_source records a trust decision, not provenance alone.",
             why=(
