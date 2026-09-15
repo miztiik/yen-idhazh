@@ -549,7 +549,7 @@ Each Measurements dispatch selects exactly one target:
 | `llm` | GGUF download timing and `llama-bench` throughput | `models`, `threads` |
 | `image` | CPU image-model candidates | none |
 | `corpus` | Live article-length sampling | `corpus_links` |
-| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
+| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_repeats`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
 | `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |
 
 The form keeps all target-specific inputs visible. A job reads only the inputs
