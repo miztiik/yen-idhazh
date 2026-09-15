@@ -37,6 +37,7 @@ from idhazh.contracts.item_health import (
     FailureCode,
     ItemOutcome,
     ItemStage,
+    OneLine,
 )
 
 #: The three source-ledger cells that may never reach a browser. `detail` is
@@ -56,12 +57,73 @@ FORBIDDEN_COLUMNS: Final[frozenset[str]] = frozenset({"canonical_url", "url_key"
 #: and never a path segment.
 PublicItemKey = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
+#: The stages `stage_gap_ms` is the remainder of. They tile the item without
+#: overlapping, which is why `label_ms` and `summary_ms` are not among them: the
+#: two are a split of `summarize_ms`, so counting them here would charge the
+#: model stage twice and drive the gap negative on every item.
+#:
+#: A second copy of `idhazh.itemrecord.NAMED_STAGE_MS`, which is what writes the
+#: cell. Contracts are the bottom of the dependency graph and may not import the
+#: module that fills them, so the two lists are held equal by a test rather than
+#: by an import.
+GAP_NAMED_STAGES: Final = ("fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms")
+
 
 class PublicTelemetryRow(Contract):
     """One planned item on one run, as the console is allowed to read it."""
 
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T08:20",
+            change=(
+                "Appended seventeen nullable cells: queue_wait_ms, label_ms, summary_ms, "
+                "visual_plan_ms, visual_plan_ms_is_estimate, faithfulness_ms, "
+                "model_wait_ms, item_total_ms, stage_gap_ms, visual_plan_tokens_written, "
+                "the four per-call prefill and decode rates, cpu_model, cpu_busy_pct "
+                "and load_1m."
+            ),
+            why=(
+                "The census records 113 columns and this projection published 32, so "
+                "three questions an operator asks had no answer on any page.\n\n"
+                "Where did an item's time go? The published row carried fetch, extract "
+                "and summarize and nothing else, so the queue wait, the faithfulness "
+                "scorers, the wait on the model server and the split of the summarize "
+                "stage between its two calls were all invisible - and so was the "
+                "remainder. stage_gap_ms is the one that matters most and it is the "
+                "reason the other eight come with it: it is item_total_ms minus every "
+                "named stage, so it is the only cell that can catch a regression in a "
+                "step nobody has thought to time, and it is worth nothing without the "
+                "named stages beside it to subtract from.\n\n"
+                "Is the model getting slower, or is there just more to write? A total "
+                "cannot say. The four rates and visual_plan_tokens_written can: a "
+                "decode rate that fell while the wall clock held still is a regression, "
+                "and a wall clock that rose while the rate held still is a longer "
+                "summary. The row already carried the tokens written per call, so the "
+                "rates are what completes the pair.\n\n"
+                "Was it the machine? cpu_busy_pct and load_1m are per item and vary "
+                "item to item, so a slow row can be read as a busy box. cpu_model is "
+                "constant inside a shard and is carried anyway, because a throughput "
+                "number with no machine beside it is not a measurement (Guardrail #10) "
+                "and the shard-grain counters that hold it are not published to a "
+                "browser.\n\n"
+                "Measured 2026-09-15 on the 12,037 committed rows of the two published "
+                "shards, with every new cell filled the way its producer writes it "
+                "(durations from the row's own recorded milliseconds, rates at "
+                "round(x, 2), one 31-character processor string): a row goes from 142.7 "
+                "to 219.5 raw bytes and from 32.12 to 54.50 gzipped. Fourteen months of "
+                "retention at the busiest committed day goes from 5.58 to 8.59 percent "
+                "of the 1 GB published cap. cpu_model is 32.00 of the 76.8 raw bytes "
+                "and 1.54 of the 22.4 gzipped, so it is the one cell to drop first if "
+                "the cap ever binds.\n\n"
+                "Appended at the end and nullable, because the browser reads this "
+                "header by position (parseTelemetryCsv compares a prefix). Every "
+                "committed row is empty in all seventeen, so from_csv_row reads an "
+                "absent cell as null and a shard published before today still loads. "
+                "stage_gap_ms carries no lower bound: it is signed on purpose, and "
+                "clamping it would hide the overlapping clocks it exists to show."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-15T04:30",
             change="The failure vocabulary this payload publishes gained no_title.",
@@ -309,6 +371,144 @@ class PublicTelemetryRow(Contract):
     summary_output_tokens: int | None = Field(default=None, ge=0)
     summary_cached_tokens: int | None = Field(default=None, ge=0)
 
+    # --- Where the item's time went ------------------------------------------
+    #
+    # The eight named stages and the remainder. They tile the item: every one of
+    # them is a slice of item_total_ms, and stage_gap_ms is what is left. A
+    # named stage published without the gap beside it would let a regression
+    # move into an unnamed step and read as nothing at all.
+    queue_wait_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="How long the item waited before its worker started it.",
+    )
+    label_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time of the label call, prefill and decode together. It is a slice of "
+            "summarize_ms, never an addition to it."
+        ),
+    )
+    summary_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time of the summarize-and-plan call, prefill and decode together. The "
+            "other slice of summarize_ms."
+        ),
+    )
+    visual_plan_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time attributed to producing the visual plan. The plan is decoded "
+            "inside the summarize-and-plan call, so this is a share of summary_ms and "
+            "not a clock of its own - visual_plan_ms_is_estimate says which."
+        ),
+    )
+    visual_plan_ms_is_estimate: bool | None = Field(
+        default=None,
+        description=(
+            "True where visual_plan_ms was apportioned out of the second call rather "
+            "than timed on its own. An estimate that does not say it is one is the "
+            "failure this column exists to prevent (Guardrail #10), and a page drawing "
+            "the plan's share has to be able to mark it."
+        ),
+    )
+    faithfulness_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Wall time of the model-free faithfulness scorers.",
+    )
+    model_wait_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Time the item spent waiting on the model server rather than being served. "
+            "It is inside summarize_ms, so a rising wait with a flat decode rate is a "
+            "queue and never a slower model."
+        ),
+    )
+    item_total_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time from the item starting to the item ending. The denominator every "
+            "stage share on the page is taken against."
+        ),
+    )
+    stage_gap_ms: int | None = Field(
+        default=None,
+        description=(
+            "item_total_ms minus every named stage. **This is the one cell that can "
+            "catch a regression in a step nobody named**, which is why it is published "
+            "rather than derived by a reader who would have to know the list. It is "
+            "signed on purpose: a negative value means two named stages overlapped, or "
+            "two clocks disagreed, and clamping it to zero would hide exactly that."
+        ),
+    )
+
+    # --- Whether the model slowed or the work grew ---------------------------
+    #
+    # A total cannot tell those apart and a rate can. The row already carries
+    # the tokens each call wrote, so these four are what completes the pair.
+    visual_plan_tokens_written: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Output tokens of the second call that belong to the visual plan rather "
+            "than to the summary. Empty where the run asked for no plan."
+        ),
+    )
+    label_prefill_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Prefill throughput of the label call."
+    )
+    label_decode_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Decode throughput of the label call."
+    )
+    summary_prefill_tokens_per_s: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Prefill throughput of the summarize-and-plan call. High on a warm slot, "
+            "because the shared head of the prompt is answered from the cache."
+        ),
+    )
+    summary_decode_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Decode throughput of the summarize-and-plan call."
+    )
+
+    # --- What it ran on ------------------------------------------------------
+    #
+    # A throughput number with no machine beside it is not a measurement
+    # (Guardrail #10). These let a row from a slower runner be read as a slower
+    # runner rather than as a regression.
+    cpu_model: OneLine | None = Field(
+        default=None,
+        description=(
+            "The processor the runner reported, verbatim. Constant inside a shard and "
+            "carried per row anyway, because the shard-grain counters that hold it are "
+            "read at build time and never published for a browser to join against. It "
+            "is 32 of the row's raw bytes and 1.54 of its gzipped bytes, so it is the "
+            "first cell to drop if the published cap ever binds."
+        ),
+    )
+    cpu_busy_pct: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "Mean busy share of every processor over this item. Busy ticks over "
+            "available ticks across the item, so it is a figure a reader can add up."
+        ),
+    )
+    load_1m: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="One-minute load average when the item ended.",
+    )
+
     @model_validator(mode="after")
     def _a_published_failure_says_why(self) -> Self:
         """The console groups failures by code, so a failure with none is a bar
@@ -358,6 +558,31 @@ class PublicTelemetryRow(Contract):
             )
             if getattr(self, field) != total:
                 raise ValueError(f"{field} must equal the sum over the published calls")
+        return self
+
+    @model_validator(mode="after")
+    def _the_published_stages_tile_the_item(self) -> Self:
+        """The gap is exactly what the named stages left over.
+
+        The console draws these cells as shares of one bar, so the shares have to
+        add up to the bar. `stage_gap_ms` is recorded rather than derived - a
+        reader deriving it would need the list of named stages, and the list is
+        the thing that moves - which means the published row can carry a gap that
+        disagrees with the stages beside it. A chart drawn from that is a chart
+        whose slices miss the total by an amount nobody can see.
+
+        Checked only where both ends are published: every row written before
+        today carries neither, and `label_ms` and `summary_ms` are a split of
+        `summarize_ms` rather than stages of their own, so they are not here.
+        """
+        if self.item_total_ms is None or self.stage_gap_ms is None:
+            return self
+        named = sum(getattr(self, name) or 0 for name in GAP_NAMED_STAGES)
+        if self.stage_gap_ms != self.item_total_ms - named:
+            raise ValueError(
+                "stage_gap_ms must equal item_total_ms minus "
+                f"{', '.join(GAP_NAMED_STAGES)}"
+            )
         return self
 
     @classmethod
