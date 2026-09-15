@@ -457,6 +457,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stderr,
     )
+    # One place, once, before any stage opens a ledger. A trial run exercises
+    # production's code path and must not be readable as a production day, and
+    # the only way to guarantee that for every ledger at once is to move the
+    # root they all hang off (Guardrail #6).
+    #
+    # `prune-state` is the exception, and it is the only one: it is the stage
+    # that EMPTIES the trial tree, so it has to see the tree that contains it.
+    if settings.app.run.trial_state_dirname and args.stage != "prune-state":
+        common.STATE_ROOT = common.STATE_ROOT / settings.app.run.trial_state_dirname
+        logging.getLogger(__name__).warning(
+            "trial run: every ledger goes to %s and no published series reads it",
+            common.STATE_ROOT.relative_to(config.REPO_ROOT).as_posix(),
+        )
     if args.stage == "site-weight":
         # Placed above the fetcher because measuring a directory reads no socket,
         # and starting one to do it would read every host's robots.txt for nothing.
@@ -540,6 +553,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             collect=settings.app.collect,
             retention_config=settings.app.retention,
             lens_weights=settings.app.lens_weights,
+            run=settings.app.run,
             run_id=plan_stage._run_id(pruned_on, args.execution),
             today=date_type.fromisoformat(pruned_on),
             dry_run=args.dry_run,

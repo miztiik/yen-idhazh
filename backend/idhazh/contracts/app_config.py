@@ -78,6 +78,22 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T22:00",
+            change=(
+                "run.trial_state_dirname and retention.trial_state_days, both "
+                "additive. The first is null by default, which is production, so a "
+                "config that says nothing behaves exactly as it did."
+            ),
+            why=(
+                "Plan 29 T5 step B3. A run that exercises production's code path in "
+                "order to measure it would otherwise append to the same ledgers the "
+                "published series is read from, and a trial day would be "
+                "indistinguishable from a real one. Naming a directory moves every "
+                "ledger at once, which is the only way to be sure none is left "
+                "behind. Owner decision, 2026-09-15."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-15T20:00",
             change="The embedded failure vocabulary gained model_refused.",
             why="It follows item-health-row, where the vocabulary is declared.",

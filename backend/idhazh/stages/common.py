@@ -99,7 +99,10 @@ PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 
 
-STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
+#: Not `Final`: `cli` points it at `state/<run.trial_state_dirname>/` before any
+#: stage opens a ledger, and the suite has always redirected it the same way so
+#: a test cannot write a committed file.
+STATE_ROOT: Path = config.REPO_ROOT / ledger.STATE_DIRNAME
 
 
 #: Where a shard leaves its recorded input manifest for the assemble stage.
