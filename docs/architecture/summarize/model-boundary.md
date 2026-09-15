@@ -187,6 +187,14 @@ It is paid for by `RunRecord.inputs.prompt_sha256`, which digests both turns
 stamp, and `prose_changed_alone` still has something to compare. Ruled by
 Fowler, 2026-09-13.
 
+**The same split is why `turns.declared_for` is optional where
+`inference.declared_for` is not.** A person writing an entry always knows which
+weights the markers were recorded against, so config load refuses a mismatch.
+But a field that were required here would have to be present in every payload
+embedding the recorded shape - and no run written before 2026-09-14 carries an
+envelope at all. Optional is what lets today's build read yesterday's run; the
+refusal that matters lives on the declared shape, where somebody can act on it.
+
 The envelope reached the entry on 2026-09-13. Before that it was one global
 file, `backend/idhazh/prompts/turn_markers.json`, with no model key - so a
 model whose turns differ was a source edit, and one process holding two
@@ -455,12 +463,29 @@ and since 2026-09-14 the five proofs above reconcile it against the running
 server before the first item - so a wrong marker now refuses the shard instead
 of yielding worse summaries with nothing red.
 
-Moving the rest of those facts onto the entry and drawing arm 2's samples from
-the holdout is
-[`../../../TODO/20260913-28-model-swap-plan.md`](../../../TODO/20260913-28-model-swap-plan.md).
-Its Status Reckoner is the live view of what has landed. **This page describes
-the boundary rather than tracking the work**, so it changes when the shape
-changes and not when a row merges.
+**The entry declares its architecture, and arm 4 is what makes that a fact.**
+`arch` is the `general.architecture` key written inside the GGUF - `qwen35` for
+the configured weights, `gemma4` for a Gemma 4 entry. It is required with no
+default, for the same reason `turns` is: an entry that inherits the incumbent's
+architecture is claiming something nobody checked. The probe reads the key back
+out of the file the server was pointed at, which costs a few kilobytes of header
+rather than a second download, and refuses the run when the two disagree. That
+is the one case where the digest, the alias and the filename all agree and only
+the words get worse - a repackaged GGUF under a familiar name.
+
+**Both declared blocks name the weights they were set for, and load refuses a
+mismatch.** `inference.declared_for` and `turns.declared_for` each hold the
+entry's own `sha256`. The failure this stops is five strings edited in place -
+repo, file, revision, digest and id - with the blocks underneath them untouched,
+which used to raise nothing and then stand a server up on numbers derived for
+weights it never opened. It is not hypothetical: the summarizer moved from the
+8B to the 9B on 2026-08-27 and the settings block did not move with it. The two
+blocks fail differently on purpose - re-derive the numbers, or re-record the
+markers off the server that applies them.
+
+**This page describes the boundary rather than tracking work**, so it changes
+when the shape changes. [Swap the Summarizer
+Model](../../how-to/evaluate-new-summarizer-model.md) is the procedure.
 
 ## See also
 
