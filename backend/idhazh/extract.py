@@ -17,14 +17,16 @@ from typing import Final, NamedTuple
 from urllib.parse import urlsplit
 
 import trafilatura
+from trafilatura.metadata import extract_metadata
 
 from idhazh.contracts.app_config import ExtractConfig
-from idhazh.contracts.article import Article, ArticleStatus, UntrustedLine
+from idhazh.contracts.article import Article, ArticleStatus, TitleSource, UntrustedLine
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
+from idhazh.discover import clean_title
 from idhazh.evals.metrics import _SENTENCE_SPLIT
 from idhazh.fetch import FetchResult
 from idhazh.measured import TOKENS_A_WORD_AT_THE_CUT
@@ -131,6 +133,46 @@ def extract_text(html: str) -> str | None:
         return None
     cleaned = sanitize(body)
     return cleaned or None
+
+
+def page_headline(html: str) -> str | None:
+    """The page's own headline, cleaned by the rule a feed headline is cleaned by.
+
+    The page was already parsed for its body and its title was thrown away, so
+    an item whose feed carried no headline was refused beside the very string
+    that would have answered it.
+
+    It is read through `clean_title`, so it meets the feed title's rules exactly:
+    the same sanitizer, the same 500-character cap, the same whitespace rule
+    (Guardrail #5 - one cleaner, not two). It stays a value on the payload and
+    never becomes a file path, a shell argument or an outbound URL; identity is
+    recomputed from the address, so no filename can be steered by it, and the
+    summarizer already puts a title inside the untrusted fence (Guardrail #11).
+    A page title the cleaner empties is refused rather than published.
+
+    `extensive=False` is the trust boundary, not a speed knob. The default asks
+    htmldate for a publication date, which hands the page's own text to
+    `dateparser`, which walks 205 locales compiling about 950 regexes - so a
+    title a stranger writes decides how much runner time we spend. Measured
+    2026-09-15 on a developer machine / Python 3.14.2, trafilatura 2.2.0, one
+    cold call a process: a title of one phrase repeated five times, 121
+    characters, costs **8.9 to 36.7 s** on the default and **5.9 ms** with the
+    date search off - a thousandfold, from 121 bytes an attacker chooses. The
+    title returned is identical either way. We never read the date, so the
+    cheapest correct call is the one that does not look for one.
+
+    This is a second parse of the same page and the measurement says it has to
+    be. `bare_extraction(with_metadata=True)` returns a title beside a body in
+    one pass, but that body is not the one `extract` returns - `extract` runs
+    the result through `determine_returnstring`, which normalises it to NFC.
+    Over the ten committed page fixtures the two bodies agree byte for byte on
+    nine, differ by one trailing space on the tenth, and agree on all ten after
+    `sanitize`; no fixture carries decomposed characters, so the normalisation
+    gap is unmeasured rather than absent. The body is a model input stamped by
+    `EXTRACTOR_VERSION`, so moving it would re-derive every cached summary to
+    buy a parse - and the one pass would have paid the same date hunt anyway.
+    """
+    return clean_title(extract_metadata(html, extensive=False).title)
 
 
 def _is_pdf(item: PlannedItem) -> bool:
@@ -344,16 +386,26 @@ def to_article_with_source(
     # with no body and no headline is a `no_text` item; this is the one that read
     # fine and has nothing to head it with.
     #
+    # The feed's headline first, then the page's own. Order is the control here:
+    # the page is the more attacker-controlled of the two strings, so it is read
+    # only when the source we chose said nothing, and it can never displace a
+    # headline we were given (Guardrail #11).
+    #
     # `Article` refuses an ok payload with no title, so building one here raised
-    # out of the per-item loop and took the whole shard with it. A headline the
-    # feed never carried is one article's data being thin, which degrades that
-    # article and no other (`CLAUDE.md` section 1a).
-    if not (item.title or "").strip():
+    # out of the per-item loop and took the whole shard with it. A headline
+    # neither the feed nor the page carries is one article's data being thin,
+    # which degrades that article and no other (`CLAUDE.md` section 1a).
+    title = item.title if (item.title or "").strip() else None
+    title_source = TitleSource.FEED if title is not None else None
+    if title is None:
+        title = page_headline(html)
+        title_source = TitleSource.PAGE if title is not None else None
+    if title is None:
         return Extracted(
             _failed(
                 item,
                 status=ArticleStatus.EXTRACT_FAILED,
-                detail="the item carries no headline to publish",
+                detail="neither the feed nor the page carries a headline to publish",
                 fetched_at=fetched_at,
                 failure_code=FailureCode.NO_TITLE,
             ),
@@ -372,7 +424,8 @@ def to_article_with_source(
             vertical=item.vertical,
             carried_by=item.carried_by,
             rank_score=item.rank_score,
-            title=item.title,
+            title=title,
+            title_source=title_source,
             text=text,
             word_count=len(text.split()),
             source_word_count=total_words,

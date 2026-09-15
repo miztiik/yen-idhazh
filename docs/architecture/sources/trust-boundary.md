@@ -148,6 +148,41 @@ the failure classifier, only for `unknown`, and it is sanitized before it reache
 the ledger. It is never copied from a page. That keeps diagnostic text from
 becoming a second channel for fetched prose.
 
+### The page's own headline is the second untrusted string, and it is asked second
+
+An item whose feed carried no headline is refused with `no_title`. The page had
+already been fetched and already been parsed, and its title was thrown away, so
+the item was being refused beside the string that answers it. `page_headline`
+reads it back: the feed's headline first, the page's own second, and `no_title`
+only when neither names the story.
+
+Two rules bound it. **Order is a control.** The page is the more
+attacker-controlled of the two strings, so it is read only when the source we
+chose said nothing - a page can never displace a headline we were given. **And
+it passes `discover.clean_title`**, the same function a feed headline passes:
+the same sanitizer, the same 500-character cap, the same whitespace rule. One
+cleaner, not two. A page headline the cleaner empties is refused rather than
+published. It stays a value on the payload; identity is recomputed from the
+address, so no filename can be steered by it, and the summarizer already places
+a title inside the untrusted fence. `Article.title_source` records which of the
+two the published headline came from - provenance for an operator, never a level
+of trust, because both are a stranger's string.
+
+**The read passes `extensive=False`, and that is a boundary decision rather than
+a speed one.** trafilatura's default metadata read asks `htmldate` for a
+publication date, which hands the page's own text to `dateparser`, which walks
+205 locales compiling about 950 regular expressions. A title of one phrase
+repeated five times - 121 characters, chosen by whoever wrote the page - costs
+**8.9 to 36.7 s** that way and **5.9 ms** with the date search off, and returns
+the same string either way. On a 4 vCPU runner that is a stranger setting our
+bill (Guardrail #2). We never read the date, so the read does not look for one.
+Measured 2026-09-15 on a developer machine / Python 3.14.2, trafilatura 2.2.0,
+one cold call per process; the cost is a property of the input rather than of
+its length, so it has no spread to quote across sizes.
+[`test_the_headline_read_does_not_go_looking_for_a_date`](../../../backend/tests/test_extract.py)
+holds it, and is honest that it can only see a cold regression: once a locale is
+compiled in a process the same mistake reads about 109 ms.
+
 ## Model output never becomes an action
 
 Asserted structurally rather than promised:
