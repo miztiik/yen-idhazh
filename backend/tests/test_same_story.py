@@ -126,6 +126,7 @@ def item(
     score: float | None = 1.0,
     run: int = 1,
     title: str | None = None,
+    outlet: str | None = None,
 ) -> DigestItem:
     return DigestItem(
         item_id=item_id,
@@ -133,7 +134,7 @@ def item(
         title=title if title is not None else f"Story {item_id}",
         source_url=f"https://example.test/{item_id}",
         source_id=source,
-        source_name=source.title(),
+        source_name=outlet if outlet is not None else source.title(),
         summary="A summary long enough to be a summary.",
         key_points=["One point."],
         band=ConfidenceBand.HIGH,
@@ -403,6 +404,74 @@ def test_two_desks_printing_different_figures_are_two_groups() -> None:
 
     assert groups_of(stamped) == {}
     assert [one.also_covered_by for one in stamped] == [0, 0]
+
+
+def test_one_outlet_on_two_of_its_own_feeds_is_not_a_group() -> None:
+    """A feed is not a source. Measured defect, 2026-09-14.
+
+    Four of our feeds are CGTN and two are The Straits Times. The rule used to
+    compare `source_id`, which is the feed, so one newsroom counted as two
+    sources and the card printed a corroboration the reader did not have: 3 of
+    the 43 groups on the committed days were CGTN grouped with CGTN. The
+    headlines here are identical, so only the outlet rule can refuse this.
+    """
+    items = [
+        item(
+            "world-01",
+            source="cgtn-tech",
+            score=1.0,
+            title="Ferry capsizes off Cyprus",
+            outlet="China Global Television Network",
+        ),
+        item(
+            "world-02",
+            source="cgtn-china",
+            score=9.0,
+            title="Ferry capsizes off Cyprus",
+            outlet="China Global Television Network",
+        ),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"world-01": unit(0), "world-02": unit(_APART)}),
+        similarity_min=committed_threshold(),
+    )
+
+    assert groups_of(stamped) == {}
+    assert [one.also_covered_by for one in stamped] == [0, 0]
+
+
+def test_two_mastheads_of_one_owner_are_two_sources() -> None:
+    """The rule folds a feed into its masthead and stops there.
+
+    The Hindu and The Hindu BusinessLine are different papers with different
+    desks. A reader who sees both has two newsrooms, and folding them would
+    cost a group that is genuinely corroborated.
+    """
+    items = [
+        item(
+            "world-01",
+            source="thehindu-all",
+            score=1.0,
+            title="Ferry capsizes off Cyprus",
+            outlet="The Hindu",
+        ),
+        item(
+            "world-02",
+            source="thehindu-biz",
+            score=9.0,
+            title="Ferry capsizes off Cyprus",
+            outlet="The Hindu BusinessLine",
+        ),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"world-01": unit(0), "world-02": unit(_APART)}),
+        similarity_min=committed_threshold(),
+    )
+
+    assert groups_of(stamped) == {"world-02": ["world-01"]}
+    assert [one.also_covered_by for one in stamped] == [1, 1]
 
 
 def test_turning_the_joiner_off_restores_the_vector_only_rule() -> None:
