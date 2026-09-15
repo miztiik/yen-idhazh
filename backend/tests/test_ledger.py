@@ -18,11 +18,18 @@ from conftest import CONFIG_DIR, FIXTURES_DIR
 from idhazh import cli, config, day_partition, ledger
 from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    RETIRED_CELLS,
+    FailureCode,
+    ItemHealthRow,
+    ItemOutcome,
+    ItemStage,
+)
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -844,6 +851,195 @@ def carried_row(
         outcome=outcome,
         code=code,
     )
+
+
+#: A generation this ledger has never carried, and that is the point of building
+#: it. The names a row cannot do without - the eleven every row fills, the count
+#: of calls and the five flat totals its own rule holds to their sum - plus the
+#: twelve headings the call rename retired. Twenty-nine columns against the
+#: forty-three the archive really holds and the hundred and thirteen it holds
+#: now, so a migration that only ever coped with the one shape the committed
+#: days happen to carry fails here.
+A_RETIRED_GENERATION: Final = (
+    "version",
+    "date",
+    "run_id",
+    "item_id",
+    "url_key",
+    "canonical_url",
+    "vertical",
+    "source_id",
+    "stage",
+    "outcome",
+    "code",
+    "model_calls",
+    *COST_FIELDS,
+    *RETIRED_CELLS,
+)
+
+
+def timed_row(number: int) -> ItemHealthRow:
+    """One row that recorded its label call, so a migration has cells to move.
+
+    Built through `model_validate` rather than `model_copy`, because the
+    contract's own rule - a call slot fills whole and the flat cells are its sum
+    - is what makes this a faithful row of that generation rather than a
+    plausible one.
+    """
+    call = {
+        "prefill_ms": 149_761 + number,
+        "decode_ms": 389_543 + number,
+        "input_tokens": 7_543 + number,
+        "output_tokens": 1_290 + number,
+        "cached_tokens": 1_676 + number,
+    }
+    return ItemHealthRow.model_validate(
+        carried_row(number, source_id="wire").model_dump(mode="json")
+        | {"model_calls": 1, "label_kind": CallKind.LABEL.value}
+        | {f"label_{name}": value for name, value in call.items()}
+        | call
+    )
+
+
+def a_generation(header: tuple[str, ...], rows: list[ItemHealthRow]) -> str:
+    """One header and its rows, written the way a run on that generation wrote them.
+
+    Every cell comes from the row's own `csv_row`, read back through the name the
+    heading had then, so the fixture cannot drift from the contract it is meant
+    to predate.
+    """
+    buffer = io.StringIO()
+    out = csv.writer(buffer, lineterminator="\n")
+    out.writerow(header)
+    for row in rows:
+        payload = row.csv_row()
+        out.writerow([payload[RETIRED_CELLS.get(name, name)] for name in header])
+    return buffer.getvalue()
+
+
+def _committed_rows(path: Path) -> list[list[str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return [row for row in csv.reader(handle) if row]
+
+
+def test_a_day_file_that_carries_two_headers_is_refiled_under_the_current_one(
+    tmp_path: Path,
+) -> None:
+    """`merge=union` stacks two generations and calls the merge clean.
+
+    That is the right answer for two runs appending different rows and no answer
+    at all for two runs appending under different headings. Line 1 still names
+    the contract, so the header check alone passes and the file stays split -
+    which is how `state/item-health/2026/09/14.csv` came to hold 394 rows under
+    one header and 71 under another.
+    """
+    state = tmp_path / "state"
+    path = ledger.item_health_path(state, DATE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    current = ItemHealthRow.csv_columns()
+    settled, stranded = timed_row(1), timed_row(2)
+    path.write_text(
+        a_generation(current, [settled]) + a_generation(A_RETIRED_GENERATION, [stranded]),
+        encoding="utf-8",
+        newline="",
+    )
+
+    assert ledger.append_item_health(state, DATE, [carried_row(3, source_id="wire")]) == 1
+
+    rows = _committed_rows(path)
+    assert rows[0] == list(current), "one header, on line 1, and it is the contract's"
+    assert [len(row) for row in rows] == [len(current)] * 4
+    read_back = ledger.load_item_health_shard(path)
+    assert [row.item_id for row in read_back] == [
+        settled.item_id,
+        stranded.item_id,
+        carried_row(3, source_id="wire").item_id,
+    ], "the stranded row keeps its place, and the new row lands after it"
+    moved = read_back[1]
+    assert moved.csv_row() == stranded.csv_row(), (
+        "every cell the retired headings carried reaches the column it migrated to"
+    )
+
+
+def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
+    tmp_path: Path,
+) -> None:
+    """A union merge orders the blocks by which side was being replayed, not by age.
+
+    The committed file this repaired had the current header first because the
+    older run was the one rebasing. The other order is a merge nobody has made
+    here yet, so it is built rather than waited for.
+    """
+    state = tmp_path / "state"
+    path = ledger.item_health_path(state, DATE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stranded, settled = timed_row(1), timed_row(2)
+    path.write_text(
+        a_generation(A_RETIRED_GENERATION, [stranded])
+        + a_generation(ItemHealthRow.csv_columns(), [settled]),
+        encoding="utf-8",
+        newline="",
+    )
+
+    assert ledger.append_item_health(state, DATE, []) == 0, "no rows to add, only a file to settle"
+
+    read_back = ledger.load_item_health_shard(path)
+    assert [row.csv_row() for row in read_back] == [stranded.csv_row(), settled.csv_row()]
+    assert _committed_rows(path)[0] == list(ItemHealthRow.csv_columns())
+
+
+def test_a_day_file_under_a_retired_header_alone_is_appendable_again(tmp_path: Path) -> None:
+    """The half a read-side migration cannot give: a file that reads and will not take a row.
+
+    Before this, the append raised - and the raise costs the run its whole commit
+    step, every ledger staged beside this one included.
+    """
+    state = tmp_path / "state"
+    path = ledger.item_health_path(state, DATE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stranded = timed_row(1)
+    path.write_text(
+        a_generation(A_RETIRED_GENERATION, [stranded]), encoding="utf-8", newline=""
+    )
+
+    assert ledger.append_item_health(state, DATE, [carried_row(2, source_id="wire")]) == 1
+
+    assert _committed_rows(path)[0] == list(ItemHealthRow.csv_columns())
+    read_back = ledger.load_item_health_shard(path)
+    assert read_back[0].csv_row() == stranded.csv_row()
+
+
+def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
+    tmp_path: Path,
+) -> None:
+    """A pass with nothing to do leaves no diff, so a run never rewrites a settled day."""
+    state = tmp_path / "state"
+    assert ledger.append_item_health(state, DATE, [timed_row(1)]) == 1
+    path = ledger.item_health_path(state, DATE)
+    before = path.read_bytes()
+
+    assert ledger.append_item_health(state, DATE, []) == 0
+    assert path.read_bytes() == before
+
+
+def test_a_refiled_row_is_the_bytes_an_append_would_have_written(tmp_path: Path) -> None:
+    """Two ways of writing one row have to agree, or the file disagrees with itself.
+
+    A migration that serialized a row its own way would leave a day file whose
+    older half and newer half differ in quoting, and every byte-level check over
+    the archive would then be reading that difference rather than the data.
+    """
+    state = tmp_path / "state"
+    migrated = ledger.item_health_path(state, DATE)
+    migrated.parent.mkdir(parents=True, exist_ok=True)
+    row = timed_row(1)
+    migrated.write_text(a_generation(A_RETIRED_GENERATION, [row]), encoding="utf-8", newline="")
+    assert ledger.append_item_health(state, DATE, []) == 0
+
+    appended = tmp_path / "fresh"
+    assert ledger.append_item_health(appended, DATE, [row]) == 1
+
+    assert migrated.read_bytes() == ledger.item_health_path(appended, DATE).read_bytes()
 
 
 def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:
