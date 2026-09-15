@@ -107,6 +107,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_publish_source_health",
         "test_publish_telemetry",
         "test_qualify",
+        "test_qualify_call_path",
         "test_rank",
         "test_reband_scores",
         "test_reference_dataset",

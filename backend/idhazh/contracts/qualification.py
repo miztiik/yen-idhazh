@@ -161,30 +161,44 @@ class CorpusItem(Model):
 
 
 class ItemObservation(Model):
-    """One inference call: one corpus item at one repeat.
+    """One corpus item at one repeat, as the run's own call path produced it.
 
-    Every call is recorded, including the ones that failed. A failure that
+    Every attempt is recorded, including the ones that failed. A failure that
     vanishes from the record takes the denominator with it, and the success rate
     then describes the survivors rather than the run.
+
+    **A row is one item and not one call, and `QualificationShard.calls_per_item`
+    is what says how many calls are behind it.** On the path that makes two,
+    every column here is the item's answer over the pair: a budget either call
+    hit cuts the item, a reasoning channel either call opened is a channel the
+    item used, and the token counts are the pair's sum. Reading a two-call row
+    as a single call halves the cost and reports a decode as clean when the
+    first of its two was truncated.
     """
 
     item_id: ItemId
     repeat: int = Field(ge=1)
     ok: bool
     failure_code: str | None = None
-    finish_reason: str = Field(min_length=1)
+    finish_reason: str = Field(
+        min_length=1,
+        description=(
+            "How the decode ended. Over a pair, `length` where either call met its "
+            "budget, because an item cut anywhere is a cut item."
+        ),
+    )
     reasoning_channel_used: bool = Field(
-        description="The runtime split a reasoning channel off the content."
+        description="The runtime split a reasoning channel off the content, in any call."
     )
     think_block_words: int = Field(
-        ge=0, description="Words inside inline `<think>` blocks. Any is a leak."
+        ge=0, description="Words inside inline `<think>` blocks, summed. Any is a leak."
     )
     schema_valid: bool
     repaired: bool = Field(description="A second attempt was needed. The gate allows none.")
     output_digest: Sha256
     summary_word_count: int = Field(ge=0)
     prompt_tokens: int = Field(
-        ge=0, description="The complete chat-templated request, as counted by the runtime."
+        ge=0, description="The complete rendered request, as counted by the runtime."
     )
     completion_tokens: int = Field(ge=0)
     fits_context_predicted: bool = Field(
@@ -259,6 +273,22 @@ class QualificationShard(Contract):
 
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T23:30",
+            change=(
+                "Added calls_per_item, defaulting to 1. Not breaking: a shard is a "
+                "workflow artifact uploaded and merged inside one job, and a shard "
+                "written before today made one call, which is what the default says."
+            ),
+            why=(
+                "The qualification can now run the same call path the digest runs, and "
+                "that path makes two calls per item. Every per-item number moves when "
+                "it does - the token counts become a pair's sum and the prompt is a "
+                "different prompt - so a shard that could not say which path produced "
+                "it would invite a comparison between two numbers that measured "
+                "different work (Guardrail #10)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T04:00",
             change=(
@@ -340,6 +370,17 @@ class QualificationShard(Contract):
     shard: int = Field(ge=0)
     shards: int = Field(ge=1)
     repeats: int = Field(ge=1)
+    calls_per_item: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Inference calls behind one observation. 1 is the qualification's own "
+            "single call; 2 is the path the digest runs, which labels the article and "
+            "then summarizes it. Recorded because it decides what every per-item "
+            "number in this shard means, and two shards that disagree on it are not "
+            "comparable."
+        ),
+    )
     candidate: CandidateIdentity
     scorer: ScorerIdentity
     inputs: PipelineInputs | None = Field(

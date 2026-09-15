@@ -56,6 +56,26 @@ def _worst_scores(scores: Sequence[ItemScore], *, keep: int) -> list[ItemScore]:
     return sorted(scores, key=lambda score: score.hhem)[:keep]
 
 
+def _which_path(shard: QualificationShard) -> str:
+    """Which call path produced these numbers, said before any of them are read.
+
+    It goes above the table rather than in it. A reader who takes the token
+    counts for a single call's and finds the footnote afterwards has already
+    compared them against a shard that measured different work (Guardrail #10).
+    """
+    if shard.calls_per_item == 1:
+        return (
+            "**One call per item.** The qualification's own path, which the digest "
+            "does not run. Every number below is that call's."
+        )
+    return (
+        f"**{shard.calls_per_item} calls per item** - the path the digest runs. Every "
+        "per-item number below is the whole item's, so the token counts are the "
+        "calls' sum and a decode cut in any of them counts the item as cut. They do "
+        "not compare against a shard that made one call."
+    )
+
+
 def render_shard(shard: QualificationShard, *, worst_items: int = 5) -> str:
     """One shard's run, as markdown.
 
@@ -77,14 +97,16 @@ def render_shard(shard: QualificationShard, *, worst_items: int = 5) -> str:
         f"`{shard.candidate.model_id}` on {shard.date}, "
         f"{shard.repeats} repeats, {shard.elapsed_seconds / 60:.1f} minutes.",
         "",
+        _which_path(shard),
+        "",
         "| Reading | Value |",
         "| --- | --- |",
         f"| Articles frozen | {len(shard.corpus)} of {shard.planned} planned |",
-        f"| Calls that returned | {_percent(len(ok), len(calls))} |",
-        f"| Schema-valid replies | {_percent(sum(c.schema_valid for c in calls), len(calls))} |",
-        f"| Replies needing repair | {sum(c.repaired for c in calls)} |",
+        f"| Items that answered | {_percent(len(ok), len(calls))} |",
+        f"| Schema-valid summaries | {_percent(sum(c.schema_valid for c in calls), len(calls))} |",
+        f"| Summaries needing repair | {sum(c.repaired for c in calls)} |",
         f"| Items whose repeats disagreed | {len(drifted)} of {len(shard.corpus)} |",
-        f"| A summarize call | {_spread([c.summarize_seconds for c in calls])} |",
+        f"| One item, summarized | {_spread([c.summarize_seconds for c in calls])} |",
         "",
     ]
 
@@ -94,7 +116,7 @@ def render_shard(shard: QualificationShard, *, worst_items: int = 5) -> str:
             code = call.failure_code or "unknown"
             failures[code] = failures.get(code, 0) + 1
     if failures:
-        lines += ["**Why calls failed.** " + ", ".join(
+        lines += ["**Why items failed.** " + ", ".join(
             f"`{code}` {count}" for code, count in sorted(failures.items())
         ), ""]
 

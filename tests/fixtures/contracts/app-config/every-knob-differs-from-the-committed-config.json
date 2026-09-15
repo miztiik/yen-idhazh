@@ -233,6 +233,7 @@
   },
   "run": {
     "max_parallel": 2,
+    "qualify_on_the_production_path": false,
     "safety_ceiling_per_run": 120,
     "shard_size": 3,
     "shard_timeout_minutes": 90,

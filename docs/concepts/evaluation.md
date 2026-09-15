@@ -501,6 +501,18 @@ Discouragement is not a control, so four things make it structurally hard rather
 
 Not to be done: seeding the queue with model pre-labels for a human to confirm. Confirmation is anchoring, and it turns an independent measurement into an expensive agreement rate with the model - LLM-as-judge with a rubber stamp.
 
+### The gate has to call what the digest calls
+
+**Until 2026-09-15 it did not.** The daily run summarizes an article in two adjacent calls - the article is labelled, and the second prompt replays that reply before asking for the summary ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). The qualification sent one call down the chat route instead. So every threshold a candidate cleared was cleared on a code path no reader ever sees: a different prompt, a different number of decodes, and no step where the model reads its own words back.
+
+That is the same shape as the survivor problem above, one level up. A gate that filters on the property it grades measures its own filter; a gate that runs a path nothing publishes measures its own harness. Neither says anything about the day.
+
+`run.qualify_on_the_production_path` is the switch, and it is true by default. False puts the gate back on its single call, which is what to do when a run goes wrong on the pair rather than reverting code - and it is a config edit, so it needs no release. The knob goes away once one qualification has cleared `decide` on the production path.
+
+**Two consequences to expect, and neither is a regression.** Determinism gets noisier, because the second prompt carries a model-written label: two repeats that would have written identical summaries can now diverge upstream of the summary. That is a true reading of what production does, and it was invisible before. And every per-item number moves - an item costs two calls, so the token counts roughly double and the prompt digest is a different digest. `QualificationShard.calls_per_item` records which side produced a shard, because two shards that disagree on it are not comparable ([../../CLAUDE.md](../../CLAUDE.md) Guardrail #10).
+
+**One caller stays on the single call on purpose.** The injection canaries put a planted attack to the model and read the reply for markers that should not have survived. They are a reader-safety check on the sanitizer and the chat template, and the shortest path to the model is the one that tests it most directly ([../../CLAUDE.md](../../CLAUDE.md) Guardrail #11).
+
 ### Current qualification-gate implementation gap
 
 **The `publishable_length` gate could not fail at all until 2026-09-10, and it
