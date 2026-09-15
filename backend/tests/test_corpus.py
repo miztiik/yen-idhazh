@@ -18,9 +18,9 @@ from collections.abc import Callable
 import pytest
 
 from idhazh import config, extract
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.qualification import CorpusItem
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.taxonomy import SourceTier

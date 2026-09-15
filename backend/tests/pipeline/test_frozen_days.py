@@ -26,9 +26,6 @@ from idhazh.stages.validate_days import (
     stage_validate_days,
 )
 
-pytestmark = pytest.mark.slow
-
-
 #
 # `validate-days` opened every committed day on every publication and on every
 # CI run, parsed it and put it through both contracts a reader holds. A
@@ -105,7 +102,7 @@ def days_opened(root: Path, work: Callable[[], int]) -> tuple[int, set[str]]:
 
 
 def test_a_day_with_no_receipt_is_validated_and_earns_one(tmp_path: Path) -> None:
-    """Arm one, and what every tree looks like the first time this runs.
+    """Case one, and what every tree looks like the first time this runs.
 
     Nothing is skipped on trust it has not earned, so a tree with no receipts
     costs exactly what this stage cost before the receipt existed. What it
@@ -130,7 +127,7 @@ def test_a_day_with_no_receipt_is_validated_and_earns_one(tmp_path: Path) -> Non
 
 
 def test_an_unchanged_day_under_an_unchanged_validator_is_not_opened(tmp_path: Path) -> None:
-    """Arm two, and the whole saving, counted rather than timed.
+    """Case two, and the whole saving, counted rather than timed.
 
     A published day cannot stop matching a contract on its own, so the second
     reading of it buys nothing. Measured 2026-09-08 on an Intel Core i7-1265U
@@ -231,7 +228,7 @@ def test_a_named_day_is_opened_even_when_it_carries_a_receipt(tmp_path: Path) ->
 
 
 def test_the_validator_identity_moves_when_a_rule_moves() -> None:
-    """Arm three, first half: what the receipt is keyed on cannot go stale by hand.
+    """Case three, first half: what the receipt is keyed on cannot go stale by hand.
 
     A hand-maintained version is a check that stops checking on the day somebody
     forgets to bump it, and it fails silently - the gate goes on printing a
@@ -256,7 +253,7 @@ def test_the_validator_identity_moves_when_a_rule_moves() -> None:
 
 
 def test_the_validator_identity_moves_when_a_contract_moves() -> None:
-    """Arm three, second half: a shape change invalidates every receipt too.
+    """Case three, second half: a shape change invalidates every receipt too.
 
     Section 11 makes a changelog entry mandatory for any change to a persisted
     shape, and that entry lands in the generated schema. Digesting the schema is
@@ -275,7 +272,7 @@ def test_the_validator_identity_moves_when_a_contract_moves() -> None:
 
 
 def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
-    """Arm three, and the reason an uninvalidatable receipt is worse than none.
+    """Case three, and the reason an uninvalidatable receipt is worse than none.
 
     The receipt is earned, the day goes unread, and then the rules move. Every
     day is opened again - not on a window and not one at a time - and the sweep

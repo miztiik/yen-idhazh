@@ -10,13 +10,11 @@ from pathlib import Path
 import pytest
 
 from idhazh import day_partition, ledger
-from idhazh.contracts.app_config import (
-    CollectConfig,
-    LensWeightsConfig,
-    ObservabilityConfig,
-    RetentionConfig,
-)
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
+from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.placement import LensWeightsConfig
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.seen import SeenRow
 from idhazh.retention import prune_counterfactual_scores, prune_seen
 from idhazh.stages.prune_state import stage_prune_state
@@ -25,8 +23,6 @@ from ._trees import (
     RUN_ID,
     TODAY,
 )
-
-pytestmark = pytest.mark.slow
 
 
 def _seen_day(state: Path, day: str, rows: int = 1) -> Path:

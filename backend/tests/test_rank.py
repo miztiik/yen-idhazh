@@ -23,10 +23,11 @@ import pytest
 from conftest import FIXTURES_DIR, read_text
 
 from idhazh.config import REPO_ROOT, load
-from idhazh.contracts.app_config import AssistConfig, CollectConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.knobs.assist import AssistConfig
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, TimeSource, VerticalPlan
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef
@@ -39,6 +40,7 @@ from idhazh.rank import (
     ITEM_ID_SYMBOLS,
     DeskPlan,
     Ranked,
+    ScoreTerms,
     authority,
     dedup_text,
     desk_of,
@@ -538,6 +540,143 @@ def test_no_weight_can_admit_a_story_the_age_gate_refused() -> None:
     assert plan.too_old == 1
 
 
+# --- the terms a planned item carries, and what they add up to ---------------
+
+#: One address two feeds carried at different tiers. A desk whose carriers all
+#: sit on one tier cannot tell the winning carrier's factors from a loser's, and
+#: no committed day is guaranteed to hold such a pair - so it is built.
+CARRIED_URL: Final = "https://carried.example.org/story"
+
+#: One address a single feed carried, so the carriage step reads a real zero.
+SOLO_URL: Final = "https://solo.example.org/story"
+
+#: The institution carrier's own weight and reliability. Neither is 1.0 and
+#: neither matches the community carrier's, so reading the wrong carrier shows.
+WON_WEIGHT: Final = 0.75
+WON_RELIABILITY: Final = 0.8
+
+#: The lens weight the solo story earns, so the lens term is non-zero somewhere.
+SOLO_LENS: Final = 0.4
+
+
+def _carrier(url: str, source_id: str, tier: SourceTier, weight: float) -> Candidate:
+    return Candidate(
+        canonical_url=url,
+        source_url=url,
+        url_key=derive_url_key(url),
+        source_id=source_id,
+        vertical="ai",
+        tier=tier,
+        source_form=SourceForm.ARTICLE,
+        title="A story",
+        published_at="2026-09-13T11:00:00Z",
+        weight=weight,
+    )
+
+
+def _terms_desk() -> list[PlannedItem]:
+    """Two stories planned through the real ranker, built from nothing else.
+
+    The carried story is listed weakest-carrier-first and is on the watchlist.
+    The solo story matches a lens. Between the two, every one of the eight terms
+    is non-zero on at least one item and zero on at least one other.
+    """
+    return plan_vertical(
+        AI,
+        [
+            _carrier(CARRIED_URL, "community-feed", SourceTier.COMMUNITY, 1.0),
+            _carrier(CARRIED_URL, "institution-feed", SourceTier.INSTITUTION, WON_WEIGHT),
+            _carrier(SOLO_URL, "trade-feed", SourceTier.TRADE_PRESS, 1.0),
+        ],
+        config=CONFIG,
+        eligible_feeds=3,
+        now=ORDER_NOW,
+        watchlist_keys=frozenset({derive_url_key(CARRIED_URL)}),
+        lens_bonuses={derive_url_key(SOLO_URL): SOLO_LENS},
+        reliability={"institution-feed": WON_RELIABILITY},
+    ).items
+
+
+def _terms_of(item: PlannedItem) -> dict[str, float]:
+    """The eight terms off one planned item, with a null refused rather than read as zero."""
+    named: dict[str, float | None] = {
+        name: getattr(item, name)
+        for name in (
+            "authority_score",
+            "tier_score",
+            "feed_weight",
+            "feed_reliability",
+            "carriage_step",
+            "watchlist_bonus",
+            "lens_bonus",
+            "recency_bonus",
+        )
+    }
+    missing = sorted(name for name, value in named.items() if value is None)
+    assert not missing, f"{item.item_id} carries no {missing}"
+    return {name: value for name, value in named.items() if value is not None}
+
+
+def test_the_terms_on_a_planned_item_add_up_to_the_score_that_ordered_the_day() -> None:
+    """Five addends sum to `rank_score`; three factors multiply to authority.
+
+    It proves the parts sum to the whole, not that any one term is correct.
+    """
+    items = _terms_desk()
+    assert len(items) == 2, "the fixture plans two stories"
+
+    for item in items:
+        terms = _terms_of(item)
+        summed = (
+            terms["authority_score"]
+            + terms["carriage_step"]
+            + terms["watchlist_bonus"]
+            + terms["lens_bonus"]
+            + terms["recency_bonus"]
+        )
+        assert summed == pytest.approx(item.rank_score, abs=1e-6), (
+            f"{item.item_id} publishes {item.rank_score} and its terms sum to {summed}"
+        )
+        assert terms["authority_score"] == pytest.approx(
+            terms["tier_score"] * terms["feed_weight"] * terms["feed_reliability"], abs=1e-6
+        ), f"{item.item_id} authority is not the product of the three factors it names"
+
+
+def test_the_authority_factors_come_from_the_carrier_that_won_the_maximum() -> None:
+    """Two feeds, one address, and only one of them scored it.
+
+    The community feed is listed first and carries the larger own-weight, so an
+    item built from an arbitrary carrier would read its tier score of 0.3 and
+    its untested 1.0 reliability. The institution is the one the score took its
+    maximum from, and its three factors are the three the item has to publish.
+    """
+    carried = next(item for item in _terms_desk() if item.url_key == derive_url_key(CARRIED_URL))
+
+    assert carried.carried_by == 2
+    assert carried.source_id == "institution-feed"
+    assert carried.tier_score == pytest.approx(tier_weight(SourceTier.INSTITUTION, CONFIG))
+    assert carried.feed_weight == pytest.approx(WON_WEIGHT)
+    assert carried.feed_reliability == pytest.approx(WON_RELIABILITY)
+    assert carried.carriage_step == pytest.approx(CONFIG.carriage_step)
+    assert carried.watchlist_bonus == pytest.approx(CONFIG.watchlist_bonus)
+    assert carried.lens_bonus == 0.0
+
+
+def test_a_term_that_did_not_fire_is_written_as_zero_and_never_left_absent() -> None:
+    """Zero is a measurement here, and null means the plan predates the terms.
+
+    A run that writes these has to write the zeros too, or a reader cannot tell
+    a story nothing carried twice from a story written before anybody counted.
+    """
+    solo = next(item for item in _terms_desk() if item.url_key == derive_url_key(SOLO_URL))
+    terms = _terms_of(solo)
+
+    assert terms["carriage_step"] == 0.0, "one feed carried it"
+    assert terms["watchlist_bonus"] == 0.0, "no watchlist subject"
+    assert terms["lens_bonus"] == pytest.approx(SOLO_LENS)
+    assert terms["recency_bonus"] > 0.0, "an hour-old story still earns the recency term"
+
+
 # --- the counterfactual: what another lens weight would have scored ----------
 
 TWO_CANDIDATES_ONE_SLOT: Final = FIXTURES_DIR / "rank" / "two-candidates-one-slot.json"
@@ -575,7 +714,7 @@ def _one_slot_config(fixture: dict[str, Any]) -> CollectConfig:
 def _one_slot_plan(*, ask: bool = True) -> tuple[dict[str, Any], DeskPlan]:
     """The desk planned once. `ask` is whether the counterfactual weight is supplied.
 
-    The committed lens weights are supplied either way, so the two arms differ
+    The committed lens weights are supplied either way, so the two cases differ
     in one argument and nothing else - which is what makes "it moved nothing"
     an assertion rather than a claim.
     """
@@ -654,7 +793,7 @@ def test_the_recorded_score_is_the_one_that_decided_the_day() -> None:
 def test_the_second_score_differs_by_the_lens_term_and_by_nothing_else() -> None:
     """Every other term is identical, so the whole difference is the lens.
 
-    Both arms are asserted, and the second one is the one that catches a real
+    Both cases are asserted, and the second one is the one that catches a real
     mistake: a story matching no lens must come back with the two scores equal
     to the last decimal place. A counterfactual that moved a story it was not
     asking about would make the ledger unreadable - nobody could tell which
@@ -705,10 +844,31 @@ def test_the_counterfactual_moves_no_item_and_no_order() -> None:
     assert asked.summary.model_dump() == plain.summary.model_dump()
 
 
+def _flat_terms(at: float) -> ScoreTerms:
+    """A breakdown that adds up, for a pool entry whose score is handed in.
+
+    Authority carries the whole of it, at a full-weight feed with no evidence
+    against it. That is the one shape that stays self-consistent whatever `at`
+    is, so the entry can name a score without also inventing a story about it.
+    """
+    return ScoreTerms(
+        total=at,
+        authority_score=at,
+        tier_score=at,
+        feed_weight=1.0,
+        feed_reliability=1.0,
+        carriage_step=0.0,
+        watchlist_bonus=0.0,
+        lens_bonus=0.0,
+        recency_bonus=0.0,
+    )
+
+
 def _scored(name: str, *, at: float = 1.0) -> Ranked:
     """One entry of a desk's pool, built in memory."""
     return Ranked(
         score=at,
+        terms=_flat_terms(at),
         candidate=_addressed(name),
         appeared_at=None,
         time_source=TimeSource.FIRST_SEEN,

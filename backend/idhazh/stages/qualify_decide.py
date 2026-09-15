@@ -1,7 +1,7 @@
 """Merge the shards, run the eleven gates, and say which number failed.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from idhazh import (
     assemble,
     config,
 )
+from idhazh.contracts.base import fit_field
 from idhazh.contracts.qualification import (
     GateStatus,
     QualificationReport,
@@ -21,7 +22,7 @@ from idhazh.contracts.validation_row import (
     ValidationRow,
     ValidationVerdict,
 )
-from idhazh.evals import golden, qualify, writer
+from idhazh.evals import golden, qualification_summary, qualify, validation, writer
 from idhazh.stages import common
 from idhazh.stages.common import LOG
 
@@ -55,6 +56,7 @@ def stage_qualify_decide(
             ),
         ),
         required_canaries=len(sorted(common.CANARY_DIR.glob("*.json"))),
+        turns=settings.models.summarize.turns,
     )
     shortfalls = qualify.corpus_shortfalls(frozen.items, summarize=settings.app.summarize)
     if shortfalls:
@@ -89,6 +91,10 @@ def stage_qualify_decide(
         ),
     )
     assemble.write_atomic(common.QUALIFICATION_ROOT / "report.json", report.to_json())
+    assemble.write_atomic(
+        common.QUALIFICATION_ROOT / "report.md",
+        qualification_summary.render_report(report),
+    )
 
     mean_hhem = (
         sum(score.hhem for score in frozen.scores) / len(frozen.scores) if frozen.scores else 0.0
@@ -107,13 +113,17 @@ def stage_qualify_decide(
                 articles=max(len(frozen.scores), 1),
                 measured_on=date,
                 commit_sha=report.commit_sha,
-                runner=runner,
+                runner=fit_field(
+                    runner, model=ValidationRow, field="runner", absent=validation.UNNAMED_RUNNER
+                ),
                 verdict=(
                     ValidationVerdict.QUALIFIED
                     if report.qualified
                     else ValidationVerdict.NOT_QUALIFIED
                 ),
-                detail=report.detail,
+                detail=fit_field(
+                    report.detail, model=ValidationRow, field="detail", absent=validation.UNSTATED
+                ),
             )
         ],
     )

@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, SCHEMAS_DIR, read_text
+from pydantic import ValidationError
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.export import CONTRACTS, expected_filenames, export
@@ -124,3 +125,51 @@ def test_a_manifest_written_before_the_verbosity_knob_still_reads() -> None:
     for run in manifest.runs:
         for use in run.models:
             assert use.model_ref.inference.log_verbosity is None
+
+
+def test_a_manifest_written_before_the_two_spans_still_reads() -> None:
+    """Section 11's release blocker for the budget that was renamed and the flag that went.
+
+    A run record embeds `ModelRef`, which embeds the settings block. Every
+    manifest published before 2026-09-14 spells that block's budget
+    `max_output_tokens` and carries a `thinking` flag beside it, and a build
+    that could not read one of those would lose the whole archive.
+
+    The old spelling is put back into the canonical fixture rather than
+    committed as a second one, so the two payloads differ in exactly the two
+    keys this migration is about.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    rewound = 0
+    for run in payload["runs"]:
+        for use in run["models"]:
+            inference = use["model_ref"]["inference"]
+            inference["max_output_tokens"] = inference.pop("max_answer_tokens")
+            del inference["max_think_tokens"]
+            inference["thinking"] = False
+            rewound += 1
+    assert rewound, "the fixture stopped carrying an inference block, so this proves nothing"
+
+    manifest = RunManifest.model_validate(payload)
+    for run in manifest.runs:
+        for use in run.models:
+            # The number is carried across rather than defaulted: the old key
+            # sized one call's answer and so does the new one.
+            assert use.model_ref.inference.max_answer_tokens == 900
+            assert "thinking" not in use.model_ref.inference.model_dump(mode="json")
+
+
+def test_a_settings_block_that_carries_both_budget_spellings_is_refused() -> None:
+    """The case that stops the migration turning `extra=forbid` into `extra=ignore`.
+
+    A rename written as "whichever key is there wins" would silently drop one of
+    two numbers an operator wrote. A payload claiming both budgets is not one
+    this migration can read, so it is left alone and the shape refuses it.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    for run in payload["runs"]:
+        for use in run["models"]:
+            use["model_ref"]["inference"]["max_output_tokens"] = 250
+
+    with pytest.raises(ValidationError, match="max_output_tokens"):
+        RunManifest.model_validate(payload)

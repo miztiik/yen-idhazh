@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { chartFlow, type FlowDay } from '../src/lib/charts/chart-flow';
 
 /**
- * The chart-arm flow, at a width that can hold it and one that cannot.
+ * The chart-drawing flow, at a width that can hold it and one that cannot.
  *
  * A Sankey label does not scale with the SVG: the font is fixed while the chart
  * redraws at container width, and the label column is a fixed 170 pixels. So a
@@ -39,7 +39,7 @@ test('the stepped list is the same flow the diagram draws', () => {
 		'Published'
 	]);
 	expect(steps.map((step) => step.value)).toEqual([1500, 1000, 150, 120]);
-	// Shares are of everything that reached the arm, which is what the diagram's
+	// Shares are of everything that reached chart drawing, which is what the diagram's
 	// own labels print.
 	expect(steps.map((step) => step.share)).toEqual([100, 67, 10, 8]);
 	expect(steps.map((step) => step.lost?.label ?? null)).toEqual([

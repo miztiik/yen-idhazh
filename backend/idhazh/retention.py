@@ -151,9 +151,10 @@ from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
 from idhazh import day_partition, ledger, month_partition, publish_telemetry, telemetry
-from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.contracts.visual_decision import VisualState
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -1357,6 +1358,67 @@ def prune_traces(
         freed += path.stat().st_size
         if not dry_run:
             path.unlink()
+
+    return TracePruneResult(
+        deleted=tuple(deleted),
+        bytes_freed=freed,
+        kept=kept,
+        dry_run=dry_run,
+    )
+
+
+# --- A trial run's ledgers ---------------------------------------------------
+
+
+def prune_trial_state(
+    state_dir: Path,
+    *,
+    dirname: str,
+    today: date,
+    within_days: int,
+    dry_run: bool = False,
+) -> TracePruneResult:
+    """Delete a trial run's day files past their window, whatever ledger wrote them.
+
+    A trial run exercises production's code path and writes every ledger it
+    would write, under `state/<dirname>/` instead of `state/`. Nothing reads
+    those rows - no published series, no gate, no console band - so the honest
+    retention is deletion, and the window is about disk and about a reader who
+    opens `state/` and wonders what a directory is.
+
+    It takes the tree whole rather than one ledger at a time, and that is the
+    difference from every prune above it. Those know which ledger they are
+    pruning and what its knob is called; this one does not need to, because
+    every file under here is the same kind of thing - a day of a run nobody
+    reads - and a per-ledger version would have to be edited every time a ledger
+    is added.
+
+    Reuses `TracePruneResult` rather than minting a shape with the same four
+    fields and a different name.
+
+    A file dated ahead of `today` is kept, the same property `prune_traces` and
+    `prune_seen` hold: a run handed an older `--date` must not delete the day
+    the next one appends to.
+    """
+    root = state_dir / dirname
+    if not root.is_dir():
+        return TracePruneResult((), 0, 0, dry_run)
+
+    deleted: list[str] = []
+    kept = 0
+    freed = 0
+    # One ledger directory per child, each a `yyyy/mm/dd` tree, so the walk is
+    # per ledger and `day_files` refuses a stray the same way it does anywhere.
+    for ledger_root in sorted(child for child in root.iterdir() if child.is_dir()):
+        for path in sorted(day_partition.day_files(ledger_root)):
+            written = date.fromisoformat(day_partition.date_of(path))
+            if (today - written).days < within_days:
+                kept += 1
+                continue
+            deleted.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
+            freed += path.stat().st_size
+            if not dry_run:
+                path.unlink()
 
     return TracePruneResult(
         deleted=tuple(deleted),

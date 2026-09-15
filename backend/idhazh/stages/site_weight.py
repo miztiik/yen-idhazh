@@ -1,7 +1,7 @@
 """Measure the built bundle against the alarm point and the Pages cap.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -11,9 +11,7 @@ from pathlib import Path
 from idhazh import (
     retention,
 )
-from idhazh.contracts.app_config import (
-    RetentionConfig,
-)
+from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.stages.common import LOG
 
 

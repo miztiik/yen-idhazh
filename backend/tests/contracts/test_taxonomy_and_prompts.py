@@ -70,7 +70,7 @@ def test_editing_one_definition_moves_the_prompt_and_nothing_else() -> None:
 
     A vocabulary that needs a code change to move its own definition is not
     config, whatever file it lives in. This test is what says so out loud: no
-    Python is edited between the two arms and no schema is regenerated, and the
+    Python is edited between the two cases and no schema is regenerated, and the
     block the labelling prompt is built from still moves.
     """
     a = taxonomy_fixture("definitions-a")
@@ -225,9 +225,10 @@ def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 16
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 19
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FailureCode.MODEL_REFUSED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
@@ -767,7 +768,7 @@ def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_wri
     writes the file agree about the line, and that the word that step writes when
     the kernel file is missing leaves the cell empty rather than raising.
     `/sys/fs/cgroup/memory.peak` has measured absent on a GitHub-hosted runner
-    every time this project has looked, so `unavailable` is the arm to expect.
+    every time this project has looked, so `unavailable` is the case to expect.
     """
     workflow = read_text(REPO_ROOT / ".github" / "workflows" / "digest.yml")
     assert "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" in workflow
@@ -890,22 +891,29 @@ def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() ->
     assert RuntimeCountersRow.from_csv_row(cells) == row
 
 
-def test_a_host_name_that_could_split_a_row_is_refused() -> None:
+def test_a_host_name_that_could_split_a_row_is_folded_onto_one_line() -> None:
     """`state/runtime-counters.csv` merges with the union driver, which is line-based.
 
     Eight shards append to one branch, and the merge keeps lines rather than
     parsing CSV. A cell holding a newline would be quoted correctly by the writer
     and still split one row in two the first time two shards raced.
+
+    The column refused such a value until 2026-09-15 and now folds it. Refusing
+    kept the file safe by losing the row - a whole run's counters thrown away
+    over a processor name nobody chose, read out of a kernel file. Folding keeps
+    both: the row lands, and it is one physical line.
     """
     for hostile in ("AMD EPYC\n7763", "AMD EPYC\r7763"):
-        with pytest.raises(ValueError, match="cpu_model"):
-            RuntimeCountersRow.model_validate(
-                {
-                    "date": "2026-08-26",
-                    "run_id": "2026-08-26-5",
-                    "shard": 0,
-                    "shards": 4,
-                    "scraped_at": "2026-08-26T21:32:30Z",
-                    "cpu_model": hostile,
-                }
-            )
+        row = RuntimeCountersRow.model_validate(
+            {
+                "date": "2026-08-26",
+                "run_id": "2026-08-26-5",
+                "shard": 0,
+                "shards": 4,
+                "scraped_at": "2026-08-26T21:32:30Z",
+                "cpu_model": hostile,
+            }
+        )
+
+        assert row.cpu_model == "AMD EPYC 7763"
+        assert len(row.csv_row()["cpu_model"].splitlines()) == 1

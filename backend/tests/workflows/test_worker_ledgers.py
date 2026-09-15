@@ -1,10 +1,12 @@
-"""Does a worker's row survive the run that produced it being thrown away?"""
+"""Does a worker's work survive the run that produced it being thrown away?"""
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import REPO_ROOT, read_text
@@ -26,6 +28,8 @@ from ._harness import (
     SUBSTITUTED_SHARDS,
     TOLERATED,
     WORK_LEDGER_STEPS,
+    WORK_PAYLOAD_ARTIFACTS,
+    _artifact_upload,
     _commit_call,
     _git,
     _isolated_env,
@@ -53,9 +57,10 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
     """The Oracle, in YAML: a cancelled job runs `always()` steps and skips the rest.
 
-    The items artifact carries a shard's verdicts for one day and has no `if:`,
-    so a cancelled job never uploads it. A run stopped between the workers and
-    the publish had measured every item and kept none of the measurements.
+    A shard's verdicts leave the runner inside its `items-<shard>` artifact,
+    which is never committed and expires. Until these steps existed a run
+    stopped between the workers and the publish had measured every item and kept
+    none of the measurements, so they are the copy that outlives the artifact.
     """
     workflow = _load_workflows()["digest.yml"]
     names = [step.get("name") for step in _steps(workflow, "work")]
@@ -86,6 +91,58 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         names.index(RECORD_STEP) + offset for offset in range(len(WORK_LEDGER_STEPS))
     ]
     assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
+
+
+def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
+    """The Oracle, in YAML: a step with no `if:` runs on `success()`, and a killed job is not one.
+
+    `work` writes each item's payloads as it finishes that item, so the items
+    directory holds every story the shard completed at the moment the bound
+    lands - which is how `record` above files rows on a cancelled shard at all.
+    Both artifacts carried no condition, so a cancelled shard uploaded neither
+    and assemble composed the day without them.
+
+    Measured on run 34852763827 (2026-09-14, four shards): three were cancelled
+    at `run.shard_timeout_minutes`, their `always()` ledger steps ran and filed
+    33 items as `outcome=ok, stage=publish`, and all three uploads were skipped.
+    The committed day carries 13 items - shard 3's count, and shard 3 is the one
+    shard that finished. The census over-reported by 3.5x and 33 articles of
+    model time were paid for and thrown away.
+
+    The two are named together because they have to be guarded together: the
+    decision naming a chart travels in `items/` and the chart's own bytes travel
+    in `shard-visuals-*`, so a guard on one alone publishes a story naming a
+    picture file that is not there.
+
+    It cannot settle whether assemble composes a partially-uploaded shard
+    correctly in every case; a real run is the check for that.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    steps = _steps(workflow, "work")
+    uploads = [
+        _artifact_upload(workflow, "work", artifact) for artifact in WORK_PAYLOAD_ARTIFACTS
+    ]
+
+    for artifact, step in zip(WORK_PAYLOAD_ARTIFACTS, uploads, strict=True):
+        guard = step.get("if")
+        assert guard is not None, (
+            f"the {artifact} upload carries no condition, so it runs on success() alone "
+            f"and a shard stopped by its own timeout skips it"
+        )
+        assert _normalize_condition(guard, f"work upload {artifact}") == "always()", (
+            f"a shard stopped by its own timeout must still upload {artifact}"
+        )
+
+    # Behind the ledger steps and never in front of them. A cancelled job spends
+    # one grace period on every `always()` step in order, and the committed rows
+    # are the copy that outlives this artifact's own expiry.
+    last_ledger = max(
+        steps.index(_step(workflow, "work", "name", name)) for name in WORK_LEDGER_STEPS
+    )
+    for artifact, step in zip(WORK_PAYLOAD_ARTIFACTS, uploads, strict=True):
+        assert steps.index(step) > last_ledger, (
+            f"the {artifact} upload must not spend the grace period the ledger steps need"
+        )
 
 
 def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
@@ -141,12 +198,14 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     """
     # The file each staged path resolves to. All four directories file by day
     # now, so the union driver has to reach a nested path - `state/**/*.csv` is
-    # the attribute line that does it.
+    # the attribute line that does it. The span rollup files by month, and the
+    # same attribute line covers it.
     written = {
         "state/item-health": ledger.item_health_relpath(SUBSTITUTED_DATE),
         "state/scores": score_writer.ledger_relpath(SUBSTITUTED_DATE),
         "state/score-index": score_writer.index_relpath(SUBSTITUTED_DATE),
         "state/runtime-counters.csv": "state/runtime-counters.csv",
+        "state/span-rollup": ledger.span_rollup_relpath(SUBSTITUTED_DATE[:7]),
     }
     assert set(written) == set(COMMIT_STAGED_PATHS["work"])
 
@@ -159,6 +218,66 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     ).stdout.splitlines()
 
     assert answered == [f"{path}: merge: union" for path in written.values()]
+
+
+#: Where each ledger the work stage appends to directly lands, as the staged path
+#: names it. Written out rather than derived, because `append_runtime_counters`
+#: writes a flat file and `append_span_rollup` writes a directory, so no rule
+#: turns a helper name into a path.
+WORK_STAGE_APPENDS: Final = {
+    "append_span_rollup": "state/span-rollup",
+}
+
+
+def test_every_ledger_the_work_stage_appends_to_is_staged_by_the_work_job() -> None:
+    """A shard's fold is worth nothing if the runner is the only place it lands.
+
+    `roll_up_spans` ran on every shard from 2026-09-06 and `append_span_rollup`
+    wrote `state/span-rollup/<YYYY-MM>.csv` into the runner's checkout. No commit
+    step named the path, so every fold died with its runner, and assemble - on
+    another machine, projecting a directory that was never there - published a
+    header row and no data for nine days. Nothing failed; the instrument simply
+    reported nothing.
+
+    The two lists this compares are written by different people at different
+    times: one is a call in a stage, the other is an argument in a workflow. This
+    is the test that makes the second follow the first.
+    """
+    source = read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "work.py")
+    called = set(re.findall(r"\bledger\.(append_[a-z_]+)\(", source))
+    assert called, "the work stage appends to no ledger - has the call moved?"
+    assert called <= set(WORK_STAGE_APPENDS), (
+        f"the work stage appends to {sorted(called - set(WORK_STAGE_APPENDS))}, "
+        "which this test cannot say a staged path for. Add it to WORK_STAGE_APPENDS "
+        "and to the work job's commit step."
+    )
+    staged = set(COMMIT_STAGED_PATHS["work"])
+    for helper in sorted(called):
+        assert WORK_STAGE_APPENDS[helper] in staged, (
+            f"stage_work calls ledger.{helper} but the work job never stages "
+            f"{WORK_STAGE_APPENDS[helper]}, so the rows die with the runner"
+        )
+
+
+def test_the_span_rollup_ships_with_a_header_so_the_commit_step_can_name_it() -> None:
+    """`git add` on a path that is not there aborts the whole step.
+
+    The commit step runs under `set -euo pipefail` and stages four ledgers in one
+    call, so a missing `state/span-rollup` would take item-health, the scores and
+    the runtime counters down with it on every fresh clone. The same reason
+    `state/feed-retirements.csv` and `state/counterfactual-scores/` ship with a
+    header and no rows.
+    """
+    relative = f"{ledger.STATE_DIRNAME}/{ledger.SPAN_ROLLUP_DIRNAME}"
+    assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
+    committed = subprocess.run(
+        ["git", "ls-files", relative],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert committed, f"{relative} must hold at least one committed file"
 
 
 def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
@@ -281,7 +400,7 @@ def test_a_second_attempt_at_one_shard_leaves_the_row_the_first_one_pushed(
     own, `merge=union` keeps both lines, and the ledger ends up with a key twice.
     That is how run `2026-08-29-3` came to hold six counter rows for four shards.
 
-    Both arms run the shipped script over the same repository. The one without
+    Both cases run the shipped script over the same repository. The one without
     the setting is the defect; the one with it is the fix. The row that survives
     is the one origin already published, so the commit adds nothing and deletes
     nothing the tip holds - which is the property that makes settling after a

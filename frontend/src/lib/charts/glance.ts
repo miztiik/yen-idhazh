@@ -21,7 +21,7 @@ import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
 import { paint, type ChartToken } from './theme';
-import type { StageFailureSeries } from './series';
+import { TIME_BANDS, type StageFailureSeries, type TimeSplitDay } from './series';
 
 export interface GlanceDay {
 	date: string;
@@ -77,26 +77,26 @@ export function runHealth(manifests: readonly RunSummary[]) {
 /** What share of a day's published items carried a chart, in percent.
  *
  * Null where the day published nothing. A share of no articles is not zero
- * percent, it is no measurement at all, and a zero would read as an arm that
- * ran and reached nobody.
+ * percent, it is no measurement at all, and a zero would read as chart drawing
+ * that ran and reached nobody.
  */
 export function coverageOf(day: GlanceDay): number | null {
 	if (day.items <= 0) return null;
 	return (day.published / day.items) * 100;
 }
 
-/** The three numbers the chart arm's retirement rule is written from. */
-export interface ArmThresholds {
+/** The three numbers the chart retirement rule is written from. */
+export interface ChartThresholds {
 	/** The span the rule is stated over. */
 	ruleDays: number;
-	/** Minutes per published visual that retires the arm. */
+	/** Minutes per published visual that retires chart drawing. */
 	minutesTarget: number;
 	/** The share of published items that must carry a chart, in whole percent. */
 	coveragePct: number;
 }
 
 /** Both halves of the rule, each as a bar, a trend and a clause of one sentence. */
-export interface ChartArm {
+export interface ChartRule {
 	/** The window is narrower than the rule's own span, so no median is offered. */
 	narrow: boolean;
 	/** Window median minutes per published visual, or null. */
@@ -131,7 +131,7 @@ function trim(value: number): string {
 function verdictOf(
 	minutes: number | null,
 	coverage: number | null,
-	thresholds: ArmThresholds,
+	thresholds: ChartThresholds,
 	days: number
 ): string {
 	const cost =
@@ -139,7 +139,7 @@ function verdictOf(
 			? `The median day has no minutes on record over these ${days} days`
 			: `The median day spends ${minutes.toFixed(1)} minutes per visual, ` +
 				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
-				`${trim(thresholds.minutesTarget)} that retires the arm`;
+				`${trim(thresholds.minutesTarget)} that retires chart drawing`;
 	const reach =
 		coverage === null
 			? 'no day published anything to put a visual on'
@@ -150,18 +150,18 @@ function verdictOf(
 }
 
 /**
- * The chart arm judged against its own written rule, over the open window.
+ * The chart drawing judged against its own written rule, over the open window.
  *
  * `windowDays` is the span the page is holding, not the number of days the
  * ledger answered for. Under the rule's own span nothing is measured at all: a
  * median of the wrong span is the same figure with a different meaning, and
  * nothing on the page would say which one is being read.
  */
-export function chartArm(
+export function chartRule(
 	days: readonly GlanceDay[],
-	thresholds: ArmThresholds,
+	thresholds: ChartThresholds,
 	windowDays: number
-): ChartArm {
+): ChartRule {
 	const narrow = windowDays < thresholds.ruleDays;
 	const ordered = [...days].sort((a, b) => a.date.localeCompare(b.date));
 	const costs = narrow
@@ -441,6 +441,71 @@ export function failureMix(series: readonly StageFailureSeries[], shape: StackSh
 }
 
 const MIX_TOKENS = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
+
+/** One token per band of the item-time stack, in `TIME_BANDS` order.
+ *
+ * Eight bands and eight palette tokens, so the ramp is taken in order and no
+ * band shares a colour with another. Bound to the band and never to its size:
+ * a colour that followed the largest band would repaint the chart every day.
+ */
+const TIME_TOKENS: readonly ChartToken[] = [
+	'--chart-1',
+	'--chart-2',
+	'--chart-3',
+	'--chart-4',
+	'--chart-5',
+	'--chart-6',
+	'--chart-7',
+	'--chart-8'
+];
+
+/** Where did an item's time go, and is the split changing?
+ *
+ * Stacked and absolute, like the failure mix: the column height is the mean
+ * item's whole clock and the bands are what claimed it, so a day that got
+ * slower and a day that changed shape do not draw alike. The top band is the
+ * time no named step claimed, which is what makes a regression in an untimed
+ * step visible rather than merely absent.
+ *
+ * The same array draws as lines, which answers the other half - what one step
+ * did on its own, which a stack hides when one band halves while its neighbour
+ * doubles. Nothing is reshaped between the two shapes.
+ */
+export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape = 'bars') {
+	const columns = days.map((day) => dayMonth(day.date));
+	return stacked(
+		columns,
+		TIME_BANDS.map((band, index) => ({
+			label: band.label,
+			token: TIME_TOKENS[index % TIME_TOKENS.length],
+			values: days.map((day) => Math.round(day.ms[index] ?? 0))
+		})),
+		shape
+	);
+}
+
+/** Every band at one day, for the strip under the chart.
+ *
+ * A stack is the hardest shape to read one band off, so the strip prints all
+ * eight at the hovered column. Each carries its share of the day's total in the
+ * same line as its milliseconds, because a band's size is the question and a
+ * reader should not have to divide two numbers off a chart to answer it.
+ */
+export function timeSplitColumns(days: readonly TimeSplitDay[]): DayReadout[] {
+	return days.map((day) => ({
+		x: 0,
+		date: day.date,
+		rows: TIME_BANDS.map((band, index) => {
+			const ms = Math.round(day.ms[index] ?? 0);
+			const share = day.total > 0 ? Math.round((100 * ms) / day.total) : null;
+			return {
+				label: band.label,
+				value: share === null ? `${ms} ms` : `${ms} ms, ${share}%`,
+				colour: `var(${TIME_TOKENS[index % TIME_TOKENS.length]})`
+			};
+		})
+	}));
+}
 
 /** Every stage's failure count on one day, for the strip under the chart.
  *

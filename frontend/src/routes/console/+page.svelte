@@ -3,7 +3,7 @@
 	 *
 	 * It answers one question and refuses the others: did the pipeline work. Did
 	 * the runs finish, how long each stage took, what the truncation cap is
-	 * costing, and whether the chart arm earns its minutes. Who supplied the day
+	 * costing, and whether the chart drawing earns its minutes. Who supplied the day
 	 * is on `/console/voices/` - every feed and source panel left this page on
 	 * 2026-09-14 and none of them stayed behind. What the model wrote is on
 	 * `/console/model/` and the hardware under it is on `/console/machine/`.
@@ -24,6 +24,7 @@
 		grouped,
 		parseTelemetryCsv,
 		rowsInWindow,
+		timeSplit,
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import {
@@ -73,7 +74,7 @@
 	} from '$lib/charts/frame';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
-		chartArm,
+		chartRule,
 		failureMix,
 		failureMixColumns,
 		publishedSkyline,
@@ -81,6 +82,8 @@
 		runHealth,
 		siteCost,
 		sizeGain,
+		timeSplitChart,
+		timeSplitColumns,
 		type Skyline,
 		type SkylineBar
 	} from '$lib/charts/glance';
@@ -372,19 +375,19 @@
 	function pct(value: number | null): string {
 		return value === null ? '-' : `${value}%`;
 	}
-	/** The chart arm's own rule, read from config rather than written into a
+	/** The chart drawing's own rule, read from config rather than written into a
 	 * component. An operator moves a threshold in `config/appearance.json`. */
 	const thresholds = $derived({
-		ruleDays: data.console.chart_arm_rule_days,
-		minutesTarget: data.console.chart_arm_minutes_target,
-		coveragePct: data.console.chart_arm_coverage_pct
+		ruleDays: data.console.chart_rule_days,
+		minutesTarget: data.console.chart_minutes_target,
+		coveragePct: data.console.chart_coverage_pct
 	});
-	/** The chart-arm days inside the open window. The rule reads them and so do
+	/** The chart-drawing days inside the open window. The rule reads them and so do
 	 * the rows behind the disclosure: a table under a control that ignored it
 	 * would answer a question the reader did not ask, at a span nothing on the
 	 * page states. */
 	const chartsInWindow = $derived(data.charts.filter((day) => inWindow(day.date)));
-	const arm = $derived(chartArm(chartsInWindow, thresholds, windowDays));
+	const rule = $derived(chartRule(chartsInWindow, thresholds, windowDays));
 	/** What the extractor found over the open window, reduced once per span on the
 	 * server. The browser picks the open one; nothing re-reads a record to change
 	 * window. */
@@ -642,6 +645,29 @@
 	 * fills as each one does. The panel says which of those two it is in.
 	 */
 	const mixSeries = $derived(failureSeriesFor(rows));
+	/** Where the time went, over the same span the mix chart reads and for the
+	 * same reason: derived from the rows in hand, so the two panels can never be
+	 * drawn over different days.
+	 *
+	 * Trimmed at both ENDS to the days that timed an item, and never in the
+	 * middle. A run before the item clock was published carries no
+	 * `item_total_ms` at all, so leading and trailing columns of eight zeroes
+	 * would say the item took no time rather than that nothing timed it. A gap
+	 * inside the span is kept: closing it up would slide every later day one
+	 * column left and draw the hole as if it were the next day along.
+	 */
+	const timeDays = $derived.by(() => {
+		const dates = datesIn(rows);
+		if (dates.length === 0) return [];
+		const days = timeSplit(rows, { start: dates[0], end: dates[dates.length - 1] });
+		const first = days.findIndex((day) => day.items > 0);
+		if (first === -1) return [];
+		const last = days.findLastIndex((day) => day.items > 0);
+		return days.slice(first, last + 1);
+	});
+	/** The server drew stacked, like the mix chart. Picking `Lines` redraws the
+	 * identical values. */
+	let timeShape = $state<StackShape>('bars');
 	/** The share of planned items that finished, drawn from the manifests the
 	 * page already carries. Built here rather than on the server: the shape is
 	 * the engine's and the numbers are two, so drawing it at build time put a
@@ -762,17 +788,17 @@
 	{#snippet articleBars()}{@render skylineBars(articleSkyline, 'articles', 'Articles published')}{/snippet}
 	{#snippet visualBars()}{@render skylineBars(visualSkyline, 'visuals', 'Visuals published')}{/snippet}
 
-	<!-- Which way a chart-arm figure has moved across the window it draws.
+	<!-- Which way a chart-drawing figure has moved across the window it draws.
 
 	     The polarity comes off the bar's own marks, so the delta and the target
 	     marker above it read one declaration: fewer minutes spent is better and
 	     a wider chart share is better, and neither is decided here. -->
-	{#snippet armMove(change: number | null, sense: TargetSense, figure: string)}
+	{#snippet ruleMove(change: number | null, sense: TargetSense, figure: string)}
 		{#if change !== null}
 			{@const verdict = movementVerdict(change, sense)}
-			<p class="arm-move" data-arm-move={figure}>
+			<p class="rule-move" data-rule-move={figure}>
 				<span
-					class="arm-move-value"
+					class="rule-move-value"
 					data-movement={change.toFixed(4)}
 					data-polarity={sense}
 					data-movement-verdict={verdict}
@@ -948,6 +974,59 @@
 				     what one stage did on its own, which a stack hides when one band
 				     halves while its neighbour doubles. Same array either way. -->
 				<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
+			{/if}
+		</Reserved>
+	</Panel>
+
+	<!-- The note is not a restatement of the encoding - the strip under the chart
+	     already prints every band at the hovered day. It is there for the one
+	     thing the shape cannot say: that the top band is time no step claimed,
+	     and that it is the band to look at first. -->
+	<Panel
+		title="Where an item's time went"
+		note="One column is one day and its height is the mean item's whole clock, split by what claimed it. The top band is time no named step claimed, so a step nobody thought to time shows up there rather than nowhere."
+	>
+		<!-- Same reserved box as the mix chart above, so this panel and everything
+		     under it stay where they were drawn whether the months are still
+		     arriving, absent, refused, or read and holding nothing. -->
+		<Reserved
+			panelState={timeDays.length === 0 ? telemetryState : 'ready'}
+			height={data.console.chart_height}
+			width={data.console.chart_width}
+			name="time-split"
+			label="Mean milliseconds an item spent in each step, per day"
+		>
+			{#if timeDays.length === 0}
+				<!-- The months were read and no row carries an item clock. That is a
+				     different answer from "no month arrived", and it is the one an
+				     operator needs: the instrument has not reached this data yet. -->
+				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-time-split-empty="none">
+					No item in the months this session has read carries an end-to-end clock, so
+					there is no time to split.
+				</p>
+			{:else}
+				<Chart
+					svg=""
+					option={timeSplitChart(timeDays, timeShape).option}
+					width={760}
+					height={220}
+					label="Mean milliseconds an item spent in each step, per day. One column is one day and its height is the mean item's whole clock. The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed. Drawn as lines instead, each step is its own milliseconds a day and the whole clock is not shown."
+					columns={timeSplitColumns(timeDays)}
+					readoutName="time-split"
+					readoutMaxShare={data.chart.readout_max_share}
+					restingNote=", the newest day"
+					hint="Point at a day to read every step at once. Left and Right step through the days, Escape returns to the newest."
+					pending="The split is drawn once the engine loads. Every step's milliseconds and share are in the strip below it."
+					fetched
+				/>
+				<!-- Stacked answers what the split is and whether the item got slower;
+				     lines answer what one step did on its own, which a stack hides when
+				     one band halves while its neighbour doubles. Same array either way. -->
+				<ShapeSwitch
+					bind:shape={timeShape}
+					name="time-split"
+					label="How to draw the item time split"
+				/>
 			{/if}
 		</Reserved>
 	</Panel>
@@ -1304,59 +1383,59 @@
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Visuals drawn for articles</h2>
 		<div
-			data-windowed="chart-arm"
+			data-windowed="chart-drawing"
 			data-window-days={windowDays}
 			data-model-rule="no"
-			data-model-rule-name="chart-arm"
-			data-model-rule-none="the chart arm is a different model call, judged on its own rule"
+			data-model-rule-name="chart-drawing"
+			data-model-rule-none="the chart drawing is a different model call, judged on its own rule"
 		>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-				Over {thresholds.ruleDays} days with the chart-only gate on, the arm is retired if the
+				Over {thresholds.ruleDays} days with the chart-only gate on, chart drawing is retired if the
 				median day spends more than {thresholds.minutesTarget} minutes per published visual, or
 				puts a visual on fewer than {thresholds.coveragePct}% of the items it published. Over
 				{windowDays} days.
 			</p>
-			<div class="console-panel mt-3" data-charts="arm">
-				{#if arm.narrow}
+			<div class="console-panel mt-3" data-charts="rule">
+				{#if rule.narrow}
 					<!-- The rule is stated over its own span, and a median of any other
 					     span is the same figure with a different meaning. -->
-					<p class="text-[0.9375rem] text-text-secondary" data-window-too-narrow="chart-arm">
+					<p class="text-[0.9375rem] text-text-secondary" data-window-too-narrow="chart-drawing">
 						The rule reads {thresholds.ruleDays} days. Widen the window to see it.
 					</p>
 				{:else}
-					<p class="text-[0.9375rem] text-text" data-charts-verdict>{arm.verdict}</p>
-					<div class="arm-figures">
-						<div class="arm-figure" data-arm-figure="minutes">
+					<p class="text-[0.9375rem] text-text" data-charts-verdict>{rule.verdict}</p>
+					<div class="rule-figures">
+						<div class="rule-figure" data-rule-figure="minutes">
 							<TargetBar
-								marks={arm.minutesMarks}
+								marks={rule.minutesMarks}
 								label="Minutes per visual"
-								valueText={arm.minutes === null ? '-' : arm.minutes.toFixed(1)}
+								valueText={rule.minutes === null ? '-' : rule.minutes.toFixed(1)}
 								targetText="Retired above {thresholds.minutesTarget}, on the median day."
 								emptyNote="No minutes are on record for these {windowDays} days."
 							/>
 							<Sparkline
-								marks={arm.minutesTrend}
+								marks={rule.minutesTrend}
 								width={220}
 								height={30}
-								label="Minutes per visual, day by day, over {arm.minutesDays} measured days"
+								label="Minutes per visual, day by day, over {rule.minutesDays} measured days"
 							/>
-							{@render armMove(arm.minutesTrend.movement, arm.minutesMarks.sense, 'minutes')}
+							{@render ruleMove(rule.minutesTrend.movement, rule.minutesMarks.sense, 'minutes')}
 						</div>
-						<div class="arm-figure" data-arm-figure="coverage">
+						<div class="rule-figure" data-rule-figure="coverage">
 							<TargetBar
-								marks={arm.coverageMarks}
+								marks={rule.coverageMarks}
 								label="Published articles with a visual"
-								valueText={arm.coverage === null ? '-' : `${Math.round(arm.coverage)}%`}
+								valueText={rule.coverage === null ? '-' : `${Math.round(rule.coverage)}%`}
 								targetText="Retired below {thresholds.coveragePct}%, on the median day."
 								emptyNote="No day in these {windowDays} days published anything to put a visual on."
 							/>
 							<Sparkline
-								marks={arm.coverageTrend}
+								marks={rule.coverageTrend}
 								width={220}
 								height={30}
-								label="Share of published articles carrying a visual, day by day, over {arm.coverageDays} measured days"
+								label="Share of published articles carrying a visual, day by day, over {rule.coverageDays} measured days"
 							/>
-							{@render armMove(arm.coverageTrend.movement, arm.coverageMarks.sense, 'coverage')}
+							{@render ruleMove(rule.coverageTrend.movement, rule.coverageMarks.sense, 'coverage')}
 						</div>
 					</div>
 				{/if}
@@ -1650,7 +1729,7 @@ color: var(--color-text-tertiary);
 /* Two figures, side by side where there is room and stacked where there is
    not. The rule names both, so reading one without the other answers half a
    question. */
-.arm-figures {
+.rule-figures {
 display: grid;
 grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
 gap: var(--space-6);
@@ -1659,7 +1738,7 @@ margin-block-start: var(--space-4);
 
 /* Four cards, and they wrap rather than scroll. The narrowest is set to hold
    the longest label without breaking a word, so a 360px column gets one card a
-   row and a wide console gets four - the same rule the chart-arm figures above
+   row and a wide console gets four - the same rule the chart-drawing figures above
    follow, at the width four cards need instead of two. */
 .extraction-figures {
 display: grid;
@@ -1667,7 +1746,7 @@ grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 gap: var(--space-4);
 }
 
-.arm-figure {
+.rule-figure {
 display: flex;
 flex-direction: column;
 gap: var(--space-2);
@@ -1678,24 +1757,24 @@ min-inline-size: 0;
    got 3 percent slower is not a broken run, and painting it in --band-low is
    how an operator learns to ignore --band-low. The sign is printed beside the
    colour, so the hue is never the only signal. */
-.arm-move {
+.rule-move {
 margin: 0;
 font-size: var(--text-xs);
 line-height: var(--leading-xs);
 color: var(--color-text-tertiary);
 }
 
-.arm-move-value[data-movement-verdict='good'] {
+.rule-move-value[data-movement-verdict='good'] {
 color: var(--movement-good);
 }
-.arm-move-value[data-movement-verdict='bad'] {
+.rule-move-value[data-movement-verdict='bad'] {
 color: var(--movement-bad);
 }
-.arm-move-value[data-movement-verdict='neutral'] {
+.rule-move-value[data-movement-verdict='neutral'] {
 color: var(--color-text-secondary);
 }
 
-/* The chart-arm flow, as a stepped list. It replaces the diagram below the
+/* The chart-drawing flow, as a stepped list. It replaces the diagram below the
    page's own stacking breakpoint and never sits beside it: two shapes of one
    flow on one screen is two answers to one question. */
 .flow-steps {

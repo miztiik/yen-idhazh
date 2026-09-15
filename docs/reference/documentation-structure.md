@@ -1,7 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
 This reference is **domain-neutral** so it can be copied between projects unchanged (CLAUDE.md section 5).
@@ -36,6 +35,7 @@ A topic that needs deeper nesting is two topics. Split it.
 - "See also" callout with cross-tier links (architecture <-> how-to <-> concepts <-> reference).
 - Content that stays in its tier (no mixed-purpose docs).
 - ASCII only - see CLAUDE.md section 5.
+- Any diagram drawn to [Diagrams](#diagrams) - it carries its own colours, because the renderer's default palette follows the reader's theme and the author only saw one of them.
 
 ## Doc-class routing contract
 
@@ -48,7 +48,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 | **How-to doc** | `docs/how-to/<verb>-<slug>.md` | Operator running a procedure | Living runbook | Ordered steps, inputs, validation, failure modes | Rationale prose; concept definitions |
 | **Reference doc** | `docs/reference/*.md` | Someone needing an exact value | Living table | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure |
 | **Agent notes** | `docs/reference/agent-notes.md` (index) + `docs/reference/agent-notes/<tool-family>.md` | Anyone running commands in the repo | Living list | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
-| **Benchmark record** | `docs/reference/benchmarks/<what-was-measured>.md` | Anyone citing or re-running that run | Living, one question one answer - a re-run REPLACES the page and moves **Last Updated**; git history holds what it said | One run: its conditions, method, arms, raw figures, and what it settles and does not | The rule the figures justify; a figure a later run superseded; a date in the filename |
+| **Benchmark record** | `docs/reference/benchmarks/<what-was-measured>.md` | Anyone citing or re-running that run | Living, one question one answer - a re-run REPLACES the page and moves **Last Updated**; git history holds what it said | One run: its conditions, method, cases, raw figures, and what it settles and does not | The rule the figures justify; a figure a later run superseded; a date in the filename |
 | **Subject dossier** | `docs/reference/<family>/<slug>.md`, indexed by `docs/reference/<family>.md` | Anyone choosing, adopting or retiring one of a set of interchangeable subjects | Living, one current reading a quantity a subject - a new reading REPLACES the old and moves **Last Updated**; git history holds what it said | One subject: its identity, its one current reading of every quantity with hardware and date, its verdict, its lifecycle status, and a link to every record behind them | A second reading of one quantity; another subject's figures; a run's conditions and method, which is a benchmark record |
 | **Plan-doc** | `TODO/<YYYYMMDD>-<slug>-plan.md` | Next person picking up work | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers | Rationale prose; decisions; rejected alternatives |
 
@@ -62,9 +62,10 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 6. Architecture choice with an actively explored rejected alternative, non-trivial reversal cost, and cross-system consequences? -> a `## Design rationale` / `## Rejected alternatives` section ON the living doc it impacts (concept / how-to / subsystem). No ADR file, no `decisions/` directory. If any leg is missing, just update the living doc's current-state text.
 7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
 8. A tool quirk, an environment trap, or a command whose result cannot be trusted at face value? -> the **agent-notes reference.** Not a private memory file - see below. It is one page until it stops being readable as one; then the stem path becomes an index and each child is named for the tool family whose output lies, so every inbound link keeps working.
-9. A benchmark run - a sweep, a candidate priced, two arms raced? -> its own **benchmark record**, and a link from the instrument log. Never an append to the log. See below.
+9. A benchmark run - a sweep, a candidate priced, two cases raced? -> its own **benchmark record**, and a link from the instrument log. Never an append to the log. See below.
 10. What happens to an artefact as it ages - kept, summarised, or removed, and on what age? -> the **concept doc** that owns that lifecycle, carrying a dated inventory of the artefacts and the rule that decides one it does not list. Not the repository-layout doc: that answers where a thing lives, and where it lives does not change when a run appends to it.
 11. A figure that belongs to one interchangeable subject rather than to the system - a component that can be swapped, where the same quantity means something else once it has been? -> that subject's **dossier**, reached through its index. The test is whether naming the figure needs the subject named first; where it does, the shared reference doc keeps only what is not per-subject and links to the dossier for what is.
+12. A diagram? -> inside the doc it explains, drawn to the rule in [Diagrams](#diagrams) below. It is never a page of its own and never an image file: a picture nobody can diff is a picture that goes stale silently.
 
 ### A benchmark run gets its own page, and never the log's name
 
@@ -77,7 +78,7 @@ the one door nobody guards, because each append is individually correct.
 
 So they separate:
 
-- **The record holds the run.** Conditions, method, arms, raw figures, and what
+- **The record holds the run.** Conditions, method, cases, raw figures, and what
   it settles and does not. It is **frozen** once written: a later run does not
   edit it, it gets its own record.
 - **The instrument log holds the figure now in force**, one per quantity, and
@@ -201,6 +202,22 @@ page that is too long costs a diluted answer; a page nobody opens costs a
 confident wrong one. Where the split test and the merge test disagree, the page
 stays whole.
 
+**The page you add to pays first.** A rule with no moment is a rule nobody runs,
+and the moment is when somebody already has the page open and already
+understands the material. Before you add a section, apply the split test to the
+page you are adding it to. Where that page already holds two questions, your new
+section starts the new page and takes its nearest sibling with it.
+
+**One addition buys at most one cut.** Nobody is asked to split a whole page, and
+a page needing four cuts gets them from four people who were each already there.
+That is what makes this scale where a migration project does not: the cost falls
+in proportion to how often a page is added to, so the pages growing fastest are
+the ones cut soonest.
+
+Where you judge the page whole, say so in the pull request in one line. A split
+declined on purpose and a split nobody considered produce the same diff, and
+only the sentence tells them apart.
+
 ### What a sentence has to do to stay
 
 **Keep the sentence a reader who skipped it would act wrongly without. Cut the
@@ -268,6 +285,23 @@ than a measurement (Guardrail #10), which is enough to compare pages and not eno
 quote anywhere else. Run it before a docs pass to pick the page, and after one to
 see what moved.
 
+**`--changed` narrows it to the pages one change touched, and adds their rank.**
+
+```text
+python backend/utilities/doc_load.py --changed docs/concepts/config.md
+```
+
+Rank is the row's place among every page by weight, and it is the one number the
+whole-tree table cannot tell you about your own page: whether the section you
+just added made a heavy page heavier. A path the standard does not govern is
+skipped in silence, because the caller is usually a CI step handing over
+whatever the diff listed.
+
+That caller is the `docs` job in `ci.yml`, which writes these rows into the run
+summary of any change that touched a page. It gates nothing and can fail
+nothing - it exists because the rule is that the page you add to pays first, and
+a rule whose input nobody sees is a rule nobody runs.
+
 ### `docs/` is the memory
 
 Everything a future contributor or agent needs is written here, in a file that
@@ -317,6 +351,89 @@ exception.
 ### Plan-doc single-snapshot rule
 
 The top of a plan-doc is exactly one block - title, Last Updated, and one-paragraph Status. Previous status text is **deleted** at every phase boundary. Stacked "previous header" layers are a band-aid for missing snapshot semantics and are forbidden by CLAUDE.md Guardrail #5. History lives in `git blame` and merge-commit titles.
+
+## Diagrams
+
+A diagram in this repository is Mermaid in a fenced ` ```mermaid ` block, and it **carries its own colours**. Nothing may be left to the renderer's default, because the renderer picks a light or a dark palette from the reader's own setting and the author only ever looked at one of them.
+
+**The failure is specific and it is always the same one.** A node styled with a pale fill and no explicit text colour is black-on-pale in light mode and white-on-pale in dark mode, and the second one is unreadable. Edge labels, subgraph titles and arrowheads are worse: they take the theme's foreground colour even when every node has been styled, so they turn white and vanish against a light page - or black and vanish against a dark one. The author sees a correct diagram and half the readers see holes in it.
+
+**So a diagram brings its own surface.** Every fill, every stroke and every piece of text is stated, on a dark ground that is legible under both settings. The cost is real and worth naming: a reader on a light page sees a dark panel rather than a diagram that blends into the prose. That is the trade - one diagram that is right for everybody, against two that are each right for half.
+
+### The opening line, which is not optional
+
+```
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+```
+
+`theme: base` is what stops the renderer choosing. Without it the `themeVariables` are merged into a palette that still flips. The five that are easy to forget are the five that break: `textColor` paints edge labels and subgraph titles, `edgeLabelBackground` paints the chip behind an edge label - left unset the renderer computes one, and it comes out a muddy olive - `lineColor` paints the arrows, and `clusterBkg` with `clusterBorder` paint the box a `subgraph` draws.
+
+### The class vocabulary
+
+Seven classes, each with one meaning. A diagram uses the ones it needs and defines no others - a new class is a new meaning, and a meaning that appears in one diagram is a meaning no reader learns.
+
+```
+classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
+classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,color:#e6e9f0;
+```
+
+| Class | Shape it goes on | What it means |
+| --- | --- | --- |
+| `stage` | rectangle | A step that does work. The default; most nodes are this. |
+| `decision` | `{"..."}` diamond | A branch. Every arrow leaving one carries a label. |
+| `yes` | rectangle | The branch that continues, passes, or publishes. |
+| `no` | rectangle | The branch that stops, refuses, or fails. |
+| `warn` | rectangle | The branch that neither passes nor fails - held, degraded, or waiting on a person. |
+| `store` | `[("...")]` cylinder | Something persisted: a committed file, a ledger, a cache. |
+| `ext` | rectangle, dashed | Something outside this repository. The dashes say "not ours" without a second colour. |
+
+**Green and red are the outcome, never the subject.** A node is `yes` because that path passed, not because it is a nice thing. A stage that happens to be about validation is `stage`. Used this way the two colours are worth reading; used decoratively they are worth nothing, and a reader stops trusting them everywhere else on the page.
+
+**Colour is never the only carrier.** `yes` and `no` sit on labelled arrows out of a diamond, so the meaning survives a monochrome print and a reader who cannot separate the two hues. A diagram that needs its colours to be understood is a diagram with a missing label.
+
+### The third dimension: which part of the system a node belongs to
+
+The classes above say what a node **is** and what an outcome **means**. Neither says **where in the system it lives**, and a diagram that crosses two subsystems without saying so reads as one undifferentiated thing. So a node that belongs to a named part of the system sits inside a `subgraph`, and the subgraph carries that part's accent.
+
+**The accent is the border and the title, never the fill.** Every box keeps the same dark ground. This is the rule that stops the palette lying: a red-bordered box is not a red node, so the outcome colours above keep meaning exactly one thing. Boxes are background, nodes are foreground, and the two never compete.
+
+```
+classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
+classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
+classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
+classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+```
+
+**This project is domain-neutral everywhere else on this page; the table below is the one exception, because an accent that is not the same colour on every page is worth nothing.** A project copying this page replaces the rows and keeps the rule.
+
+| Class | Covers | Where the reader goes next |
+| --- | --- | --- |
+| `sysIngest` | Feeds, first sighting, feed health, scoring and ranking - everything that decides what is a candidate | [../architecture/sources/](../architecture/sources/), the `plan` stage |
+| `sysExtract` | Fetch, extract, sanitize. The trust boundary is inside this one | [../architecture/extraction/](../architecture/extraction/), the `work` stage |
+| `sysModel` | The summariser calls, classification, the visual plan | [../architecture/summarize/](../architecture/summarize/), the `work` stage |
+| `sysPublish` | Assemble, the digest tree, the published site | [../architecture/publishing/](../architecture/publishing/), the `assemble` stage |
+| `sysEval` | Model validation, the bench, drift review, the eval ledger | [github-actions.md](github-actions.md), `validate.yml`, `measure.yml` |
+| `sysOps` | CI, the prune, backfill, the operator console - work that serves the pipeline rather than the reader | [github-actions.md](github-actions.md), `ci.yml`, `prune.yml` |
+
+**Name the box for the thing a reader can go and look at.** `Content refresh - digest.yml` is a box title; `Stage 2` is not. The title is how a reader gets from the picture to the code, so it carries the workflow's own display name or the architecture directory's own name and nothing invented here (CLAUDE.md section 0b).
+
+**One accent per box, and a box only where it earns one.** A diagram entirely inside one subsystem needs no boxes at all - six grey rectangles in a labelled box say less than six grey rectangles. Boxes are for the diagram that crosses a boundary, which is the diagram where a reader asks "wait, which part is doing that?"
+
+### Checks before a diagram merges
+
+1. The `%%{init...}%%` line is present and names `theme: base`.
+2. Every node is in a class. An unstyled node is the bug this whole rule exists for.
+3. Every arrow out of a diamond has a label.
+4. `yes` and `no` mark outcomes, not subjects.
+5. Every `subgraph` carries a `sys*` accent, and its title names something a reader can go and open.
+6. Read it once with the page on light and once on dark. Both, not one.
 
 ## See also
 

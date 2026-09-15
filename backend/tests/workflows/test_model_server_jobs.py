@@ -28,7 +28,7 @@ from ._harness import (
     LLAMA_PORT_ENV,
     LLAMA_PORT_READ,
     LLAMA_PORT_VALUE,
-    LLAMA_RUNTIME_WORKFLOWS,
+    LLAMA_SERVER_WORKFLOWS,
     MEMORY_PEAK_FILE,
     MEMORY_SUMMARY_STEP,
     METRICS_ENDPOINT,
@@ -65,7 +65,7 @@ from ._harness import (
     requires_bash,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
@@ -75,7 +75,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     existed for one reason: `digest.yml` started its server before
     `pip install -e .` ran, so the package was not importable yet. The install
     moved one step earlier and the copy went. While it existed the two halves
-    drifted, and the arm that drifted was the one nobody diffed - `validate.yml`
+    drifted, and the case that drifted was the one nobody diffed - `validate.yml`
     qualified a candidate on a server the daily run does not run.
 
     The install ordering is the whole reason, so it is asserted here rather than
@@ -84,24 +84,27 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     """
     workflows = _load_workflows()
     starters = _server_starters(workflows)
-    assert starters == {where: name for where, (name, _) in SERVER_STARTERS.items()}
+    assert starters == {
+        where: tuple(name for name, _ in declared) for where, declared in SERVER_STARTERS.items()
+    }
 
-    for (filename, job_name), (step_name, config_root) in sorted(SERVER_STARTERS.items()):
-        where = f"{filename}/{job_name}/{step_name}"
-        names = [step.get("name") for step in _steps(workflows[filename], job_name)]
-        assert "Install" in names, f"{where} must install the package it imports"
-        assert names.index("Install") < names.index(step_name), (
-            f"{where} imports idhazh, so the install runs first"
-        )
+    for (filename, job_name), declared in sorted(SERVER_STARTERS.items()):
+        for step_name, config_root in declared:
+            where = f"{filename}/{job_name}/{step_name}"
+            names = [step.get("name") for step in _steps(workflows[filename], job_name)]
+            assert "Install" in names, f"{where} must install the package it imports"
+            assert names.index("Install") < names.index(step_name), (
+                f"{where} imports idhazh, so the install runs first"
+            )
 
-        script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
-        assert "from idhazh.llm.server import server_argv" in script, where
-        if config_root is None:
-            continue
-        assert f'config.load(Path("{config_root}"))' in script, f"{where} reads {config_root}"
-        # NUL-separated, so a flag value carrying a space stays one argument.
-        assert "mapfile -d '' LLAMA_ARGV" in script, where
-        assert 'port=int(os.environ["LLAMA_PORT"])' in script, where
+            script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
+            assert "from idhazh.llm.server import server_argv" in script, where
+            if config_root is None:
+                continue
+            assert f'config.load(Path("{config_root}"))' in script, f"{where} reads {config_root}"
+            # NUL-separated, so a flag value carrying a space stays one argument.
+            assert "mapfile -d '' LLAMA_ARGV" in script, where
+            assert 'port=int(os.environ["LLAMA_PORT"])' in script, where
 
     # The other side of the same Oracle: no command a runner executes renders
     # the list itself. Only `run:` scripts are read, because a dispatch-form
@@ -439,11 +442,11 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
             assert f"127.0.0.1:{LLAMA_PORT_VALUE}" not in text, (
                 f"{filename} writes the port into an address instead of reading it back"
             )
-    assert declaring == set(LLAMA_RUNTIME_WORKFLOWS), (
+    assert declaring == set(LLAMA_SERVER_WORKFLOWS), (
         "every workflow that starts a llama-server declares the port and nothing else does"
     )
 
-    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
+    for filename in sorted(LLAMA_SERVER_WORKFLOWS):
         for line in read_text(WORKFLOWS_DIR / filename).splitlines():
             if re.search(rf"\b{LLAMA_PORT_VALUE}\b", line):
                 assert LLAMA_PORT_ENV in line, (
@@ -479,7 +482,7 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
         "a job named here no longer exists in digest.yml"
     )
     for job_name, (log_file, weights_output) in sorted(RUNTIME_IDENTITY_JOBS.items()):
-        start_step, _ = SERVER_STARTERS[("digest.yml", job_name)]
+        ((start_step, _),) = SERVER_STARTERS[("digest.yml", job_name)]
         call = re.search(r"start-llama-server\.sh (\S+) (\S+)", _digest_step(job_name, start_step))
         assert call, f"{job_name} must start its server through the shared script"
         assert f"{call.group(2)}.log" == log_file, (
@@ -626,9 +629,9 @@ def test_every_counters_step_says_which_job_it_is(job_name: str) -> None:
 def _uncommented(text: str) -> str:
     """The lines a runner acts on, without the ones explaining why.
 
-    A comment that says "there is no incumbent arm" is documentation worth
+    A comment that says "there is no incumbent case" is documentation worth
     keeping; an assertion that greps the whole file cannot tell it apart from
-    an incumbent arm.
+    an incumbent case.
     """
     return "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith("#")

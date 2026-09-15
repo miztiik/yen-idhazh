@@ -41,8 +41,8 @@ from collections import Counter
 from collections.abc import Container, Mapping, Sequence
 from dataclasses import dataclass
 
-from idhazh.contracts.app_config import PlacementConfig
 from idhazh.contracts.digest_day import DigestItem
+from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.contracts.taxonomy import Taxonomy
 
 

@@ -33,7 +33,7 @@ import re
 from collections.abc import Iterable, Sequence
 from typing import Final
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals.hhem import CHUNK_ANCHOR
 
 #: Bumped whenever a definition below changes what an existing column means.

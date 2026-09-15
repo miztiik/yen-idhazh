@@ -36,69 +36,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Retired asset_path. One published file per visual is left and data_path names it, so the rendered-visual rule moved onto data_path and spec's description says what the field now holds - the compiled marks, as the published visual-data document.",
+      "change": "Retired asset_path.",
       "version": "2026-09-13T22:30",
-      "why": "The build-time renderer is deleted, so nothing writes an SVG and asset_path had no producer. Two fields naming one file is the spec_format failure again: a second name for a fact already carried, whose only possible contribution is to disagree with it. No read side is owed - this payload is written under gitignored backend/var/ and travels as a one-day artifact, so the run that writes it is the run that reads it, and Contract.read refuses a stamp it does not know rather than guessing at one."
+      "why": "The build-time renderer is deleted, so nothing writes an SVG to name."
     },
     {
-      "change": "Added data_path, where this item's published visual data landed. Optional, null by default, and refused on a decision whose visual did not render. spec's description stops naming Vega-Lite: it now says what the field is for and leaves the grammar to the renderer.",
+      "change": "Added data_path, where this item's published visual data landed.",
       "version": "2026-09-13T20:00",
-      "why": "The owner ruled on 2026-09-13 that the reader's browser draws the chart and the pipeline never draws one, so the compiled data is published and the decision has to record where. It is a second path beside asset_path rather than a derivation of it, for the reason asset_path is stored rather than derived: a path a later build recomputes is a path a later build can recompute differently. The description moves now because a description IS the field's meaning (CLAUDE.md section 11), and the row that deletes the build-time renderer changes what the field holds - naming the grammar here would make this contract wrong on the day that lands rather than on the day somebody remembered. Nothing is owed on the read side either way: this payload is written under gitignored backend/var/ and travels as a one-day artifact, so the run that writes it is the run that reads it."
+      "why": "The reader's browser draws the chart, so it needs the marks rather than an SVG."
     },
     {
-      "change": "NoneReason takes a fifth member, window_exhausted. Additive: no payload written before today can carry it, and every reader that handled four members handles five.",
+      "change": "NoneReason takes a fifth member, window_exhausted.",
       "version": "2026-09-13",
-      "why": "Under --no-context-shift a reply that runs into the wall of the context window comes back on an ordinary HTTP 200 with the same finish_reason as a reply that spent its whole output budget, so the two were one member and an operator could not tell them apart. They are different work: a budget cut is the reply shape's arithmetic, and a window cut is models.summarize.inference.n_ctx against extract.truncation_cap_tokens. The arithmetic that separates them needs nothing new - the server already reports the prompt's token count, and call 2's budget is derived from its own grammar - so the member costs one comparison at the one call site that writes it."
+      "why": "A reply that runs into the wall of the context window had no name of its own."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
+      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
       "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
+      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
-      "change": "Added none_reason and the NoneReason enum it is typed with. Optional, null by default, and refused on a decision that carries a visual.",
-      "version": "2026-09-11",
-      "why": "A `none` recorded no cause, and `none` is the majority outcome by design - so the largest number an operator reads explained nothing, and no gate could be retired, tuned or shown to work. It is a typed enum rather than a sentence in `rationale` because a console counts members and cannot count prose. Four members, one per gate that has a writer in this build; the potential class, the novelty floor, the sufficiency bar and the per-visual byte cap arrive with the rows that build them. The read-side migration is the default: a payload written before the field existed carries null, which is the honest reading - nothing recorded says which gate refused it - and the single-call planner writes null for the same reason."
-    },
-    {
-      "change": "Removed spec_format and the SpecFormat enum it was typed with. VisualKind lost diagram and image, so it holds chart and none. spec is unchanged and still carries the Vega-Lite JSON the renderer draws.",
-      "version": "2026-09-05T18:00",
-      "why": "spec_format was never read. It was a second name for a fact kind already carried, and a table in this module mapped one to the other - so the only thing it could do was disagree with kind, which is what the validator existed to stop. image had no producer and no renderer from the day it was written. diagram had both, and both were Mermaid: the planner wrote flowchart TD text and our own layout read it back. That round trip is gone (pseudo-plan row 63). It was written so anyone could re-render the picture with the real Mermaid toolchain, and nobody can: the payload lands under backend/var/, which is gitignored, travels as a one-day artifact, and the published DigestVisual carries no spec at all. It also lost data - the parser matched edges and threw them away, so two different graphs drew identically. No read-side migration: scanned 2026-09-05 over all 15 committed digest.json files, 6,425 items, 351 of them carrying a visual - every one is a chart, none carries diagram or image, and no committed visual carries a spec or a spec_format key."
-    },
-    {
-      "change": "The file this payload is written to is now <item>.visual.json. It was <item>.route.json. No field changed.",
-      "version": "2026-09-05T17:00",
-      "why": "The filename is the last place the old word survived on the write path, and it is the one nothing else records - the payload lives under backend/var/, which is gitignored, so a reader of this repository has only this entry to learn the old name from. Python now spells the suffix once, as PAYLOAD_SUFFIX above, because the writer and the glob that reads it were two literals that had to agree. The workflow's upload glob is the second spelling and cannot read a Python name, so a test holds the two as one pair: move the suffix without the glob and the artifact uploads nothing, assemble receives no visuals, and the day publishes with no pictures on a green run."
-    },
-    {
-      "change": "Renamed. The class was Route, the schema file was route.schema.json, and the two fields routed_at and route_ms are now decided_at and decision_ms. No field was added, removed or retyped, and no value changed.",
-      "version": "2026-09-05T15:00",
-      "why": "Route names a dispatch decision; this payload records a planning decision, so the old stem taught the wrong word to everything that read it. The old stem is written here because a schema file that changes name leaves no other trace of what it used to be called (CLAUDE.md section 11). No read-side migration: this payload is written to <item>.route.json under backend/var/, which is gitignored and travels as a one-day artifact, so the run that writes it is the run that reads it and no committed payload carries the old field names."
-    },
-    {
-      "change": "asset_path is now written as digest/<Y>/<M>/<D>/<item_id>.svg. It was digest/<Y>/<M>/<D>/<vertical>-<NN>.svg, where NN came from a counter seeded by reading the day's directory.",
-      "version": "2026-08-27",
-      "why": "A counter has to be seeded from somewhere a run can read, and two runs of one day read the same directory before either had pushed. Both wrote energy-03.svg for different items and run 32869125768 lost a finished day to CONFLICT (add/add). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories, and sharding the route stage stops being blocked on it. No migration: the path is stored, not derived, so every payload written under the old shape still validates and still resolves to the file it names. Both shapes are live in committed data."
-    },
-    {
-      "change": "Added drafted_chart, defaulting to false and derived true for a chart.",
-      "version": "2026-08-25",
-      "why": "A chart draft that the post-model checks reject is today indistinguishable from a draft the model never wrote, so nothing committed says why 8 of 17 drafts died on 2026-08-25. The run manifest sums this into charts_drafted. The read-side migration is a validator: a payload written before the field existed whose kind is chart was necessarily drafted as one, and a default of false there would report fewer drafts than published charts."
-    },
-    {
-      "change": "Added asked_the_model, defaulting to true.",
-      "version": "2026-08-24T23:10",
-      "why": "The router now decides an item without posting when no enabled visual kind could survive its checks. That decision must be a field, not a sentence a reader parses out of the rationale, because the run manifest counts it and a chart rate quoted against the wrong denominator is the first thing this gate would break. True on an older payload, which is correct: every item was asked before the gate existed."
-    },
-    {
-      "change": "Added optional route_ms.",
-      "version": "2026-08-24T11:15",
-      "why": "The route job sits between 51 and 60 minutes against a 60-minute bound and nothing recorded what it spent, so every argument about the budget was an estimate (Guardrail #10). Null on a payload written before the clock existed, which is what keeps the field additive."
-    },
-    {
-      "change": "Initial shape: the four-way visual-kind enum, the spec, and the render outcome.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-21",
-      "why": "Contracts before logic - the planner and Render are written against a fixed payload."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "The visual planner's decision plus the Render stage's outcome, one per item.",

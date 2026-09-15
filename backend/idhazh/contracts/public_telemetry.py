@@ -31,7 +31,14 @@ from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Slug
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
-from idhazh.contracts.item_health import FailureCode, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    CALL_SLOTS,
+    RETIRED_CELLS,
+    FailureCode,
+    ItemOutcome,
+    ItemStage,
+    OneLine,
+)
 
 #: The three source-ledger cells that may never reach a browser. `detail` is
 #: diagnostic free text and the two address fields identify the page rather than
@@ -50,6 +57,17 @@ FORBIDDEN_COLUMNS: Final[frozenset[str]] = frozenset({"canonical_url", "url_key"
 #: and never a path segment.
 PublicItemKey = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
+#: The stages `stage_gap_ms` is the remainder of. They tile the item without
+#: overlapping, which is why `label_ms` and `summary_ms` are not among them: the
+#: two are a split of `summarize_ms`, so counting them here would charge the
+#: model stage twice and drive the gap negative on every item.
+#:
+#: A second copy of `idhazh.itemrecord.NAMED_STAGE_MS`, which is what writes the
+#: cell. Contracts are the bottom of the dependency graph and may not import the
+#: module that fills them, so the two lists are held equal by a test rather than
+#: by an import.
+GAP_NAMED_STAGES: Final = ("fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms")
+
 
 class PublicTelemetryRow(Contract):
     """One planned item on one run, as the console is allowed to read it."""
@@ -57,80 +75,29 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-14T01:30",
-            change="ItemStage gained visual. No row here can carry it.",
-            why=(
-                "The enum is inlined in this schema, so a name added for the event "
-                "envelope's src becomes legal in this column too. It is unreachable: every "
-                "row here projects an item-health row, and that census column refuses "
-                "visual because an item whose picture failed still publishes. The entry "
-                "exists so the widening is dated rather than inferred from a schema diff."
-            ),
+            version="2026-09-15T22:10",
+            change="FailureCode gained model_timed_out and shard_out_of_time.",
+            why="Both were being reported under a name that sends an operator to the wrong place.",
         ),
         ChangelogEntry(
-            version="2026-09-12T16:20",
-            change=(
-                "Added nullable model_calls, call_1_kind and the first call's five cost "
-                "cells at the end of the row. The second call is the remainder."
-            ),
-            why=(
-                "The census records each model call's own cost and this projection kept "
-                "only the item total, so the console's cache figures were about to stop "
-                "meaning anything: readWhole counts items whose prompt was read whole, "
-                "749 of the 5,197 rows carrying a cache figure on 2026-09-12, and a "
-                "second call that reuses the first call's prompt takes it to zero for "
-                "ever with no code change. The first call plus the total is the whole "
-                "split, because the flat cells are their sum and the arithmetic is exact "
-                "integers - so the second call is total minus first, and model_calls is "
-                "what says how many calls that remainder covers rather than letting a "
-                "third be absorbed in silence. Both calls spelled out would have cost "
-                "more than the split is worth to a fetch: measured 2026-09-12 on the two "
-                "committed shards with every timed row populated, twelve cells cost 72.9 "
-                "and 80.1 percent more gzipped against 35.3 and 40.8 for these seven. "
-                "Appended at the end and nullable, because the browser reads this header "
-                "by position. Empty stays empty - a run that recorded no split writes no "
-                "cell, and a zero in call_1_cached_tokens is the cold-slot measurement."
-            ),
+            version="2026-09-15T20:00",
+            change="The failure vocabulary gained model_refused.",
+            why="It follows item-health-row, where the vocabulary is declared.",
         ),
         ChangelogEntry(
-            version="2026-09-05T20:00",
-            change=(
-                "Added nullable fetch_ms, extract_ms, summarize_ms, prefill_ms, "
-                "decode_ms, input_tokens, output_tokens and cached_tokens at the end "
-                "of the row."
-            ),
-            why=(
-                "Every run since 2026-08-23 has measured these eight and written them "
-                "to state/item-health/, and the projection dropped all eight on the "
-                "way out - so the console could show that a stage failed and never "
-                "how long the stage took. They are counts and durations of our own "
-                "work, not the fetched page, so they cross on the same terms "
-                "source_words always has. Appended at the end and nullable, because "
-                "the browser reads this header by position: a name inserted anywhere "
-                "else shifts every column the console already draws. Empty stays "
-                "empty - an instrument that did not run writes no cell, never a zero, "
-                "or a stage that was skipped reads as a stage that took no time."
-            ),
+            version="2026-09-15T19:40",
+            change="Four columns keep their names and change what they mean.",
+            why="Queue wait now sits outside the item total rather than inside it.",
+        ),
+        ChangelogEntry(
+            version="2026-09-15T08:20",
+            change="Appended seventeen nullable cells.",
+            why="The census records far more columns than this projection was publishing.",
         ),
         ChangelogEntry(
             version="2026-09-02",
-            change=(
-                "Initial shape: the eleven published columns, typed, with "
-                "canonical_url, url_key and detail refused at import."
-            ),
-            why=(
-                "The only thing standing between the item-health census and a "
-                "browser was a tuple of eleven strings in publish_telemetry.py and a "
-                "set of three more it was checked against. Both are readable code and "
-                "neither is a contract, so the projection had no schema, no version "
-                "stamp and no changelog while every other persisted surface has all "
-                "three (Guardrail #3). Typing it also gives the migration something to read "
-                "a committed shard back through, which is what proves a published file "
-                "still loads rather than merely still parses. item_id is the one cell "
-                "carried as an opaque key: identity is minted by ItemHealthRow, and a "
-                "published shard has no writer left to re-mint it if that grammar "
-                "moves."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -202,7 +169,7 @@ class PublicTelemetryRow(Contract):
             "Tokens the server answered from its prompt cache rather than reading again, "
             "added over every call the row records. Zero is a real answer here and means "
             "nothing was cached; empty means the server reported no cache figure at all. "
-            "Where call_1_cached_tokens is filled, read the cache per call rather than "
+            "Where label_cached_tokens is filled, read the cache per call rather than "
             "here: a second call reusing the first call's prompt makes this non-zero on "
             "every item."
         ),
@@ -216,7 +183,7 @@ class PublicTelemetryRow(Contract):
             "total minus the first call - is one more call or several."
         ),
     )
-    call_1_kind: CallKind | None = Field(
+    label_kind: CallKind | None = Field(
         default=None,
         description=(
             "Which call ran first: summarize, visual_plan, label or summarize_and_plan. "
@@ -224,7 +191,7 @@ class PublicTelemetryRow(Contract):
             "reads as the design change it is rather than as a regression."
         ),
     )
-    call_1_prefill_ms: int | None = Field(
+    label_prefill_ms: int | None = Field(
         default=None,
         ge=0,
         description=(
@@ -234,16 +201,191 @@ class PublicTelemetryRow(Contract):
             "rate is the one that composes."
         ),
     )
-    call_1_decode_ms: int | None = Field(default=None, ge=0)
-    call_1_input_tokens: int | None = Field(default=None, ge=0)
-    call_1_output_tokens: int | None = Field(default=None, ge=0)
-    call_1_cached_tokens: int | None = Field(
+    label_decode_ms: int | None = Field(default=None, ge=0)
+    label_input_tokens: int | None = Field(default=None, ge=0)
+    label_output_tokens: int | None = Field(default=None, ge=0)
+    label_cached_tokens: int | None = Field(
         default=None,
         ge=0,
         description=(
             "Prompt tokens the first call reused. Zero is the cold-slot answer and is a "
             "measurement; empty means no split was published for this row."
         ),
+    )
+    summary_kind: CallKind | None = Field(
+        default=None,
+        description=(
+            "Which call ran second, or empty where the item made one call. The pair of "
+            "kinds is what lets a reader see a two-call item as two calls rather than "
+            "inferring it from a subtraction."
+        ),
+    )
+    summary_prefill_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds the second call spent reading its prompt. Small on a warm "
+            "slot, because that prompt is the first call's prompt extended and the "
+            "server answers the shared head from its cache."
+        ),
+    )
+    summary_decode_ms: int | None = Field(default=None, ge=0)
+    summary_input_tokens: int | None = Field(default=None, ge=0)
+    summary_output_tokens: int | None = Field(default=None, ge=0)
+    summary_cached_tokens: int | None = Field(default=None, ge=0)
+
+    # --- Where the item's time went ------------------------------------------
+    #
+    # The eight named stages and the remainder. They tile the item: every one of
+    # them is a slice of item_total_ms, and stage_gap_ms is what is left. A
+    # named stage published without the gap beside it would let a regression
+    # move into an unnamed step and read as nothing at all.
+    queue_wait_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "How long the item waited before its worker started it - its own fetch "
+            "and extract subtracted, because both are work rather than waiting. It "
+            "sits outside item_total_ms rather than inside it."
+        ),
+    )
+    label_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time of the label call, prefill and decode together. It is a slice of "
+            "summarize_ms, never an addition to it."
+        ),
+    )
+    summary_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time of the summarize-and-plan call, prefill and decode together. The "
+            "other slice of summarize_ms."
+        ),
+    )
+    visual_plan_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time attributed to producing the visual plan. The plan is decoded "
+            "inside the summarize-and-plan call, so this is a share of summary_ms and "
+            "not a clock of its own - visual_plan_ms_is_estimate says which."
+        ),
+    )
+    visual_plan_ms_is_estimate: bool | None = Field(
+        default=None,
+        description=(
+            "True where visual_plan_ms was apportioned out of the second call rather "
+            "than timed on its own. An estimate that does not say it is one is the "
+            "failure this column exists to prevent (Guardrail #10), and a page drawing "
+            "the plan's share has to be able to mark it."
+        ),
+    )
+    faithfulness_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Wall time of the model-free faithfulness scorers.",
+    )
+    model_wait_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Time the item spent waiting on the model server rather than being served. "
+            "It is inside summarize_ms, so a rising wait with a flat decode rate is a "
+            "queue and never a slower model."
+        ),
+    )
+    item_total_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "What the item cost, from the item starting to the item ending with "
+            "queue_wait_ms taken out. The denominator every stage share on the page is "
+            "taken against, and the reason the wait is excluded: the stage runs its "
+            "fetch loop and its model loop in different orders, so the raw clock "
+            "counts the whole queue ahead of each item and a column summed across a "
+            "shard reported the shard's own duration once per item."
+        ),
+    )
+    stage_gap_ms: int | None = Field(
+        default=None,
+        description=(
+            "item_total_ms minus every named stage. **This is the one cell that can "
+            "catch a regression in a step nobody named**, which is why it is published "
+            "rather than derived by a reader who would have to know the list. It is "
+            "signed on purpose: a negative value means two named stages overlapped, or "
+            "two clocks disagreed, and clamping it to zero would hide exactly that."
+        ),
+    )
+
+    # --- Whether the model slowed or the work grew ---------------------------
+    #
+    # A total cannot tell those apart and a rate can. The row already carries
+    # the tokens each call wrote, so these four are what completes the pair.
+    visual_plan_tokens_written: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Output tokens of the second call that belong to the visual plan rather "
+            "than to the summary. Empty where the run asked for no plan."
+        ),
+    )
+    label_prefill_tokens_per_s: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Prefill throughput of the label call, over the tokens the server really "
+            "evaluated - the input minus whatever the cache already held."
+        ),
+    )
+    label_decode_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Decode throughput of the label call."
+    )
+    summary_prefill_tokens_per_s: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Prefill throughput of the summarize-and-plan call, over the tokens the "
+            "server really evaluated. A warm slot answers almost the whole prompt from "
+            "the cache, and that shows up in summary_cache_pct rather than here: this "
+            "cell is about the machine, so counting the skipped tokens as work would "
+            "make a cache hit read as a fast server."
+        ),
+    )
+    summary_decode_tokens_per_s: float | None = Field(
+        default=None, ge=0.0, description="Decode throughput of the summarize-and-plan call."
+    )
+
+    # --- What it ran on ------------------------------------------------------
+    #
+    # A throughput number with no machine beside it is not a measurement
+    # (Guardrail #10). These let a row from a slower runner be read as a slower
+    # runner rather than as a regression.
+    cpu_model: OneLine | None = Field(
+        default=None,
+        description=(
+            "The processor the runner reported, verbatim. Constant inside a shard and "
+            "carried per row anyway, because the shard-grain counters that hold it are "
+            "read at build time and never published for a browser to join against. It "
+            "is 32 of the row's raw bytes and 1.54 of its gzipped bytes, so it is the "
+            "first cell to drop if the published cap ever binds."
+        ),
+    )
+    cpu_busy_pct: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "Mean busy share of every processor over this item. Busy ticks over "
+            "available ticks across the item, so it is a figure a reader can add up."
+        ),
+    )
+    load_1m: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="One-minute load average when the item ended.",
     )
 
     @model_validator(mode="after")
@@ -255,30 +397,71 @@ class PublicTelemetryRow(Contract):
         return self
 
     @model_validator(mode="after")
-    def _the_remainder_is_a_call_and_not_a_negative_number(self) -> Self:
-        """The published split is the first call and the total; the rest is arithmetic.
+    def _a_published_call_is_published_whole(self) -> Self:
+        """A slot fills entirely or not at all, and the flat cells are their sum.
 
-        A browser derives the second call by subtracting, so the cells have to
-        leave a subtraction that can be made and can be trusted: the first call
-        fills whole or not at all, it never exceeds the total, and `model_calls`
-        says how many calls the remainder covers.
+        **The browser used to derive the second call by subtracting it from the
+        total, and the subtraction was the bug.** The month shard published six
+        first-call cells and stopped, so a reader that wanted the second call had
+        to assume the remainder was one call, could not name what kind of call it
+        was, and got a plausible number on any row where the assumption was
+        false. The cells are published now, and the rule here is the same one the
+        source ledger holds itself to - filled whole, and the flat cells equal the
+        sum - so the two can be compared without either side reinterpreting the
+        other.
         """
-        cells = [getattr(self, f"call_1_{field}") for field in COST_FIELDS]
-        if self.call_1_kind is None and all(cell is None for cell in cells):
+        filled = 0
+        for slot in CALL_SLOTS:
+            cells = [getattr(self, f"{slot}_{field}") for field in COST_FIELDS]
+            kind = getattr(self, f"{slot}_kind")
+            if kind is None and all(cell is None for cell in cells):
+                continue
+            if kind is None or any(cell is None for cell in cells):
+                raise ValueError(f"the {slot} call is published whole or not at all")
+            if getattr(self, f"{slot}_cached_tokens") > getattr(self, f"{slot}_input_tokens"):
+                raise ValueError(f"{slot}_cached_tokens cannot exceed {slot}_input_tokens")
+            filled += 1
+        if filled == 0:
             if self.model_calls is not None:
-                raise ValueError("model_calls is published only beside the call it counts")
+                raise ValueError("model_calls is published only beside the calls it counts")
             return self
-        if self.call_1_kind is None or any(cell is None for cell in cells):
-            raise ValueError("the first call is published whole or not at all")
-        if self.model_calls is None:
-            raise ValueError("a published call carries the count of calls it is one of")
-        if self.call_1_cached_tokens > self.call_1_input_tokens:  # type: ignore[operator]
-            raise ValueError("call 1 cached_tokens cannot exceed its input_tokens")
+        if self.label_kind is None:
+            raise ValueError("a second call is published only after a first")
+        if self.model_calls != filled:
+            raise ValueError("model_calls must equal the number of published calls")
         for field in COST_FIELDS:
-            total = getattr(self, field)
-            first = getattr(self, f"call_1_{field}")
-            if total is None or first > total:
-                raise ValueError(f"call_1_{field} must leave a remainder inside {field}")
+            total = sum(
+                getattr(self, f"{slot}_{field}")
+                for slot in CALL_SLOTS
+                if getattr(self, f"{slot}_kind") is not None
+            )
+            if getattr(self, field) != total:
+                raise ValueError(f"{field} must equal the sum over the published calls")
+        return self
+
+    @model_validator(mode="after")
+    def _the_published_stages_tile_the_item(self) -> Self:
+        """The gap is exactly what the named stages left over.
+
+        The console draws these cells as shares of one bar, so the shares have to
+        add up to the bar. `stage_gap_ms` is recorded rather than derived - a
+        reader deriving it would need the list of named stages, and the list is
+        the thing that moves - which means the published row can carry a gap that
+        disagrees with the stages beside it. A chart drawn from that is a chart
+        whose slices miss the total by an amount nobody can see.
+
+        Checked only where both ends are published: every row written before
+        today carries neither, and `label_ms` and `summary_ms` are a split of
+        `summarize_ms` rather than stages of their own, so they are not here.
+        """
+        if self.item_total_ms is None or self.stage_gap_ms is None:
+            return self
+        named = sum(getattr(self, name) or 0 for name in GAP_NAMED_STAGES)
+        if self.stage_gap_ms != self.item_total_ms - named:
+            raise ValueError(
+                "stage_gap_ms must equal item_total_ms minus "
+                f"{', '.join(GAP_NAMED_STAGES)}"
+            )
         return self
 
     @classmethod
@@ -300,8 +483,16 @@ class PublicTelemetryRow(Contract):
 
         A shard carries no `version` cell, so the row is stamped with the current
         one on read the way any document that omits it is.
+
+        **A cell under a retired heading is read into the column that replaced
+        it.** Every month shard published before this change heads its six
+        first-call cells `call_1_*`, and those shards are what a reader's browser
+        has cached.
         """
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.csv_columns()}
+        for retired, current in RETIRED_CELLS.items():
+            if current in payload and payload[current] == "":
+                payload[current] = row.get(retired, "")
         for name, field in cls.model_fields.items():
             if name in payload and field.default is None and payload[name] == "":
                 payload[name] = None

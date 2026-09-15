@@ -24,8 +24,9 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR
 
 from idhazh import config, summarize
-from idhazh.contracts.app_config import ModelsConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import Completion
 from idhazh.sanitize import untrusted_block
 from utilities.measure_two_calls import (
@@ -76,7 +77,7 @@ def test_the_three_causes_always_sum_and_that_is_why_they_are_not_the_oracle(
 ) -> None:
     """The sum holds for every input, so a check on it proves nothing.
 
-    `boundary` cancels out of the two call-2 causes in both branches of the
+    `boundary` cancels out of the summarize-and-plan call's two causes in both branches of the
     `max`, so they come to `two.prompt_tokens - two.cached_tokens` whatever the
     numbers are. It is here as documentation: a reader who takes the printed
     total for a verification would trust a number they should not. What the run
@@ -88,8 +89,8 @@ def test_the_three_causes_always_sum_and_that_is_why_they_are_not_the_oracle(
 def test_the_recorded_reading_splits_the_way_the_write_up_says() -> None:
     """209 behind the template break and the rest behind the article.
 
-    The write-up reached the 209 by hand - 1,493 cached against the 1,702 call
-    1's prompt and its reply come to. This is the same arithmetic in code, so
+    The write-up reached the 209 by hand - 1,493 cached against the 1,702 the
+    label call's prompt and its reply come to. This is the same arithmetic in code, so
     the two cannot drift apart, and it shows what the write-up never named: the
     trailing turn is the larger share by a factor of three.
     """
@@ -103,7 +104,7 @@ def test_the_recorded_reading_splits_the_way_the_write_up_says() -> None:
 def test_the_template_cause_is_everything_behind_the_break_not_the_break() -> None:
     """A four-token divergence does not cost four tokens.
 
-    Hold the divergence at four and grow call 1's reply: the cause grows with
+    Hold the divergence at four and grow the label call's reply: the cause grows with
     the reply, because a prefix cache stops at the first difference and reads
     the rest again. That is the whole argument for row #3c and it is the one
     thing a reader of the old boolean could not see.
@@ -127,10 +128,10 @@ def test_a_prefix_that_survives_leaves_only_the_trailing_turn() -> None:
     assert spend.total == prefilled(RECORDED_ONE, kept)
 
 
-def test_a_cache_reaching_past_call_ones_reply_still_sums() -> None:
+def test_a_cache_reaching_past_the_label_reply_still_sums() -> None:
     """The good-news branch, which today never fires.
 
-    A cache that served more than call 1's prompt and reply would mean part of
+    A cache that served more than the label call's prompt and reply would mean part of
     the trailing turn was cached too. It cannot make a cause negative and it
     cannot break the identity.
     """
@@ -154,16 +155,16 @@ def test_common_prefix_stops_at_the_first_difference() -> None:
     assert common_prefix([], [1]) == 0
 
 
-#: The rendered reading that matches the recorded completions: call 1's prompt
+#: The rendered reading that matches the recorded completions: the label call's prompt
 #: renders to the 1,497 tokens the server charged for, and the two prompts
-#: diverge at 1,493 - four tokens inside call 1's own prompt, which is where the
+#: diverge at 1,493 - four tokens inside the label call's own prompt, which is where the
 #: chat template wrote a block it dropped on the replay. It is a reading of the
 #: path row #3c retired, kept because it is the only evidence in the tree of
 #: what a broken prefix looks like.
 BROKE: Final = Break(at=1493, rendered_one=1497, rendered_two=2389, tail="", replay_tokens=205)
 
 #: The same item once the prompt bytes are ours: the two prompts agree for the
-#: whole of call 1's 1,497 and the cache reaches 1,702 - call 1's prompt and its
+#: whole of the label call's 1,497 and the cache reaches 1,702 - the label call's prompt and its
 #: whole reply. Built rather than recorded, because the reading that produced
 #: `BROKE` was taken before the row and the shape is the point (`CLAUDE.md`
 #: section 13).
@@ -176,11 +177,11 @@ def test_the_checks_hold_when_the_render_and_the_cache_agree() -> None:
     assert check(RECORDED_ONE, KEPT_TWO, spend, AGREES).hold
 
 
-def test_two_prompts_that_diverge_inside_call_ones_fail() -> None:
+def test_two_prompts_that_diverge_inside_the_label_prompt_fail() -> None:
     """Row #3c's oracle, taken live: the recorded pre-row reading does not pass it.
 
     This is the reading that made the row. The two prompts stopped agreeing four
-    tokens before the end of call 1's, because the chat template rendered one
+    tokens before the end of the label call's, because the chat template rendered one
     assistant turn two ways, and 209 tokens were read again. Nothing about the
     arithmetic changed; what changed is that a run in that state now says so
     instead of printing a share and moving on.
@@ -188,14 +189,14 @@ def test_two_prompts_that_diverge_inside_call_ones_fail() -> None:
     spend = decompose(RECORDED_ONE, RECORDED_TWO)
     wrong = check(RECORDED_ONE, RECORDED_TWO, spend, BROKE)
     assert not wrong.hold
-    assert wrong.failures() == ["the two prompts diverge before the end of call 1's"]
+    assert wrong.failures() == ["the two prompts diverge before the end of the label call's"]
 
 
 def test_a_cache_reaching_past_the_shared_prefix_is_the_good_news() -> None:
     """A floor, not an equality, and the distinction is measured rather than chosen.
 
-    Once call 2's prompt is call 1's extended, the slot also answers for call
-    1's reply, so the cache reaches beyond where the two prompts stop being the
+    Once the summarize-and-plan call's prompt is the label call's extended, the slot also answers for the
+    label call's reply, so the cache reaches beyond where the two prompts stop being the
     same string. Measured 2026-09-12 on the configured weights: the prompts
     agreed to token 7,420 and the cache reached 7,435. An equality here would
     fail every item for working.
@@ -219,8 +220,8 @@ def test_a_prompt_that_renders_to_another_length_fails() -> None:
     wrong = check(RECORDED_ONE, KEPT_TWO, spend, replace(AGREES, rendered_one=1493))
     assert not wrong.hold
     assert wrong.failures() == [
-        "call 1's rendered prompt is not the length the server charged for",
-        "the two prompts diverge before the end of call 1's",
+        "the label call's rendered prompt is not the length the server charged for",
+        "the two prompts diverge before the end of the label call's",
     ]
 
 
@@ -235,16 +236,16 @@ def test_a_cache_that_stopped_short_of_the_shared_prefix_fails() -> None:
 def test_a_replay_shorter_than_the_reply_fails() -> None:
     """A runtime that returns less than it decoded replays less than it wrote.
 
-    `build_call_two_request` appends `one.content` to call 1's own prompt
+    `build_summarize_and_plan_request` appends `one.content` to the label call's own prompt
     bytes. A build that emptied that field would append nothing, and every token
-    of call 1's reply would be charged to the template cause where no row would
+    of the label call's reply would be charged to the template cause where no row would
     remove it.
     """
     spend = decompose(RECORDED_ONE, KEPT_TWO)
     wrong = check(RECORDED_ONE, KEPT_TWO, spend, replace(AGREES, replay_tokens=0))
     assert not wrong.hold
     assert wrong.failures() == [
-        "call 1's replayed turn is shorter than the reply it generated"
+        "the label call's replayed turn is shorter than the reply it generated"
     ]
 
 
@@ -266,27 +267,39 @@ def a_sample(key: str, words: int) -> Sample:
     )
 
 
-def test_the_cap_arm_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
+def test_the_cap_case_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
     """The corpus cannot supply an article at the cap, so one is built.
 
-    Driven from two built samples rather than from `corpus/corpus.jsonl`, which
-    a run appends to (Guardrail #12). What is under test is the joining and the
-    cut, and a fixed pair shows both: neither row alone reaches the cap.
+    The cap is read from `config/` and the word count derived from the measured
+    ratio, so both follow a change to either and neither is a literal somebody
+    has to remember to update (Guardrail #6). Built rather than read from
+    `corpus/corpus.jsonl`, which a run appends to (Guardrail #12): what is under
+    test is the joining and the cut, and a pair that each hold just under half
+    the cap shows both.
     """
-    cap = 1300
-    allowed = cap // 13 * 10
-    built = sample_at_the_cap([a_sample("first", 600), a_sample("second", 600)], cap_tokens=cap)
+    cap = config.load(CONFIG_DIR).app.extract.truncation_cap_tokens
+    allowed = int(cap / TOKENS_PER_WORD)
+    each = allowed // 2 + 1
+
+    built = sample_at_the_cap(
+        [a_sample("first", each), a_sample("second", each)], cap_tokens=cap
+    )
+
     assert built.article.word_count == allowed
     assert built.article.truncated
     assert built.article.truncated_at_tokens == cap
     assert built.url_key == "built from first+second"
 
 
-def test_the_cap_arm_stops_joining_once_it_has_enough() -> None:
-    """A row past the cap is not read, so the arm names only what it used."""
+def test_the_cap_case_stops_joining_once_it_has_enough() -> None:
+    """A row past the cap is not read, so the case names only what it used."""
+    cap = config.load(CONFIG_DIR).app.extract.truncation_cap_tokens
+    past_the_cap = int(cap / TOKENS_PER_WORD) + 1
+
     built = sample_at_the_cap(
-        [a_sample("first", 5000), a_sample("second", 5000)], cap_tokens=1300
+        [a_sample("first", past_the_cap), a_sample("second", past_the_cap)], cap_tokens=cap
     )
+
     assert built.url_key == "built from first"
 
 
@@ -333,7 +346,7 @@ def declaring(models: ModelsConfig, digest: str) -> ModelsConfig:
 
 
 def test_the_harness_accepts_the_weights_config_declares(tmp_path: Path) -> None:
-    """The accepting arm, so the refusal below is not a function that always raises."""
+    """The accepting case, so the refusal below is not a function that always raises."""
     weights = tmp_path / "declared.gguf"
     weights.write_bytes(b"GGUF the config names")
     digest = hashlib.sha256(weights.read_bytes()).hexdigest()

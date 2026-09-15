@@ -15,7 +15,7 @@ import { telemetryCsv } from '../src/lib/charts/series';
  * - **The oracle.** Every console panel's bounding box, measured twice in ONE
  *   page session - while the months are still in the air, and once they have
  *   landed - and compared. A CSS property is not checked, because a CSS
- *   property is not what moves under a reader's cursor. The chrome arm reads
+ *   property is not what moves under a reader's cursor. The chrome case reads
  *   the whole column rather than the panels alone, and cuts the set at the
  *   first panel's top rather than at the fold - a fold is a question about the
  *   runner's fonts, and this one was six pixels from answering it wrongly.
@@ -27,7 +27,7 @@ import { telemetryCsv } from '../src/lib/charts/series';
  *   and the proof is the computed style in a browser that asked for stillness.
  * - **A state per state**, each with the sentence it prints.
  *
- * Every arm blocks the service worker. A "the payload did not arrive" arm is a
+ * Every case blocks the service worker. A "the payload did not arrive" case is a
  * lie while a worker can serve the payload out of its own cache.
  */
 
@@ -91,15 +91,19 @@ async function holdMonths(page: Page) {
 	});
 }
 
-/** The one panel on this route whose content comes out of the fetch.
+/** The panels on this route whose content comes out of the fetch.
  *
- * Its body is a chart, a readout strip and a shape switch, and the last two
- * exist only once there is a series to read and a shape to switch - so its box
- * grows when the rows land, and it is the ONLY box that may. Naming it here is
- * what makes the oracle below strong: a second panel that starts changing size
- * fails, whatever the reason.
+ * Each body is a chart, a readout strip and a shape switch, and the last two
+ * exist only once there is a series to read and a shape to switch - so these
+ * boxes grow when the rows land, and they are the ONLY boxes that may. Naming
+ * them here is what makes the oracle below strong: a third panel that starts
+ * changing size fails, whatever the reason.
  */
-const FETCHED_PANEL = 'What is failing, by stage';
+const FETCHED_PANELS = ['What is failing, by stage', "Where an item's time went"];
+
+/** The one the waiting and retry rows drive. Either would do; one is named so
+ * those tests read about a single box rather than a set. */
+const FETCHED_PANEL = FETCHED_PANELS[0];
 
 /** Every block the console lays out in its one column, keyed by what it is.
  *
@@ -116,11 +120,13 @@ const FETCHED_PANEL = 'What is failing, by stage';
 async function columnBoxes(page: Page): Promise<Record<string, [number, number, number, number]>> {
 	return page
 		.locator('[data-surface="operator"] > *, [data-console-panels] > *, [data-console-panel]')
-		.evaluateAll((nodes, fetchedPanel) => {
-			const fetched = document.querySelector(`[data-console-panel="${fetchedPanel}"]`);
+		.evaluateAll((nodes, fetchedPanels) => {
+			const fetched = fetchedPanels
+				.map((title) => document.querySelector(`[data-console-panel="${title}"]`))
+				.filter((node): node is Element => node !== null);
 			const boxes: Record<string, [number, number, number, number]> = {};
 			for (const node of nodes) {
-				if (fetched !== null && node !== fetched && node.contains(fetched)) continue;
+				if (fetched.some((one) => node !== one && node.contains(one))) continue;
 				const marker = [...node.attributes].find((attribute) =>
 					attribute.name.startsWith('data-')
 				);
@@ -145,7 +151,7 @@ async function columnBoxes(page: Page): Promise<Record<string, [number, number, 
 				];
 			}
 			return boxes;
-		}, FETCHED_PANEL);
+		}, FETCHED_PANELS);
 }
 
 test('THE ORACLE: only the panel that is waiting for rows changes size', async ({ page }) => {
@@ -178,11 +184,11 @@ test('THE ORACLE: only the panel that is waiting for rows changes size', async (
 	const resized = Object.keys(first)
 		.filter((name) => first[name][1] !== after[name][1] || first[name][2] !== after[name][2])
 		.map((name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`);
-	expect(resized, `panels changed size when the payload landed:\n${resized.join('\n')}`).toEqual([
-		`${FETCHED_PANEL}: ${JSON.stringify(first[FETCHED_PANEL])} -> ${JSON.stringify(
-			after[FETCHED_PANEL]
-		)}`
-	]);
+	expect(resized, `panels changed size when the payload landed:\n${resized.join('\n')}`).toEqual(
+		FETCHED_PANELS.map(
+			(name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`
+		)
+	);
 });
 
 test('THE ORACLE: nothing above the first panel moves when the payload lands', async ({ page }) => {

@@ -13,13 +13,9 @@ from pydantic import ValidationError
 
 from idhazh import config
 from idhazh.contracts import canonical_json
-from idhazh.contracts.app_config import (
-    SUPERSEDED_APP_NAMES,
-    SUPERSEDED_MODELS_NAMES,
-    AppConfig,
-    ModelsConfig,
-    SystemPlacement,
-)
+from idhazh.contracts.app_config import SUPERSEDED_APP_NAMES, AppConfig
+from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
+from idhazh.contracts.knobs.turns import SystemPlacement
 from idhazh.contracts.run_manifest import RunManifest
 
 from ._fixtures import (
@@ -123,15 +119,13 @@ def test_a_fold_that_declares_a_joiner_loads() -> None:
 
 
 def test_a_template_that_reads_no_keyword_may_not_be_asked_to_think() -> None:
-    """Decision 3, second half, and the two halves sit in different blocks.
+    """Decision 3, second half. Both halves are facts about the same template.
 
     A null keyword means the request carries no `chat_template_kwargs` at all,
-    so `inference.thinking` true asks for reasoning through a channel nothing
-    sends. Neither block can see the other, so the entry is where the pair is
-    checked.
+    so a declared closing marker asks for reasoning through a channel nothing
+    sends.
     """
-    payload = entry_with(thinking_kwarg=None)
-    payload["summarize"]["inference"]["thinking"] = True
+    payload = entry_with(thinking_kwarg=None, thinking_close="</think>")
 
     with pytest.raises(ValidationError) as raised:
         ModelsConfig.model_validate(payload)
@@ -144,7 +138,51 @@ def test_a_template_that_reads_no_keyword_loads_with_reasoning_off() -> None:
     silent = ModelsConfig.model_validate(entry_with(thinking_kwarg=None))
 
     assert silent.summarize.turns.thinking_kwarg is None
-    assert silent.summarize.inference.thinking is False
+    assert silent.summarize.turns.thinks is False
+
+
+def test_the_closing_marker_is_the_whole_declaration_that_reasoning_is_wanted() -> None:
+    """One place, so there is no flag to disagree with it.
+
+    `thinks` is read all over the pipeline - the render, the budget, the chat
+    keyword and three refusals - and every one of them reads this field. A
+    second switch beside it is what row #10 retired.
+    """
+    quiet = ModelsConfig.model_validate(entry_with())
+    loud = ModelsConfig.model_validate(entry_with(thinking_close="</think>"))
+
+    assert quiet.summarize.turns.thinks is False
+    assert loud.summarize.turns.thinks is True
+    assert loud.summarize.turns.thinking_close == "</think>"
+
+
+def test_a_config_that_still_spells_the_retired_thinking_flag_is_refused_by_name() -> None:
+    """The read-side migration for a knob that moved block, not just name.
+
+    Every model here forbids unknown keys, so the old spelling already fails -
+    with "extra inputs are not permitted", which does not tell an operator that
+    reasoning is declared on the envelope now. The message names the key that
+    replaced it, in full, because `inference.turns.thinking_close` is not a path
+    that exists.
+    """
+    payload = entry_with()
+    payload["summarize"]["inference"]["thinking"] = False
+
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(payload)
+
+    assert "models.<role>.turns.thinking_close" in str(raised.value)
+
+
+def test_a_config_that_still_spells_the_one_output_budget_is_refused_by_name() -> None:
+    """One budget over two spans could not say which span overran."""
+    payload = entry_with()
+    payload["summarize"]["inference"]["max_output_tokens"] = 900
+
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(payload)
+
+    assert "models.<role>.inference.max_answer_tokens" in str(raised.value)
 
 
 def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> None:
@@ -247,7 +285,7 @@ def test_a_refused_model_file_is_named_by_the_loader(tmp_path: Path) -> None:
     """Every model has a file of its own, so a refusal has to say which one.
 
     The validator cannot: it is handed a payload, not a path. So the loader adds
-    the address, and this is the arm that proves it rather than trusting it - an
+    the address, and this is the case that proves it rather than trusting it - an
     operator with two model files on disk and a refusal naming neither has to
     guess which one they broke.
     """
@@ -285,7 +323,7 @@ def test_the_one_shared_settings_block_is_refused_by_name() -> None:
     with pytest.raises(ValidationError) as raised:
         ModelsConfig.model_validate(raw)
     assert "models.inference is now models.<role>.inference" in str(raised.value)
-    assert SUPERSEDED_MODELS_NAMES["inference"] == "<role>.inference"
+    assert SUPERSEDED_MODELS_NAMES["inference"] == "models.<role>.inference"
     assert not SUPERSEDED_MODELS_NAMES["visual_planner"]
     assert not SUPERSEDED_MODELS_NAMES["route"]
 

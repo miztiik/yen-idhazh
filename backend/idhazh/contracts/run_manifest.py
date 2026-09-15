@@ -19,7 +19,6 @@ from typing import Any, ClassVar, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
-from idhazh.contracts.app_config import ModelRef
 from idhazh.contracts.base import (
     ChangelogEntry,
     CommitSha,
@@ -34,6 +33,7 @@ from idhazh.contracts.base import (
     without_retired_keys,
 )
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.models import ModelRef
 
 
 class RunStatus(StrEnum):
@@ -144,8 +144,8 @@ class RunRecord(Model):
             "Items the retired visual planner decided without asking the model, because "
             "no enabled visual kind could survive the checks. Counted separately so a "
             "chart rate is never quoted against items_routed alone. **Zero on every run "
-            "since plan 11 row #6**: call 2 writes the summary and the plan in one "
-            "reply, so the model is asked on every item and the gate then decides what "
+            "since plan 11 row #6**: the summarize-and-plan call writes the summary and the plan "
+            "in one reply, so the model is asked on every item and the gate then decides what "
             "to do with the plan. Kept because the committed archive carries non-zero "
             "values a reader of an older day still needs."
         ),
@@ -288,279 +288,29 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-13T23:30",
-            change=(
-                "items_prefiltered keeps its shape and gains a sentence: no run writes "
-                "a non-zero value any more. No field moved, so this is not breaking and "
-                "no payload needs migrating."
-            ),
-            why=(
-                "Plan 11 row #6 retired the visual planner stage, which was the only "
-                "producer of a decision made without asking a model. Call 2 writes the "
-                "summary and the plan in one reply, so every item's model is asked. The "
-                "column stays because the committed archive carries non-zero values, "
-                "and a reader of one of those days needs the field to mean what it "
-                "meant then - but a field that can only read zero from here on has to "
-                "say so where somebody about to quote it will look."
-            ),
+            version="2026-09-15T12:30",
+            change="The embedded draft block's spec_type accepts a third value, draft-mtp.",
+            why="It follows models-config, which is where the choice is declared.",
         ),
         ChangelogEntry(
-            version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprints from a run record. BREAKING.",
-            why=(
-                "`inputs` has recorded the same seventeen facts by name since 2026-09-12 "
-                "and nothing has filled the list since, so it was a shape every future "
-                "author of this manifest had to ask about. Removing it is breaking, "
-                "because contracts.base.Model sets extra='forbid' and all 23 committed "
-                "frontend/public/digest/**/run.json files carry the key. The read-side "
-                "migration ships in this commit and is expected to be permanent: a "
-                "published day is frozen, so `_drop_retired_keys` pops the one named key "
-                "before validation and the condition that would let it go is written on "
-                "the line that declares it."
-            ),
+            version="2026-09-14T07:00",
+            change="The embedded ModelRef gained an optional draft block.",
+            why="A run records the draft weights it used, or a later reader cannot repeat it.",
         ),
         ChangelogEntry(
-            version="2026-09-12T21:00",
-            change=(
-                "A run record carries `inputs`, the recorded input manifest, and stops "
-                "filling `pipeline_fingerprints`."
-            ),
-            why=(
-                "The stamp was one digest standing for seventeen inputs, and a digest "
-                "affords equality and nothing else - which is a gate's only operation. "
-                "Naming the inputs instead lets a reader see which one moved, and lets "
-                "the console draw a model-change boundary that can say what changed. "
-                "Additive and optional: a manifest written before today carries no key "
-                "and reads as null. Measured on the committed tree 2026-09-12: about "
-                "460 compact bytes a run, so roughly 1.4 KB on a three-run day, and "
-                "run.json is read at build time and never staged into the bundle "
-                "(frontend/scripts/copy-visuals.mjs), so the 1 GB site cap is untouched."
-            ),
+            version="2026-09-14T06:00",
+            change="The embedded ModelRef gained an optional byte_count.",
+            why="It follows models-config, which is where the size is now declared.",
         ),
         ChangelogEntry(
-            version="2026-09-09T20:10",
-            change=(
-                "The embedded inference block gained log_verbosity, following the "
-                "config contract. Additive and optional: a manifest written before "
-                "today carries no key and reads as null, which is the runtime default."
-            ),
-            why=(
-                "A manifest that named every runtime setting except the one that "
-                "decides whether the run's own log can be read would leave the reader "
-                "of a log unable to say why a line is missing from it. Stamped here as "
-                "well as on app-config because run.json is a separate persisted "
-                "document and its shape moved (CLAUDE.md section 11); it costs about "
-                "22 compact bytes per model use."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-09",
-            change=(
-                "The embedded ModelRef gained an inference block, because config moved "
-                "the runtime settings onto the model entry. Additive and optional: a "
-                "manifest written before today carries no block and reads on the "
-                "contract defaults, which is what tests/fixtures/contracts/run-manifest/"
-                "two-runs.json proves."
-            ),
-            why=(
-                "One settings block served both roles, so a swap inherited numbers "
-                "measured against other weights in silence. The block now belongs to "
-                "the entry, and the record of a run says which runtime each model was "
-                "served on rather than leaving it to be looked up. Measured 2026-09-09 "
-                "on the committed tree: 433 compact bytes per model use, so 1,732 B on "
-                "the 13,010 B manifest of 2026-09-08 - 13.3 percent bigger. No reader "
-                "pays it. run.json is read at build time and never staged into the "
-                "bundle (frontend/scripts/copy-visuals.mjs), so the 1 GB site cap is "
-                "untouched and the cost is about 1.7 KB of repository weight a day."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-05T16:00",
-            change=(
-                "Three Python names moved and not one wire key did. ModelRole.ROUTE is "
-                "ModelRole.VISUAL_PLANNER and still serialises to route; RunRecord."
-                "items_routed is RunRecord.items_decided and RunRecord.route_ms is "
-                "RunRecord.decision_ms, both aliased back to the keys they had. "
-                "RunRecord now serialises and validates by alias. No field was added, "
-                "removed or retyped, no schema property name moved, and no committed "
-                "manifest needs migrating."
-            ),
-            why=(
-                "Route names a dispatch decision and this stage plans a visual, so the "
-                "names taught the wrong word to every developer who read them. The keys "
-                "could not follow, because run.json is published: 15 manifests sit under "
-                "frontend/public/digest/ and 11 of them carry items_routed and route_ms, "
-                "which frontend/src/lib/server/payload.ts reads by those exact names at "
-                "build time. Moving a key would have meant migrating every published day "
-                "to change a string no reader ever sees, against a real risk of dropping "
-                "a run from the record (Fowler, 2026-09-05). So the Python renames and "
-                "the wire is frozen, which is the whole of this entry. A payload spelling "
-                "the new Python name also validates, because validate_by_name accepts "
-                "both - nothing writes that spelling, and refusing it would be a check "
-                "with no producer to catch."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-02T23:00",
-            change="Added optional eligible_feeds and feed_floor to each vertical.",
-            why=(
-                "below_feed_floor said a desk was under its floor and neither number "
-                "that decided it, so a reader of a past run could not check the claim "
-                "or see how close a desk came. The plan now counts only the addresses "
-                "a run may lawfully ask, which makes the count a different fact from "
-                "the one the manifest never carried - and recording it beside the "
-                "floor is what lets a later reader tell a desk that went dark from a "
-                "desk that was one source away. Both null on every manifest written "
-                "before today, and null reads as unknown rather than as a desk with "
-                "no sources (section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-01T12:00",
-            change="Added optional rank_version to a run.",
-            why=(
-                "`idhazh.rank.RANK_VERSION` says which scoring shape decided the "
-                "published order, and its own comment says an order that moved for "
-                "a reason nobody recorded is an order nobody can defend. Nothing "
-                "read the constant, so no run had ever recorded it and a bump would "
-                "have recorded nothing. This is the wiring on its own: no scoring "
-                "behaviour changes in this commit and the value written is the "
-                "constant already in the tree. Null on every manifest written "
-                "before today - 11 days when this landed, 2026-09-01 - and null "
-                "reads as unknown, never as a claim that some particular shape ran "
-                "(section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-31",
-            change=(
-                "run_id is the execution's own identity and no longer restates n. "
-                "A record is still numbered from 1 without gaps and still addressed "
-                "by the date, and no two records may share a run_id."
-            ),
-            why=(
-                "n was read off the last committed manifest, and actions/checkout "
-                "pins a job to the commit its run was triggered at - so a run that "
-                "starts while another is still working reads a manifest that has "
-                "never heard of it and counts the same number. On 2026-08-29 two "
-                "runs did: 33270983446 dispatched at 19:29 and 33274853468 "
-                "scheduled at 20:58 both derived 2026-08-29-3, and the ledgers keyed "
-                "on that string ended up with six counter rows for four shards and "
-                "44 repeated item-health keys. Summed naively that run's reading "
-                "clock read 19,305.8 seconds against 11,810.3 - 63 percent high. The "
-                "id now comes from the CI run, which GitHub allocates and no second "
-                "execution can reproduce, and the day's ordinal stays on n where it "
-                "was always the thing being asked for. Every committed manifest "
-                "still validates: <date>-<n> is addressed by the date and unique "
-                "within a day, so this relaxes the rule rather than breaking it."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-30T16:00",
-            change=(
-                "Added optional evaluation_enabled, evaluation_sample_rate, "
-                "evaluation_sampled and scorer_version to a run."
-            ),
-            why=(
-                "The faithfulness scorer is now sampled by run, so a day with no eval "
-                "rows has four possible causes - switched off in config, not drawn at "
-                "the rate, the weights would not load, or the run never reached the "
-                "scorer - and an absence in state/scores.csv looks the same for all "
-                "four. The rate lands here rather than on EvalRow because the unit "
-                "sampled is the run: every row of a run shares one rate, so one cell "
-                "per run says everything a per-row column would, and no persisted "
-                "ledger widens. All four are nullable and default to null, because an "
-                "older manifest does not know what it was configured to do and a "
-                "concrete default would invent the answer - the same rule the "
-                "observability block states as an empty cell is never a zero."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-28",
-            change="The embedded ModelRef gained an optional hf_base_repo.",
-            why=(
-                "A manifest embeds the whole model entry, so a field added there lands "
-                "here whether or not this document wanted it - the same way the optional "
-                "revision did on 2026-08-26. Nothing a run writes changes and no manifest "
-                "needs migrating; the emitted schema gained one optional property, and a "
-                "stale schema fails the drift gate."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-27T11:00",
-            change="site_bytes and site_files now say which tree they measure.",
-            why=(
-                "They always held the committed payload tree, and this document said they "
-                "measured the ceiling. Measured 2026-08-27, that tree was 7,027,075 bytes "
-                "while the published site was 128,064,853 - eighteen times larger. A field "
-                "that reads as the site cap and holds a tree eighteen times smaller is how "
-                "the alarm came to watch the wrong thing. No value changed and no payload "
-                "needs migrating; only the description did."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-26T20:00",
-            change="The embedded ModelRef gained an optional revision.",
-            why=(
-                "A manifest says which model ran. Until now it could not say which upload "
-                "of that model, because the weights were fetched from a branch. The "
-                "reason for the field is on the app-config schema; this entry exists "
-                "because the manifest embeds the same shape and its own document changed "
-                "with it. Optional, so every published manifest still validates "
-                "(section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-25",
-            change="Added optional charts_drafted to a run.",
-            why=(
-                "On 2026-08-25 the router drafted 17 charts and published 9, and no "
-                "committed row said where the other 8 went. Without the drafted count a "
-                "model that stops asking for charts and a set of checks that starts "
-                "refusing them look identical, so the chart arm's kill line cannot be "
-                "read from anything the run leaves behind. Defaults to zero on a "
-                "manifest written before it existed."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-24T23:10",
-            change="Added optional items_prefiltered to a run.",
-            why=(
-                "The router now decides an item without asking the model when no enabled "
-                "visual kind could survive its own checks. Counting those separately keeps "
-                "the denominator honest: after the gate the same charts sit over a much "
-                "smaller routed set, so a chart rate quoted against items_routed alone "
-                "would climb without a single extra chart existing. Defaults to zero on a "
-                "manifest written before it existed."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-24T11:15",
-            change="Added optional items_routed and route_ms to a run.",
-            why=(
-                "The route job lands between 51 and 60 minutes against a 60-minute bound, "
-                "and no committed artifact said what it spent or how many items it spent it "
-                "on. The budget cannot be argued from an estimate (Guardrail #10). Both default "
-                "on a manifest written before they existed."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-24T00:30",
-            change="Pinned RunRecord vertical published counts to the run that wrote them.",
-            why=(
-                "A later run appends to the day payload. Counting the accumulated day "
-                "against this run's plan rejected valid second and later runs."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-21T02:00",
-            change="Added optional pipeline_fingerprints and determinism_violations to a run.",
-            why="A run that cannot say which stamps it wrote under cannot be audited later.",
+            version="2026-09-14T04:00",
+            change="inputs.turn_markers_sha256, optional: the turn envelope the prompts used.",
+            why="A moved marker renders a prompt with no turn structure and raises nothing.",
         ),
         ChangelogEntry(
             version="2026-08-21",
-            change="Initial shape: append-only runs for one date, with counts and site size.",
-            why="Contracts before logic - a partial day is a recorded fact from run one.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

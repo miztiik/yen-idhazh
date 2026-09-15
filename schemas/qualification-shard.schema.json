@@ -240,7 +240,7 @@
     },
     "ItemObservation": {
       "additionalProperties": false,
-      "description": "One inference call: one corpus item at one repeat.\n\nEvery call is recorded, including the ones that failed. A failure that\nvanishes from the record takes the denominator with it, and the success rate\nthen describes the survivors rather than the run.",
+      "description": "One corpus item at one repeat, as the run's own call path produced it.\n\nEvery attempt is recorded, including the ones that failed. A failure that\nvanishes from the record takes the denominator with it, and the success rate\nthen describes the survivors rather than the run.\n\n**A row is one item and not one call, and `QualificationShard.calls_per_item`\nis what says how many calls are behind it.** On the path that makes two,\nevery column here is the item's answer over the pair: a budget either call\nhit cuts the item, a reasoning channel either call opened is a channel the\nitem used, and the token counts are the pair's sum. Reading a two-call row\nas a single call halves the cost and reports a decode as clean when the\nfirst of its two was truncated.",
       "properties": {
         "completion_tokens": {
           "minimum": 0,
@@ -260,6 +260,7 @@
           "title": "Failure Code"
         },
         "finish_reason": {
+          "description": "How the decode ended. Over a pair, `length` where either call met its budget, because an item cut anywhere is a cut item.",
           "minLength": 1,
           "title": "Finish Reason",
           "type": "string"
@@ -284,13 +285,13 @@
           "type": "string"
         },
         "prompt_tokens": {
-          "description": "The complete chat-templated request, as counted by the runtime.",
+          "description": "The complete rendered request, as counted by the runtime.",
           "minimum": 0,
           "title": "Prompt Tokens",
           "type": "integer"
         },
         "reasoning_channel_used": {
-          "description": "The runtime split a reasoning channel off the content.",
+          "description": "The runtime split a reasoning channel off the content, in any call.",
           "title": "Reasoning Channel Used",
           "type": "boolean"
         },
@@ -319,7 +320,7 @@
           "type": "integer"
         },
         "think_block_words": {
-          "description": "Words inside inline `<think>` blocks. Any is a leak.",
+          "description": "Words inside inline `<think>` blocks, summed. Any is a leak.",
           "minimum": 0,
           "title": "Think Block Words",
           "type": "integer"
@@ -522,6 +523,20 @@
           "minimum": 1,
           "title": "Truncation Cap Tokens",
           "type": "integer"
+        },
+        "turn_markers_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The turn envelope the prompts were rendered through - every marker string, the system placement and its joiner, digested as one. prompt_sha256 already moves when a marker moves, and stops short of two envelope facts that move an output without moving a rendered prompt: which of the two reply openings a call ends on, and the marker the thinking span stops at. Absent means a run written before 2026-09-14, when the markers first became able to move at all. It is never a default value: a substituted digest would say the envelope was recorded and unchanged, which is the one thing an absent key must not be read as.",
+          "title": "Turn Markers Sha256"
         }
       },
       "required": [
@@ -591,33 +606,40 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
+      "change": "Added calls_per_item, defaulting to 1.",
+      "version": "2026-09-15T23:30",
+      "why": "Qualification can now run the call path the digest runs, which calls twice."
+    },
+    {
+      "change": "inputs gains turn_markers_sha256, optional.",
+      "version": "2026-09-14T04:00",
+      "why": "The turn envelope is a control, so a verdict has to record which one it ran."
+    },
+    {
+      "change": "Removed pipeline_fingerprint.",
       "version": "2026-09-13T22:00",
-      "why": "`inputs` beside it records the same facts by name and no writer has built a stamp since 2026-09-12. A shard is a workflow artifact uploaded by one qualification job and merged by the next; none is committed, so the shape moves with no payload of it on disk."
+      "why": "`inputs` beside it records the same controls by name."
     },
     {
-      "change": "A shard and a report carry `inputs`, the recorded input manifest, and pipeline_fingerprint is optional on both.",
+      "change": "A shard and a report carry `inputs`, the recorded input manifest.",
       "version": "2026-09-12T21:00",
-      "why": "A qualification run stamped its controls so two candidates could be shown to have run under one pipeline. The stamp stopped being built, so the field is recorded when a caller has one and absent otherwise."
+      "why": "Two candidates are only comparable when the run records what it held still."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
-      "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
-    },
-    {
-      "change": "Added optional failure_code and failure_detail to CanaryObservation.",
-      "version": "2026-08-27",
-      "why": "A canary that never replied and a canary whose reply carried the attack both landed as `replied: false` with nothing to tell them apart, so a blank reply was read as a sanitizer breach. Both fields are nullable, so a shard written before today still validates."
-    },
-    {
-      "change": "Initial shape: the frozen corpus, every call, every score and the canaries.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-26",
-      "why": "Row #10 qualifies one model on absolute gates, so the evidence a shard hands the decider is a persisted contract rather than a log line."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "What one capture-and-replay job uploads.\n\nThe corpus is hashed and written before the first inference call, so the\npre-registration is an ordering the code enforces rather than a promise in a\ndocument.",
   "properties": {
+    "calls_per_item": {
+      "default": 1,
+      "description": "Inference calls behind one observation. 1 is the qualification's own single call; 2 is the path the digest runs, which labels the article and then summarizes it. Recorded because it decides what every per-item number in this shard means, and two shards that disagree on it are not comparable.",
+      "minimum": 1,
+      "title": "Calls Per Item",
+      "type": "integer"
+    },
     "canaries": {
       "items": {
         "$ref": "#/$defs/CanaryObservation"
@@ -713,7 +735,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-09-13T22:00",
+      "default": "2026-09-15T23:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -734,5 +756,5 @@
   ],
   "title": "QualificationShard",
   "type": "object",
-  "version": "2026-09-13T22:00"
+  "version": "2026-09-15T23:30"
 }

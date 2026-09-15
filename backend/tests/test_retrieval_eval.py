@@ -446,10 +446,10 @@ def index_report(
     embedded: list[list[float]],
     config: AppConfig,
 ) -> RetrievalReport:
-    """Pinned to the same day as `report`, because this arm is a comparison.
+    """Pinned to the same day as `report`, because this case is a comparison.
 
     The question is what moving to the index cost, so the corpus has to be held
-    still on both sides. Pin one arm and the gap reads as an index defect when
+    still on both sides. Pin one case and the gap reads as an index defect when
     it is only the days between the pin and today.
     """
     return retrieval.evaluate(
@@ -482,7 +482,7 @@ def test_moving_search_to_the_index_cost_no_recall(
     """The load-bearing half of this row's Oracle.
 
     A page that got lighter while search got worse is a regression, and the only
-    thing that can tell the difference is this number. Both arms use the same
+    thing that can tell the difference is this number. Both cases use the same
     queries, the same labels, the same ranking and the same embedded queries -
     the only difference is whether the vectors came out of the day payloads the
     page used to inline or out of the month shard it now fetches.

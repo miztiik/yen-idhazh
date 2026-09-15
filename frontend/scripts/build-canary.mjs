@@ -126,9 +126,25 @@ function writeItemHealthCanary() {
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
 		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
 		'shard', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
-		'call_1_kind', 'call_1_prefill_ms', 'call_1_decode_ms', 'call_1_input_tokens',
-		'call_1_output_tokens', 'call_1_cached_tokens', 'call_2_kind', 'call_2_prefill_ms',
-		'call_2_decode_ms', 'call_2_input_tokens', 'call_2_output_tokens', 'call_2_cached_tokens'
+		'label_kind', 'label_prefill_ms', 'label_decode_ms', 'label_input_tokens',
+		'label_output_tokens', 'label_cached_tokens', 'summary_kind', 'summary_prefill_ms',
+		'summary_decode_ms', 'summary_input_tokens', 'summary_output_tokens', 'summary_cached_tokens',
+		'truncation_cap_tokens', 'selection_score', 'authority_score', 'tier_score', 'feed_weight',
+		'feed_reliability', 'lens_bonus', 'recency_bonus', 'carriage_step', 'watchlist_bonus',
+		'carried_by', 'watchlist_hit', 'on_front_page', 'tier', 'source_form', 'published_at',
+		'time_source', 'item_started_at', 'item_ended_at', 'item_index', 'shard_item_count',
+		'queue_wait_ms', 'fetch_connect_ms', 'fetch_ttfb_ms', 'robots_ms', 'retry_count',
+		'retry_total_ms', 'label_ms', 'summary_ms', 'visual_plan_ms', 'visual_plan_ms_is_estimate',
+		'faithfulness_ms', 'model_wait_ms', 'item_total_ms', 'stage_gap_ms',
+		'visual_plan_tokens_written', 'label_cache_pct', 'summary_cache_pct', 'slot_id',
+		'kv_tokens_at_start', 'prefix_shared_with_previous', 'label_prefill_tokens_per_s',
+		'label_decode_tokens_per_s', 'summary_prefill_tokens_per_s', 'summary_decode_tokens_per_s',
+		'label_finish_reason', 'summary_finish_reason', 'recovered', 'cpu_model', 'runner_name',
+		'cpu_busy_pct', 'cpu_busy_max', 'cpu_busy_min', 'load_1m', 'llama_rss_bytes',
+		'llama_rss_peak_bytes', 'python_rss_bytes', 'cgroup_peak_bytes', 'model_id',
+		'model_quantisation', 'n_ctx_configured', 'n_parallel', 'n_threads', 'n_batch',
+		'max_output_tokens', 'label_budget_tokens', 'summary_budget_tokens', 'run_visual_decision',
+		'temperature', 'failed_field', 'failed_rule'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
@@ -174,8 +190,64 @@ function writeItemHealthCanary() {
 			cached_tokens: model[4],
 			source_words_before_cap: cut?.[2],
 			...extraction(id),
-			...perCall(model, calls)
+			...perCall(model, calls),
+			...clock(id, [fetchMs, extractMs, summarizeMs], model, calls)
 		});
+
+	/** The item's own clock, the per-call rates, and what it ran on.
+	 *
+	 * **Fixture, and derived from the milliseconds already on the row.** The run
+	 * this canary was taken from predates the item clock, so `item_total_ms` and
+	 * `stage_gap_ms` cannot be read off it - but a panel that draws where an
+	 * item's time went is a panel no test can reach without them.
+	 *
+	 * The contract refuses a row whose gap is not what the named stages left
+	 * over, so the total is built from the stages rather than the other way
+	 * round: fetch, extract, summarize and faithfulness, plus a remainder that
+	 * varies by item id so the top band is not a flat ribbon across the chart.
+	 *
+	 * The rates are each call's own tokens over its own milliseconds, rounded
+	 * the way `stages/work.py` rounds them. Those milliseconds are the server's
+	 * real numbers, so they are used for the rates and NOT for the bands: this
+	 * canary's stage clock is a fixture and its model clock is a measurement, so
+	 * `prefill_ms + decode_ms` is far larger than `summarize_ms` on the rows that
+	 * carry both. The bands split `summarize_ms` in the calls' own proportion
+	 * instead, which keeps the stack adding up to the item rather than drawing a
+	 * band tens of seconds below the axis.
+	 *
+	 * `cpu_model` is the processor the shard counters below already name, so one
+	 * page cannot say the run drew two different machines.
+	 */
+	const clock = (id, [fetchMs, extractMs, summarizeMs], model, calls) => {
+		const spread = [...id].reduce((total, letter) => total + letter.charCodeAt(0), 0);
+		const faithfulness = 20 + (spread % 40);
+		const gap = 60 + (spread % 120);
+		const rate = (tokens, ms) => (ms > 0 ? Math.round(((1000 * tokens) / ms) * 100) / 100 : '');
+		const [label, summary] = calls ?? [];
+		const wire = (calls ?? []).reduce((total, call) => total + call[1] + call[2], 0);
+		const labelMs = label && wire > 0 ? Math.round((summarizeMs * (label[1] + label[2])) / wire) : '';
+		const summaryMs = summary ? summarizeMs - labelMs : '';
+		const planMs = summary ? Math.round(summaryMs * 0.18) : '';
+		return {
+			queue_wait_ms: spread % 900,
+			faithfulness_ms: faithfulness,
+			model_wait_ms: Math.round(summarizeMs * 0.02),
+			item_total_ms: fetchMs + extractMs + summarizeMs + faithfulness + gap,
+			stage_gap_ms: gap,
+			label_ms: labelMs,
+			summary_ms: summaryMs,
+			visual_plan_ms: planMs,
+			visual_plan_ms_is_estimate: summary ? 'True' : '',
+			visual_plan_tokens_written: summary ? Math.round(summary[4] * 0.2) : '',
+			label_prefill_tokens_per_s: label ? rate(label[3], label[1]) : '',
+			label_decode_tokens_per_s: label ? rate(label[4], label[2]) : '',
+			summary_prefill_tokens_per_s: summary ? rate(summary[3], summary[1]) : '',
+			summary_decode_tokens_per_s: summary ? rate(summary[4], summary[2]) : '',
+			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cpu_busy_pct: Math.round((60 + (spread % 3500) / 100) * 100) / 100,
+			load_1m: Math.round((2 + (spread % 600) / 100) * 100) / 100
+		};
+	};
 
 	/** The two calls one item took, as the ledger's flat cells.
 	 *
@@ -191,11 +263,12 @@ function writeItemHealthCanary() {
 	const perCall = (model, calls) => {
 		if (!calls) return {};
 		const cells = { model_calls: calls.length };
+		const slots = ['label', 'summary'];
 		const names = ['prefill_ms', 'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens'];
 		calls.forEach(([kind, ...numbers], index) => {
-			cells[`call_${index + 1}_kind`] = kind;
+			cells[`${slots[index]}_kind`] = kind;
 			names.forEach((name, at) => {
-				cells[`call_${index + 1}_${name}`] = numbers[at];
+				cells[`${slots[index]}_${name}`] = numbers[at];
 			});
 		});
 		names.forEach((name, at) => {

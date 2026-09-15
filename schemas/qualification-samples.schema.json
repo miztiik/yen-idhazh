@@ -1,0 +1,196 @@
+{
+  "$defs": {
+    "CandidateIdentity": {
+      "additionalProperties": false,
+      "description": "Which bytes ran. A model-card name identifies nothing.",
+      "properties": {
+        "bytes_expected": {
+          "minimum": 1,
+          "title": "Bytes Expected",
+          "type": "integer"
+        },
+        "bytes_observed": {
+          "minimum": 1,
+          "title": "Bytes Observed",
+          "type": "integer"
+        },
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "repo": {
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "An immutable repository revision, not a branch.",
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "runtime_build": {
+          "minLength": 1,
+          "title": "Runtime Build",
+          "type": "string"
+        },
+        "sha256_expected": {
+          "description": "What the adoption target declares.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256 Expected",
+          "type": "string"
+        },
+        "sha256_observed": {
+          "description": "What the runtime actually opened.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256 Observed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "repo",
+        "revision",
+        "file",
+        "quantisation",
+        "sha256_expected",
+        "sha256_observed",
+        "bytes_expected",
+        "bytes_observed",
+        "runtime_build"
+      ],
+      "title": "CandidateIdentity",
+      "type": "object"
+    },
+    "SummarySample": {
+      "additionalProperties": false,
+      "description": "One summary as a person would read it, beside the two numbers that judged it.\n\nSelf-contained on purpose. A reviewer opening this file to ask whether a\nscore is believable should not have to join it against the shard to learn\nwhether the item was a brief or a long read, or open a third file to find\nthe address that would settle a claim.",
+      "properties": {
+        "band_index": {
+          "description": "Which length tier the extracted article fell in.",
+          "minimum": 0,
+          "title": "Band Index",
+          "type": "integer"
+        },
+        "compression": {
+          "minimum": 0.0,
+          "title": "Compression",
+          "type": "number"
+        },
+        "hhem": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Hhem",
+          "type": "number"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "source_url": {
+          "description": "The only way to check a claim.",
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Source Url",
+          "type": "string"
+        },
+        "summary": {
+          "description": "The writing under judgement. Our text.",
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null where the drafted title missed its range and was dropped.",
+          "title": "Title"
+        },
+        "truncated": {
+          "description": "The same words are good or bad depending on how much was shown.",
+          "title": "Truncated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "item_id",
+        "summary",
+        "source_url",
+        "band_index",
+        "truncated",
+        "hhem",
+        "compression"
+      ],
+      "title": "SummarySample",
+      "type": "object"
+    }
+  },
+  "$id": "qualification-samples.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one row per scored item, carrying the title and the summary.",
+      "version": "2026-09-15T21:00",
+      "why": "A verdict quoting only an average cannot be traced back to the item that set it."
+    }
+  ],
+  "description": "The writing one shard produced, for a person to read.\n\n**Nothing here reaches a gate, and nothing here reaches a reader of the\nsite.** `QualificationReport` does not embed it and no scorer opens it: a\ngate that learned to read this would be a gate reading text it also scored.\nIt is uploaded as its own artifact and thrown away with it, never committed\nand never written under `frontend/public/`.\n\nWhy it exists at all: a qualification run recorded what the writing measured\nand never the writing. `output_digest` says two runs wrote the same words\nand cannot say whether the words were any good, and `ItemScore` is eleven\nfloats over text nobody kept. Andre's ruling, 2026-09-15: what qualification\nmeasured was everything except the writing.\n\n**This is our summary, not the publisher's text.** Section 0a bans\nrepublishing an article body to a reader; the article is still only hashed,\nand the prompt that contains it is still behind its own flag. What is here\nis the model's output.\n\nTwo objections, recorded rather than resolved. A human reading these is a\nselector nobody logs, and somebody sorting by faithfulness, reading ten and\nquietly re-running is re-rolling the corpus by hand - which the frozen\ncorpus exists to stop. And seven fields is a taste panel with no rubric, no\nsecond rater and no agreement number; it will be cited as evidence and it is\nnot.",
+  "properties": {
+    "candidate": {
+      "$ref": "#/$defs/CandidateIdentity"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/SummarySample"
+      },
+      "title": "Samples",
+      "type": "array"
+    },
+    "shard": {
+      "minimum": 0,
+      "title": "Shard",
+      "type": "integer"
+    },
+    "version": {
+      "default": "2026-09-15T21:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "shard",
+    "candidate"
+  ],
+  "title": "QualificationSamples",
+  "type": "object",
+  "version": "2026-09-15T21:00"
+}

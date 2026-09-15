@@ -40,7 +40,6 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -55,6 +54,7 @@ from idhazh.contracts.base import (
     UrlKey,
     derive_url_key,
 )
+from idhazh.contracts.knobs.extract import ExtractConfig
 
 
 class ReferenceSplit(StrEnum):
@@ -149,35 +149,13 @@ class ReferenceDatasetRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-14",
-            change=(
-                "Description only, on three sentences the first labelling pass made "
-                "false: `reference_summary` has a writer, `second_labels` holds the "
-                "same labeller's alternative reading rather than an independent second "
-                "rating, and the module no longer claims no model wrote a field here."
-            ),
-            why=(
-                "The pass of 2026-09-13 filled all 641 rows at the owner's direction "
-                "and recorded `labelled_by` of `human` (owner decision, `CLAUDE.md` "
-                "section 0). Who wrote a label is the fact every number taken on this "
-                "set rests on, so a contract asserting the opposite is worse than one "
-                "that says nothing. No field moved, so no payload needs a migration."
-            ),
+            change="Description only, on three sentences the first labelling pass made false.",
+            why="A description that describes a state the data has left is worse than none.",
         ),
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Initial shape: the article's identity and provenance, the text file's "
-                "digest and word count, and two empty label slots - one per rater."
-            ),
-            why=(
-                "Plan 23 measures a classifier against a frozen labelled set, and the set "
-                "needs a declared shape before anything writes one (Guardrail #3). The "
-                "split is deliberately absent: `splits/dev.txt` and `splits/test.txt` are "
-                "the split, and a copy of it here is a second thing that can disagree. "
-                "`second_labels` is here from the first commit because row #P3 double-"
-                "labels 60 dev items for a Cohen's kappa, and a field added later would "
-                "make that a schema argument in the middle of a labelling pass."
-            ),
+            change="Initial shape: the article's identity and provenance, the text file's digest.",
+            why="A classifier is measured against a frozen labelled set, which needs a shape.",
         ),
     )
 
@@ -485,38 +463,17 @@ class ReferenceDatasetLocalConfig(Contract):
         ChangelogEntry(
             version="2026-09-13T13:05",
             change="Added the cleaning block.",
-            why=(
-                "Filtering rows cannot improve text, and 44,523 words of the real corpus "
-                "- 1.8 percent overall and 15.9 percent of one publisher - are disclaimers "
-                "and sales pitches sitting inside articles that pass every flag. Every "
-                "threshold is here rather than in the loop so a different judgement about "
-                "what counts as furniture is a config edit (Guardrail #6)."
-            ),
+            why="Filtering rows cannot improve text, and the real corpus carries boilerplate.",
         ),
         ChangelogEntry(
             version="2026-09-13T10:20",
             change="Added selection.generic_host_labels.",
-            why=(
-                "The first import over the supplied list produced the outlet key "
-                "`newsletter` for `newsletter.semianalysis.com`, which names a subdomain "
-                "rather than a publisher. The list of labels that fall back to the "
-                "registered name is a knob rather than a literal, because which words "
-                "read as generic is a judgement that will change (Guardrail #6)."
-            ),
+            why="The first import over the supplied list produced the outlet key `newsletter`.",
         ),
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Initial shape: the input and vocabulary paths, the fetch settings, the "
-                "request delay, and the selection block."
-            ),
-            why=(
-                "The collection needs a declared, validated settings file before anything "
-                "writes into it (Guardrail #3), and the owner ruled on 2026-09-13 that "
-                "these settings stay local rather than joining AppConfig. The selection "
-                "numbers are here rather than in the loop so a different sample size is a "
-                "config edit (Guardrail #6)."
-            ),
+            change="Initial shape: the input and vocabulary paths, the fetch settings.",
+            why="The collection needs a declared, validated settings file before anything writes.",
         ),
     )
 
@@ -567,17 +524,8 @@ class ReferenceManifestRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Initial shape: the input position, the three addresses, the registered "
-                "domain, the host, the frozen publisher key, and the optional source id "
-                "and vertical."
-            ),
-            why=(
-                "The import needs a declared row before it writes one (Guardrail #3). "
-                "`publisher` is stored rather than derived on read because its length "
-                "depends on which other hosts are in the pool, so recomputing it over a "
-                "later pool could rename an outlet that nothing changed."
-            ),
+            change="Initial shape: the input position, the three addresses and the registrar.",
+            why="The import needs a declared row before it writes one.",
         ),
     )
 
@@ -637,26 +585,12 @@ class ReferenceExtractionRow(Contract):
         ChangelogEntry(
             version="2026-09-13T13:05",
             change="Added quality_flags, defaulting to empty.",
-            why=(
-                "The cleaning phase writes the same row shape with its text cleaned, and "
-                "an article it kept but is unhappy about has to be able to say so. It "
-                "stays empty on an extraction row: the fetch judges whether a page "
-                "answered, never whether the prose is worth reading."
-            ),
+            why="The cleaning phase writes the same row shape with its text cleaned.",
         ),
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Initial shape: the manifest identity, the full sanitized text with its "
-                "digest and word count, the two timestamps, the two tool versions, and "
-                "the outcome with its typed reason."
-            ),
-            why=(
-                "The extraction needs a declared row before it writes one (Guardrail #3). "
-                "The text is the untruncated sanitized prose rather than the capped "
-                "`Article.text`, because a classifier reading a 2,500-token excerpt is "
-                "reading a different article from the one a person opened."
-            ),
+            change="Initial shape: the manifest identity, the full sanitized text with its digest.",
+            why="The extraction needs a declared row before it writes one.",
         ),
     )
 
@@ -759,11 +693,7 @@ class ReferenceSelectionRow(Contract):
         ChangelogEntry(
             version="2026-09-13",
             change="Initial shape: the identity, the grouping fields and the text digest.",
-            why=(
-                "The sample needs a declared row before one is written (Guardrail #3). The "
-                "text is not copied: two copies of an article in one collection are two "
-                "things that can disagree, and the digest is what proves they have not."
-            ),
+            why="The sample needs a declared row before one is written.",
         ),
     )
 
@@ -904,36 +834,17 @@ class ReferenceCollectionMetadata(Contract):
         ChangelogEntry(
             version="2026-09-13T13:05",
             change="Added the cleaning phase and its totals.",
-            why=(
-                "Cleaning writes a new collection rather than editing the frozen "
-                "extraction, so it needs its own phase and its own totals. removed_lines "
-                "carries every line the pass took out, because this is the one step that "
-                "changes an article's text."
-            ),
+            why="Cleaning writes a new collection rather than editing the frozen extraction.",
         ),
         ChangelogEntry(
             version="2026-09-13T11:40",
             change="Removed extraction_totals.attempts.",
-            why=(
-                "The extraction makes one request per identity, so attempts and "
-                "unique_attempted were computed from the same set and could never "
-                "disagree. A number that cannot disagree with its neighbour reads as a "
-                "check and is decoration (Guardrail #10)."
-            ),
+            why="One request per identity makes attempts and unique_attempted the same number.",
         ),
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Initial shape: the phase, the input and output identity, the count maps, "
-                "the frozen publisher map, the resolved settings, and one totals block per "
-                "phase."
-            ),
-            why=(
-                "A collection file is a bare JSON array, so the provenance it cannot carry "
-                "lives beside it (Guardrail #3). The resolved settings are recorded per run "
-                "because a later edit to `config.json` must not change what an earlier "
-                "result claims to have been built with."
-            ),
+            change="Initial shape: the phase, the input and output identity, the count maps.",
+            why="A collection file is a bare JSON array, so its provenance needs a home.",
         ),
     )
 

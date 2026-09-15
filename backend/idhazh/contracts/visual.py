@@ -78,7 +78,7 @@ plan that fills none and the seven a `bar` leaves empty cost 87. That is **28
 tokens** on the declining plan and **23** on the four-bar one, about 3.1 tokens
 an empty role. At the 6.01 tok/s the configured summarizer decodes at
 (`ubuntu-latest`, 2026-08-23) that is 4.7 s and 3.8 s a plan. The plan is
-decoded by call 2, behind the summary, so this sits inside
+decoded by the summarize-and-plan call, behind the summary, so this sits inside
 `run.shard_timeout_minutes` (200) along with everything else an item costs.
 
 The reading is `idhazh.measured.EMPTY_ROLE_TOKENS` and it names weights this
@@ -135,9 +135,9 @@ cannot say "at most four roles for a bar". Which roles a type may fill is the
 validator's rule.
 
 `visuals.max_output_tokens` is 400 and it is the single-call planner's budget, not
-this shape's. Call 2 decodes a summary and this plan through one budget derived
+this shape's. The summarize-and-plan call decodes a summary and this plan through one budget derived
 from both shapes' bounds, which is the planner's work and not this contract's -
-`classify.calls.call_two_output_tokens` does the arithmetic and
+`classify.calls.summarize_and_plan_budget_tokens` does the arithmetic and
 `widest_json_characters` below is the half of it this module owns.
 """
 
@@ -149,7 +149,11 @@ from typing import Annotated, Any, ClassVar, Final, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model, SchemaVersion
-from idhazh.contracts.element import ELEMENT_ID_PATTERN, ElementId
+from idhazh.contracts.element import (
+    ELEMENT_ID_MAX_LENGTH,
+    ELEMENT_ID_PATTERN,
+    ElementId,
+)
 
 #: The field this contract may never grow, and the reason it is spelled as a
 #: name rather than left as an absence. Alt text assembled by the compiler is
@@ -179,14 +183,12 @@ _NUMBER_MAX_CHARACTERS: Final = 20
 #: a number nobody can read off the module is a number nobody re-derives.
 WORST_CASE_REPLY_CHARACTERS: Final = 3767
 
-#: `<kind>-<span_start>-<span_end>` at its longest: `quantity` is the longest
-#: element kind at 8 characters, and six digits an offset. `extract` truncates a
-#: body at `truncation_cap_tokens` (10000), which `truncate_to_tokens` spends as
-#: `int(10000 / 1.3)` = 7,692 words, so six digits covers an article of 999,999
-#: characters and is an upper bound with room in it. The ceiling is here rather
-#: than on `ElementId` itself because it is a decoder bound, not an identity
-#: rule: the pattern, and so the identity, stays element.py's.
-ELEMENT_ID_MAX_LENGTH: Final = 22
+#: `<kind>-<span_start>-<span_end>` at its longest, and `ELEMENT_ID_PATTERN`
+#: already admits no more than that - the pattern bounds every one of its own
+#: quantifiers, because a `maxLength` beside an unbounded quantifier is the one
+#: the schema-to-grammar converter drops. So `max_length` here is the belt and
+#: the pattern is the braces; the number is element.py's because the identity
+#: rule and the decoder bound are now the same bound.
 _PlanElementId = Annotated[
     ElementId, StringConstraints(pattern=ELEMENT_ID_PATTERN, max_length=ELEMENT_ID_MAX_LENGTH)
 ]
@@ -362,49 +364,19 @@ class VisualPlan(Contract):
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T19:40",
+            change="Every element-id field now carries a self-bounding pattern.",
+            why="These are every string the constrained decoder sees, and it cannot compile one.",
+        ),
+        ChangelogEntry(
             version="2026-09-09T03:11",
-            change=(
-                "encodings became one flat object with a field per role, and the schema "
-                "requires every one of them. It was a map whose keys were optional, so a "
-                "reply could name a type and never mention the channel that draws it. An "
-                "inapplicable role is now an empty array. No role was added or removed "
-                "and no bound moved, so the worst-case reply is the same 3767 characters."
-            ),
-            why=(
-                "Optional role keys produced a confident chart with no bars in it, twice, "
-                "on the first live run, and a plan that omits quantity reads as a complete "
-                "answer rather than as a failure. A JSON Schema can require the keys of an "
-                "object it declares and cannot require the keys of a map, so the roles had "
-                "to become fields for the decoder to be held to them. Presence is all this "
-                "shape guarantees: which roles a given type may leave empty needs that "
-                "type's own rule set, which is the validator's and not the schema's. The "
-                "cost is nine keys on every reply and it is measured rather than assumed - "
-                "28 tokens on a plan that declines and 23 on a four-bar one, about 2 "
-                "seconds a plan and 6 to 7 percent of the planner's run budget."
-            ),
+            change="encodings became one flat object with a field per role.",
+            why="Optional role keys produced a confident chart with no bars in it, twice.",
         ),
         ChangelogEntry(
             version="2026-09-09",
-            change=(
-                "Initial shape: the plan a compiler draws from, carrying element "
-                "references and closed vocabularies only. No geometry field, no numeric "
-                "field but a 0..1 confidence, no alt_text, and labels and annotations "
-                "typed as element ids rather than as strings. Every array carries a "
-                "maxItems and every decoded string a maxLength."
-            ),
-            why=(
-                "Contracts before logic - the planner's second call and the compiler are "
-                "both written against a fixed payload (Guardrail #3). The prohibitions are the "
-                "point of the shape rather than a note beside it: a plan that can name a "
-                "pixel is a plan bound to one renderer, and a plan that can state a "
-                "number turns the worst a prompt injection can do from picking the wrong "
-                "bars into drawing the wrong figure. alt_text is left out because the "
-                "compiler assembles it from element values it already holds, where the "
-                "model writing it would be the last prose channel in the system that no "
-                "validator can check. The bounds are what make the worst-case decoded "
-                "reply arithmetic rather than a hope, and the arithmetic is in the module "
-                "docstring so it can be re-derived when a bound moves."
-            ),
+            change="Initial shape: the plan a compiler draws from, carrying element references.",
+            why="Contracts before logic - the planner and the compiler both need a fixed shape.",
         ),
     )
 

@@ -22,10 +22,12 @@ from conftest import (
 )
 
 from idhazh import config, corpus, summarize
-from idhazh.contracts.app_config import AppConfig, FinetuneConfig, ModelsConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.knobs.finetune import FinetuneConfig
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 
 DATE = "2026-08-28"
@@ -98,7 +100,7 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
         article,
         model_id=models.summarize.id,
         inference=models.summarize.inference,
-        thinking_kwarg=models.summarize.turns.thinking_kwarg,
+        turns=models.summarize.turns,
         prompt_config=app.summarize,
     )
     harvested = corpus.harvest_rows(

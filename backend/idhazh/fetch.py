@@ -10,13 +10,27 @@ instruction from an untrusted source about where to send a request from inside
 CI. So an address is validated before it is dialled, and the loopback, private
 and link-local ranges are refused - a cloud metadata endpoint is one feed entry
 away otherwise (Guardrail #11).
+
+A read also says where its milliseconds went, because `fetch_ms` alone cannot
+tell a slow host from a slow handshake from three retries, and unattributed
+time is what hides a regression. The split is taken from `http.client`'s own
+`connect`, reached through `urllib.request`'s documented injection point -
+`AbstractHTTPHandler.do_open` takes the connection class to dial - rather than
+from a stopwatch wrapped round the whole call (Guardrail #8). Only numbers come
+back: no header, no redirect chain and no server string crosses the boundary
+with them.
 """
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import socket
-from dataclasses import dataclass
+import time
+from contextvars import ContextVar
+from dataclasses import dataclass, field, fields, replace
+from functools import cache
+from http.client import HTTPResponse
 from typing import Final, Protocol
 from urllib import request
 from urllib.error import HTTPError, URLError
@@ -24,8 +38,8 @@ from urllib.parse import urlsplit
 
 from protego import Protego
 
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
+from idhazh.contracts.knobs.extract import ExtractConfig
 
 #: Bumped when fetch policy changes. `-2` reads robots.txt with `protego`
 #: rather than `urllib.robotparser`, which changes what some files mean - see
@@ -52,6 +66,43 @@ _RETRYABLE_STATUS: Final[frozenset[int]] = frozenset({408, 425, 429, 500, 502, 5
 
 
 @dataclass(frozen=True, slots=True)
+class FetchTimings:
+    """Where one read's milliseconds went, under the census row's own names.
+
+    **The field names ARE `ItemHealthRow`'s column names and this shape mints
+    none of its own**, so a cell called one thing here and another in the ledger
+    is a drift that cannot start. `ItemRecorder.note` refuses a key no column
+    declares, which is what turns a typo into a failure rather than a cell
+    nobody reads.
+
+    Every field is nullable because a reading that was never taken is not a
+    zero. A blocked address opened no connection, so a `0` there would claim a
+    handshake that never happened, and an attempt nothing answered has no first
+    byte to time.
+    """
+
+    #: DNS, TCP and - on https - the TLS handshake, before a byte of the answer.
+    #: Summed over the connections one attempt opened, because a host that
+    #: redirects opens more than one and every one of them is before the answer.
+    fetch_connect_ms: int | None = None
+    #: From the end of the handshake to the first byte of the response. That is
+    #: the host thinking, and it is the half a slow server shows up in.
+    fetch_ttfb_ms: int | None = None
+    #: What establishing permission cost this read. Zero on the second and every
+    #: later article from one host, because the document is read once a run.
+    robots_ms: int | None = None
+    #: How many attempts this address needed beyond the first.
+    retry_count: int | None = None
+    #: Everything before the attempt that produced this result - the failed
+    #: attempts and the backoff between them.
+    retry_total_ms: int | None = None
+
+    def cells(self) -> dict[str, int | None]:
+        """These numbers as census cells, ready for `ItemRecorder.note`."""
+        return {declared.name: getattr(self, declared.name) for declared in fields(self)}
+
+
+@dataclass(frozen=True, slots=True)
 class FetchResult:
     outcome: FetchOutcome
     status: int | None = None
@@ -61,10 +112,21 @@ class FetchResult:
     #: The permission this read was made under, as a value rather than a
     #: sentence. `None` on a result nobody established permission for.
     robots: RobotsOutcome | None = None
+    #: Where this read's time went. Empty on a result that reached no socket.
+    timings: FetchTimings = FetchTimings()
 
     @property
     def ok(self) -> bool:
         return self.outcome is FetchOutcome.OK
+
+    def with_robots_ms(self, elapsed_ms: int) -> FetchResult:
+        """The same result, saying what its permission check cost.
+
+        The robots read belongs to the caller that owns the per-origin cache, so
+        it is the caller that fills this cell - a refusal and a success both
+        paid for it and both carry it.
+        """
+        return replace(self, timings=replace(self.timings, robots_ms=elapsed_ms))
 
 
 #: Every reason this module refuses an address outright. `telemetry` types the
@@ -255,6 +317,127 @@ def read_capped(response: Readable, limit: int) -> tuple[bytes, bool]:
     return body, False
 
 
+def _ms(seconds: float) -> int:
+    return int(seconds * 1000)
+
+
+@dataclass(slots=True)
+class _Handshakes:
+    """How long one attempt's connections took to open, and how many opened.
+
+    The count is what separates "the handshake was instant" from "there was no
+    handshake": a connect that raised recorded nothing, and reporting zero
+    milliseconds for it would claim a connection that never existed.
+    """
+
+    seconds: float = 0.0
+    opened: int = 0
+
+    def record(self, seconds: float) -> None:
+        self.seconds += seconds
+        self.opened += 1
+
+
+#: The attempt in flight on this context, so the connection class can report a
+#: handshake without the handler having to thread an object through
+#: `do_open`'s keyword arguments. Per-context rather than a module global,
+#: because two callers fetching at once must not read each other's clocks.
+_HANDSHAKES: Final[ContextVar[_Handshakes | None]] = ContextVar(
+    "idhazh_fetch_handshakes", default=None
+)
+
+
+def _record_handshake(seconds: float) -> None:
+    clock = _HANDSHAKES.get()
+    if clock is not None:
+        clock.record(seconds)
+
+
+class _TimedHTTPConnection(http.client.HTTPConnection):
+    """`http.client`'s own connection, saying how long opening it took."""
+
+    def connect(self) -> None:
+        started = time.monotonic()
+        super().connect()
+        _record_handshake(time.monotonic() - started)
+
+
+class _TimedHTTPSConnection(http.client.HTTPSConnection):
+    """The same, where the reading also covers the TLS handshake."""
+
+    def connect(self) -> None:
+        started = time.monotonic()
+        super().connect()
+        _record_handshake(time.monotonic() - started)
+
+
+class _TimedHTTPHandler(request.HTTPHandler):
+    """The stock handler, dialling the connection class that times itself.
+
+    `do_open` taking the connection class is `urllib.request`'s own extension
+    point, which is why this is six lines rather than a second HTTP client.
+    """
+
+    def http_open(self, req: request.Request) -> HTTPResponse:
+        return self.do_open(_TimedHTTPConnection, req)
+
+
+class _TimedHTTPSHandler(request.HTTPSHandler):
+    """The same for https, dialling with the context its parent built.
+
+    The context is read back rather than rebuilt, so this handler negotiates
+    exactly what the stock one would - same verification, same protocol list.
+    `urllib.request` keeps it under a private name, which is why this reaches
+    into the instance dictionary rather than naming the attribute.
+    """
+
+    def https_open(self, req: request.Request) -> HTTPResponse:
+        return self.do_open(_TimedHTTPSConnection, req, context=self.__dict__["_context"])
+
+
+@cache
+def _timing_opener() -> request.OpenerDirector:
+    """One opener for the process, exactly as `urlopen` keeps one.
+
+    `build_opener` drops its own `HTTPHandler` and `HTTPSHandler` when it is
+    handed subclasses of them, so this is the stock chain - proxies, redirects,
+    error processing - with the connection class swapped and nothing else.
+    Built once because the handlers hold no per-request state and an SSL
+    context is the expensive part of building one.
+    """
+    return request.build_opener(_TimedHTTPHandler(), _TimedHTTPSHandler())
+
+
+@dataclass(slots=True)
+class _Attempt:
+    """One pass round the retry loop, and what it can say about its own time."""
+
+    #: How many attempts came before this one. Zero on the first.
+    retries: int
+    #: When this attempt began, after any backoff it waited out.
+    started: float
+    #: When the first attempt began, so the retries can be priced together.
+    loop_started: float
+    handshakes: _Handshakes = field(default_factory=_Handshakes)
+
+    def answered(self) -> FetchTimings:
+        """The reading for an attempt whose response headers arrived."""
+        waited = time.monotonic() - self.started - self.handshakes.seconds
+        return self._reading(_ms(max(waited, 0.0)))
+
+    def unanswered(self) -> FetchTimings:
+        """The reading for an attempt nothing answered - no first byte to time."""
+        return self._reading(None)
+
+    def _reading(self, ttfb_ms: int | None) -> FetchTimings:
+        return FetchTimings(
+            fetch_connect_ms=_ms(self.handshakes.seconds) if self.handshakes.opened else None,
+            fetch_ttfb_ms=ttfb_ms,
+            retry_count=self.retries,
+            retry_total_ms=_ms(self.started - self.loop_started),
+        )
+
+
 def fetch(url: str, *, config: ExtractConfig, permission: RobotsOutcome) -> FetchResult:
     """The one function here that opens a socket, and only with permission.
 
@@ -267,6 +450,12 @@ def fetch(url: str, *, config: ExtractConfig, permission: RobotsOutcome) -> Fetc
 
     Reading `/robots.txt` itself is always permitted, so the caller passes
     `allowed` for that read.
+
+    The result says where its own time went. The retry cells come from this
+    loop rather than from a counter kept beside it, so a budget change moves
+    them by construction: `retry_count` is the index of the attempt that
+    produced the result, and `retry_total_ms` is everything before that attempt
+    started - the failed attempts and the backoff they earned.
     """
     dialable, why = address_is_dialable(url)
     if not dialable:
@@ -282,37 +471,56 @@ def fetch(url: str, *, config: ExtractConfig, permission: RobotsOutcome) -> Fetc
         )
 
     outbound = request.Request(url, headers={"User-Agent": config.user_agent})
+    opener = _timing_opener()
     last: FetchResult = FetchResult(
         FetchOutcome.TRANSIENT, detail="never attempted", robots=permission
     )
-    for delay in [0.0, *backoff_delays(config)]:
+    loop_started = time.monotonic()
+    for retries, delay in enumerate([0.0, *backoff_delays(config)]):
         if delay:
             _sleep(delay)
+        attempt = _Attempt(
+            retries=retries, started=time.monotonic(), loop_started=loop_started
+        )
+        token = _HANDSHAKES.set(attempt.handshakes)
         try:
-            with request.urlopen(outbound, timeout=config.request_timeout_seconds) as response:
-                body, truncated = read_capped(response, config.max_body_bytes)
-                return FetchResult(
-                    FetchOutcome.OK,
-                    status=response.status,
-                    body=body,
-                    body_truncated=truncated,
-                    robots=permission,
-                )
+            response = opener.open(outbound, timeout=config.request_timeout_seconds)
         except HTTPError as error:
             outcome = classify_status(error.code)
             last = FetchResult(
-                outcome, status=error.code, detail=f"HTTP {error.code}", robots=permission
+                outcome,
+                status=error.code,
+                detail=f"HTTP {error.code}",
+                robots=permission,
+                timings=attempt.answered(),
             )
             if outcome is FetchOutcome.PERMANENT:
                 return last
         except (URLError, TimeoutError, OSError) as error:
             last = FetchResult(
-                FetchOutcome.TRANSIENT, detail=type(error).__name__, robots=permission
+                FetchOutcome.TRANSIENT,
+                detail=type(error).__name__,
+                robots=permission,
+                timings=attempt.unanswered(),
             )
+        else:
+            # Read the clock before the body, or the whole download lands in
+            # the cell that is supposed to hold the host's thinking time.
+            timings = attempt.answered()
+            with response:
+                body, truncated = read_capped(response, config.max_body_bytes)
+            return FetchResult(
+                FetchOutcome.OK,
+                status=response.status,
+                body=body,
+                body_truncated=truncated,
+                robots=permission,
+                timings=timings,
+            )
+        finally:
+            _HANDSHAKES.reset(token)
     return last
 
 
 def _sleep(seconds: float) -> None:
-    import time
-
     time.sleep(seconds)

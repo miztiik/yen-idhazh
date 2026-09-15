@@ -1059,7 +1059,7 @@
       "qwen3-5-9b-q4-k-m"
     ],
     "published_charts": 0,
-    "published_items": 0,
+    "published_items": 13,
     "runs": [
       {
         "charts_drafted": 0,
@@ -1090,10 +1090,83 @@
         "started_at": "2026-09-14T12:54:56Z",
         "status": "partial",
         "succeeded": 0
+      },
+      {
+        "charts_drafted": 3,
+        "decided": 13,
+        "decision_ms": 0,
+        "failed": 67,
+        "n": 3,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-14-34852763827",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-14T14:00:49Z",
+        "status": "partial",
+        "succeeded": 13
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 80,
+        "n": 4,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-14-34886978811",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-14T20:52:30Z",
+        "status": "partial",
+        "succeeded": 0
       }
     ],
-    "site_bytes": 24750320,
+    "site_bytes": 24795977,
     "site_files": 50,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-09-15",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 112,
+    "runs": [
+      {
+        "charts_drafted": 15,
+        "decided": 66,
+        "decision_ms": 29,
+        "failed": 14,
+        "n": 1,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-15-34943695821",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-15T07:50:10Z",
+        "status": "partial",
+        "succeeded": 66
+      },
+      {
+        "charts_drafted": 9,
+        "decided": 46,
+        "decision_ms": 58,
+        "failed": 34,
+        "n": 2,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-15-34965344554",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-15T11:49:36Z",
+        "status": "partial",
+        "succeeded": 46
+      }
+    ],
+    "site_bytes": 25097054,
+    "site_files": 52,
     "version": "2026-09-09"
   }
 ]

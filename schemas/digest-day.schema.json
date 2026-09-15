@@ -609,99 +609,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Retired DigestVisual.path, which named the committed drawing. A visual now carries kind, state, data_path and alt. The rendered-and-has-a-path rule went with it; the surviving rule is one-way - a data path means the marks were written.",
+      "change": "Retired DigestVisual.path, which named the committed drawing.",
       "version": "2026-09-13T22:30",
-      "why": "The reader's browser draws the chart from the data file and the pipeline draws nothing, so the 495 committed drawings are deleted and no path points anywhere. Model forbids a key it does not declare, so the 24 frozen days are read through a named pop of path rather than by widening the model. The old rule cannot survive the archive: those days are rendered and carry no data file, permanently, because back-filling one would mean re-fetching 495 source pages that have since moved and a chart compiled from today's page under an old day's date is a record of nothing. What a reader loses is named where the ruling is: every day published before this row loses its chart, for every reader and not only one with JavaScript off."
+      "why": "The reader's browser draws the chart now, so no SVG is written."
     },
     {
-      "change": "Added DigestVisual.data_path - where this visual's data file landed, beside the drawing it was compiled with. Optional and null by default. No chart data enters this payload.",
+      "change": "Added DigestVisual.data_path - where this visual's data file landed.",
       "version": "2026-09-13T20:00",
-      "why": "The owner ruled on 2026-09-13 that the reader's browser draws the chart, so the compiled data has to be published - and it may not be published here. This payload is never deleted, so data inside it could never age out and retention.image_months would have nothing to act on; one file per visual keeps the prune granularity exactly where it is. So the day carries a pointer and visual-data.schema.json carries the marks. The read-side migration is the default: null on every one of the 24 committed days, which is the honest reading - no data was written for them - and a page that finds none draws none, which is already the shape 94.7 percent of stories have."
+      "why": "The reader's browser draws the chart, so it needs the marks rather than an SVG."
     },
     {
-      "change": "Added DigestItem.secondary_desk - the one other desk a story has a claim to. A story names at most two desks and the second never equals the first. count and desk_count both keep their meanings.",
+      "change": "Added DigestItem.secondary_desk - the one other desk a story has a claim to.",
       "version": "2026-09-13",
-      "why": "The desk ceiling shipped on 2026-09-13 sends an over-ceiling story to a second desk, and the only second desk available was the word the FEED declares - so the move overwrote the desk the story was read as and lost it. The story now keeps that claim: the move swaps the two, which stops a crowding rule erasing what a story is about. Neither count moves, and that is deliberate. A pill is a promise about what the desk page lists, so the number and the page widen in one commit or neither does - and the page half needs a render test in frontend/tests/, which a second worker holds. Ruled by Editor, 2026-09-13. Additive and optional: null is unknown rather than 'no second desk', so no committed day is rewritten and none has to be - 24 days and 9,353 items, 0 of which carry a read desk of any kind, measured 2026-09-13 (section 11)."
+      "why": "The desk ceiling sends an over-ceiling story to a second desk, unnamed."
     },
     {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
+      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
       "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
+      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
-      "change": "Added DigestItem.desk - where the day publishes a story - and DigestVerticalRef.desk_count beside count. DigestVerticalRef.count keeps meaning the vertical count. Every use of the word desk for the vertical was rewritten in the same commit.",
-      "version": "2026-09-12T06:56",
-      "why": "One word was doing two jobs across the whole file, and a reader has no way to tell which job a given sentence meant. A vertical is what the carrying feed declares and what item_id is addressed from; a desk is where the day publishes the story. Redefining count in place was refused: 22 frozen published days already carry it, a published day is never rewritten, and nothing in the payload would say which of the two meanings a given day's number holds - so the second number is a second field and a page prefers desk_count where it is present. Both new fields are optional and null on every day published before today - 22 days, 106 vertical refs and 8,922 items, measured 2026-09-12 - where null reads as unknown and a page falls back to the vertical (section 11). Nothing fills desk yet; the model that will is a later row."
-    },
-    {
-      "change": "DigestItem.lenses and DigestItem.events are lists of Slug rather than of the closed LensId and EventType enums, which are deleted. The schema gates the slug pattern and no longer enumerates the members.",
-      "version": "2026-09-12T03:55",
-      "why": "Adding or retiring a lens was a code change and a release rather than a config edit. The vocabulary is config/taxonomy.json, and the tagger can only emit a key of the mapping that file builds, so widening the type lets nothing invent a label (Guardrail #11). Read-compatible, which is the half that matters for a frozen day: every id the 22 committed days carry is a well-formed slug, so this build reads all 8,922 of their items unchanged (measured 2026-09-12). It is also what lets a day keep saying what it said - ai-roi is retired and carried by 18 of those items, and under a closed type deleting the id from config would make those days unreadable, so the only safe move was never to delete one (section 11)."
-    },
-    {
-      "change": "updated_at names the published ledger's day tree, not the flat file.",
-      "version": "2026-09-08",
-      "why": "The flat state/published.csv was split into state/published/YYYY/MM/DD.csv and removed, so the description named a file that no longer exists. No field moved and no payload changes, so nothing migrates - but the generated schema does change, and a schema that changes with no changelog entry is a diff nobody can explain."
-    },
-    {
-      "change": "VisualKind, which types DigestVisual.kind, lost diagram and image. It now holds chart and none. No field was added, removed or retyped.",
-      "version": "2026-09-05T18:00",
-      "why": "Nothing draws either one. image never had a producer or a renderer, and the diagram renderer went with the Mermaid round trip it read (pseudo-plan row 63). Narrowing an enum a committed payload is typed with is breaking, so it was counted first: scanned 2026-09-05 over all 15 committed digest.json files, 6,425 items, 351 of them carrying a visual, and every one is a chart. Zero carry diagram and zero carry image, so no read-side migration is owed and no committed day stops loading."
-    },
-    {
-      "change": "Added considered, too_old and below_feed_floor to each vertical of the day.",
-      "version": "2026-09-02T16:00",
-      "why": "A vertical that published three stories looked exactly like one whose feeds had broken, and the page had nothing to tell them apart with. The planning step already counted what the feeds offered and how much of it was a back catalogue; it wrote both into the run plan and published neither, so the reading page could not say why a topic was thin. Nothing new is computed. Each field is the largest any run of the day recorded rather than the sum, because a later run has already taken what an earlier one published and would count the same back-catalogue story twice. All three are optional, arrive together, and are null on every day published before this - 12 days, 56 vertical-days and 4,713 items when this landed, 2026-09-02 - and a null reads as unknown, never as 0, which would claim the feeds offered a vertical nothing (section 11)."
-    },
-    {
-      "change": "Added leads: the day's leading stories, each with the reason it leads.",
-      "version": "2026-09-01T12:30",
-      "why": "The page had no first screen. Its opening stories were whichever vertical sorted first in run 1, which is an accident rather than an edit, and the reader could not see why any story was there. The block is chosen across the whole day from the ranking signal the item already publishes plus a shared-subject term computed here, and it removes nothing: every lead is still in items, in the published order, and every excluded story still publishes. Additive with an empty default, so every day published before today - 11 days and 4,086 items when this landed, 2026-09-01 - still validates and still renders, with no block (section 11)."
-    },
-    {
-      "change": "Added also_covered_by and same_story_as to published items.",
-      "version": "2026-09-01T09:00",
-      "why": "A day ran the same story from up to four of our sources and drew every copy. Nothing on the item said so, and the field that looks like it would - carried_by - counts syndication of one address and reads 1 when two outlets write their own piece. The pass groups the day on the vectors this payload already carries, keeps the strongest of each group, and names the keeper on the rest. Nothing is unpublished: a collapsed item keeps its place in items, its anchor and its archive entry, and only what the default view draws changes. Measured 2026-09-01 over the eleven committed days and 3,978 items: 22 groups and 24 collapsed items, 0.60 percent, and every group read by hand as one story. Both fields are optional and null on every day published before this, and a null reads as unknown, never as 0, which would claim no other source carried the story (section 11)."
-    },
-    {
-      "change": "Added carried_by, watchlist_hit, on_front_page, rank_score and time_source to published items.",
-      "version": "2026-08-31T10:30",
-      "why": "The planning step computed all five and published none, so the page could not say why a story is in the digest or which clock its time came from. Nothing new is computed: four are the score's own terms and the fifth is the choice rank.appeared_at already makes. All five are optional and null on every day published before this - 11 days and 3,596 items when this landed, 2026-08-31 - and a null reads as unknown, never as 0, which for carried_by would claim a story no feed carried, and never as false, which for on_front_page would claim a vote that was never counted (section 11)."
-    },
-    {
-      "change": "Marked updated_at and updated_by_run reserved in their descriptions.",
-      "version": "2026-08-26",
-      "why": "Both read as machinery a run could use, and no run can: three gates stop a published address being planned, summarized or appended a second time. Measured on this checkout 2026-08-26 - 2,121 committed items, 2,121 carry updated_at, 2,107 carry updated_by_run, zero carry a value in either. Description-only, so no payload changes and none needs a migration."
-    },
-    {
-      "change": "Added optional updated_by_run to published items.",
-      "version": "2026-08-25",
-      "why": "An item's words are joined to the run manifest that names the model that wrote them. That join read introduced_by_run, which is the wrong run once a later run rewrites the text, so it answered with the wrong model rather than with nothing. Null until a run revises an item, and on every day published before this, so no committed payload had to be rewritten."
-    },
-    {
-      "change": "Added optional band_reason to published items.",
-      "version": "2026-08-24T11:15",
-      "why": "The medium band printed 'Mostly matches the source', which is a grade and not a sentence: it told a reader an item was worse without telling them what was missing. Both things that cap an item at medium were already computed and neither reached the page. Null on a high item and on every day published before this, which keeps an older payload rendering exactly as it does today."
-    },
-    {
-      "change": "Added source_form and reader_note to published items.",
-      "version": "2026-08-23T18:51",
-      "why": "Short and abstract sources can now publish, so the page needs our own sentence that tells the reader what kind of source was summarized without turning the limitation into a badge."
-    },
-    {
-      "change": "Added the optional embeddings block.",
-      "version": "2026-08-22",
-      "why": "On-device search needs the day's vectors committed, and the corpus is fixed at publish. Additive and optional - a day written before this, or a day whose encoder was unavailable, still validates and still renders."
-    },
-    {
-      "change": "Added source_kind to a published item.",
-      "version": "2026-08-21T06:00",
-      "why": "Reader's ruling: a company announcing itself and a reporter measuring it arrived on the page looking identical, and that is the risk a reader carries when they forward something."
-    },
-    {
-      "change": "Initial shape: the day's items in published order, its runs, and its counts.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-21",
-      "why": "Contracts before logic - the published surface is fixed before it renders."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "`frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json`.",

@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { chartArm, coverageOf, type ArmThresholds, type GlanceDay } from '../src/lib/charts/glance';
+import { chartRule, coverageOf, type ChartThresholds, type GlanceDay } from '../src/lib/charts/glance';
 import { targetGeometry } from '../src/lib/charts/targetbar';
 
 /**
- * The chart arm is the only console section carrying a written decision rule in
+ * Chart drawing is the only console section carrying a written decision rule in
  * its own prose, and until this row the page showed none of the three numbers
  * that rule is made of. Seven columns of daily counts asked the operator to
  * compute a fourteen-day median of a ratio in his head, twice, against two
@@ -27,18 +27,18 @@ const CONFIG = JSON.parse(
 	console?: {
 		window_presets?: number[];
 		default_window_days?: number;
-		chart_arm_rule_days?: number;
-		chart_arm_minutes_target?: number;
-		chart_arm_coverage_pct?: number;
+		chart_rule_days?: number;
+		chart_minutes_target?: number;
+		chart_coverage_pct?: number;
 	};
 };
 
 const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
-const THRESHOLDS: ArmThresholds = {
-	ruleDays: CONFIG.console?.chart_arm_rule_days ?? 14,
-	minutesTarget: CONFIG.console?.chart_arm_minutes_target ?? 6,
-	coveragePct: CONFIG.console?.chart_arm_coverage_pct ?? 5
+const THRESHOLDS: ChartThresholds = {
+	ruleDays: CONFIG.console?.chart_rule_days ?? 14,
+	minutesTarget: CONFIG.console?.chart_minutes_target ?? 6,
+	coveragePct: CONFIG.console?.chart_coverage_pct ?? 5
 };
 
 /** A window narrower than the rule, and one at least as wide, from the presets
@@ -54,7 +54,7 @@ function day(date: string, over: Partial<GlanceDay> = {}): GlanceDay {
 test.describe('the arithmetic behind the two bars', () => {
 	test('a share of nothing is an absence, never zero percent', () => {
 		// A day that published no article did not fail to put a visual on one. Zero
-		// would read as an arm that ran and reached nobody, and it would drag the
+		// would read as chart drawing that ran and reached nobody, and it would drag the
 		// median of every quiet week to the floor.
 		expect(coverageOf(day('2026-08-01'))).toBeNull();
 		expect(coverageOf(day('2026-08-02', { items: 8, published: 1 }))).toBeCloseTo(12.5, 6);
@@ -68,19 +68,19 @@ test.describe('the arithmetic behind the two bars', () => {
 			// The pathological day. A mean would put the figure past the target.
 			day('2026-08-03', { items: 10, published: 1, minutesPerChart: 40 })
 		];
-		const arm = chartArm(days, THRESHOLDS, WIDE);
+		const rule = chartRule(days, THRESHOLDS, WIDE);
 
-		expect(arm.minutes).toBe(3);
-		expect(arm.coverage).toBe(10);
+		expect(rule.minutes).toBe(3);
+		expect(rule.coverage).toBe(10);
 		const mean = (2 + 3 + 40) / 3;
-		expect(arm.minutes).toBeLessThan(mean);
+		expect(rule.minutes).toBeLessThan(mean);
 	});
 
 	test('an even count of days averages the middle pair', () => {
 		const days = [4, 2, 8, 6].map((m, i) =>
 			day(`2026-08-0${i + 1}`, { items: 10, published: 1, minutesPerChart: m })
 		);
-		expect(chartArm(days, THRESHOLDS, WIDE).minutes).toBe(5);
+		expect(chartRule(days, THRESHOLDS, WIDE).minutes).toBe(5);
 	});
 
 	test('below the rule span nothing is measured, and the bars are empty', () => {
@@ -88,27 +88,27 @@ test.describe('the arithmetic behind the two bars', () => {
 			day('2026-08-01', { items: 10, published: 5, minutesPerChart: 1 }),
 			day('2026-08-02', { items: 10, published: 5, minutesPerChart: 1 })
 		];
-		const arm = chartArm(days, THRESHOLDS, NARROW);
+		const rule = chartRule(days, THRESHOLDS, NARROW);
 
 		// A median of the wrong span is the same figure with a different meaning
 		// and nothing on the page to say which one is being read.
-		expect(arm.narrow).toBe(true);
-		expect(arm.minutes).toBeNull();
-		expect(arm.coverage).toBeNull();
-		expect(arm.minutesMarks.empty).toBe(true);
-		expect(arm.coverageMarks.empty).toBe(true);
-		expect(arm.minutesTrend.empty).toBe(true);
+		expect(rule.narrow).toBe(true);
+		expect(rule.minutes).toBeNull();
+		expect(rule.coverage).toBeNull();
+		expect(rule.minutesMarks.empty).toBe(true);
+		expect(rule.coverageMarks.empty).toBe(true);
+		expect(rule.minutesTrend.empty).toBe(true);
 
 		// And the same rows at the rule's own span do produce both figures, so the
 		// assertions above are about the window and not about the fixture.
-		const wide = chartArm(days, THRESHOLDS, WIDE);
+		const wide = chartRule(days, THRESHOLDS, WIDE);
 		expect(wide.narrow).toBe(false);
 		expect(wide.minutes).toBe(1);
 		expect(wide.coverage).toBe(50);
 	});
 
 	test('the verdict names both figures and which side of each threshold they fell', () => {
-		const inside = chartArm(
+		const inside = chartRule(
 			[day('2026-08-01', { items: 10, published: 5, minutesPerChart: 1 })],
 			THRESHOLDS,
 			WIDE
@@ -118,7 +118,7 @@ test.describe('the arithmetic behind the two bars', () => {
 		expect(inside.verdict).toContain('50% of what it published');
 		expect(inside.verdict).toContain('above');
 
-		const outside = chartArm(
+		const outside = chartRule(
 			[day('2026-08-01', { items: 100, published: 1, minutesPerChart: 40 })],
 			THRESHOLDS,
 			WIDE
@@ -132,14 +132,14 @@ test.describe('the arithmetic behind the two bars', () => {
 	});
 
 	test('a window with nothing in it says so rather than printing a zero', () => {
-		const arm = chartArm([day('2026-08-01')], THRESHOLDS, WIDE);
-		expect(arm.minutes).toBeNull();
-		expect(arm.coverage).toBeNull();
-		expect(arm.verdict).toContain('has no minutes on record');
-		expect(arm.verdict).toContain('no day published anything to put a visual on');
+		const rule = chartRule([day('2026-08-01')], THRESHOLDS, WIDE);
+		expect(rule.minutes).toBeNull();
+		expect(rule.coverage).toBeNull();
+		expect(rule.verdict).toContain('has no minutes on record');
+		expect(rule.verdict).toContain('no day published anything to put a visual on');
 		// The second clause has no subject of its own, so the first has to hand it
 		// one whichever branch it took.
-		expect(arm.verdict.startsWith('The median day')).toBe(true);
+		expect(rule.verdict.startsWith('The median day')).toBe(true);
 	});
 
 	test('each trend carries one point per measured day, oldest first', () => {
@@ -149,40 +149,40 @@ test.describe('the arithmetic behind the two bars', () => {
 			day('2026-08-02', { items: 10, published: 2, minutesPerChart: 5 }),
 			day('2026-08-01', { items: 10, published: 1, minutesPerChart: 1 })
 		];
-		const arm = chartArm(days, THRESHOLDS, WIDE);
+		const rule = chartRule(days, THRESHOLDS, WIDE);
 
-		expect(arm.minutesDays).toBe(3);
-		expect(arm.coverageDays).toBe(3);
-		expect(arm.minutesTrend.values).toEqual([1, 5, 9]);
-		expect(arm.coverageTrend.values).toEqual([10, 20, 30]);
+		expect(rule.minutesDays).toBe(3);
+		expect(rule.coverageDays).toBe(3);
+		expect(rule.minutesTrend.values).toEqual([1, 5, 9]);
+		expect(rule.coverageTrend.values).toEqual([10, 20, 30]);
 		// Rising, because the oldest day is the smallest. A line drawn from the
 		// table's own order would be falling, and it would look like a fix.
-		expect(arm.minutesTrend.rising).toBe(true);
+		expect(rule.minutesTrend.rising).toBe(true);
 
 		// One measured day is a dot, and a dot with a direction beside it is a lie.
-		const single = chartArm([days[0]], THRESHOLDS, WIDE);
+		const single = chartRule([days[0]], THRESHOLDS, WIDE);
 		expect(single.minutesDays).toBe(1);
 		expect(single.minutesTrend.empty).toBe(true);
 	});
 
 	test('the marker sits at the threshold on both bars, and the senses are opposite', () => {
 		const days = [day('2026-08-01', { items: 100, published: 20, minutesPerChart: 9 })];
-		const arm = chartArm(days, THRESHOLDS, WIDE);
+		const rule = chartRule(days, THRESHOLDS, WIDE);
 
 		// Recomputed rather than read back: a bar whose fill and marker come from
 		// one wrong divisor is self-consistent and still wrong.
-		expect(arm.minutesMarks.markerFraction).toBeCloseTo(
+		expect(rule.minutesMarks.markerFraction).toBeCloseTo(
 			targetGeometry(9, THRESHOLDS.minutesTarget, 'lower-is-better').markerFraction,
 			9
 		);
-		expect(arm.coverageMarks.markerFraction).toBeCloseTo(
+		expect(rule.coverageMarks.markerFraction).toBeCloseTo(
 			targetGeometry(20, THRESHOLDS.coveragePct, 'higher-is-better').markerFraction,
 			9
 		);
 		// Nine minutes against a six-minute limit is past it. Twenty percent
 		// against a five percent floor is not. Same numbers, opposite senses.
-		expect(arm.minutesMarks.band).toBe('past');
-		expect(arm.coverageMarks.band).toBe('good');
+		expect(rule.minutesMarks.band).toBe('past');
+		expect(rule.coverageMarks.band).toBe('good');
 	});
 });
 
@@ -276,12 +276,12 @@ test.describe('the section on the page', () => {
 
 		const days = fixtureDays();
 		expect(days.length, 'the fixture committed no day, so this asserts nothing').toBeGreaterThan(0);
-		const expected = chartArm(ruleWindow(days, WIDE), THRESHOLDS, WIDE);
+		const expected = chartRule(ruleWindow(days, WIDE), THRESHOLDS, WIDE);
 		expect(expected.minutes, 'no day in the fixture was timed').not.toBeNull();
 		expect(expected.coverage, 'no day in the fixture published anything').not.toBeNull();
 
-		const minutes = page.locator('[data-arm-figure="minutes"] [data-target-cell="value"]');
-		const coverage = page.locator('[data-arm-figure="coverage"] [data-target-cell="value"]');
+		const minutes = page.locator('[data-rule-figure="minutes"] [data-target-cell="value"]');
+		const coverage = page.locator('[data-rule-figure="coverage"] [data-target-cell="value"]');
 		await expect(minutes).toHaveText((expected.minutes as number).toFixed(1));
 		await expect(coverage).toHaveText(`${Math.round(expected.coverage as number)}%`);
 
@@ -295,9 +295,9 @@ test.describe('the section on the page', () => {
 		await hydrated(page);
 		await setWindow(page, WIDE);
 
-		const expected = chartArm(ruleWindow(fixtureDays(), WIDE), THRESHOLDS, WIDE);
+		const expected = chartRule(ruleWindow(fixtureDays(), WIDE), THRESHOLDS, WIDE);
 		const measured = await page
-			.locator('[data-arm-figure] [data-target-cell="marker"]')
+			.locator('[data-rule-figure] [data-target-cell="marker"]')
 			.evaluateAll((nodes) =>
 				nodes.map((node) => {
 					const track = node.parentElement as HTMLElement;
@@ -323,15 +323,15 @@ test.describe('the section on the page', () => {
 		await page.goto('/console/');
 		await hydrated(page);
 
-		const section = page.locator('[data-windowed="chart-arm"]');
+		const section = page.locator('[data-windowed="chart-drawing"]');
 		await setWindow(page, WIDE);
-		await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveCount(0);
+		await expect(section.locator('[data-window-too-narrow="chart-drawing"]')).toHaveCount(0);
 		await expect(section.locator('[data-target-bar]')).toHaveCount(2);
 
 		await setWindow(page, NARROW);
 		// The exact sentence, because a median of the wrong span is the same figure
 		// with a different meaning and nothing on the page to say which.
-		await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveText(
+		await expect(section.locator('[data-window-too-narrow="chart-drawing"]')).toHaveText(
 			`The rule reads ${THRESHOLDS.ruleDays} days. Widen the window to see it.`
 		);
 		await expect(section.locator('[data-target-bar]')).toHaveCount(0);
@@ -341,7 +341,7 @@ test.describe('the section on the page', () => {
 	test('the section states its own rule, in the numbers config holds', async ({ page }) => {
 		await page.goto('/console/');
 
-		const section = page.locator('[data-windowed="chart-arm"]');
+		const section = page.locator('[data-windowed="chart-drawing"]');
 		await expect(section).toContainText(`${THRESHOLDS.ruleDays} days`);
 		await expect(section).toContainText(`${THRESHOLDS.minutesTarget} minutes per published visual`);
 		await expect(section).toContainText(`${THRESHOLDS.coveragePct}% of the items`);
@@ -357,7 +357,7 @@ test.describe('the section on the page', () => {
 		// where only one has history does not stagger. What the line does over
 		// several days is proved above without a browser, which is where a rule
 		// the one-day fixture cannot reach belongs.
-		await expect(page.locator('[data-arm-figure] [data-sparkline]')).toHaveCount(2);
+		await expect(page.locator('[data-rule-figure] [data-sparkline]')).toHaveCount(2);
 	});
 
 	test('the daily rows are on demand, and they open and close', async ({ page }) => {
@@ -403,7 +403,7 @@ test.describe('the section on the page', () => {
 		// Every bar and both trend shapes are markup, so the prerendered document
 		// is already finished. A native disclosure is why the rows stay reachable.
 		await expect(page.locator('[data-charts-verdict]')).toBeVisible();
-		await expect(page.locator('[data-arm-figure] [data-target-cell="track"]')).toHaveCount(2);
+		await expect(page.locator('[data-rule-figure] [data-target-cell="track"]')).toHaveCount(2);
 		await expect(page.locator('[data-charts-toggle]')).toBeVisible();
 		await context.close();
 	});

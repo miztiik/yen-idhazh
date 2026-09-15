@@ -16,14 +16,21 @@ from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import column_bounds, derive_url_key, field_column
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    UNSPECIFIED,
+    FailureCode,
+    ItemHealthDetail,
+    ItemHealthRow,
+    ItemOutcome,
+    ItemStage,
+)
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
@@ -53,6 +60,7 @@ def failed_article(status: ArticleStatus, detail: str) -> Article:
     payload.update(
         {
             "title": item().title or "Fixture title",
+            "title_source": None,
             "text": None,
             "word_count": 0,
             "token_count": 0,
@@ -124,6 +132,24 @@ def row_for(code: FailureCode) -> ItemHealthRow:
             )
         case FailureCode.NO_TEXT:
             failed = failed_article(ArticleStatus.EXTRACT_FAILED, "extractor found no article text")
+        case FailureCode.NO_TITLE:
+            headless = item().model_validate(item().model_dump(mode="json") | {"title": None})
+            failed = extract.to_article(
+                headless,
+                FetchResult(
+                    FetchOutcome.OK,
+                    status=200,
+                    body=(
+                        b"<html><body><article>"
+                        b"<p>This sentence has enough words to count as article prose today.</p>"
+                        b"<p>Another sentence has enough words to count as article prose today.</p>"
+                        b"<p>A third sentence has enough words to count as article prose today.</p>"
+                        b"</article></body></html>"
+                    ),
+                ),
+                config=settings.app.extract,
+                fetched_at="2026-08-21T06:00:00Z",
+            )
         case FailureCode.TOO_SHORT:
             failed = failed_article(
                 ArticleStatus.EXTRACT_FAILED, "only 12 words extracted; page furniture is short"
@@ -217,6 +243,23 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
+        case FailureCode.MODEL_TIMED_OUT | FailureCode.SHARD_OUT_OF_TIME:
+            # Both are a clock running out rather than a reply arriving, and they
+            # differ only in whose clock: the request's, or the worker's.
+            failed_summary = summarize.to_summary(
+                ok_article,
+                None,
+                model_id="qwen3-8b",
+                generated_at="2026-08-21T06:00:00Z",
+                no_reply=code,
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=ok_article,
+                summary=failed_summary,
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
         case FailureCode.CONTEXT_EXCEEDED:
             failed_summary = summarize.to_summary(
                 ok_article,
@@ -224,6 +267,21 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 model_id="qwen3-8b",
                 generated_at="2026-08-21T06:00:00Z",
                 no_reply=FailureCode.CONTEXT_EXCEEDED,
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=ok_article,
+                summary=failed_summary,
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
+        case FailureCode.MODEL_REFUSED:
+            failed_summary = summarize.to_summary(
+                ok_article,
+                None,
+                model_id="qwen3-8b",
+                generated_at="2026-08-21T06:00:00Z",
+                no_reply=FailureCode.MODEL_REFUSED,
             )
             return telemetry.classify_item(
                 planned=item(),
@@ -464,12 +522,62 @@ def test_a_sixteen_column_item_health_row_reads_as_unmeasured() -> None:
     assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (None, None, None)
 
 
-def test_unknown_detail_is_sanitized_guarded_and_truncated() -> None:
+def test_unknown_detail_is_sanitized_guarded_and_fitted_to_its_column() -> None:
+    """A detail is cut to the column's own ceiling, not to a number written here.
+
+    The ceiling moved from 200 to 2,000 on 2026-09-15 and this test did not have
+    to be edited, which is the point: a test restating a bound is one more place
+    the bound can drift from the column.
+    """
     row = row_for(FailureCode.UNKNOWN)
+    _, _, ceiling = column_bounds(field_column(ItemHealthRow.model_fields["detail"]))
 
     assert row.detail is not None
     assert not row.detail.startswith(("=", "+", "-", "@", "\t", "\r"))
-    assert len(row.detail) <= 200
+    assert ceiling is not None
+    assert len(row.detail) <= ceiling
+    assert len(telemetry.detail_cell("x" * (ceiling * 3))) <= ceiling
+
+
+def test_a_detail_the_column_would_refuse_is_folded_rather_than_dropped() -> None:
+    """The live defect: a dash in a failure message killed the row reporting it.
+
+    `ItemHealthDetail` takes printable ASCII on one line. A Pydantic
+    `ValidationError` quotes the value it refused, so a page title's curly quote
+    arrives inside the message saying the title was refused - and the row that
+    raised was the only record that anything had gone wrong.
+    """
+    adapter = TypeAdapter(ItemHealthDetail)
+    hostile = {
+        "em_dash": "the model \u2014 not the runtime \u2014 refused",
+        "curly_quote": "the page\u2019s own \u201cheadline\u201d",
+        "non_latin": "\u0418\u0437\u0432\u0435\u0441\u0442\u0438\u044f",
+        "emoji": "shipped \U0001f680",
+        "newline": "first\nsecond",
+        "replacement": "read \ufffd\ufffd back",
+    }
+
+    for case, raw in hostile.items():
+        cell = telemetry.detail_cell(raw)
+        adapter.validate_python(cell)
+        assert cell, f"{case} produced an empty detail"
+        assert len(cell.splitlines()) == 1, f"{case} produced more than one line"
+
+    assert telemetry.detail_cell("the model \u2014 not the runtime") == (
+        "the model - not the runtime"
+    )
+    assert telemetry.detail_cell("\u0418\u0437\u0432\u0435\u0441\u0442\u0438\u044f") == "?"
+
+
+def test_a_detail_that_folds_away_to_nothing_still_says_a_failure_happened() -> None:
+    """`detail` has `min_length=1`, so the floor cannot be an empty string.
+
+    A row whose detail folded to nothing is still a row reporting a failure. An
+    empty cell would raise and take that report with it.
+    """
+    assert telemetry.detail_cell("") == UNSPECIFIED
+    assert telemetry.detail_cell("   ") == UNSPECIFIED
+    assert telemetry.detail_cell("\u200b\u200b") == UNSPECIFIED
 
 
 # --- The length before the cap ----------------------------------------------
@@ -602,13 +710,13 @@ def test_the_census_row_says_which_call_each_number_came_from() -> None:
     )
 
     assert row.model_calls == 2
-    assert (row.call_1_kind, row.call_2_kind) == (CallKind.LABEL, CallKind.SUMMARIZE_AND_PLAN)
-    assert row.call_1_cached_tokens == 0, "the first call read its prompt cold"
-    assert row.call_2_cached_tokens == 1493
+    assert (row.label_kind, row.summary_kind) == (CallKind.LABEL, CallKind.SUMMARIZE_AND_PLAN)
+    assert row.label_cached_tokens == 0, "the first call read its prompt cold"
+    assert row.summary_cached_tokens == 1493
     assert row.cached_tokens == 1493, "the folded cell is their sum and says neither"
 
     cells = row.csv_row()
-    assert cells["call_1_kind"] == "label"
+    assert cells["label_kind"] == "label"
     assert ItemHealthRow.from_csv_row(cells) == row
 
 
@@ -645,7 +753,7 @@ def test_a_refused_reply_reaches_the_census_row_with_what_it_cost() -> None:
     assert row.prefill_ms == reply.prefill_ms
     assert row.input_tokens == reply.prompt_tokens
     assert row.model_calls == 1
-    assert row.call_1_kind is CallKind.SUMMARIZE
+    assert row.label_kind is CallKind.SUMMARIZE
     cells = row.csv_row()
     assert cells["prefill_ms"] and cells["input_tokens"], "an empty cell is skipped, not pooled"
 
@@ -724,7 +832,7 @@ def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path)
 
 
 def flagged_article() -> Article:
-    """An article extract kept and flagged, so the degraded-but-done arm has a payload."""
+    """An article extract kept and flagged, so the degraded-but-done case has a payload."""
     return extract.to_article(
         item(),
         FetchResult(
@@ -748,7 +856,7 @@ def refused_summary() -> Summary:
     )
 
 
-def every_arm() -> dict[str, tuple[Article | None, Summary | None]]:
+def every_case() -> dict[str, tuple[Article | None, Summary | None]]:
     """One payload pair for each place `classify_item` builds a row."""
     return {
         "nothing reached it": (None, None),
@@ -760,14 +868,14 @@ def every_arm() -> dict[str, tuple[Article | None, Summary | None]]:
     }
 
 
-def test_every_arm_of_the_classifier_carries_the_shard() -> None:
+def test_every_case_of_the_classifier_carries_the_shard() -> None:
     """Six places build a row and a shard missed on one is a hole in the join.
 
     The hole would not raise: the cell reads empty, which is the same thing an
     unclaimed row says, so a per-shard figure would quietly drop those items and
     still add up to a plausible number.
     """
-    for name, (payload, reply) in every_arm().items():
+    for name, (payload, reply) in every_case().items():
         row = telemetry.classify_item(
             planned=item(),
             article=payload,
@@ -878,9 +986,16 @@ def test_the_concept_page_names_no_event_the_code_cannot_emit() -> None:
     So the list read as a promise, and nothing told a reader which names fire.
     This is the check that stops the page and the vocabulary drifting apart
     again, in either direction.
+
+    **The prefix list is read off the vocabulary rather than written out.** It
+    was `run|stage|item` and the six flat records added 2026-09-15 brought two
+    more prefixes with them, so a hand-written alternation would have let
+    `model.waiting` and `shard.done` go unnamed on the page while the test
+    stayed green - which is the exact failure it exists to catch.
     """
     page = (REPO_ROOT / "docs" / "concepts" / "telemetry.md").read_text(encoding="utf-8")
-    named = set(re.findall(r"`((?:run|stage|item)\.[a-z.]+)`", page))
+    prefixes = "|".join(sorted({name.value.split(".")[0] for name in telemetry.EventName}))
+    named = set(re.findall(rf"`((?:{prefixes})\.[a-z.]+)`", page))
 
     assert named == {name.value for name in telemetry.EventName}
 

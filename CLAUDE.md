@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -110,7 +110,7 @@ These operationalize the guardrails and shape every subsystem.
 - **Pydantic models are the source of truth.** Every event, every persisted payload, and every config file is a Pydantic model under `backend/idhazh/contracts/`. `schemas/*.schema.json` is generated from those models, and the frontend's TypeScript types and validators are generated from those schemas. A CI drift gate regenerates both and fails on any diff. Nobody hand-edits a generated artifact.
 - **Payloads, not calls.** Data crossing any boundary is a serializable structured payload (JSON-shaped), so it can be logged, validated, replayed, and tested with real fixtures.
 - **Atomic, resumable units.** One work item is one content-addressed file written with a temp-file-plus-rename. A failed item never damages a sibling, and a re-run costs only the unfinished items.
-- **A router is not a worker.** A file that chooses which unit of work runs holds the choice and nothing else; the work lives in the unit's own module. A file every change opens is a file no change owns, so its growth is invisible to the change that causes it and paid by whoever reads it next.
+- **A source file answers one narrow question, and its first sentence states which one.** Read that sentence before you add to the file. If what you add requires widening it, the file now holds two answers - put yours in a new file beside it. A sentence that names a tier, layer, or subsystem names no question, turning the file into a dumping ground. Keep files short and focused: an answer should not sprawl. If answering the question requires a long file, the question is too broad - decompose it into smaller, composable units. A file must never hold two answers, nor should it grow long when it can be split. A router is the sharpest case: a file that dispatches work contains only the routing logic, while the execution lives strictly in the unit's own module. A file every change touches is a file no change owns; its bloat remains hidden from the author and penalizes the next reader.
 - **Config-driven, sane defaults.** Both `frontend/` and `backend/` read tunable behaviour from `config/`; every knob has a sane default; a fresh clone runs on the defaults (Guardrail #6).
 - **Schema-first.** Every config file and every persisted payload conforms to a generated schema in `schemas/`; a config or payload that fails its schema fails the build (Guardrail #3).
 - **Degrade, do not fail.** A missing visual, a failed extraction, or an unreachable source degrades that item and records why. It never takes down the run.
@@ -216,12 +216,12 @@ Commit messages describe the change. **No AI co-author / attribution tags.**
 The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
 - [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Guardrail #7.
-- [ ] Full suite green **on the merge candidate, once**. CI is the authoritative arm and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required. A candidate that is already green does not re-run the suite because the trunk moved under it.
+- [ ] Full suite green **on the merge candidate, once**. CI is authoritative and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required. A candidate that is already green does not re-run the suite because the trunk moved under it.
 - [ ] Applicable local lint, type checks and selected tests pass before the push, per [docs/how-to/run-the-gates.md](docs/how-to/run-the-gates.md). Use the shared test selector. Keep full-suite checks in CI unless local full coverage is explicitly needed. Verify a worker's unchanged test record instead of repeating its check; documentation-only closure needs no local application suite.
 - [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
 - [ ] For reader-facing and operator-facing surfaces: the sufficiency checks in [`docs/concepts/design-system.md`](docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not. A surface can fail by being too little.
-- [ ] Canonical docs updated in `docs/` (right tier).
+- [ ] Canonical docs updated in `docs/` (right tier). A page you added a section to paid the split test first, or the PR says in one line why it stays whole ([`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md)).
 - [ ] Schemas version-stamped + changelogged (and migrated if breaking) when any persisted contract changed (section 11).
 - [ ] Module `AGENTS.md` updated if structure or invariants changed.
 - [ ] No `[DEBUG]` markers left.
@@ -260,10 +260,11 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 11. Schema Versioning
 
-Every config file and every persisted surface is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. Three rules bind every one of them.
+Every config file and every persisted surface is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. Four rules bind every one of them.
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
 - Every change appends a `changelog` entry, newest first, `{ version, change, why }`, and sets `version`.
+- **A changelog entry is one line. Five entries at most: the four newest changes, then one pointer saying the rest is in git.** `change` says what moved. `why` says the reason in one clause. Neither carries a measurement, a date, an incident, a plan row or a person's name - a reading belongs in the instrument log (Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). **An entry that will not fit one line is the test:** either the reason is worth a `## Design rationale` section in `docs/`, and goes there with one line left here pointing at it, or it was never worth keeping. Older entries are deleted, not archived - git is the archive, and a pointer to the file's history beats a hash that rots.
 - A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
 
 What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).

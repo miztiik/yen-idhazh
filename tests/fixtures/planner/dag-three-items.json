@@ -9,7 +9,7 @@
     "model": "qwen3.5-9b-q4-k-m, Q4_K_M, llama-server, n_parallel 1",
     "spread": "one run, three items; the fourth consecutive item agrees and is recorded below as a fourth reading rather than as an average"
   },
-  "caveat": "The system turn was 1,755 tokens on this run. It is not 1,755 today - the prompt files have been edited since, and `idhazh.measured.CALL_ONE_SCAFFOLD_TOKENS` records 2,167 for the whole scaffold with 2,055 of it the system turn. So the assertions over this file are the relationships between the numbers, never the numbers themselves: a prefix figure that is identical across items, and a call-2 prefix that covers call 1's whole prompt. A test that pinned 1,755 would go red the next time somebody improved a sentence, which is a fuse rather than a check.",
+  "caveat": "The system turn was 1,755 tokens on this run. It is not 1,755 today - the prompt files have been edited since, and `idhazh.measured.LABEL_SCAFFOLD_TOKENS` records 2,167 for the whole scaffold with 2,055 of it the system turn. So the assertions over this file are the relationships between the numbers, never the numbers themselves: a prefix figure that is identical across items, and a summarize-and-plan prefix that covers the label call's whole prompt. A test that pinned 1,755 would go red the next time somebody improved a sentence, which is a fuse rather than a check.",
   "items": [
     {
       "item_id": "ai-2tx0g9dp10ttb9dh",

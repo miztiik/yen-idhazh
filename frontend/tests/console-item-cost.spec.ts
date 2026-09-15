@@ -135,12 +135,12 @@ test.describe('what one item cost, as arithmetic', () => {
 			input_tokens: '3886',
 			cached_tokens: '1493',
 			model_calls: '2',
-			call_1_kind: 'label',
-			call_1_prefill_ms: '214122',
-			call_1_decode_ms: '88795',
-			call_1_input_tokens: '1497',
-			call_1_output_tokens: '205',
-			call_1_cached_tokens: '0'
+			label_kind: 'label',
+			label_prefill_ms: '214122',
+			label_decode_ms: '88795',
+			label_input_tokens: '1497',
+			label_output_tokens: '205',
+			label_cached_tokens: '0'
 		});
 		const oneCall = row({ item_id: 'a-02', input_tokens: '1000', cached_tokens: '0' });
 
@@ -162,7 +162,7 @@ test.describe('what one item cost, as arithmetic', () => {
 		// dropping out of the denominator.
 		const cost = itemCost(
 			[
-				row({ input_tokens: '1000', cached_tokens: '0', call_1_cached_tokens: '' }),
+				row({ input_tokens: '1000', cached_tokens: '0', label_cached_tokens: '' }),
 				row({ item_id: 'a-02', input_tokens: '1000', cached_tokens: '400' })
 			],
 			WINDOW
@@ -173,7 +173,7 @@ test.describe('what one item cost, as arithmetic', () => {
 	});
 
 	test('a middle taken over an even number of items is still a whole number', () => {
-		// The canary holds an odd number of timed items, so no browser arm can reach
+		// The canary holds an odd number of timed items, so no browser case can reach
 		// this. The committed projection holds 6,104 and reached it on the first
 		// real build: the middle prompt printed 1,687.5 tokens.
 		const cost = itemCost(
@@ -442,8 +442,8 @@ test.describe('the section on the built console', () => {
 				// calls always reuses something, because the second replays the first
 				// call's prompt, so these three taken off the totals would count a
 				// cold slot as a warm one.
-				const firstCached = value(line, 'call_1_cached_tokens');
-				const firstInput = value(line, 'call_1_input_tokens');
+				const firstCached = value(line, 'label_cached_tokens');
+				const firstInput = value(line, 'label_input_tokens');
 				const split = firstCached !== null && firstInput !== null;
 				const cacheOf = split ? firstCached : cached;
 				const promptOf = split ? firstInput : input;

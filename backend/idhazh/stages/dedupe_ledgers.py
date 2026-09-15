@@ -1,7 +1,7 @@
 """Settle the keyed ledgers after a merge, and print what it dropped.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -19,13 +19,15 @@ from idhazh.stages.common import LOG
 def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> int:
     """Settle the keyed ledgers after a merge, and print what it dropped.
 
-    The one thing an appending stage cannot do for itself. Each of those stages
+    The two things an appending stage cannot do for itself. Each of those stages
     filters what it is about to write against the file it checked out, and
     `actions/checkout` pins a job to the commit its run was triggered at - so a
     second attempt at the same work cannot see the rows the first attempt pushed
     afterwards, appends them again, and `merge=union` concatenates both sides.
     The result is a file whose key repeats, which is the one shape every reader
-    of it assumes cannot happen.
+    of it assumes cannot happen. The same merge produces the other shape too: two
+    sides appending under different headings leave both header blocks in the
+    file, and git calls that clean.
 
     So this runs where the frozen snapshot cannot reach: after the merge, on the
     merged file, which is the only artefact that has ever held both sides at
@@ -54,22 +56,46 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
     it is the one settled by a rule rather than by arrival order; the rule is in
     `contracts.feed_health.supersedes` and travels with the key.
 
-    It always returns 0. A repeat it drops is a repair, not a finding, and a
-    non-zero exit here would abort the commit step that called it and cost the
-    run every ledger row staged beside the one it just fixed.
+    **The header fold covers the ledgers that name a contract, and the score
+    ledger is settled for repeats only.** Folding two header blocks into one
+    means reading a row written under the other one, which only the contract's
+    own `from_csv_row` can do, and `EvalRow` declares none - it has never retired
+    a heading, so nothing has ever needed one. The day it does, the reader lands
+    with the change that retires it.
+
+    It always returns 0. A repeat it drops and a row it re-files are repairs
+    rather than findings, a row it cannot repair is logged at `error` and left
+    exactly as it was, and a non-zero exit here would abort the commit step that
+    called it and cost the run every ledger row staged beside the one it just
+    fixed.
     """
     state = state_dir if state_dir is not None else common.STATE_ROOT
+    keyed = ledger.keyed_paths(state, date=date)
     scores: list[tuple[Path, tuple[str, ...]]] = (
         [(writer.ledger_path(state, date), writer.OBSERVATION_KEY)]
         if date is not None
         else [(day, writer.OBSERVATION_KEY) for day in writer.ledger_days(state)]
     )
-    targets: list[tuple[Path, tuple[str, ...]]] = [
-        *ledger.keyed_paths(state, date=date),
+    refiled = 0
+    for target in keyed:
+        moved, complaints = ledger.settle_header(
+            target.path,
+            target.model.csv_columns(),
+            ledger.refiler(target.model),
+            carried=target.carried,
+        )
+        refiled += moved
+        if moved:
+            LOG.info("re-filed rows under one header file=%s rows=%s", target.path.name, moved)
+        for complaint in complaints:
+            LOG.error("a ledger line could not be repaired file=%s %s", target.path.name, complaint)
+
+    total = 0
+    settled: list[tuple[Path, tuple[str, ...]]] = [
+        *((target.path, target.key) for target in keyed),
         *scores,
     ]
-    total = 0
-    for path, key in targets:
+    for path, key in settled:
         dropped = ledger.drop_repeated_rows(path, key)
         total += dropped
         if dropped:
@@ -80,9 +106,10 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
                 dropped,
             )
     LOG.info(
-        "ledgers settled cover=%s files=%s repeated_rows_dropped=%s",
+        "ledgers settled cover=%s files=%s repeated_rows_dropped=%s rows_refiled=%s",
         date or "every-shard",
-        len(targets),
+        len(settled),
         total,
+        refiled,
     )
     return 0

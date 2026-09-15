@@ -13,6 +13,7 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from ._harness import (
     CONFIG_FILE_NAME,
+    DRAFT_REF_OUTPUTS,
     LLAMA_RUNTIME_WORKFLOWS,
     MODEL_ENV_NAMES,
     MODEL_REF_FIELDS,
@@ -27,6 +28,7 @@ from ._harness import (
     WORKFLOWS_DIR,
     _committed_models,
     _config_key_paths,
+    _declared_dispatch_inputs,
     _every_env,
     _expression,
     _inline_programs,
@@ -46,7 +48,7 @@ from ._harness import (
     _weights_fetch_steps,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_every_weights_fetch_fails_loudly() -> None:
@@ -109,6 +111,32 @@ def test_the_health_check_names_the_weights_that_answered() -> None:
     assert "/v1/models" in script, "assert the served alias"
     assert "/props" in script, "assert the loaded path"
     assert _plan_output("summarize_file") in script
+
+
+def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
+    """The Oracle. A number is about a model only if that model produced it.
+
+    `validate.yml` has asked `/v1/models` since it was written. `measure.yml`
+    waited for a 200 and started the clock, so a server answering under any
+    other alias would have had its throughput filed under the candidate - which
+    is a Guardrail #10 failure that no gate would have caught, because every
+    number in the report would be internally consistent and wrong.
+
+    Discovery is over every step that waits for `/health`, so an arm added later
+    is held to the same rule whether or not anybody remembered it. The drift this
+    catches has run in both directions: `test_model_server_jobs` records the last
+    time it was `validate.yml` that nobody diffed.
+    """
+    for filename, workflow in sorted(_load_workflows().items()):
+        for job_name in _mapping(workflow.get("jobs"), f"{filename} jobs"):
+            for step in _steps(workflow, job_name):
+                script = step.get("run")
+                if not isinstance(script, str) or "/health" not in script:
+                    continue
+                where = f"{filename}/{job_name}/{step.get('name')}"
+                assert "/v1/models" in script, (
+                    f"{where} waits for health and never asks which model answered"
+                )
 
 
 def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
@@ -181,7 +209,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     """
     workflow = _load_workflows()["digest.yml"]
     outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
-    for name in MODEL_REF_OUTPUTS:
+    for name in (*MODEL_REF_OUTPUTS, *DRAFT_REF_OUTPUTS):
         assert outputs.get(name) == _expression(f"steps.models.outputs.{name}")
 
     step = _step(workflow, "plan", "id", "models")
@@ -191,10 +219,17 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     assert '>> "$GITHUB_OUTPUT"' in script
 
     models = _committed_models()
+    # The draft refs are published empty while no entry declares a draft head,
+    # which is the case that matters: a guard that refused an absent ref would
+    # take down every run this repository makes, and `"".split()` is `[]`
+    # rather than `[""]`, so the obvious shape check does exactly that.
     assert _run_the_inline_program(script, REPO_ROOT) == {
-        f"{role}_{field}": models[role][field]
-        for role in set(WEIGHTS_CACHE_ROLES.values())
-        for field in MODEL_REF_FIELDS
+        **{
+            f"{role}_{field}": models[role][field]
+            for role in set(WEIGHTS_CACHE_ROLES.values())
+            for field in MODEL_REF_FIELDS
+        },
+        **dict.fromkeys(DRAFT_REF_OUTPUTS, ""),
     }
 
     # Every ref is substituted straight into a shell command downstream, so the
@@ -209,6 +244,97 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
         _run_the_inline_program(script, tmp_path)
+
+
+def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
+    tmp_path: Path,
+) -> None:
+    """Four fields or none. A head with three is a file fetched against a blank.
+
+    The guard read `if value and value.split() != [value]`, so an empty field
+    passed it. An entry naming a draft `file` with no `sha256` therefore reached
+    the fetch step, downloaded the head, and only then failed inside
+    `sha256sum --check` on a line with nothing to check - which reports "no
+    properly formatted checksum lines found" and names neither the entry nor
+    the field. The two measurement arms have always used `if draft and`.
+
+    The absent case is the one this must not break: no committed entry declares
+    a head today, and a guard that refused `{}` would take down every run this
+    repository makes.
+    """
+    script = _script(
+        _step(_load_workflows()["digest.yml"], "plan", "id", "models"),
+        "digest.yml/plan/models",
+    )
+    pointer = "models/probe.json"
+    (tmp_path / "config" / "models").mkdir(parents=True)
+    models = _committed_models()
+    models["summarize"]["draft"] = {
+        "repo": "publisher/head-GGUF",
+        "revision": "8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265",
+        "file": "head.gguf",
+        "sha256": "",
+    }
+    (tmp_path / "config" / pointer).write_text(json.dumps(models), encoding="utf-8")
+    (tmp_path / "config" / "idhazh.json").write_text(
+        json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
+    )
+
+    with pytest.raises(AssertionError, match=re.escape("models.summarize.draft.sha256")):
+        _run_the_inline_program(script, tmp_path)
+
+
+def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: Path) -> None:
+    """One argument, so the two copies of a candidate's facts cannot disagree.
+
+    A form that asked for the repository, the commit, the filename, the digest,
+    the byte count, the alias and the quantisation was asking an operator to
+    retype seven facts already written in the candidate's own file. Two copies
+    can differ, and the failure is silent: the bench measures one set of bytes
+    and the adoption points at another, with every gate green.
+
+    The path becomes a file the step opens, so containment is proved rather than
+    spelled - `..` in a form field is the whole reason this is a resolve check
+    and not a name check.
+    """
+    committed = _committed_models()
+    for filename, step_id in (("validate.yml", "candidate"), ("measure.yml", "models")):
+        workflow = _load_workflows()[filename]
+        declared = sorted(
+            name for name in _declared_dispatch_inputs(workflow) if name.startswith("candidate")
+        )
+        assert declared == ["candidate_models_file"], (
+            f"{filename} asks for more than the one file that already holds the answer"
+        )
+
+        script = _script(_step(workflow, "plan" if step_id == "candidate" else step_id, "id", step_id), filename)
+        published = _run_the_inline_program(script, REPO_ROOT)
+        for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
+            key = field if filename == "validate.yml" else f"candidate_{field}"
+            assert published[key] == committed["summarize"][field], (
+                f"{filename} publishes a {field} the committed entry does not carry"
+            )
+
+        # A named file is read instead, and a traversal out of `config/` stops
+        # here - nothing downstream opens the path again to check it.
+        (tmp_path / "config" / "models").mkdir(parents=True, exist_ok=True)
+        other = json.loads(json.dumps(committed))
+        other["summarize"]["id"] = "some-other-model"
+        (tmp_path / "config" / "models" / "other.json").write_text(
+            json.dumps(other), encoding="utf-8"
+        )
+        (tmp_path / "config" / CONFIG_FILE_NAME).write_text(
+            json.dumps({MODELS_POINTER_KEY: "models/other.json"}), encoding="utf-8"
+        )
+        named = _run_the_inline_program(
+            script, tmp_path, {"CANDIDATE_MODELS_FILE": "models/other.json"}
+        )
+        assert named["id" if filename == "validate.yml" else "candidate_id"] == "some-other-model"
+
+        with pytest.raises(AssertionError, match="under config/"):
+            _run_the_inline_program(
+                script, tmp_path, {"CANDIDATE_MODELS_FILE": "../../etc/passwd.json"}
+            )
 
 
 def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> None:
@@ -331,3 +457,110 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
         ), job_name
 
     assert len(set(keys.values())) == len(keys), "one entry cannot hold two sets of weights"
+
+
+#: Where each bench-side workflow decides what the candidate is: the step that
+#: reads the entry, and the prefix it puts on what it publishes.
+CANDIDATE_STEPS = (
+    ("measure.yml", "models", "models", "candidate_"),
+    ("validate.yml", "plan", "candidate", ""),
+)
+
+
+def _an_entry(**extra: object) -> dict[str, object]:
+    """A summarize entry carrying everything the step requires, plus what a test adds."""
+    return {
+        "repo": "publisher/Model-GGUF",
+        "revision": "0" * 40,
+        "file": "model-Q4_K_M.gguf",
+        "sha256": "a" * 64,
+        "id": "model-q4-k-m",
+        "quantisation": "Q4_K_M",
+        **extra,
+    }
+
+
+def _a_config_tree(tmp_path: Path, summarize: dict[str, object]) -> Path:
+    """One models file, built rather than borrowed.
+
+    The committed tree has one entry with a draft head and two without, so a
+    test driven from it could only ever ask what today's config happens to say -
+    and it would go quiet on the day somebody retired the entry it relied on.
+    """
+    models = tmp_path / "config" / "models"
+    models.mkdir(parents=True)
+    (tmp_path / "config" / "idhazh.json").write_text(
+        json.dumps({"models_file": "models/candidate.json"}) + "\n", encoding="utf-8"
+    )
+    (models / "candidate.json").write_text(
+        json.dumps({"summarize": summarize}) + "\n", encoding="utf-8"
+    )
+    return tmp_path
+
+
+def _candidate_outputs(
+    filename: str, job_name: str, step_id: str, tmp_path: Path, summarize: dict[str, object]
+) -> dict[str, str]:
+    step = _step(_load_workflows()[filename], job_name, "id", step_id)
+    return _run_the_inline_program(
+        _script(step, f"{filename}/{job_name}/{step_id}"),
+        _a_config_tree(tmp_path, summarize),
+        {"CANDIDATE_MODELS_FILE": ""},
+    )
+
+
+@pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+def test_a_declared_draft_head_is_published_and_named_in_the_cache_key(
+    filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
+) -> None:
+    """The cache holds every file the candidate needs, so the key names every digest.
+
+    A key that named only the target served a complete-looking entry with the
+    draft head missing, and llama-server exits at load rather than at fetch - so
+    the arm that restored it spent a runner hour and measured nothing.
+    """
+    draft = {
+        "repo": "publisher/Model-GGUF",
+        "revision": "0" * 40,
+        "file": "mtp-model.gguf",
+        "sha256": "b" * 64,
+    }
+    published = _candidate_outputs(
+        filename, job_name, step_id, tmp_path, _an_entry(draft=draft)
+    )
+
+    for field, value in draft.items():
+        assert published[f"{prefix}draft_{field}"] == value
+
+    key = published[f"{prefix}cache_key" if prefix else "cache_key"]
+    assert key == f"{'a' * 64}-{'b' * 64}", "the key must name both digests"
+
+
+@pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+def test_an_entry_with_no_draft_head_keeps_the_key_it_already_had(
+    filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
+) -> None:
+    """Adding the draft to the key must not throw away what earlier runs downloaded.
+
+    Two of three committed entries declare no draft head. If their key moved,
+    the next dispatch for each would refetch several gigabytes to land on bytes
+    it already had.
+    """
+    published = _candidate_outputs(filename, job_name, step_id, tmp_path, _an_entry())
+
+    for field in ("repo", "revision", "file", "sha256"):
+        assert published[f"{prefix}draft_{field}"] == ""
+
+    key = published[f"{prefix}cache_key" if prefix else "cache_key"]
+    assert key == "a" * 64, "an entry with no draft keeps the target digest alone"
+
+
+@pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+def test_a_draft_head_that_declares_no_digest_is_refused(
+    filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
+) -> None:
+    """A head with no digest would be downloaded unchecked, which is the one thing we never do."""
+    entry = _an_entry(draft={"repo": "p/M", "revision": "0" * 40, "file": "mtp.gguf"})
+
+    with pytest.raises(AssertionError, match=r"draft\.sha256"):
+        _candidate_outputs(filename, job_name, step_id, tmp_path, entry)

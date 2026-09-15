@@ -43,8 +43,8 @@ from typing import Any, Final, NamedTuple
 from pydantic import ValidationError
 
 from idhazh import config, corpus, summarize
-from idhazh.contracts.app_config import SummarizeConfig
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusRow
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 REFERENCE_ROOT_RELPATH: Final = "tests/fixtures/reference"

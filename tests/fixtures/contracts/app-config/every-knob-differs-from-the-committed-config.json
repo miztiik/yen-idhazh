@@ -67,10 +67,10 @@
   },
   "console": {
     "band_outlier_rows": 6,
-    "chart_arm_coverage_pct": 5.0,
-    "chart_arm_minutes_target": 6.0,
-    "chart_arm_rule_days": 14,
+    "chart_coverage_pct": 5.0,
     "chart_height": 160,
+    "chart_minutes_target": 6.0,
+    "chart_rule_days": 14,
     "chart_width": 520,
     "default_window_days": 21,
     "doubt_rows": 6,
@@ -165,7 +165,12 @@
     "window_days": 7
   },
   "logging": {
-    "level": "DEBUG"
+    "capture_prompts": false,
+    "capture_replies": false,
+    "item_lines": false,
+    "level": "DEBUG",
+    "stage_lines": false,
+    "waiting_heartbeat_seconds": 5
   },
   "models_file": "models/qwen3-8b-q4km.json",
   "observability": {
@@ -223,16 +228,21 @@
     "image_months": 12,
     "max_deletes_per_run": 50,
     "pages_hard_cap_mb": 900,
-    "site_budget_mb": 600
+    "site_budget_mb": 600,
+    "trial_state_days": 45
   },
   "run": {
     "max_parallel": 2,
+    "qualify_on_the_production_path": false,
     "safety_ceiling_per_run": 120,
     "shard_size": 3,
     "shard_timeout_minutes": 90,
-    "success_floor_pct": 80
+    "shard_wrap_up_minutes": 7,
+    "success_floor_pct": 80,
+    "trial_state_dirname": "a-trial-nobody-runs"
   },
   "summarize": {
+    "asks_for_a_visual_plan": false,
     "bands": [
       {
         "key_points_max": 4,

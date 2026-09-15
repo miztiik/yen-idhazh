@@ -83,7 +83,7 @@ dev = [
     "pytest>=8.3",
     # Runs the suite across the cores the machine already has, by default. It
     # was opt-in until 2026-08-30, on the argument that a parallel-only failure
-    # would hide from the one gate everybody trusts. Running BOTH arms parallel
+    # would hide from the one gate everybody trusts. Running BOTH cases parallel
     # settles that better than running one of each: a test that only fails
     # under xdist now fails everywhere rather than only on a developer box.
     #
@@ -95,7 +95,7 @@ dev = [
     # already there.
     #
     # Measured effect, same box and date (12 logical CPUs, 31.8 GiB RAM, every
-    # arm wrapped in backend/utilities/gate_lock.py so no sibling gate could
+    # case wrapped in backend/utilities/gate_lock.py so no sibling gate could
     # land inside it): 548.03, 484.68 and 505.78 s serially, against 159.04,
     # 149.60 and 147.67 s under `-n auto` (n=3 each; means 512.83 s and
     # 152.10 s; spreads 63.35 s and 11.37 s). That is 3.37x - about six minutes
@@ -233,13 +233,18 @@ pythonpath = ["backend"]
 # on a developer box; `-n 0` turns it off for a debugging run.
 # `--strict-markers` makes a mark that is not on the list below a collection
 # error naming the file, instead of a warning that leaves the test in no subset.
-addopts = "-q -n auto --strict-markers"
+# `--durations` costs nothing to switch on: pytest times every phase of every
+# test either way (`_pytest.runner.CallInfo.from_call`), and the option only
+# decides what gets printed. So every run, local and CI, ends by naming what it
+# spent its time on. `docs/reference/benchmarks/what-the-suite-costs.md` is the
+# standing reading.
+addopts = "-q -n auto --strict-markers --durations=25"
 # Four selectors, so a change can run the tests it can break instead of all
-# 2,140. Each is a module-level `pytestmark`, so a module that is renamed or
+# 3,498. Each is a module-level `pytestmark`, so a module that is renamed or
 # moved keeps its mark. CI still runs the whole suite - a mark is a developer's
 # shortcut, never the thing that decides what a merge is checked against.
-# `backend/tests/test_marks.py` holds the four against the whole collected set,
-# so a module in no subset is named rather than silently never run.
+# `backend/tests/test_marks.py` holds the four against every test module, so a
+# module in no subset is named rather than silently never run.
 markers = [
     "contract: the persisted shapes - generated schemas, config contracts, the ledgers, the committed digest tree",
     "visual: the visual planner, its validator, the spec compiler and the two renderers",

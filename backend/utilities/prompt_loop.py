@@ -41,8 +41,8 @@ from string import Template
 from typing import Final, Protocol
 
 from idhazh import config, summarize
-from idhazh.contracts.app_config import SummarizeConfig
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.evals.metrics import (
     hedge_dropped,
     lead_coverage,
@@ -364,7 +364,7 @@ class LiveSummarizer:
                 article,
                 model_id=model_id,
                 inference=inference,
-                thinking_kwarg=self._settings.models.summarize.turns.thinking_kwarg,
+                turns=self._settings.models.summarize.turns,
                 prompt_config=ask,
             )
             payload["messages"][0]["content"] = render_system(
@@ -378,6 +378,7 @@ class LiveSummarizer:
                 prompt_config=ask,
                 source_words=article.band_source_words,
                 brief=article.brief,
+                thinking=self._settings.models.summarize.turns.thinks,
             )
             produced.append(
                 ItemSummary(
@@ -455,7 +456,7 @@ class ModelJudge:
             user=user,
             output_schema=schema,
             inference=inference,
-            thinking_kwarg=self._settings.models.summarize.turns.thinking_kwarg,
+            turns=self._settings.models.summarize.turns,
             schema_name=schema_name,
         )
         completion = post(

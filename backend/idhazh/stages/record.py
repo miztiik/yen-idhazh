@@ -1,7 +1,7 @@
 """Commit what one shard measured, before anything can throw it away.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -16,7 +16,14 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.evals import writer
 from idhazh.stages import common
-from idhazh.stages.common import LOG, _extraction_health, _item_payloads, _run_dir, shard_of
+from idhazh.stages.common import (
+    LOG,
+    _extraction_health,
+    _item_payloads,
+    _recovered,
+    _run_dir,
+    shard_of,
+)
 
 
 def stage_record(
@@ -26,9 +33,9 @@ def stage_record(
 
     `stage_assemble` writes the whole day's census, and it runs in another job on
     another machine hours later. Until then a shard's verdicts exist only inside
-    its `items-<shard>` artifact, which expires in a day and is not uploaded at
-    all when the job is cancelled. So a run stopped between the workers and the
-    publish had measured every item and recorded none of it.
+    its `items-<shard>` artifact, which expires and is never committed. So a run
+    stopped between the workers and the publish had measured every item and
+    recorded none of it.
 
     Only settled items are recorded, which is what `telemetry.is_final` decides.
     An item whose summary is not written yet was interrupted rather than failed,
@@ -60,6 +67,7 @@ def stage_record(
                 run_id=plan.run_id,
                 shard=shard,
                 extraction=_extraction_health(payload.article, settings),
+                recovered=_recovered(payload.decision_path),
             )
         )
         if payload.eval_path.exists():

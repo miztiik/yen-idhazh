@@ -1,7 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 How an item gets a chart or - most of the time - nothing at all.
 The rule this subsystem serves is in [`../../concepts/digest.md`](../../concepts/digest.md): a
 visual must carry a fact the sentence beside it does not. A picture that decorates is worse than
@@ -16,7 +15,7 @@ idhazh work --date <D> # two calls an item: labels, then the summary and the pla
 idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
-Call 2 writes the summary and the plan in one reply, so the same model that read the article
+The summarize-and-plan call writes the summary and the plan in one reply, so the same model that read the article
 decides the picture and `work` draws it while it still holds the text.
 
 **It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
@@ -50,7 +49,7 @@ It needs an article a bar can legally be drawn from, which is rarer than it soun
 customers - so `units_convertible` refuses every bar expressible from it, correctly.
 `tests/fixtures/pages/wind.html` exists for this: four countries, four figures, one unit, matching
 the shape `tests/fixtures/visual-validator/` already keeps as the plan that passes. Its recorded
-pair is `call-one/wind-labelled.json` and `call-two/wind-summary-and-plan.json`, and the element
+pair is `label/wind-labelled.json` and `summarize-and-plan/wind-summary-and-plan.json`, and the element
 ids in the second are the ones this pipeline mints from the first - so an extractor change that
 moves a span turns the test red rather than quietly turning the picture off.
 
@@ -155,7 +154,7 @@ Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`, 2026-09-09) t
 | 6.01 tok/s, the configured summarizer, `ubuntu-latest`, 2026-08-23 | 4.7 s | 3.8 s | 5.1 to 6.2 min |
 
 Eighty is `run.safety_ceiling_per_run` and is the most items a run plans for, so the run figure is an
-upper bound - an item the reachability gate refuses never reaches call 2's plan half at all.
+upper bound - an item the reachability gate refuses never reaches the summarize-and-plan call's plan half at all.
 `digest.yml` fires five scheduled runs a day, so the day's ceiling is 400 plans: 26 to 31 minutes of
 runner wall-clock, spread over four shards rather than paid serially. The worst-case reply ceiling
 did not move: it already counted every declared key, because a grammar-constrained decoder emits
@@ -480,17 +479,17 @@ Three properties of how it is written, and each one is load-bearing:
 - **It is a predicate over every enabled kind, not a chart special case.** Chart is the only kind
  left, so the predicate answers for one today - but a kind added later declares its own
  reachability here rather than being let through by an `if` that only knows about charts. The
- diagram arm is what made that shape necessary and then proved its own cost: a diagram's steps come
+ diagram drawing is what made that shape necessary and then proved its own cost: a diagram's steps come
  from prose, so nothing about one is decidable in advance, and with `diagram` in
  `visuals.enabled_kinds` **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
 - **It reads the facts only - never the article's words.** A predicate that branched on fetched
  prose would let a stranger's page steer our control flow, which is Guardrail #11 with no prompt in
- sight. There was no keyword rescue for the diagram arm for the same reason.
+ sight. There was no keyword rescue for the diagram drawing for the same reason.
 - **The empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
  reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
  that publish today.
 
-With the arm off, measured on the 145 items of run `32804437110` with no model and no network:
+With diagram drawing off, measured on the 145 items of run `32804437110` with no model and no network:
 **68 items (46.9%) never reach the model**, and 77 do. The histogram of widest unit group per
 article is in [`../../reference/measurements.md`](../../reference/measurements.md).
 
@@ -502,9 +501,9 @@ names the run manifest froze on 2026-09-05; the Python behind them is `items_dec
 
 ## The two-call gate suppresses the plan and never skips the call
 
-The single-call gate above skips a request. The two-call flow cannot, because **call 2 is the call
+The single-call gate above skips a request. The two-call flow cannot, because **the summarize-and-plan call is the call
 that writes the summary** - so what the gate takes away is the plan's decode, not the request. The
-grammar is what takes it: `call_two_model(plan=False)` is the summary draft alone, with no `visual`
+grammar is what takes it: `summarize_and_plan_model(plan=False)` is the summary draft alone, with no `visual`
 property, so the decoder has nowhere to write a plan. A smaller budget on its own would not do it -
 the decoder would start the plan and meet the cap part-way through, which spends the decode the gate
 exists to save and returns a cut reply.
@@ -536,28 +535,28 @@ channel of every ruled type, asserting the validator refuses all of them. One su
 the gate costs an item a picture a reader would have seen, which is the one way a cheap gate is
 expensive.
 
-| What the gate changes about call 2 | Before | Gated |
+| What the gate changes about the summarize-and-plan call | Before | Gated |
 | --- | --- | --- |
 | The decoder shape | `{summary, visual}` | the summary draft alone |
-| The output budget | 4,694 tokens | 905 tokens |
+| The output budget | 4,735 tokens | 946 tokens |
 | The trailing user turn | 2,555 characters | 961 characters |
-| The system turn, the article, call 1's reply | unchanged | unchanged |
+| The system turn, the article, the label call's reply | unchanged | unchanged |
 
 Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
 being the other minus the plan's - two ways of computing one quantity disagree the first time a
 bound moves, and the one that is wrong is the one nobody reads. The saving is 3,789 tokens off the
-ceiling, which is 81 percent of it.
+ceiling, which is 80 percent of it.
 
 **A ceiling is not a measurement of seconds, so here is one.** The "21 measured seconds" this page
 used to quote was a saving for skipping a whole call, which cannot happen, and that figure is
 withdrawn rather than re-used. What the gate really saves is the plan's decode. Measured 2026-09-11
-by tokenising the committed call-2 reply with `Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`: the
+by tokenising the summarize-and-plan call's committed reply with `Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`: the
 whole reply is **327 tokens**, the summary alone is **152**, and the plan half is **176** - so a
 plan is 54 percent of what an ordinary reply decodes. At the 6.01 tok/s the summarizer decodes at
 (`ubuntu-latest`, 2026-08-23) that is **29.3 seconds an item**, on the items the gate fires for.
 **It is one reply and not a distribution**: the fixture is written by hand, so this sizes the saving
 rather than measuring a run, and no run had read one when it was written - the stage that dispatches
-call 2 shipped on 2026-09-12 behind a flag, and the flag went away with the old path on 2026-09-13.
+the summarize-and-plan call shipped on 2026-09-12 behind a flag, and the flag went away with the old path on 2026-09-13.
 (176 by direct count and 175
 by subtracting the summary from the whole - the one-token gap is a merge across the object
 boundary.) How often the gate fires is the other half of the bill and is a run measurement still
@@ -573,7 +572,7 @@ or out rather than two whole prompts, so the summary half cannot drift between t
 test asserts the two renders share it byte for byte.
 
 **Suppressing the plan moves nothing in front of the article.** All three differences sit after the
-system turn, the article and call 1's reply, so the cached prefix a gated item reuses is the prefix
+system turn, the article and the label call's reply, so the cached prefix a gated item reuses is the prefix
 an ungated one reuses, and the floor row #3 measured is the same floor for both.
 
 ## Every `none` says which gate refused it
@@ -596,7 +595,7 @@ what an operator acts on is the gate rather than the line of code. And **which**
 `ValidatorCheck`'s to say: one fact with two homes is a fact that can disagree with itself.
 
 `validation_failed` is the member that rule is doing the most work in. Three routes write it, and
-the last two only exist once a stage dispatches call 2: the validator refused the plan by name; the
+the last two only exist once a stage dispatches the summarize-and-plan call: the validator refused the plan by name; the
 reply's plan half would not hold `VisualPlan`'s own rules, which a grammar cannot enforce because
 they read one field against another; and every check passed and `compile_bar` still could not draw
 it. To an operator those are one answer - a plan was drafted and this build refuses it - so the
@@ -693,7 +692,7 @@ depth 1 publish on the validator alone, which is depth 1 quietly becoming the de
 consequence is stated rather than hidden: `state/visuals/` does not exist yet, so today the
 population is always empty, every depth refuses, and **the ladder behaves exactly as if it were
 off**. What ships now is the mechanism, its edges and three of its four invariants under test; the
-floor arm becomes live when the ledger does.
+floor case becomes live when the ledger does.
 
 **A downgrade with no annotation fails**, at every depth and not only at depth 2. The source
 document states it both ways - a table that puts it at depth 2 and a rule that puts it at depth 1
@@ -785,12 +784,12 @@ weights, install, model start. Both numbers came down together on 2026-08-25, be
 20 minutes above the stage bound is 20 minutes in which a stuck stage burns runner wall-clock past
 its own limit. Raising either one is the move Guardrail #2 forbids.
 
-**The chart arm has a kill line, registered before the data was read.** Authority: Jony,
-2026-08-25. Over 14 consecutive days with the chart-only gate on, retire the arm if the median day
+**Chart drawing has a kill line, registered before the data was read.** Authority: Jony,
+2026-08-25. Over 14 consecutive days with the chart-only gate on, retire chart drawing if the median day
 publishes a chart on fewer than 5% of published items, or spends more than 6 planner minutes per
 published chart. Either limb trips it. A day stopped at the budget still counts. Measured
 2026-08-25 on `ubuntu-latest` (4 vCPU, 16 GB): 6.2% and 4.4 minutes - inside the line on both
-limbs, which is why the arm ships. Writing the line down first is what stops the number being
+limbs, which is why it ships. Writing the line down first is what stops the number being
 argued after it is seen.
 
 `charts_drafted` on the run manifest is what makes that reading possible. It counts the items whose
@@ -847,8 +846,8 @@ claim is that every figure on it was written down when the run happened.
 
 **Charts published is counted from the payload, not from the manifest.** The manifest records what
 the planner decided; the payload records what a reader can see. A chart whose render failed is a
-visual and is not a published chart, so counting visuals instead would put a failure on the chart
-arm's bill.
+visual and is not a published chart, so counting visuals instead would put a failure on chart
+drawing's bill.
 
 ## Two controls that run after the model has answered
 
@@ -953,7 +952,7 @@ prints it rather than guarding it.
 **What the reader can read, measured rather than promised, and it is not the floor yet.** The
 drawing is placed at the width the card actually gave it, in CSS pixels, so one drawn unit is
 one pixel on screen and there is no scale factor between what a token says and what a reader
-sees. Measured on the canary day, both arms on one developer machine back to back with
+sees. Measured on the canary day, both cases on one developer machine back to back with
 `BUILD_VERSION` pinned, 2026-09-14, at 360, 390 and 1440 CSS px in both themes. **After, the
 scale is 1.000 at all three widths and every drawn string resolves at 12.0 CSS px**, which is
 `--text-xs` at its own size. Before, the same drawing laid itself out 720 units wide whatever
@@ -1006,10 +1005,10 @@ flowchart TD
     direction TB
     ART["<b>ARTICLE</b><br/>sanitized text; every span indexes these bytes"]
     CP["<b>CANDIDATE PASS</b> - code<br/>finds every quantity the number pattern matches<br/>mints element_id, span_start, span_end"]
-    C1["<b>CALL 1</b> - model<br/>labels what each number MEANS<br/>no schema field accepts a value, a unit or an offset"]
+    C1["<b>LABEL CALL</b> - model<br/>labels what each number MEANS<br/>no schema field accepts a value, a unit or an offset"]
     ANC["<b>ANCHORING</b> - code<br/>one rule per shape<br/>what will not anchor is dropped"]
     TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, cut from the article<br/>TIER 2 model-assigned, span-anchored")]
-    C2["<b>CALL 2</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles"]
+    C2["<b>SUMMARIZE-AND-PLAN CALL</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles"]
     VP["<b>VISUAL PLAN</b><br/>type + role -&gt; element_ids<br/>no geometry, no literal value, no authored text"]
     VV{"<b>VALIDATOR</b> - deterministic, no model<br/>is this type drawable from these elements?"}
     DL["<b>DOWNGRADE LADDER</b><br/>depth 1, depth 2, then refuse"]
@@ -1216,7 +1215,7 @@ payload ever did: scanned 2026-09-05 over all 15 committed `digest.json` files,
 6,425 items and 351 visuals, and every one is a chart. It was deleted on that
 evidence.
 
-**And why the diagram renderer went with it.** The arm shipped off on 2026-08-25
+**And why the diagram renderer went with it.** Diagram drawing shipped off on 2026-08-25
 for the reason above - it drafted zero diagrams in 88 items and rendered zero in
 703, while making the reachability gate unfireable. What was left was a round trip
 with nothing at either end. The planner wrote `flowchart TD` text "so anyone can
@@ -1305,7 +1304,7 @@ promotes it to a `chart` through the contract's own validation, and a caller nev
 
 **The oracle is the published figure against the element table.** `backend/tests/test_render.py`
 compiles the committed `bar` plan and asserts every published figure equals the one its element
-states, in the plan's own channel order; a second arm doubles one element's figure and requires that
+states, in the plan's own channel order; a second case doubles one element's figure and requires that
 one mark to double with the other three untouched, which is what an equality on a single table
 cannot say. The browser's half is `frontend/tests/item-visual.spec.ts`, which reads the same numbers
 back off a real page and checks each bar's length is its figure in proportion to the longest.
@@ -1409,7 +1408,7 @@ its whole output budget returns. One member for both would have made the largest
 can act on unreadable, because the fix for one is not the fix for the other - a budget cut is the
 reply shape's own arithmetic, and a window cut is `models.summarize.inference.n_ctx` against
 `extract.truncation_cap_tokens`. Separating them costs one comparison at the one call site that
-writes either, over numbers already in hand: the server counted the prompt, and call 2's budget is
+writes either, over numbers already in hand: the server counted the prompt, and the summarize-and-plan call's budget is
 derived from its own grammar. Plan 11 row #3f, 2026-09-13;
 [`../summarize/prompt.md`](../summarize/prompt.md) carries the sizing behind it.
 
@@ -1421,11 +1420,11 @@ the precedent for the same reason.
 **Why the ladder ships inert rather than waiting for its ledger.** With no depth-0 population every
 floor is uncomputable and every depth refuses, so today the ladder answers exactly as it would with
 the flag off. That is deliberate: the edges, the invariants and the refusals are under test now, at
-no reader-visible cost, and the one arm that needs a corpus is the one arm that waits. The
+no reader-visible cost, and the one case that needs a corpus is the one case that waits. The
 alternative - hold the whole mechanism back until `state/visuals/` lands - would put the edge table
 and the invariance rules into the same commit as the ledger, where a review has to hold both.
 
-**Why the call-2 prompt lost its plan half.** A turn that asks for fields the grammar cannot hold is
+**Why the summarize-and-plan prompt lost its plan half.** A turn that asks for fields the grammar cannot hold is
 not ignored: constrained decoding renormalises onto the allowed tokens, so the text goes into the
 only channel still open, which is the summary a reader reads. The same rule already governs the key
 points, where asking for more than the grammar admits "would lose the item for doing what it was
@@ -1492,27 +1491,27 @@ unreachable, and asserts `to_decision` lands on `none` for all of them. One surv
 gate drops a chart a reader would have seen. That test is what makes "provable" a true word here,
 and it only became true once one quantity was limited to one bar.
 
-**The diagram arm is off, on the measurement it was waiting for.** The doc used to say "the arm
-stays enabled until one run separates the three explanations - no exemplar in the prompt,
+**Diagram drawing is off, on the measurement it was waiting for.** The doc used to say "diagram
+drawing stays enabled until one run separates the three explanations - no exemplar in the prompt,
 `min_diagram_steps` blocking short answers, or news items genuinely not being flowcharts." That run
 landed. `32804437110` logs the draft kind beside the final kind: **17 chart drafts, 71 `none`
 drafts, and 0 diagram drafts in 88 items.** The model is not asking for diagrams and our checks are
 not rejecting them, so the first explanation is the live one - and the second and third cannot be
 told apart without a prompt change nobody has a reason to make. Across 703 decided items on
-2026-08-24/25 the arm produced nothing at all. Meanwhile it was the reason the reachability gate
+2026-08-24/25 diagram drawing produced nothing at all. Meanwhile it was the reason the reachability gate
 above could never fire, which cost 46.9% of every day at 20.7 to 40.3 s an item.
 
-So the arm is switched off in `visuals.enabled_kinds`, and the contract default follows, because a
+So diagram drawing is switched off in `visuals.enabled_kinds`, and the contract default follows, because a
 fresh clone should not pay for it either (Guardrail #6: the sane default is the measured one). Nothing
 else changes: the `diagram` enum member, the Mermaid writer, the SVG layout and their tests all
-stay, and `TestToDecision` keeps both arms on so the rejection paths and the injection canaries still
+stay, and `TestToDecision` keeps both cases on so the rejection paths and the injection canaries still
 hold. Turning it back on is one word in `config/idhazh.json`. The prompt still describes diagrams;
 it was left alone on purpose, because editing it changes the decode grammar and would invalidate
 the 21 s and 40 s figures this whole page rests on. A draft that asks for one now folds to `none`
 with a rationale naming the switch.
 
 **This is a pause, not a descope, and the condition to reopen it is written down.** Authority:
-Jony, 2026-08-25. Two things reopen the arm together, never separately: a prompt carrying a diagram
+Jony, 2026-08-25. Two things bring diagram drawing back together, never separately: a prompt carrying a diagram
 exemplar that, measured offline against fixture articles, drafts diagrams at a rate surviving the
 post-model checks - AND a hand-read sample showing those drafts carry an order the summary does not
 already state. The first alone only proves a model will say "diagram" when asked to. The experiment
@@ -1573,10 +1572,10 @@ file before it can be enabled.
 
 | Option | Why rejected |
 | --- | --- |
-| Skip call 2 entirely when the gate refuses | Call 2 is the call that writes the summary, so skipping it costs the item the thing a reader came for. The gate suppresses the plan fields inside the call and never the call (O43). |
+| Skip the summarize-and-plan call entirely when the gate refuses | The summarize-and-plan call is the call that writes the summary, so skipping it costs the item the thing a reader came for. The gate suppresses the plan fields inside the call and never the call (O43). |
 | Suppress the plan with a smaller budget and leave the grammar whole | The decoder starts the plan and meets the cap part-way through, which spends the decode the gate exists to save and hands back a cut reply. The grammar is the control; a budget is a request. |
 | Derive the suppressed budget as the full one minus the plan's characters | Two ways of computing one quantity, which disagree the first time a bound moves - and the one that is wrong is the one nobody reads. Both come off the same two-half arithmetic over their own schema. |
-| Leave the plan half in the call-2 prompt when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |
+| Leave the plan half in the summarize-and-plan prompt when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |
 | `confidence` as the ladder's escalating floor | The contract says it gates nothing, it is the one free number the model writes, and a model may not select what publishes (`CLAUDE.md` section 0a). Gating it would also destroy it as a diagnostic. |
 | Waive the floor when no depth-0 visuals have been published | Depth 1 would publish on the validator alone, which is depth 1 quietly becoming the default path - the failure the escalating floor exists to prevent. |
 | A separate on-off flag beside the ladder's rungs | Two knobs that can disagree about one thing. Zero rungs is already an unambiguous no, and the rung count is already the maximum depth. |
@@ -1603,7 +1602,7 @@ file before it can be enabled.
 | Cap the number of items the planner may consider | A count has to be set for the worst host, so a fast host would decide 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
 | Give a budget-stopped item a `VisualDecision` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
-| A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Guardrail #11 in spirit, with no prompt involved. |
+| A keyword pre-filter to rescue the diagram drawing | Fetched words would steer our control flow. Guardrail #11 in spirit, with no prompt involved. |
 | A second, smaller model to triage items first | Two calls where the point was zero. |
 | Diffusion for charts | Produces a beautiful picture of a chart with hallucinated axis labels. |
 | A charting library in the renderer | `vl-convert` took a spec to SVG with no browser and no runtime JavaScript. **Retired 2026-09-13**: the reader's browser draws the chart now, so there is no renderer for a library to be in. |

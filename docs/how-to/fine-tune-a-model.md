@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-14
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -419,13 +419,13 @@ of 77 MB.
 `models.<teacher>.inference.n_ctx` on 2026-09-13.** A training row is a prompt
 the pipeline could have sent and an answer it could have returned, and the
 corpus holds single-call rows - so the sum it has to cover is 997 tokens of
-prompt overhead, up to 12,191 for the longest and hardest-tokenizing article
-`extract.truncation_cap_tokens` lets through, and 900 of answer: 14,088 of
-16,384, or 86 percent. The serving window went to 49,152 the same day to hold
+prompt overhead, up to 23,259 for the longest and hardest-tokenizing article
+`extract.truncation_cap_tokens` lets through, and 900 of answer: **25,156 of the
+committed 32,768, or 77 percent**. The serving window is wider because it holds
 the two-call pair, which nothing trains on. Both windows are still asserted in
-`backend/tests/contracts/` and against the cap, so a later move of the
-cap fails rather than drifts - **against two sums now rather than one**, because
-the two paths render different prompts.
+`backend/tests/contracts/` and against the cap, so a later move of the cap fails
+rather than drifts - **against two sums now rather than one**, because the two
+paths render different prompts.
 
 **A training window narrower than the production cap fails silently, so the two
 are asserted against one sum.** The wrangler and the notebook drop an
@@ -434,7 +434,7 @@ training set every long article while production keeps summarizing them - a mode
 tuned on the short half of its own job. Dropping stays the right refusal; the
 point is that nothing has to be refused.
 
-**Nobody has measured what 16,384 costs a card, because nothing has trained
+**Nobody has measured what 32,768 costs a card, because nothing has trained
 yet** (Guardrail #10). If a session runs out of memory, `SEQUENCE_LENGTH_OVERRIDE` in
 the notebook lowers the window for that session and prints how many rows the
 lower value dropped. That is a session's choice and not a config edit, because
@@ -450,6 +450,23 @@ reads the safetensors repository while the pipeline reads the GGUF one. Held in
 two blocks a model swap moves one string and leaves the other, and a LoRA adapter
 loads onto a mismatched base without raising - so the damage would arrive later
 as a quality drop nobody could attribute.
+
+**A base swap retires every adapter trained on the old base, and it also makes
+the corpus mixed-teacher.** Both are recorded rather than prevented: the
+notebook stops when the resolved base is not the one production serves, and the
+census in `corpus/corpus.meta.json` counts the rows by the teacher that wrote
+them.
+
+```bash
+python -c "import json;print(json.load(open('corpus/corpus.meta.json'))['models'])"
+```
+
+Read it before training, not after. It already reads two ways - 1,015 rows from
+the retired `qwen3-8b-q4-k-m` and 429 from `qwen3-5-9b-q4-k-m` of 1,444 - so a
+model trained on it today learns mostly from a teacher that no longer serves.
+That is a fact to weigh, not a refusal: the rows are still summaries the project
+published. What moves the mix is time, because the roll evicts by date
+([evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md)).
 
 **The committed `hf_base_repo` values are unverified.** `Qwen/Qwen3.5-9B` is the
 expected upstream for an `unsloth/*-GGUF` repository; nobody has confirmed it

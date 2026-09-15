@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import CollectConfig
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, TimeSource, VerticalPlan
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
@@ -183,6 +183,32 @@ def tier_weight(tier: SourceTier, config: CollectConfig) -> float:
     }[tier]
 
 
+class Authority(NamedTuple):
+    """The authority term, and the three numbers whose product it is."""
+
+    total: float
+    tier_score: float
+    feed_weight: float
+    feed_reliability: float
+
+
+def authority_terms(
+    candidate: Candidate,
+    config: CollectConfig,
+    reliability: Mapping[str, float] | None = None,
+) -> Authority:
+    """`authority`, with the three factors kept instead of thrown away.
+
+    This is the only place the three are multiplied. `authority` is this
+    function's `total`, so a planned item that publishes the parts and a score
+    that publishes the product cannot fall out of step (Guardrail #5). Why each
+    factor exists is on `authority`.
+    """
+    tier = tier_weight(candidate.tier, config)
+    factor = 1.0 if reliability is None else reliability.get(candidate.source_id, 1.0)
+    return Authority(tier * candidate.weight * factor, tier, candidate.weight, factor)
+
+
 def authority(
     candidate: Candidate,
     config: CollectConfig,
@@ -202,8 +228,25 @@ def authority(
     recent evidence on carries 1.0, so an untested feed is never punished. The
     map is built once per run by `ledger.reliability`; a missing feed reads 1.0.
     """
-    factor = 1.0 if reliability is None else reliability.get(candidate.source_id, 1.0)
-    return tier_weight(candidate.tier, config) * candidate.weight * factor
+    return authority_terms(candidate, config, reliability).total
+
+
+def strongest(
+    carried: Sequence[Candidate],
+    config: CollectConfig,
+    reliability: Mapping[str, float] | None = None,
+) -> Candidate:
+    """The best-trusted feed that carried the story, ties broken on the feed id.
+
+    One function rather than a maximum taken here and a choice made there. The
+    score is this candidate's authority and the planned item publishes this
+    candidate's tier, weight and reliability, so two copies of the choice could
+    disagree on a tie and the item would then name factors the score never read.
+    """
+    return min(
+        carried,
+        key=lambda candidate: (-authority(candidate, config, reliability), candidate.source_id),
+    )
 
 
 def merge(candidates: Iterable[Candidate]) -> dict[str, list[Candidate]]:
@@ -212,6 +255,62 @@ def merge(candidates: Iterable[Candidate]) -> dict[str, list[Candidate]]:
     for candidate in candidates:
         grouped.setdefault(candidate.url_key, []).append(candidate)
     return grouped
+
+
+class ScoreTerms(NamedTuple):
+    """The selection score, and every term a person named that adds up to it.
+
+    `total` is what `score` returns, rounded the way `score` rounds it. The
+    other eight are left unrounded on purpose: the five that add up to `total`
+    would each carry their own rounding error, and their sum would then miss
+    the rounded total the day is ordered on - which is the one check this shape
+    has.
+    """
+
+    total: float
+    authority_score: float
+    tier_score: float
+    feed_weight: float
+    feed_reliability: float
+    carriage_step: float
+    watchlist_bonus: float
+    lens_bonus: float
+    recency_bonus: float
+
+
+def score_terms(
+    carried: Sequence[Candidate],
+    *,
+    config: CollectConfig,
+    watchlist_hit: bool,
+    lens_bonus: float = 0.0,
+    appeared: str | None,
+    now: str,
+    reliability: Mapping[str, float] | None = None,
+) -> ScoreTerms:
+    """The score and its terms, from one pass of the arithmetic.
+
+    `score` is this function's `total` and adds nothing to it. Why each term
+    exists is written on `score`; this keeps the parts instead of discarding
+    them, so a planned item can say which part of the score admitted the story.
+    The three authority factors come from the carrier that won the maximum, so
+    their product is the authority term and not some other feed's.
+    """
+    best = authority_terms(strongest(carried, config, reliability), config, reliability)
+    carriage = config.carriage_step if len(carried) > 1 else 0.0
+    watchlist = config.watchlist_bonus if watchlist_hit else 0.0
+    recency = recency_bonus(appeared, now=now, config=config)
+    return ScoreTerms(
+        total=round(best.total + carriage + watchlist + lens_bonus + recency, 6),
+        authority_score=best.total,
+        tier_score=best.tier_score,
+        feed_weight=best.feed_weight,
+        feed_reliability=best.feed_reliability,
+        carriage_step=carriage,
+        watchlist_bonus=watchlist,
+        lens_bonus=lens_bonus,
+        recency_bonus=recency,
+    )
 
 
 def score(
@@ -255,21 +354,28 @@ def score(
     and it does change which of those twenty leads on 2 of them - a term that is
     silent 99.9 percent of the time and then decides the lead is a lottery. The
     vote is still published on the item; it just no longer buys a place.
+
+    The arithmetic itself is `score_terms`, which keeps the parts. This returns
+    the one number the order is sorted on.
     """
-    best = max(authority(candidate, config, reliability) for candidate in carried)
-    total = best
-    if len(carried) > 1:
-        total += config.carriage_step
-    if watchlist_hit:
-        total += config.watchlist_bonus
-    total += lens_bonus
-    total += recency_bonus(appeared, now=now, config=config)
-    return round(total, 6)
+    return score_terms(
+        carried,
+        config=config,
+        watchlist_hit=watchlist_hit,
+        lens_bonus=lens_bonus,
+        appeared=appeared,
+        now=now,
+        reliability=reliability,
+    ).total
 
 
 @dataclass(frozen=True, slots=True)
 class Ranked:
     """One story after scoring, before anything decides whether to take it.
+
+    `terms` is that same score broken into the parts it was built from, carried
+    here because the parts are computed once and would otherwise be thrown away
+    on the next line. `score` is `terms.total`.
 
     `score_counterfactual` is what the same story would have scored if one lens
     weight had been a different number, and it is `None` on a run that asked no
@@ -281,6 +387,7 @@ class Ranked:
     """
 
     score: float
+    terms: ScoreTerms
     candidate: Candidate
     appeared_at: str | None
     time_source: TimeSource
@@ -553,10 +660,7 @@ def plan_vertical(
     scored: list[Ranked] = []
     stale = 0
     for url_key, carried in grouped.items():
-        best = min(
-            carried,
-            key=lambda item: (-authority(item, config, reliability), item.source_id),
-        )
+        best = strongest(carried, config, reliability)
         watchlist_hit = url_key in watchlist_keys
         on_front_page = best.canonical_url in front_page_keys
         appeared = appeared_at(
@@ -569,17 +673,19 @@ def plan_vertical(
             stale += 1
             continue
         theme = themes.get(url_key, 0.0)
+        terms = score_terms(
+            carried,
+            config=config,
+            watchlist_hit=watchlist_hit,
+            lens_bonus=theme,
+            appeared=appeared.at,
+            now=now,
+            reliability=reliability,
+        )
         scored.append(
             Ranked(
-                score=score(
-                    carried,
-                    config=config,
-                    watchlist_hit=watchlist_hit,
-                    lens_bonus=theme,
-                    appeared=appeared.at,
-                    now=now,
-                    reliability=reliability,
-                ),
+                score=terms.total,
+                terms=terms,
                 candidate=best,
                 appeared_at=appeared.at,
                 time_source=appeared.source,
@@ -622,6 +728,14 @@ def plan_vertical(
             watchlist_hit=item.watchlist_hit,
             on_front_page=item.on_front_page,
             rank_score=item.score,
+            authority_score=item.terms.authority_score,
+            tier_score=item.terms.tier_score,
+            feed_weight=item.terms.feed_weight,
+            feed_reliability=item.terms.feed_reliability,
+            carriage_step=item.terms.carriage_step,
+            watchlist_bonus=item.terms.watchlist_bonus,
+            lens_bonus=item.terms.lens_bonus,
+            recency_bonus=item.terms.recency_bonus,
         )
         for item in taken
     ]

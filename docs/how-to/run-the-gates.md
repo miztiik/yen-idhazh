@@ -1,7 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -150,7 +149,7 @@ checkout against the committed schemas.
 
 ## Direct backend checks
 
-**CI is the authoritative arm and it is faster than your machine by between six
+**CI is authoritative and it is faster than your machine by between six
 and fifteen times.** The `gates` job finishes the whole backend suite in about
 90 seconds on a clean runner; the same suite on a developer box shared with
 other agents has measured 8 to 45 minutes. It also runs on Linux, on the merge
@@ -192,7 +191,7 @@ and want the answer now.** The commands are below, and none of them is the
 default: blocking on a 25-minute local suite before every push, for a change CI
 clears in 90 seconds, costs far more than it finds.
 
-Two exceptions where local is still the only arm. A published-site change needs
+Two exceptions where local is still the only place to run it. A published-site change needs
 the browser smoke in `CLAUDE.md` section 12, which is a real browser on your
 machine. And a change to a workflow's own shell needs `shellcheck`, which is
 seconds either way.
@@ -297,9 +296,9 @@ anywhere has to be repointed.
 | `-m "not slow"` | Everything else, which is most of the tests |
 | nothing | The whole suite, which is what CI runs |
 
-**`-n 0` is the faster arm for a small subset**, because the worker pool costs
+**`-n 0` is faster for a small subset**, because the worker pool costs
 several seconds to start and that is most of what a small run pays. Time every
-arm through `gate_lock.py`, so no sibling gate can land inside a timing.
+run through `gate_lock.py`, so no sibling gate can land inside a timing.
 
 **Read the ratio rather than the seconds.** The whole-suite spread is 45.9 s on
 a 155.4 s mean - 30 percent of itself, and that is the shared box rather than
@@ -371,7 +370,7 @@ broken install. It prints nothing on a pass, and a silent run is the pass.
 It reads files, so it covers `.github/scripts/` and nothing else. The shell
 written inline in a workflow `run:` body is held by the contract tests in
 `backend/tests/workflows/`
-([../reference/github-actions.md](../reference/github-actions.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
+([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
 
 **`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
 it would rewrite, all of them
@@ -551,7 +550,7 @@ the two machines disagree about which is right.** A runner is 4 vCPU with
 nothing else on it (Guardrail #2), so extra workers cut the browser step
 substantially. A developer box sharing two performance cores with sibling
 checkouts has no spare capacity to hand a second worker, so the same change runs
-slower there - and both arms pass, so the local result reads as a clean win and
+slower there - and both cases pass, so the local result reads as a clean win and
 is not one. Raise it locally only on an idle box, and never read a local worker
 figure as a runner figure.
 
@@ -572,7 +571,7 @@ their feature group. Both configurations use the existing Playwright runner.
 `reading-page.spec.ts` reads the reading surface whole - every reader route at
 360, 801 and 1536 CSS px in both themes, the story's own time against the day's
 zone caption, the aside against the sticky filter panel, and a day whose stories
-are broken at the network. Four of its arms need a day longer than
+are broken at the network. Four of its cases need a day longer than
 `ui.shell_seed_items`, because a document that already carries its whole day
 never fetches, and the canary is eight stories against a seed of fifteen. They
 skip here on a fact the served payload owns and run against the real digest:
@@ -584,8 +583,8 @@ npx playwright test tests/reading-page.spec.ts tests/layout-overflow.spec.ts
 Remove-Item Env:IDHAZH_TEST_BUILD
 ```
 
-Take that arm before `build:canary`, which overwrites the same `build/`
-directory. **Two of its arms are expected to fail and are annotated
+Run it before `build:canary`, which overwrites the same `build/`
+directory. **Two of its cases are expected to fail and are annotated
 `test.fail`**, because the composed page has two defects nobody has decided
 how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-got-wrong-and-what-shipped-2026-09-02)).
 An expected failure turns the suite red the day it starts passing, which is
@@ -620,10 +619,10 @@ npm run test:whole-day
 
 **A few minutes end to end**, dominated by the build rather than the spec. The
 spec is 7 tests: three read the day off disk in milliseconds, and four are
-browser arms. The spread between two runs of one tree is the shared box rather
+browser cases. The spread between two runs of one tree is the shared box rather
 than the widths, which is why the build figure can nearly double. Which day it
 looks at is derived and never written down: the committed day staging the most
-drawings. Take this arm before `build:canary`, which overwrites the same
+drawings. Run it before `build:canary`, which overwrites the same
 `build/` directory.
 
 **It runs in CI, in a job of its own, and the numbers say why it is not part of

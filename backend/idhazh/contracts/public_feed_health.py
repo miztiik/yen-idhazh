@@ -40,18 +40,8 @@ class PublicFeedRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-09",
-            change=(
-                "Initial shape: the feed, the run, the outcome, what it yielded and "
-                "what robots said, with endpoint_key refused at import."
-            ),
-            why=(
-                "The console reads state/feed-health/ at build time and inlines the "
-                "result, so the ledger's shape reached a reader with no contract and "
-                "no version stamp (Guardrail #3). Naming it before a producer exists is "
-                "what stops the producer and the consumer inventing two different "
-                "lists. detail is kept because it is our own sentence and the panel "
-                "prints it; endpoint_key is refused because it is the address."
-            ),
+            change="Initial shape: the feed, the run, the outcome and what it yielded.",
+            why="The console inlined this at build time with no declared shape behind it.",
         ),
     )
 

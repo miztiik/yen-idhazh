@@ -1,6 +1,6 @@
 """The evidence one model qualification leaves behind.
 
-A qualification runs one model. There is no incumbent arm and no paired replay:
+A qualification runs one model. There is no incumbent case and no paired replay:
 the owner ruled on 2026-08-26 that the candidate is judged alone, and Andre
 ruled that re-basing the dropped comparisons on the committed 8B history would
 be confounded - those rows span two run-days, the articles differ every day, and
@@ -161,30 +161,44 @@ class CorpusItem(Model):
 
 
 class ItemObservation(Model):
-    """One inference call: one corpus item at one repeat.
+    """One corpus item at one repeat, as the run's own call path produced it.
 
-    Every call is recorded, including the ones that failed. A failure that
+    Every attempt is recorded, including the ones that failed. A failure that
     vanishes from the record takes the denominator with it, and the success rate
     then describes the survivors rather than the run.
+
+    **A row is one item and not one call, and `QualificationShard.calls_per_item`
+    is what says how many calls are behind it.** On the path that makes two,
+    every column here is the item's answer over the pair: a budget either call
+    hit cuts the item, a reasoning channel either call opened is a channel the
+    item used, and the token counts are the pair's sum. Reading a two-call row
+    as a single call halves the cost and reports a decode as clean when the
+    first of its two was truncated.
     """
 
     item_id: ItemId
     repeat: int = Field(ge=1)
     ok: bool
     failure_code: str | None = None
-    finish_reason: str = Field(min_length=1)
+    finish_reason: str = Field(
+        min_length=1,
+        description=(
+            "How the decode ended. Over a pair, `length` where either call met its "
+            "budget, because an item cut anywhere is a cut item."
+        ),
+    )
     reasoning_channel_used: bool = Field(
-        description="The runtime split a reasoning channel off the content."
+        description="The runtime split a reasoning channel off the content, in any call."
     )
     think_block_words: int = Field(
-        ge=0, description="Words inside inline `<think>` blocks. Any is a leak."
+        ge=0, description="Words inside inline `<think>` blocks, summed. Any is a leak."
     )
     schema_valid: bool
     repaired: bool = Field(description="A second attempt was needed. The gate allows none.")
     output_digest: Sha256
     summary_word_count: int = Field(ge=0)
     prompt_tokens: int = Field(
-        ge=0, description="The complete chat-templated request, as counted by the runtime."
+        ge=0, description="The complete rendered request, as counted by the runtime."
     )
     completion_tokens: int = Field(ge=0)
     fits_context_predicted: bool = Field(
@@ -260,62 +274,29 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T23:30",
+            change="Added calls_per_item, defaulting to 1.",
+            why="Qualification can now run the call path the digest runs, which calls twice.",
+        ),
+        ChangelogEntry(
+            version="2026-09-14T04:00",
+            change="inputs gains turn_markers_sha256, optional.",
+            why="The turn envelope is a control, so a verdict has to record which one it ran.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
-            why=(
-                "`inputs` beside it records the same facts by name and no writer has built "
-                "a stamp since 2026-09-12. A shard is a workflow artifact uploaded by one "
-                "qualification job and merged by the next; none is committed, so the shape "
-                "moves with no payload of it on disk."
-            ),
+            change="Removed pipeline_fingerprint.",
+            why="`inputs` beside it records the same controls by name.",
         ),
         ChangelogEntry(
             version="2026-09-12T21:00",
-            change=(
-                "A shard and a report carry `inputs`, the recorded input manifest, and "
-                "pipeline_fingerprint is optional on both."
-            ),
-            why=(
-                "A qualification run stamped its controls so two candidates could be shown "
-                "to have run under one pipeline. The stamp stopped being built, so the "
-                "field is recorded when a caller has one and absent otherwise."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-27",
-            change="Added optional failure_code and failure_detail to CanaryObservation.",
-            why=(
-                "A canary that never replied and a canary whose reply carried the attack "
-                "both landed as `replied: false` with nothing to tell them apart, so a "
-                "blank reply was read as a sanitizer breach. Both fields are nullable, so "
-                "a shard written before today still validates."
-            ),
+            change="A shard and a report carry `inputs`, the recorded input manifest.",
+            why="Two candidates are only comparable when the run records what it held still.",
         ),
         ChangelogEntry(
             version="2026-08-26",
-            change="Initial shape: the frozen corpus, every call, every score and the canaries.",
-            why=(
-                "Row #10 qualifies one model on absolute gates, so the evidence a shard "
-                "hands the decider is a persisted contract rather than a log line."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -325,6 +306,17 @@ class QualificationShard(Contract):
     shard: int = Field(ge=0)
     shards: int = Field(ge=1)
     repeats: int = Field(ge=1)
+    calls_per_item: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Inference calls behind one observation. 1 is the qualification's own "
+            "single call; 2 is the path the digest runs, which labels the article and "
+            "then summarizes it. Recorded because it decides what every per-item "
+            "number in this shard means, and two shards that disagree on it are not "
+            "comparable."
+        ),
+    )
     candidate: CandidateIdentity
     scorer: ScorerIdentity
     inputs: PipelineInputs | None = Field(
@@ -356,34 +348,97 @@ class QualificationShard(Contract):
         return self
 
 
+class SummarySample(Model):
+    """One summary as a person would read it, beside the two numbers that judged it.
+
+    Self-contained on purpose. A reviewer opening this file to ask whether a
+    score is believable should not have to join it against the shard to learn
+    whether the item was a brief or a long read, or open a third file to find
+    the address that would settle a claim.
+    """
+
+    item_id: ItemId
+    title: UntrustedLine | None = Field(
+        default=None, description="Null where the drafted title missed its range and was dropped."
+    )
+    summary: str = Field(min_length=1, description="The writing under judgement. Our text.")
+    source_url: Url = Field(description="The only way to check a claim.")
+    band_index: int = Field(ge=0, description="Which length tier the extracted article fell in.")
+    truncated: bool = Field(
+        description="The same words are good or bad depending on how much was shown."
+    )
+    hhem: float = Field(ge=0.0, le=1.0)
+    compression: float = Field(ge=0.0)
+
+
+class QualificationSamples(Contract):
+    """The writing one shard produced, for a person to read.
+
+    **Nothing here reaches a gate, and nothing here reaches a reader of the
+    site.** `QualificationReport` does not embed it and no scorer opens it: a
+    gate that learned to read this would be a gate reading text it also scored.
+    It is uploaded as its own artifact and thrown away with it, never committed
+    and never written under `frontend/public/`.
+
+    Why it exists at all: a qualification run recorded what the writing measured
+    and never the writing. `output_digest` says two runs wrote the same words
+    and cannot say whether the words were any good, and `ItemScore` is eleven
+    floats over text nobody kept. Andre's ruling, 2026-09-15: what qualification
+    measured was everything except the writing.
+
+    **This is our summary, not the publisher's text.** Section 0a bans
+    republishing an article body to a reader; the article is still only hashed,
+    and the prompt that contains it is still behind its own flag. What is here
+    is the model's output.
+
+    Two objections, recorded rather than resolved. A human reading these is a
+    selector nobody logs, and somebody sorting by faithfulness, reading ten and
+    quietly re-running is re-rolling the corpus by hand - which the frozen
+    corpus exists to stop. And seven fields is a taste panel with no rubric, no
+    second rater and no agreement number; it will be cited as evidence and it is
+    not.
+    """
+
+    __schema_stem__: ClassVar[str] = "qualification-samples"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T21:00",
+            change="Initial shape: one row per scored item, carrying the title and the summary.",
+            why="A verdict quoting only an average cannot be traced back to the item that set it.",
+        ),
+    )
+
+    date: DateStamp
+    shard: int = Field(ge=0)
+    candidate: CandidateIdentity
+    samples: list[SummarySample] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _the_worst_is_first(self) -> Self:
+        scores = [sample.hhem for sample in self.samples]
+        if scores != sorted(scores):
+            raise ValueError("samples are read worst-first, so they are stored worst-first")
+        return self
+
+
 class QualificationReport(Contract):
     """The merged verdict: every gate, every diagnostic, one answer."""
-
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14T04:00",
+            change="inputs gains turn_markers_sha256, optional.",
+            why="The verdict records the same controls the shard beside it does.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:00",
-            change=(
-                "Added inputs, the recorded input manifest, and removed "
-                "pipeline_fingerprint. BREAKING, and nothing to migrate."
-            ),
-            why=(
-                "Both halves land in one entry because the first was never stamped. "
-                "`inputs` and the relaxed stamp arrived here on 2026-09-12 with this "
-                "changelog left at 2026-08-26, so the generated schema has been reporting "
-                "a shape older than itself - found and corrected 2026-09-13 (CLAUDE.md "
-                "section 11). Removing the stamp is breaking and owes no read-side "
-                "migration: a report is a workflow artifact merged from shards in the job "
-                "that wrote them, and none is committed."
-            ),
+            change="Added inputs, the recorded input manifest, and removed pipeline_fingerprint.",
+            why="Both halves land in one entry because the first was never stamped.",
         ),
         ChangelogEntry(
             version="2026-08-26",
             change="Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
-            why=(
-                "An adoption gate that reports a pass without the number that produced it "
-                "cannot be re-read six months later (Guardrail #10)."
-            ),
+            why="An adoption gate reporting a pass without its numbers cannot be re-checked.",
         ),
     )
 

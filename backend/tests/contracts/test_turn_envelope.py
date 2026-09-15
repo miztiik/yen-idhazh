@@ -11,7 +11,7 @@ from conftest import CONFIG_DIR, REPO_ROOT
 from pydantic import ValidationError
 
 from idhazh import config
-from idhazh.contracts.app_config import ModelEntry, ModelRef, ModelsConfig
+from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse
 
 from ._envelope import (
@@ -56,7 +56,7 @@ def test_an_entry_with_no_turn_envelope_at_all_is_refused() -> None:
 
 @pytest.mark.parametrize("marker", ["turn_closing", "reply_opening", "reply_opening_thinking"])
 def test_an_empty_marker_is_refused(marker: str) -> None:
-    """`continued_prompt` splices call 2 onto `turn_closing`.
+    """`continued_prompt` splices the summarize-and-plan call onto `turn_closing`.
 
     An empty seam joins two turns into one, the grammar still answers, and the
     prefix the two-call design rests on is gone with nothing to read it off.
@@ -72,7 +72,7 @@ def test_a_turn_opening_that_names_no_role_is_refused(opening: str) -> None:
     """A substitution over a string that names nothing returns it unchanged.
 
     Every turn then renders with no role header, the prompt is still
-    syntactically fine, and no reader downstream can tell. The second arm is the
+    syntactically fine, and no reader downstream can tell. The second case is the
     renamed placeholder, which raises at the first render rather than at load -
     late, and in the middle of a shard.
     """

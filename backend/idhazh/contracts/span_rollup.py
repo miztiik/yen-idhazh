@@ -65,39 +65,13 @@ class SpanRollupRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-06T15:00",
-            change=(
-                "Add `unattributed_ms`, an optional whole-millisecond count carried on the "
-                "`item` row only: the shard's wall clock minus the time inside its item "
-                "spans. Null on the other four rows and on every row written before this."
-            ),
-            why=(
-                "The rollup could say how long each step took but not whether the steps "
-                "added up to the shard's wall clock, so time could go missing between "
-                "items - model load, file writes, scheduling - and nothing caught it. This "
-                "makes the reconciliation self-checking: item.total_ms plus "
-                "unattributed_ms is the shard's wall clock, and the fold refuses a set of "
-                "spans that claims more time than the shard had. It rides on the `item` "
-                "row because item is the shard's top-level span and the one row every "
-                "rollup already carries; optional and null-by-default so a row an earlier "
-                "run wrote still validates."
-            ),
+            change="Add `unattributed_ms`, an optional whole-millisecond count.",
+            why="The rollup said how long each step took, never whether the steps added up.",
         ),
         ChangelogEntry(
             version="2026-09-06",
-            change=(
-                "Initial shape: one row per (date, run_id, shard, span_name), carrying "
-                "the span count and the summed duration for one of the five committed "
-                "spans."
-            ),
-            why=(
-                "Contracts before logic - the fold and the ledger are written against a "
-                "fixed row. The row carries a count and a total and nothing else, because "
-                "every other cut of a span's timing is already a ledger column and a "
-                "second account of a number a ledger holds is what this row exists not to "
-                "be. It commits five span names and not the eleven the tracer opens, for "
-                "the same reason: the other six each have a column that already times "
-                "them."
-            ),
+            change="Initial shape: one row per date, run, shard and span name.",
+            why="Contracts before logic - the fold and the ledger need a fixed row first.",
         ),
     )
 

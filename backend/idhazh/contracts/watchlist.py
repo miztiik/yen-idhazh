@@ -22,7 +22,7 @@ from typing import Annotated, ClassVar, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url
+from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url, records_json
 from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceTier
 
 Cik = Annotated[str, StringConstraints(pattern=r"^[0-9]{10}$")]
@@ -112,27 +112,13 @@ class Watchlist(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-08-31",
-            change=(
-                "EntityDef gained kind, so an entry can be a subject and not only "
-                "an organisation."
-            ),
-            why=(
-                "A running story - a pandemic, a tournament, an export-control regime - "
-                "has no SEC filer id and no feed of its own, and the registry described "
-                "itself as a list of named organisations, so nothing could hold one. The "
-                "field defaults to organisation, which is what all 30 committed entries "
-                "are, so the change is additive and no payload needs a migration."
-            ),
+            change="EntityDef gained kind, so an entry can be a subject and not only an outfit.",
+            why="A running story is a subject a reader follows, and nothing could name one.",
         ),
         ChangelogEntry(
             version="2026-08-26",
             change="Stated the match rule on EntityDef.aliases.",
-            why=(
-                "The field was declared on day one and read nowhere, so entities were "
-                "empty on every committed item and the watchlist ranking bonus had never "
-                "moved a score. The rule is now written where the terms live. "
-                "Description-only, so no payload changes and none needs a migration."
-            ),
+            why="The field was declared on day one and read nowhere, so entities were empty.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -143,6 +129,14 @@ class Watchlist(Contract):
 
     entities: list[EntityDef]
     edgar: EdgarPolicy = Field(default_factory=EdgarPolicy)
+
+    def to_json(self) -> str:
+        """One entity a line - see `records_json`.
+
+        Same reason `config/sources.json` has: a person curates it, and an
+        alias list is read against the display name it belongs to.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     def entity_terms(self) -> dict[str, list[str]]:
         """The entity match surface. A retired entity keeps its tombstone and stops matching."""

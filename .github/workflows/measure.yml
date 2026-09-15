@@ -18,27 +18,14 @@ on:
           - corpus
           - batched
           - budgets
-      # One candidate, typed once, and every arm below reads the answer the
-      # `models` job published rather than repeating the fallback. Leave them
-      # empty and the bench measures the model config already names, which is
-      # how the arm is checked against the page it is supposed to reproduce.
-      candidate_repo:
-        description: 'Hugging Face repository. Empty benches the configured model.'
-        default: ''
-      candidate_revision:
-        description: 'The 40-character commit those weights were uploaded in'
-        default: ''
-      candidate_file:
-        description: 'Weights filename inside that repository'
-        default: ''
-      candidate_sha256:
-        description: 'The digest those bytes must have, or the bench refuses them'
-        default: ''
-      candidate_id:
-        description: 'The alias the server answers to'
-        default: ''
-      candidate_quantisation:
-        description: 'The quantisation those bytes carry, for example Q4_K_M'
+      # ONE argument names the candidate, and it is the same line a swap moves:
+      # the models file. Every fact about a candidate is already written there,
+      # and a form that asked for them again could bench one set of bytes while
+      # the adoption pointed at another. Leave it empty and the bench measures
+      # the model config already names, which is how the case is checked against
+      # the page it is supposed to reproduce.
+      candidate_models_file:
+        description: 'Models file under config/, for example models/qwen3.5-9b-q4km.json. Empty benches the configured model.'
         default: ''
       threads:
         description: 'Comma-separated llama-bench thread counts, for example 4,8'
@@ -62,6 +49,10 @@ on:
           - threads
           - threads_batch
           - np2_inflight
+          - no_draft
+      runtime_repeats:
+        description: 'Repeats per case. A named candidate runs two cases, so 3 does not fit the job timeout - use 2'
+        default: '3'
       runtime_threads:
         description: 'Value for --threads when runtime_candidate is threads'
         default: '8'
@@ -83,7 +74,7 @@ env:
   # and validate.yml make. The runtime job starts its own server from an inline
   # python block rather than through `.github/scripts/start-llama-server.sh`,
   # because it sweeps a setting and needs the process handle - but it reads the
-  # port from here, so no arm of this repository spells the number twice
+  # port from here, so no part of this repository spells the number twice
   # (Guardrail #6).
   LLAMA_PORT: '8080'
 
@@ -98,7 +89,7 @@ jobs:
   # one file and finishes in seconds.
   #
   # It is also where the candidate is decided: the dispatch input where one was
-  # given, the configured model otherwise. One place, so the two arms of the
+  # given, the configured model otherwise. One place, so the two cases of the
   # bench cannot disagree about which bytes they measured.
   models:
     runs-on: ubuntu-latest
@@ -111,25 +102,28 @@ jobs:
       candidate_revision: ${{ steps.models.outputs.candidate_revision }}
       candidate_file: ${{ steps.models.outputs.candidate_file }}
       candidate_sha256: ${{ steps.models.outputs.candidate_sha256 }}
+      candidate_byte_count: ${{ steps.models.outputs.candidate_byte_count }}
       candidate_id: ${{ steps.models.outputs.candidate_id }}
       candidate_quantisation: ${{ steps.models.outputs.candidate_quantisation }}
       candidate_ref: ${{ steps.models.outputs.candidate_ref }}
+      candidate_models_file: ${{ steps.models.outputs.candidate_models_file }}
+      candidate_draft_repo: ${{ steps.models.outputs.candidate_draft_repo }}
+      candidate_draft_revision: ${{ steps.models.outputs.candidate_draft_revision }}
+      candidate_draft_file: ${{ steps.models.outputs.candidate_draft_file }}
+      candidate_draft_sha256: ${{ steps.models.outputs.candidate_draft_sha256 }}
+      candidate_cache_key: ${{ steps.models.outputs.candidate_cache_key }}
     steps:
       - uses: actions/checkout@v6
 
       # Each value is asserted to be one bare word at the one point that writes
       # them, so an expression that substitutes one into a shell command below
-      # cannot carry a space, a quote or a newline into it. The inputs arrive
+      # cannot carry a space, a quote or a newline into it. The input arrives
       # through `env` for the same reason: a value pasted into this program
-      # would be text before it was a value.
+      # would be text before it was a value. It becomes a FILE PATH, so it is
+      # resolved and proved to sit inside `config/` before anything opens it.
       - id: models
         env:
-          CANDIDATE_REPO: ${{ inputs.candidate_repo }}
-          CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
-          CANDIDATE_FILE: ${{ inputs.candidate_file }}
-          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
-          CANDIDATE_ID: ${{ inputs.candidate_id }}
-          CANDIDATE_QUANTISATION: ${{ inputs.candidate_quantisation }}
+          CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
@@ -137,6 +131,7 @@ jobs:
           import os
           import pathlib
 
+          root = pathlib.Path("config").resolve()
           config = json.load(open("config/idhazh.json", encoding="utf-8"))
           models_file = pathlib.Path("config") / config["models_file"]
           models = json.load(open(models_file, encoding="utf-8"))
@@ -146,27 +141,64 @@ jobs:
                   if value.split() != [value]:
                       raise SystemExit(f"models.{role}.{field} is empty or not one word")
                   print(f"{role}_{field}={value}")
-          configured = models["summarize"]
+
+          named = os.environ.get("CANDIDATE_MODELS_FILE", "").strip()
+          candidate_file = named or config["models_file"]
+          if candidate_file.split() != [candidate_file]:
+              raise SystemExit("candidate_models_file is not one bare word")
+          path = (root / candidate_file).resolve()
+          if not path.is_relative_to(root) or path.suffix != ".json" or not path.is_file():
+              raise SystemExit(f"candidate_models_file is not a models file under config/: {candidate_file}")
+          print(f"candidate_models_file={candidate_file}")
+          entry = json.load(open(path, encoding="utf-8"))["summarize"]
           candidate = {}
           for field in ("repo", "revision", "file", "sha256", "id", "quantisation"):
-              value = os.environ.get(f"CANDIDATE_{field.upper()}", "").strip()
-              value = value or configured.get(field) or ""
+              value = entry.get(field) or ""
               if value.split() != [value]:
-                  raise SystemExit(f"candidate {field} is empty or not one word")
+                  raise SystemExit(f"{candidate_file} summarize.{field} is empty or not one word")
               candidate[field] = value
               print(f"candidate_{field}={value}")
           print(
               "candidate_ref="
               f"{candidate['repo']}@{candidate['revision']}:{candidate['file']}"
           )
+
+          # The entry's own declared size. Empty means the entry declares none,
+          # which is an entry nobody has fetched yet - the check below skips
+          # rather than refuses, exactly as the validation case does.
+          print(f"candidate_byte_count={entry.get('byte_count') or ''}")
+
+          # An entry may name a draft head - a small second model the server
+          # runs ahead of the big one. It is optional, so all four values are
+          # empty when there is none, and each is held to the same one-bare-word
+          # rule as the target because it reaches a shell the same way.
+          draft = entry.get("draft") or {}
+          for field in ("repo", "revision", "file", "sha256"):
+              value = draft.get(field) or ""
+              if draft and value.split() != [value]:
+                  raise SystemExit(
+                      f"{candidate_file} summarize.draft.{field} is empty or not one word"
+                  )
+              print(f"candidate_draft_{field}={value}")
+
+          # The cache holds every file the candidate needs, so the key names
+          # every file's digest. A key that named only the target would serve a
+          # complete-looking entry with the draft head missing, and the server
+          # case would fail to start on a cache hit it could not see into. An
+          # entry with no draft keeps the key it already had, so adding this
+          # does not throw away what earlier runs paid to download.
+          key = candidate["sha256"]
+          if draft:
+              key = f"{key}-{draft['sha256']}"
+          print(f"candidate_cache_key={key}")
           PY
 
-  # The bench, arm one: raw prefill and decode throughput with nothing else in
-  # the process. This is the arm that says whether the weights can move tokens
+  # The bench, case one: raw prefill and decode throughput with nothing else in
+  # the process. This is the case that says whether the weights can move tokens
   # at all, and it is the cheap one - it runs first so a model that cannot clear
-  # the bar never costs the server arm a runner hour.
+  # the bar never costs the server case a runner hour.
   #
-  # It also holds the cache both arms read. The entry is keyed on the candidate
+  # It also holds the cache both cases read. The entry is keyed on the candidate
   # digest rather than its filename, because two builds of one model share a
   # name and a key that cannot tell them apart serves the wrong weights under
   # the right alias.
@@ -211,7 +243,7 @@ jobs:
             df -h / /mnt 2>/dev/null | sed -n '1,4p'
           } | tee backend/var/hardware.txt
 
-      # Keyed on the candidate bytes, and shared with the server arm below. One
+      # Keyed on the candidate bytes, and shared with the server case below. One
       # model per entry, so the cache never holds two multi-gigabyte sets of
       # weights at once (Guardrail #2).
       - name: Cache the candidate weights and runtime
@@ -221,7 +253,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
 
       # The measurement runtime is immutable even while production still
       # follows the latest compatible release. A candidate and an incumbent
@@ -253,6 +285,40 @@ jobs:
           SRC=$(dirname "$(find llama -type f -name 'llama-bench' | head -1)")
           cp -a "$SRC"/. backend/bin/
 
+      # llama-bench never runs a draft head, so this case does not measure one.
+      # It fetches it anyway, because it fills the cache the server case reads:
+      # an entry saved here without the draft is a hit there with a file
+      # missing, and the server exits at load rather than at fetch. The bytes
+      # are tens of megabytes against multi-gigabyte weights.
+      - name: Fetch the draft head
+        if: >-
+          steps.weights.outputs.cache-hit != 'true'
+          && needs.models.outputs.candidate_draft_file != ''
+        env:
+          DRAFT_REPO: ${{ needs.models.outputs.candidate_draft_repo }}
+          DRAFT_REVISION: ${{ needs.models.outputs.candidate_draft_revision }}
+          DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+          DRAFT_SHA256: ${{ needs.models.outputs.candidate_draft_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/models
+          curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
+            "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
+
+      # No `if:`, for the usual reason: a restored entry is the one case where
+      # nobody watched the bytes arrive. It matters more here than anywhere,
+      # because this case never runs the draft head - the only thing standing
+      # between a corrupt cached copy and the server case is this line.
+      - name: Verify the draft head
+        env:
+          DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${{ needs.models.outputs.candidate_draft_sha256 }}  backend/models/${DRAFT_FILE}" \
+              | sha256sum --check
+          fi
+
       # No `if:`. A restored entry is the one case where nobody watched the
       # bytes arrive, so this runs on a cache hit too and the hardware record
       # names the binary either way (Guardrail #10).
@@ -273,7 +339,7 @@ jobs:
 
       # The bench refuses any bytes but the declared ones, so every number it
       # writes is about a model somebody can fetch again (Guardrail #10). It
-      # also writes the raw half of the dossier body the server arm finishes.
+      # also writes the raw half of the dossier body the server case finishes.
       - name: Benchmark the candidate
         env:
           CANDIDATE_REF: ${{ needs.models.outputs.candidate_ref }}
@@ -302,7 +368,7 @@ jobs:
             --quantisation "$CANDIDATE_QUANTISATION" \
             --threads "$THREAD_COUNTS" \
             --binary "$LLAMA_BIN/llama-bench" \
-            --readings backend/var/bench/raw-arm.json
+            --readings backend/var/bench/raw-case.json
 
       # Ninety days, not seven. A dossier is pasted from these numbers weeks
       # after the dispatch that read them, and an artifact that expired is a
@@ -393,11 +459,11 @@ jobs:
           name: bench-corpus
           path: backend/var/corpus.json
 
-  # The bench, arm two: a real llama-server, real fetches, real summaries. Raw
+  # The bench, case two: a real llama-server, real fetches, real summaries. Raw
   # throughput says what the weights can do; this says what a shard of the daily
   # run costs, which is the number the job budget is spent against.
   #
-  # It needs the raw arm rather than running beside it, for two reasons. The
+  # It needs the raw case rather than running beside it, for two reasons. The
   # weights cache is already warm, so this job downloads nothing. And the emit
   # step at the end needs both halves in one place to write the page body.
   runtime:
@@ -412,6 +478,10 @@ jobs:
       CANDIDATE_SHA256: ${{ needs.models.outputs.candidate_sha256 }}
       CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
       CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
+      DRAFT_REPO: ${{ needs.models.outputs.candidate_draft_repo }}
+      DRAFT_REVISION: ${{ needs.models.outputs.candidate_draft_revision }}
+      DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+      DRAFT_SHA256: ${{ needs.models.outputs.candidate_draft_sha256 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -444,7 +514,7 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # The same key the raw arm wrote, so this job restores what that job
+      # The same key the raw case wrote, so this job restores what that job
       # already paid for. A miss here is a second download of the same bytes,
       # and download seconds are wall-clock seconds exactly like compute is.
       - name: Restore the candidate weights and runtime
@@ -454,7 +524,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
 
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
@@ -478,16 +548,34 @@ jobs:
           cp -a "$SRC"/. backend/bin/
           curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${CANDIDATE_FILE}" \
             "https://huggingface.co/${CANDIDATE_REPO}/resolve/${CANDIDATE_REVISION}/${CANDIDATE_FILE}?download=true"
+          if [ -n "${DRAFT_FILE}" ]; then
+            curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
+              "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
+          fi
 
       # A throughput number is about a model only if it names the bytes that
       # produced it (Guardrail #10). No `if:`, because a restored cache entry is
-      # the one case where nobody watched the bytes arrive.
+      # the one case where nobody watched the bytes arrive. The draft head is
+      # checked on the same terms: the server loads it, so it is part of what
+      # the number is about.
       - name: Verify the weights
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
           echo "${{ needs.models.outputs.candidate_sha256 }}  backend/models/${CANDIDATE_FILE}" \
             | sha256sum --check
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
+          fi
+          OBSERVED=$(stat -c %s "backend/models/${CANDIDATE_FILE}")
+          # The entry's own declared size, cross-checking the DOCUMENT rather
+          # than the file - sha256 above already settles the bytes. Empty means
+          # the entry declares none, which is an entry nobody has fetched yet.
+          DECLARED="${{ needs.models.outputs.candidate_byte_count }}"
+          if [ -n "$DECLARED" ] && [ "$OBSERVED" != "$DECLARED" ]; then
+            echo "candidate is ${OBSERVED} bytes; its entry declares ${DECLARED}" >&2
+            exit 1
+          fi
 
       - name: Record input identity
         env:
@@ -502,44 +590,20 @@ jobs:
             echo "model_revision=${CANDIDATE_REVISION}"
             stat -c 'model_bytes=%s' "backend/models/${CANDIDATE_FILE}"
             sha256sum "backend/models/${CANDIDATE_FILE}"
+            if [ -n "${DRAFT_FILE}" ]; then
+              echo "draft_repo=${DRAFT_REPO}"
+              echo "draft_revision=${DRAFT_REVISION}"
+              stat -c 'draft_bytes=%s' "backend/models/${DRAFT_FILE}"
+              sha256sum "backend/models/${DRAFT_FILE}"
+            fi
           } | tee backend/var/runtime-sweep/cache-state.txt
 
-      # The committed config still names the incumbent, and a bench does not
-      # edit it. The scratch copy differs in the ACTIVE MODEL FILE and nothing
-      # else, so every control the run holds fixed - prompt, schema, sampler,
-      # context, threads, truncation cap - is the committed one by construction.
-      # The pointer is left alone and the file it names is rewritten, so a
-      # candidate is benched through the same one line a swap would later move.
+      # Why the copy differs in one line and nothing else is written down once,
+      # in the action.
       - name: Build the candidate config
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var
-          rm -rf backend/var/candidate-config
-          cp -a config backend/var/candidate-config
-          python - <<'PY'
-          import json, os, pathlib
-          root = pathlib.Path("backend/var/candidate-config")
-          pointer = json.loads((root / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
-          path = root / pointer
-          models = json.loads(path.read_text(encoding="utf-8"))
-          entry = dict(models["summarize"])
-          inference = dict(entry["inference"])
-          inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          turns = dict(entry["turns"])
-          turns["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          entry.update({
-              "file": os.environ["CANDIDATE_FILE"],
-              "id": os.environ["CANDIDATE_ID"],
-              "inference": inference,
-              "quantisation": os.environ["CANDIDATE_QUANTISATION"],
-              "repo": os.environ["CANDIDATE_REPO"],
-              "revision": os.environ["CANDIDATE_REVISION"],
-              "sha256": os.environ["CANDIDATE_SHA256"],
-              "turns": turns,
-          })
-          models["summarize"] = entry
-          path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          PY
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ needs.models.outputs.candidate_models_file }}
 
       - name: Build fixed five-article corpus
         run: |
@@ -575,6 +639,7 @@ jobs:
       - name: Measure runtime candidate
         env:
           RUNTIME_CANDIDATE: ${{ inputs.runtime_candidate }}
+          RUNTIME_REPEATS: ${{ inputs.runtime_repeats }}
           RUNTIME_THREADS: ${{ inputs.runtime_threads }}
           RUNTIME_THREADS_BATCH: ${{ inputs.runtime_threads_batch }}
           # Whether the weights were already on the machine decides what the
@@ -584,6 +649,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
+          import hashlib
           import json
           import os
           import re
@@ -594,10 +660,11 @@ jobs:
           import threading
           import time
           import urllib.request
+          from collections import Counter
           from pathlib import Path
 
           from idhazh import config
-          from idhazh.contracts.app_config import ModelsConfig
+          from idhazh.contracts.knobs.models import ModelsConfig
           from idhazh.llm.server import server_argv
 
           CANDIDATE = os.environ["RUNTIME_CANDIDATE"]
@@ -606,16 +673,23 @@ jobs:
           CONFIG_ROOT = ROOT / "configs"
           CANDIDATE_CONFIG = Path("backend/var/candidate-config")
           CANDIDATE_FILE = os.environ["CANDIDATE_FILE"]
+          CANDIDATE_ID = os.environ["CANDIDATE_ID"]
           THREADS = int(os.environ["RUNTIME_THREADS"])
           THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
           MAX_THREADS = 2 * (os.cpu_count() or 1)
-          REPEATS = 3
+          REPEATS = int(os.environ["RUNTIME_REPEATS"])
           SERVER_PORT = int(os.environ["LLAMA_PORT"])
 
           if not 1 <= THREADS <= MAX_THREADS:
               raise SystemExit(f"runtime_threads must be in 1..{MAX_THREADS}")
           if not 1 <= THREADS_BATCH <= MAX_THREADS:
               raise SystemExit(f"runtime_threads_batch must be in 1..{MAX_THREADS}")
+          # Two, because a spread needs two readings and this guard exists to stop
+          # a dispatch that cannot produce one. The ceiling is the job timeout
+          # rather than taste: a named candidate runs two cases, and one repeat of
+          # five articles has taken over an hour on every machine measured so far.
+          if REPEATS < 2:
+              raise SystemExit("runtime_repeats must be at least 2 - one reading has no spread")
 
           def candidate_update(name):
               if name == "baseline":
@@ -640,6 +714,13 @@ jobs:
                   return {"n_threads_batch": THREADS_BATCH}, 1
               if name == "np2_inflight":
                   return {"n_parallel": 2, "n_ctx": 16384}, 2
+              if name == "no_draft":
+                  # The only candidate that reaches outside `inference`.
+                  # `write_config` lifts it, and a model file declaring no draft
+                  # head answers the question this candidate exists for: what the
+                  # head is worth, measured on ONE machine instead of across two
+                  # dispatches.
+                  return {"draft": None}, 1
               raise SystemExit(f"unknown runtime candidate: {name}")
 
           def write_config(label, update):
@@ -655,7 +736,16 @@ jobs:
               )["models_file"]
               path = dst / pointer
               payload = json.loads(path.read_text(encoding="utf-8"))
-              payload["summarize"]["inference"].update(update)
+              inference = dict(update)
+              # `draft` is a sibling of `inference` rather than a knob inside it,
+              # so a candidate that changes the draft head reaches one level up.
+              # Lifting it here leaves every other candidate's patch exactly what
+              # it was. Written through `update` rather than indexed, because an
+              # entry declaring no draft head has no such key and this is the
+              # one line allowed to create one.
+              if "draft" in inference:
+                  payload["summarize"].update({"draft": inference.pop("draft")})
+              payload["summarize"]["inference"].update(inference)
               path.write_text(ModelsConfig.model_validate(payload).to_json(), encoding="utf-8")
               return dst
 
@@ -688,6 +778,24 @@ jobs:
                       pass
                   time.sleep(5)
               raise RuntimeError("llama-server never became healthy")
+
+          def assert_the_candidate_is_serving():
+              """Healthy says a server replied. It does not say which weights replied.
+
+              Every number this job reports is filed under the candidate's id, so a
+              server answering under any other alias makes the whole run a
+              measurement of something else with the candidate's name on it
+              (Guardrail #10). The validation case has asked this since it was
+              written; this case did not, and that is the drift.
+              """
+              with urllib.request.urlopen(
+                  f"http://127.0.0.1:{SERVER_PORT}/v1/models", timeout=5
+              ) as response:
+                  served = json.load(response)["data"][0]["id"]
+              if served != CANDIDATE_ID:
+                  raise RuntimeError(
+                      f"the server answers to {served}, not {CANDIDATE_ID}"
+                  )
 
           def parse_server_facts(log_path):
               text = log_path.read_text(encoding="utf-8", errors="replace")
@@ -770,6 +878,7 @@ jobs:
                   sampler.start()
                   try:
                       wait_for_health()
+                      assert_the_candidate_is_serving()
                       startup_ms = int((time.perf_counter() - t0) * 1000)
                       work_started = time.perf_counter()
                       commands = []
@@ -840,21 +949,59 @@ jobs:
                       f"total_ms={result['total_ms']}"
                   )
 
-          digest_sets = {}
-          for result in results:
-              digest_sets.setdefault(result["label"], []).append(result["digests"])
+          def input_key(result):
+              return json.dumps(result["sources"], sort_keys=True)
+
+          # Which repeats read the same five articles.
+          #
+          # Every repeat refetches, and a publisher editing a page inside a
+          # multi-hour job is ordinary rather than unlucky - on 2026-09-15 it
+          # happened to two of five articles on both of two dispatches. A repeat
+          # that summarized different text may not sit in the same median as one
+          # that did not, and that is what this guard is for.
+          #
+          # What it may NOT do is throw the job away. Until today any drift at
+          # all raised, which discarded three complete repeats to protect a
+          # comparison that two of them could still have made - and did, byte for
+          # byte. So the largest agreeing set is what gets timed, the rest are
+          # named, and the run is refused only when what is left cannot carry a
+          # spread.
+          counted = Counter(input_key(result) for result in results)
+          agreed, _ = counted.most_common(1)[0]
+          comparable = [result for result in results if input_key(result) == agreed]
+          drifted = [result for result in results if input_key(result) != agreed]
+
           verdict = "passed"
           problems = []
-          expected_sources = results[0]["sources"]
-          for result in results[1:]:
-              if result["sources"] != expected_sources:
-                  verdict = "rejected_input_drift"
-                  problems.append({
-                      "label": result["label"],
-                      "repeat": result["repeat"],
-                      "expected_sources": expected_sources,
-                      "actual_sources": result["sources"],
-                  })
+          expected_sources = comparable[0]["sources"]
+          for result in drifted:
+              problems.append({
+                  "why": "input_drift_dropped",
+                  "label": result["label"],
+                  "repeat": result["repeat"],
+                  "expected_sources": expected_sources,
+                  "actual_sources": result["sources"],
+              })
+          thin = sorted(
+              label
+              for label in labels
+              if sum(1 for result in comparable if result["label"] == label) < 2
+          )
+          if thin:
+              verdict = "rejected_input_drift"
+              problems.append({
+                  "why": "too_few_agreeing_repeats",
+                  "labels": thin,
+                  "kept": len(comparable),
+                  "ran": len(results),
+              })
+
+          # Output drift is only a question about identical inputs. Asking it
+          # across the drifted repeats would report the publisher's edit as the
+          # model being nondeterministic, which names the wrong cause.
+          digest_sets = {}
+          for result in comparable:
+              digest_sets.setdefault(result["label"], []).append(result["digests"])
           for label, maps in digest_sets.items():
               first = maps[0]
               for index, current in enumerate(maps[1:], start=2):
@@ -862,7 +1009,7 @@ jobs:
                       if verdict == "passed":
                           verdict = "rejected_output_drift"
                       problems.append({"label": label, "repeat": index, "expected": first, "actual": current})
-          if CANDIDATE != "baseline":
+          if CANDIDATE != "baseline" and not thin:
               if digest_sets[CANDIDATE][0] != digest_sets["baseline"][0]:
                   if verdict == "passed":
                       verdict = "rejected_output_drift"
@@ -873,23 +1020,29 @@ jobs:
                   })
 
           def stats(label, key):
-              values = [result[key] for result in results if result["label"] == label]
+              values = [result[key] for result in comparable if result["label"] == label]
               return {
                   "values": values,
                   "median": statistics.median(values),
                   "spread": max(values) - min(values),
               }
 
-          timing = {
-              label: {
-                  "startup_ms": stats(label, "startup_ms"),
-                  "work_ms": stats(label, "work_ms"),
-                  "total_ms": stats(label, "total_ms"),
-                  "model_path_ms": stats(label, "model_path_ms"),
+          # No timing when a label kept fewer than two agreeing repeats. The
+          # summary is still written, because the problems above are what a
+          # person needs to see, and a median over one reading would read like a
+          # measurement (Guardrail #10).
+          timing = {}
+          if not thin:
+              timing = {
+                  label: {
+                      "startup_ms": stats(label, "startup_ms"),
+                      "work_ms": stats(label, "work_ms"),
+                      "total_ms": stats(label, "total_ms"),
+                      "model_path_ms": stats(label, "model_path_ms"),
+                  }
+                  for label in labels
               }
-              for label in labels
-          }
-          if CANDIDATE != "baseline":
+          if CANDIDATE != "baseline" and not thin:
               comparison_key = (
                   "total_ms" if CANDIDATE == "np2_inflight" else "model_path_ms"
               )
@@ -908,6 +1061,11 @@ jobs:
               "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
               "candidate": CANDIDATE,
               "repeats": REPEATS,
+              # What the timing above was actually taken over. It is not
+              # `repeats` whenever a page moved mid-job, and a reader who
+              # assumed it was would be reading a median over a denominator
+              # nobody told them about.
+              "repeats_timed": len(comparable),
               "fixed_corpus": "backend/var/runtime-sweep/plan.json",
               "gguf_cache_hit": os.environ["GGUF_CACHE_HIT"],
               "verdict": verdict,
@@ -926,9 +1084,9 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: bench-raw
-          path: backend/var/raw-arm/
+          path: backend/var/raw-case/
 
-      # The whole point of the arm. Two artifacts of numbers are a
+      # The whole point of the job. Two artifacts of numbers are a
       # transcription job; a page body with the numbers already in it is a
       # paste. This step never writes the committed config and never touches
       # `docs/` - a person reads the emitted page and decides.
@@ -936,7 +1094,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 backend/utilities/measure_llm.py emit \
-            --raw backend/var/raw-arm/bench/raw-arm.json \
+            --raw backend/var/raw-case/bench/raw-case.json \
             --server backend/var/runtime-sweep/runtime-summary.json \
             --corpus 'Five articles' \
             --dossier backend/var/runtime-sweep/dossier.md \
@@ -978,6 +1136,10 @@ jobs:
       CANDIDATE_SHA256: ${{ needs.models.outputs.candidate_sha256 }}
       CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
       CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
+      DRAFT_REPO: ${{ needs.models.outputs.candidate_draft_repo }}
+      DRAFT_REVISION: ${{ needs.models.outputs.candidate_draft_revision }}
+      DRAFT_FILE: ${{ needs.models.outputs.candidate_draft_file }}
+      DRAFT_SHA256: ${{ needs.models.outputs.candidate_draft_sha256 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -990,7 +1152,7 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # The same key the bench arms use, so a dispatch that follows a bench pays
+      # The same key the bench cases use, so a dispatch that follows a bench pays
       # nothing for the weights and one that does not pays once (Guardrail #2).
       - name: Restore the candidate weights and runtime
         id: weights
@@ -999,7 +1161,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
 
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
@@ -1023,6 +1185,10 @@ jobs:
           cp -a "$SRC"/. backend/bin/
           curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${CANDIDATE_FILE}" \
             "https://huggingface.co/${CANDIDATE_REPO}/resolve/${CANDIDATE_REVISION}/${CANDIDATE_FILE}?download=true"
+          if [ -n "${DRAFT_FILE}" ]; then
+            curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
+              "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
+          fi
 
       # A reading is about a vocabulary only if it names the bytes that carry it
       # (Guardrail #10). No `if:`, because a restored cache entry is the one case
@@ -1033,6 +1199,18 @@ jobs:
           chmod +x backend/bin/llama-server
           echo "${{ needs.models.outputs.candidate_sha256 }}  backend/models/${CANDIDATE_FILE}" \
             | sha256sum --check
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
+          fi
+          OBSERVED=$(stat -c %s "backend/models/${CANDIDATE_FILE}")
+          # The entry's own declared size, cross-checking the DOCUMENT rather
+          # than the file - sha256 above already settles the bytes. Empty means
+          # the entry declares none, which is an entry nobody has fetched yet.
+          DECLARED="${{ needs.models.outputs.candidate_byte_count }}"
+          if [ -n "$DECLARED" ] && [ "$OBSERVED" != "$DECLARED" ]; then
+            echo "candidate is ${OBSERVED} bytes; its entry declares ${DECLARED}" >&2
+            exit 1
+          fi
 
       # The committed config still names the incumbent and a measurement does
       # not edit it. The scratch copy differs in the active model file and
@@ -1108,8 +1286,16 @@ jobs:
             tail -50 llama-server.log >&2
             exit 1
           }
+          # Healthy says a server replied. It does not say which weights
+          # replied, and every budget below is filed under this alias
+          # (Guardrail #10).
+          SERVED=$(curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[0].id')
+          if [ "$SERVED" != "${CANDIDATE_ID}" ]; then
+            echo "the server answers to ${SERVED}, not ${CANDIDATE_ID}" >&2
+            exit 1
+          fi
 
-      # The whole point of the arm. Three artifacts of numbers are a
+      # The whole point of the job. Three artifacts of numbers are a
       # transcription job; a block with the numbers already in it is a paste.
       - name: Retake the budgets a vocabulary sizes
         env:

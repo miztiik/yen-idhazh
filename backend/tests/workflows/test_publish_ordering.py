@@ -33,7 +33,7 @@ from ._harness import (
     requires_bash,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 @pytest.mark.parametrize(("filename", "job_name"), VALIDATE_DAYS_JOBS)
@@ -437,7 +437,7 @@ def test_the_plan_queue_guard_reads_a_real_merge_commit(tmp_path: Path) -> None:
     The check is about what a pull request changes, and a pull request is a
     merge commit - so the fixture is one, built twice: once where the branch
     edits the page and once where it does not. A check that read the working
-    tree, or the tip of `main`, would pass both arms.
+    tree, or the tip of `main`, would pass both cases.
     """
     bash = _bash()
     assert bash is not None, "requires_bash admitted a run with no bash"

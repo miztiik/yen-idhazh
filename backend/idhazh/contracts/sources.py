@@ -20,7 +20,7 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url
+from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url, records_json
 from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceKind, SourceTier
 
 
@@ -83,60 +83,28 @@ class Sources(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13T18:00",
-            change=(
-                "A salience feed's description no longer says a vote is worth "
-                "collect.front_page_bonus. No field was added, removed or retyped, so a "
-                "config/sources.json written before this still loads and needs no "
-                "read-side migration."
-            ),
-            why=(
-                "collect.front_page_bonus was removed in the same commit, so the "
-                "sentence named a config key that no longer exists. A vote is now a "
-                "published fact about the item rather than a term of the score, and the "
-                "description says which of the two it is."
-            ),
+            change="A salience feed's description no longer prices a front-page vote.",
+            why="The knob that paid for the vote was removed in the same commit.",
         ),
         ChangelogEntry(
             version="2026-08-23T18:47",
             change="Added feed form with an abstract value.",
-            why=(
-                "A reader must be told when the summary is of an abstract, but detecting "
-                "that from page text would turn a stranger's words into control data. The "
-                "form is declared per feed instead."
-            ),
+            why="A reader must be told when the summary is of an abstract and not an article.",
         ),
         ChangelogEntry(
             version="2026-08-22T10:00",
             change="Split retired feeds out of feeds into their own list.",
-            why=(
-                "A retired feed sat in the list Collect loops, so it cost a request every "
-                "run and its articles still reached a reader - the retirement was recorded "
-                "and not honoured. Two lists make the live one lean and the rule structural "
-                "rather than a filter every caller has to remember."
-            ),
+            why="A retired feed sat in the list Collect loops, so it cost a request every run.",
         ),
         ChangelogEntry(
             version="2026-08-22T09:00",
             change="Removed weight from a salience feed.",
-            why=(
-                "Nothing read it. A vote is worth collect.front_page_bonus - one number "
-                "for every aggregator - so a per-feed weight was a knob that looked "
-                "tunable and moved nothing."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-21T06:00",
-            change="Added kind to a feed.",
-            why=(
-                "A company announcing its own product and a reporter measuring it arrived "
-                "looking identical. Reader named this as the one thing an item lacked "
-                "before they would share it."
-            ),
+            why="Nothing read it.",
         ),
         ChangelogEntry(
             version="2026-08-21",
-            change="Initial shape: per-vertical feeds plus a separate salience list.",
-            why="Contracts before logic - Collect is written against a fixed source shape.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -160,6 +128,15 @@ class Sources(Contract):
         which is the one thing `kind` exists to prevent.
         """
         return [*self.feeds, *self.retired]
+
+    def to_json(self) -> str:
+        """One feed a line - see `records_json`.
+
+        A person curates this file and a reviewer reads the diff, and a feed's
+        fields only mean anything together: the id says nothing without the
+        vertical, the tier nothing without the title.
+        """
+        return records_json(self.model_dump(mode="json"))
 
     @model_validator(mode="after")
     def _each_list_holds_what_it_says(self) -> Self:

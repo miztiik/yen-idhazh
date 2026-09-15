@@ -11,14 +11,17 @@ from typing import Any, Final
 import pytest
 
 from idhazh import config
-from idhazh.classify.calls import build_call_one_request
-from idhazh.contracts.app_config import AppConfig, ElementsConfig, InferenceConfig, ModelRef
+from idhazh.classify.calls import build_label_request
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_output_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.inference import InferenceConfig
+from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
@@ -219,13 +222,13 @@ class RecordedEndpoint:
 
     More than one body replays them in a cycle, which is what lets a caller that
     makes a fixed number of calls per item be driven over several items: two
-    bodies answer call 1 and call 2, then call 1 again. `served` is the POST
+    bodies answer the label call and the summarize-and-plan call, then the label call again. `served` is the POST
     count, so a test can assert the pair rather than infer it from what came
     back - and an item that sent one call where the cycle expects two shows up
     there rather than as a reply that will not parse three items later.
 
     `sent` is every request body, in the order they arrived. A cycle of replies
-    cannot tell a caller that ran call 1 three times from one that alternated,
+    cannot tell a caller that ran the label call three times from one that alternated,
     because both read the same bytes back; the requests can, which is what makes
     the item-major rule assertable rather than readable.
     """
@@ -293,8 +296,8 @@ class RecordedEndpoint:
         self._thread.join(timeout=5.0)
 
 
-CALL_ONE_REPLIES = FIXTURES_DIR / "completions" / "call-one"
-CALL_TWO_REPLIES = FIXTURES_DIR / "completions" / "call-two"
+LABEL_REPLIES = FIXTURES_DIR / "completions" / "label"
+SUMMARIZE_AND_PLAN_REPLIES = FIXTURES_DIR / "completions" / "summarize-and-plan"
 
 
 def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> ElementTable:
@@ -309,9 +312,9 @@ def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> Ele
     return element_table(article, config=ElementsConfig(max_per_article=cap))
 
 
-def call_one_payload(article: Article) -> dict[str, Any]:
+def label_payload(article: Article) -> dict[str, Any]:
     entry = config.load(CONFIG_DIR).models.summarize
-    return build_call_one_request(
+    return build_label_request(
         article,
         a_table(article),
         model_id="m",

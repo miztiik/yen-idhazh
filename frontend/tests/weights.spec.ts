@@ -6,7 +6,7 @@
  * single miss discards the whole set. Without that, the second origin would be
  * a permission for another party to put bytes into a reader's tab.
  *
- * **The arm that matters is the failing one.** A verifier that always answered
+ * **The case that matters is the failing one.** A verifier that always answered
  * "fine" would pass every happy-path test ever written and would defend
  * nothing, so most of this file drives the refusals: a wrong digest, a
  * truncation, a 404, an unreachable host, a deadline. Each one has to end with
@@ -187,7 +187,7 @@ test.describe('a set with anything wrong in it is discarded whole', () => {
 
 	test('no second origin is a refusal and not an empty success', async () => {
 		// `NO_SECOND_ORIGIN` is what every failed config read answers, so this is
-		// the arm that keeps a missing or malformed block from turning into a
+		// the case that keeps a missing or malformed block from turning into a
 		// fetch nobody meant to make.
 		let called = 0;
 		const fetch = (async () => {

@@ -23,12 +23,15 @@
         "http_server_error",
         "network_error",
         "no_text",
+        "no_title",
         "too_short",
         "not_prose",
         "boilerplate",
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "model_refused",
+        "model_timed_out",
         "context_exceeded",
         "output_truncated",
         "labels_truncated",
@@ -36,6 +39,7 @@
         "length_out_of_range",
         "copied_source",
         "leaked_address",
+        "shard_out_of_time",
         "unknown"
       ],
       "title": "FailureCode",
@@ -69,24 +73,29 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "ItemStage gained visual. No row here can carry it.",
-      "version": "2026-09-14T01:30",
-      "why": "The enum is inlined in this schema, so a name added for the event envelope's src becomes legal in this column too. It is unreachable: every row here projects an item-health row, and that census column refuses visual because an item whose picture failed still publishes. The entry exists so the widening is dated rather than inferred from a schema diff."
+      "change": "FailureCode gained model_timed_out and shard_out_of_time.",
+      "version": "2026-09-15T22:10",
+      "why": "Both were being reported under a name that sends an operator to the wrong place."
     },
     {
-      "change": "Added nullable model_calls, call_1_kind and the first call's five cost cells at the end of the row. The second call is the remainder.",
-      "version": "2026-09-12T16:20",
-      "why": "The census records each model call's own cost and this projection kept only the item total, so the console's cache figures were about to stop meaning anything: readWhole counts items whose prompt was read whole, 749 of the 5,197 rows carrying a cache figure on 2026-09-12, and a second call that reuses the first call's prompt takes it to zero for ever with no code change. The first call plus the total is the whole split, because the flat cells are their sum and the arithmetic is exact integers - so the second call is total minus first, and model_calls is what says how many calls that remainder covers rather than letting a third be absorbed in silence. Both calls spelled out would have cost more than the split is worth to a fetch: measured 2026-09-12 on the two committed shards with every timed row populated, twelve cells cost 72.9 and 80.1 percent more gzipped against 35.3 and 40.8 for these seven. Appended at the end and nullable, because the browser reads this header by position. Empty stays empty - a run that recorded no split writes no cell, and a zero in call_1_cached_tokens is the cold-slot measurement."
+      "change": "The failure vocabulary gained model_refused.",
+      "version": "2026-09-15T20:00",
+      "why": "It follows item-health-row, where the vocabulary is declared."
     },
     {
-      "change": "Added nullable fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens and cached_tokens at the end of the row.",
-      "version": "2026-09-05T20:00",
-      "why": "Every run since 2026-08-23 has measured these eight and written them to state/item-health/, and the projection dropped all eight on the way out - so the console could show that a stage failed and never how long the stage took. They are counts and durations of our own work, not the fetched page, so they cross on the same terms source_words always has. Appended at the end and nullable, because the browser reads this header by position: a name inserted anywhere else shifts every column the console already draws. Empty stays empty - an instrument that did not run writes no cell, never a zero, or a stage that was skipped reads as a stage that took no time."
+      "change": "Four columns keep their names and change what they mean.",
+      "version": "2026-09-15T19:40",
+      "why": "Queue wait now sits outside the item total rather than inside it."
     },
     {
-      "change": "Initial shape: the eleven published columns, typed, with canonical_url, url_key and detail refused at import.",
+      "change": "Appended seventeen nullable cells.",
+      "version": "2026-09-15T08:20",
+      "why": "The census records far more columns than this projection was publishing."
+    },
+    {
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-09-02",
-      "why": "The only thing standing between the item-health census and a browser was a tuple of eleven strings in publish_telemetry.py and a set of three more it was checked against. Both are readable code and neither is a contract, so the projection had no schema, no version stamp and no changelog while every other persisted surface has all three (Guardrail #3). Typing it also gives the migration something to read a committed shard back through, which is what proves a published file still loads rather than merely still parses. item_id is the one cell carried as an opaque key: identity is minted by ItemHealthRow, and a published shard has no writer left to re-mint it if that grammar moves."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "One planned item on one run, as the console is allowed to read it.",
@@ -102,87 +111,8 @@
         }
       ],
       "default": null,
-      "description": "Tokens the server answered from its prompt cache rather than reading again, added over every call the row records. Zero is a real answer here and means nothing was cached; empty means the server reported no cache figure at all. Where call_1_cached_tokens is filled, read the cache per call rather than here: a second call reusing the first call's prompt makes this non-zero on every item.",
+      "description": "Tokens the server answered from its prompt cache rather than reading again, added over every call the row records. Zero is a real answer here and means nothing was cached; empty means the server reported no cache figure at all. Where label_cached_tokens is filled, read the cache per call rather than here: a second call reusing the first call's prompt makes this non-zero on every item.",
       "title": "Cached Tokens"
-    },
-    "call_1_cached_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Prompt tokens the first call reused. Zero is the cold-slot answer and is a measurement; empty means no split was published for this row.",
-      "title": "Call 1 Cached Tokens"
-    },
-    "call_1_decode_ms": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 1 Decode Ms"
-    },
-    "call_1_input_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 1 Input Tokens"
-    },
-    "call_1_kind": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/CallKind"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Which call ran first: summarize, visual_plan, label or summarize_and_plan. It moves when the call structure moves, so a step change in these series reads as the design change it is rather than as a regression."
-    },
-    "call_1_output_tokens": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Call 1 Output Tokens"
-    },
-    "call_1_prefill_ms": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Milliseconds the first call spent reading its prompt. A duration and never a rate: a prompt token costs more the deeper into the context it sits, so a per-call tok/s cannot be compared with another call's. The item's blended rate is the one that composes.",
-      "title": "Call 1 Prefill Ms"
     },
     "code": {
       "anyOf": [
@@ -194,6 +124,37 @@
         }
       ],
       "default": null
+    },
+    "cpu_busy_pct": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Mean busy share of every processor over this item. Busy ticks over available ticks across the item, so it is a figure a reader can add up.",
+      "title": "Cpu Busy Pct"
+    },
+    "cpu_model": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The processor the runner reported, verbatim. Constant inside a shard and carried per row anyway, because the shard-grain counters that hold it are read at build time and never published for a browser to join against. It is 32 of the row's raw bytes and 1.54 of its gzipped bytes, so it is the first cell to drop if the published cap ever binds.",
+      "title": "Cpu Model"
     },
     "date": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -227,6 +188,20 @@
       "default": null,
       "description": "Milliseconds spent extracting the body. Empty where extract did not run.",
       "title": "Extract Ms"
+    },
+    "faithfulness_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time of the model-free faithfulness scorers.",
+      "title": "Faithfulness Ms"
     },
     "fetch_ms": {
       "anyOf": [
@@ -262,6 +237,155 @@
       "title": "Item Id",
       "type": "string"
     },
+    "item_total_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the item cost, from the item starting to the item ending with queue_wait_ms taken out. The denominator every stage share on the page is taken against, and the reason the wait is excluded: the stage runs its fetch loop and its model loop in different orders, so the raw clock counts the whole queue ahead of each item and a column summed across a shard reported the shard's own duration once per item.",
+      "title": "Item Total Ms"
+    },
+    "label_cached_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prompt tokens the first call reused. Zero is the cold-slot answer and is a measurement; empty means no split was published for this row.",
+      "title": "Label Cached Tokens"
+    },
+    "label_decode_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Decode Ms"
+    },
+    "label_decode_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Decode throughput of the label call.",
+      "title": "Label Decode Tokens Per S"
+    },
+    "label_input_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Input Tokens"
+    },
+    "label_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which call ran first: summarize, visual_plan, label or summarize_and_plan. It moves when the call structure moves, so a step change in these series reads as the design change it is rather than as a regression."
+    },
+    "label_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time of the label call, prefill and decode together. It is a slice of summarize_ms, never an addition to it.",
+      "title": "Label Ms"
+    },
+    "label_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Output Tokens"
+    },
+    "label_prefill_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Milliseconds the first call spent reading its prompt. A duration and never a rate: a prompt token costs more the deeper into the context it sits, so a per-call tok/s cannot be compared with another call's. The item's blended rate is the one that composes.",
+      "title": "Label Prefill Ms"
+    },
+    "label_prefill_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prefill throughput of the label call, over the tokens the server really evaluated - the input minus whatever the cache already held.",
+      "title": "Label Prefill Tokens Per S"
+    },
+    "load_1m": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "One-minute load average when the item ended.",
+      "title": "Load 1M"
+    },
     "model_calls": {
       "anyOf": [
         {
@@ -275,6 +399,20 @@
       "default": null,
       "description": "How many model calls the cells above add up over. Empty on every row published before 2026-09-12. It is what says whether the remainder - the total minus the first call - is one more call or several.",
       "title": "Model Calls"
+    },
+    "model_wait_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Time the item spent waiting on the model server rather than being served. It is inside summarize_ms, so a rising wait with a flat decode rate is a queue and never a slower model.",
+      "title": "Model Wait Ms"
     },
     "outcome": {
       "$ref": "#/$defs/ItemOutcome"
@@ -306,6 +444,20 @@
       "default": null,
       "description": "Milliseconds of that spent reading the prompt. Reading and writing run at different rates, so summarize_ms alone cannot separate them.",
       "title": "Prefill Ms"
+    },
+    "queue_wait_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How long the item waited before its worker started it - its own fetch and extract subtracted, because both are work rather than waiting. It sits outside item_total_ms rather than inside it.",
+      "title": "Queue Wait Ms"
     },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
@@ -347,6 +499,19 @@
     "stage": {
       "$ref": "#/$defs/ItemStage"
     },
+    "stage_gap_ms": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "item_total_ms minus every named stage. **This is the one cell that can catch a regression in a step nobody named**, which is why it is published rather than derived by a reader who would have to know the list. It is signed on purpose: a negative value means two named stages overlapped, or two clocks disagreed, and clamping it to zero would hide exactly that.",
+      "title": "Stage Gap Ms"
+    },
     "summarize_ms": {
       "anyOf": [
         {
@@ -360,6 +525,126 @@
       "default": null,
       "description": "Milliseconds the summarizer held the item, prompt and summary together. Empty where summarize did not run.",
       "title": "Summarize Ms"
+    },
+    "summary_cached_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Cached Tokens"
+    },
+    "summary_decode_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Decode Ms"
+    },
+    "summary_decode_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Decode throughput of the summarize-and-plan call.",
+      "title": "Summary Decode Tokens Per S"
+    },
+    "summary_input_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Input Tokens"
+    },
+    "summary_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which call ran second, or empty where the item made one call. The pair of kinds is what lets a reader see a two-call item as two calls rather than inferring it from a subtraction."
+    },
+    "summary_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time of the summarize-and-plan call, prefill and decode together. The other slice of summarize_ms.",
+      "title": "Summary Ms"
+    },
+    "summary_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Output Tokens"
+    },
+    "summary_prefill_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Milliseconds the second call spent reading its prompt. Small on a warm slot, because that prompt is the first call's prompt extended and the server answers the shared head from its cache.",
+      "title": "Summary Prefill Ms"
+    },
+    "summary_prefill_tokens_per_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prefill throughput of the summarize-and-plan call, over the tokens the server really evaluated. A warm slot answers almost the whole prompt from the cache, and that shows up in summary_cache_pct rather than here: this cell is about the machine, so counting the skipped tokens as work would make a cache hit read as a fast server.",
+      "title": "Summary Prefill Tokens Per S"
     },
     "summary_words": {
       "anyOf": [
@@ -375,7 +660,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-14T01:30",
+      "default": "2026-09-15T22:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -384,6 +669,47 @@
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "title": "Vertical",
       "type": "string"
+    },
+    "visual_plan_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall time attributed to producing the visual plan. The plan is decoded inside the summarize-and-plan call, so this is a share of summary_ms and not a clock of its own - visual_plan_ms_is_estimate says which.",
+      "title": "Visual Plan Ms"
+    },
+    "visual_plan_ms_is_estimate": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "True where visual_plan_ms was apportioned out of the second call rather than timed on its own. An estimate that does not say it is one is the failure this column exists to prevent (Guardrail #10), and a page drawing the plan's share has to be able to mark it.",
+      "title": "Visual Plan Ms Is Estimate"
+    },
+    "visual_plan_tokens_written": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Output tokens of the second call that belong to the visual plan rather than to the summary. Empty where the run asked for no plan.",
+      "title": "Visual Plan Tokens Written"
     }
   },
   "required": [
@@ -397,5 +723,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-14T01:30"
+  "version": "2026-09-15T22:10"
 }

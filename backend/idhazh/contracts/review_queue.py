@@ -26,11 +26,11 @@ exist is a workflow artifact a week old, and a re-run rebuilds it. So a shape
 change here owes a re-run, never a read-side migration.
 
 **Three populations, because three have a producer.** A fourth - a second
-configuration's render of the same day, the config-B arm - is named by the plan
+configuration's render of the same day, the config-B case - is named by the plan
 that asked for this surface and nothing in this build can produce one. A member
 for it would be a word nobody can write, nobody can retire and nobody can tell
 from a bug, which is the rule `NoneReason` already states for the same reason.
-It arrives with the row that builds the second arm.
+It arrives with the row that builds the second case.
 
 Every text field here is untrusted (Guardrail #11). It came off the open web or out
 of a model, it is bounded by `UntrustedLine`, and the renderer escapes it on the
@@ -145,19 +145,8 @@ class ReviewQueue(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-13",
-            change=(
-                "Initial shape: the three populations that have a producer, one row an "
-                "item, and a census carrying each population's true size beside the "
-                "number of rows kept."
-            ),
-            why=(
-                "Contracts before logic - the review tree's renderer and the reviewing "
-                "tools that read it back are written against a fixed payload (Guardrail #3). "
-                "The file is gitignored and rebuilt by a re-run, and it is a contract for "
-                "the reason EvidenceItem is one: it is written on a runner and read on a "
-                "reviewer's machine, so the reader has to be able to refuse a queue it "
-                "cannot trust."
-            ),
+            change="Initial shape: the three populations that have a producer, one row an item.",
+            why="Contracts before logic - the review tree's renderer and the reviewing tools.",
         ),
     )
 

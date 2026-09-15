@@ -1,7 +1,7 @@
 """Bench one candidate model and emit the dossier page body its numbers fill.
 
 Three verbs. `bench` downloads exact GGUF files and runs one local llama-bench
-build over them. `emit` folds that arm together with the server arm's runtime
+build over them. `emit` folds that case together with the server case's runtime
 sweep and writes the model dossier's body, numbers already in place. `compare`
 reads two emitted reading sets and says whether the second reproduces the first
 inside the spread each one declares.
@@ -429,7 +429,7 @@ class BenchReadings:
     def merge(self, other: BenchReadings) -> BenchReadings:
         clash = set(self.readings) & set(other.readings)
         if clash:
-            raise ValueError(f"two arms read the same quantity: {', '.join(sorted(clash))}")
+            raise ValueError(f"two cases read the same quantity: {', '.join(sorted(clash))}")
         return BenchReadings(
             identity={**self.identity, **other.identity},
             context={**self.context, **other.context},
@@ -609,7 +609,7 @@ def server_readings(summary: Mapping[str, Any], *, label: str = "baseline") -> d
     )
     if len(runs) < 2:
         raise ValueError(
-            f"the server arm ran {len(runs)} repeat(s) of {label!r}; under two, "
+            f"the server case ran {len(runs)} repeat(s) of {label!r}; under two, "
             "a cold start cannot be told from a warm one"
         )
 
@@ -712,7 +712,7 @@ def render_dossier(readings: BenchReadings) -> str:
         "",
         "**Status: measured, not adopted.** Every number below was read by one "
         f"dispatch of the bench on {day}. Nothing here says the model is good enough "
-        "to publish with - that is the qualification arm, and it runs separately.",
+        "to publish with - that is the qualification case, and it runs separately.",
         "",
         "## Identity",
         "",
@@ -768,7 +768,7 @@ def render_dossier(readings: BenchReadings) -> str:
             "",
             "The bench reads throughput, memory and wall-clock. It does not grade a "
             "summary and it does not decide whether this model publishes. Paste the "
-            "qualification verdict and the licence row in from the validation arm "
+            "qualification verdict and the licence row in from the validation case "
             "before this page stands for an adopted model.",
             "",
         ]
@@ -874,12 +874,14 @@ def parse_args() -> argparse.Namespace:
     )
     bench.add_argument("--candidate-id", default="", help="The config id these weights serve as")
     bench.add_argument("--quantisation", default="", help="The quantisation these bytes carry")
-    bench.add_argument("--readings", type=Path, default=Path("backend/var/bench/raw-arm.json"))
+    bench.add_argument("--readings", type=Path, default=Path("backend/var/bench/raw-case.json"))
 
-    emit = verbs.add_parser("emit", help="Write the dossier body the two arms fill")
-    emit.add_argument("--raw", type=Path, required=True, help="The raw arm's readings")
-    emit.add_argument("--server", type=Path, required=True, help="The server arm's runtime summary")
-    emit.add_argument("--corpus", default="Five articles", help="What the server arm replayed")
+    emit = verbs.add_parser("emit", help="Write the dossier body the two cases fill")
+    emit.add_argument("--raw", type=Path, required=True, help="The raw case's readings")
+    emit.add_argument(
+        "--server", type=Path, required=True, help="The server case's runtime summary"
+    )
+    emit.add_argument("--corpus", default="Five articles", help="What the server case replayed")
     emit.add_argument("--dossier", type=Path, default=Path("backend/var/bench/dossier.md"))
     emit.add_argument("--readings", type=Path, default=Path("backend/var/bench/readings.json"))
 
@@ -945,7 +947,7 @@ def run_bench(args: argparse.Namespace) -> int:
         check=True,
     )
     if len(refs) == 1:
-        _write_raw_arm(
+        _write_raw_case(
             args,
             ref=refs[0],
             remote=remotes[0],
@@ -957,7 +959,7 @@ def run_bench(args: argparse.Namespace) -> int:
     return 0
 
 
-def _write_raw_arm(
+def _write_raw_case(
     args: argparse.Namespace,
     *,
     ref: ModelRef,
@@ -1012,8 +1014,13 @@ def run_emit(args: argparse.Namespace) -> int:
     summary = json.loads(args.server.read_text(encoding="utf-8"))
     server = BenchReadings(
         identity={},
+        # What the timing was taken over, which is not always what was asked
+        # for. The bench refetches every repeat, and a repeat whose article a
+        # publisher edited mid-job is dropped from the median rather than
+        # failing the run - so the page says the number it was really given
+        # (CLAUDE.md Guardrail #10).
         context={
-            "server_repeats": str(summary.get("repeats") or ""),
+            "server_repeats": str(summary.get("repeats_timed") or summary.get("repeats") or ""),
             "corpus": args.corpus,
         },
         readings=server_readings(summary),

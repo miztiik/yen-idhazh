@@ -26,10 +26,10 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
+from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals import evidence as evidence_writer
 from idhazh.evals import writer as score_writer
 from utilities import grader_length_bias as bias
@@ -76,7 +76,7 @@ def a_ledger(state: Path, rows: list[dict[str, object]]) -> Path:
     Filed by each row's own `date` through `evals.writer.ledger_path`, which is
     what the pipeline files by - a fixture that spelled the layout itself would
     be a second writer, and the two could disagree without either being wrong.
-    An empty ledger still writes one day file, so the no-rows arm reads a store
+    An empty ledger still writes one day file, so the no-rows case reads a store
     that exists and holds nothing rather than a store that is not there.
     """
     names = EvalRow.csv_columns()

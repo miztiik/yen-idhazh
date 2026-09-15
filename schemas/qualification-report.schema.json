@@ -261,6 +261,20 @@
           "minimum": 1,
           "title": "Truncation Cap Tokens",
           "type": "integer"
+        },
+        "turn_markers_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The turn envelope the prompts were rendered through - every marker string, the system placement and its joiner, digested as one. prompt_sha256 already moves when a marker moves, and stops short of two envelope facts that move an output without moving a rendered prompt: which of the two reply openings a call ends on, and the marker the thinking span stops at. Absent means a run written before 2026-09-14, when the markers first became able to move at all. It is never a default value: a substituted digest would say the envelope was recorded and unchanged, which is the one thing an absent key must not be read as.",
+          "title": "Turn Markers Sha256"
         }
       },
       "required": [
@@ -330,14 +344,19 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "Added inputs, the recorded input manifest, and removed pipeline_fingerprint. BREAKING, and nothing to migrate.",
+      "change": "inputs gains turn_markers_sha256, optional.",
+      "version": "2026-09-14T04:00",
+      "why": "The verdict records the same controls the shard beside it does."
+    },
+    {
+      "change": "Added inputs, the recorded input manifest, and removed pipeline_fingerprint.",
       "version": "2026-09-13T22:00",
-      "why": "Both halves land in one entry because the first was never stamped. `inputs` and the relaxed stamp arrived here on 2026-09-12 with this changelog left at 2026-08-26, so the generated schema has been reporting a shape older than itself - found and corrected 2026-09-13 (CLAUDE.md section 11). Removing the stamp is breaking and owes no read-side migration: a report is a workflow artifact merged from shards in the job that wrote them, and none is committed."
+      "why": "Both halves land in one entry because the first was never stamped."
     },
     {
       "change": "Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
       "version": "2026-08-26",
-      "why": "An adoption gate that reports a pass without the number that produced it cannot be re-read six months later (Guardrail #10)."
+      "why": "An adoption gate reporting a pass without its numbers cannot be re-checked."
     }
   ],
   "description": "The merged verdict: every gate, every diagnostic, one answer.",
@@ -426,7 +445,7 @@
       "$ref": "#/$defs/ScorerIdentity"
     },
     "version": {
-      "default": "2026-09-13T22:00",
+      "default": "2026-09-14T04:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -449,5 +468,5 @@
   ],
   "title": "QualificationReport",
   "type": "object",
-  "version": "2026-09-13T22:00"
+  "version": "2026-09-14T04:00"
 }

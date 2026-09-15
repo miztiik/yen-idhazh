@@ -3,7 +3,7 @@ name: Model validation
 # Row #10: qualify one candidate summarizer on absolute machine gates.
 #
 # One model runs. The owner ruled on 2026-08-26 that the candidate is judged
-# alone, so there is no incumbent arm, no paired replay and no second set of
+# alone, so there is no incumbent case, no paired replay and no second set of
 # weights on this runner. Andre ruled the consequence: re-basing the dropped
 # comparisons on the committed 8B history would be confounded, so the gates
 # that survived read their thresholds from config, from the adoption target in
@@ -21,33 +21,21 @@ name: Model validation
 on:
   workflow_dispatch:
     inputs:
-      # Every candidate field is empty by default and falls back to the model
-      # `config/idhazh.json` names, so no model ref is written in this file
-      # (Guardrail #6). A dispatch that leaves them empty re-qualifies the incumbent,
-      # which is a coherent run rather than a broken one. Qualifying a NEW model
-      # means filling them in; the values for the model under adoption are in
-      # docs/reference/measurements.md, which is where a target is declared.
-      candidate_repo:
-        description: 'Hugging Face GGUF repository. Empty = the configured summarizer.'
+      # ONE argument names the candidate, and it is the same one line a swap
+      # moves: the models file. Everything about a candidate - the repository,
+      # the commit, the GGUF filename, its digest, its byte count, the alias it
+      # answers to, the quantisation - is already written in that file, and a
+      # form that asked for them again was a second copy of six facts that could
+      # disagree with the first. It could bench one set of bytes and adopt
+      # another, and nothing here would have noticed.
+      #
+      # Empty falls back to the pointer in `config/idhazh.json`, so a dispatch
+      # that fills nothing in re-qualifies the incumbent - a coherent run rather
+      # than a broken one, and no model ref is written in this file
+      # (Guardrail #6).
+      candidate_models_file:
+        description: 'Models file under config/, for example models/qwen3.5-9b-q4km.json. Empty = the configured one.'
         default: ''
-      candidate_revision:
-        description: 'Immutable repository revision. A branch name is not a pin.'
-        default: ''
-      candidate_file:
-        description: 'GGUF filename. Empty = the configured summarizer.'
-        default: ''
-      candidate_id:
-        description: 'Model id the summaries and the ledger will carry'
-        default: ''
-      candidate_quantisation:
-        description: 'Quantisation the ledger will carry'
-        default: ''
-      candidate_sha256:
-        description: 'SHA-256 the adoption target declares for those bytes'
-        default: ''
-      candidate_bytes:
-        description: 'Byte count the adoption target declares. 0 = it declares none.'
-        default: '0'
       shards:
         description: 'Capture-and-replay jobs. Each one freezes its own slice.'
         default: '3'
@@ -89,12 +77,19 @@ jobs:
     outputs:
       date: ${{ steps.decide.outputs.date }}
       matrix: ${{ steps.fanout.outputs.matrix }}
+      candidate_models_file: ${{ steps.candidate.outputs.models_file }}
       candidate_repo: ${{ steps.candidate.outputs.repo }}
       candidate_revision: ${{ steps.candidate.outputs.revision }}
       candidate_file: ${{ steps.candidate.outputs.file }}
       candidate_id: ${{ steps.candidate.outputs.id }}
       candidate_quantisation: ${{ steps.candidate.outputs.quantisation }}
       candidate_sha256: ${{ steps.candidate.outputs.sha256 }}
+      candidate_byte_count: ${{ steps.candidate.outputs.byte_count }}
+      candidate_draft_repo: ${{ steps.candidate.outputs.draft_repo }}
+      candidate_draft_revision: ${{ steps.candidate.outputs.draft_revision }}
+      candidate_draft_file: ${{ steps.candidate.outputs.draft_file }}
+      candidate_draft_sha256: ${{ steps.candidate.outputs.draft_sha256 }}
+      candidate_cache_key: ${{ steps.candidate.outputs.cache_key }}
     steps:
       - uses: actions/checkout@v6
 
@@ -110,54 +105,81 @@ jobs:
       - id: decide
         run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
-      # One place decides what the candidate is: the dispatch input where one
-      # was given, `models.summarize` from config otherwise. Every job below
+      # One place decides what the candidate is: the models file the dispatch
+      # named, the pointer in `config/idhazh.json` otherwise. Every job below
       # reads the answer from here rather than repeating that fallback at each
       # use site, which is what keeps the two from disagreeing.
       #
-      # The inputs arrive through `env` and not through an expression pasted
-      # into the program, and each value is asserted to be one bare word here -
-      # downstream they are substituted straight into shell commands and into a
-      # download URL, and nothing after this point can catch a value carrying a
-      # space, a quote or a newline.
+      # The input arrives through `env` and not through an expression pasted
+      # into the program, because a value pasted into a script is text before it
+      # is a value. It becomes a FILE PATH, so it is resolved and proved to sit
+      # inside `config/` before anything opens it - `..` in a form field is the
+      # whole reason this is a containment check and not a name check
+      # (CLAUDE.md section 4). The fields it publishes are substituted straight
+      # into shell commands and into a download URL downstream, and nothing
+      # after this point can catch a value carrying a space, a quote or a
+      # newline - so each one is asserted to be one bare word here.
       - id: candidate
         env:
-          CANDIDATE_REPO: ${{ inputs.candidate_repo }}
-          CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
-          CANDIDATE_FILE: ${{ inputs.candidate_file }}
-          CANDIDATE_ID: ${{ inputs.candidate_id }}
-          CANDIDATE_QUANTISATION: ${{ inputs.candidate_quantisation }}
-          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os, pathlib
 
+          root = pathlib.Path("config").resolve()
           config = json.load(open("config/idhazh.json", encoding="utf-8"))
-          models = json.load(
-              open(pathlib.Path("config") / config["models_file"], encoding="utf-8")
-          )
-          configured = models["summarize"]
+          named = os.environ.get("CANDIDATE_MODELS_FILE", "").strip()
+          models_file = named or config["models_file"]
+          if models_file.split() != [models_file]:
+              raise SystemExit("candidate_models_file is not one bare word")
+          path = (root / models_file).resolve()
+          if not path.is_relative_to(root) or path.suffix != ".json" or not path.is_file():
+              raise SystemExit(f"candidate_models_file is not a models file under config/: {models_file}")
+          models = json.load(open(path, encoding="utf-8"))
+          print(f"models_file={models_file}")
           for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
-              value = os.environ.get(f"CANDIDATE_{field.upper()}", "").strip()
-              value = value or configured.get(field) or ""
+              value = models["summarize"].get(field) or ""
               if value.split() != [value]:
-                  raise SystemExit(f"candidate {field} is empty or not one word")
+                  raise SystemExit(f"{models_file} summarize.{field} is empty or not one word")
               print(f"{field}={value}")
+          # Optional, so an entry nobody has fetched yet publishes the empty
+          # string and the check below is skipped rather than passed.
+          print(f"byte_count={models['summarize'].get('byte_count') or ''}")
+
+          # The draft head, or four empty strings where the entry declares none.
+          # It is held to the same one-bare-word rule as the target because it
+          # reaches a shell and a download URL the same way, and a declared head
+          # with a missing digest is refused rather than fetched unchecked.
+          draft = models["summarize"].get("draft") or {}
+          for field in ("repo", "revision", "file", "sha256"):
+              value = draft.get(field) or ""
+              if draft and value.split() != [value]:
+                  raise SystemExit(
+                      f"{models_file} summarize.draft.{field} is empty or not one word"
+                  )
+              print(f"draft_{field}={value}")
+
+          # The cache holds every file the candidate needs, so the key names
+          # every file's digest. An entry with no draft keeps the key it already
+          # had, so this does not throw away what earlier runs paid to download.
+          key = models["summarize"]["sha256"]
+          if draft:
+              key = f"{key}-{draft['sha256']}"
+          print(f"cache_key={key}")
           PY
 
       # Every number this dispatch carries, shaped once, here. `plan` is the job
       # every other job needs, so "before its first use" is anywhere after this
-      # step - the qualify matrix, the job bound, the byte check and the gate
-      # all read these afterwards. They arrive through `env` and are read by
-      # name, so nothing below is pasted into a command.
+      # step - the qualify matrix, the job bound and the gate all read these
+      # afterwards. They arrive through `env` and are read by name, so nothing
+      # below is pasted into a command.
       - id: fanout
         env:
           SHARDS: ${{ inputs.shards }}
           CORPUS_PER_SHARD: ${{ inputs.corpus_per_shard }}
           REPEATS: ${{ inputs.repeats }}
           JOB_BUDGET_MINUTES: ${{ inputs.job_budget_minutes }}
-          CANDIDATE_BYTES: ${{ inputs.candidate_bytes }}
         run: |
           set -euo pipefail
           if ! [[ "$SHARDS" =~ ^[1-8]$ ]]; then
@@ -170,11 +192,6 @@ jobs:
               exit 1
             fi
           done
-          # 0 is the documented value for "the adoption target declares none".
-          if ! [[ "$CANDIDATE_BYTES" =~ ^[0-9]{1,15}$ ]]; then
-            echo "candidate_bytes is a byte count, or 0 when the target declares none" >&2
-            exit 1
-          fi
           echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
       # The addresses only. A plan carries URLs and rank metadata, never an
@@ -214,56 +231,15 @@ jobs:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
-      # The committed config still names the incumbent, and an experiment does
-      # not edit it. The scratch copy differs in the ACTIVE MODEL FILE and
-      # nothing else, so every control the gates hold fixed - prompt, schema,
-      # sampler, context, threads, truncation cap - is the committed one by
-      # construction. The pointer is left alone and the file it names is
-      # rewritten, so a candidate is qualified through the same one line a swap
-      # would later move.
-      #
-      # Both of the incumbent's declared blocks travel onto the candidate entry
-      # and both `declared_for` values become the candidate's digest: this run
-      # is what puts those numbers in front of these weights, and `context_fit`
-      # is what then says whether they held. Written out rather than inherited,
-      # because an inherited block is the thing this repository stopped
-      # allowing - and `turns` has no default, so a candidate built without it
-      # is a config that cannot load.
+      # Why the copy differs in one line and nothing else is written down once,
+      # in the action. What it means HERE is the part worth repeating: move that
+      # line and you have run the swap; move it back and you have run the
+      # revert, so a candidate is qualified through the exact line an adoption
+      # would later touch.
       - name: Build the candidate config
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var
-          rm -rf backend/var/candidate-config
-          cp -a config backend/var/candidate-config
-          python - <<'PY'
-          import json, os, pathlib
-          root = pathlib.Path("backend/var/candidate-config")
-          pointer = json.loads((root / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
-          path = root / pointer
-          models = json.loads(path.read_text(encoding="utf-8"))
-          inference = dict(models["summarize"]["inference"])
-          inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          turns = dict(models["summarize"]["turns"])
-          turns["declared_for"] = os.environ["CANDIDATE_SHA256"]
-          models["summarize"] = {
-              "file": os.environ["CANDIDATE_FILE"],
-              "id": os.environ["CANDIDATE_ID"],
-              "inference": inference,
-              "quantisation": os.environ["CANDIDATE_QUANT"],
-              "repo": os.environ["CANDIDATE_REPO"],
-              "revision": os.environ["CANDIDATE_REVISION"],
-              "sha256": os.environ["CANDIDATE_SHA256"],
-              "turns": turns,
-          }
-          path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          PY
-        env:
-          CANDIDATE_FILE: ${{ needs.plan.outputs.candidate_file }}
-          CANDIDATE_ID: ${{ needs.plan.outputs.candidate_id }}
-          CANDIDATE_QUANT: ${{ needs.plan.outputs.candidate_quantisation }}
-          CANDIDATE_REPO: ${{ needs.plan.outputs.candidate_repo }}
-          CANDIDATE_REVISION: ${{ needs.plan.outputs.candidate_revision }}
-          CANDIDATE_SHA256: ${{ needs.plan.outputs.candidate_sha256 }}
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ needs.plan.outputs.candidate_models_file }}
 
       # Keyed on the candidate bytes, not on its filename: two builds of one
       # model share a name, and a key that cannot tell them apart serves the
@@ -276,12 +252,15 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: qualify-${{ needs.plan.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: qualify-${{ needs.plan.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
 
       - name: Fetch the runtime and the candidate
         if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRAFT_REPO: ${{ needs.plan.outputs.candidate_draft_repo }}
+          DRAFT_REVISION: ${{ needs.plan.outputs.candidate_draft_revision }}
+          DRAFT_FILE: ${{ needs.plan.outputs.candidate_draft_file }}
         run: |
           set -euo pipefail
           mkdir -p backend/bin backend/models
@@ -307,24 +286,36 @@ jobs:
           curl -fsSL --retry 3 --retry-all-errors \
             -o "backend/models/${{ needs.plan.outputs.candidate_file }}" \
             "https://huggingface.co/${{ needs.plan.outputs.candidate_repo }}/resolve/${{ needs.plan.outputs.candidate_revision }}/${{ needs.plan.outputs.candidate_file }}?download=true"
+          # The draft head, when the entry declares one. The server loads it at
+          # start-up, so a candidate that declares one and cannot find it does
+          # not serve at all.
+          if [ -n "${DRAFT_FILE}" ]; then
+            curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
+              "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
+          fi
 
       # No `if:`. This runs on a cache hit too, because a restored entry is the
       # one case where nobody watched the bytes arrive. It sits before the
       # server starts, so wrong weights cost one step instead of a whole shard
       # of measurements filed under a model that never ran (Guardrail #10).
       - name: Verify the candidate bytes
+        env:
+          DRAFT_FILE: ${{ needs.plan.outputs.candidate_draft_file }}
+          DRAFT_SHA256: ${{ needs.plan.outputs.candidate_draft_sha256 }}
         run: |
           set -euo pipefail
           WEIGHTS="backend/models/${{ needs.plan.outputs.candidate_file }}"
           echo "${{ needs.plan.outputs.candidate_sha256 }}  ${WEIGHTS}" | sha256sum --check
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
+          fi
           OBSERVED=$(stat -c %s "$WEIGHTS")
-          # A byte count the target declares is a cross-check of the DOCUMENT,
-          # not of the file - sha256 above already settles the bytes. Zero means
-          # no target declares one, which is what a dispatch that qualifies the
-          # configured model gets.
-          if [ "${{ inputs.candidate_bytes }}" != "0" ] \
-            && [ "$OBSERVED" != "${{ inputs.candidate_bytes }}" ]; then
-            echo "candidate is ${OBSERVED} bytes; the target declares ${{ inputs.candidate_bytes }}" >&2
+          # The entry's own declared size, cross-checking the DOCUMENT rather
+          # than the file - sha256 above already settles the bytes. Empty means
+          # the entry declares none, which is an entry nobody has fetched yet.
+          DECLARED="${{ needs.plan.outputs.candidate_byte_count }}"
+          if [ -n "$DECLARED" ] && [ "$OBSERVED" != "$DECLARED" ]; then
+            echo "candidate is ${OBSERVED} bytes; its entry declares ${DECLARED}" >&2
             exit 1
           fi
 
@@ -337,7 +328,7 @@ jobs:
           mkdir -p backend/var
           # The scratch config's `models.summarize` IS the candidate, so the
           # alias and every flag come from the same place the run is judged
-          # against. This arm used to render the flag list from a second copy,
+          # against. This step used to render the flag list from a second copy,
           # which is how it went two changes without the context-shift refusal
           # the daily run has had since PR #88.
           python - <<'PY' > backend/var/llama-argv
@@ -399,11 +390,16 @@ jobs:
             --shards "${{ fromJSON(inputs.shards) }}" \
             --repeats "${{ fromJSON(inputs.repeats) }}" \
             --corpus-per-shard "${{ fromJSON(inputs.corpus_per_shard) }}" \
-            --candidate-revision "${{ needs.plan.outputs.candidate_revision }}" \
-            --candidate-bytes "${{ fromJSON(inputs.candidate_bytes) }}" \
             --weights "backend/models/${{ needs.plan.outputs.candidate_file }}" \
             --commit "${GITHUB_SHA}" \
             --runner ubuntu-latest
+
+      # `if: always()` buys the record of a bad shard. A run that died mid-way
+      # is exactly the one whose counts a reader wants, and the stage writes
+      # this file before it returns.
+      - name: What this shard measured
+        if: always()
+        run: cat backend/var/qualification/shard-${{ matrix.shard }}.md >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Runtime log on failure
         if: failure()
@@ -417,6 +413,16 @@ jobs:
         with:
           name: qualification-${{ matrix.shard }}
           path: backend/var/qualification/shard-*.json
+          retention-days: 30
+
+      # Our own summaries, so a person can read the writing the scores judged.
+      # Its own artifact rather than a field on the shard, because a gate must
+      # not learn to read it. Still no article body: the source is a link
+      # (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qualification-samples-${{ matrix.shard }}
+          path: backend/var/qualification/samples-*.json
           retention-days: 30
 
   decide:
@@ -455,6 +461,13 @@ jobs:
             --date "${{ needs.plan.outputs.date }}" \
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
+
+      # The eleven gates, failures first. `if: always()` because the step above
+      # exits non-zero on an ESCALATE, and that is precisely the verdict a
+      # reader opened this page for.
+      - name: The verdict
+        if: always()
+        run: cat backend/var/qualification/report.md >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Commit the validation ledger
         env:

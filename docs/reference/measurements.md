@@ -1,7 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 Every number this project's design rests on, with the date it was taken and the
 spread. Guardrail #10 in one page: **an unmeasured number is labelled an estimate and
 may not be used to justify a design.**
@@ -29,7 +28,7 @@ first reading which model a row was about - and a figure that needs that is a
 figure Guardrail #10's one-current-reading rule cannot check.
 
 **A benchmark run does not get appended to this page.** A run that sweeps a
-setting, prices a candidate or races two arms is written up as its own record
+setting, prices a candidate or races two cases is written up as its own record
 under `docs/reference/benchmarks/`, named for what it measured and nothing else
 - a re-run replaces that record rather than adding a second one. This page then
 carries **the one figure that is now in force** and a link to the record behind
@@ -71,13 +70,13 @@ Three rules govern this page:
  look a record up at the moment it is declared.
  `idhazh.measured.SIZED_BY_A_READING_HERE` pairs each site with the reading
  that sized it, which is what makes the `subject` visible to a gate even where
- the constant is not. **All three name weights this repository retired on
- 2026-08-27 and none has been retaken**;
- `python backend/utilities/measure_budgets.py check` says so and exits 1, and
+ the constant is not. **All three were retaken against the configured weights on
+ 2026-09-14 and all three name them**;
+ `python backend/utilities/measure_budgets.py check` is what says so, and it
+ exits 1 naming any constant whose subject has drifted -
  `measure_budgets.py read` retakes them from a running server's own
- `/tokenize`. Row #13b of
- [`../../TODO/20260913-28-model-swap-plan.md`](../../TODO/20260913-28-model-swap-plan.md)
- is where they land.
+ `/tokenize`. After a swap it is red until the new readings are pasted in, which
+ is the point of it.
 
 **This page holds the reading, never the decision.** The value in force lives in
 `config/idhazh.json` and the rule that acts on it lives in the doc it impacts,
@@ -149,7 +148,7 @@ The screen is deterministic and no model reads anything: a total and two to five
 parts in the same unit, adding up within 0.5 percent, every part above zero and
 below the total, all of them inside 600 characters, and one of the article's own
 joining words between the first and the last. **What it cannot do is tell a
-stated composition from a numeric coincidence.** Its own null arm - every value
+stated composition from a numeric coincidence.** Its own null case - every value
 re-dealt at random within its unit, every position and every joining word left
 where it was - still finds 14 articles, 0.97 percent, and that null under-states
 chance rather than estimating it. Three figures are quoted together here and
@@ -180,18 +179,44 @@ that often would be drawing a circle out of three unrelated market indices.
 
 **A 90-day sight window opens 4 files and reads 312,048 rows at month grain, and
 91 files and 286,832 rows at day grain** - 87 more file handles for 25,216 fewer
-rows, 8.1 percent of what the month arm reads. The wall clock does not separate
-them: the day arm's median was 99.1 ms faster, 3.5 percent, against spreads of
-638.7 and 499.3 ms. CPython 3.14.2, 9 interleaved passes an arm, over a built
+rows, 8.1 percent of what the month case reads. The wall clock does not separate
+them: the day case's median was 99.1 ms faster, 3.5 percent, against spreads of
+638.7 and 499.3 ms. CPython 3.14.2, 9 interleaved passes a case, over a built
 120-day ledger of 3,152 rows a day.
 
 The milliseconds are a developer-machine reading and an order-of-magnitude check
 by the rule above, so they name the box that took them: **Intel Core i7-1265U,
 Windows 11 build 26200**. The two counts are arithmetic and travel, so they name
-only the interpreter. The full record - conditions, method, both arms, and what
+only the interpreter. The full record - conditions, method, both cases, and what
 it does not settle - is
 [benchmarks/day-window-read.md](benchmarks/day-window-read.md).
 Re-run it with `python backend/utilities/measure_day_window.py`.
+
+## What the test suite spends its time on, 2026-09-14
+
+**Four-fifths of the suite's time comes from 185 of its 3,407 timed tests - one
+test in nineteen** - and half of it from 46. A fifth of the tests carry 95
+percent, so a pass over the top 200 is the whole of the available win.
+
+The shares travel; the seconds do not. The run was taken on a developer box with
+seven sibling agent processes on it, so an absolute second is high while a
+comparison between two of its own rows cancels the box.
+
+Two findings came out of it. `test_marks.py` was 95.6 s and rank 8, bought with
+a subprocess that collected the whole suite to defend a developer shortcut that
+never gates a merge; it now reads `pytestmark` from source at 1.89 s, held to
+the same 53 unmarked modules. And the `slow` marker, declared as "a module whose
+average test takes over a second", disagrees with the measurement on **36 of the
+74 modules it classifies** - 17 modules over a second carry no mark, and 19
+under a second carry `slow`. Ten of that second group are one module-level mark
+that [#720](https://github.com/miztiik/yen-idhazh/pull/720) copied into 13
+modules when it split `test_workflows.py`.
+
+Every run now ends by naming its own 25 dearest tests: `--durations=25` is in
+`addopts`, and it is free because pytest times every phase either way. The full
+record is
+[benchmarks/what-the-suite-costs.md](benchmarks/what-the-suite-costs.md).
+Re-run it with `pytest backend/tests -q -n auto --durations=0`.
 
 ## What the doubled window and the doubled cap cost, measured 2026-09-09
 
@@ -373,48 +398,42 @@ needs it, and that objection is now the only one.
 ## What the window costs the summarizer, 2026-09-13
 
 **The projection above was exact at 32,768 and stays linear to 65,536.** Three
-arms, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
-own flags, read off the load log at `log_verbosity` 4. The fourth row is the
-configured window and is interpolated between them.
+cases, one `llama-server` each on `Qwen3.5-9B-Q4_K_M.gguf` with `server_argv`'s
+own flags, read off the load log at `log_verbosity` 4.
 
 | `n_ctx` | KV buffer | Recurrent state | Compute buffer | Model buffers | Total |
 | --- | --- | --- | --- | --- | --- |
 | 16,384 | 512.00 MiB | 50.25 MiB | 112.02 MiB | 8,024.61 MiB | 8,698.88 MiB = 8.49 GiB |
 | 32,768 | 1,024.00 MiB | 50.25 MiB | 128.02 MiB | 8,024.61 MiB | 9,226.88 MiB = 9.01 GiB |
-| 49,152 | 1,536.00 MiB | 50.25 MiB | 144.02 MiB | 8,024.61 MiB | 9,754.88 MiB = 9.53 GiB |
 | 65,536 | 2,048.00 MiB | 50.25 MiB | 160.02 MiB | 8,024.61 MiB | 10,282.88 MiB = 10.04 GiB |
 
-**The 49,152 row is interpolated and the other three are measured.** KV is exact
-arithmetic at 32 KiB a token, and the compute buffer grows 16.00 MiB per 16,384
-tokens across the measured arms, so 144.02 MiB is the step between 128.02 and
-160.02. Nothing else in the row moves with the window.
+**KV is exact arithmetic at 32 KiB a token**, and the compute buffer grows 16.00
+MiB per 16,384 tokens across the cases. Nothing else in the row moves with the
+window.
 
-So **49,152 costs 1,056 MiB more than 16,384**, and 65,536 would cost 1,584,
-against the 6.84 GiB low-water mark above and a 1.0 GiB bar.
-`config/idhazh.json` took **49,152** on 2026-09-13 and this is the reading that
-says it fits.
+So **65,536 costs 1,584 MiB more than 16,384**, against the 6.84 GiB low-water
+mark above and a 1.0 GiB bar. `config/idhazh.json` carries **65,536** and this is
+the reading that says it fits.
 
-**The margin is 25 percent and that number has a derivation, which is the point
-of it.** The two-call sequence sizes at 39,284 tokens, so 49,152 leaves 9,868
-spare. The 25 percent is the size of the one tokenizer miss on record -
-`idhazh.measured.WORST_TOKENS_A_WORD` says 1.585 tokens a word and the densest
-cap-length build delivered 1.952, 23 percent over - rounded up to the next whole
-multiple of 16,384 and of the 512-token batch. **Memory did not choose it**:
-every candidate from 32,768 to 65,536 clears the 1.0 GiB bar by more than four
-times, so 528 MiB either way is noise. What a wider window costs is the
-assertion's reach - at 65,536 the sequence could grow 67 percent before the gate
-said so, and at 49,152 it can grow 25. Ruled by Carmack, 2026-09-13.
-**Re-derive it when `extract.truncation_cap_tokens` is fixed or
+**What the window holds is the two-call pair, and that is what sized it.** The
+pair sizes at 54,887 tokens at the committed truncation cap, so 65,536 - the
+first whole multiple of both 16,384 and the 512-token batch that holds it -
+leaves 10,649 spare. **Memory did not choose it**: every candidate from 32,768
+to 65,536 clears the 1.0 GiB bar by more than four times, so half a gigabyte
+either way is noise. What a wider window costs is the assertion's reach - the
+gate cannot report a sequence that grew until the sequence has outgrown the
+window. Ruled by Carmack, 2026-09-13.
+**Re-derive it when `extract.truncation_cap_tokens` or
 `elements.max_per_article` moves.**
 
 **Only 8 of the model's 32 layers hold a KV cache.** The other 24 are recurrent
 and carry a fixed 50.25 MiB whatever the window is, which is why doubling the
 window does not double the footprint and why the 32 KiB a token above is the
 figure over the attention layers rather than over all of them. `n_ctx_train` is
-262,144, so none of these arms scaled RoPE.
+262,144, so none of these cases scaled RoPE.
 
 Hardware: a developer laptop, i7-1265U, 32 GiB, with four other agents live.
-Peak working set ran 6.05, 8.47 and 9.47 GiB across the three arms and is the
+Peak working set ran 6.05, 8.47 and 9.47 GiB across the three cases and is the
 weaker number of the two - it counts the memory-mapped weights, which the OS may
 evict, and it moves with what else the box was doing. The llama.cpp buffer sizes
 are arithmetic over the model's own architecture and carry to a runner unchanged.
@@ -497,46 +516,32 @@ the day the active model file names different weights.
 cover.** Over the 36 rows the cap cut, where the word count is fixed at 3,846,
 `input_tokens` ran 5,582 to 7,093. Take off the 997-token constant and the
 article itself measured **4,585 to 6,096 tokens - 1.192 to 1.585 tokens a
-word**. `extract.truncate_to_tokens` spends the cap as `int(cap / 1.3)` words,
-so an article that tokenizes harder than 1.3 overruns the budget its own cap
-gave it. **The worst one overran by 21.9 percent**: 3,846 words at 1.585 is
-6,096 tokens against a cap that asked for 5,000, and `(6096 - 5000) / 5000` is
-0.219. The ratio is a property of the prose, not of the cap, so the same article
-at the 10,000-token cap gives 7,692 x 1.585 = 12,192 tokens, over by the same
-21.9 percent - which is where the 14,089 in the table below comes from.
+word**. `extract.truncate_to_tokens` spends the cap as
+`int(cap / TOKENS_PER_WORD)` words, at a rate taken from the configured weights
+and currently 1.3628, so an article that tokenizes harder than that rate
+overruns the budget its own cap gave it. **The worst one overruns by 16.3
+percent**: the committed cap of 20,000 cuts at 14,675 words, which at 1.585
+tokens a word is 23,259 tokens. The ratio is a property of the prose and not of
+the cap, which is why what is recorded is the ratio and what follows it is the
+overrun at whatever cap is committed.
 
-**This paragraph said 16.8 percent until 2026-09-09, and that figure was
-irreproducible from the numbers beside it.** It came from subtracting a
-1,255-token constant instead of the 997 this same section derives, which lowers
-the worst ratio to 1.518 and the overrun to 16.8 percent - while the worst-case
-table two paragraphs down used 1.585 and 14,089. One section, two constants, two
-worst-case ratios. 997 is the one the evidence supports: this section's own
-least-squares intercept, corroborated by 3-word items measuring 980 to 985
-tokens. So 21.9 percent stands and 14,089 was right all along. Re-derived from
-the same 36 rows on 2026-09-09.
+**Worst case at the committed cap of 20,000, against the committed window of
+65,536:**
 
-**Worst case at the committed cap of 10,000, against the committed window of
-16,384:**
-
-| | tokens | share of 16,384 |
+| | tokens | share of 65,536 |
 | --- | --- | --- |
-| Typical article (1.306 a word) | 997 + 10,046 + 900 = **11,943** | 73 percent |
-| Worst article this shard produced (1.585 a word) | 997 + 12,192 + 900 = **14,089** | 86 percent |
+| Typical article (1.306 a word) | 997 + 19,165 + 900 = **21,062** | 32 percent |
+| Worst article this shard produced (1.585 a word) | 997 + 23,259 + 900 = **25,156** | 38 percent |
 
-The margin falls from 1.9x to **1.16x**. At the 8,192 window committed the day
-before, 14,089 tokens is 172 percent of the window: this cap raise was not
-possible until that window raise landed, and the two are one decision.
+**The cap and the window are one decision**, and the worked example is the pair
+that could not have shipped apart: at the 8,192 window in force on 2026-09-08 a
+10,000-token cap sizes at 172 percent of the window.
 `test_the_longest_article_the_cap_allows_still_fits_the_window` in
 [../../backend/tests/contracts/](../../backend/tests/contracts/)
 reads both sides from `config/` and fails on any later pair that does not fit.
-
-**A two-call design has almost nothing left.** The pseudo-plan's second call
-adds about 1,200 tokens of first answer, about 300 of second instruction and
-about 1,200 of second answer. On the typical article that is 13,580 tokens, 83
-percent, a margin of 1.21x. On the worst article this shard produced it is
-**15,889 tokens, 97 percent of the window, a margin of 1.03x**. Write that down:
-the next cap raise needs a window raise beside it, and a second call at this cap
-needs one too.
+**It sizes the single call, which is the path being retired** - the two-call
+pair sizes at 54,887 of the same window
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
 
 ### What the wall clock pays
 
@@ -743,7 +748,7 @@ cache. Byte figures are from one representative run of each level.
 
 ### `-fa on` versus `-fa off`: three observables, all of them in the log
 
-Three runs of each arm. **Every figure below was identical in all three, so the
+Three runs of each case. **Every figure below was identical in all three, so the
 spread is zero.**
 
 | Reading, at `-lv 4` | no `-fa` flag, as committed | `-fa on` | `-fa off` |
@@ -761,7 +766,7 @@ spread is zero.**
 no flag it says `auto`, which is the state row 3 exists to refuse to accept as
 an answer. `resolve_fused_ops: Flash Attention enabled` is the decision, and it
 appears only when there was a decision to make, so it is absent from both
-explicit arms. The two together cover all three cases and nothing else does.
+explicit settings. The two together cover all three cases and nothing else does.
 
 **The committed config resolves to flash attention ON.** `flash_attention` is
 `null` in `config/idhazh.json`, so `server_argv` passes no `-fa` at all, so the
@@ -792,21 +797,21 @@ Corroboration is worth the line because the log grammar is llama.cpp's and moves
 between builds, while the buffer difference is arithmetic and does not.
 
 **Written, 2026-09-09.** `idhazh.llm.server.flash_attention_state` is that
-reader and returns those three states by those names. Its four arms are driven
+reader and returns those three states by those names. Its four cases are driven
 from committed fixtures and never from a live server (Guardrail #7): the three
 `tests/fixtures/runtime/2026-09-09-lv4-*.readings.txt` excerpts carry the
-readings above, and the `UNREADABLE` arm is driven by the four real
+readings above, and the `UNREADABLE` case is driven by the four real
 `2026-08-29-3-shard-*.server-head.txt` captures, which are runner logs taken
 before the verbosity knob existed and therefore hold no attention line at all.
-A fifth case removes the `resolve_fused_ops` line from the recorded `auto` arm
-and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
+A fifth case removes the `resolve_fused_ops` line from the recorded `auto`
+readings and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
 being read as a yes.
 
 ### `/props` settles the build and the window, and cannot settle flash attention
 
 `/props` is the right instrument for three questions and the wrong one for this
 one. It carries no key matching `flash`, `attn`, `kv` or `buf` anywhere in the
-document, and the five arms are byte-identical once the per-process
+document, and the five cases are byte-identical once the per-process
 `media_marker` nonce is normalised out.
 
 | `/props` field | Value on this run | What it settles |
@@ -1024,6 +1029,67 @@ of these names the flip the way it would name a hardware change, and reads no tr
 across it. The switch is `config/idhazh.json` `observability.tracing_enabled`; the
 reasoning is in [`../concepts/telemetry.md`](../concepts/telemetry.md).
 
+## What making both model calls unconditional cost, 2026-09-14
+
+Commit `e067db60` retired the flag that let a run make one model call an item,
+so the two-call sequence became unconditional. These two runs are either side of
+it, both on stock `ubuntu-latest`, both the same weights and the same window.
+
+| Quantity | Run `34745383977`, 2026-09-13 | Run `34852763827`, 2026-09-14 | Move |
+| --- | ---: | ---: | ---: |
+| Median model time an item | 97,879 ms | 475,890 ms | **4.9x** |
+| Median output tokens an item | 229 | 1,158 | **5.1x** |
+| Items that made two calls | 0 of 76 | 58 of 66 | |
+| Wall clock | 97 min | 206 min, 3 of 4 shards killed | |
+
+**The two multipliers agree within 4 percent, and that is the finding.** The
+decode rate did not move; the volume of decoded tokens did. The model is not
+slower - it is writing five times as much. A design that proposes to make this
+faster is arguing about how many tokens to ask for, not about throughput.
+
+Prompt caching was measured in the same run and was never the problem: the
+summarize-and-plan call re-read 76 fresh tokens an article and reused **98.2
+percent** of its 240,814 prompt tokens, which is 0.8 percent of the run's model
+time. The label call reused 53.6 percent of 184,371 - that is the shared system
+scaffold, and the article itself is new each item and must be read once.
+
+Where the model time went, same run, all four shards: label prefill 21.6
+percent, label decode 39.3, summarize prefill 0.8, summarize decode 38.2.
+
+Two runs are two runs. The per-item spread inside each is not reported here
+because the medians are what the comparison rests on; a design that needs the
+tail should take it from `state/item-health/` rather than from this page.
+
+## What a ledger row costs to check, 2026-09-15
+
+Taken to settle whether every appended row should be validated against its
+contract. **12th Gen Intel Core i7-1265U, Windows, Python 3.14.2, pydantic
+2.13.4**, 40 repeats after 5 warm-up discarded, interleaved arms in one process
+so the box cancels. A developer machine is an order-of-magnitude check and never
+a runner reading.
+
+| Operation, 113 columns | Median | Spread |
+| --- | ---: | ---: |
+| Validate a row through `from_csv_row` | 42.85 us | 22.63 |
+| Serialise it through `csv_row` | 17.56 us | 3.77 |
+| Write it through `DictWriter` | 22.65 us | 6.35 |
+| Compare a row's width to the header | 0.04 us | 0.32 |
+
+**Validating a row costs 1.07x what writing it already costs** - the same order,
+not ten times it. Against a run of 80 items that is 3.43 ms, set beside 38,071
+seconds of item work: **one part in 11.1 million.**
+
+Cost is therefore not the argument either way, and the design decision does not
+rest on it. Per-row validation on append was refused because a row Python writes
+was validated when its model was constructed, so the check cannot fail unless
+the round-trip test is already red - and that test proves it once, on a fixture,
+for every row for ever. The reasoning sits beside `migrate_header` in
+`backend/idhazh/ledger.py`, where the next person about to add it will read it.
+
+A first pass without warm-up read the same operation at 107.66 us and 74.81 us
+inside one process, 44 percent apart. That spread was the shared box and cold
+caches, not the code. Quote 42.85.
+
 ## Inference throughput
 
 `llama-bench -m <model> -p 730,1800,4850 -n 250 -t 4`, at the three input
@@ -1103,7 +1169,7 @@ cannot check. The retired incumbent's rows stay above, where they were taken.
 **The verdict is on the model's own page.**
 [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) carries run
 `33016222069` of 2026-08-26 gate by gate - the nine that passed, the two that
-failed, the band counts, and the fact that no comparison arm was ever run against
+failed, the band counts, and the fact that no comparison case was ever run against
 the retired incumbent.
 
 What stays here is what one of those gates taught about the instrument rather
@@ -1179,7 +1245,7 @@ turned that string into a security finding.
 **The second-order cost is the finding worth keeping: Guardrail #11 has no live
 evidence today.** An instrument that cannot separate a breach from a blank reply
 can never confirm the rule it exists to confirm. This is a statement about the
-canary arm alone - the nine passing gates above are unaffected.
+canary case alone - the nine passing gates above are unaffected.
 
 **The live marker check on a `sanitizer`-neutralised canary cannot fail, by
 construction.** `sanitize` runs inside `untrusted_block` before any request
@@ -1199,7 +1265,7 @@ function that `backend/tests/test_canaries.py` already asserts on every commit
 at no cost, and it would spend about 95 minutes of wall clock and a second 5 GB
 weights entry against a cache already at 8.11 GB of the 10 GB cap in Guardrail #2.
 
-**What replaces it:** land the failure code, then re-run the canary arm alone
+**What replaces it:** land the failure code, then re-run the canary case alone
 against the configured 9B - five calls, no corpus freeze, no repeats, weights
 already warm. That is the outstanding measurement, and it is the only thing that
 turns this gate back into a reading.
@@ -1731,7 +1797,7 @@ two-call summariser change, whose second model call an item costs about 87
 minutes at 20 items. Sized from the worst case, never the median, because a
 worker killed at the bound uploads nothing:
 
-| At 20 items | Base work | Call 2 needs | At 150 | At 200 |
+| At 20 items | Base work | The summarize-and-plan call needs | At 150 | At 200 |
 | --- | --- | --- | --- | --- |
 | Median | ~39 min | 87 min | fits, 24 min spare | fits, 74 min spare |
 | p90 | ~51 min | 87 min | fits, 12 min spare | fits, 62 min spare |
@@ -2046,7 +2112,7 @@ Four Playwright workers, measured 2026-09-05 on runs `33989034726` and
 | Runner, 4 vCPU, nothing else on it | 344 s | 207 s | **40 percent faster** |
 | a shared developer box, six other checkouts building | 135.5 s | 233.7 s | **72 percent slower** |
 
-Both arms passed all 268 tests, so the local result reads as a clean measurement
+Both cases passed all 268 tests, so the local result reads as a clean measurement
 of a regression that is not there. Two performance cores shared with six sibling
 agents have no spare capacity to hand a second worker. The knob is
 `PLAYWRIGHT_WORKERS` and the figure that decides it is the runner's.
@@ -2094,28 +2160,29 @@ to justify a design decision.
 | --- | --- | --- |
 | **How many articles really state a whole its parts add up to** | **bounded, not measured: at most 72 of 1,444, 4.99 percent** | the deterministic screen cannot tell a stated composition from a numeric coincidence, and its own examples show it failing at that - three unrelated stock indices whose two smaller moves sum to the larger pass it ([How often an article states a whole its parts add up to](#how-often-an-article-states-a-whole-its-parts-add-up-to-2026-09-13)). One person marks all 72 hits genuine or not against the written definition; the instrument already emits them with `python backend/utilities/measure_declared_wholes.py --window 600 --examples 72 --json`, so it needs no new code and costs one to two hours of one person's attention. Record the count with a Wilson interval - the true rate is 4.99 percent times that precision. Nothing may use the 4.99 as a rate until then, and nothing may use the agent's three-of-twelve reading at all. |
 | **How long a reader waits for a console panel's payload** | **`console.shimmer_after_ms` ships at 400, a declared estimate and not a measurement** | the shell-and-fetch migration was meant to settle this and **could not, for a reason that is a ruling rather than an omission.** The knob decides when a reserved box starts to shimmer, so the number it needs is the median time a payload takes to reach a **reader** - and the same plan scoped out a reader-facing timing measurement (owner, 2026-09-08). Everything measured instead is localhost: that migration counted 3 serial round trips and 303,306 payload bytes on a cold `/console/` over `vite preview`, where arrival is a few milliseconds and any threshold derived from it would be a threshold nobody ever crosses. Two things settle it, and both need the owner to reopen that scope-out: throttle a Playwright context to a named profile and read the median arrival over the default window, which measures a chosen network rather than a reader's; or accept a reader-facing timing measurement and take it on the live origin. Until one of them, 400 stays and stays labelled. |
-| **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **answered 2026-09-10, and half the question is void** | the site ships at 98.7 MB in 581 files with 727 published days of runway, measured four times on the runner with zero spread ([What the shell migration saved](measurements-site.md#what-the-shell-migration-saved-and-the-run-that-got-it-wrong-2026-09-10)). The encoder weights never left, so there is no second arm to measure - row #17 was descoped on 2026-09-09. The harness this row used to prescribe measured a tree that was never built and is deleted. |
+| **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **answered 2026-09-10, and half the question is void** | the site ships at 98.7 MB in 581 files with 727 published days of runway, measured four times on the runner with zero spread ([What the shell migration saved](measurements-site.md#what-the-shell-migration-saved-and-the-run-that-got-it-wrong-2026-09-10)). The encoder weights never left, so there is no second case to measure - row #17 was descoped on 2026-09-09. The harness this row used to prescribe measured a tree that was never built and is deleted. |
 | **Whether a subject the registry does not name goes quiet for long enough to matter** | **bounded, not measured: 75.2 percent of published items carry no registry name** | the 30 registry names are all covered near-daily, so nothing in the record supports a fade rate ([How long we go quiet about a registry name](../archive/measurements-2026-08.md#how-long-we-go-quiet-about-a-registry-name-2026-08-31)). Whether a quiet subject exists in the other three items in four cannot be read from a closed vocabulary, and this repository has no entity recogniser. Two things settle it, in order: put one real subject in `config/watchlist.json` and re-run `python backend/utilities/entity_gap.py` for that entry alone; or, if the question is ever worth a model, score the model on the gap as well as the coverage, because a recogniser that splits one subject across three names raises coverage and shortens every gap. |
 | **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](../archive/measurements-2026-08.md#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |
 | **A work shard's fixed cost on more than one run** | **one run measured: 335.1 s a shard, 5.6 minutes** | only run `2026-08-29-2` has four clocks and one execution each; `2026-08-29-3` filed six counter rows for four shards and cannot be joined, and the six runs before 2026-08-29 have no `job_seconds` cell at all ([Three figures the ledgers already held](../archive/measurements-2026-08.md#three-figures-the-ledgers-already-held-2026-08-30)). Re-run `python backend/utilities/measure_ledgers.py` after a few more clocked days, and read the spread rather than the single figure. | | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Whether a day at eight work shards publishes** | **answered 2026-08-27: it does** | run `33114410534` published the 2026-08-27 day at `shards = 8`, with 25 charts over 25 distinct paths and 25 files in the tree ([Eight work shards, paired](../archive/measurements-2026-08.md#eight-work-shards-paired-2026-08-27)). What remains is a decision about `run.max_parallel`, not a measurement. |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `stages.plan._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](../archive/measurements-2026-08.md#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
-| **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two arms of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](measurements-site.md#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
+| **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two cases of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](measurements-site.md#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs off the runner ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). A developer box measures itself, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
 | **What holds the 1.5 GiB a work shard's own python holds** | **bounded, not attributed: 1.49 to 1.55 GiB over four captured shards, in one process nothing names** | two dispatches of `.github/workflows/digest.yml`, no code. The first with `faithfulness: false`: the install step then takes `.` instead of `.[faithfulness]` and `_scorer` returns nothing, so the difference in `python_peak_rss_bytes` between that run and a scored one **is** the scorer's resident share, on the runner. The second at the default, to read the new per-process roll-call in **What memory this shard used** and confirm what the other two pythons are ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). Do the second one first - it costs nothing extra and it says whether the 4 percent attributed to the host is really the host. |
 | **What makes a visuals host 21 s or 38 s an item** | **void: the job retired on 2026-09-13** | it was a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The nine runs that name a CPU rule the CPU model out rather than confirming it ([The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Plan 11 row #6 deleted the job, so nothing will ever add to that population. The same swing, if it is a property of the host rather than of the model, will show up in the `work` job's own prefill rate; that is where to look for it, and it is a new question with a new denominator rather than this one continued. |
 | **Which CPU the visuals job drew, run by run** | **void: the job retired on 2026-09-13** | the instrument landed 2026-09-12 and collected nothing before the job it measured was deleted. The `work` job has carried the same cells since 2026-08-29 and is the only server job left, so the covariate is still recorded - for one job rather than two, and `RuntimeCountersRow.job` is what tells the two apart in the committed ledger. |
 | **What a sharded `route` job would cost** | **void: the job retired on 2026-09-13** | four shards would have divided the stage while each paid the fixed cost. Plan 11 row #6 took the whole job away instead: the picture is decided inside the `work` shard that read the article, so the day's pictures are already spread over four to eight runners and there is nothing left to shard. |
-| **What the two calls cost a work shard, measured rather than estimated** | **owed: the first scheduled runs after 2026-09-13** | the design was landed on an estimate of 182 to 185 minutes for the worst shard against a 200-minute timeout and a 180-minute escalation bar, built from a cap-length call-1 prompt at the slowest recorded prefill. Read `job_seconds` for the worst `work` shard out of `state/runtime-counters.csv` over seven scheduled days, and report the worst and the median against 180. If the worst passes 180, the plan's own escalation trigger has fired and the next move is the design that fits, not a raised bound (Guardrail #2). |
+| **What the two calls cost a work shard, measured rather than estimated** | **owed: the first scheduled runs after 2026-09-13** | the design was landed on an estimate of 182 to 185 minutes for the worst shard against a 200-minute timeout and a 180-minute escalation bar, built from a cap-length label-call prompt at the slowest recorded prefill. Read `job_seconds` for the worst `work` shard out of `state/runtime-counters.csv` over seven scheduled days, and report the worst and the median against 180. If the worst passes 180, the plan's own escalation trigger has fired and the next move is the design that fits, not a raised bound (Guardrail #2). |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
-| **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record)). |
+| **`max_answer_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. It was `max_output_tokens` until 2026-09-14. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record)). |
+| **What the answer span really prefills when a call thinks** | **estimated, not read** | a call decoded as two spans splices the thinking onto the answer span's prompt, so the slot should hold it and the answer span should prefill only the closing marker. If it misses, the estimated cost is 25.6 s an item on top of the 42.6 s a span the thinking itself costs. **The reading already ships**: `stages/common._two_spans` logs the answer span's evaluated tokens beside its cached tokens on every item, and their difference is what it prefilled. One scheduled run with `models.<role>.turns.thinking_close` declared answers it; nothing declares one today. |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
 | A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)). It is a resident set and not a demand, and the marks it recorded are on the configured model's own page ([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)). **That cell is llama-server alone**; the job also holds 1.49 to 1.55 GiB of its own python at the same time, and subtracting the sum of the two from the machine's total does not yield headroom ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). |
-| **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary arm alone against the configured 9B - five calls, no corpus freeze, no repeats. |
+| **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary case alone against the configured 9B - five calls, no corpus freeze, no repeats. |
 | Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The qualification's faithfulness mean ([models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md)) is one model on one corpus and is not a delta. |
 
 ## How to add a row here

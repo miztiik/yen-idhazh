@@ -35,11 +35,13 @@ EXPECTED_WORKFLOWS: Final = {
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
+    "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "pages.yml": (
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
+    "probe.yml": ("Runtime probe", frozenset({"workflow_dispatch"})),
     "prune.yml": ("Corpus prune", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
@@ -72,27 +74,20 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
-    ("measure.yml", "candidate_file"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_id"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_quantisation"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_repo"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_revision"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_sha256"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
+    # Read by name, and the floor is checked where it is used rather than by a
+    # pattern here: "at least 2" is a statement about a spread, and a regex that
+    # said it would be a second copy of the rule.
+    ("measure.yml", "runtime_repeats"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("prune.yml", "force"): DISPATCH_BOOLEAN,
-    ("validate.yml", "candidate_bytes"): "^[0-9]{1,15}$",
-    ("validate.yml", "candidate_file"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_id"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_quantisation"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_repo"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_revision"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "candidate_sha256"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "job_budget_minutes"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "repeats"): "^[1-9][0-9]{0,3}$",
@@ -165,7 +160,7 @@ APPROVED_ACTION_MAJORS: Final = {
     "actions/upload-pages-artifact": "v5",
 }
 
-# One llama.cpp build for the pipeline, the validation arm and the measurement
+# One llama.cpp build for the pipeline, the validation case and the measurement
 # harness. The sha256 was read from the release API's own `digest` field and
 # confirmed by downloading the 16,377,727-byte archive and hashing it, on
 # 2026-08-25.
@@ -175,7 +170,19 @@ PINNED_LLAMA_ASSET: Final = f"llama-{PINNED_LLAMA_BUILD}-bin-ubuntu-x64.tar.gz"
 
 PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c"
 
-LLAMA_RUNTIME_WORKFLOWS: Final = frozenset({"digest.yml", "measure.yml", "validate.yml"})
+# Every workflow that installs the pinned llama.cpp build, whether or not it
+# then stands a server up. This is the set the pin and the digest check are
+# asserted over: a second build downloaded anywhere is a second binary, and a
+# number measured on one of them describes the other (Guardrail #10).
+LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "probe.yml", "validate.yml"}
+)
+
+# The subset that starts a server and posts to it. `probe.yml` installs the
+# same binary and asks it what it accepts, which needs no port - and a port
+# declared where nothing reads it is a value that can go stale with nothing to
+# catch it, which is the failure the port test exists to stop.
+LLAMA_SERVER_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - {"probe.yml"}
 
 LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check'
 
@@ -203,11 +210,29 @@ WEIGHTS_CHECKS: Final = {
         "Start the model",
         '["summarize"]["sha256"]',
     ),
+    ("idhazh-pipeline-tests.yaml", "cases"): (
+        "Fetch runtime and weights",
+        "Verify the weights",
+        "Start the model",
+        '["summarize"]["sha256"]',
+    ),
     ("measure.yml", "runtime"): (
         "Fetch runtime and weights",
         "Verify the weights",
         "Measure runtime candidate",
         "${{ needs.models.outputs.candidate_sha256 }}",
+    ),
+    # The raw arm downloads the draft head and never runs it - llama-bench has
+    # no speculative path. It fetches it to fill the cache the server arm
+    # restores, which is why the check matters more here than the reader does:
+    # nothing in this job would notice a corrupt copy, and the arm that loads it
+    # is a different job on a different machine. The bench step is named below
+    # as the ordering anchor, not as a reader of these bytes.
+    ("measure.yml", "llm"): (
+        "Fetch the draft head",
+        "Verify the draft head",
+        "Benchmark the candidate",
+        "${{ needs.models.outputs.candidate_draft_sha256 }}",
     ),
     ("measure.yml", "batched"): (
         "Download the summarizer weights",
@@ -238,6 +263,17 @@ MODEL_REF_OUTPUTS: Final = (
     "summarize_repo",
     "summarize_revision",
     "summarize_file",
+)
+
+#: The draft head's refs, published beside the target's and empty where the
+#: entry declares none. Held apart from MODEL_REF_OUTPUTS because they are
+#: optional: a test that required them would fail on every day this repository
+#: has published.
+DRAFT_REF_OUTPUTS: Final = (
+    "draft_repo",
+    "draft_revision",
+    "draft_file",
+    "draft_sha256",
 )
 
 MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
@@ -276,8 +312,8 @@ MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "
 
 
 #: The bench is one target and two jobs: raw prefill and decode first, then a
-#: real server doing real work. The raw arm saves the weights cache entry and
-#: the server arm restores it, so a key that differs by one character is a
+#: real server doing real work. The raw case saves the weights cache entry and
+#: the server case restores it, so a key that differs by one character is a
 #: second multi-gigabyte download inside one dispatch (Guardrail #2).
 BENCH_TARGET: Final = "bench"
 
@@ -286,7 +322,7 @@ BENCH_RAW_JOB: Final = "llm"
 BENCH_SERVER_JOB: Final = "runtime"
 
 BENCH_CACHE_KEY: Final = (
-    "bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}"
+    "bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}"
 )
 
 BENCH_ARTIFACTS: Final = {
@@ -309,10 +345,16 @@ BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
 
 BENCH_CONFIG_STEP: Final = "Build the candidate config"
 
+#: The one composite action in this repository. The step above was byte-identical
+#: in two workflows apart from the job it read the models file from, and a step
+#: duplicated across two files is a step that drifts the day one of them is
+#: edited - which has happened twice in these two.
+CANDIDATE_CONFIG_ACTION: Final = "candidate-config"
+
 BENCH_EMIT_STEP: Final = "Emit the dossier body"
 
 
-#: Row #13a's arm. Its own target because retaking three token counts is minutes
+#: Row #13a's case. Its own target because retaking three token counts is minutes
 #: and the bench is hours, and nobody should have to spend the second to get the
 #: first. It shares the bench's weights cache key, so the bytes are paid for once.
 BUDGETS_JOB: Final = "budgets"
@@ -342,11 +384,23 @@ LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 # Every step in the repository that stands a llama-server up, and the config
 # root each one reads. Discovery in the test is closed-world, so a new one fails
 # here until it appears with an install ahead of it.
-SERVER_STARTERS: Final = {
-    ("digest.yml", "work"): ("Start the model", "config"),
-    ("measure.yml", "runtime"): ("Measure runtime candidate", None),
-    ("measure.yml", "budgets"): ("Start the tokenizer", "backend/var/candidate-config"),
-    ("validate.yml", "qualify"): ("Start the candidate", "backend/var/candidate-config"),
+#
+# A job may declare more than one, in the order the steps run. One per job was
+# the rule until the pipeline test workflow, and it was an accident of every
+# job so far serving one model for its whole life: a slot count is fixed when
+# the process starts, so a case that moves it has to restart the server inside
+# the job it shares with the cases it is compared against. What the closed world
+# still buys is unchanged - every starter is discovered by reading and the set
+# is compared by equality, so a server stood up any other way still fails here.
+SERVER_STARTERS: Final[dict[tuple[str, str], tuple[tuple[str, str | None], ...]]] = {
+    ("digest.yml", "work"): (("Start the model", "config"),),
+    ("idhazh-pipeline-tests.yaml", "cases"): (
+        ("Start the model", "backend/var/cases/baseline/config"),
+        ("Restart the model with two slots", "backend/var/cases/parallel-2/config"),
+    ),
+    ("measure.yml", "runtime"): (("Measure runtime candidate", None),),
+    ("measure.yml", "budgets"): (("Start the tokenizer", "backend/var/candidate-config"),),
+    ("validate.yml", "qualify"): (("Start the candidate", "backend/var/candidate-config"),),
 }
 
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
@@ -478,6 +532,7 @@ RUNTIME_CANDIDATES: Final = frozenset(
         "threads",
         "threads_batch",
         "np2_inflight",
+        "no_draft",
     }
 )
 
@@ -541,11 +596,16 @@ COMMIT_STAGED_PATHS: Final = {
     # what those rows are, and the writer reads it instead of them. A shard
     # committed without its index is a month the next run cannot recognise, so
     # it would append every measurement in it a second time.
+    #
+    # `state/span-rollup` joined on 2026-09-15. A shard is the only thing that
+    # writes it, and until that day nothing staged it, so nine days of folded
+    # spans were measured and then thrown away with the runner.
     "work": [
         "state/item-health",
         "state/scores",
         "state/score-index",
         "state/runtime-counters.csv",
+        "state/span-rollup",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -674,6 +734,21 @@ WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
 
 TOLERATED: Final = "true"
 
+# The two artifacts a work shard hands to assemble, spelled the way `with.name`
+# spells them. A step with no `if:` runs on `success()` and a job stopped by
+# `timeout-minutes` is cancelled, so both were skipped on every shard that ran
+# out of time while the `always()` ledger steps above them ran. They travel
+# together or not at all: the decision naming a chart is in the first and the
+# chart's own bytes are in the second.
+#
+# `evidence-*` is not here. It is the labelling queue's copy of the article
+# text, no job downloads it and nothing on the publish path reads it, so
+# guarding it is a decision of its own rather than part of this hand-off.
+WORK_PAYLOAD_ARTIFACTS: Final = (
+    "items-${{ matrix.shard }}",
+    "shard-visuals-${{ matrix.shard }}",
+)
+
 COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
 
 
@@ -731,6 +806,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/score-index",
         "state/item-health",
         "state/runtime-counters.csv",
+        "state/span-rollup",
     ],
 }
 
@@ -1133,6 +1209,27 @@ def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
     return references
 
 
+def _composite_action_script(name: str) -> str:
+    """The shell a repository-local composite action runs, as one string.
+
+    A `./`-prefixed action resolves to this repository at the commit the run
+    checked out, so what it runs is in the tree the tests already read - but it
+    is not in `.github/workflows/`, so every oracle that globs that directory
+    stops seeing it. This is what keeps those oracles pointed at the shell after
+    it moves out of a workflow file.
+    """
+    path = WORKFLOWS_DIR.parent / "actions" / name / "action.yml"
+    document = yaml.safe_load(read_text(path))
+    runs = _mapping(_mapping(document, path.name).get("runs"), f"{name} runs")
+    assert runs.get("using") == "composite", f"{name} must be a composite action"
+    steps = runs.get("steps")
+    assert isinstance(steps, list), f"{name} must declare steps"
+
+    scripts = [step["run"] for step in steps if isinstance(step, dict) and "run" in step]
+    assert scripts, f"{name} runs no shell"
+    return "\n".join(scripts)
+
+
 def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> list[int] | None:
     """Read the fan-out step's shell and answer what matrix it writes.
 
@@ -1323,12 +1420,17 @@ def _every_env(workflow: dict[str, object]) -> list[tuple[str, dict[str, object]
     return scopes
 
 
-def _run_the_inline_program(script: str, config_root: Path) -> dict[str, str]:
+def _run_the_inline_program(
+    script: str, config_root: Path, env: dict[str, str] | None = None
+) -> dict[str, str]:
     """Run the program a plan-job step carries, and read what it would write.
 
     The step redirects its stdout into `$GITHUB_OUTPUT`, so its stdout IS the
     job output. Running the shipped bytes against a real config directory is
     what makes this a test of the step rather than of a copy of it.
+
+    `env` is what the step's own `env:` block would deliver. Absent, the program
+    runs with none of them set, which is the dispatch that filled nothing in.
     """
     match = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
     assert match is not None, "the step must carry an inline program"
@@ -1336,6 +1438,7 @@ def _run_the_inline_program(script: str, config_root: Path) -> dict[str, str]:
     result = subprocess.run(
         [sys.executable, "-c", match.group(1)],
         cwd=config_root,
+        env={**os.environ, **(env or {})},
         capture_output=True,
         text=True,
         check=False,
@@ -1841,7 +1944,7 @@ def _starter_shell(step: Mapping[str, object]) -> str:
     """Everything a starter step executes, following one level of delegation.
 
     `work` and `visuals` ran 31 lines of near-identical inline shell, 80.6 percent
-    the same, differing in the config attribute and two filenames. They call one
+    the same, differing in the config attribute and two filenames. They run one
     script now. Reading the step alone would report that neither reaches
     `server_argv` any more, which is the opposite of what happened.
     """
@@ -1855,13 +1958,16 @@ def _starter_shell(step: Mapping[str, object]) -> str:
 
 def _server_starters(
     workflows: Mapping[str, dict[str, object]],
-) -> dict[tuple[str, str], str]:
+) -> dict[tuple[str, str], tuple[str, ...]]:
     """Every step that reaches `server_argv`, found by reading, not by listing.
 
     A step that stands a server up any other way is a second answer to what the
-    run executes, so the set this returns is compared by equality.
+    run executes, so the set this returns is compared by equality. A job's
+    starters come back in the order its steps run, because a case that restarts
+    a server is comparing itself against the cases before it and the order is
+    what says which start each case ran under.
     """
-    found: dict[tuple[str, str], str] = {}
+    found: dict[tuple[str, str], tuple[str, ...]] = {}
     for filename, workflow in workflows.items():
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):
@@ -1870,6 +1976,5 @@ def _server_starters(
                 name = step.get("name")
                 assert isinstance(name, str), f"{filename}/{job_name}: name the step"
                 where = (filename, job_name)
-                assert where not in found, f"{filename}/{job_name} starts two servers"
-                found[where] = name
+                found[where] = (*found.get(where, ()), name)
     return found

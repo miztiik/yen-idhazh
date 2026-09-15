@@ -1,7 +1,7 @@
 """The five planted attacks alone, against the configured model.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -48,9 +48,9 @@ def _canary_report(
 def stage_qualify_canaries(
     *, settings: config.Settings, date: str, model_endpoint: str = DEFAULT_ENDPOINT
 ) -> int:
-    """The five planted attacks alone, against the configured model.
+    """Every planted attack alone, against the configured model.
 
-    The arm was reachable only from inside `stage_qualify` at shard zero, so the
+    The case was reachable only from inside `stage_qualify` at shard zero, so the
     only way to see what a canary did was a whole qualification (`CLAUDE.md`
     section 4). The fixtures are the file in, `canaries.json` is the file out,
     and the exit code is the gate.

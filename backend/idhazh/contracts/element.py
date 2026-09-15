@@ -101,10 +101,6 @@ from idhazh.contracts.base import (
     derive_url_key,
 )
 
-#: `<kind>-<span_start>-<span_end>`: the element's address inside its article.
-#: Derived from the two facts that make it unique there, so it is rebuilt on
-#: read rather than trusted, and legible in a committed diff.
-ELEMENT_ID_PATTERN: Final = r"^[a-z]+-[0-9]+-[0-9]+$"
 #: A quantity's value: a decimal, pinned as text for the reason a timestamp is.
 #: One spelling, and no float formatting that can drift under a committed file.
 QUANTITY_VALUE_PATTERN: Final = r"^-?[0-9]+(?:\.[0-9]+)?$"
@@ -113,7 +109,6 @@ QUANTITY_VALUE_PATTERN: Final = r"^-?[0-9]+(?:\.[0-9]+)?$"
 #: wrote, and a derived value is not a found one.
 DATE_OR_YEAR_PATTERN: Final = r"^\d{4}(?:-\d{2}-\d{2})?$"
 
-ElementId = Annotated[str, StringConstraints(pattern=ELEMENT_ID_PATTERN)]
 DateOrYear = Annotated[str, StringConstraints(pattern=DATE_OR_YEAR_PATTERN)]
 #: The two bounds a producer needs as numbers rather than as annotations. A
 #: pattern over fetched bytes can match a 200-digit serial number or a
@@ -154,6 +149,40 @@ class ElementKind(StrEnum):
     QUOTE = "quote"
     #: An assertion the article made in its own voice.
     CLAIM = "claim"
+
+
+#: How many digits a span offset may carry. `extract` truncates a body at
+#: `truncation_cap_tokens` (10000), which `truncate_to_tokens` spends as
+#: `int(10000 / 1.3)` = 7,692 words, so six digits covers an article of 999,999
+#: characters and is an upper bound with room in it.
+ELEMENT_ID_OFFSET_DIGITS: Final = 6
+#: The longest kind, which is what the pattern below admits. Derived from the
+#: enum rather than written down, so a seventh kind widens the bound with it.
+_ELEMENT_KIND_MAX_LENGTH: Final = max(len(kind.value) for kind in ElementKind)
+
+#: `<kind>-<span_start>-<span_end>`: the element's address inside its article.
+#: Derived from the two facts that make it unique there, so it is rebuilt on
+#: read rather than trusted, and legible in a committed diff.
+#:
+#: Every quantifier carries an upper bound, and that is load-bearing rather than
+#: tidy. This pattern reaches a constrained decoder, and llama.cpp's
+#: schema-to-grammar converter honours a `pattern` or a length bound, never both
+#: - so a `maxLength` sitting beside an unbounded `[a-z]+` is dropped and the
+#: decoder is handed a state it can stay in forever. On 2026-09-14 one reply
+#: spent 15,472 characters inside this 22-character field, and 15.8 minutes of a
+#: 4 vCPU runner, before its token budget stopped it. A pattern in a decoder
+#: schema bounds its own length; `backend/tests/contracts/test_decoder_grammar.py`
+#: holds every schema to that.
+ELEMENT_ID_PATTERN: Final = (
+    rf"^[a-z]{{1,{_ELEMENT_KIND_MAX_LENGTH}}}"
+    rf"-[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}"
+    rf"-[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"
+)
+#: The widest string the pattern admits, so a decoder bound and the identity
+#: rule cannot drift apart: kind, two offsets, and the two hyphens between them.
+ELEMENT_ID_MAX_LENGTH: Final = _ELEMENT_KIND_MAX_LENGTH + 2 * ELEMENT_ID_OFFSET_DIGITS + 2
+
+ElementId = Annotated[str, StringConstraints(pattern=ELEMENT_ID_PATTERN)]
 
 
 class Extractor(StrEnum):
@@ -355,75 +384,29 @@ class ElementTable(Contract):
     __schema_stem__: ClassVar[str] = "element-table"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-15T19:40",
+            change="element_id's pattern bounds every one of its own quantifiers.",
+            why="This pattern reaches a constrained decoder, which cannot compile an open one.",
+        ),
+        ChangelogEntry(
             version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
+            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
+            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-09-08T18:00",
-            change=(
-                "A second regex pass writes into this table, so `date` now appears in "
-                "`candidates_found` and in `elements`. No field was added, removed or "
-                "retyped; `candidates_found` is restated as one count per pass, taken "
-                "before the rule that settles two passes claiming one span."
-            ),
-            why=(
-                "Both patterns match `2026` and only one of them can keep the "
-                "characters, so `elements` can now hold fewer of a kind than the pass "
-                "matched for a reason that is not the cap. Counting each pass before the "
-                "rule keeps that visible: count after it instead and a date pattern that "
-                "swallowed every figure would report an article with no figures in it, "
-                "which is the silent failure this counter exists to prevent. No payload "
-                "had to move - a table written under the previous stamp still validates, "
-                "which is what the two committed fixtures show."
-            ),
+            change="A second regex pass writes into this table, so `date` now appears twice.",
+            why="Both patterns match a year and only one of them can keep the characters.",
         ),
         ChangelogEntry(
             version="2026-09-08T12:00",
-            change=(
-                "candidates_found added and required, one count per kind, holding what "
-                "each pass matched before the cap. VALUE_MAX_LENGTH and UNIT_MAX_LENGTH "
-                "are exported so a producer can refuse what the shape will not hold."
-            ),
-            why=(
-                "`elements` is capped by a tunable, so its length saturates and a density "
-                "signal read off it cannot tell a 600-word note carrying 16 figures from "
-                "a 3,000-word data story carrying 60 - and the second is the chartable "
-                "one. It fails silently, because a capped counter returns a plausible "
-                "integer. Required rather than defaulted, because a default of zero is "
-                "indistinguishable from a pass that genuinely found nothing, which is the "
-                "same silent failure one level down; nothing had been persisted under the "
-                "previous shape, so the only payloads to move were the two committed "
-                "fixtures. Keyed by kind because a single total stops answering the "
-                "density question the moment a second pass writes into the same table."
-            ),
+            change="candidates_found added and required, one count per kind.",
+            why="`elements` is capped, so its length saturates and a density signal reads flat.",
         ),
         ChangelogEntry(
             version="2026-09-08",
-            change=(
-                "Initial shape: six element kinds, a Tier 1 half only code writes and a "
-                "Tier 2 half a later labeller may assign, over one article's text."
-            ),
-            why=(
-                "Contracts before logic - the two pattern producers are written against a "
-                "fixed payload (Guardrail #3). Six kinds land in one entry rather than four "
-                "later widenings of a persisted shape. `span_excerpt` is the one name for "
-                "the verbatim slice, because `raw` is whitespace-cleaned and `surface` is "
-                "already this project's word for a place something is shown."
-            ),
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

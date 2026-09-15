@@ -122,6 +122,13 @@ class PlannedItem(Model):
     the feed's own date, unless it claimed a future too far ahead to be true,
     in which case it is when we first saw the address. `time_source` says which
     of the two it is.
+
+    `rank_score` is the number the day is ordered on, and the eight terms under
+    it are what it was built from: `authority_score` plus `carriage_step` plus
+    `watchlist_bonus` plus `lens_bonus` plus `recency_bonus` is `rank_score`,
+    and `tier_score` times `feed_weight` times `feed_reliability` is
+    `authority_score`. Every one of the thirteen score fields is null on a plan
+    written before 2026-09-14 - unknown, and never a term worth nothing.
     """
 
     item_id: ItemId
@@ -153,6 +160,103 @@ class PlannedItem(Model):
         default=False, description="A salience feed voted for it. A vote, never a discovery."
     )
     rank_score: float = Field(ge=0.0)
+
+    authority_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "The best-trusted feed that carried this story, scored: its tier score "
+            "times its own weight times its reliability. The largest term of the "
+            "score, and the only one that is a product rather than a step."
+        ),
+    )
+    tier_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "collect.tier_weights for that feed's tier. From the same feed that won "
+            "authority_score, never from another carrier of the story."
+        ),
+    )
+    feed_weight: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="That feed's own weight from config/sources.json. Soft retirement.",
+    )
+    feed_reliability: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "That feed's factor from the trailing feed-health window, built once per "
+            "run by ledger.reliability. 1.0 means no recent evidence against it."
+        ),
+    )
+    carriage_step: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "collect.carriage_step when more than one feed carried this address, and "
+            "0.0 when one did. A flat step that fires once, never a count."
+        ),
+    )
+    watchlist_bonus: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="collect.watchlist_bonus when watchlist_hit, and 0.0 when not.",
+    )
+    lens_bonus: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "The weight of the one lens this story earned most from, matched on the "
+            "headline. Never the sum of several, and 0.0 when no lens matched."
+        ),
+    )
+    recency_bonus: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "collect.recency_weight decayed by age at plan time. Orders what the age "
+            "gate already admitted; it never admits anything itself."
+        ),
+    )
+
+    label_confidence: float | None = Field(
+        default=None,
+        description=(
+            "How sure the label call was of what this article is about. No producer "
+            "yet - declared so the row shape stops moving, and null until the "
+            "article-classification work writes it."
+        ),
+    )
+    relationship_score: float | None = Field(
+        default=None,
+        description=(
+            "How well the picture a run planned matches the relationship the article "
+            "states. No producer yet - null until the visual planning work writes it."
+        ),
+    )
+    fit_weight: float | None = Field(
+        default=None,
+        description=(
+            "How well the chosen chart form fits the data it draws. No producer yet - "
+            "null until the visual planning work writes it."
+        ),
+    )
+    dual_score: float | None = Field(
+        default=None,
+        description=(
+            "The pair of readings a two-axis story is scored on. No producer yet - "
+            "null until the known-defects work writes it."
+        ),
+    )
+    null_score: float | None = Field(
+        default=None,
+        description=(
+            "What this story scores against the no-visual baseline. No producer yet - "
+            "null until the known-defects work writes it."
+        ),
+    )
 
     @model_validator(mode="after")
     def _identity_is_rebuilt_not_trusted(self) -> Self:
@@ -249,138 +353,29 @@ class RunPlan(Contract):
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-14",
+            change="A planned item carries the eight terms that add up to rank_score.",
+            why="Only the total survived, so nobody could read why a story ranked where it did.",
+        ),
+        ChangelogEntry(
             version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
+            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
+            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-09-07",
-            change=(
-                "A run records what the already-published guard refused on "
-                "dropped_published, and how old those addresses were on "
-                "dropped_published_ages."
-            ),
-            why=(
-                "The guard is the whole reason the published ledger is read entire and "
-                "never windowed, and nothing committed said what it bought. The count "
-                "went to stderr and stopped there, so no payload could say how often "
-                "the guard fired or how old the addresses it refused were - and the "
-                "age is the number a finite cover turns on, because a cover only ever "
-                "forgets the old ones. Measured on this checkout 2026-09-08 on an "
-                "Intel Core i7-1265U, over the ledger as it stood at the end of "
-                "2026-09-07: 7,600 rows, 7,519 distinct addresses, and 16 published "
-                "days from 2026-08-23 to 2026-09-07 - so the whole record is 16 days "
-                "wide. Every cover anybody has proposed is wider than that, and today "
-                "the question cannot be answered from what is committed at all. "
-                "Recording the bands is what makes it answerable, one run at a time. "
-                "Additive with a default, so a plan an earlier run wrote still "
-                "validates and no read-side migration is needed (section 11)."
-            ),
+            change="A run records what the already-published guard refused on dropped_published.",
+            why="The guard is the whole reason the published ledger is read entire.",
         ),
         ChangelogEntry(
             version="2026-09-02T23:00",
-            change=(
-                "live_feeds on a vertical is renamed eligible_feeds and feed_floor is "
-                "added beside it. A plan spelling the old name still reads, and no "
-                "floor is invented for a payload that never carried one. feeds_skipped "
-                "now also covers a feed held back by a retired address."
-            ),
-            why=(
-                "The count decided whether a desk publishes at all, and it counted "
-                "feeds a curator had not retired - so a source robots.txt refuses, an "
-                "address a server reports permanently gone, and a source we may "
-                "actually ask all counted the same. The floor exists to stop a thin "
-                "desk reaching a reader, and padding it with sources we are not "
-                "allowed to ask is how it stops doing that. The new name says what is "
-                "counted; feed_floor beside it means the payload can be read without "
-                "the config that produced it. Measured on this checkout 2026-09-02 "
-                "over the committed ledger: the two counts are identical on every "
-                "desk today - ai 43 against a floor of 35, energy 27 against 21, "
-                "business-economy 25 against 21, world 25 against 21, india 24 "
-                "against 21 - because no committed row records permission or a "
-                "retirement yet. Breaking, and the read migration is in this commit "
-                "(section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-31T10:30",
-            change="Added time_source to each planned item.",
-            why=(
-                "published_at holds the feed's own date, or our first sight of the "
-                "address when the feed gave no usable one, and the field could not say "
-                "which. The choice is made in rank.appeared_at and was thrown away one "
-                "line later, so a page printing the time could not vouch for it. "
-                "Measured 2026-08-31 on the committed 2026-08-30 payload - the newest "
-                "day that had finished publishing - 431 items: 305 distinct HH:mm "
-                "values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. "
-                "That last figure is an upper bound on the fallback rather than a "
-                "count of it, because nothing committed records the choice yet - which "
-                "is the defect. Additive with a default, so a plan an earlier run wrote "
-                "still validates, and a null reads as unknown (section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-30",
-            change="Added too_old to each vertical's plan summary.",
-            why=(
-                "collect.max_age_hours now refuses a story older than a day, and the "
-                "verticals do not lose the same amount. Measured 2026-08-30 over the "
-                "2,900 items published from 2026-08-22 to 2026-08-29: a one-day gate "
-                "keeps 95.7 percent of world and 32.4 percent of ai, because the ai "
-                "desk is largely fed by research-lab blogs that serve a back "
-                "catalogue. Without this count a desk that halves overnight looks "
-                "like a broken feed rather than a working gate. Additive with a "
-                "default, so a plan an earlier run wrote still validates (section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-23T18:48",
-            change="Added source_form to each planned item.",
-            why=(
-                "Workers need to know when a source is an abstract without detecting it "
-                "from page text. Carrying the curator-declared feed form keeps that fact in "
-                "the plan payload."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-23T12:00",
-            change="feeds_skipped counts the feeds a quarantine held back this run.",
-            why=(
-                "A quarantined feed is neither read nor failed, so a short day looked "
-                "like a quiet news day. The count says which it was."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-22T11:00",
-            change=(
-                "item_id is derived from the address instead of the rank position, and "
-                "published_at now carries the time the run believes rather than the time "
-                "the feed claimed."
-            ),
-            why=(
-                "A rank position renumbers the day on every run, so on a six-hourly "
-                "schedule the same story came back under a new id and published twice. A "
-                "date a feed puts in the future is not a date, and forwarding one to a "
-                "reader repeats the feed's claim as our own."
-            ),
+            change="live_feeds on a vertical is renamed eligible_feeds and feed_floor is added.",
+            why="The count decided whether a desk publishes and counted the wrong feeds.",
         ),
         ChangelogEntry(
             version="2026-08-21T04:00",
-            change="Initial shape: the ranked, capped, deduplicated work list for one run.",
-            why="Contracts before logic - a worker reads a fixed shape and never re-decides.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

@@ -95,6 +95,10 @@ jobs:
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
       summarize_file: ${{ steps.models.outputs.summarize_file }}
+      draft_repo: ${{ steps.models.outputs.draft_repo }}
+      draft_revision: ${{ steps.models.outputs.draft_revision }}
+      draft_file: ${{ steps.models.outputs.draft_file }}
+      draft_sha256: ${{ steps.models.outputs.draft_sha256 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -172,6 +176,18 @@ jobs:
                   if value.split() != [value]:
                       raise SystemExit(f"models.{role}.{field} is empty or not one word")
                   print(f"{role}_{field}={value}")
+          # The draft head, or four empty strings where the entry declares none.
+          # Published here for the same reason the target's refs are: `needs`
+          # resolves before a job's first step, and the fetch step downstream
+          # must not open config a second time and disagree with this one.
+          draft = models["summarize"].get("draft") or {}
+          for field in ("repo", "revision", "file", "sha256"):
+              value = draft.get(field) or ""
+              # `draft and`, not `value and`: an entry that declares a head must
+              # declare all four, or the fetch downstream runs on a blank.
+              if draft and value.split() != [value]:
+                  raise SystemExit(f"models.summarize.draft.{field} is empty or not one word")
+              print(f"draft_{field}={value}")
           PY
 
       # How long a worker may take, read from the one file that says so. It
@@ -491,11 +507,26 @@ jobs:
           curl -fsSL --retry 3 --retry-all-errors \
             -o "backend/models/${{ needs.plan.outputs.summarize_file }}" \
             "https://huggingface.co/${{ needs.plan.outputs.summarize_repo }}/resolve/${{ needs.plan.outputs.summarize_revision }}/${{ needs.plan.outputs.summarize_file }}?download=true"
+          # The draft head, when the entry declares one. Same pinned-commit rule
+          # and the same load-bearing `-f`, in the same step because a second
+          # fetch step is a second place for these two rules to drift apart.
+          if [ -n "${{ needs.plan.outputs.draft_file }}" ]; then
+            curl -fsSL --retry 3 --retry-all-errors \
+              -o "backend/models/${{ needs.plan.outputs.draft_file }}" \
+              "https://huggingface.co/${{ needs.plan.outputs.draft_repo }}/resolve/${{ needs.plan.outputs.draft_revision }}/${{ needs.plan.outputs.draft_file }}?download=true"
+          fi
 
       # No `if:`. This runs on a cache hit as well as a miss, because a restored
       # entry is the one case where nobody watched the bytes arrive. It sits
       # before the server starts, so wrong weights cost one step instead of a
       # shard of summaries filed under a model that never ran (Guardrail #10).
+      #
+      # The draft head, where the entry declares one, is fetched and checked in
+      # the same step and to the same standard. A draft that fails its digest
+      # would be a second set of weights nobody verified proposing tokens to the
+      # one we did - and because the target verifies every draft, the run would
+      # publish correct text and no error while paying for a guess that never
+      # lands. Silent and expensive is the worst pair.
       - name: Verify the weights
         run: |
           set -euo pipefail
@@ -505,6 +536,9 @@ jobs:
             exit 1
           fi
           echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.summarize_file }}" | sha256sum --check
+          if [ -n "${{ needs.plan.outputs.draft_file }}" ]; then
+            echo "${{ needs.plan.outputs.draft_sha256 }}  backend/models/${{ needs.plan.outputs.draft_file }}" | sha256sum --check
+          fi
 
       - name: Start the model
         env:
@@ -551,7 +585,7 @@ jobs:
       # the grammar still accepts, so the only symptom is worse summaries and
       # nothing goes red.
       #
-      # Five arms, and none of them has a skip flag: the render, the prefix
+      # Five cases, and none of them has a skip flag: the render, the prefix
       # cache, the grammar, the architecture in the weights, and the window
       # against the length the model was trained for. Each refuses by name and
       # says what was declared and what was reported.
@@ -564,7 +598,7 @@ jobs:
       # the front of the weights file.
       #
       # The schema is handed in from the module that builds it rather than
-      # copied here, so the grammar arm is held to the shape this run really
+      # copied here, so the grammar case is held to the shape this run really
       # sends (`docs/architecture/summarize/model-boundary.md`).
       - name: The server proves the entry
         env:
@@ -576,14 +610,14 @@ jobs:
           from pathlib import Path
 
           from idhazh import config
-          from idhazh.classify.calls import call_two_schema
+          from idhazh.classify.calls import summarize_and_plan_schema
           from idhazh.llm.server import prove_the_entry
 
           entry = config.load(Path("config")).models.summarize
           prove_the_entry(
               model=entry,
               weights=Path(os.environ["LLAMA_WEIGHTS"]),
-              output_schema=call_two_schema(),
+              output_schema=summarize_and_plan_schema(),
               timeout=entry.inference.request_timeout_minutes * 60,
           )
           print("the entry and the server agree on all five")
@@ -635,9 +669,8 @@ jobs:
 
       # The rows this shard earned, committed here rather than three hours later
       # in assemble. Until then they exist only inside the items artifact at the
-      # end of this job, which keeps them for one day and is not uploaded at all
-      # when a job is cancelled - so a run stopped after the workers had measured
-      # every item recorded none of it.
+      # end of this job, which is never committed and expires - so a run stopped
+      # after the workers had measured every item recorded none of it.
       #
       # First of the `always()` steps for that reason: a cancelled job runs them
       # in order inside a grace period, and this is the one whose loss the pair
@@ -755,6 +788,13 @@ jobs:
       # file and one score day file, so those are the only files a repeat can be
       # in, and naming them is what keeps the pass costing the same however many
       # days the archive holds (Guardrail #12).
+      #
+      # `state/span-rollup` is staged here because a shard is the only thing that
+      # writes it. `roll_up_spans` folds the shard's spans and appends the month
+      # file into this runner's checkout; until 2026-09-15 no list named the path,
+      # so the fold died with the runner and assemble published a header row over
+      # an absent directory. Every span this project has ever opened was measured,
+      # folded and thrown away by one missing path.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -767,6 +807,7 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/item-health state/scores state/score-index state/runtime-counters.csv
+          state/span-rollup
 
       - name: Prompt cache log summary
         if: always()
@@ -877,14 +918,29 @@ jobs:
       # runs a day held for seven days is 18.6 MB against the 500 MB of artifact
       # storage Guardrail #2 allows - 3.7 percent of the budget, for the only copy of
       # the text that exists.
+      #
+      # `always()`, because a step with no condition runs on `success()` and a
+      # job stopped by `timeout-minutes` is cancelled rather than successful.
+      # Run 34852763827 on 2026-09-14 is what that cost: three of four shards
+      # were cancelled at the bound, the `always()` ledger steps above them ran
+      # and filed 33 items as published, and this upload was skipped on all
+      # three - so assemble composed the day from shard 3 alone. The census read
+      # 46 published items and the committed day carries 13.
+      #
+      # There is something to upload because `work` writes each item's payloads
+      # as it finishes that item rather than once at the end. The record step
+      # above reads this same directory and did file rows on every cancelled
+      # shard, which is the evidence the files are on disk when the bound lands.
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: items-${{ matrix.shard }}
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
           retention-days: 7
           if-no-files-found: ignore
 
-      # The pictures this shard drew. Call 2 writes the summary and the plan in
+      # The pictures this shard drew. The summarize-and-plan call writes the
+      # summary and the plan in
       # one reply, so `work` is the only job that renders, and a decision naming
       # an asset whose bytes never left this runner is a broken image on the
       # page - `_picture_faults` calls it "names a picture file that is not
@@ -897,7 +953,14 @@ jobs:
       # This run's day and never the whole tree: `render.write.asset_relpath`
       # files every chart under the day that names it, so a wider line sends
       # every committed day back to Actions on every run (Guardrail #12).
+      #
+      # `always()` for the reason written over the items artifact, and it has to
+      # be the same answer for both: the decision naming a chart travels in
+      # `items/` and the chart's bytes travel here, so guarding one alone
+      # publishes a story naming a picture file that is not there - which is
+      # what `_picture_faults` refuses the day for.
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: shard-visuals-${{ matrix.shard }}
           path: ${{ needs.plan.outputs.day_dir }}/
@@ -924,6 +987,31 @@ jobs:
           name: evidence-${{ matrix.shard }}
           path: backend/var/evidence/${{ needs.plan.outputs.date }}/
           retention-days: 14
+          if-no-files-found: ignore
+
+      # What each model call was sent and what came back. The census row says a
+      # reply was 1,158 tokens where it used to be 229; it cannot say what the
+      # model was asked, so it cannot say whether the prompt moved, the article
+      # was longer, or the decoder simply ran on. That question was open for six
+      # days on the regression this exists for, and it was open because the only
+      # copy of the text was on a runner that had already been deleted.
+      #
+      # Ninety days, which is the longest window anything here keeps and is
+      # deliberate: a regression is found by comparing today with a run from
+      # weeks ago, and fourteen days would put the comparison run out of reach
+      # exactly when it is wanted. It is bounded by the two flags that fill it -
+      # `logging.capture_prompts` and `logging.capture_replies` - and with both
+      # off the directory is empty and this line is a green no-op.
+      #
+      # Never committed, and deliberately not named in any commit-and-push.sh
+      # call: a rendered prompt carries the article body inside it, and an
+      # article body is not ours to republish (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: captures-${{ matrix.shard }}
+          path: backend/var/run/${{ needs.plan.outputs.date }}/captures/
+          retention-days: 90
           if-no-files-found: ignore
 
   assemble:
@@ -956,7 +1044,8 @@ jobs:
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
-      # The pictures the work shards drew. Call 2 writes the summary and the
+      # The pictures the work shards drew. The summarize-and-plan call writes
+      # the summary and the
       # plan in one reply, so a chart is rendered on the shard that read the
       # article and travels with it - one artifact per shard, and
       # `continue-on-error` because a day where nothing was drawable is a normal
@@ -1091,6 +1180,7 @@ jobs:
             state/score-index
             state/item-health
             state/runtime-counters.csv
+            state/span-rollup
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest

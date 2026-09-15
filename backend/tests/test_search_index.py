@@ -137,13 +137,13 @@ class TestTheShape:
         assert built.entries[0].vector is None
         assert '"vector":null' in built.to_json()
 
-    def test_both_arms_of_the_offset_field_are_in_the_schema(self) -> None:
+    def test_both_cases_of_the_offset_field_are_in_the_schema(self) -> None:
         """The schema itself says 'offset or null' rather than leaving it to a reader."""
         field = SearchIndex.json_schema()["$defs"]["SearchIndexEntry"]["properties"]["vector"]
-        arms = field["anyOf"]
-        assert {"type": "null"} in arms
+        cases = field["anyOf"]
+        assert {"type": "null"} in cases
         assert any(
-            arm.get("type") == "integer" and arm.get("minimum") == 0 for arm in arms
+            case.get("type") == "integer" and case.get("minimum") == 0 for case in cases
         )
 
     def test_an_offset_that_skips_a_vector_is_rejected(self) -> None:

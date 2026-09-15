@@ -1,7 +1,6 @@
 # Site Measurements
 
-**Last Updated**: 2026-09-13
-
+**Last Updated**: 2026-09-15
 Every number about **what the reader downloads**: the compression level the
 origin serves, each page's ceiling, what a cold load costs, how fast the site
 fills, and the weight of the archive, the search index and the published ledger.
@@ -31,7 +30,7 @@ defence: visuals are 10.7 percent of what the site adds in a day, and with no
 window at all they would take about nine years to fill the cap on their own.
 
 Toolchain: CPython 3.14.2. Date: 2026-09-13. Byte and file counts over a fixed
-tree, so the box bears on none of them and n=1 per arm has no spread of its own;
+tree, so the box bears on none of them and n=1 per case has no spread of its own;
 the spread that matters is on the rate and is given below.
 
 **This rate is over the committed payload tree, and that is legal for visuals
@@ -121,7 +120,7 @@ Method: one tree built three times each way at a pinned `BUILD_VERSION`,
 interleaved - once as it stands, once with the seven
 `export const prerender = true` declarations deleted and nothing else changed.
 Zero spread: every figure below repeated to the byte on all three builds of both
-arms.
+cases.
 
 **Prerendering costs 1,635,702 bytes, 1.54 percent of the published site** -
 106,316,899 B with it against 104,681,197 B without. In the unit the Pages cap
@@ -137,7 +136,7 @@ document to weigh, and `npm run build` itself exits 1 because
 `frontend/scripts/build-state.ts` will not certify a build whose root document
 is missing.
 
-The full record - conditions, method, both arms, the spread and what it does not
+The full record - conditions, method, both cases, the spread and what it does not
 settle - is
 [benchmarks/prerender-on-and-off.md](benchmarks/prerender-on-and-off.md).
 
@@ -440,13 +439,13 @@ readable cross-origin, so the 22.59 MiB was forfeited deliberately.
 ### The run that was supposed to answer this measured something else
 
 `.github/workflows/measure-migrated-tree.yml`, dispatched 2026-09-08 on
-`ubuntu-latest` as run `34287508030`, ran two arms on one commit: the tree as it
+`ubuntu-latest` as run `34287508030`, ran two cases on one commit: the tree as it
 shipped, and a "migrated" tree with the encoder weights removed and the dated
 directories deleted. It reported **112.0 MB in 763 files and 601 days** for the
 first and **89.4 MB in 757 files and 777 days** for the second, twice, 121 bytes
 apart.
 
-**The second arm did not delete the dated directories, and its own output says
+**The second case did not delete the dated directories, and its own output says
 so.** The file count moved by six, which is exactly the six files under
 `frontend/static/assist/models/`. The `by directory` line moved `assist` from
 43.2 MB to 20.6 MB and left `digest` at 18.2 MB and `console` at 7.9 MB
@@ -459,7 +458,7 @@ may not be quoted for the site, and the plan's headline claim rested on it. The
 727 above replaces it, and it needed no harness - the site as it ships **is** the
 migrated tree, so the ordinary `site` job answers the question.
 
-**What the fake arm did measure, and it is still worth having:** removing the
+**What the fake case did measure, and it is still worth having:** removing the
 encoder weights alone is worth 22.6 MB and 176 published days of runway. That is
 the price of keeping them, and the owner paid it on 2026-09-09 knowing the cap is
 not close.
@@ -475,7 +474,7 @@ Nothing else in the move costs anything: the tokenizer arrives gzipped from the
 hub at 212,991 bytes against 0.21 MB from our origin, which is the same number.
 
 This settles the fork Carmack left open on 2026-09-08, when the
-shell-and-fetch migration measured the two origins: it is the expensive arm. The 6.75 MB is what gzip was taking off the quantised
+shell-and-fetch migration measured the two origins: it is the expensive case. The 6.75 MB is what gzip was taking off the quantised
 ONNX weights, 29.4 percent of them, and a hub that serves them as an opaque
 octet-stream gives that back to the reader.
 
@@ -624,23 +623,23 @@ network. The page is `https://miztiik.github.io/yen-idhazh/`, the deployed Pages
 origin; `location.origin` and `isSecureContext` were read out of the loaded
 document to prove it. Every fetch runs inside that document, so the `Origin`
 header and the CORS check are production's. Twenty fetches per repetition,
-**three repetitions of the widened arm and one of the as-deployed arm: every
+**three repetitions of the widened case and one of the as-deployed case: every
 verdict and every byte count was identical in all of them, so the spread is
 zero.** Each fetched body is hashed in the page with `crypto.subtle.digest` and
 compared against the file on disk, so a match means the browser got our bytes
 and not merely a 200.
 
-### Two arms, because one arm cannot tell the two gates apart
+### Two cases, because one case cannot tell the two gates apart
 
-| Arm | What the document's `connect-src` said | Result |
+| Case | What the document's `connect-src` said | Result |
 | --- | --- | --- |
 | As deployed | `'self'` | all 15 fetches refused, and the browser recorded no hop - the request never left |
 | Widened | `'self'` plus the six hosts below | 10 of 20 read, 10 refused; the refusals are the other origin's, not ours |
 
-The widened arm rewrites the `connect-src` directive in the CSP meta tag the
+The widened case rewrites the `connect-src` directive in the CSP meta tag the
 Pages document ships, and changes nothing else. Same scheme, same host, same
 port, same document - only our own policy differs, and that policy is what
-row #16 changes. Running one arm alone would have reported our CSP as a CORS
+row #16 changes. Running one case alone would have reported our CSP as a CORS
 refusal, or a CORS refusal as our CSP.
 
 ### The four routes, and where each one breaks
@@ -698,7 +697,7 @@ same CORS rule, but they were not run, so the refusal above is Chromium's and
 the inference to other engines is a prior rather than evidence. Nothing here
 measures a rate limit: `raw.githubusercontent.com` is documented as
 rate-limited and no request in this run was throttled, which says nothing about
-what happens when a hundred readers search in a minute. And no arm measured a
+what happens when a hundred readers search in a minute. And no case measured a
 reader who already holds the bytes, because every fetch ran with
 `cache: 'no-store'`.
 
@@ -957,19 +956,19 @@ Method: two fixture archives generated under `$env:TEMP` and read through
 `DIGEST_ROOT`, so nothing under `frontend/public/` moved. Both cover the **same
 24 calendar months**, 2 October 2024 to 1 September 2026, one at 700 published
 days and one at 182 - so the difference between the two is days and nothing
-else. Each arm is one `npm run build` and `gzip -9` over
-`build/archive/index.html`. The before arm is `origin/main`'s own archive
+else. Each case is one `npm run build` and `gzip -9` over
+`build/archive/index.html`. The before case is `origin/main`'s own archive
 source, checked out in place over this branch's and copied back afterwards, in
-the worktree that built the after arm.
+the worktree that built the after case.
 
-| Arm | Published days | `gzip -9` of `/archive/` | Day-list markup, raw | Day links |
+| Case | Published days | `gzip -9` of `/archive/` | Day-list markup, raw | Day links |
 | --- | ---: | ---: | ---: | ---: |
 | Before, 700 days | 700 | 12,045 | 74,621 | 700 |
 | Before, 182 days | 182 | 6,319 | 19,457 | 182 |
 | After, 700 days | 700 | 10,484 | 73,385 | 707 |
 | After, 182 days | 182 | 6,348 | 26,460 | 189 |
 
-Growth per published day, over the 518 days between the two arms of each pair:
+Growth per published day, over the 518 days between the two cases of each pair:
 
 | | Bytes a day, `gzip -9` | Day-list markup, raw bytes a day |
 | --- | ---: | ---: |
@@ -1008,7 +1007,7 @@ rather than shorter.
 Toolchain: node 24.12.0. Date: 2026-08-27. Method:
 one checkout, one set of committed day payloads, built twice - once with the
 frontend source at `9d25827` and once with search reading the month index. Only
-`frontend/src` and `frontend/scripts` differ between the arms, so nothing the
+`frontend/src` and `frontend/scripts` differ between the cases, so nothing the
 pipeline published between builds can move the number.
 
 | Route | Eager day payloads | Month index | Change |
@@ -1016,7 +1015,7 @@ pipeline published between builds can move the number.
 | `/archive/` | 1,766,682 | 2,912 | **-1,763,770, which is 99.8 percent** |
 | Every prerendered page, summed | 13,247,645 | 11,483,881 | -1,763,764 |
 
-Two builds of each arm agree to 1 byte on the old source and to 8 bytes on the
+Two builds of each case agree to 1 byte on the old source and to 8 bytes on the
 new one, so the noise floor is far below anything here. **1.7 MB is what the
 archive charged a reader for opening a page to find one story**, and the whole
 of it was the day payloads on-device search read the vectors out of.
@@ -1138,7 +1137,7 @@ it.** `ui.archive_recent_days` moved from seven to fourteen, so the block of day
 rows above the month list is twice as long. Toolchain: node 24.12.0. Date:
 2026-09-06. Method: `npm run build` then
 `frontend/scripts/bundle-gate.mjs` on one worktree at 16 committed days, once at
-each setting. Spread: not taken - one build an arm, and the 64-byte noise floor
+each setting. Spread: not taken - one build a case, and the 64-byte noise floor
 derived above is four hundred times smaller than the move. `/archive/` weighs
 **5,015 bytes at seven rows and 5,163 at fourteen**, so seven extra rows cost
 148 bytes, which is 21.1 a row. That is a one-off step and not a change of
@@ -1216,7 +1215,7 @@ buys days that keep arriving.
 
 **Measured on an node 24.12.0, 2026-08-27**, by
 summing every file under `frontend/build/` after `npm run build`, over the six
-committed days and 2,237 items. n=1 per arm. CI's own `du -sb build` on the same
+committed days and 2,237 items. n=1 per case. CI's own `du -sb build` on the same
 commit agreed to 0.0006 percent, so a local build is a trustworthy stand-in for
 the runner's.
 
@@ -1240,16 +1239,16 @@ one - 25.9 times smaller for the same 731 items.
 
 **So a fill rate needs one code and two corpora, not two dates.** Three builds
 were taken. Toolchain: node v24.12.0.
-Date: 2026-09-06. n=1 per arm - a byte count over a fixed tree has no spread, and
+Date: 2026-09-06. n=1 per case - a byte count over a fixed tree has no spread, and
 the spread that matters is on the rate and is given below.
 
-| Arm | What it is | Bytes | Files | Items | Published days |
+| Case | What it is | Bytes | Files | Items | Published days |
 | --- | --- | ---: | ---: | ---: | ---: |
 | E | `f75f42bc`, the 2026-08-31 tip | 158,567,231 | 380 | 3,485 | 10 |
 | Aug | today's code, September removed | 96,235,704 | 440 | 4,086 | 11 |
 | T | `40a96ef7`, the 2026-09-06 tip | 111,351,483 | 666 | 6,799 | 16 |
 
-Arm Aug is arm T's code built against a copy of `frontend/public/` and `state/`
+Case Aug is case T's code built against a copy of `frontend/public/` and `state/`
 with every September day taken out - the digest days, the month's search-index
 shard, the month's telemetry and ledger shards, and the 2,713 September rows of
 the flat published ledger this project then held. September is cut whole because
@@ -1258,8 +1257,8 @@ sharded by month, so a month boundary is the only cut that leaves each shard
 either untouched or absent. **No day was cloned or synthesised**; both corpora
 are real published days.
 
-**Arm E is the control that proves the method.** The 2026-08-30 reading above is
-147,986,756 bytes over 3,054 items; arm E is 158,567,231 over 3,485. The step
+**Case E is the control that proves the method.** The 2026-08-30 reading above is
+147,986,756 bytes over 3,054 items; case E is 158,567,231 over 3,485. The step
 between them is **24,549 bytes an item**, against **24,378** measured
 independently on 2026-08-29 over seven mature days - **0.7 percent apart**, from
 a different tree state and a different method. A local build of an older commit
@@ -1276,7 +1275,7 @@ reproduces the committed record.
 
 **Two methods, 4.4 percent apart on the part both can see.** The first fits
 `bytes = fixed + rate x items` over the thirteen mature per-date subtrees of the
-arm T build alone - a partition of one tree, never reading arm Aug - and gets
+case T build alone - a partition of one tree, never reading case Aug - and gets
 **1,197,991 bytes a published day plus 1,785 an item**, with a root-mean-square
 residual of 178,369 bytes a day, 8.5 percent of a mean day. Applied to the five
 removed days and their 2,713 items it predicts **10,831,453** bytes against the
@@ -1337,7 +1336,7 @@ the level it is the same story: 6,480,999 bytes of the 49,579,643-byte clone are
 history, 13.1 percent. A clone today is 47.3 MiB against a site of 106.2, and it
 grows at 45 percent of the site's rate.
 
-**The runway, from the arm T level at the measured rate.**
+**The runway, from the case T level at the measured rate.**
 
 | Quantity | Value |
 | --- | ---: |
@@ -1351,7 +1350,7 @@ grows at 45 percent of the site's rate.
 Both were correct for the tree they measured.
 
 **`site-weight`'s printed runway is no longer the floor it is documented as.**
-On the arm T tree it prints 277.6 published days to the alarm against the 240.6
+On the case T tree it prints 277.6 published days to the alarm against the 240.6
 measured here - **15.4 percent long**. It counts the right bytes: its 106.2 MB
 and 6,799 items match the independent sum above exactly. Two recorded premises
 in its arithmetic now point opposite ways and nearly cancel. Charging the fixed
@@ -1560,7 +1559,7 @@ Toolchain: CPython 3.14.2,
 shared by every row; then `retrieval.evaluate` over the committed day payloads
 restricted to the days up to and including each date. Same queries, same labels,
 same ranking code, same run - only the corpus moves. 80.2 s of wall clock for
-the whole table plus the four decomposition arms.
+the whole table plus the four decomposition cases.
 
 | Archive through | Items | Carrying a vector | reachable recall@10 | +/- se |
 | --- | ---: | ---: | ---: | ---: |
@@ -1688,7 +1687,7 @@ What a browser fetches before a reader does anything: the prerendered document, 
 | `/evals/` | 3,113 | 43,272 | 6,806 | **53,191** | 23 | the signpost to the console |
 | `/404` | 1,604 | 42,397 | 6,806 | **50,807** | 21 | the fallback shell |
 
-**The spread is the build's own noise and nothing else.** Two builds of one unchanged tree, back to back in the same worktree, moved each route's first load by **10 to 19 bytes** - `/` +19, `/<date>/` +18, `/<date>/<topic>/` +16, `/archive/` +12, `/evals/` +10, `/404` +10. Every document moved by 1 byte or less; all of it is JavaScript. That is `kit.version.name` defaulting to `Date.now`, which lands in the content hash of every chunk filename ([agent-notes/gates-and-builds.md](agent-notes/gates-and-builds.md#running-the-gates)). The version was deliberately **not** pinned to take these two arms: the pin stops every page hydrating when `BUILD_VERSION` is unset, which costs more than the noise it removes. 64 bytes remains the working tolerance, and 19 is well inside it.
+**The spread is the build's own noise and nothing else.** Two builds of one unchanged tree, back to back in the same worktree, moved each route's first load by **10 to 19 bytes** - `/` +19, `/<date>/` +18, `/<date>/<topic>/` +16, `/archive/` +12, `/evals/` +10, `/404` +10. Every document moved by 1 byte or less; all of it is JavaScript. That is `kit.version.name` defaulting to `Date.now`, which lands in the content hash of every chunk filename ([agent-notes/gates-and-builds.md](agent-notes/gates-and-builds.md#running-the-gates)). The version was deliberately **not** pinned to take these two cases: the pin stops every page hydrating when `BUILD_VERSION` is unset, which costs more than the noise it removes. 64 bytes remains the working tolerance, and 19 is well inside it.
 
 **The home page is proportional to the day and a dated route is not, and one publish measured both.** The same instrument ran a few hours earlier over the twelve days to 2026-09-01, when the newest day was that day's **627** stories rather than 2026-09-02's 128:
 

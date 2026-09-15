@@ -48,134 +48,52 @@ class ArticleStatus(StrEnum):
     ROBOTS_DENIED = "robots_denied"
 
 
+class TitleSource(StrEnum):
+    """Which stranger's string the published headline came from.
+
+    Both are untrusted, and they are not trusted equally. The feed is a source
+    somebody chose and the page is whoever answered the address, so the feed is
+    read first and the page only when the feed said nothing - order is a
+    control, and a page can never displace a headline we were given. The page
+    path is then held to a tighter bound than the feed path and refused over it
+    rather than cut. So this field records the outcome of a trust decision
+    rather than provenance alone: `page` says the more attacker-controlled of
+    the two strings is the one on the page.
+    """
+
+    FEED = "feed"
+    PAGE = "page"
+
+
 class Article(Contract):
     """The Extract stage's output payload, one per item."""
 
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-13",
-            change=(
-                "Added secondary_desk: the one other desk the article's own reading "
-                "names, beside desk, which keeps naming where the digest publishes it."
-            ),
-            why=(
-                "The desk ceiling shipped on 2026-09-13 sends an over-ceiling story to a "
-                "second desk, and until now the only second desk available was the word "
-                "the FEED declares - so a story could only move back to where it "
-                "arrived, and a story whose feed word was already its filing could not "
-                "move at all. The feed's word stays the fallback and this is what "
-                "replaces it where a reading exists. One value rather than a list, "
-                "because a story on four desks is a story on no desk. Additive and "
-                "optional: null is nothing having said, the day falls back to vertical, "
-                "and every payload written before today still reads (section 11). "
-                "Nothing fills it yet - the model that will is plan 23 row #8, and 0 of "
-                "9,353 committed items across 24 days carry a read desk of any kind, "
-                "measured 2026-09-13."
-            ),
+            version="2026-09-15T22:10",
+            change="FailureCode gained model_timed_out and shard_out_of_time.",
+            why="Both were being reported under a name that sends an operator to the wrong place.",
         ),
         ChangelogEntry(
-            version="2026-09-12T18:40",
-            change=(
-                "item_id accepts a second shape: sixteen Crockford base32 symbols "
-                "beside the decimal digits it already took."
-            ),
-            why=(
-                "Ten decimal digits is 33 bits of the address, which collides often "
-                "enough that the collision had to be resolved - and the only way to "
-                "resolve one is to step the loser past whatever else the run planned, "
-                "so a collided id depended on the day's pool rather than on the "
-                "address alone. Two runs of one day draw different pools, so the same "
-                "article came back under a second id and published twice. Eighty bits "
-                "do not collide. This widens and never contracts: every day published "
-                "before today carries the decimal shape and a published day is frozen, "
-                "so nothing was rewritten and no read-side migration is owed."
-            ),
+            version="2026-09-15T20:00",
+            change="The embedded failure vocabulary gained model_refused.",
+            why="It follows item-health-row, where the vocabulary is declared.",
         ),
         ChangelogEntry(
-            version="2026-09-12T06:56",
-            change=(
-                "Added desk: where the digest publishes the story, beside vertical, "
-                "which keeps carrying the word the feed declares about itself."
-            ),
-            why=(
-                "One word was doing two jobs. A feed declares a vertical and the digest "
-                "needs to know what the article is about, and those are different "
-                "questions the moment an energy feed carries an AI story. Repointing "
-                "vertical was refused instead of taken: _identity_is_rebuilt_not_trusted "
-                "asserts item_id.startswith(f'{self.vertical}-'), so repointing it "
-                "rejects, at read time, every item whose desk moved. Additive and "
-                "optional: null is nothing having said, the digest falls back to "
-                "vertical, and every payload written before today still reads (section "
-                "11). Nothing fills it yet - the model that will is a later row."
-            ),
+            version="2026-09-15T12:00",
+            change="title_source records a trust decision, not provenance alone.",
+            why="A page headline and a feed headline are not equally trustworthy.",
         ),
         ChangelogEntry(
-            version="2026-09-12T03:55",
-            change=(
-                "lenses and events are lists of Slug rather than of the closed LensId "
-                "and EventType enums, which are deleted. The schema gates the slug "
-                "pattern and no longer enumerates the members."
-            ),
-            why=(
-                "A lens id was a Python enum member, so adding or retiring a word was a "
-                "code change, a schema regeneration and a release. The vocabulary is "
-                "config/taxonomy.json and nothing else, and the tagger can only ever "
-                "emit a key of the mapping that file builds - so the type can widen "
-                "without letting anything invent a label (Guardrail #11). Read-compatible: "
-                "every id any payload on disk carries is a well-formed slug, so this "
-                "build reads every one of them, and a re-run of a stage against a "
-                "payload an older build wrote produces the same tags. The break is on "
-                "the write side, where the schema stops refusing a word the vocabulary "
-                "has gained (section 11)."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-27",
-            change="failure_code may now carry copied_source or leaked_address.",
-            why=(
-                "Summarize gained two rejects and the failure vocabulary is inlined into "
-                "this schema, so this generated file's bytes move even though no field "
-                "on this payload changed and extract can never write either value. "
-                "Stamped here rather than left to the drift gate to announce (section "
-                "11). Additive - a payload written before today names none of the new "
-                "values and still validates."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-26",
-            change="Added source_word_count: the body length before the truncation cap.",
-            why=(
-                "The length band is named min_source_words and was being chosen from the "
-                "post-cap count, which cannot exceed int(truncation_cap_tokens / 1.3). At "
-                "the committed cap of 2500 that ceiling is 1923 words, so the 2000-word "
-                "band was unreachable by arithmetic. The field is None on payloads written "
-                "before it existed, where band_source_words falls back to the post-cap "
-                "count the build that wrote them used."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-23T18:49",
-            change="Added source_form to the extract payload.",
-            why=(
-                "Summarize and publish need the curator-declared source form after the "
-                "plan file is no longer in hand. The field defaults to article so older "
-                "payloads still read."
-            ),
-        ),
-        ChangelogEntry(
-            version="2026-08-23T18:15",
-            change="Added brief and failure_code to the extract payload.",
-            why=(
-                "Extract now publishes short or list-shaped pages by default while recording "
-                "the shape signal, and it rejects paywalled or unsupported forms with typed "
-                "codes that the item-health classifier can carry."
-            ),
+            version="2026-09-15T06:19",
+            change="Added title_source: feed or page, the headline's provenance.",
+            why="Extract now falls back to the page's own headline when the feed carried none.",
         ),
         ChangelogEntry(
             version="2026-08-21",
-            change="Initial shape: identity, provenance, text, truncation and failure states.",
-            why="Contracts before logic - Extract is written against a fixed payload.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -229,6 +147,18 @@ class Article(Contract):
     rank_score: float = Field(ge=0.0)
 
     title: UntrustedLine | None = None
+    title_source: TitleSource | None = Field(
+        default=None,
+        description=(
+            "Where `title` came from: the feed entry, or the fetched page's own "
+            "metadata when the feed carried none. Both are untrusted and they are not "
+            "trusted equally - the feed is read first because it is the less "
+            "attacker-controlled string, and the page path is held to a tighter bound "
+            "and refused over it rather than cut. So this is the outcome of a trust "
+            "decision, not provenance alone. Null on a failed payload, which publishes "
+            "no headline, and on an ok payload written before the field existed."
+        ),
+    )
     text: str | None = Field(default=None, description="Sanitized text. Never republished.")
     word_count: int = Field(default=0, ge=0, description="Words in `text`, after the cap.")
     source_word_count: int | None = Field(
@@ -290,8 +220,11 @@ class Article(Contract):
                 FailureCode.BOILERPLATE,
             }:
                 raise ValueError("an ok article carries only a recorded extract signal")
-        elif self.failure_detail is None:
-            raise ValueError("a failed article must record why")
+        else:
+            if self.failure_detail is None:
+                raise ValueError("a failed article must record why")
+            if self.title_source is not None:
+                raise ValueError("a failed article publishes no headline, so it names no source")
         if (
             self.failure_code is not None
             and ItemStage.EXTRACT not in FAILURE_CODE_STAGES[self.failure_code]

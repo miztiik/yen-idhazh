@@ -17,7 +17,7 @@
           "description": "The quantity that is binned rather than plotted.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -28,7 +28,7 @@
           "description": "The discrete axis: what each mark is.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -39,7 +39,7 @@
           "description": "Who or what a mark is about.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -50,7 +50,7 @@
           "description": "What names one dated event.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -61,7 +61,7 @@
           "description": "The measured axis: how big each mark is.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -72,7 +72,7 @@
           "description": "The second measured axis, where a type has two.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -83,7 +83,7 @@
           "description": "What splits the marks into groups.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -94,7 +94,7 @@
           "description": "The third channel, drawn as area.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -105,7 +105,7 @@
           "description": "The temporal axis.",
           "items": {
             "maxLength": 22,
-            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
             "type": "string"
           },
           "maxItems": 8,
@@ -174,14 +174,19 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "encodings became one flat object with a field per role, and the schema requires every one of them. It was a map whose keys were optional, so a reply could name a type and never mention the channel that draws it. An inapplicable role is now an empty array. No role was added or removed and no bound moved, so the worst-case reply is the same 3767 characters.",
-      "version": "2026-09-09T03:11",
-      "why": "Optional role keys produced a confident chart with no bars in it, twice, on the first live run, and a plan that omits quantity reads as a complete answer rather than as a failure. A JSON Schema can require the keys of an object it declares and cannot require the keys of a map, so the roles had to become fields for the decoder to be held to them. Presence is all this shape guarantees: which roles a given type may leave empty needs that type's own rule set, which is the validator's and not the schema's. The cost is nine keys on every reply and it is measured rather than assumed - 28 tokens on a plan that declines and 23 on a four-bar one, about 2 seconds a plan and 6 to 7 percent of the planner's run budget."
+      "change": "Every element-id field now carries a self-bounding pattern.",
+      "version": "2026-09-15T19:40",
+      "why": "These are every string the constrained decoder sees, and it cannot compile one."
     },
     {
-      "change": "Initial shape: the plan a compiler draws from, carrying element references and closed vocabularies only. No geometry field, no numeric field but a 0..1 confidence, no alt_text, and labels and annotations typed as element ids rather than as strings. Every array carries a maxItems and every decoded string a maxLength.",
+      "change": "encodings became one flat object with a field per role.",
+      "version": "2026-09-09T03:11",
+      "why": "Optional role keys produced a confident chart with no bars in it, twice."
+    },
+    {
+      "change": "Initial shape: the plan a compiler draws from, carrying element references.",
       "version": "2026-09-09",
-      "why": "Contracts before logic - the planner's second call and the compiler are both written against a fixed payload (Guardrail #3). The prohibitions are the point of the shape rather than a note beside it: a plan that can name a pixel is a plan bound to one renderer, and a plan that can state a number turns the worst a prompt injection can do from picking the wrong bars into drawing the wrong figure. alt_text is left out because the compiler assembles it from element values it already holds, where the model writing it would be the last prose channel in the system that no validator can check. The bounds are what make the worst-case decoded reply arithmetic rather than a hope, and the arithmetic is in the module docstring so it can be re-derived when a bound moves."
+      "why": "Contracts before logic - the planner and the compiler both need a fixed shape."
     }
   ],
   "description": "One item's visual plan: references and closed names, and nothing else.",
@@ -190,7 +195,7 @@
       "description": "The elements to mark first, so one mark lands before its siblings. A reference for the same reason a label is.",
       "items": {
         "maxLength": 22,
-        "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+        "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
         "type": "string"
       },
       "maxItems": 4,
@@ -226,7 +231,7 @@
       "description": "Every element this plan draws from, so the validator has one list to check existence against rather than nine.",
       "items": {
         "maxLength": 22,
-        "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+        "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
         "type": "string"
       },
       "maxItems": 32,
@@ -241,7 +246,7 @@
       "description": "The elements whose own characters name the marks and the axes. A reference and never a string: code cuts every character a reader sees, and the model points at which characters.",
       "items": {
         "maxLength": 22,
-        "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+        "pattern": "^[a-z]{1,8}-[0-9]{1,6}-[0-9]{1,6}$",
         "type": "string"
       },
       "maxItems": 10,
@@ -292,7 +297,7 @@
       "description": "The form, from the full declarable vocabulary. Null on a plan that declines."
     },
     "version": {
-      "default": "2026-09-09T03:11",
+      "default": "2026-09-15T19:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -318,5 +323,5 @@
   ],
   "title": "VisualPlan",
   "type": "object",
-  "version": "2026-09-09T03:11"
+  "version": "2026-09-15T19:40"
 }

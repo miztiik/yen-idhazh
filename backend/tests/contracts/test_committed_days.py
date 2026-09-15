@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.cli import main
-from idhazh.contracts.app_config import UiConfig
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
+from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.stages.validate_days import stage_validate_days
 
 from ._fixtures import (
@@ -46,17 +46,68 @@ def test_the_published_tree_holds_days_to_migrate() -> None:
 def a_day_that_validates() -> dict[str, Any]:
     """A finished committed day, taken off the real tree rather than written here.
 
-    A day composed by hand drifts from the one the pipeline writes, and the
-    guard under test is about the real file. The test below needs a day longer
-    than `ui.shell_seed_items`, which is 15, and the date still being written
-    has no floor - one run in on 2026-09-06 it held 78 stories against 374.
-    `committed_days` is what keeps that date out of reach.
+    The two tests below it are about a tree that holds a day the gate accepts,
+    and say nothing about what is in one. The real file is the cheapest such day
+    and it costs one read; `committed_days` keeps the date still being written
+    out of reach, because that one can be half a day at any moment.
+
+    Nothing here may depend on the day's LENGTH. A committed day is as long as
+    the run that wrote it managed to be, so a test that needs a particular
+    length builds one (`a_day_longer_than_the_seed`).
     """
     day: dict[str, Any] = json.loads(read_text(committed_days()[-1]))
     return day
 
 
-def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = "2026-08-30") -> Path:
+#: Where a day written by these tests is filed, and the date it carries. One
+#: constant for both, because a payload whose date and path disagree is a day no
+#: run could have written.
+BUILT_DATE: Final = "2026-08-30"
+
+
+def a_day_longer_than_the_seed(seed: int) -> dict[str, Any]:
+    """A day carrying one story more than a prerendered document seeds.
+
+    Built here, because the length is the whole point and the archive does not
+    hold a length - it holds whatever the last run managed. 2026-09-14 published
+    13 stories against a seed of 15, because three of four shards hit their
+    timeout and their finished work never reached `assemble`. A short day is
+    also what a slow run, a source outage or a holiday leaves behind, so a test
+    that asked the newest committed day for sixteen stories was a fuse timed to
+    a day nobody chose (`CLAUDE.md` section 13).
+
+    The template is the committed contract fixture, so the payload is the shape
+    the pipeline writes down to the last optional field - `test_contracts.py`
+    holds that file to a byte-identical round trip through `DigestDay`, which a
+    dict composed here would drift from. Only the length is built.
+    """
+    template: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")
+    )
+    story = template["items"][0]
+    # A visual names a file in the day directory and nothing writes one here, so
+    # a copy that kept it would fail on the missing picture and say nothing
+    # about the seed.
+    items = [
+        {**story, "item_id": f"ai-{n:02d}", "introduced_by_run": 1, "visual": None}
+        for n in range(1, seed + 2)
+    ]
+    return {
+        **template,
+        "date": BUILT_DATE,
+        "generated_at": f"{BUILT_DATE}T18:22:05Z",
+        "items": items,
+        "leads": [],
+        "verticals": [{"id": "ai", "display_name": "AI", "count": len(items)}],
+        "runs": [{"n": 1, "at": f"{BUILT_DATE}T18:22:05Z", "items_added": len(items)}],
+        "items_planned": len(items),
+        "items_failed": 0,
+        "partial": False,
+        "embeddings": None,
+    }
+
+
+def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = BUILT_DATE) -> Path:
     """One committed day on disk, in the layout `published_days` globs for."""
     year, month, dom = date.split("-")
     where = tmp_path / "digest" / year / month / dom
@@ -73,16 +124,22 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     The story is broken at the END of a day longer than `ui.shell_seed_items`,
     so no prerendered document carries it and no build would ever open it. A
     reader's browser fetches it. The gate has to find it there.
-    """
-    day = a_day_that_validates()
-    seed = UiConfig().shell_seed_items
-    assert len(day["items"]) > seed, "a day no longer than the seed proves nothing here"
-    day["items"][-1]["key_points"] = []
 
-    root = a_tree_holding(tmp_path, day)
+    Two arms over one built day, because the second alone would pass against a
+    gate that refused everything: the whole day is accepted, and the same day is
+    refused once its last story loses its key points.
+    """
+    seed = UiConfig().shell_seed_items
+    day = a_day_longer_than_the_seed(seed)
+    assert len(day["items"]) > seed, "a day no longer than the seed proves nothing here"
+
+    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day)) == 0
+
+    day["items"][-1]["key_points"] = []
+    root = a_tree_holding(tmp_path / "past-the-seed", day)
     with caplog.at_level(logging.ERROR):
         assert stage_validate_days(root) == 1
-    assert "2026-08-30" in caplog.text, "the failing day has to be named"
+    assert BUILT_DATE in caplog.text, "the failing day has to be named"
     assert "digest-view.schema.json" in caplog.text, "which contract refused it"
 
 
@@ -133,7 +190,7 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     one byte for one byte, passed against the committed receipt store and
     reported `0 of them opened`; against an empty store the same file was
     refused. `frontend/tests/malformed-day.spec.ts` was making exactly that
-    call, so the control arm that exists because a guard which only ever refuses
+    call, so the control case that exists because a guard which only ever refuses
     proves nothing was passing on a receipt about a different file - and the
     receipts it filed about its scratch trees landed in the tracked
     `state/day-validations.csv`, which `frontend/scripts/build-state.ts`

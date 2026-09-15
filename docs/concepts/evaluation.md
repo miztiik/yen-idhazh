@@ -1,7 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-13
-
+**Last Updated**: 2026-09-15
 How a summary is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
 **Whether archive search finds the right story is a different instrument and lives in [search-quality.md](search-quality.md).** The two share no data, no metric and no config knob, and a person arrives holding one question or the other.
@@ -502,6 +501,18 @@ Discouragement is not a control, so four things make it structurally hard rather
 
 Not to be done: seeding the queue with model pre-labels for a human to confirm. Confirmation is anchoring, and it turns an independent measurement into an expensive agreement rate with the model - LLM-as-judge with a rubber stamp.
 
+### The gate has to call what the digest calls
+
+**Until 2026-09-15 it did not.** The daily run summarizes an article in two adjacent calls - the article is labelled, and the second prompt replays that reply before asking for the summary ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). The qualification sent one call down the chat route instead. So every threshold a candidate cleared was cleared on a code path no reader ever sees: a different prompt, a different number of decodes, and no step where the model reads its own words back.
+
+That is the same shape as the survivor problem above, one level up. A gate that filters on the property it grades measures its own filter; a gate that runs a path nothing publishes measures its own harness. Neither says anything about the day.
+
+`run.qualify_on_the_production_path` is the switch, and it is true by default. False puts the gate back on its single call, which is what to do when a run goes wrong on the pair rather than reverting code - and it is a config edit, so it needs no release. The knob goes away once one qualification has cleared `decide` on the production path.
+
+**Two consequences to expect, and neither is a regression.** Determinism gets noisier, because the second prompt carries a model-written label: two repeats that would have written identical summaries can now diverge upstream of the summary. That is a true reading of what production does, and it was invisible before. And every per-item number moves - an item costs two calls, so the token counts roughly double and the prompt digest is a different digest. `QualificationShard.calls_per_item` records which side produced a shard, because two shards that disagree on it are not comparable ([../../CLAUDE.md](../../CLAUDE.md) Guardrail #10).
+
+**One caller stays on the single call on purpose.** The injection canaries put a planted attack to the model and read the reply for markers that should not have survived. They are a reader-safety check on the sanitizer and the chat template, and the shortest path to the model is the one that tests it most directly ([../../CLAUDE.md](../../CLAUDE.md) Guardrail #11).
+
 ### Current qualification-gate implementation gap
 
 **The `publishable_length` gate could not fail at all until 2026-09-10, and it
@@ -863,12 +874,12 @@ never as a drawing. The card names the gate that refused it; it cannot show what
 the drawing would have looked like.
 
 **A fourth population is named by the plan that asked for this surface and has
-no producer.** A config-B arm is a second configuration's render of the same
+no producer.** A config-B case is a second configuration's render of the same
 day, and nothing in this build can select one. There is no member for it and no
 empty section pretending otherwise, for the reason `NoneReason` already gives
 about its own vocabulary: a word nobody can write is a word nobody can retire
 and nobody can tell from a bug. It arrives with the row that builds the second
-arm.
+case.
 
 ### How a reviewer gets the tree
 
@@ -1468,7 +1479,7 @@ corpus, no side-by-side scores, no human review - so nothing here shows its
 summaries are better or worse than the retired model's.
 
 Qualification run `33016222069`, 2026-08-26, on `ubuntu-latest`. One model, three
-deterministic repeats, no side-by-side arm. Every gate outcome, the band counts,
+deterministic repeats, no side-by-side case. Every gate outcome, the band counts,
 the faithfulness spread and the identity of the bytes that ran are in
 [../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m).
 
@@ -1500,7 +1511,7 @@ reader can tell a breach from a blank reply.
 **The consequence for this page is bigger than the reply failure: Guardrail #11 has
 no live evidence today.** An instrument that cannot separate a breach from a
 blank reply can never confirm the rule it exists to confirm. Eight gates still
-measure what they claim to. The canary arm does not, and cannot until the
+measure what they claim to. The canary case does not, and cannot until the
 failure code lands - and `publishable_length` does not either, for an unrelated
 reason ([Current qualification-gate implementation gap](#current-qualification-gate-implementation-gap)).
 
@@ -1520,7 +1531,7 @@ of its branches - "both models fail" and "only the 9B fails" - assume a marker
 reached a reply, and none did; and `sanitize` runs before the request is built
 under every model, so the replay is structurally incapable of returning a
 different answer. What replaces it is narrower: land the failure code, then
-re-run the canary arm alone against the configured 9B - five calls, no corpus
+re-run the canary case alone against the configured 9B - five calls, no corpus
 freeze, no repeats.
 
 ### The alarm that watches the swap

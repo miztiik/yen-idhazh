@@ -1,7 +1,7 @@
 """Collect whatever finished, publish it, and append the ledger.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is not a worker").
+body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 """
 
 from __future__ import annotations
@@ -47,6 +47,7 @@ from idhazh.stages.common import (
     _item_payloads,
     _load_day,
     _load_manifest,
+    _recovered,
     _run_dir,
 )
 
@@ -166,6 +167,7 @@ def stage_assemble(
             date=plan.date,
             run_id=run_id,
             extraction=_extraction_health(payload.article, settings),
+            recovered=_recovered(payload.decision_path),
         )
         for payload in _item_payloads(plan, items_dir)
     ]

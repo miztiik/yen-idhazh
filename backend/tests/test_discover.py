@@ -23,9 +23,9 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
-from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome, RobotsOutcome
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
@@ -381,7 +381,7 @@ def test_a_promotional_address_never_enters_the_pool() -> None:
         "https://fool.com/the-ascent/credit-cards/landing/citi-simplicity-review",
         "https://fool.com/The-Ascent/credit-cards/landing/wells-fargo-reflect-review",
     ]
-    # The publisher's editorial arm is not blocked. The measured cut is the
+    # The publisher's editorial case is not blocked. The measured cut is the
     # affiliate section, and nothing wider has been measured (Guardrail #10).
     assert [candidate.canonical_url for candidate in kept] == [
         "https://cnn.com/2026/08/23/world/summit",
@@ -549,7 +549,7 @@ def test_every_kind_of_evidence_adds_preserves_or_clears(
     """The whole availability rule, one row at a time.
 
     Three effects and eight kinds of evidence, driven against a streak of two so
-    each arm is visible: adding makes it three, clearing makes it nought, and
+    each case is visible: adding makes it three, clearing makes it nought, and
     preserving leaves it at two. A robots result we could not read is here beside
     a refusal because both are written as `robots_denied` - the difference is in
     `robots_outcome`, and availability does not care which it was.
@@ -1087,7 +1087,7 @@ def test_one_article_keeps_one_id_whatever_else_is_planned_beside_it() -> None:
     }
     assert set(stale.values()) == {fixture["collided_on"]}, (
         "the fixture no longer collides under the arithmetic it was built against, "
-        "so it proves nothing - find a new pair rather than deleting this arm"
+        "so it proves nothing - find a new pair rather than deleting this case"
     )
 
     probe = fixture["probe"]

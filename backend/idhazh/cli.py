@@ -40,10 +40,8 @@ from idhazh import (
     assemble,
     config,
 )
-from idhazh.contracts.app_config import (
-    ObservabilityConfig,
-    RunConfig,
-)
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
@@ -114,6 +112,11 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
     exists because those two can disagree - a mirror can serve a same-named file
     with different bytes - so the digest here is taken from the file the runtime
     will open (Guardrail #10).
+
+    Every expectation comes from the entry, so a dispatch that named them
+    separately could not drift from the file it was qualifying. A `byte_count`
+    the entry does not declare falls back to the observed size, which makes that
+    one comparison inert rather than false - the digest is the check either way.
     """
     model = settings.models.summarize
     weights = args.weights or (config.REPO_ROOT / "backend" / "models" / model.file)
@@ -124,12 +127,12 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
     return CandidateIdentity(
         model_id=model.id,
         repo=model.repo,
-        revision=args.candidate_revision or "revision-not-recorded",
+        revision=model.revision or "revision-not-recorded",
         file=model.file,
         quantisation=model.quantisation,
         sha256_expected=model.sha256,
         sha256_observed=file_digest(weights),
-        bytes_expected=args.candidate_bytes or weights.stat().st_size,
+        bytes_expected=model.byte_count or weights.stat().st_size,
         bytes_observed=weights.stat().st_size,
         runtime_build=runtime_build(),
     )
@@ -269,17 +272,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=int,
         default=10,
         help="How many frozen articles one qualification shard replays.",
-    )
-    parser.add_argument(
-        "--candidate-revision",
-        default="",
-        help="The immutable repository revision the candidate weights were taken from.",
-    )
-    parser.add_argument(
-        "--candidate-bytes",
-        type=int,
-        default=0,
-        help="The byte count the adoption target declares for the candidate GGUF.",
     )
     parser.add_argument(
         "--weights",
@@ -465,6 +457,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stderr,
     )
+    # One place, once, before any stage opens a ledger. A trial run exercises
+    # production's code path and must not be readable as a production day, and
+    # the only way to guarantee that for every ledger at once is to move the
+    # root they all hang off (Guardrail #6).
+    #
+    # `prune-state` is the exception, and it is the only one: it is the stage
+    # that EMPTIES the trial tree, so it has to see the tree that contains it.
+    if settings.app.run.trial_state_dirname and args.stage != "prune-state":
+        common.STATE_ROOT = common.STATE_ROOT / settings.app.run.trial_state_dirname
+        logging.getLogger(__name__).warning(
+            "trial run: every ledger goes to %s and no published series reads it",
+            common.STATE_ROOT.relative_to(config.REPO_ROOT).as_posix(),
+        )
     if args.stage == "site-weight":
         # Placed above the fetcher because measuring a directory reads no socket,
         # and starting one to do it would read every host's robots.txt for nothing.
@@ -548,6 +553,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             collect=settings.app.collect,
             retention_config=settings.app.retention,
             lens_weights=settings.app.lens_weights,
+            run=settings.app.run,
             run_id=plan_stage._run_id(pruned_on, args.execution),
             today=date_type.fromisoformat(pruned_on),
             dry_run=args.dry_run,

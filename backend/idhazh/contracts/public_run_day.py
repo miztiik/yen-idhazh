@@ -94,18 +94,8 @@ class PublicRunDay(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-09",
-            change=(
-                "Initial shape: the day's run records, the site size the last run "
-                "measured, the models it used, and the published item and chart counts."
-            ),
-            why=(
-                "The console derived all of this at build time by opening every day's "
-                "run.json and every day's digest.json, then inlined the result - so "
-                "three of its ten reads had no contract, no version stamp and no "
-                "changelog (Guardrail #3). One row a day, fetched a month at a time, also "
-                "removes the read that costs the most: a day payload is hundreds of "
-                "kilobytes and the console wanted two integers out of it (Guardrail #12)."
-            ),
+            change="Initial shape: the day's run records and the site size the last run measured.",
+            why="The console derived this at build time by opening every day's run manifest.",
         ),
     )
 

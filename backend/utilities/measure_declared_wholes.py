@@ -41,7 +41,7 @@ It does not count::
     India's population lives within 100 km of the coast ... 30% ..."
     ->   40 + 30 = 70 is arithmetic, but the three figures are two thousand
     characters apart and describe three different subjects. Rule 4 refuses
-    it, and the null arm below is how we know a rule like it is needed.
+    it, and the null case below is how we know a rule like it is needed.
 
 **Rule 5 is a proximity test and not an attachment test**, and that is its
 weakness rather than a detail: the check is that a joining word falls somewhere
@@ -55,7 +55,7 @@ a hit the screen was missing. That is the difference between a definition and a
 filter tuned on its own output, and it is written here because only the author
 knows which one happened (Andre, 2026-09-13).
 
-Three arms, and none of them is added to another
+Three cases, and none of them is added to another
 ------------------------------------------------
 
 **stated** is the definition above: the total is a number the article wrote.
@@ -71,11 +71,11 @@ in the instrument so a later reader can check that refusal rather than take it o
 trust (Editor, 2026-09-13).
 
 **null** is the coincidence floor. An article carries several quantities, so
-some subset of them adds up to another one by chance. The null arm re-runs the
+some subset of them adds up to another one by chance. The null case re-runs the
 same test over values dealt out across articles at random, which holds every
 unit, every character position, every article's quantity count and every joining
 word fixed and destroys only which value sat where - the one thing the measured
-arm claims. `--seed` makes a null run reproducible.
+case claims. `--seed` makes a null run reproducible.
 
 **The null is a floor on chance and not an estimate of it.** Inside one article
 the quantities of a unit have correlated magnitudes - twenty-one IPO premiums are
@@ -229,7 +229,7 @@ _NOT_A_UNIT: Final = frozenset(
     """.split()
 )
 
-ARMS: Final = ("stated", "implied_percent", "null_stated", "null_implied_percent")
+CASES: Final = ("stated", "implied_percent", "null_stated", "null_implied_percent")
 
 
 @dataclass(frozen=True)
@@ -396,7 +396,7 @@ def _parts_for(
 def declared_wholes(
     built: list[Group], *, implied: bool, window: int, tolerance: float, cues: tuple[int, ...]
 ) -> list[Finding]:
-    """Every whole these groups declare, under the arm and the window asked for."""
+    """Every whole these groups declare, under the case and the window asked for."""
     findings: list[Finding] = []
     for unit_group in built:
         if implied:
@@ -442,7 +442,7 @@ def deal_out(per_article: list[list[Quantity]], seed: int) -> list[list[Quantity
     quantity that carried it, so an article that crowds nine percentages into one
     paragraph still crowds nine percentages into one paragraph. The magnitudes
     are the corpus's own. The only thing destroyed is which value sat at which
-    position - the one thing the measured arm claims.
+    position - the one thing the measured case claims.
 
     Re-dealing positions instead, at some average spacing, would have been the
     easier null and a badly wrong one: real articles cluster their numbers, an
@@ -486,7 +486,7 @@ def _example(text: str, finding: Finding) -> str:
     return f"{finding.whole.text} = {total}  [{finding.unit}]  ... {excerpt} ..."
 
 
-def one_arm(
+def one_case(
     population: list[tuple[list[Group], int]],
     *,
     implied: bool,
@@ -496,7 +496,7 @@ def one_arm(
     articles: list[str] | None,
     examples: int,
 ) -> dict[str, Any]:
-    """One arm over one population, at one window."""
+    """One case over one population, at one window."""
     hits = 0
     capped = 0
     units: Counter[str] = Counter()
@@ -553,7 +553,7 @@ def report(
     }
     for window in windows:
         result["windows"][str(window)] = {
-            "stated": one_arm(
+            "stated": one_case(
                 measured,
                 implied=False,
                 window=window,
@@ -562,7 +562,7 @@ def report(
                 articles=articles,
                 examples=examples,
             ),
-            "implied_percent": one_arm(
+            "implied_percent": one_case(
                 measured,
                 implied=True,
                 window=window,
@@ -571,7 +571,7 @@ def report(
                 articles=articles,
                 examples=examples,
             ),
-            "null_stated": one_arm(
+            "null_stated": one_case(
                 null,
                 implied=False,
                 window=window,
@@ -580,7 +580,7 @@ def report(
                 articles=None,
                 examples=0,
             ),
-            "null_implied_percent": one_arm(
+            "null_implied_percent": one_case(
                 null,
                 implied=True,
                 window=window,
@@ -605,19 +605,20 @@ def _print(result: dict[str, Any], examples: int) -> None:
     )
     print()
     print(f"{'window':>9}  {'stated':>14}  {'null':>14}  {'implied %':>14}  {'null':>14}")
-    for window, arms in result["windows"].items():
+    for window, cases in result["windows"].items():
         label = "article" if window == "0" else f"{window} ch"
         cells = "  ".join(
-            f"{arms[arm]['articles_with_a_whole']:>6} {arms[arm]['percent']:>6.2f}%" for arm in ARMS
+            f"{cases[case]['articles_with_a_whole']:>6} {cases[case]['percent']:>6.2f}%"
+            for case in CASES
         )
         print(f"{label:>9}  {cells}")
     print()
     chosen = str(WINDOW) if str(WINDOW) in result["windows"] else next(iter(result["windows"]))
-    arm = result["windows"][chosen]["stated"]
-    print(f"at a {chosen}-character window the stated arm splits by unit as {arm['by_unit']},")
-    print(f"by part count as {arm['by_part_count']}, with {arm['capped_groups']} capped groups")
+    case = result["windows"][chosen]["stated"]
+    print(f"at a {chosen}-character window the stated case splits by unit as {case['by_unit']},")
+    print(f"by part count as {case['by_part_count']}, with {case['capped_groups']} capped groups")
     print()
-    for line in arm["examples"][:examples]:
+    for line in case["examples"][:examples]:
         print(f"  {line}")
 
 

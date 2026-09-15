@@ -1,6 +1,6 @@
 # Determinism and the Recorded Input Manifest
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-14
 
 What a run records about its own inputs, the one alarm built on that record, and how the pipeline notes the times "nothing changed" turns out to be false. This page owns the enumeration, where each input is read from, and the violation policy.
 
@@ -39,7 +39,11 @@ operation and the only one. A set of named values affords reading, so a reader
 can see *which* input moved and the console's boundary can say so. Ruled by
 Fowler, 2026-09-12.
 
-The declared inputs are the weights digest, the quantisation, the runtime build, the chat-template / prompt / output-schema digests, the truncation cap, the sampling spelling, `n_ctx` / `n_batch` / `n_ubatch` / `n_threads`, the runner class, and the extractor and sanitizer versions. `RunRecord.config_digests` sits beside it and says which config bytes the run read.
+The declared inputs are the weights digest, the quantisation, the runtime build, the chat-template / prompt / output-schema digests, the turn-envelope digest, the truncation cap, the sampling spelling, `n_ctx` / `n_batch` / `n_ubatch` / `n_threads`, the runner class, and the extractor and sanitizer versions. `RunRecord.config_digests` sits beside it and says which config bytes the run read.
+
+**The turn envelope is digested twice, and the second one is not redundant.** The prompt digest covers the envelope already, because the two calls render their own bytes through it. It stops short of two facts all the same: which of the two reply openings a call ends on, and the marker the thinking span stops at. An entry that changed only the string that closes its reasoning block would decode differently and move no rendered prompt, so `turn_markers_sha256` carries the envelope whole - every marker, the system placement and its joiner. **An absent key means a run written before 2026-09-14**, when a marker first became able to move at all; it never means a default value.
+
+**One knob is absent on purpose, and it is the one people look for.** There is no reasoning flag in the stamp. Reasoning is declared by `models.<role>.turns.thinking_close`, so it arrives in the envelope digest and in the rendered prompt's choice of reply opening. A flag beside a marker would be two places to disagree.
 
 **The weights digest is of the file the runtime opened, not the one config named.** `ModelRef.sha256` is an expectation; the record is an observation. The two disagreeing is precisely the event this exists to expose.
 
@@ -144,7 +148,7 @@ Ten of the nineteen knobs stay outside the stamp. Nine of the ten reach `server_
 | Knob | In the stamp? | Why |
 | --- | --- | --- |
 | `n_ctx`, `n_batch`, `n_ubatch`, `n_threads` | yes, under their own names | They change how the partial sums accumulate. |
-| `temperature`, `top_p`, `seed`, `max_output_tokens`, `thinking` | yes, folded into `sampling` | One canonical spelling of the decoding parameters. |
+| `temperature`, `top_p`, `seed`, `max_answer_tokens`, `max_think_tokens` | yes, folded into `sampling` | One canonical spelling of the decoding parameters. Two budgets rather than one since 2026-09-14: a call is decoded as a thinking span and then the answer, and one number over two spans could not say which of them overran. |
 | `cache_type_k`, `cache_type_v` | **no - blind spot** | A quantised KV cache changes the attention arithmetic. |
 | `flash_attention` | **no - blind spot** | Another kernel adds the same values in another order. |
 | `n_parallel` | **no - blind spot** | Slots divide the context, which changes the batch shapes. |

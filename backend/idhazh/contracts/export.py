@@ -11,7 +11,7 @@ import argparse
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.app_config import AppConfig, ModelsConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
@@ -29,13 +29,19 @@ from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.observation_index import ObservationIndexRow
+from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.public_eval import PublicEvalRow
 from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
-from idhazh.contracts.qualification import QualificationReport, QualificationShard
+from idhazh.contracts.qualification import (
+    QualificationReport,
+    QualificationSamples,
+    QualificationShard,
+)
 from idhazh.contracts.reference_dataset import (
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
@@ -87,11 +93,13 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     LabelRow,
     ModelsConfig,
     ObservationIndexRow,
+    PipelineTestsConfig,
     PublicEvalRow,
     PublicFeedRow,
     PublicRunDay,
     PublicTelemetryRow,
     QualificationReport,
+    QualificationSamples,
     QualificationShard,
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,

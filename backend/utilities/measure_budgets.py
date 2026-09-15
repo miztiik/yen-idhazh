@@ -67,7 +67,7 @@ CORPUS: Final = REPO_ROOT / "corpus" / "corpus.jsonl"
 PLAN_FIXTURES: Final = REPO_ROOT / "tests" / "fixtures" / "contracts" / "visual-plan"
 
 #: The two committed plans, declining first. The empty-role cost is a per-role
-#: rate and the declining plan is where every role is empty, so it is the arm
+#: rate and the declining plan is where every role is empty, so it is the case
 #: that fixes the rate; the four-bar one is what says the rate holds when two
 #: roles are filled.
 PLAN_PROBES: Final = ("declined.json", "bar-chart.json")
@@ -135,6 +135,10 @@ class BudgetReading:
     spread: float
     probe: str
     why_that_probe: str
+    #: How much text was counted, in the probe's own units. A total can move
+    #: because the probe changed rather than the vocabulary, so the two are
+    #: printed side by side and neither is quoted alone.
+    probe_size: str
     #: What the value was divided by, so the number can be re-derived from the
     #: same two counts rather than trusted.
     working: dict[str, float]
@@ -282,6 +286,7 @@ def read_definition_budget(
             "no prompt carries, and the two would part the first time the block's layout "
             "moved"
         ),
+        probe_size=f"{offered} definition sentences",
         working={
             "entries_offered": offered,
             "tokens": tokens,
@@ -325,6 +330,7 @@ def read_empty_role_budget(
             "and the declining one is where all nine roles are empty - which is what fixes "
             "the per-role rate rather than an average of it"
         ),
+        probe_size=f"{len(roles)} encoding roles",
         working=working,
         **stamp,
     )
@@ -354,6 +360,7 @@ def read_tokens_a_word(
             "totals divided rather than a mean of per-article ratios, so one short "
             "article cannot weigh as much as one long one"
         ),
+        probe_size=f"{len(bodies)} articles, {words:,} words",
         working={"articles": len(bodies), "words": words, "tokens": tokens},
         **stamp,
     )
@@ -426,6 +433,62 @@ def render_paste(readings: Sequence[BudgetReading]) -> str:
             "    subject=<the constant naming those weights>,",
             "",
         ]
+    return "\n".join(lines)
+
+
+def render_dossier(readings: Sequence[BudgetReading]) -> str:
+    """The dossier section these readings replace, ready to paste as it stands.
+
+    The tool prints the heading, the table and the note, because those are the
+    reading restated and a person retyping them is how the last set went stale
+    unnoticed. It prints no sentence about *why* a number moved: that is history
+    the tool cannot see, it survives a retake, and it is marked here as the
+    person's to keep.
+
+    `Taken over` is the load-bearing column. A total can move because the probe
+    text moved rather than the vocabulary, so the size sits beside the value and
+    neither is quoted alone.
+    """
+    if not readings:
+        return ""
+    taken = readings[0].taken_on
+    lines = [
+        "Paste into docs/reference/models/<the configured model>.md, replacing the",
+        "'## What the tokenizer costs' heading down to the end of the note below the",
+        "table. Keep the '### Each reading is a point in time' subsection that follows",
+        "it: that is the history of what moved and why, it survives a retake, and this",
+        "tool cannot see it.",
+        "",
+        "-----8<-----",
+        "",
+        "## What the tokenizer costs",
+        "",
+        "Three counts of **our own text** in this model's vocabulary. Each sizes a budget",
+        "the pipeline spends before it reads a single article word, so each one moves when",
+        "the weights move.",
+        "",
+        f"**Taken {taken}** against these weights, by",
+        "`python backend/utilities/measure_budgets.py read`, which asks the running",
+        "`llama-server` to tokenize the exact text the pipeline sends.",
+        "",
+        "| Quantity | Reading | Taken over | What it measures |",
+        "| --- | --- | --- | --- |",
+    ]
+    for reading in readings:
+        value = f"{format_number(reading.value)} {reading.unit}"
+        lines.append(
+            f"| `{reading.record}` | {value} | {reading.probe_size} | {reading.measures} |"
+        )
+    lines += [
+        "",
+        "**Spread is 0 on all three, and is printed rather than left out.** A tokenizer",
+        "over fixed text returns the identical count every time, so there is nothing to",
+        "repeat - but a reading with no spread field would read as one that forgot to take",
+        "it (Guardrail #10).",
+        "",
+        "-----8<-----",
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -518,7 +581,7 @@ def run_read(args: argparse.Namespace) -> int:
         print(str(refused), file=sys.stderr)
         return 2
 
-    body = f"{render_readings(readings)}\n{render_paste(readings)}"
+    body = f"{render_readings(readings)}\n{render_paste(readings)}\n{render_dossier(readings)}"
     print(body)
     if args.readings is not None:
         args.readings.parent.mkdir(parents=True, exist_ok=True)

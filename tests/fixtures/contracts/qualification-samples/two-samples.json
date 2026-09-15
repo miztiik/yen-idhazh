@@ -1,0 +1,39 @@
+{
+  "candidate": {
+    "bytes_expected": 5680522464,
+    "bytes_observed": 5680522464,
+    "file": "Qwen3.5-9B-Q4_K_M.gguf",
+    "model_id": "qwen3-5-9b-q4-k-m",
+    "quantisation": "Q4_K_M",
+    "repo": "unsloth/Qwen3.5-9B-GGUF",
+    "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+    "runtime_build": "b10598",
+    "sha256_expected": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+    "sha256_observed": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+  },
+  "date": "2026-08-26",
+  "samples": [
+    {
+      "band_index": 1,
+      "compression": 0.22,
+      "hhem": 0.41,
+      "item_id": "ai-01",
+      "source_url": "https://example.org/energy/exemption-narrowed",
+      "summary": "The cabinet narrowed the exemption to plants commissioned before 2019, and set a two-year window for the rest to apply. Officials said the change closes a route that had let newer sites claim the older terms.",
+      "title": "A cabinet ruling narrows what the exemption covers",
+      "truncated": false
+    },
+    {
+      "band_index": 0,
+      "compression": 0.55,
+      "hhem": 0.88,
+      "item_id": "ai-02",
+      "source_url": "https://example.org/ai/a-short-brief",
+      "summary": "One sentence, because the source was a brief and said little more.",
+      "title": null,
+      "truncated": true
+    }
+  ],
+  "shard": 0,
+  "version": "2026-09-15T21:00"
+}

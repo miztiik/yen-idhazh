@@ -1,9 +1,9 @@
-"""Every test is reachable from a mark, or is named here as carrying none.
+"""Every test module is reachable from a mark, or is named here as carrying none.
 
 The four marks declared in `pyproject.toml` let a developer run what a change
-can break instead of the whole suite. That is only safe when a test outside
-every subset is FOUND rather than silently never run, so this module collects
-the suite once and asks pytest which marks it resolved onto each test.
+can break instead of the whole suite. That is only safe when a module outside
+every subset is FOUND rather than silently never run, so this module reads the
+module-level `pytestmark` off every test module and holds the four against it.
 
 A mark is a module-level `pytestmark`, so a module that is renamed or moved
 carries its mark with it and nothing here needs an edit. What does need an edit
@@ -14,24 +14,44 @@ The marks never decide what a merge is checked against. CI runs the whole suite
 (`docs/how-to/run-the-gates.md`), so a wrong mark costs a developer a re-run
 rather than a missed regression. That is also why this file buys its answer as
 cheaply as it can.
+
+## Design rationale
+
+**2026-09-14: the answer is read from source, not bought with a collection.**
+This file used to spawn a subprocess that collected the whole suite and asked
+pytest which marks resolved onto each test. That cost 29.2 s for the answer
+alone, and 95.6 s of the suite's own reported time - rank 8 of 3,407 timed
+tests, and the worst per test by a factor of three - to defend a developer
+shortcut that never gates a merge. Reading `pytestmark` off 131 files is the
+same answer far more cheaply.
+
+The two agree because of a property of this tree rather than of pytest, so it is
+held rather than assumed: **no declared mark is ever applied by decorator.** All
+139 `@pytest.mark.` decorators under `backend/tests` are `parametrize`, which is
+a builtin and selects nothing. `test_a_declared_mark_is_never_applied_by_decorator`
+is what makes the cheap read safe - decorate a test with `contract` tomorrow and
+it fails, naming the file.
+
+The collection this replaces answered 3,498 tests, 53 unmarked modules, and
+981/226/432/182 tests per mark on 2026-09-14. Reading source reproduces the same
+53 modules and the same four non-empty marks.
 """
 
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
-import tempfile
+import ast
+import re
 import tomllib
-from collections.abc import Iterable
-from functools import cache
-from pathlib import Path, PurePosixPath
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Final
 
 import pytest
 from conftest import REPO_ROOT, read_text
 
 pytestmark = pytest.mark.slow
+
+TESTS_DIR: Final = REPO_ROOT / "backend" / "tests"
 
 #: Every test module that no mark selects, by stem. A module lands here because
 #: a developer changing that area has no shorter thing to run than the module
@@ -49,39 +69,55 @@ UNMARKED_MODULES: Final = frozenset(
         "test_data_wrangler",
         "test_day_metrics_producer",
         "test_day_partition",
+        "test_decode_split",
         "test_desk_bounds",
+        "test_desk_field",
         "test_desk_knobs",
         "test_discover",
-        "test_embed",
+        "test_doc_load",
         "test_elements",
+        "test_embed",
+        "test_eval_ledger",
+        "test_eval_row",
         "test_evals",
         "test_evidence",
         "test_extract",
         "test_extraction_health",
+        "test_feed_health_shards",
         "test_frame_knobs",
+        "test_frozen_days",
+        "test_gate_lock",
         "test_grader_length_bias",
         "test_head_frame",
+        "test_item_records",
         "test_labels",
         "test_leading_stories",
-        "test_measure_ledgers",
+        "test_machine_readings",
         "test_measure_budgets",
+        "test_measure_ledgers",
         "test_measure_llm",
         "test_measure_two_calls",
         "test_migrate_to_day_shards",
         "test_notebooks",
         "test_order_of_the_day",
+        "test_pipeline_artifact_analyzer",
         "test_plan",
         "test_plan_status",
+        "test_policy_defaults",
         "test_prompt_loop",
         "test_publish_source_health",
         "test_publish_telemetry",
         "test_qualify",
+        "test_qualify_call_path",
         "test_rank",
         "test_reband_scores",
         "test_reference_dataset",
         "test_reference_set",
+        "test_retention_oracle",
         "test_same_story",
         "test_search_index",
+        "test_seen_days",
+        "test_site_alarm",
         "test_source_health",
         "test_spans",
         "test_stream_order",
@@ -90,38 +126,20 @@ UNMARKED_MODULES: Final = frozenset(
         "test_sweep_worktrees",
         "test_tag",
         "test_telemetry",
+        "test_telemetry_fold",
+        "test_trace_tree",
         "test_two_runs",
         "test_validation",
+        "test_visual_pruning",
+        "test_work_order",
     }
 )
 
 
-#: Collects the suite and reports what pytest resolved onto each test.
-#:
-#: `pytest_collection_modifyitems` runs after every `pytestmark`, class mark and
-#: decorator has been applied, so `iter_markers` is pytest's own answer rather
-#: than this file re-reading source and guessing. The JSON goes to a file
-#: because pytest owns stdout.
-CENSUS: Final = """
-import json, sys
-import pytest
-
-class Census:
-    def __init__(self):
-        self.rows = []
-
-    def pytest_collection_modifyitems(self, items):
-        for item in items:
-            self.rows.append([item.nodeid, sorted({m.name for m in item.iter_markers()})])
-
-census = Census()
-code = pytest.main(
-    ["-o", "addopts=", "--collect-only", "-q", "-p", "no:cacheprovider"],
-    plugins=[census],
-)
-with open(sys.argv[1], "w", encoding="utf-8") as handle:
-    json.dump({"code": int(code), "rows": census.rows}, handle)
-"""
+#: A mark applied to one test rather than to its module. `parametrize` and the
+#: other builtins select nothing, so they are the only ones this tree may carry.
+DECORATOR_MARK: Final = re.compile(r"@pytest\.mark\.(\w+)")
+BUILTIN_MARKS: Final = frozenset({"parametrize", "skip", "skipif", "xfail", "usefixtures"})
 
 
 def declared_marks() -> tuple[str, ...]:
@@ -135,84 +153,101 @@ def declared_marks() -> tuple[str, ...]:
     return tuple(str(entry).split(":", 1)[0].strip() for entry in declared)
 
 
-@cache
-def census() -> dict[str, frozenset[str]]:
-    """Every node id in the suite, against the marks pytest resolved onto it.
-
-    One collection, where this file used to run six - the whole suite, one per
-    declared mark, and the complement - at 32 s of subprocess each. The five
-    extra runs were asking pytest's `-m` engine to confirm set arithmetic that
-    pytest's own mark data already answers, and that engine is not ours to test.
-    Measured 2026-09-05 on Intel Core i7-1265U / Windows 11: 195 s to 34 s.
-
-    `-o addopts=` clears the repository defaults, so no second layer of xdist
-    workers starts. It also drops `--strict-markers`, which is deliberate: a
-    misspelled mark must reach this file as an unmarked module rather than
-    stopping the subprocess, so the failure names the module either way.
-    """
-    with tempfile.TemporaryDirectory() as room:
-        out = Path(room) / "census.json"
-        done = subprocess.run(
-            [sys.executable, "-c", CENSUS, str(out)],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-            encoding="utf-8",
-        )
-        assert out.exists(), f"the census never ran:\n{done.stdout}\n{done.stderr}"
-        payload = json.loads(out.read_text(encoding="utf-8"))
-
-    assert payload["code"] == 0, f"collection failed:\n{done.stdout}\n{done.stderr}"
-    rows = {node_id: frozenset(marks) for node_id, marks in payload["rows"]}
+def modules() -> list[Path]:
+    """Every test module, including the ones that sit inside a package."""
+    found = sorted(TESTS_DIR.rglob("test_*.py"))
     # A census of nothing would make every assertion below vacuous, which reads
     # exactly like a pass.
-    assert len(rows) > 1000, f"the census collected {len(rows)} tests, so it did not collect"
-    return rows
+    assert len(found) > 100, f"found {len(found)} test modules, so the walk did not walk"
+    return found
 
 
-def selected_by(name: str) -> frozenset[str]:
-    return frozenset(node_id for node_id, marks in census().items() if name in marks)
+def mark_names(value: ast.expr) -> Iterator[str]:
+    """The mark names a `pytestmark` right-hand side carries.
+
+    Covers `pytest.mark.slow`, a list or tuple of those, and the called form
+    `pytest.mark.slow(...)`. Anything else yields nothing, which `module_marks`
+    turns into a refusal rather than a silent zero.
+    """
+    items = value.elts if isinstance(value, ast.List | ast.Tuple) else [value]
+    for item in items:
+        node = item.func if isinstance(item, ast.Call) else item
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Attribute)
+            and node.value.attr == "mark"
+        ):
+            yield node.attr
 
 
-def selected_by_nothing() -> frozenset[str]:
-    declared = frozenset(declared_marks())
-    return frozenset(node_id for node_id, marks in census().items() if not (marks & declared))
+def module_marks(path: Path) -> frozenset[str]:
+    """The marks a module's own `pytestmark` names, read from its source.
+
+    A `pytestmark` in a shape this cannot read is refused by name rather than
+    counted as no marks, because no marks is a legal answer here and would hide
+    the mistake inside `UNMARKED_MODULES`.
+    """
+    for node in ast.parse(read_text(path)).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "pytestmark" for target in node.targets
+        ):
+            names = frozenset(mark_names(node.value))
+            assert names, (
+                f"{path.relative_to(REPO_ROOT).as_posix()} assigns `pytestmark` in a shape this "
+                "file cannot read. Write it as `pytest.mark.<name>` or a list of those."
+            )
+            return names
+    return frozenset()
 
 
-def by_module(node_ids: Iterable[str]) -> dict[str, list[str]]:
-    grouped: dict[str, list[str]] = {}
-    for node_id in sorted(node_ids):
-        grouped.setdefault(PurePosixPath(node_id.split("::", 1)[0]).stem, []).append(node_id)
-    return grouped
-
-
-def test_every_mark_selects_tests_and_no_module_falls_outside_them() -> None:
-    """One test, because `-n auto` gives two tests two processes and the census
-    cache cannot cross them."""
+def test_every_mark_selects_modules_and_no_module_falls_outside_them() -> None:
     marks = declared_marks()
     assert marks, "pyproject.toml declares no marks at all"
-    empty = [name for name in marks if not selected_by(name)]
+
+    declared = frozenset(marks)
+    carried = {path.stem: module_marks(path) & declared for path in modules()}
+
+    empty = [name for name in marks if not any(name in got for got in carried.values())]
     assert not empty, (
-        f"pyproject.toml declares {empty} and no test carries them. "
+        f"pyproject.toml declares {empty} and no module carries them. "
         "A module-level `pytestmark` was removed, or the name was never applied."
     )
 
     # An unmarked module is a decision somebody wrote down, never an oversight.
-    rest = by_module(selected_by_nothing())
-    appeared = sorted(set(rest) - UNMARKED_MODULES)
-    vanished = sorted(UNMARKED_MODULES - set(rest))
+    rest = {stem for stem, got in carried.items() if not got}
+    appeared = sorted(rest - UNMARKED_MODULES)
+    vanished = sorted(UNMARKED_MODULES - rest)
 
-    named = "\n".join(
-        f"  {name}: {len(rest[name])} tests, e.g. {rest[name][0]}" for name in appeared
-    )
     assert not appeared, (
         "no mark selects these modules and UNMARKED_MODULES does not name them:\n"
-        f"{named}\n"
-        "Give the module a `pytestmark`, or add it to UNMARKED_MODULES so the next "
+        + "\n".join(f"  {name}" for name in appeared)
+        + "\nGive the module a `pytestmark`, or add it to UNMARKED_MODULES so the next "
         "reader can see the omission was a choice."
     )
     assert not vanished, (
         f"UNMARKED_MODULES names {vanished}, which a mark now selects or which no longer exist. "
         "Drop them from the set."
+    )
+
+
+def test_a_declared_mark_is_never_applied_by_decorator() -> None:
+    """The property that lets this file read source instead of collecting.
+
+    Reading `pytestmark` sees a module's marks and nothing else, which is the
+    whole answer only while no single test carries a declared mark of its own.
+    """
+    declared = frozenset(declared_marks())
+    offenders: list[str] = []
+    for path in modules():
+        where = path.relative_to(REPO_ROOT).as_posix()
+        for found in DECORATOR_MARK.findall(read_text(path)):
+            if found in declared:
+                offenders.append(f"  {where}: @pytest.mark.{found} is a declared selector")
+            elif found not in BUILTIN_MARKS:
+                offenders.append(f"  {where}: @pytest.mark.{found} is neither declared nor builtin")
+
+    assert not offenders, (
+        "a declared mark is applied to a test rather than to its module, so reading "
+        "`pytestmark` no longer sees every mark:\n" + "\n".join(offenders) + "\nMove it to a "
+        "module-level `pytestmark`, or make this file collect the suite again."
     )

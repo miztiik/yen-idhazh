@@ -34,14 +34,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
-| [20260913-28-model-swap-plan.md](20260913-28-model-swap-plan.md) | 14 | 11 | 3 | 3 |
+| [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 23
+## Ready now - 31
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -69,9 +69,17 @@ section 3 is where it is answered.
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3, plan 23 row #21 |
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
-| #13b | 28 | E | Paste the three readings a dispatch takes | 13a |
-| #9 | 28 | G | The runbook: swap and revert in one line each | 6, 8, 12 |
-| #10 | 28 | H | Two spans on one call, so the model can think | 5, 6, 11 |
+| #1 | 27 | A | The two calls get names that say what they do | - |
+| #2 | 27 | B | `state/item-health/` becomes the per-item spine | 1 |
+| #3 | 27 | B | The selection score carries its own terms | - |
+| #4 | 27 | B | Logging is a set of flags, not a level | - |
+| #5 | 27 | C | `work.py` says what it is doing, per item and per stage | 2, 3, 4 |
+| #6 | 27 | C | Every item records the machine that ran it | 2, 4 |
+| #7 | 27 | C | The summary and the picture are timed apart | 2 |
+| #8 | 27 | C | What the model saw, kept for 90 days | 4 |
+| #9 | 27 | D | A cut reply keeps its summary | 1 |
+| #10 | 27 | D | A killed shard keeps the work it finished | - |
+| #11 | 27 | E | Two articles, three arms, one runner | 4 |
 
 ## Waiting on another row - 48
 

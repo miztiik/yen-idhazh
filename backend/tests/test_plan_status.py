@@ -99,7 +99,7 @@ DELTA = """# Delta
 | Phase | # | Row | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | A | 1 | Delta one | - | **DONE 2026-01-01** - merged by hand |
-| A | 2 | Delta two | 1 (and 3 for the other arm) | CLOSED 2026-01-02 (PR #202) |
+| A | 2 | Delta two | 1 (and 3 for the other case) | CLOSED 2026-01-02 (PR #202) |
 """
 
 #: A file under TODO/ that is not a plan. It must be found and then ignored.
