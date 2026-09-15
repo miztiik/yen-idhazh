@@ -16,6 +16,12 @@ from __future__ import annotations
 # block is deleted by plan 32 row 10, once every caller is inside the package's
 # own tree and imports the module that owns the name it uses. A re-export that
 # outlives its cut-over is a second name for everything (Guardrail #6).
+#
+# **`record` is the one pre-split name that is not here.** `record.py` owns one
+# item's row, and Python binds a submodule onto its package, so re-exporting a
+# function under the same name gives `telemetry.record` two meanings decided by
+# import order. The function is `telemetry.events.record`, which is where it has
+# always been defined.
 from idhazh.telemetry.census import (
     DEGRADED_BUT_DONE,
     classify_item,
@@ -31,7 +37,6 @@ from idhazh.telemetry.events import (
     EventLevel,
     EventName,
     event,
-    record,
 )
 from idhazh.telemetry.rollup import roll_up_spans
 from idhazh.telemetry.sinks import (
@@ -97,7 +102,6 @@ __all__ = [
     "is_final",
     "item_attributes",
     "langfuse_sink",
-    "record",
     "refuse_text",
     "roll_up_spans",
     "summary_attributes",

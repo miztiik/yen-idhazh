@@ -80,24 +80,49 @@ BEFORE_THE_SPLIT: Final[frozenset[str]] = frozenset(
 
 MODULES: Final[tuple[ModuleType, ...]] = (census, events, rollup, sinks, spans, traces)
 
+#: The one pre-split name the package cannot re-export, and why it cannot.
+#: `telemetry/record.py` owns one item's row (plan 32 row 4), and Python binds a
+#: submodule onto its package as an attribute - so a function re-exported under
+#: the same name means `telemetry.record` is the function until something
+#: imports the module and the module afterwards. That is not a name, it is an
+#: import-order bug waiting for a caller. The attribute scan behind
+#: `BEFORE_THE_SPLIT` found no caller outside the package using it, and the
+#: function is still `telemetry.events.record` where it has always been defined.
+TAKEN_BY_A_MODULE: Final[frozenset[str]] = frozenset({"record"})
+
 
 def test_every_public_name_survives_the_split() -> None:
     """The one oracle this row turns on: no caller outside the package broke."""
-    missing = sorted(name for name in BEFORE_THE_SPLIT if not hasattr(telemetry, name))
+    reachable = BEFORE_THE_SPLIT - TAKEN_BY_A_MODULE
+    missing = sorted(name for name in reachable if not hasattr(telemetry, name))
     assert missing == [], f"the package no longer exports {missing}"
 
     exported = list(telemetry.__all__)
     assert len(exported) == len(set(exported)), "__all__ names something twice"
-    assert set(exported) == BEFORE_THE_SPLIT, (
+    assert set(exported) == reachable, (
         "__all__ and the pre-split surface disagree; a name added here is a new "
         "public name and a name dropped is a break"
     )
 
-    for name in sorted(BEFORE_THE_SPLIT):
+    for name in sorted(reachable):
         exposed = getattr(telemetry, name)
         assert any(getattr(module, name, None) is exposed for module in MODULES), (
             f"telemetry.{name} is a copy: no module in the package holds that object"
         )
+
+
+def test_the_name_a_module_took_is_the_module_and_the_function_is_one_import_away() -> None:
+    """`telemetry.record` is the module. Two names for one word is what this refuses.
+
+    The serializer keeps the name it was always defined under, so a caller that
+    wants it names the module that owns it rather than the package.
+    """
+    from idhazh.telemetry import record
+
+    assert isinstance(record, ModuleType)
+    assert record.__name__ == "idhazh.telemetry.record"
+    assert events.record.__module__ == "idhazh.telemetry.events"
+    assert "record" not in telemetry.__all__
 
 
 def test_the_flat_module_left_no_shim_behind() -> None:
@@ -106,5 +131,7 @@ def test_the_flat_module_left_no_shim_behind() -> None:
     Plan 32 section 1a: the row that moves a thing deletes it in the same
     commit. `telemetry.py` sitting next to `telemetry/` would import as nothing,
     read as a fallback, and drift from the package for as long as it survived.
+    The recorder is the second move to make that promise (plan 32 row 4).
     """
     assert not (REPO_ROOT / "backend" / "idhazh" / "telemetry.py").exists()
+    assert not (REPO_ROOT / "backend" / "idhazh" / "itemrecord.py").exists()
