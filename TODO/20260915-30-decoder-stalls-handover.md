@@ -42,13 +42,20 @@ then spent a quarter of an hour drawing one.
 **Branch**: `fix/a-worker-gets-a-clock`, off `247e386a`.
 **Pull request**: [#766](https://github.com/miztiik/yen-idhazh/pull/766), open as a
 **draft on purpose** - three tests still fail. Do not merge it as it stands.
+**CI has never run on it** - see section 8. Run the suite yourself.
 
-There is no worktree; make your own:
+**Somebody may already be carrying this.** As of 2026-09-15 a second agent had
+committed `A skipped item says so in the ledger, not only in the log` on top of
+the pushed tip, unpushed, in a worktree at `p31-clock`. Check
+`git log --oneline origin/fix/a-worker-gets-a-clock..` and the worktree list
+before you start, so two of you do not fix the same three tests.
+
+Make your own worktree, on a path nobody else has been told to use:
 
 ```powershell
 cd c:\...\yen-idhazh
 git fetch origin
-git worktree add ..\yen-idhazh.worktrees\p31-clock -b clock origin/fix/a-worker-gets-a-clock
+git worktree add ..\yen-idhazh.worktrees\<your-own-name> -b <your-own-branch> origin/fix/a-worker-gets-a-clock
 ```
 
 `ruff` and `mypy` are clean on it. The three failures are all one mechanical
@@ -321,8 +328,19 @@ Ten worked examples from run 34943695821 shard 3 are in
   wedge the terminal tool. Set `$env:GH_PAGER='cat'`.
 - **`main` is unprotected**, so `gh pr merge --auto` merges immediately rather
   than waiting for checks. Check the gates yourself first.
-- Several agents work this repository at once. Guard every command with a unique
-  tag and `if ($PWD.Path -ne $target) { exit 9 }` after `Set-Location`.
+- **An absent check is not a passing check.** PR #766 recorded **zero** check
+  runs against its pushed commit - `gh pr checks` says "no checks reported on
+  the branch" and `gh api repos/.../commits/<sha>/check-runs` returns an empty
+  list. `ci.yml` triggers on `pull_request` with no draft filter, so why it did
+  not run is unresolved; the likeliest cause is its `cancel-in-progress`
+  concurrency group under several agents pushing at once. Before you trust a
+  quiet PR, look for the check runs on the SHA, not at the absence of red.
+- Several agents work this repository at once, and **they will take your
+  worktree path**. `yen-idhazh.worktrees/p31-clock` was recreated by another
+  agent following section 2 of this page, and then also used for unrelated
+  workflow edits. Pick a path nobody has been told to use, guard every command
+  with a unique tag, and put `if ($PWD.Path -ne $target) { exit 9 }` after every
+  `Set-Location`.
 - Adding one `FailureCode` member breaks a fixture writer, three docs assertions
   and a config fixture. That is the suite working, not a problem - budget for it.
 - `config.Settings` is a dataclass, not a Pydantic model. Use
