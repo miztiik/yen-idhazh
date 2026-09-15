@@ -1,7 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -150,7 +149,7 @@ Two rules keep it from becoming a censorship surface:
  working feed.
 
 **Block the narrowest thing that was measured.** `fool.com/the-ascent/` is the
-publisher's affiliate arm and is blocked; `fool.com/investing/` is not, because
+publisher's affiliate case and is blocked; `fool.com/investing/` is not, because
 no item from it has been observed to fail (Guardrail #10). A marker wide enough
 to catch what has not happened yet is a marker nobody can defend.
 
@@ -453,7 +452,7 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | Adding the feed weight to the tier score instead of multiplying | Addition lets a weighted-down institution overtake a full-weight one of the same tier, which is the opposite of what turning it down meant. |
 | Raising the faithfulness threshold to keep affiliate pages out | They are faithful. Short declarative marketing prose is trivially entailed, so every cut that excludes them excludes real reporting first, and the bar rewards the source it should reject. |
 | Retiring `cnn-world` over the syndicated affiliate pages | It is a working feed carrying real reporting. Retiring a whole source over three items it passed through costs the vertical a desk to fix a link filter. |
-| Blocking `fool.com` entirely | The publisher's editorial arm has not been observed to fail. The measured cut is the affiliate section, and nothing wider has been measured. |
+| Blocking `fool.com` entirely | The publisher's editorial case has not been observed to fail. The measured cut is the affiliate section, and nothing wider has been measured. |
 | Taking the leading block from the first N of the published order | It ships the accident instead of the edit. That head is the top of whichever desk sorted first in run 1, which is a property of how the plan is assembled and not a judgement about the news. |
 | A heat score for the leading block, computed in the browser | Read-time re-ranking makes a shared link show the recipient a different page from the one the sender saw, and the number behind it would be one nobody measured (Guardrail #10). Carmack, 2026-08-31. |
 | `Front page at <source>.` as a lead's sentence | False. `on_front_page` says a salience feed voted, and more than one aggregator can be a salience feed - so naming the front page is wrong whenever the other one voted. |

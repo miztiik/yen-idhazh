@@ -15,7 +15,7 @@ import { telemetryCsv } from '../src/lib/charts/series';
  * - **The oracle.** Every console panel's bounding box, measured twice in ONE
  *   page session - while the months are still in the air, and once they have
  *   landed - and compared. A CSS property is not checked, because a CSS
- *   property is not what moves under a reader's cursor. The chrome arm reads
+ *   property is not what moves under a reader's cursor. The chrome case reads
  *   the whole column rather than the panels alone, and cuts the set at the
  *   first panel's top rather than at the fold - a fold is a question about the
  *   runner's fonts, and this one was six pixels from answering it wrongly.
@@ -27,7 +27,7 @@ import { telemetryCsv } from '../src/lib/charts/series';
  *   and the proof is the computed style in a browser that asked for stillness.
  * - **A state per state**, each with the sentence it prints.
  *
- * Every arm blocks the service worker. A "the payload did not arrive" arm is a
+ * Every case blocks the service worker. A "the payload did not arrive" case is a
  * lie while a worker can serve the payload out of its own cache.
  */
 

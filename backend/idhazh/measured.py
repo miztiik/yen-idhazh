@@ -298,7 +298,7 @@ def refuse_a_reading_taken_against_other_weights(
     `contracts/` is the bottom of the dependency graph and cannot import this
     module, so an `AppConfig` validator is not an available placement and this
     module opens no file. And a gate that reads its own inputs cannot be driven
-    from a built record, which is what the arm proving it bites needs
+    from a built record, which is what the case proving it bites needs
     (`CLAUDE.md` section 13).
 
     The refusal carries `SIZED_BY_A_READING_HERE`. This gate has exactly one
@@ -490,7 +490,7 @@ LABEL_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
     when_it_fires=(
         "prose tokenized harder than this, `numbered_sentences` changed how it "
-        "addresses a sentence, or the weights moved. Rebuild the cap-length arms and "
+        "addresses a sentence, or the weights moved. Rebuild the cap-length builds and "
         "re-take the worst."
     ),
     why_a_number=(

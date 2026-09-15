@@ -3,7 +3,7 @@ name: Model validation
 # Row #10: qualify one candidate summarizer on absolute machine gates.
 #
 # One model runs. The owner ruled on 2026-08-26 that the candidate is judged
-# alone, so there is no incumbent arm, no paired replay and no second set of
+# alone, so there is no incumbent case, no paired replay and no second set of
 # weights on this runner. Andre ruled the consequence: re-basing the dropped
 # comparisons on the committed 8B history would be confounded, so the gates
 # that survived read their thresholds from config, from the adoption target in
@@ -348,7 +348,7 @@ jobs:
           mkdir -p backend/var
           # The scratch config's `models.summarize` IS the candidate, so the
           # alias and every flag come from the same place the run is judged
-          # against. This arm used to render the flag list from a second copy,
+          # against. This step used to render the flag list from a second copy,
           # which is how it went two changes without the context-shift refusal
           # the daily run has had since PR #88.
           python - <<'PY' > backend/var/llama-argv

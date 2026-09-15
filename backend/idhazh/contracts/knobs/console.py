@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+from typing import Any, Self
 
 from pydantic import Field, model_validator
 
@@ -181,36 +181,67 @@ class ConsoleConfig(Model):
             "`console.feed_rows`."
         ),
     )
-    chart_arm_rule_days: int = Field(
+    chart_rule_days: int = Field(
         default=14,
         ge=1,
         description=(
-            "The span the chart arm's retirement rule is stated over. A median taken "
+            "The span the chart retirement rule is stated over. A median taken "
             "over any other span is the same figure with a different meaning and "
             "nothing on the page to say which one is being read, so under this many "
             "days the section prints the rule's own span and no number at all."
         ),
     )
-    chart_arm_minutes_target: float = Field(
+    chart_minutes_target: float = Field(
         default=6.0,
         gt=0.0,
         description=(
             "Router minutes per published chart above which the median day retires "
-            "the chart arm. Drawn as a marker on the bar, never as a subtraction the "
+            "chart drawing. Drawn as a marker on the bar, never as a subtraction the "
             "reader performs."
         ),
     )
-    chart_arm_coverage_pct: float = Field(
+    chart_coverage_pct: float = Field(
         default=5.0,
         gt=0.0,
         le=100.0,
         description=(
             "The share of a day's published items that must carry a chart, in whole "
-            "percent. Below this on the median day the arm is retired: an arm that "
+            "percent. Below this on the median day chart drawing is retired: drawing that "
             "reaches almost nothing is paying for a capability the digest does not "
             "use."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _the_old_chart_keys_still_read(cls, data: Any) -> Any:
+        """`chart_arm_*` became `chart_*` on 2026-09-15. A config spelling it still loads.
+
+        Only the names moved. `arm` was benchmarking's word for the same work run
+        again under different settings, and this section's own prose stopped using
+        it in the same commit - so the keys followed rather than being left as the
+        one place a person still has to type it.
+
+        These go a release later, the way a renamed config knob does: a config
+        file is a file somebody can edit, so the alias buys the edit time and is
+        then replaced by a refusal (section 11).
+        """
+        if not isinstance(data, dict):
+            return data
+        moved = {
+            "chart_arm_rule_days": "chart_rule_days",
+            "chart_arm_minutes_target": "chart_minutes_target",
+            "chart_arm_coverage_pct": "chart_coverage_pct",
+        }
+        if not any(old in data for old in moved):
+            return data
+        migrated = dict(data)
+        for old, new in moved.items():
+            if old in migrated and new not in migrated:
+                migrated[new] = migrated.pop(old)
+            else:
+                migrated.pop(old, None)
+        return migrated
 
     @model_validator(mode="after")
     def _window_bounds_are_ordered(self) -> Self:
@@ -236,8 +267,8 @@ class ConsoleConfig(Model):
         # A rule no preset can reach is a rule the page can never print. The
         # section would show the widen-the-window notice at every setting of the
         # control, which reads as a broken surface rather than as a narrow one.
-        if max(self.window_presets) < self.chart_arm_rule_days:
+        if max(self.window_presets) < self.chart_rule_days:
             raise ValueError(
-                "console.window_presets must offer a span of at least chart_arm_rule_days"
+                "console.window_presets must offer a span of at least chart_rule_days"
             )
         return self

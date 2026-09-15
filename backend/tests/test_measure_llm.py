@@ -198,7 +198,7 @@ def _bench_rows(*, threads: int = 4) -> list[dict[str, object]]:
 
 
 def _runtime_summary(*, startups: tuple[float, ...] = (4158.0, 3789.5, 3820.3)) -> dict[str, object]:
-    """What the server arm writes: one entry per repeat, each with its own samples."""
+    """What the server case writes: one entry per repeat, each with its own samples."""
     results: list[dict[str, object]] = []
     for index, startup in enumerate(startups, start=1):
         results.append(
@@ -344,7 +344,7 @@ def _page(
 def test_the_emitted_body_is_the_shape_of_the_page_it_fills() -> None:
     """Every heading the emitter writes is a heading the committed dossier carries.
 
-    The point of the arm is that adopting a model is a paste rather than a
+    The point of the case is that adopting a model is a paste rather than a
     transcription, and a body whose headings do not match the page it replaces
     is a transcription with extra steps.
     """

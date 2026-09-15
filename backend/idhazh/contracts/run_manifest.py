@@ -577,7 +577,7 @@ class RunManifest(Contract):
                 "On 2026-08-25 the router drafted 17 charts and published 9, and no "
                 "committed row said where the other 8 went. Without the drafted count a "
                 "model that stops asking for charts and a set of checks that starts "
-                "refusing them look identical, so the chart arm's kill line cannot be "
+                "refusing them look identical, so the chart drawing's kill line cannot be "
                 "read from anything the run leaves behind. Defaults to zero on a "
                 "manifest written before it existed."
             ),

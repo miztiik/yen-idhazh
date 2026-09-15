@@ -1,7 +1,6 @@
 # Model throughput and why it drifts inside a run
 
 **Last Updated**: 2026-09-15
-
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -45,7 +44,7 @@ an item pays two spans: **85.2 seconds**.
 **One part is an estimate and is labelled one** (Guardrail #10). Whether the
 answer span re-pays prefill on the thinking tokens has not been read. The slot
 should hold - span two's prompt is span one's extended, `cache_prompt` is
-requested, and arm 2 of the start-up probe refuses a run whose second call
+requested, and case 2 of the start-up probe refuses a run whose second call
 re-read a prompt the first one filled. If it misses, the estimated cost is
 **25.6 seconds an item more**. **What settles it**: the dispatch logs span two's
 evaluated tokens beside its cached tokens on every item, and their difference is

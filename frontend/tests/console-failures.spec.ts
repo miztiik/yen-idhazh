@@ -594,7 +594,7 @@ test.describe('the failure section on the page', () => {
 		const window = { start: start as string, end: end as string };
 		const failed = failedRows(canary, window, null);
 
-		// Both arms assert. Which one runs is decided by the fixture, never by a
+		// Both cases assert. Which one runs is decided by the fixture, never by a
 		// locator that returns zero because an attribute was renamed.
 		if (failed.length === 0) {
 			await expect(page.locator('[data-failure-list="empty"]')).toHaveText(

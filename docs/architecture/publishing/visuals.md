@@ -1,7 +1,6 @@
 # Visual planning and rendering
 
 **Last Updated**: 2026-09-15
-
 How an item gets a chart or - most of the time - nothing at all.
 The rule this subsystem serves is in [`../../concepts/digest.md`](../../concepts/digest.md): a
 visual must carry a fact the sentence beside it does not. A picture that decorates is worse than
@@ -480,17 +479,17 @@ Three properties of how it is written, and each one is load-bearing:
 - **It is a predicate over every enabled kind, not a chart special case.** Chart is the only kind
  left, so the predicate answers for one today - but a kind added later declares its own
  reachability here rather than being let through by an `if` that only knows about charts. The
- diagram arm is what made that shape necessary and then proved its own cost: a diagram's steps come
+ diagram drawing is what made that shape necessary and then proved its own cost: a diagram's steps come
  from prose, so nothing about one is decidable in advance, and with `diagram` in
  `visuals.enabled_kinds` **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
 - **It reads the facts only - never the article's words.** A predicate that branched on fetched
  prose would let a stranger's page steer our control flow, which is Guardrail #11 with no prompt in
- sight. There was no keyword rescue for the diagram arm for the same reason.
+ sight. There was no keyword rescue for the diagram drawing for the same reason.
 - **The empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
  reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
  that publish today.
 
-With the arm off, measured on the 145 items of run `32804437110` with no model and no network:
+With diagram drawing off, measured on the 145 items of run `32804437110` with no model and no network:
 **68 items (46.9%) never reach the model**, and 77 do. The histogram of widest unit group per
 article is in [`../../reference/measurements.md`](../../reference/measurements.md).
 
@@ -693,7 +692,7 @@ depth 1 publish on the validator alone, which is depth 1 quietly becoming the de
 consequence is stated rather than hidden: `state/visuals/` does not exist yet, so today the
 population is always empty, every depth refuses, and **the ladder behaves exactly as if it were
 off**. What ships now is the mechanism, its edges and three of its four invariants under test; the
-floor arm becomes live when the ledger does.
+floor case becomes live when the ledger does.
 
 **A downgrade with no annotation fails**, at every depth and not only at depth 2. The source
 document states it both ways - a table that puts it at depth 2 and a rule that puts it at depth 1
@@ -785,12 +784,12 @@ weights, install, model start. Both numbers came down together on 2026-08-25, be
 20 minutes above the stage bound is 20 minutes in which a stuck stage burns runner wall-clock past
 its own limit. Raising either one is the move Guardrail #2 forbids.
 
-**The chart arm has a kill line, registered before the data was read.** Authority: Jony,
-2026-08-25. Over 14 consecutive days with the chart-only gate on, retire the arm if the median day
+**Chart drawing has a kill line, registered before the data was read.** Authority: Jony,
+2026-08-25. Over 14 consecutive days with the chart-only gate on, retire chart drawing if the median day
 publishes a chart on fewer than 5% of published items, or spends more than 6 planner minutes per
 published chart. Either limb trips it. A day stopped at the budget still counts. Measured
 2026-08-25 on `ubuntu-latest` (4 vCPU, 16 GB): 6.2% and 4.4 minutes - inside the line on both
-limbs, which is why the arm ships. Writing the line down first is what stops the number being
+limbs, which is why it ships. Writing the line down first is what stops the number being
 argued after it is seen.
 
 `charts_drafted` on the run manifest is what makes that reading possible. It counts the items whose
@@ -847,8 +846,8 @@ claim is that every figure on it was written down when the run happened.
 
 **Charts published is counted from the payload, not from the manifest.** The manifest records what
 the planner decided; the payload records what a reader can see. A chart whose render failed is a
-visual and is not a published chart, so counting visuals instead would put a failure on the chart
-arm's bill.
+visual and is not a published chart, so counting visuals instead would put a failure on chart
+drawing's bill.
 
 ## Two controls that run after the model has answered
 
@@ -953,7 +952,7 @@ prints it rather than guarding it.
 **What the reader can read, measured rather than promised, and it is not the floor yet.** The
 drawing is placed at the width the card actually gave it, in CSS pixels, so one drawn unit is
 one pixel on screen and there is no scale factor between what a token says and what a reader
-sees. Measured on the canary day, both arms on one developer machine back to back with
+sees. Measured on the canary day, both cases on one developer machine back to back with
 `BUILD_VERSION` pinned, 2026-09-14, at 360, 390 and 1440 CSS px in both themes. **After, the
 scale is 1.000 at all three widths and every drawn string resolves at 12.0 CSS px**, which is
 `--text-xs` at its own size. Before, the same drawing laid itself out 720 units wide whatever
@@ -1216,7 +1215,7 @@ payload ever did: scanned 2026-09-05 over all 15 committed `digest.json` files,
 6,425 items and 351 visuals, and every one is a chart. It was deleted on that
 evidence.
 
-**And why the diagram renderer went with it.** The arm shipped off on 2026-08-25
+**And why the diagram renderer went with it.** Diagram drawing shipped off on 2026-08-25
 for the reason above - it drafted zero diagrams in 88 items and rendered zero in
 703, while making the reachability gate unfireable. What was left was a round trip
 with nothing at either end. The planner wrote `flowchart TD` text "so anyone can
@@ -1305,7 +1304,7 @@ promotes it to a `chart` through the contract's own validation, and a caller nev
 
 **The oracle is the published figure against the element table.** `backend/tests/test_render.py`
 compiles the committed `bar` plan and asserts every published figure equals the one its element
-states, in the plan's own channel order; a second arm doubles one element's figure and requires that
+states, in the plan's own channel order; a second case doubles one element's figure and requires that
 one mark to double with the other three untouched, which is what an equality on a single table
 cannot say. The browser's half is `frontend/tests/item-visual.spec.ts`, which reads the same numbers
 back off a real page and checks each bar's length is its figure in proportion to the longest.
@@ -1421,7 +1420,7 @@ the precedent for the same reason.
 **Why the ladder ships inert rather than waiting for its ledger.** With no depth-0 population every
 floor is uncomputable and every depth refuses, so today the ladder answers exactly as it would with
 the flag off. That is deliberate: the edges, the invariants and the refusals are under test now, at
-no reader-visible cost, and the one arm that needs a corpus is the one arm that waits. The
+no reader-visible cost, and the one case that needs a corpus is the one case that waits. The
 alternative - hold the whole mechanism back until `state/visuals/` lands - would put the edge table
 and the invariance rules into the same commit as the ledger, where a review has to hold both.
 
@@ -1492,27 +1491,27 @@ unreachable, and asserts `to_decision` lands on `none` for all of them. One surv
 gate drops a chart a reader would have seen. That test is what makes "provable" a true word here,
 and it only became true once one quantity was limited to one bar.
 
-**The diagram arm is off, on the measurement it was waiting for.** The doc used to say "the arm
-stays enabled until one run separates the three explanations - no exemplar in the prompt,
+**Diagram drawing is off, on the measurement it was waiting for.** The doc used to say "diagram
+drawing stays enabled until one run separates the three explanations - no exemplar in the prompt,
 `min_diagram_steps` blocking short answers, or news items genuinely not being flowcharts." That run
 landed. `32804437110` logs the draft kind beside the final kind: **17 chart drafts, 71 `none`
 drafts, and 0 diagram drafts in 88 items.** The model is not asking for diagrams and our checks are
 not rejecting them, so the first explanation is the live one - and the second and third cannot be
 told apart without a prompt change nobody has a reason to make. Across 703 decided items on
-2026-08-24/25 the arm produced nothing at all. Meanwhile it was the reason the reachability gate
+2026-08-24/25 diagram drawing produced nothing at all. Meanwhile it was the reason the reachability gate
 above could never fire, which cost 46.9% of every day at 20.7 to 40.3 s an item.
 
-So the arm is switched off in `visuals.enabled_kinds`, and the contract default follows, because a
+So diagram drawing is switched off in `visuals.enabled_kinds`, and the contract default follows, because a
 fresh clone should not pay for it either (Guardrail #6: the sane default is the measured one). Nothing
 else changes: the `diagram` enum member, the Mermaid writer, the SVG layout and their tests all
-stay, and `TestToDecision` keeps both arms on so the rejection paths and the injection canaries still
+stay, and `TestToDecision` keeps both cases on so the rejection paths and the injection canaries still
 hold. Turning it back on is one word in `config/idhazh.json`. The prompt still describes diagrams;
 it was left alone on purpose, because editing it changes the decode grammar and would invalidate
 the 21 s and 40 s figures this whole page rests on. A draft that asks for one now folds to `none`
 with a rationale naming the switch.
 
 **This is a pause, not a descope, and the condition to reopen it is written down.** Authority:
-Jony, 2026-08-25. Two things reopen the arm together, never separately: a prompt carrying a diagram
+Jony, 2026-08-25. Two things bring diagram drawing back together, never separately: a prompt carrying a diagram
 exemplar that, measured offline against fixture articles, drafts diagrams at a rate surviving the
 post-model checks - AND a hand-read sample showing those drafts carry an order the summary does not
 already state. The first alone only proves a model will say "diagram" when asked to. The experiment
@@ -1603,7 +1602,7 @@ file before it can be enabled.
 | Cap the number of items the planner may consider | A count has to be set for the worst host, so a fast host would decide 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
 | Give a budget-stopped item a `VisualDecision` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
-| A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Guardrail #11 in spirit, with no prompt involved. |
+| A keyword pre-filter to rescue the diagram drawing | Fetched words would steer our control flow. Guardrail #11 in spirit, with no prompt involved. |
 | A second, smaller model to triage items first | Two calls where the point was zero. |
 | Diffusion for charts | Produces a beautiful picture of a chart with hallucinated axis labels. |
 | A charting library in the renderer | `vl-convert` took a spec to SVG with no browser and no runtime JavaScript. **Retired 2026-09-13**: the reader's browser draws the chart now, so there is no renderer for a library to be in. |

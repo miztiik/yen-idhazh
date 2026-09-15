@@ -77,26 +77,26 @@ export function runHealth(manifests: readonly RunSummary[]) {
 /** What share of a day's published items carried a chart, in percent.
  *
  * Null where the day published nothing. A share of no articles is not zero
- * percent, it is no measurement at all, and a zero would read as an arm that
- * ran and reached nobody.
+ * percent, it is no measurement at all, and a zero would read as chart drawing
+ * that ran and reached nobody.
  */
 export function coverageOf(day: GlanceDay): number | null {
 	if (day.items <= 0) return null;
 	return (day.published / day.items) * 100;
 }
 
-/** The three numbers the chart arm's retirement rule is written from. */
-export interface ArmThresholds {
+/** The three numbers the chart retirement rule is written from. */
+export interface ChartThresholds {
 	/** The span the rule is stated over. */
 	ruleDays: number;
-	/** Minutes per published visual that retires the arm. */
+	/** Minutes per published visual that retires chart drawing. */
 	minutesTarget: number;
 	/** The share of published items that must carry a chart, in whole percent. */
 	coveragePct: number;
 }
 
 /** Both halves of the rule, each as a bar, a trend and a clause of one sentence. */
-export interface ChartArm {
+export interface ChartRule {
 	/** The window is narrower than the rule's own span, so no median is offered. */
 	narrow: boolean;
 	/** Window median minutes per published visual, or null. */
@@ -131,7 +131,7 @@ function trim(value: number): string {
 function verdictOf(
 	minutes: number | null,
 	coverage: number | null,
-	thresholds: ArmThresholds,
+	thresholds: ChartThresholds,
 	days: number
 ): string {
 	const cost =
@@ -139,7 +139,7 @@ function verdictOf(
 			? `The median day has no minutes on record over these ${days} days`
 			: `The median day spends ${minutes.toFixed(1)} minutes per visual, ` +
 				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
-				`${trim(thresholds.minutesTarget)} that retires the arm`;
+				`${trim(thresholds.minutesTarget)} that retires chart drawing`;
 	const reach =
 		coverage === null
 			? 'no day published anything to put a visual on'
@@ -150,18 +150,18 @@ function verdictOf(
 }
 
 /**
- * The chart arm judged against its own written rule, over the open window.
+ * The chart drawing judged against its own written rule, over the open window.
  *
  * `windowDays` is the span the page is holding, not the number of days the
  * ledger answered for. Under the rule's own span nothing is measured at all: a
  * median of the wrong span is the same figure with a different meaning, and
  * nothing on the page would say which one is being read.
  */
-export function chartArm(
+export function chartRule(
 	days: readonly GlanceDay[],
-	thresholds: ArmThresholds,
+	thresholds: ChartThresholds,
 	windowDays: number
-): ChartArm {
+): ChartRule {
 	const narrow = windowDays < thresholds.ruleDays;
 	const ordered = [...days].sort((a, b) => a.date.localeCompare(b.date));
 	const costs = narrow

@@ -87,7 +87,7 @@ function dirs(at: string): string[] {
 
 /** Every day the Pipelines daily table can draw a row for: one per committed
  * run manifest, whatever the visual planner did on it. */
-function chartArmDays(): string[] {
+function chartRuleDays(): string[] {
 	const root = join(CANARY, 'digest');
 	const found: string[] = [];
 	for (const year of dirs(root)) {
@@ -253,7 +253,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'the page publishes no windowed surfaces, so the oracle asserts nothing'
 	).toEqual([
 		'band-distance',
-		'chart-arm',
+		'chart-drawing',
 		'extraction',
 		'failure-rate',
 		'item-cost',
@@ -512,14 +512,14 @@ test('a rule stated over 14 days prints no median in a 7-day window', async ({ p
 	await page.goto('/console/');
 	await hydrated(page);
 
-	const section = page.locator('[data-windowed="chart-arm"]');
+	const section = page.locator('[data-windowed="chart-drawing"]');
 	await setWindow(page, RULE_DAYS);
-	await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveCount(0);
+	await expect(section.locator('[data-window-too-narrow="chart-drawing"]')).toHaveCount(0);
 
 	await setWindow(page, 7);
 	// The exact sentence, because a median of the wrong span is the same figure
 	// with a different meaning and nothing on the page to say which one it is.
-	await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveText(
+	await expect(section.locator('[data-window-too-narrow="chart-drawing"]')).toHaveText(
 		'The rule reads 14 days. Widen the window to see it.'
 	);
 	await expect(section.locator('[data-charts-verdict]')).toHaveCount(0);
@@ -605,7 +605,7 @@ test('THE ORACLE: a daily table drawn under the control is drawn over the contro
 	// day the fixture grows a row, and it goes stale silently.
 	const widest = Math.max(...PRESETS);
 	for (const [route, committed] of [
-		['/console/', chartArmDays()],
+		['/console/', chartRuleDays()],
 		['/console/model/', workedDays()]
 	] as const) {
 		await page.goto(route);

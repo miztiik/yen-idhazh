@@ -24,27 +24,27 @@
  *   7's panel that sticks from 1024px. Neither knows about the other.
  * - **A day that half arrives is still a designed page.** Rows 25 and 26 made
  *   the dated routes seed and fetch; row 14 designed what a reader meets when
- *   the fetch fails. The three arms below break the fetch at the network and
- *   count what they broke - an arm that intercepted nothing has proved that a
+ *   the fetch fails. The three cases below break the fetch at the network and
+ *   count what they broke - a case that intercepted nothing has proved that a
  *   page loads, which it would have done anyway.
  * - **The offline reader changes nothing a reader can see.** Row 28 put a
  *   worker in front of the same requests rows 25 and 26 make. A day out of the
  *   device and a day off the network have to be the same page.
  *
- * Several arms cannot run on a day shorter than `ui.shell_seed_items`, because
+ * Several cases cannot run on a day shorter than `ui.shell_seed_items`, because
  * a document that already carries its whole day never fetches - so there is
  * nothing to break and nothing to serve from a cache - and none can run on a
  * day with one desk, which cannot fill a leading block. They read both off the
  * fixture rather than off a locator, and the browser gate's eight-story canary
- * is the case that skips: seven of sixteen arms there, and none on a real
+ * is the case that skips: seven of sixteen tests there, and none on a real
  * published day. `item-zones.spec.ts` set the same precedent for the aside.
  * What the canary cannot reach is measured on the committed digest instead,
  * with hardware and date, in `docs/reference/measurements.md`.
  *
- * **Two arms at the end were written failing and now pass.** Composing the rows
+ * **Two cases at the end were written failing and now pass.** Composing the rows
  * broke two things: the dated document counted the stories in its own hand
  * instead of the day's, and a story's own address only landed while the pager
- * was already showing it. Both were fixed on 2026-09-02 and both arms are now
+ * was already showing it. Both were fixed on 2026-09-02 and both cases are now
  * ordinary assertions, which is what keeps them fixed. What they measure is in
  * `docs/architecture/publishing/layout.md`.
  */
@@ -143,7 +143,7 @@ const TOPIC = String((FACTS?.verticals ?? [])[0]?.id ?? '');
 
 const SEED = shellSeedItems();
 /** Whether the day is longer than the document that seeds it. False on the
- * canary, where nothing fetches and the two fetch arms have nothing to hold. */
+ * canary, where nothing fetches and the two fetch cases have nothing to hold. */
 const PAST_SEED = SERVED_ITEMS > SEED;
 /** How many leads the day earned, computed the way the page computes it. It is
  * what decides whether there is an aside to collide with anything. */
@@ -189,7 +189,7 @@ function watch(page: Page): Faults {
 		// network reporting itself rather than our code throwing, and the two
 		// lists below already hold every failed request by name - so counting it
 		// here would report one fault twice and make the deliberate 404 the absent
-		// arm serves read as a page that threw.
+		// case serves read as a page that threw.
 		if (message.text().includes('Failed to load resource')) return;
 		found.errors.push(message.text());
 	});
@@ -469,7 +469,7 @@ test.describe('the count and the address', () => {
 				`${published}. It counts the list in hand rather than the day's own total, so a ` +
 				'reader pressing the pager would watch it tick'
 		).toBe(published);
-		// And the arm that says the number is not simply the list: the stream pages
+		// And the case that says the number is not simply the list: the stream pages
 		// at twelve, so a count taken off what is drawn would be smaller on any day
 		// past that.
 		expect(stories, 'the page drew no story, so the count above proves nothing').toBeGreaterThan(0);
@@ -561,7 +561,7 @@ test.describe('a day whose stories never arrive', () => {
 
 	/** Break the day payload and count what was broken.
 	 *
-	 * Decision 3: an arm that reports zero interceptions is a null result rather
+	 * Decision 3: a case that reports zero interceptions is a null result rather
 	 * than a pass, so the count is printed and asserted above zero before the
 	 * state it is evidence for is asserted at all.
 	 */
@@ -580,10 +580,10 @@ test.describe('a day whose stories never arrive', () => {
 		await page.goto(`/${DAY}/`);
 		await expect(
 			page.locator('[data-payload-state]'),
-			`the ${name} arm never reached a settled state`
+			`the ${name} case never reached a settled state`
 		).toHaveAttribute('data-payload-state', 'unreachable');
 		console.log(`[reading-page] ${name}: intercepted ${taken.length} - ${taken.join(', ')}`);
-		expect(taken.length, `the ${name} arm intercepted nothing, so it measured nothing`).toBeGreaterThan(
+		expect(taken.length, `the ${name} case intercepted nothing, so it measured nothing`).toBeGreaterThan(
 			0
 		);
 		return taken.length;
@@ -594,16 +594,16 @@ test.describe('a day whose stories never arrive', () => {
 	async function designed(page: Page, name: string): Promise<void> {
 		await expect(
 			page.locator('[data-payload-state] .failed-headline'),
-			`the ${name} arm drew no headline`
+			`the ${name} case drew no headline`
 		).toContainText(DAY.slice(0, 4));
 		await expect(
 			page.getByRole('button', { name: 'Try again' }),
-			`the ${name} arm offers no way to try again`
+			`the ${name} case offers no way to try again`
 		).toHaveCount(1);
 		const held = await page.locator('article.item').count();
 		expect(
 			held,
-			`the ${name} arm took the document's own stories away as well`
+			`the ${name} case took the document's own stories away as well`
 		).toBeGreaterThan(0);
 		const measured = await page.evaluate(() => ({
 			scrollWidth: document.documentElement.scrollWidth,
@@ -611,7 +611,7 @@ test.describe('a day whose stories never arrive', () => {
 		}));
 		expect(
 			measured.scrollWidth,
-			`the ${name} arm scrolls sideways`
+			`the ${name} case scrolls sideways`
 		).toBeLessThanOrEqual(measured.clientWidth);
 	}
 
@@ -619,10 +619,10 @@ test.describe('a day whose stories never arrive', () => {
 		const faults = watch(page);
 		await broken(page, 'absent', (route) => route.fulfill({ status: 404, body: '' }));
 		await designed(page, 'absent');
-		// The 404 is the arm. What must not be there is anything thrown.
+		// The 404 is the case. What must not be there is anything thrown.
 		expect(
 			faults.errors,
-			`the absent arm threw:\n${faults.errors.join('\n')}`
+			`the absent case threw:\n${faults.errors.join('\n')}`
 		).toEqual([]);
 	});
 
@@ -632,7 +632,7 @@ test.describe('a day whose stories never arrive', () => {
 			route.fulfill({ status: 200, contentType: 'application/json', body: '' })
 		);
 		await designed(page, 'empty');
-		expect(faults.errors, `the empty arm threw:\n${faults.errors.join('\n')}`).toEqual([]);
+		expect(faults.errors, `the empty case threw:\n${faults.errors.join('\n')}`).toEqual([]);
 	});
 
 	test('unparseable: the file is there and is not a day', async ({ page }) => {
@@ -641,7 +641,7 @@ test.describe('a day whose stories never arrive', () => {
 			route.fulfill({ status: 200, contentType: 'application/json', body: '}{ not a day' })
 		);
 		await designed(page, 'unparseable');
-		expect(faults.errors, `the unparseable arm threw:\n${faults.errors.join('\n')}`).toEqual([]);
+		expect(faults.errors, `the unparseable case threw:\n${faults.errors.join('\n')}`).toEqual([]);
 	});
 });
 
@@ -664,7 +664,7 @@ test.describe('with the offline reader installed', () => {
 				for (const name of await caches.keys()) await caches.delete(name);
 			})
 			.catch(() => {
-				// An arm that ended on a page that could not load has nothing to
+				// A case that ended on a page that could not load has nothing to
 				// clean up, and the context is discarded either way.
 			});
 	});

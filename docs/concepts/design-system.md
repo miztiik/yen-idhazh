@@ -1,7 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
 **A rule is here if it binds a token or a bound the whole site resolves.** A rule about one named console panel - how a figure is worded, ranked, tinted or drawn there - is in [console-design.md](console-design.md), which reads this page's vocabulary and adds no token of its own.
@@ -394,7 +393,7 @@ An item's figure is **one tab stop**, and the name it announces lists every bar 
 
 **What the reader loses is nothing on screen and one thing off it.** A reader with JavaScript off gets neither the chart nor the sentence. Measured on the canary build 2026-09-14, the prerendered document carries **zero `<figure>` elements**: the figure exists only once the marks have arrived, so the sentence had already stopped reaching that reader when the browser took over the drawing on 2026-09-13. This row states the loss rather than causing it.
 
-[../../frontend/tests/item-visual.spec.ts](../../frontend/tests/item-visual.spec.ts) is the memory. It reads the pointer-reachable set off the drawn nodes, walks the keyboard-reachable set by pressing Tab from the top of the document, and compares the two whole, printing both when they differ. **Asserting that some keyboard route exists is not the check** - the defect is always one fact that only a pointer reaches. One arm is driven from a **built** eight-bar chart rather than from the canary's four, because the case that breaks is the one the archive has never produced.
+[../../frontend/tests/item-visual.spec.ts](../../frontend/tests/item-visual.spec.ts) is the memory. It reads the pointer-reachable set off the drawn nodes, walks the keyboard-reachable set by pressing Tab from the top of the document, and compares the two whole, printing both when they differ. **Asserting that some keyboard route exists is not the check** - the defect is always one fact that only a pointer reaches. One test is driven from a **built** eight-bar chart rather than from the canary's four, because the case that breaks is the one the archive has never produced.
 
 Authority: Reader, plan 14 row #2.
 
@@ -414,7 +413,7 @@ The console is not covered by that spec. It carries live scroll containers of it
 
 ### A diagram a narrow column cannot hold becomes a list, never a smaller diagram
 
-A chart engine scales its marks with the container and its **type with nothing at all**. The chart-arm flow is the case: its Sankey labels sit outside the nodes, in a fixed 170-pixel column, at a fixed 12-pixel size. Measured 2026-09-01 in Chromium on the built console, that column is 12 percent of a 1,376px SVG at 1440 and **52 percent of a 328px one at 360**, so the four stages divide 158 pixels between them and their labels print over each other.
+A chart engine scales its marks with the container and its **type with nothing at all**. The chart-drawing flow is the case: its Sankey labels sit outside the nodes, in a fixed 170-pixel column, at a fixed 12-pixel size. Measured 2026-09-01 in Chromium on the built console, that column is 12 percent of a 1,376px SVG at 1440 and **52 percent of a 328px one at 360**, so the four stages divide 158 pixels between them and their labels print over each other.
 
 | Viewport | Flow SVG | Label pairs overlapping | Worst overlap |
 | --- | --- | --- | --- |
@@ -427,7 +426,7 @@ A chart engine scales its marks with the container and its **type with nothing a
 
 Two answers were refused before this one. **A horizontal scroll** destroys the diagram's whole value - seeing every branch at once - and hides the small branches off screen. **Smaller type** was already measured and rejected once, when a one-line label ran 280px into a 246px column pitch; the reply then was two lines, and two lines is what the table above measures. Neither is available at 360, because the label column does not shrink with the frame at any font size a reader can use.
 
-So below `48rem` the same numbers are a **stepped list**: one row per stage with its count and its share of everything that reached the arm, and the branch that left it indented under it. The breakpoint is the one the console page already stacks at, and it clears the measured crossing by 68 pixels.
+So below `48rem` the same numbers are a **stepped list**: one row per stage with its count and its share of everything that reached chart drawing, and the branch that left it indented under it. The breakpoint is the one the console page already stacks at, and it clears the measured crossing by 68 pixels.
 
 **One call builds both shapes.** `chartFlow` returns the option and the steps together, so the list and the diagram cannot report two different flows - which is the failure a fallback invites and the one nothing on screen would show.
 `frontend/tests/console-flow.spec.ts` reads every count off the diagram at 1440 and off the list at 390 and compares the two sets, and it checks on the page that what leaves a stage is what arrived at it.

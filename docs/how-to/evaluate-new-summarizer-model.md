@@ -1,7 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-14
-
+**Last Updated**: 2026-09-15
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -9,7 +8,7 @@ The swap is one line in `config/idhazh.json`:
 ```
 
 Point it at another file in `config/models/` and everything follows it: the
-daily run, the qualification arm and the bench all read the entry that file
+daily run, the qualification case and the bench all read the entry that file
 holds. **The revert is the same line back.**
 
 The rest of this page is what to do before you write that line and what to check
@@ -219,7 +218,7 @@ default silently.
 
 ### 1.3 Bench it - how fast
 
-One dispatch, two arms, and one field naming the candidate:
+One dispatch, two cases, and one field naming the candidate:
 
 ```bash
 gh workflow run measure.yml \
@@ -259,7 +258,7 @@ copies of the same facts can disagree, which means benching one set of bytes and
 adopting another with every gate green. They now take the models file and read
 the rest out of it, which is the same string the swap itself writes.
 
-**Arm one, artifact `bench-raw`** - raw prefill and decode with nothing else in
+**Case one, artifact `bench-raw`** - raw prefill and decode with nothing else in
 the process:
 
 - `hardware.txt`: CPU topology, cgroup limits and runtime identity;
@@ -268,10 +267,10 @@ the process:
 - `resources.json`: wall time, CPU pressure, throttling and memory events.
  Cgroup `memory.peak` can be absent or cumulative; it is not a per-model RSS
  comparison; and
-- `bench/raw-arm.json`: the same numbers as readings, which is what arm two
+- `bench/raw-case.json`: the same numbers as readings, which is what case two
  folds into the page.
 
-**Arm two, artifact `bench-server-<runtime_candidate>`** - a real llama-server,
+**Case two, artifact `bench-server-<runtime_candidate>`** - a real llama-server,
 real fetches, real summaries over a fixed five-article corpus:
 
 - `runtime-summary.json`: per-repeat startup, work and per-item timings, the
@@ -353,7 +352,7 @@ gh workflow run validate.yml \
  -f job_budget_minutes='330'
 ```
 
-The arm builds a candidate config under gitignored
+The case builds a candidate config under gitignored
 `backend/var/candidate-config` - the committed tree with `models_file` moved and
 nothing else touched, so it runs the exact line an adoption later moves - checks
 the SHA-256 and the entry's declared byte count **before
@@ -501,7 +500,7 @@ learning mostly from a teacher that no longer serves.
 weights cache key carries the file and its revision. A cache miss is 5.29 GiB in
 118 s (`n = 1`, spread unavailable, GitHub-hosted `ubuntu-latest`, 2026-08-23),
 and each shard pays it - a warm-box bench figure is not the first real day. The
-bench reports a cold arm for exactly this reason; read that one.
+bench reports a cold case for exactly this reason; read that one.
 
 The steady-state cache holds one model. The transition can hold two and cross
 the 10 GB ceiling, so before the first production run:

@@ -428,7 +428,7 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
     `months` names the months this run touched, which is what the day workflow
     passes. None means every month still on disk, which is the sweep `ci.yml`
     takes on a change that can move a contract - and reading everything is the
-    point of that arm, because a contract change can invalidate any file.
+    point of that case, because a contract change can invalidate any file.
 
     Six of the seven directories are trimmed on every assemble by
     `publish_console.prune_months`, so the sweep opens at most their own
@@ -436,7 +436,7 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
     rather than in a sentence that would be wrong: its deletion lives in
     `retention.prune_telemetry`, inside the workflow step that ships
     `--dry-run`, so `public_telemetry_keep_months` is declared and not yet
-    enforced and that directory gains one file a month. The daily arm is
+    enforced and that directory gains one file a month. The daily case is
     unaffected - it opens only the months the run wrote.
 
     The band is checked every time whatever `months` says. It is one small file

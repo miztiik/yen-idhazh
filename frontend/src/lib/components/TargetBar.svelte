@@ -3,7 +3,7 @@
 	 *
 	 * A bare count cannot answer the operator's question. "12 failures" means
 	 * nothing until the number that rests a feed is beside it, and "4.1 minutes"
-	 * means nothing until the 6 that retires the chart arm is on the same track.
+	 * means nothing until the 6 that retires chart drawing is on the same track.
 	 * So the threshold is a marker the eye measures against, not a subtraction
 	 * the reader performs.
 	 *
