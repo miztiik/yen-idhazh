@@ -42,7 +42,6 @@ from ._harness import (
     _plan_output,
     _reads_the_environment,
     _run_bodies,
-    _run_the_inline_program,
     _runtime_cache_keys,
     _script,
     _step,
@@ -383,10 +382,12 @@ def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> Non
                         )
                         node = cast(dict[str, object], node)[key]
 
-    # The sweep rewrites its own copy of the config, which is the read that went
-    # stale. Naming it keeps this test from passing by finding nothing, and it
-    # names a path in EACH document so neither half can go quiet on its own.
-    assert ("measure.yml", MODELS_DOCUMENT, ("summarize", "inference")) in seen
+    # The pipeline-tests case rewrites its own copy of the config, which is the
+    # read that goes stale. Naming it keeps this test from passing by finding
+    # nothing, and it names a path in EACH document so neither half can go quiet
+    # on its own. It was `measure.yml` until the bench's programs moved into
+    # `backend/utilities/`, where ruff and mypy can see them.
+    assert ("idhazh-pipeline-tests.yaml", MODELS_DOCUMENT, ("summarize",)) in seen
     assert ("digest.yml", CONFIG_FILE_NAME, (MODELS_POINTER_KEY,)) in seen
 
 
@@ -523,7 +524,7 @@ def _candidate_outputs(
     step = _step(_load_workflows()[filename], job_name, "id", step_id)
     script = _script(step, f"{filename}/{job_name}/{step_id}")
     assert MODEL_REFS_CALL in script, f"{filename} resolves the candidate somewhere else"
-    prefix = dict((name, value) for name, _, _, value in CANDIDATE_STEPS)[filename]
+    prefix = {name: value for name, _, _, value in CANDIDATE_STEPS}[filename]
     return _published(
         model_refs.candidate_rows(_a_config_tree(tmp_path, summarize), "", prefix=prefix)
     )

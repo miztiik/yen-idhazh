@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
+from conftest import REPO_ROOT, read_text
+
+from utilities import runtime_sweep
 
 from ._harness import (
     BENCH_ARTIFACTS,
@@ -177,18 +181,14 @@ def test_the_bench_measures_a_candidate_without_touching_the_committed_config() 
         _step(workflow, BENCH_SERVER_JOB, "name", "Measure runtime candidate"),
         f"measure.yml/{BENCH_SERVER_JOB}/Measure runtime candidate",
     )
-    # The property, not the spelling. This assertion used to pin the name
-    # `CANDIDATE` for the path, which was also the name the sweep read
-    # `RUNTIME_CANDIDATE` into - so the test held the collision in place.
-    copied = re.search(r"shutil\.copytree\((\w+), dst\)", sweep)
-    assert copied, (
-        "the sweep copies the candidate tree; copying `config` would measure the incumbent"
-    )
-    held = copied.group(1)
-    assert f'{held} = Path("{BENCH_CANDIDATE_CONFIG}")' in sweep
-    assert f'{held} = os.environ' not in sweep, (
-        f"{held} holds the candidate config path and a dispatch input at once"
-    )
+    assert "backend/utilities/runtime_sweep.py sweep" in sweep
+    # The property, not the spelling. The sweep copies the CANDIDATE tree; a
+    # copy of `config` would measure the incumbent under the candidate's name.
+    # This used to read the step's own heredoc and now reads the module the step
+    # calls, which is the same assertion one indirection later.
+    assert runtime_sweep.CANDIDATE_CONFIG == Path(BENCH_CANDIDATE_CONFIG)
+    source = read_text(REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py")
+    assert "shutil.copytree(CANDIDATE_CONFIG, dst)" in source
 
     for job_name in (BENCH_RAW_JOB, BENCH_SERVER_JOB):
         for step in _steps(workflow, job_name):

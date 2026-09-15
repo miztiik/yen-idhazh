@@ -398,10 +398,16 @@ SERVER_STARTERS: Final[dict[tuple[str, str], tuple[tuple[str, str | None], ...]]
         ("Start the model", "backend/var/cases/baseline/config"),
         ("Restart the model with two slots", "backend/var/cases/parallel-2/config"),
     ),
-    ("measure.yml", "runtime"): (("Measure runtime candidate", None),),
     ("measure.yml", "budgets"): (("Start the tokenizer", "backend/var/candidate-config"),),
     ("validate.yml", "qualify"): (("Start the candidate", "backend/var/candidate-config"),),
 }
+
+#: The starters that are not steps. `measure.yml`'s runtime case starts a server
+#: too, but it does it inside a module rather than inside a heredoc - so the
+#: Oracle reads the module. It is held here, beside the steps, because the thing
+#: that must never happen is a server started by a second spelling of the flag
+#: list, and where that spelling lives does not change the rule.
+SERVER_STARTER_MODULES: Final = ("backend/utilities/runtime_sweep.py",)
 
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
     "work": ("Prompt cache log summary", "llama-server.log"),
