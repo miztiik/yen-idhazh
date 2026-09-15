@@ -370,7 +370,7 @@ broken install. It prints nothing on a pass, and a silent run is the pass.
 It reads files, so it covers `.github/scripts/` and nothing else. The shell
 written inline in a workflow `run:` body is held by the contract tests in
 `backend/tests/workflows/`
-([../reference/github-actions.md](../reference/github-actions.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
+([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
 
 **`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
 it would rewrite, all of them
