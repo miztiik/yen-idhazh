@@ -42,7 +42,7 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.knobs.placement import AssembleConfig, PlacementConfig
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.run_manifest import (
@@ -53,7 +53,7 @@ from idhazh.contracts.run_manifest import (
     RunStatus,
     VerticalCount,
 )
-from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource, VerticalPlan
+from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus

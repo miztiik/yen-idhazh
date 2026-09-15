@@ -72,7 +72,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.digest_day import DigestLead, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
-from idhazh.contracts.run_plan import TimeSource
+from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualState
 
