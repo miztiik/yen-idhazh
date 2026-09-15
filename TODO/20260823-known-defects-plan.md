@@ -48,10 +48,12 @@ headline and the pass grouped 15 of them.
 
 **The threshold was not the fault.** `collapse_same_story` scores vectors built
 by `embed.text_for` over `f"{title}. {summary}"`, and the summary is our own
-model's prose about one article - roughly nineteen words in twenty of the
-encoded text. Two outlets writing the same story give our summariser two
-different articles, so the comparison is dominated by the one part guaranteed to
-differ. The 53 cross-source pairs whose headlines match score a median of
+model's prose about one article - a median 16 tokens of headline in a median
+121, so 87 percent of what the encoder reads, measured 2026-09-14 with the
+committed tokenizer over 75 items of the 2026-09-13 day. Two outlets writing the
+same story give our summariser two different articles, so the comparison is
+dominated by the one part guaranteed to differ. The 53 cross-source pairs whose
+headlines match score a median of
 **0.9177** against a floor of **0.94**, and the pair a person has already marked
 as two stories sits at **0.9317** - above that median. No floor separates the two
 populations, so lowering one would have traded this defect for a worse one.

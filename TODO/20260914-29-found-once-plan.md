@@ -75,16 +75,29 @@ which is the same family.
 
 | # | Row | Depends on | Wave | Status | Worker | PR | Worktree |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Stop printing "Only one of our sources carried this" | - | A | PENDING | - | - | dedup2 |
-| 2 | Two feeds of one outlet are one source | - | A | PENDING | - | - | dedup2 |
-| 3 | Measure: title signal against the committed days | - | A | PENDING | - | - | dedup2 |
-| 4 | Correct the token-share number defect 22 shipped | - | A | PENDING | - | - | - |
-| 5 | The title arm, at a floor row #3 sets | 3 | B | PENDING | - | - | - |
-| 6 | Draw the collapse | 3, 5 | C | PENDING | - | - | - |
+| 1 | Stop printing "Only one of our sources carried this" | - | A | DONE | - | #782 | - |
+| 2 | Two feeds of one outlet are one source | - | A | DONE | - | #782 | - |
+| 3 | Measure: title signal against the committed days | - | A | DONE | - | #782 | - |
+| 4 | Correct the token-share number defect 22 shipped | - | A | PENDING | - | - | p29-plan |
+| 5 | Draw the collapse, with a publisher stack that links | - | B | PENDING | - | - | - |
+| 6 | An article we could not read never becomes a card | - | B | PENDING | - | - | - |
+| 7 | One outlet never runs the identical piece twice | - | B | PENDING | - | - | - |
+| 8 | A ceiling on the day, beside the ceiling on a run | - | B | PENDING | - | - | - |
+| 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
+| 10 | A story that has been running ranks below one that broke today | - | C | PENDING | - | - | - |
+| 11 | The lead is a weighted score, and the page says how | 10 | C | PENDING | - | - | - |
+| 12 | Label the sheet, then set the floor | 9 | D | PENDING | - | - | - |
 
-Rows 1, 2 and 3 are written and gated in the `dedup2` worktree; they flip to
-DONE with a PR number once that merges. Row #3's machine half is finished and
-its numbers are below - what is outstanding is the human labelling pass.
+**Owner decisions, 2026-09-15.** Rows 5 to 12 are approved with the contracts
+below. The contracts are the owner's; a worker implements them and decides
+nothing. Five candidates were refused and are recorded under `Rejected` so
+nobody re-proposes them.
+
+**The comparison is over our own summary, and that is a bet the owner is
+making on purpose.** "Assuming the summariser has done the job properly, that
+is the premise of the app - let us bet it did and compare on that." Every row
+below reads `title. summary`, which is what the pass already encodes. No row
+reads an article body.
 
 ## Row #1 - stop printing the sentence we cannot support
 
@@ -188,7 +201,259 @@ so the summary is **87 percent of the tokens** and the headline is about one
 part in eight. Guardrail #10: an unmeasured number may not justify a design, and
 this one is now measured and wrong.
 
+## Row #5 - draw the collapse, with a publisher stack
+
+**Intent.** A reader sees one card per story, and that card says which
+newsrooms ran it. Today the grouping is computed, persisted and deliberately
+withheld from the page, so every detection gain is invisible.
+
+**Contract.**
+
+- `DigestViewItem` carries `same_story_as`, which the projection drops today,
+  and gains `covered_by: list[DigestCoverage]` - **outlet names, not a count**,
+  each carrying the name and the member's own item id, ordered by `rank_score`,
+  capped at three plus a remainder.
+- An item whose `same_story_as` is set **is not drawn as its own card**. The
+  anchor draws one card carrying a stack of publisher pills.
+- **Every pill is a link to that publisher's own item page**, which carries our
+  summary of their piece and its `Read the original` link. It links to our page
+  rather than straight out: a reader who wanted the publisher's version still
+  reaches it in one more click, and a reader who wanted ours does not lose it.
+  Nothing is removed - each member keeps its address, its archive entry and its
+  month search entry. This is the reachability answer that pulled the collapse
+  the first time, and it is not optional.
+- `ui.draw_same_story`, default **true**, removal condition on the declaring
+  line. It is the revert path.
+- `also_covered_by` keeps its meaning and stays on the wire, because the count
+  and the names answer different questions.
+
+**Why the names and the fold ship together.** The fold is what makes a false
+merge expensive - a story goes behind a pill instead of printing a wrong number.
+The names are what make it recoverable. Shipping the fold first would be the
+worst order available.
+
+**Oracle.** A reading-page test on a built day with a known group: the anchor
+draws once, the members do not draw as cards, every member's address still
+resolves, and every member appears in the month index. A second arm with
+`ui.draw_same_story` off restores one card per item.
+
+**What the reader loses, stated.** On a false merge, a story is one click away
+instead of on the page. That is the trade the owner took on 2026-09-14.
+
+## Row #6 - an article we could not read never becomes a card
+
+**Intent.** A card whose headline is `Article fails to load due to technical
+issues` is not a story. It should never have cost a summarize call either.
+
+**Contract.**
+
+- The refusal reads **our own recorded extraction outcome**, never the fetched
+  text. Matching on phrases inside the body would be a rule driven by untrusted
+  input (Guardrail #11) and a source could steer it.
+- The refusal lands **before summarize**, so the run does not pay to write prose
+  about an error page. Measured: about 83 s of decode per item.
+- The item is recorded as refused with its reason, exactly as other refusals
+  are, so the operator surfaces can still count it.
+
+**Oracle.** A built fixture whose extraction failed never reaches summarize and
+never reaches the day. A second arm with a successful extraction of the same
+shape publishes normally.
+
+**What the reader loses.** A link to an article we could not read and had no
+summary for.
+
+## Row #7 - one outlet never runs the identical piece twice
+
+**Intent.** The same piece from one outlet appears once.
+
+**Contract.**
+
+- A deterministic same-outlet, same-identity check at **plan** time, so the
+  second copy is never summarised.
+- It is **not** part of `collapse_same_story`. That pass refuses same-outlet
+  pairs by design and therefore can never catch this; adding it there would
+  break the across-outlets rule row #2 just repaired.
+
+**Oracle.** A built plan carrying one outlet's piece twice plans it once. A
+second arm with two different outlets plans both.
+
+## Row #8 - a ceiling on the day, beside the ceiling on a run
+
+**Intent.** Two different things need bounding and one knob is doing both
+badly. A run has to finish inside its shard. A day has to be readable.
+
+**Contract.**
+
+- `run.safety_ceiling_per_run` stays, and its reason is narrowed in writing: it
+  protects the worker from its timeout.
+- `run.safety_ceiling_per_day` is added. It bounds what the day publishes across
+  every run.
+- **Both are guardrails, not rules.** They only ever refuse. Neither chooses
+  content, ranks it, or reorders it; they bound how much the content-picker may
+  hand over. A day under the ceiling is untouched.
+- Numbers are the owner's and are recorded on the line that declares them.
+
+**Why both.** The per-run cap is 80 and the day runs about five times, so a
+number a person set at 80 publishes about 356. Anybody reading `80` and picturing
+an 80-item day is wrong by a factor of four and a half.
+
+**Oracle.** A built multi-run day stops at the day ceiling with runs still
+under their own. A second arm stops a single run at the run ceiling with the day
+still under its own.
+
+## Row #9 - the same story is one story for 36 hours, not one day
+
+**Intent.** A story that breaks at 23:00 and is picked up at 07:00 is one story.
+Today grouping sees one published day and stops at midnight, so it is two.
+
+**Contract.**
+
+- `assemble.same_story_window_hours`, **default 36**, configurable so the number
+  can move without a source edit. 36 covers an evening break picked up the next
+  morning and refuses a genuine follow-up two days later.
+- The pass reads the current day plus **only** those earlier days the window can
+  still reach - at 36 hours that is one earlier day, and the read is bounded by
+  the window rather than by how much archive exists (Guardrail #12). The
+  declaration goes beside the code and names what it reads and why a single day
+  cannot answer the question.
+- **Nothing in an already-published day is rewritten.** A day that has been
+  published is finished. When today's item matches yesterday's, the grouping is
+  recorded on **today's** item only, and it points at yesterday's id.
+- `same_story_as` therefore has to carry a date as well as an id. That is a
+  persisted contract change: stamp `version`, append the changelog entry, and
+  ship the read-side migration in the same commit - an item written before this
+  carries a bare id and means "today".
+- The card's wording changes when the match is older: the pill says the outlet
+  and that it ran earlier, rather than implying it ran today.
+
+**What this costs, to be measured before it lands.** One extra day of items and
+vectors loaded per run, and the pair count rises with the square of the items in
+the window. On a 356-item day that is about four times the pairs. The pass uses
+0.23 percent of the assemble budget today, so four times is still about 1
+percent - but that is arithmetic on a measured number, not a measurement, and
+the row takes the reading before it claims it.
+
+**Oracle.** A built pair 30 hours apart groups; the same pair 40 hours apart does
+not; the window set to 0 restores today's same-day behaviour exactly. A built
+earlier day is byte-identical before and after the later run.
+
+## Row #10 - a story that has been running ranks below one that broke today
+
+**Intent.** Freshness is a ranking signal we already have the data for and do
+not use.
+
+**Contract.**
+
+- A derived decay term over `published_at`, which every item already carries.
+  No model, no new persisted field, no fetch.
+- It feeds **ranking**, never grouping. A story's age changes where it sits, not
+  whether it is the same story as another.
+- The shape and its constant are config, with a sane default, so the behaviour
+  changes without a source edit.
+
+**Oracle.** Two items alike in every other signal, one published today and one
+two days ago, rank in that order; with the knob at zero they rank as they do
+today.
+
+## Row #11 - the lead is a weighted score, and the page says how
+
+**Intent.** The day's leading stories are chosen by one score today. They should
+be chosen by several signals with declared weights, and a reader should be able
+to find out what those are.
+
+**Contract.**
+
+- A composite score over signals the payload already carries. At minimum: the
+  existing `rank_score`, how many outlets ran it (`also_covered_by`), and the
+  freshness term from row #10.
+- **Every weight is config with a sane default.** Change the config and the lead
+  order changes with no source edit (Guardrail #6). No weight is a literal.
+- The composite is **deterministic and model-free**. It reads numbers the
+  pipeline already wrote; no model ranks anything.
+- **`also_covered_by` enters the composite only above a floor the owner sets**,
+  because at today's recall the count is zero on most genuinely multi-source
+  stories. Below that floor its weight is zero and the lead behaves as it does
+  now. Row #12 supplies the recall figure that sets the floor.
+
+**The documentation is part of the row, not a follow-up.** A page under
+`docs/architecture/publishing/` owns the composite and carries a mermaid diagram
+showing, in one picture: what signals enter, where each is computed, how the
+same-story pass folds a group, and how the leading stories are chosen over the
+folded day. The existing same-story flowchart in
+[`../docs/architecture/publishing/layout.md`](../docs/architecture/publishing/layout.md)
+is one half of it and is linked rather than copied.
+
+**Oracle.** A built day where the top item by `rank_score` alone is not the top
+item by the composite, proving the weights bind. A second arm with every weight
+but `rank_score` set to zero reproduces today's order exactly.
+
+## Row #12 - label the sheet, then set the floor
+
+**Intent.** No floor is chosen by taste, and no weight in row #11 is either.
+
+**What labelling is, since it has been asked.** It is **not** training a model
+and it produces no model. A person reads two headlines and says whether they are
+the same story. With a few hundred of those answers, we can count - for any
+candidate floor - how many pairs the rule gets right and how many it gets wrong.
+That is how the number is chosen instead of guessed. Nothing about it assigns a
+score to a publisher; it scores the **rule**.
+
+**Contract.**
+
+- The sheet, its answer key and the script that builds it live under
+  `test-results/same-story-labels/`, which git ignores. They are working
+  material, not a published artefact.
+- Blind: date, two outlet names, two headlines. No scores, no indication of
+  which rule fired, shuffled with a recorded seed.
+- Three verdicts: SAME EVENT, RELATED BUT DIFFERENT, UNRELATED.
+- Regenerate the sheet **after** row #9, so the window's new pairs are in it.
+- **Precision is not recall.** Every candidate is found by a rule, so the sheet
+  measures precision only. Draw 200 further pairs at random from **below** the
+  candidate filter and label those too; if none is SAME EVENT, the filter's own
+  recall is at least 98.5 percent and the study may use the word recall. If any
+  is, it reports a lower bound and names what it could not see.
+
+**A question this row should answer while it has the labels.** The vector is
+built over `title. summary`. Three cheap variants can be scored on the same
+labels at no extra cost: the summary alone, the title alone, and the item's
+`key_points` joined. If one separates better than what ships, that is a free
+improvement and the measurement is already paid for.
+
+## Rejected, 2026-09-15
+
+Recorded so nobody proposes them again. Each is a dated decision, not a law
+(section 0a) - what would reopen it is named.
+
+| Proposal | Why it was refused | What would reopen it |
+| --- | --- | --- |
+| Cut the day to 90-120 items | The digest is a self-curating feed of digests, not a fixed-size bulletin. Content chooses its position and its relevance; we do not choose content, and more desks are coming rather than fewer | Nothing on the present design. The day is bounded by row #8's ceilings, which refuse without choosing |
+| Per-day TF-IDF over headline words | Refused as a dependency, and that reason was wrong - it is about twenty lines of `collections.Counter` and `math.log`, no install and no shipped bytes. It stands refused because the comparison this project bets on is semantic and over the summary, and a word-overlap score is neither | Row #12 measuring it beating the shipped scorer on the same labels |
+
+| A canonical "what happened" line from the summariser | Cannot be backfilled, so no committed day can measure it | A measured failure that only a rewritten summary could reach |
+| Encode the article's lede and compare that | Proposed on 2026-09-15 and refused the same day. It serves no purpose the summary does not already serve, and the premise of this project is that the summariser did its job - so the comparison is over what the summariser wrote. The encoder's 256-token window meant it was never the whole article either | A measurement showing our summaries of one story diverge in a way the articles do not |
+| Rebalance which desks get space | Same ruling as the day size: content chooses its position | Nothing on the present design |
+| Let the cross-source count pick the day's leads | Not refused - **taken**, as row #11, with the count gated behind a recall floor so it cannot feed noise into the most valuable slots on the page | - |
+
+
 ## Limits nobody trades
+
+From the Editor's ruling, 2026-09-14, except where the owner has since moved
+one. Each is a rule a grouping change has to honour, not a preference.
+
+- **A reaction is never merged into its event.** The reaction is the newer news.
+  This is the 0.9317 pair.
+- **An analysis piece is never merged into a reporting piece.** `source_kind`
+  already records which is which. It is 5 percent of the day and the most
+  distinctive 5 percent.
+- **A round-up or live blog is never grouped, in either direction.**
+- **Two feeds of one outlet are one source.** Row #2, landed.
+- **No sentence on a card may state as fact something the same page
+  contradicts.** Silence is always available.
+- **A published day is never rewritten.** Row #9 crosses days by recording the
+  match on the newer item only.
+- ~~Grouping never crosses days.~~ **Overruled by the owner, 2026-09-15.** A
+  story that breaks at 23:00 and is picked up at 07:00 is one story, and the
+  window is `assemble.same_story_window_hours`, default 36.
 
 From the Editor's ruling, 2026-09-14. Each is a rule a grouping change has to
 honour, not a preference.
@@ -207,13 +472,18 @@ honour, not a preference.
 
 ## Out of scope
 
-- Drawing the collapse. Row #6, and it waits on row #3.
-- Day size. The Editor rules 356 items is the bigger failure and that perfect
-  dedup only takes a day to about 290, 18 percent shorter. It is a different
-  plan.
-- Cross-day grouping. A follow-up is a new development, so it is a new story.
-- The browser gate failing on `main` at `malformed-day.spec.ts`. Another worker
-  holds it.
+- **Two-stage blocking** - bucket items on a cheap key, compare only inside a
+  bucket. The premise is a cost problem we do not have: the pass spends 0.23
+  percent of the assemble budget on a typical day and 0.97 percent on the
+  largest ever published. Row #9 raises the pair count about fourfold, which is
+  still around 1 percent, so this stays out until a reading says otherwise.
+- **Time decay inside the grouping pass.** Row #9 makes the window 36 hours
+  rather than weighting by age inside it: a pair is inside the window or it is
+  not. A decay curve would add a second number to tune for no measured gain.
+  Row #10 takes the half of the idea that pays, in the ranker.
+- **Rewriting a published day.** Row #9 records a cross-day match on the newer
+  item only. A finished day stays finished.
+- Day size and desk balance - both refused above.
 
 ## See also
 
