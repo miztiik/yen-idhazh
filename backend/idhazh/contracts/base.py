@@ -12,11 +12,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Final, Self
+from typing import Annotated, Any, ClassVar, Final, Self, get_args
 
+from annotated_types import MaxLen, MinLen
 from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError, model_validator
+from pydantic.fields import FieldInfo
 
 JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 
@@ -65,6 +68,27 @@ COMMIT_SHA_PATTERN: Final = r"^[0-9a-f]{40}$"
 _PATH_SEGMENT: Final = r"[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*"
 REL_PATH_PATTERN: Final = rf"^{_PATH_SEGMENT}(?:/{_PATH_SEGMENT})*$"
 
+# The two CHARACTER-CLASS patterns, and they are a different kind of rule from
+# every pattern above. Those name an identity the pipeline mints - a date, a
+# digest, an id - so a value that fails one is our own defect and refusing it is
+# right. These two name which characters a cell may hold, and a value that fails
+# one is a stranger's page or a runtime's own vocabulary arriving as it was
+# written. Refusing that loses the row that was reporting the failure, so these
+# two are the only patterns `fit_cell` folds a value into and every pattern above
+# it leaves alone.
+#
+# One line of printable ASCII. A newline would break `merge=union` on a day file,
+# which resolves line by line, and a control character would break the CSV.
+PRINTABLE_LINE_PATTERN: Final = r"^[ -~]+$"
+# A lowercase token the pipeline, a runtime or the config minted - a model id, a
+# finish reason, a clock name. Never a sentence and never fetched prose.
+LOWER_TOKEN_PATTERN: Final = r"^[a-z0-9][a-z0-9_.+-]*$"
+
+#: The name of a pipeline job. Minted here rather than read from anywhere, so it
+#: sits with the other identities: a job this repository does not run is not a
+#: job a fold should invent a name for.
+JOB_NAME_PATTERN: Final = r"^[a-z][a-z0-9_-]*$"
+
 SchemaVersion = Annotated[str, StringConstraints(pattern=SCHEMA_VERSION_PATTERN)]
 DateStamp = Annotated[str, StringConstraints(pattern=DATE_PATTERN)]
 MonthStamp = Annotated[str, StringConstraints(pattern=MONTH_PATTERN)]
@@ -101,6 +125,195 @@ def derive_text_digest(text: str) -> str:
     already call, so the two can never drift into two conventions.
     """
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# --- making a value fit the column that will hold it -------------------------
+#
+# A helper whose output its own column can refuse is not a sanitizer. Everything
+# below reads the rule off the annotated type rather than restating it, so the
+# fold and the column cannot disagree and a column whose bound moves takes its
+# folder with it (Guardrail #6).
+
+#: Characters outside printable ASCII that carry a plain ASCII meaning, and what
+#: that meaning is. These are what a page title actually holds - a typographer's
+#: quotes, a dash somebody's CMS substituted, an ellipsis - and each mapping is a
+#: spelling change rather than a translation, so nothing here invents a reading.
+#: `U+FFFD` is in the table because it is what a decode error leaves behind, and
+#: a question mark is the honest thing to put where a byte could not be read.
+_ASCII_SPELLINGS: Final[dict[str, str]] = {
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201a": "'",
+    "\u201b": "'",
+    "\u2039": "'",
+    "\u203a": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u201e": '"',
+    "\u201f": '"',
+    "\u00ab": '"',
+    "\u00bb": '"',
+    "\u2010": "-",
+    "\u2011": "-",
+    "\u2012": "-",
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2015": "-",
+    "\u2212": "-",
+    "\u2026": "...",
+    "\u2022": "*",
+    "\u00b7": ".",
+    "\u2044": "/",
+    "\ufffd": "?",
+}
+
+#: A run of characters no ASCII spelling covers. A RUN and not a character: a
+#: sentence of Cyrillic becomes one `?` rather than thirty, so the reader sees
+#: that something could not be carried without the cell being buried under it.
+_UNCARRIED: Final = re.compile(r"[^\x20-\x7e]+")
+
+#: Anything the lowercase-token class does not admit, in runs, for the same
+#: reason.
+_NOT_TOKEN: Final = re.compile(r"[^a-z0-9_.+-]+")
+
+
+def fold_to_ascii(text: str) -> str:
+    """One line of printable ASCII, keeping every character that has an ASCII spelling.
+
+    Three passes and each one is a different decision. Whitespace collapses
+    first, because a newline in a cell splits the row in two under a line-based
+    `merge=union` resolve and the CSV quoting that survives a comma does not
+    survive that. Then the spellings table and a compatibility decomposition
+    carry across everything that has a plain reading - `e-acute` becomes `e`, a
+    curly quote becomes a straight one. What is left is replaced rather than
+    transliterated: romanising Cyrillic would put an English reading of a Russian
+    word into a cell whose whole job is to be evidence, and no reader could tell
+    it from a word the page actually carried.
+    """
+    collapsed = " ".join(text.split())
+    spelled = "".join(_ASCII_SPELLINGS.get(character, character) for character in collapsed)
+    decomposed = unicodedata.normalize("NFKD", spelled)
+    unmarked = "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    )
+    return _UNCARRIED.sub("?", unmarked).strip()
+
+
+def fold_to_token(text: str) -> str:
+    """The same value as a lowercase token, or nothing where no token survives.
+
+    A runtime that reports `Length` and a config that spells a quantisation
+    `Q4_K_M` are both writing a name rather than prose, so lowercasing is a
+    spelling change and not a loss. A run of anything the class refuses becomes
+    one hyphen, and a leading character the class cannot open with is dropped.
+    """
+    joined = _NOT_TOKEN.sub("-", fold_to_ascii(text).lower()).strip("-")
+    return joined.lstrip("_.+-")
+
+
+def column_bounds(column: Any) -> tuple[str | None, int | None, int | None]:
+    """The pattern and the two lengths an annotated string type declares.
+
+    Walks unions and nested `Annotated` forms, so a field declared
+    `ItemHealthDetail | None` answers the same as the alias alone. Pass a model
+    field through `field_column` first: Pydantic lifts a required field's
+    constraints out of its annotation, and an annotation read without them looks
+    like a column that declared nothing.
+    """
+    pattern: str | None = None
+    minimum: int | None = None
+    maximum: int | None = None
+
+    def walk(node: Any) -> None:
+        nonlocal pattern, minimum, maximum
+        for part in get_args(node):
+            if isinstance(part, StringConstraints):
+                # `pattern` is typed to allow a compiled expression. Read its
+                # source either way, so a column that compiled its rule is
+                # compared against the character classes on the same terms as one
+                # that wrote a string - it will not match either, which leaves it
+                # classified as an identity and keeps its refusal.
+                if part.pattern is not None:
+                    pattern = (
+                        part.pattern if isinstance(part.pattern, str) else part.pattern.pattern
+                    )
+                minimum = part.min_length if part.min_length is not None else minimum
+                maximum = part.max_length if part.max_length is not None else maximum
+            elif isinstance(part, MinLen):
+                minimum = part.min_length
+            elif isinstance(part, MaxLen):
+                maximum = part.max_length
+            else:
+                walk(part)
+
+    walk(column)
+    return pattern, minimum, maximum
+
+
+def field_column(field: FieldInfo) -> Any:
+    """A model field's whole type, its constraints put back in the annotation.
+
+    Pydantic moves a required field's `StringConstraints` into `field.metadata`
+    and leaves `field.annotation` as a bare `str`, while an optional field keeps
+    them in the annotation because they belong to one arm of the union. Reading
+    either half alone therefore answers differently for two columns declared the
+    same way, and the half that goes quiet is the one that says `url_key` is a
+    digest. Re-attaching gives one shape to read.
+    """
+    if not field.metadata:
+        return field.annotation
+    return Annotated[(field.annotation, *field.metadata)]
+
+
+#: The two patterns that name which characters a cell may hold. A column
+#: declaring one of these is saying what a value may be MADE OF, which is a
+#: question a fold can answer; every other pattern in this module names an
+#: identity, which is a question only the producer can answer.
+CHARACTER_CLASS_PATTERNS: Final[frozenset[str]] = frozenset(
+    {PRINTABLE_LINE_PATTERN, LOWER_TOKEN_PATTERN}
+)
+
+#: The patterns `fit_cell` knows how to fold a value into. `None` is here and not
+#: above because a column with no pattern still gets the one-line collapse:
+#: nothing declares a newline illegal in those cells and `merge=union` still
+#: cannot hold one.
+FOLDABLE_PATTERNS: Final[frozenset[str | None]] = frozenset({None}) | CHARACTER_CLASS_PATTERNS
+
+
+def fit_cell(text: str, *, column: Any, absent: str) -> str:
+    """The value a column will accept, from a value it might not have.
+
+    `column` is the annotated type the value is going into, so the fold reads the
+    character class and the length off the field that will hold it rather than
+    restating either (Guardrail #6). `absent` is what a value that folds away to
+    nothing becomes - a cell that reached this function had something to say, and
+    an empty string would be refused by a `min_length` and would lose the fact
+    that a failure happened at all.
+
+    Raises where the column's pattern is not one of `FOLDABLE_PATTERNS`. Those
+    patterns name an identity rather than a character class, and a fold that
+    tried to satisfy one would invent a digest or a date - so this refuses to
+    guess and the caller keeps the refusal it already had.
+    """
+    pattern, minimum, ceiling = column_bounds(column)
+    if pattern not in FOLDABLE_PATTERNS:
+        raise ValueError(f"fit_cell cannot fold a value into {pattern!r}; it names an identity")
+    folded = fold_to_token(text) if pattern == LOWER_TOKEN_PATTERN else fold_to_ascii(text)
+    if ceiling is not None:
+        folded = folded[:ceiling].strip()
+    if folded and (minimum is None or len(folded) >= minimum):
+        return folded
+    return absent[:ceiling] if ceiling is not None else absent
+
+
+def fit_field(text: str, *, model: type[BaseModel], field: str, absent: str) -> str:
+    """`fit_cell` against a named field of a model.
+
+    A producer that writes one column says which column, and the rule comes back
+    off that column. This is the form to reach for at a construction site: it is
+    one line, and it cannot drift from the field the way a restated `[:200]` can.
+    """
+    return fit_cell(text, column=field_column(model.model_fields[field]), absent=absent)
 
 
 def canonical_json(payload: Any) -> str:

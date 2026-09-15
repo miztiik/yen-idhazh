@@ -18,11 +18,13 @@ from pathlib import Path
 from typing import Any, Final, Protocol
 
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.base import CHARACTER_CLASS_PATTERNS, column_bounds, field_column, fit_cell
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import (
     CALL_SLOTS,
     FailureCode,
+    ItemHealthDetail,
     ItemHealthRow,
     ItemOutcome,
     ItemStage,
@@ -154,6 +156,24 @@ INSTRUMENT_CELLS: Final[frozenset[str]] = frozenset(
 #: each site, so a record and a ledger row read down the same way and a reader
 #: comparing the two is comparing the same sequence.
 CENSUS_CELLS: Final[tuple[str, ...]] = ItemHealthRow.csv_columns()
+
+#: The whole annotated type behind each census column, by column name. Read off
+#: `model_fields` rather than written out: a column added to the ledger is folded
+#: into its own class the day it is declared, and a column whose bound moves
+#: takes the fold with it (Guardrail #6). `field_column` is what makes that true
+#: for a required column as well as an optional one - Pydantic lifts a required
+#: field's constraints out of its annotation, and a column read without them
+#: looks like a column that declared nothing.
+_CENSUS_COLUMN_TYPES: Final[Mapping[str, Any]] = {
+    name: field_column(field) for name, field in ItemHealthRow.model_fields.items()
+}
+
+#: What a failure detail that folded away to nothing records, and what a recorded
+#: cell that did the same records. Neither is an empty string: a cell that
+#: reached the fold had something to say, and a column with `min_length=1` would
+#: refuse the emptiness and take the row reporting the fault with it.
+UNSPECIFIED: Final = "unspecified failure"
+UNPRINTABLE: Final = "unprintable"
 
 #: Every key a flat record may carry. The census row's columns, plus the ten
 #: above. Derived rather than written out, so a column added to the ledger is
@@ -803,12 +823,59 @@ def is_final(article: Article | None, summary: Summary | None) -> bool:
 
 
 def detail_cell(text: str) -> str:
-    """Sanitize an unknown-failure detail for a CSV cell."""
+    """Sanitize an unknown-failure detail for a CSV cell.
+
+    Two controls, composed, and they answer different questions (Guardrail #11).
+    `sanitize` is the trust boundary: this text can be a stranger's page, and it
+    reaches here whenever a failure quotes what failed - a Pydantic
+    `ValidationError` embeds `input_value=...`, so a page title with a curly
+    quote in it arrives inside the message that says the title was refused.
+    `fit_cell` is the column: it reads the class and the length off
+    `ItemHealthDetail` itself, so the cut is the column's own 2,000 rather than a
+    number restated here, and the result is a value the column accepts.
+
+    **A failure that cannot be printed is still a failure that happened.** A
+    detail that folds away to nothing becomes `UNSPECIFIED`, never an empty
+    string: the column has `min_length=1`, so an empty cell would raise and lose
+    the row that was reporting the fault.
+    """
     cleaned = sanitize(text)
     while cleaned.startswith(_FORMULA_PREFIXES):
         cleaned = cleaned[1:].lstrip()
-    collapsed = " ".join(cleaned.split())
-    return collapsed[:200] or "unspecified failure"
+    return fit_cell(cleaned, column=ItemHealthDetail, absent=UNSPECIFIED)
+
+
+def fit_record_cells(cells: Mapping[str, object]) -> dict[str, object]:
+    """Every recorded string cell, folded into the census column that will hold it.
+
+    **One door and no list.** The cells a stage records are keyed by the column
+    they land in, so the column's own annotation is reachable from the key - and
+    that is what makes this structural rather than a table somebody maintains. A
+    column declared tomorrow is folded the day it is declared, and a column whose
+    bound moves takes its folder with it.
+
+    A pattern `fit_cell` cannot fold is left alone, and that is the load-bearing
+    half: `item_id`, `url_key`, `canonical_url`, `vertical` and `source_id` name
+    an identity the pipeline minted rather than a class of characters, so a fold
+    there would invent an address. So does every enum column. Those keep the
+    refusal they already had.
+
+    An empty string stays empty. A cell that arrived with nothing in it is a
+    reading nobody took, which is a different fact from a reading that could not
+    be printed, and the census columns are nullable for exactly that reason.
+    """
+    fitted: dict[str, object] = {}
+    for name, value in cells.items():
+        column = _CENSUS_COLUMN_TYPES.get(name)
+        if column is None or not isinstance(value, str) or not value:
+            fitted[name] = value
+            continue
+        pattern, _, _ = column_bounds(column)
+        if pattern not in CHARACTER_CLASS_PATTERNS:
+            fitted[name] = value
+            continue
+        fitted[name] = fit_cell(value, column=column, absent=UNPRINTABLE)
+    return fitted
 
 
 def classify_item(

@@ -10,6 +10,7 @@ from idhazh import (
     assemble,
     config,
 )
+from idhazh.contracts.base import fit_field
 from idhazh.contracts.qualification import (
     GateStatus,
     QualificationReport,
@@ -21,7 +22,7 @@ from idhazh.contracts.validation_row import (
     ValidationRow,
     ValidationVerdict,
 )
-from idhazh.evals import golden, qualify, writer
+from idhazh.evals import golden, qualify, validation, writer
 from idhazh.stages import common
 from idhazh.stages.common import LOG
 
@@ -108,13 +109,17 @@ def stage_qualify_decide(
                 articles=max(len(frozen.scores), 1),
                 measured_on=date,
                 commit_sha=report.commit_sha,
-                runner=runner,
+                runner=fit_field(
+                    runner, model=ValidationRow, field="runner", absent=validation.UNNAMED_RUNNER
+                ),
                 verdict=(
                     ValidationVerdict.QUALIFIED
                     if report.qualified
                     else ValidationVerdict.NOT_QUALIFIED
                 ),
-                detail=report.detail,
+                detail=fit_field(
+                    report.detail, model=ValidationRow, field="detail", absent=validation.UNSTATED
+                ),
             )
         ],
     )

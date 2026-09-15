@@ -16,9 +16,20 @@ the point of the row.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.base import fit_field
 from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
+
+#: What an empty or unprintable runner label and an empty verdict detail record.
+#: Both columns have `min_length=1`, so an empty cell would raise and lose the
+#: whole ledger the gate was writing - and a runner is an environment label we
+#: did not write, which is reason enough to fold it rather than trust it. Public
+#: because two producers write these two columns and the floor is the column's,
+#: not either writer's.
+UNNAMED_RUNNER: Final = "unnamed runner"
+UNSTATED: Final = "detail could not be printed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,9 +136,9 @@ def to_rows(
             articles=measurement.articles,
             measured_on=measured_on,
             commit_sha=commit_sha,
-            runner=runner,
+            runner=fit_field(runner, model=ValidationRow, field="runner", absent=UNNAMED_RUNNER),
             verdict=decision.verdict,
-            detail=decision.detail,
+            detail=fit_field(decision.detail, model=ValidationRow, field="detail", absent=UNSTATED),
         )
         for measurement in [incumbent, *challengers]
     ]

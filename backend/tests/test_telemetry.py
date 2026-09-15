@@ -16,14 +16,20 @@ from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import column_bounds, derive_url_key, field_column
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    FailureCode,
+    ItemHealthDetail,
+    ItemHealthRow,
+    ItemOutcome,
+    ItemStage,
+)
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
@@ -483,12 +489,62 @@ def test_a_sixteen_column_item_health_row_reads_as_unmeasured() -> None:
     assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (None, None, None)
 
 
-def test_unknown_detail_is_sanitized_guarded_and_truncated() -> None:
+def test_unknown_detail_is_sanitized_guarded_and_fitted_to_its_column() -> None:
+    """A detail is cut to the column's own ceiling, not to a number written here.
+
+    The ceiling moved from 200 to 2,000 on 2026-09-15 and this test did not have
+    to be edited, which is the point: a test restating a bound is one more place
+    the bound can drift from the column.
+    """
     row = row_for(FailureCode.UNKNOWN)
+    _, _, ceiling = column_bounds(field_column(ItemHealthRow.model_fields["detail"]))
 
     assert row.detail is not None
     assert not row.detail.startswith(("=", "+", "-", "@", "\t", "\r"))
-    assert len(row.detail) <= 200
+    assert ceiling is not None
+    assert len(row.detail) <= ceiling
+    assert len(telemetry.detail_cell("x" * (ceiling * 3))) <= ceiling
+
+
+def test_a_detail_the_column_would_refuse_is_folded_rather_than_dropped() -> None:
+    """The live defect: a dash in a failure message killed the row reporting it.
+
+    `ItemHealthDetail` takes printable ASCII on one line. A Pydantic
+    `ValidationError` quotes the value it refused, so a page title's curly quote
+    arrives inside the message saying the title was refused - and the row that
+    raised was the only record that anything had gone wrong.
+    """
+    adapter = TypeAdapter(ItemHealthDetail)
+    hostile = {
+        "em_dash": "the model \u2014 not the runtime \u2014 refused",
+        "curly_quote": "the page\u2019s own \u201cheadline\u201d",
+        "non_latin": "\u0418\u0437\u0432\u0435\u0441\u0442\u0438\u044f",
+        "emoji": "shipped \U0001f680",
+        "newline": "first\nsecond",
+        "replacement": "read \ufffd\ufffd back",
+    }
+
+    for case, raw in hostile.items():
+        cell = telemetry.detail_cell(raw)
+        adapter.validate_python(cell)
+        assert cell, f"{case} produced an empty detail"
+        assert len(cell.splitlines()) == 1, f"{case} produced more than one line"
+
+    assert telemetry.detail_cell("the model \u2014 not the runtime") == (
+        "the model - not the runtime"
+    )
+    assert telemetry.detail_cell("\u0418\u0437\u0432\u0435\u0441\u0442\u0438\u044f") == "?"
+
+
+def test_a_detail_that_folds_away_to_nothing_still_says_a_failure_happened() -> None:
+    """`detail` has `min_length=1`, so the floor cannot be an empty string.
+
+    A row whose detail folded to nothing is still a row reporting a failure. An
+    empty cell would raise and take that report with it.
+    """
+    assert telemetry.detail_cell("") == telemetry.UNSPECIFIED
+    assert telemetry.detail_cell("   ") == telemetry.UNSPECIFIED
+    assert telemetry.detail_cell("\u200b\u200b") == telemetry.UNSPECIFIED
 
 
 # --- The length before the cap ----------------------------------------------
