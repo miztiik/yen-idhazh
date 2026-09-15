@@ -41,6 +41,7 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
+    "probe.yml": ("Runtime probe", frozenset({"workflow_dispatch"})),
     "prune.yml": ("Corpus prune", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
@@ -165,9 +166,19 @@ PINNED_LLAMA_ASSET: Final = f"llama-{PINNED_LLAMA_BUILD}-bin-ubuntu-x64.tar.gz"
 
 PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c"
 
+# Every workflow that installs the pinned llama.cpp build, whether or not it
+# then stands a server up. This is the set the pin and the digest check are
+# asserted over: a second build downloaded anywhere is a second binary, and a
+# number measured on one of them describes the other (Guardrail #10).
 LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
-    {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "validate.yml"}
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "probe.yml", "validate.yml"}
 )
+
+# The subset that starts a server and posts to it. `probe.yml` installs the
+# same binary and asks it what it accepts, which needs no port - and a port
+# declared where nothing reads it is a value that can go stale with nothing to
+# catch it, which is the failure the port test exists to stop.
+LLAMA_SERVER_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - {"probe.yml"}
 
 LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check'
 
@@ -206,6 +217,18 @@ WEIGHTS_CHECKS: Final = {
         "Verify the weights",
         "Measure runtime candidate",
         "${{ needs.models.outputs.candidate_sha256 }}",
+    ),
+    # The raw arm downloads the draft head and never runs it - llama-bench has
+    # no speculative path. It fetches it to fill the cache the server arm
+    # restores, which is why the check matters more here than the reader does:
+    # nothing in this job would notice a corrupt copy, and the arm that loads it
+    # is a different job on a different machine. The bench step is named below
+    # as the ordering anchor, not as a reader of these bytes.
+    ("measure.yml", "llm"): (
+        "Fetch the draft head",
+        "Verify the draft head",
+        "Benchmark the candidate",
+        "${{ needs.models.outputs.candidate_draft_sha256 }}",
     ),
     ("measure.yml", "batched"): (
         "Download the summarizer weights",
@@ -295,7 +318,7 @@ BENCH_RAW_JOB: Final = "llm"
 BENCH_SERVER_JOB: Final = "runtime"
 
 BENCH_CACHE_KEY: Final = (
-    "bench-${{ needs.models.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}"
+    "bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}"
 )
 
 BENCH_ARTIFACTS: Final = {

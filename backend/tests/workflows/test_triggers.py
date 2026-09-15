@@ -29,7 +29,7 @@ from ._harness import (
     requires_bash,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:

@@ -19,7 +19,6 @@ from typing import Any, ClassVar, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
-from idhazh.contracts.app_config import ModelRef
 from idhazh.contracts.base import (
     ChangelogEntry,
     CommitSha,
@@ -34,6 +33,7 @@ from idhazh.contracts.base import (
     without_retired_keys,
 )
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.models import ModelRef
 
 
 class RunStatus(StrEnum):
@@ -287,6 +287,20 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T12:30",
+            change=(
+                "The embedded draft block's spec_type accepts a third value, "
+                "draft-mtp. Additive, so every committed run.json still reads and no "
+                "migration is needed."
+            ),
+            why=(
+                "It follows models-config, which is where the choice is declared. A "
+                "manifest records the ref a run actually used, so a value the config "
+                "can hold and the manifest cannot is a run that cannot describe "
+                "itself."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-14T07:00",
             change=(

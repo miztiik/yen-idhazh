@@ -20,10 +20,10 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import assemble, telemetry
-from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,

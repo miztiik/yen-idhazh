@@ -28,9 +28,10 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import AppConfig, VisualsConfig
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.derived import DerivedFunction, DerivedValue, DisplayedValue
 from idhazh.contracts.element import Element, ElementTable
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, VisualPlan, VisualType
 from idhazh.derived_values import (
     DERIVED_VALUE_VERSION,

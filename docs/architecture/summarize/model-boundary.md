@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-15
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -187,6 +187,14 @@ It is paid for by `RunRecord.inputs.prompt_sha256`, which digests both turns
 stamp, and `prose_changed_alone` still has something to compare. Ruled by
 Fowler, 2026-09-13.
 
+**The same split is why `turns.declared_for` is optional where
+`inference.declared_for` is not.** A person writing an entry always knows which
+weights the markers were recorded against, so config load refuses a mismatch.
+But a field that were required here would have to be present in every payload
+embedding the recorded shape - and no run written before 2026-09-14 carries an
+envelope at all. Optional is what lets today's build read yesterday's run; the
+refusal that matters lives on the declared shape, where somebody can act on it.
+
 The envelope reached the entry on 2026-09-13. Before that it was one global
 file, `backend/idhazh/prompts/turn_markers.json`, with no model key - so a
 model whose turns differ was a source edit, and one process holding two
@@ -354,6 +362,27 @@ the KV budget. And the draft's own digest in the run record, so a day that was
 drafted can be told from a day that was not - a run that cannot answer that
 cannot explain its own throughput.
 
+**Every arm that starts a server fetches it, and that had to be made true.** The
+daily run always did. The two measurement arms below and the qualification arm
+did not: each downloaded exactly one file, so the first entry ever to declare a
+draft head benched by starting `llama-server` against a path that did not exist.
+The server exits during load, which surfaces as a health check that never passes
+rather than as a missing file, and the job that hit it had already paid for its
+download. All four now fetch the head and check its digest - on a restored cache
+as well as on a fresh download, because a restored entry is the one copy nobody
+watched arrive.
+
+**The cache key names the head's digest too, or the fetch never runs.** Both
+bench arms share one cache entry so the second does not download the weights the
+first already has. An entry keyed on the target alone is a complete-looking hit
+with the head missing: the fetch step is skipped because the cache reported a
+hit, and the server fails at load anyway. So the key is the target's digest, and
+the head's where an entry declares one. An entry that declares no head keeps the
+key it already had, which is what stops this costing every other model a
+refetch. The raw arm never runs a draft head - `llama-bench` has no speculative
+path - and fetches it regardless, because it is the arm that fills the cache the
+server arm restores.
+
 **The flag spellings are the trap, and they are not the ones on most pages.**
 `--draft-max` and `--draft-min` were removed from llama.cpp; the pinned build
 exits telling the operator to use `--spec-draft-n-max` and `--spec-draft-n-min`.
@@ -361,6 +390,30 @@ exits telling the operator to use `--spec-draft-n-max` and `--spec-draft-n-min`.
 llama-server flag may be spelled, and a test pins all four current spellings and
 refuses the two retired ones by name - so a rename in either direction fails
 here rather than on a runner.
+
+**The spelling of the flag's VALUE is the second trap, and it is quieter.**
+`spec_type` says which kind of speculation the runtime should drive, and naming
+the wrong kind is not a slow server - it is a dead one. The Gemma entry declared
+a multi-token head as `draft-simple`; the server started, loaded the head, and
+then failed every single request on `decode() failed: failed to process
+speculative batch`. Five articles of five, deterministic, one hour of bench time
+on run 34941400155. It reached the pipeline as `model_unreachable`, which is a
+network word for a decode failure and is why that mapping is worth splitting.
+
+The build accepts eleven values and the contract offers three - `draft-simple`,
+`draft-mtp` and `ngram-simple`. The rest need either a draft head nobody has
+published for our weights or a lookup cache nothing here writes, and a closed
+choice is what stops an operator naming one and getting a server that drafts
+nothing. **The agreement between the two lists is now a test rather than a
+memory**: `tests/fixtures/runtime/b10598-llama-server-help.txt` is what the
+pinned build printed for `--help`, and the contract's values must be a subset of
+the list on its `--spec-type` line. The fixture is named for the build, so
+moving the pin without re-recording fails on a missing file rather than passing
+against a binary nobody runs.
+
+**The recording comes from `.github/workflows/probe.yml`**, which installs the
+pinned asset, runs `--help` and keeps the output. It exists because the
+alternative way to learn what a build accepts is the hour the Gemma run spent.
 
 ## The two measurement arms
 
@@ -455,12 +508,29 @@ and since 2026-09-14 the five proofs above reconcile it against the running
 server before the first item - so a wrong marker now refuses the shard instead
 of yielding worse summaries with nothing red.
 
-Moving the rest of those facts onto the entry and drawing arm 2's samples from
-the holdout is
-[`../../../TODO/20260913-28-model-swap-plan.md`](../../../TODO/20260913-28-model-swap-plan.md).
-Its Status Reckoner is the live view of what has landed. **This page describes
-the boundary rather than tracking the work**, so it changes when the shape
-changes and not when a row merges.
+**The entry declares its architecture, and arm 4 is what makes that a fact.**
+`arch` is the `general.architecture` key written inside the GGUF - `qwen35` for
+the configured weights, `gemma4` for a Gemma 4 entry. It is required with no
+default, for the same reason `turns` is: an entry that inherits the incumbent's
+architecture is claiming something nobody checked. The probe reads the key back
+out of the file the server was pointed at, which costs a few kilobytes of header
+rather than a second download, and refuses the run when the two disagree. That
+is the one case where the digest, the alias and the filename all agree and only
+the words get worse - a repackaged GGUF under a familiar name.
+
+**Both declared blocks name the weights they were set for, and load refuses a
+mismatch.** `inference.declared_for` and `turns.declared_for` each hold the
+entry's own `sha256`. The failure this stops is five strings edited in place -
+repo, file, revision, digest and id - with the blocks underneath them untouched,
+which used to raise nothing and then stand a server up on numbers derived for
+weights it never opened. It is not hypothetical: the summarizer moved from the
+8B to the 9B on 2026-08-27 and the settings block did not move with it. The two
+blocks fail differently on purpose - re-derive the numbers, or re-record the
+markers off the server that applies them.
+
+**This page describes the boundary rather than tracking work**, so it changes
+when the shape changes. [Swap the Summarizer
+Model](../../how-to/evaluate-new-summarizer-model.md) is the procedure.
 
 ## See also
 

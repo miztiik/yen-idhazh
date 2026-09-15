@@ -5,12 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import (
-    SUPERSEDED_COLLECT_NAMES,
-    SUPERSEDED_RETENTION_NAMES,
-    CollectConfig,
-    ObservabilityConfig,
-)
+from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig
+from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, ObservabilityConfig
 
 pytestmark = pytest.mark.contract
 

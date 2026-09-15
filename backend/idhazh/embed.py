@@ -28,7 +28,7 @@ import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from idhazh.contracts.app_config import AssistConfig
+from idhazh.contracts.knobs.assist import AssistConfig
 
 if TYPE_CHECKING:
     from idhazh.contracts.digest_day import DigestItem

@@ -48,8 +48,8 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.element import Element, ElementTable
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 
 # The nine checks were declared here with a note saying they move into

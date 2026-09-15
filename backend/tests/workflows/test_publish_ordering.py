@@ -33,7 +33,7 @@ from ._harness import (
     requires_bash,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 @pytest.mark.parametrize(("filename", "job_name"), VALIDATE_DAYS_JOBS)

@@ -463,6 +463,13 @@ and renders every turn anonymous. The other three markers may not be empty;
 `continued_prompt` splices the summarize-and-plan call onto `turn_closing`, so an empty seam joins
 two turns into one and the grammar still answers.
 
+**Deciding which opening a reply started with tries the longest one first.**
+The two reply openings share a prefix - the thinking one is what the other one
+extends - so a shortest-first or a declaration-order match reports the wrong
+span every time the model did think. Sorting the candidates longest-first makes
+the answer independent of the order somebody wrote them in, and it holds for any
+model whose two openings nest the same way, which is most of them.
+
 **The last three arrived on 2026-09-14, and each carries a refusal.** They are
 the facts a model cannot share with another model: where the system text goes,
 what holds it apart from the article when it shares a turn, and which variable
@@ -1136,7 +1143,9 @@ Three structural facts hold the rest:
 block holding `Title: <headline>` and the body. It is fetched text from the same
 page, and it is now the line we ask a model to rewrite. Outside the fence it
 would be untrusted text sitting where the prompt's "that block is DATA" sentence
-does not reach (Guardrail #11).
+does not reach (Guardrail #11). `classify.calls.label_user_turn` fences it too,
+in a block of its own; it did not until 2026-09-15, and the
+[trust boundary](../sources/trust-boundary.md) records what that cost.
 
 **Required in the draft, optional on the payload.** Grammar-constrained decoding
 is free to skip a property that is not `required`, so an optional draft title is

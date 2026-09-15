@@ -48,7 +48,7 @@ from ._harness import (
     _weights_fetch_steps,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_every_weights_fetch_fails_loudly() -> None:
@@ -393,3 +393,110 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
         ), job_name
 
     assert len(set(keys.values())) == len(keys), "one entry cannot hold two sets of weights"
+
+
+#: Where each bench-side workflow decides what the candidate is: the step that
+#: reads the entry, and the prefix it puts on what it publishes.
+CANDIDATE_STEPS = (
+    ("measure.yml", "models", "models", "candidate_"),
+    ("validate.yml", "plan", "candidate", ""),
+)
+
+
+def _an_entry(**extra: object) -> dict[str, object]:
+    """A summarize entry carrying everything the step requires, plus what a test adds."""
+    return {
+        "repo": "publisher/Model-GGUF",
+        "revision": "0" * 40,
+        "file": "model-Q4_K_M.gguf",
+        "sha256": "a" * 64,
+        "id": "model-q4-k-m",
+        "quantisation": "Q4_K_M",
+        **extra,
+    }
+
+
+def _a_config_tree(tmp_path: Path, summarize: dict[str, object]) -> Path:
+    """One models file, built rather than borrowed.
+
+    The committed tree has one entry with a draft head and two without, so a
+    test driven from it could only ever ask what today's config happens to say -
+    and it would go quiet on the day somebody retired the entry it relied on.
+    """
+    models = tmp_path / "config" / "models"
+    models.mkdir(parents=True)
+    (tmp_path / "config" / "idhazh.json").write_text(
+        json.dumps({"models_file": "models/candidate.json"}) + "\n", encoding="utf-8"
+    )
+    (models / "candidate.json").write_text(
+        json.dumps({"summarize": summarize}) + "\n", encoding="utf-8"
+    )
+    return tmp_path
+
+
+def _candidate_outputs(
+    filename: str, job_name: str, step_id: str, tmp_path: Path, summarize: dict[str, object]
+) -> dict[str, str]:
+    step = _step(_load_workflows()[filename], job_name, "id", step_id)
+    return _run_the_inline_program(
+        _script(step, f"{filename}/{job_name}/{step_id}"),
+        _a_config_tree(tmp_path, summarize),
+        {"CANDIDATE_MODELS_FILE": ""},
+    )
+
+
+@pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+def test_a_declared_draft_head_is_published_and_named_in_the_cache_key(
+    filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
+) -> None:
+    """The cache holds every file the candidate needs, so the key names every digest.
+
+    A key that named only the target served a complete-looking entry with the
+    draft head missing, and llama-server exits at load rather than at fetch - so
+    the arm that restored it spent a runner hour and measured nothing.
+    """
+    draft = {
+        "repo": "publisher/Model-GGUF",
+        "revision": "0" * 40,
+        "file": "mtp-model.gguf",
+        "sha256": "b" * 64,
+    }
+    published = _candidate_outputs(
+        filename, job_name, step_id, tmp_path, _an_entry(draft=draft)
+    )
+
+    for field, value in draft.items():
+        assert published[f"{prefix}draft_{field}"] == value
+
+    key = published[f"{prefix}cache_key" if prefix else "cache_key"]
+    assert key == f"{'a' * 64}-{'b' * 64}", "the key must name both digests"
+
+
+@pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+def test_an_entry_with_no_draft_head_keeps_the_key_it_already_had(
+    filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
+) -> None:
+    """Adding the draft to the key must not throw away what earlier runs downloaded.
+
+    Two of three committed entries declare no draft head. If their key moved,
+    the next dispatch for each would refetch several gigabytes to land on bytes
+    it already had.
+    """
+    published = _candidate_outputs(filename, job_name, step_id, tmp_path, _an_entry())
+
+    for field in ("repo", "revision", "file", "sha256"):
+        assert published[f"{prefix}draft_{field}"] == ""
+
+    key = published[f"{prefix}cache_key" if prefix else "cache_key"]
+    assert key == "a" * 64, "an entry with no draft keeps the target digest alone"
+
+
+@pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+def test_a_draft_head_that_declares_no_digest_is_refused(
+    filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
+) -> None:
+    """A head with no digest would be downloaded unchecked, which is the one thing we never do."""
+    entry = _an_entry(draft={"repo": "p/M", "revision": "0" * 40, "file": "mtp.gguf"})
+
+    with pytest.raises(AssertionError, match=r"draft\.sha256"):
+        _candidate_outputs(filename, job_name, step_id, tmp_path, entry)

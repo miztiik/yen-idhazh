@@ -37,7 +37,7 @@ from ._harness import (
     _string_list,
 )
 
-pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+pytestmark = pytest.mark.workflow
 
 
 def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:
@@ -73,7 +73,7 @@ def test_the_bench_is_one_target_that_runs_two_arms_in_order() -> None:
         BUDGETS_JOB: BENCH_CACHE_KEY,
     }, "one key, written the same way twice, or the restore misses"
     composed = BENCH_CACHE_KEY.replace(
-        _expression("needs.models.outputs.candidate_sha256"), "a" * 64
+        _expression("needs.models.outputs.candidate_cache_key"), "a" * 64
     ).replace(_expression("env.LLAMA_CPP_BUILD"), PINNED_LLAMA_BUILD)
     assert "${{" not in composed, "every half of the key must resolve"
 

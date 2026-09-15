@@ -29,17 +29,18 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh import fetch as fetch_module
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus, TitleSource
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.discover import TITLE_MAX_CHARS, clean_title
 from idhazh.extract import (
     EXTRACTOR_VERSION,
+    PAGE_TITLE_MAX_CHARS,
     boilerplate_ratio,
     declares_paywall,
     extract_text,
@@ -968,14 +969,20 @@ _PAGE_BODY = (
     "</article>"
 )
 
-#: A page headline that carries all three things a cleaner has to take out: a
-#: tag, a line break, and more characters than a headline may hold. Built rather
-#: than captured, because no committed capture carries any of them and a test
-#: that waits for a publisher to write one is a test that never runs
-#: (`CLAUDE.md` section 13).
+#: A page headline that carries the two things a cleaner has to take out: a tag
+#: and a line break. Built rather than captured, because no committed capture
+#: carries either and a test that waits for a publisher to write one is a test
+#: that never runs (`CLAUDE.md` section 13). Length is the other thing a page
+#: headline can be wrong about, and it is now a refusal rather than a cut, so it
+#: has its own constant below and its own tests.
 _HOSTILE_HEADLINE = (
-    "Interconnector cleared " + "for the 2027 link " * 40 + "<script>alert(1)</script>\nand more"
+    "Interconnector cleared " + "for the 2027 link " * 5 + "<script>alert(1)</script>\nand more"
 )
+
+#: 250 characters of ordinary prose: inside a feed headline's bound and outside
+#: a page headline's. One string, read down both paths, is what makes the two
+#: bounds assertable against each other rather than each against itself.
+_LONG_HEADLINE = ("Interconnector cleared for the 2027 link and the operator said so. " * 4)[:250]
 
 
 def built_page(title: str | None) -> str:
@@ -1125,7 +1132,9 @@ def test_an_item_no_one_named_degrades_rather_than_raising(
 
     assert article.status is ArticleStatus.EXTRACT_FAILED, what
     assert article.failure_code is FailureCode.NO_TITLE
-    assert article.failure_detail == "neither the feed nor the page carries a headline to publish"
+    assert (
+        article.failure_detail == "neither the feed nor the page carries a headline we will publish"
+    )
     assert article.text is None
     assert article.title_source is None, "nothing was published, so nothing is sourced"
 
@@ -1171,6 +1180,11 @@ def test_a_page_headline_is_cleaned_by_the_rule_a_feed_headline_is_cleaned_by(
     checks. The property checks are here as well, because they name what the
     equality is buying: no tag machinery, one line, and inside the width the
     payload will hold.
+
+    The bound is the caller's and this caller asks for its own, so the equality
+    is stated at the page's bound rather than the feed's. That is the whole of
+    the difference between the two paths: same function, same sanitizer, same
+    whitespace rule, a tighter number and a refusal instead of a cut.
     """
     with _TitleSite({"/a": built_page(_HOSTILE_HEADLINE)}) as site:
         _let_the_loopback_be_dialled(monkeypatch)
@@ -1181,17 +1195,78 @@ def test_a_page_headline_is_cleaned_by_the_rule_a_feed_headline_is_cleaned_by(
         )
 
     assert article.status is ArticleStatus.OK
-    assert article.title == clean_title(_HOSTILE_HEADLINE)
+    assert article.title == clean_title(
+        _HOSTILE_HEADLINE, max_chars=PAGE_TITLE_MAX_CHARS, over_bound="refuse"
+    )
 
     title = article.title
     assert title is not None
     assert "<script>" not in title and "</script>" not in title
     assert title == " ".join(title.split()), "one line, and no run of spaces"
-    assert len(title) <= TITLE_MAX_CHARS
+    assert len(title) <= PAGE_TITLE_MAX_CHARS
     assert clean_title(title) == title, "already clean, so the cleaner is a fixed point"
 
     assert article.item_id == item.item_id, "identity is the plan's, never the page's"
     assert article.url_key == derive_url_key(item.canonical_url)
+
+
+def test_a_page_headline_past_its_bound_is_refused_rather_than_cut(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The page path's bound, and the thing it refuses to do at it.
+
+    Nothing bounds a page `<title>` but whoever wrote the page, so a title far
+    past a headline's length is a payload rather than a headline. Cutting it
+    would publish the first 200 characters of whatever it is and call that a
+    headline, and would put those 200 characters in front of a model. The item
+    is refused instead, with the reason on the payload (Guardrail #11).
+
+    The published headline is asserted absent as well as the status, because a
+    status check alone passes a build that refused the item and published the
+    string anyway.
+    """
+    assert len(_LONG_HEADLINE) == 250, "this headline has to be past the page bound to prove it"
+    assert len(_LONG_HEADLINE) > PAGE_TITLE_MAX_CHARS
+
+    with _TitleSite({"/a": built_page(_LONG_HEADLINE)}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=None)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.EXTRACT_FAILED
+    assert article.failure_code is FailureCode.NO_TITLE
+    assert (
+        article.failure_detail == "neither the feed nor the page carries a headline we will publish"
+    )
+    assert article.title is None, "refused, so nothing was published under it"
+    assert article.title_source is None
+
+
+def test_the_same_headline_from_a_feed_still_publishes_whole(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bite proof for the test above: the refusal is the page path's, not the string's.
+
+    Without this, a cleaner that had simply started refusing every long headline
+    would pass the refusal test and lose every long feed headline in the
+    archive. The same 250 characters arrive down the feed path here and publish
+    whole - inside `TITLE_MAX_CHARS`, so there is nothing to cut either.
+    """
+    with _TitleSite({"/a": built_page(None)}) as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        item = planned_at(site.url("/a"), title=_LONG_HEADLINE)
+        article = to_article(
+            item, read_over_the_loopback(item.canonical_url), config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+
+    assert article.status is ArticleStatus.OK
+    assert article.title == _LONG_HEADLINE
+    assert article.title_source is TitleSource.FEED
+    assert len(_LONG_HEADLINE) <= TITLE_MAX_CHARS, "a feed headline is cut at 500, not at 250"
 
 
 def test_a_page_whose_headline_is_only_whitespace_is_refused_rather_than_published(

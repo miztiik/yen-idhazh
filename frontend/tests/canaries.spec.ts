@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Request } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { dayReady } from './support/day-ready';
 
@@ -28,19 +28,18 @@ interface Canary {
 	must_not_render_as?: string[];
 }
 
-function load(): Canary[] {
-	const read = (dir: string) =>
-		readdirSync(dir, { withFileTypes: true })
-			.filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-			.map((entry) => JSON.parse(readFileSync(join(dir, entry.name), 'utf8')) as Canary);
-	return [...read(CANARY_DIR), ...read(join(CANARY_DIR, 'browser'))].sort((a, b) =>
-		a.name.localeCompare(b.name)
-	);
-}
-
-const CANARIES = load();
-
-/** Named in the acceptance gate. A canary that vanishes is a control that stopped being asserted. */
+/** The canaries this day publishes, named rather than globbed.
+ *
+ * `backend/utilities/build_canary_day.py` names the same eight in
+ * `DAY_CANARIES` and builds the day from that list, so this is the same
+ * question asked on the other side. Reading the directory instead made this
+ * suite's expectation depend on how many injection attacks the boundary suite
+ * happens to hold, which is a different question: a sixth attack landed on
+ * 2026-09-15 and turned four of these tests red without a line of the page
+ * moving. An attack joins this list when somebody gives it a row on the day.
+ *
+ * A canary that vanishes is still caught - `load` skips a name no file
+ * carries, and the first test compares what loaded against this list. */
 const REQUIRED = [
 	'direct-instruction-override',
 	'encoded-payload',
@@ -51,6 +50,21 @@ const REQUIRED = [
 	'markup-into-the-page',
 	'tool-call-injection'
 ];
+
+function load(): Canary[] {
+	const found: Canary[] = [];
+	for (const name of [...REQUIRED].sort((a, b) => a.localeCompare(b))) {
+		for (const dir of [CANARY_DIR, join(CANARY_DIR, 'browser')]) {
+			const path = join(dir, `${name}.json`);
+			if (!existsSync(path)) continue;
+			found.push(JSON.parse(readFileSync(path, 'utf8')) as Canary);
+			break;
+		}
+	}
+	return found;
+}
+
+const CANARIES = load();
 
 /** The attacker's address. Deliberately NOT `canary.example`, which is the
  * fixture's own `source_url` and is supposed to render as a link - every item
@@ -84,7 +98,7 @@ function watchEgress(page: Page): string[] {
 
 test.describe('the eight canaries, on the published surface', () => {
 	test('every named canary is present', () => {
-		expect(CANARIES.map((canary) => canary.name).sort()).toEqual(REQUIRED);
+		expect(CANARIES.map((canary) => canary.name).sort()).toEqual([...REQUIRED].sort());
 	});
 
 	test('the day renders all eight without a page error', async ({ page }) => {

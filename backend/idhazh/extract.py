@@ -19,11 +19,11 @@ from urllib.parse import urlsplit
 import trafilatura
 from trafilatura.metadata import extract_metadata
 
-from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource, UntrustedLine
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.discover import clean_title
@@ -34,7 +34,15 @@ from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 #: Bumped when extraction changes shape. It is a fingerprint input, because a
 #: different extractor over the same page is a different input to the model.
-EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-2"
+EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-3"
+
+#: How long a page's own `<title>` may be and still be a headline. A feed
+#: headline is bounded by editorial practice before it reaches us and keeps
+#: `discover.TITLE_MAX_CHARS`; a page title is bounded by whoever wrote the
+#: page. Past this it is refused rather than cut, because 200 characters of a
+#: payload is a nonsense headline and the item is better refused than published
+#: under one (Guardrail #11).
+PAGE_TITLE_MAX_CHARS: Final = 200
 
 # English averages a little over one token per word. Exact enough to place a
 # truncation point deterministically, and it is only a placement: the decoder
@@ -142,13 +150,20 @@ def page_headline(html: str) -> str | None:
     an item whose feed carried no headline was refused beside the very string
     that would have answered it.
 
-    It is read through `clean_title`, so it meets the feed title's rules exactly:
-    the same sanitizer, the same 500-character cap, the same whitespace rule
-    (Guardrail #5 - one cleaner, not two). It stays a value on the payload and
-    never becomes a file path, a shell argument or an outbound URL; identity is
-    recomputed from the address, so no filename can be steered by it, and the
-    summarizer already puts a title inside the untrusted fence (Guardrail #11).
-    A page title the cleaner empties is refused rather than published.
+    It is read through `clean_title`, so it meets the feed title's rules
+    exactly: the same sanitizer, the same whitespace rule, one cleaner rather
+    than two (Guardrail #5). **The bound is the caller's, and this caller asks
+    for a tighter one.** A feed headline is bounded by editorial practice before
+    it reaches us; a page `<title>` is bounded by nothing but whoever wrote the
+    page, including a page that exists to be crawled. Past
+    `PAGE_TITLE_MAX_CHARS` it is a payload rather than a headline, so it is
+    refused and the item lands as `no_title` - cutting it would publish the
+    first 200 characters of somebody's instruction and call it a headline.
+
+    It stays a value on the payload and never becomes a file path, a shell
+    argument or an outbound URL; identity is recomputed from the address, so no
+    filename can be steered by it, and every prompt that carries a title puts it
+    inside the untrusted fence (Guardrail #11).
 
     `extensive=False` is the trust boundary, not a speed knob. The default asks
     htmldate for a publication date, which hands the page's own text to
@@ -172,7 +187,11 @@ def page_headline(html: str) -> str | None:
     `EXTRACTOR_VERSION`, so moving it would re-derive every cached summary to
     buy a parse - and the one pass would have paid the same date hunt anyway.
     """
-    return clean_title(extract_metadata(html, extensive=False).title)
+    return clean_title(
+        extract_metadata(html, extensive=False).title,
+        max_chars=PAGE_TITLE_MAX_CHARS,
+        over_bound="refuse",
+    )
 
 
 def _is_pdf(item: PlannedItem) -> bool:
@@ -405,7 +424,7 @@ def to_article_with_source(
             _failed(
                 item,
                 status=ArticleStatus.EXTRACT_FAILED,
-                detail="neither the feed nor the page carries a headline to publish",
+                detail="neither the feed nor the page carries a headline we will publish",
                 fetched_at=fetched_at,
                 failure_code=FailureCode.NO_TITLE,
             ),
