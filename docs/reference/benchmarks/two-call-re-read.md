@@ -63,7 +63,7 @@ cached)`. It divides three ways:
 | the chat template broke the prefix | what the label call left in the slot, less what the summarize-and-plan call reused | row #3c |
 | the trailing turn sits behind the article | what the summarize-and-plan call carries beyond anything the slot held | row #3e |
 
-**The sum is an identity and is not the oracle.** The two call-2 causes always
+**The sum is an identity and is not the oracle.** The summarize-and-plan call's two causes always
 come to `the summarize-and-plan prompt - what that call cached`, whatever the numbers are, so a
 check that they add up cannot fail. What the run checks per item is that the
 label call's rendered prompt is the length the server charged for, that the cache stopped
@@ -88,7 +88,7 @@ Three items on one slot, adjacent, in one process.
 Item 3's label call stopped because it was finished, not because it ran out of
 budget, so **96 tokens is the label call's real reply length** on a 3,430-word article.
 Two of the three articles sit at the corpus ceiling of 3,846 words and the third
-is 3,430, and their call-1 prompts still differ by 2,043 tokens - sentence
+is 3,430, and their label-call prompts still differ by 2,043 tokens - sentence
 addressing and the candidate table are not a function of the word count.
 
 ### Where the re-prefilled tokens went
@@ -124,7 +124,7 @@ and the rest is the chat-template header around the turn, which no row moves.
 **687 tokens is 69.7 seconds an item, about 23.2 minutes of a 20-item shard.**
 
 **The steady state is one, and nobody had seen it before.** Items 2 and 3 each
-reused **1,362 tokens** of their call-1 prompt with no work - the label call's system
+reused **1,362 tokens** of the label call's prompt with no work - its system
 turn, which is byte-identical on every item - and the server erased the previous
 item's copy of the summarize-and-plan call's question as invalidated. Row #3d decision 3's alarm does
 not fire.
