@@ -17,7 +17,8 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
-from idhazh.contracts.public_telemetry import PublicTelemetryRow
+from idhazh.contracts.public_telemetry import GAP_NAMED_STAGES, PublicTelemetryRow
+from idhazh.itemrecord import NAMED_STAGE_MS
 from idhazh.publish_telemetry import (
     DEFAULT_PUBLIC_ROOT,
     FORBIDDEN_COLUMNS,
@@ -148,6 +149,23 @@ def test_publish_telemetry_drops_url_keys_urls_and_detail(tmp_path: Path) -> Non
             "summary_input_tokens": "",
             "summary_output_tokens": "",
             "summary_cached_tokens": "",
+            "queue_wait_ms": "",
+            "label_ms": "",
+            "summary_ms": "",
+            "visual_plan_ms": "",
+            "visual_plan_ms_is_estimate": "",
+            "faithfulness_ms": "",
+            "model_wait_ms": "",
+            "item_total_ms": "",
+            "stage_gap_ms": "",
+            "visual_plan_tokens_written": "",
+            "label_prefill_tokens_per_s": "",
+            "label_decode_tokens_per_s": "",
+            "summary_prefill_tokens_per_s": "",
+            "summary_decode_tokens_per_s": "",
+            "cpu_model": "",
+            "cpu_busy_pct": "",
+            "load_1m": "",
         }
     ]
 
@@ -352,6 +370,212 @@ def test_a_published_failure_without_a_reason_is_refused() -> None:
                 "source_words_before_cap": "",
             }
         )
+
+
+def test_publish_telemetry_carries_the_split_the_rates_and_the_machine(tmp_path: Path) -> None:
+    """The three questions the widening was for, on one projected row.
+
+    Where did the time go: the per-step milliseconds and the remainder. Is the
+    model slower or is there more to write: a rate beside the tokens. Was it the
+    machine: the processor and what it was doing.
+
+    The second row is the pair that has to stay apart - an instrument that never
+    ran writes an empty cell, never a zero - because a zero here reads as a step
+    that took no time rather than a step nobody timed.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "frontend" / "public" / "telemetry"
+    _write_item_health(
+        state,
+        [
+            _row(
+                queue_wait_ms=40,
+                label_ms=150,
+                summary_ms=430,
+                visual_plan_ms=60,
+                visual_plan_ms_is_estimate=True,
+                faithfulness_ms=30,
+                model_wait_ms=12,
+                item_total_ms=800,
+                stage_gap_ms=50,
+                visual_plan_tokens_written=24,
+                label_prefill_tokens_per_s=812.5,
+                label_decode_tokens_per_s=9.4,
+                summary_prefill_tokens_per_s=1204.75,
+                summary_decode_tokens_per_s=8.1,
+                cpu_model="AMD EPYC 7763 64-Core Processor",
+                cpu_busy_pct=73.25,
+                load_1m=3.9,
+            ),
+            _row(item_id="ai-02"),
+        ],
+    )
+
+    written = publish(state_root=state, public_root=public)
+
+    with written[0].open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        header = tuple(reader.fieldnames or [])
+        projected = list(reader)
+    added = (
+        "queue_wait_ms",
+        "label_ms",
+        "summary_ms",
+        "visual_plan_ms",
+        "visual_plan_ms_is_estimate",
+        "faithfulness_ms",
+        "model_wait_ms",
+        "item_total_ms",
+        "stage_gap_ms",
+        "visual_plan_tokens_written",
+        "label_prefill_tokens_per_s",
+        "label_decode_tokens_per_s",
+        "summary_prefill_tokens_per_s",
+        "summary_decode_tokens_per_s",
+        "cpu_model",
+        "cpu_busy_pct",
+        "load_1m",
+    )
+    at = header.index(added[0])
+    assert header[at:] == added, (
+        "one unbroken block at the end of the row - the browser reads this header "
+        "by position, so a later column goes after it and never through it"
+    )
+    assert not (FORBIDDEN_COLUMNS & set(projected[0]))
+    assert [projected[0][name] for name in added] == [
+        "40",
+        "150",
+        "430",
+        "60",
+        "True",
+        "30",
+        "12",
+        "800",
+        "50",
+        "24",
+        "812.5",
+        "9.4",
+        "1204.75",
+        "8.1",
+        "AMD EPYC 7763 64-Core Processor",
+        "73.25",
+        "3.9",
+    ]
+    assert all(projected[1][name] == "" for name in added), (
+        "an instrument that did not run writes an empty cell, never a zero"
+    )
+
+
+def test_the_published_stages_tile_the_item() -> None:
+    """The gap is exactly what the named stages left over, or the row is refused.
+
+    The panel draws these as shares of one bar, so a row whose bands do not add
+    up to the bar draws a chart that misses the total by an amount nobody can
+    see. That is the "plausible number rather than an error" failure, which is
+    why it is refused at the boundary instead of tidied on the page.
+    """
+    cells = {
+        "date": "2026-09-15",
+        "run_id": "2026-09-15-1",
+        "item_id": "ai-01",
+        "vertical": "ai",
+        "source_id": "example",
+        "stage": "publish",
+        "outcome": "ok",
+        "fetch_ms": "100",
+        "extract_ms": "20",
+        "summarize_ms": "600",
+        "faithfulness_ms": "30",
+        "item_total_ms": "800",
+    }
+    row = PublicTelemetryRow.from_csv_row({**cells, "stage_gap_ms": "50"})
+    assert row.stage_gap_ms == 50
+
+    with pytest.raises(ValidationError, match="stage_gap_ms"):
+        PublicTelemetryRow.from_csv_row({**cells, "stage_gap_ms": "0"})
+
+
+def test_a_negative_gap_publishes_because_that_is_what_it_is_for() -> None:
+    """Below zero means two clocks disagreed, and that is the fault to surface.
+
+    Clamping it would hide exactly what the cell exists to show, so the schema
+    carries no lower bound on this one column.
+    """
+    row = PublicTelemetryRow.from_csv_row(
+        {
+            "date": "2026-09-15",
+            "run_id": "2026-09-15-1",
+            "item_id": "ai-01",
+            "vertical": "ai",
+            "source_id": "example",
+            "stage": "publish",
+            "outcome": "ok",
+            "fetch_ms": "100",
+            "extract_ms": "20",
+            "summarize_ms": "600",
+            "item_total_ms": "700",
+            "stage_gap_ms": "-20",
+        }
+    )
+    assert row.stage_gap_ms == -20
+
+
+def test_the_gap_and_the_recorder_name_the_same_stages() -> None:
+    """Two copies of one list, held equal here rather than by an import.
+
+    `ItemRecorder` writes `stage_gap_ms` and the contract validates it, and a
+    contract may not import the module that fills it. So the drift this would
+    otherwise hide - a stage added to one list and not the other, which turns
+    every row into a refusal or every gap into a lie - is caught by comparing
+    them.
+    """
+    assert GAP_NAMED_STAGES == NAMED_STAGE_MS
+
+
+def test_a_shard_published_before_a_widening_still_reads(tmp_path: Path) -> None:
+    """Today's build reads yesterday's shard, or the widening is a release blocker.
+
+    The projection grows by appending, so a shard published before the last
+    widening is the current header cut short. Built here by cutting the header
+    rather than by keeping an old file, because a committed file ages into
+    whatever the newest shape is and stops being the case this test is about.
+    """
+    shard = tmp_path / "2026-08.csv"
+    old_columns = PUBLIC_COLUMNS[: PUBLIC_COLUMNS.index("queue_wait_ms")]
+    with shard.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=old_columns, lineterminator="\n")
+        writer.writeheader()
+        writer.writerow(
+            {
+                "date": "2026-08-23",
+                "run_id": "2026-08-23-1",
+                "item_id": "ai-01",
+                "vertical": "ai",
+                "source_id": "example",
+                "stage": "publish",
+                "outcome": "ok",
+                "fetch_ms": "100",
+            }
+        )
+
+    rows = read_shard(shard)
+
+    assert len(rows) == 1
+    assert rows[0].fetch_ms == 100
+    assert rows[0].item_total_ms is None, "a cell behind the cut reads as unrecorded"
+    assert rows[0].cpu_model is None
+
+
+def test_a_shard_that_disagrees_inside_the_prefix_is_still_refused(tmp_path: Path) -> None:
+    """Shorter is an older shape. Different is a different shape, and it is refused."""
+    shard = tmp_path / "2026-08.csv"
+    wrong = ("date", "run_id", "vertical", "item_id")
+    with shard.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=wrong, lineterminator="\n")
+        writer.writeheader()
+
+    with pytest.raises(ValueError, match="header is"):
+        read_shard(shard)
 
 
 def _month_shard(state: Path, month: str, rows: list[ItemHealthRow]) -> None:

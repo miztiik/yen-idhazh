@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-15
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -41,11 +41,13 @@ rewrites is a file with every row twice.
 
 The published columns are exactly:
 
-`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, model_calls, label_kind, label_prefill_ms, label_decode_ms, label_input_tokens, label_output_tokens, label_cached_tokens, summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens`
+`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, model_calls, label_kind, label_prefill_ms, label_decode_ms, label_input_tokens, label_output_tokens, label_cached_tokens, summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens, queue_wait_ms, label_ms, summary_ms, visual_plan_ms, visual_plan_ms_is_estimate, faithfulness_ms, model_wait_ms, item_total_ms, stage_gap_ms, visual_plan_tokens_written, label_prefill_tokens_per_s, label_decode_tokens_per_s, summary_prefill_tokens_per_s, summary_decode_tokens_per_s, cpu_model, cpu_busy_pct, load_1m`
 
-The last twelve are the two model calls' own shares of the five cost cells before
-them, and the kind of call each one was. The flat cells are their sum, and the
-contract refuses a row where they are not.
+Forty-nine of the census's 113. The last seventeen landed 2026-09-15 and are
+[the three questions](#the-seventeen-columns-an-operator-asks-for-since-2026-09-15)
+below. Positions 20 to 31 are the two model calls' own shares of the five cost
+cells before them, and the kind of call each one was. The flat cells are their
+sum, and the contract refuses a row where they are not.
 
 **They used to be six, and the browser was told to subtract.** The shard ended at
 `label_cached_tokens`, on the reasoning that the second call is the total minus
@@ -66,6 +68,14 @@ headed `call_1_*` then; `PublicTelemetryRow.from_csv_row` reads a retired headin
 into the column that replaced it, one direction only. The six new cells are
 appended at the end, so the positional prefix `parseTelemetryCsv` reads is
 unchanged and a cached bundle keeps working.
+
+**`read_shard` checks the header as a prefix too, since 2026-09-15.** It used to
+demand equality, which made every widening a release blocker for exactly the file
+it exists to prove still loads: the moment the contract grew a column, the
+committed shard was the current header cut short and the reader refused it
+(`CLAUDE.md` section 11). Cells behind the cut come back null, which is what an
+empty cell already reads as. A header that disagrees *inside* the prefix is still
+refused - shorter is an older shape, different is a different shape.
 
 These source-ledger columns never cross to the browser:
 
@@ -172,6 +182,80 @@ of the window control and leaves the section blank until it lands
 The two options remain open for a panel that genuinely needs a panned answer.
 Nothing on the page needs one today.
 
+### The seventeen columns an operator asks for, since 2026-09-15
+
+The census measures 113 columns an item at a time. This projection published 32
+of them, so three questions an operator asks had no answer anywhere a person
+could read.
+
+**Where did an item's time go?** `queue_wait_ms`, `label_ms`, `summary_ms`,
+`visual_plan_ms`, `visual_plan_ms_is_estimate`, `faithfulness_ms`,
+`model_wait_ms`, `item_total_ms` and `stage_gap_ms`. The published row carried
+fetch, extract and summarize and stopped, so the queue wait, the faithfulness
+scorers, the wait on the model server and the split of the summarize stage
+between its two calls were all invisible - and so was the remainder.
+`stage_gap_ms` is the one that matters most, and it is the reason the other eight
+come with it: it is `item_total_ms` minus every named stage, so it is the only
+cell that can catch a regression in a step nobody has thought to time, and it is
+worth nothing without the named stages beside it to subtract from. It is signed
+on purpose, so the schema carries no lower bound on it: below zero means two
+named stages overlapped or two clocks disagreed, and clamping would hide exactly
+that.
+
+**Is the model getting slower, or is there just more to write?** The four rates -
+`label_prefill_tokens_per_s`, `label_decode_tokens_per_s`,
+`summary_prefill_tokens_per_s`, `summary_decode_tokens_per_s` - and
+`visual_plan_tokens_written`. A total cannot tell those two apart and a rate can:
+a decode rate that fell while the wall clock held still is a regression, and a
+wall clock that rose while the rate held still is a longer summary. The row
+already carried the tokens written per call, so the rates are what completes the
+pair.
+
+**Was it the machine?** `cpu_busy_pct` and `load_1m` are per item and vary item
+to item, so a slow row can be read as a busy box rather than a slow pipeline.
+`cpu_model` is constant inside a shard and is carried anyway: a throughput number
+with no machine beside it is not a measurement (Guardrail #10), and the
+shard-grain counters that hold the processor are read at build time and never
+published for a browser to join against.
+
+**What it costs, measured 2026-09-15 on this checkout.** Every one of the 12,037
+committed rows is empty in all seventeen, so the file on disk is the floor and
+not the answer. Both arms:
+
+| Arm | Raw bytes a row | Gzipped bytes a row |
+| --- | ---: | ---: |
+| Today, 32 columns | 142.7 | 32.12 |
+| Committed shards rewritten, all seventeen empty | 159.8 | 32.52 |
+| Every cell filled the way its producer writes it | 219.5 | 54.50 |
+
+The filled arm is the one to plan against. Durations were taken from each row's
+own recorded milliseconds, rates written at `round(x, 2)` as `stages/work.py`
+writes them, and one 31-character processor string repeated. Fourteen months of
+retention at the busiest committed day - 1,000 rows - goes from 59.9 MB to
+92.2 MB, which is 5.58 to 8.59 percent of the 1 GB published cap (Guardrail #2).
+At the median day of 480 rows it is 28.8 MB to 44.3 MB, 2.68 to 4.12 percent.
+
+**`cpu_model` is 32.00 of the 76.8 raw bytes and 1.54 of the 22.4 gzipped**, so
+it is 42 percent of what the widening costs the cap and 7 percent of what it
+costs a fetch. It is the first cell to drop if the cap ever binds, and dropping
+it takes the busiest-day projection from 8.59 to 7.33 percent.
+
+**What was left behind, and why.** Sixty-four census columns still do not cross,
+in six groups.
+
+| Group | Columns | Why not |
+| --- | --- | --- |
+| Refused at the trust boundary | `canonical_url`, `url_key`, `detail` | Guardrail #11. Adding one fails at import, not in the published tree. |
+| Ranking provenance | `selection_score`, `authority_score`, `tier_score`, `feed_weight`, `feed_reliability`, `lens_bonus`, `recency_bonus`, `carriage_step`, `watchlist_bonus`, `carried_by`, `watchlist_hit`, `on_front_page`, `tier`, `source_form`, `published_at`, `time_source` | Sixteen cells about why a story was chosen. No timing or rate question reads one, and the ranker has its own surfaces. |
+| Fetch sub-splits | `fetch_connect_ms`, `fetch_ttfb_ms`, `robots_ms`, `retry_count`, `retry_total_ms`, `http_status` | One level below the question asked. `fetch_ms` names the band; these say which half of it, which is the next question and not this one. |
+| Cache and slot internals | `label_cache_pct`, `summary_cache_pct`, `slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous` | The two percentages are `cached / input` off cells already published, and the other three are llama-server bookkeeping a page never draws. |
+| Shard and run bookkeeping | `shard`, `item_index`, `shard_item_count`, `item_started_at`, `item_ended_at`, `runner_name`, `cpu_busy_max`, `cpu_busy_min`, `llama_rss_bytes`, `llama_rss_peak_bytes`, `python_rss_bytes`, `cgroup_peak_bytes` | Answered at shard grain on `/console/machine/`, which already publishes them once a shard instead of once an item. |
+| Configuration provenance | `model_id`, `model_quantisation`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `max_output_tokens`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `temperature`, `truncation_cap_tokens` | Constant within a run. Carrying twelve constants on every row is the largest byte waste on the list, and the run surface already holds them. |
+| Extraction, finish reasons, recovery | `source_chars`, `span_integrity`, `elements_found`, `element_class`, `failed_field`, `failed_rule`, `label_finish_reason`, `summary_finish_reason`, `recovered` | The extraction pass has its own panel, and a finish reason is neither a timing nor a rate. |
+
+A column nobody reads is weight on every browser fetch, so each group above is a
+decision to revisit when a question needs it rather than a permanent refusal.
+
 ### A new column is appended at the end, and the reader checks a prefix
 
 **The browser's header check is a prefix match, not an equality.**
@@ -180,7 +264,7 @@ Nothing on the page needs one today.
 read - so it asserts that the first `n` published columns are the `n` names it
 knows, and says nothing about anything after them.
 
-Both lists carry the same 19 names since 2026-09-05, so the check covers the
+Both lists carry the same 49 names since 2026-09-15, so the check covers the
 whole header today. It is written for the day it does not, and that day is
 normal rather than exceptional: **append at the end is a rule rather than
 tidiness**.

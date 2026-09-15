@@ -48,6 +48,23 @@ export function telemetryRow(over: Partial<TelemetryRow> = {}): TelemetryRow {
 		summary_input_tokens: null,
 		summary_output_tokens: null,
 		summary_cached_tokens: null,
+		queue_wait_ms: null,
+		label_ms: null,
+		summary_ms: null,
+		visual_plan_ms: null,
+		visual_plan_ms_is_estimate: '',
+		faithfulness_ms: null,
+		model_wait_ms: null,
+		item_total_ms: null,
+		stage_gap_ms: null,
+		visual_plan_tokens_written: null,
+		label_prefill_tokens_per_s: null,
+		label_decode_tokens_per_s: null,
+		summary_prefill_tokens_per_s: null,
+		summary_decode_tokens_per_s: null,
+		cpu_model: '',
+		cpu_busy_pct: null,
+		load_1m: null,
 		...over
 	};
 }
