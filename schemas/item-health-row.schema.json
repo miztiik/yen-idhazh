@@ -98,6 +98,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Three columns keep their names and change what they mean: queue_wait_ms now subtracts the item's own extract as well as its fetch, item_total_ms now has queue_wait_ms taken out of it, and the two prefill rates now divide by the tokens the server evaluated rather than by the whole prompt.",
+      "version": "2026-09-15T19:40",
+      "why": "All three read as measurements and none of them could disagree with anything.\n\nqueue_wait_ms declared itself the time before the worker started the item and included the item's own extract, so the column contradicted its own description. item_total_ms counted the whole queue ahead of each item, because the stage fetches every item and then runs the model over them in a different order: on the two-item shard of 2026-09-14 the column summed to 2,786 seconds against a shard that really took 2,196. The error grows with shard size, so the column got worse exactly where it was most used.\n\nThe prefill rates divided the whole prompt by the prefill clock, which counts a cache hit as work done. One item on 2026-09-14 published 787 tokens a second on a call that evaluated 52 real tokens in 6.2 seconds - 8.4 - so the column said the server was fast when what it had measured was the cache beside it in cache_pct (Guardrail #10).\n\nNo field is added or removed and no type moves, so every row an earlier run wrote still loads. What a reader may not do is compare a row written before this stamp with one written after it; the version is what says where the line is."
+    },
+    {
       "change": "FailureCode gained no_title, an extract-stage member.",
       "version": "2026-09-15T04:15",
       "why": "An item with no headline could not be recorded at all. The extractor built an ok article carrying the planned item's title, the Article contract refuses an ok article with no title, and nothing caught the refusal - so one headline-less item raised out of the per-item loop and took its whole shard with it. That is reachable from a real feed: discover.clean_title returns None for an absent, empty or whitespace headline and rank.plan_vertical plans the item anyway.\n\nWidening only. Every row an earlier run wrote still reads, and no row carries this code because no run could ever finish an item that would have earned it. It counts against the source, beside no_text: a feed publishing entries with no headline is publishing stories we can never print."
@@ -603,7 +608,7 @@
         }
       ],
       "default": null,
-      "description": "Wall time from item_started_at to item_ended_at.",
+      "description": "What the item cost, from item_started_at to item_ended_at with queue_wait_ms taken out. The stage fetches every item and then runs the model over them in a different order, so the raw wall clock counts the whole queue ahead of each item and the column summed to the shard's own duration once per item.",
       "title": "Item Total Ms"
     },
     "kv_tokens_at_start": {
@@ -782,7 +787,7 @@
         }
       ],
       "default": null,
-      "description": "Prefill throughput of the label call.",
+      "description": "Prefill throughput of the label call, over the tokens the server really evaluated - label_input_tokens minus label_cached_tokens. Counting the cached ones as work makes this and label_cache_pct the same number twice, and reads as a fast server rather than as a cache hit.",
       "title": "Label Prefill Tokens Per S"
     },
     "lens_bonus": {
@@ -1064,7 +1069,7 @@
         }
       ],
       "default": null,
-      "description": "How long the item waited before its worker started it.",
+      "description": "How long the item waited before its worker started it - its own fetch and extract subtracted, because both are work rather than waiting. Discounted from item_total_ms, so a shard's items do not each count the queue ahead of them.",
       "title": "Queue Wait Ms"
     },
     "recency_bonus": {
@@ -1484,7 +1489,7 @@
         }
       ],
       "default": null,
-      "description": "Prefill throughput of the summarize-and-plan call.",
+      "description": "Prefill throughput of the summarize-and-plan call, over the tokens the server really evaluated. This call reuses the label call's prompt almost whole, so the two readings differ by two orders of magnitude: on 2026-09-14 one item read 787 tokens a second over the whole prompt and 8.4 over the 52 tokens that were new.",
       "title": "Summary Prefill Tokens Per S"
     },
     "summary_words": {
@@ -1575,7 +1580,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15T04:15",
+      "default": "2026-09-15T19:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1666,5 +1671,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-15T04:15"
+  "version": "2026-09-15T19:40"
 }
