@@ -78,16 +78,16 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-14T22:30",
+            version="2026-09-14T23:10",
             change=(
                 "Prose only. No field was added, removed or retyped, and no default "
                 "moved, so every config/idhazh.json that validated before this still "
                 "validates and no read-side migration is owed. What changed is the "
                 "`description` text on several blocks, which pydantic lifts from the "
                 "class docstring and the Field description into the generated schema: "
-                "page_weight, observability, summarize, turns and models drop the "
-                "dated incidents, the inline readings and the decision provenance they "
-                "were carrying. The rule each one states is unchanged."
+                "page_weight, observability, summarize, turns, models and assist drop "
+                "the dated incidents, the inline readings and the decision provenance "
+                "they were carrying. The rule each one states is unchanged."
             ),
             why=(
                 "Guardrail #10 says a rule carries its reason, never its evidence - the "
