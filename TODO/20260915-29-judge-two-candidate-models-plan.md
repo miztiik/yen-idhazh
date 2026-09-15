@@ -1,8 +1,36 @@
-# Handover, 2026-09-15
+# Judge two candidate models
 
 **Last Updated**: 2026-09-15
 
+Take two candidate summarizer models from "benched, with the harness lying to us" to "measured, qualified, written up, and adopted or rejected on the record" - and fix the measurement pipeline on the way, because most of this session was spent discovering it could not be trusted.
+
 For the agent picking this up with no context. Read this top to bottom once before touching anything. Every claim here was checked on 2026-09-15; where something is an estimate it says so.
+
+## Coverage index - every item this plan carries
+
+So nothing raised in the session that produced this plan falls off the end.
+
+| id | Item | Where it is dealt with | State |
+| --- | --- | --- | --- |
+| C1 | Sanitizer could not hold Gemma's one-sided turn markers | section 2 | shipped, `2cd717c5` |
+| C2 | The bench's server arm had never finished - missing `hashlib` import | section 2 | shipped, `6caa123e` |
+| C3 | No measurement arm fetched the draft head | section 2 | shipped, `5adf36c0` |
+| C4 | Gemma's draft block named the wrong speculation type | section 2, task T1 | **root cause found, fix not written** |
+| C5 | Bench Gemma and get a completed server arm | task T1 | not started |
+| C6 | Write the model dossiers | task T2 | not started |
+| C7 | Markdown job summary for qualify and decide (owner approved "yes for D3") | task T3 | not started |
+| C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | not started |
+| C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | needs owner sign-off, Level 5 |
+| C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | not started |
+| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | owner ruled, not started |
+| C12 | Whether `measure.yml` and `validate.yml` should be one workflow | task T7 | answered, work not started |
+| C13 | Two real drift defects between those two workflows | task T7 | **found this session, not fixed** |
+| C14 | Merge the two ready pull requests | task T8 | not started |
+| C15 | `digest.yml` validates draft fields loosely | task T9 | not started |
+| C16 | `model_unreachable` is a misleading failure code | task T9 | not started |
+| C17 | The owner's "old code" suspicion about item ids | section 7 | answered, no defect |
+
+Tasks T1, T3, T4 and T6 are unblocked and can start today. T5 and T7 need a person's ruling first, and each says so where it sits.
 
 ## 0. What this project is, and the five minutes of reading you owe
 
@@ -89,15 +117,33 @@ With the head fetched, llama-server started and then failed every single request
 srv update_slots: decode() failed: failed to process speculative batch
 ```
 
-Five of five articles, deterministic. Surfaced to the pipeline as `failure_code: model_unreachable`, because the summarize path maps an `HTTPError` to that code - which is itself slightly misleading and may be worth a separate look.
+Five of five articles, deterministic. Surfaced to the pipeline as `failure_code: model_unreachable`, because the summarize path maps an `HTTPError` to that code - which is itself misleading and is task T9.
 
-The cause is the config, written in this session, and it is worth understanding rather than just patching. `config/models/gemma-4-e4b-qat.json` declares the Gemma MTP head with `"spec_type": "draft-simple"`. A `draft-simple` draft is a standalone small language model that decodes on its own. An MTP head is extra layers fed by the target's hidden states and **cannot decode alone** - which is exactly why the GGUF loads fine and every decode dies inside the speculative batch.
+**The cause is one wrong config value, and the publisher documents the right one.** `config/models/gemma-4-e4b-qat.json` declares the Gemma MTP head with `"spec_type": "draft-simple"`. Unsloth's own guide at <https://unsloth.ai/docs/models/mtp> gives the llama-server invocation for exactly this file:
 
-The contract had already written the warning down. [`backend/idhazh/contracts/app_config.py`](../backend/idhazh/contracts/app_config.py) around line 74:
+```bash
+./llama.cpp/llama-server \
+    --model gemma-4-12B-it-qat-UD-Q4_K_XL.gguf \
+    --model-draft mtp-gemma-4-12B-it.gguf \
+    --spec-type draft-mtp --spec-draft-n-max 2
+```
+
+**The value is `draft-mtp`.** Not `draft-simple`, and not the `mtp` an engine advisor guessed at before the documentation was read.
+
+The good news is how narrow the fix is. Our `server_argv` already passes `--spec-draft-model` and `--spec-type`, and the head **loaded successfully** - the log shows `common_speculative_init_result: loading draft model` completing and the GGUF opening. Only the decode failed. So the flag spellings build b10598 wants are already right, and the single wrong thing is the enum value.
+
+That enum is `SpeculationType` in [`backend/idhazh/contracts/app_config.py`](../backend/idhazh/contracts/app_config.py) around line 74, and it is a closed choice on purpose:
 
 > Only the two this project can actually stand up. `llama-server` accepts a longer list - eagle3, mtp, dflash, dspark and five ngram variants - and each of those either needs a purpose-built draft head we do not have or a lookup cache nothing here writes. A closed choice is what stops an operator naming one of them and getting a server that starts and drafts nothing.
 
-So the enum deliberately excludes `mtp`, and this session picked `draft-simple` for an MTP head anyway. Note the docstring's premise is now half-false: we DO have a purpose-built MTP head. That does not mean the path works, only that the reason for excluding it has changed.
+That docstring did its job - it warned that naming an unsupported type gives you a server that starts and drafts nothing, which is precisely what happened. Its premise has now changed in one respect: **we do have a purpose-built MTP head.** Whether the pinned build can drive it is task T1.
+
+Three facts from the publisher's guide that bear on whether this is worth doing at all, and which belong in whatever gets written up:
+
+- The claimed speedup is **1.4x to 2.2x**, and the guide says it is "especially effective on GPUs" and that "gains are smaller on devices with lower memory bandwidth". We run on 4 CPU cores. Expect the low end or nothing.
+- **MTP costs about 2 GB of extra memory.** Ornith already peaked at 9.33 GiB against the runner's 16 GB, so this is not free headroom.
+- `--spec-draft-n-max 2` is the recommended starting point and the guide says explicitly not to assume 2 is optimal - anything from 1 to 6 may win, and it is hardware-dependent. Our entry currently says `n_max: 3`.
+- The guide's build instructions point at llama.cpp PR #22673. **Whether pinned build b10598 contains it is the one thing still unknown**, and T1 says how to settle it cheaply.
 
 ## 3. The only measurements that exist
 
@@ -155,12 +201,13 @@ Ruled this session, in the owner's own words where it matters:
 
 - **A1 accepted**: teach the harness to fetch the draft head and put its digest in the cache key. Done, commit `5adf36c0`.
 - **D3 accepted**: "yes for D3" - build a markdown job summary for both the qualify shards and the decide job. Not started. See task T3.
-- **F1 proposed and then questioned**: drop Gemma's draft block and bench it plain. The owner then asked "have we tested MTP yes/no? - if we haven't we should at least 3 runs so we have data." See task T1, which has a conflict you must surface rather than resolve alone.
+- **The CPU lottery: keep drawing.** *"i disagree with carmack - since we dont control the cpu lot, the only option we have is to keeping drawing and infer from the data."* The advisor's paired-bench recommendation is overruled. See task T6.
+- **MTP: the publisher's own guide settles the flag.** The owner supplied <https://unsloth.ai/docs/models/mtp>, which gives `--spec-type draft-mtp` for exactly the file in our entry. This replaced an advisor's inference. See section 2 and task T1.
 
 Still open and needing the owner:
 
-- Whether to collapse `idhazh qualify` into `idhazh work` (task T5). This is a Level 5 change - a persisted contract and the model pick. It needs a person's sign-off.
-- What to do about the CPU lottery (task T7). The owner asked for more Ornith runs; the engine advisor says that does not fix it. Both positions are in section 5.
+- Whether to collapse `idhazh qualify` onto `idhazh work`'s call path (task T5). This is a Level 5 change - a persisted contract and the model pick. It needs a person's sign-off.
+- Whether to build the composite action that would de-duplicate `measure.yml` and `validate.yml` (task T7). The two defects that task names should be fixed either way.
 
 ## 5. The advisor debate the owner asked for
 
@@ -230,26 +277,39 @@ Averaging over it estimates today's fleet mix, which is a number that changes wh
 
 He recommends the paired bench. One caveat he names: the weights cache key is one model's digest, so a two-model job needs a key covering both or it thrashes - and two multi-gigabyte models in one entry pushes at the 10 GB ceiling.
 
-**On MTP, he is blunt and he is right: no, MTP has not been tested.** What was tested is `draft-simple` with an MTP file in the slot, which is a configuration mismatch rather than an MTP run. Five of five identical deterministic failures is a proof, not a sample. **Three more runs would produce three copies of the same error.**
+**The owner overruled this on 2026-09-15 and the ruling is what binds** - keep drawing solo runs and infer from the distribution. Task T6 carries the instruction and keeps his caveat next to it.
 
-To actually test it: confirm `--spec-type mtp` exists in build b10598, then add `MTP = "mtp"` to `SpeculationType`, regenerate `schemas/models-config.schema.json` and `schemas/run-manifest.schema.json`, and version-stamp both per CLAUDE.md section 11. **The cheap check that settles it first: unpack the pinned llama.cpp tarball and run `llama-server --help` looking for the spec-type values.** Under a minute, and it decides whether any of the rest is worth doing.
+**On MTP, he is blunt and he is half right: no, MTP has not been tested.** What was tested is `draft-simple` with an MTP file in the slot, which is a configuration mismatch rather than an MTP run. Five of five identical deterministic failures is a proof, not a sample. **Three more runs would produce three copies of the same error.** That much stands.
 
-His objections: the paired bench costs workflow work before it costs a measurement, and the model gap looks larger than any plausible machine gap, so it may be rigour that changes no decision. And he is asserting MTP head semantics from architecture rather than from this build's source - the `--help` check is the cheap thing that could prove him wrong.
+**Where he was wrong is the spelling, and it matters.** He inferred the enum value would be `mtp`. The publisher's documentation, which the owner supplied afterwards, gives `--spec-type draft-mtp`. He also inferred the head could not be driven at all through this code path; in fact our `--spec-draft-model` and `--spec-type` flags are already the right ones for build b10598, the head loaded cleanly, and only the value passed to `--spec-type` was wrong. **This is the session's clearest lesson: an advisor reasoning from architecture produced a confident answer that was directionally right and specifically wrong, and one page of vendor documentation settled in a minute what the inference could not.** Read the publisher's page before theorising about the publisher's file.
+
+His one genuinely cheap suggestion survives and is step 1 of task T1: unpack the pinned tarball and run `llama-server --help` to see whether `draft-mtp` is an accepted value in this build.
 
 ## 6. The task list
 
 Ordered by what unblocks what. Each row says what done looks like.
 
-### T1 - Settle Gemma's draft head, then bench it. BLOCKED ON THE OWNER.
+### T1 - Teach the contract `draft-mtp`, then bench Gemma. UNBLOCKED.
 
-There is a genuine conflict here and it must be surfaced, not resolved by an agent. The owner said "F1 - have we tested MTP yes/no? - if we haven't we should at least 3 runs so we have data." The engine advisor's answer is that MTP has not been tested, and that three runs of a deterministic configuration error is not data.
+The owner supplied the publisher's documentation and it settles what an earlier advisor could only guess at. Section 2 has the detail. The work is small and ordered, and step 1 decides whether steps 2 and 3 happen at all.
 
-So the owner's *intent* - get real data on whether the MTP head helps - needs a different action than the owner's *instruction*. Per CLAUDE.md section 0d, price it and hand it back. Do this first because it is nearly free:
+**Step 1, and do this first because it costs under a minute.** Fetch the pinned llama.cpp release - `LLAMA_CPP_BUILD` and `LLAMA_CPP_ASSET` in `.github/workflows/measure.yml` - unpack it, and run:
 
-1. Fetch the pinned llama.cpp build (`LLAMA_CPP_BUILD` in `.github/workflows/measure.yml`), run `llama-server --help`, and report whether `mtp` is an accepted `--spec-type` value.
-2. Then ask the owner to choose, in one message with costs, between: bench Gemma with `draft: null` now and get a number today; or add `MTP` to `SpeculationType` with its schema stamps and try the real path first; or both, in that order.
+```bash
+./llama-server --help | grep -A6 -- --spec-type
+```
 
-Done when: the owner has ruled and Gemma has a completed arm 2.
+Record whether `draft-mtp` appears in the accepted values. The publisher's build instructions point at llama.cpp PR #22673, so a build predating it will not list `draft-mtp` and the honest answer is then to say so and price a build bump rather than guess.
+
+**Step 2, if `draft-mtp` is accepted.** Add `DRAFT_MTP = "draft-mtp"` to `SpeculationType` in `backend/idhazh/contracts/app_config.py`, amend the docstring so it no longer says we have no purpose-built head, regenerate `schemas/models-config.schema.json` and `schemas/run-manifest.schema.json`, and version-stamp both with a `changelog` entry per CLAUDE.md section 11. Then set `"spec_type": "draft-mtp"` in `config/models/gemma-4-e4b-qat.json`.
+
+While you are in that file, reconsider `n_max`. It currently says 3; the publisher recommends starting at 2 and says explicitly not to assume 2 is optimal, because the best value is hardware-dependent anywhere from 1 to 6. Do not sweep it blindly - one bench job per value is an hour each. Set it to 2, get one clean measurement, and only then argue about sweeping.
+
+**Step 3, bench it twice.** One dispatch with the head, one with `draft: null`. That pair is the only honest way to say what the head is worth, and both runs land on whatever processor the runner gives them, so run them close together and record both CPU names.
+
+Set expectations in whatever you write up. The publisher claims 1.4x to 2.2x, says it is especially effective on GPUs, and says gains are smaller where memory bandwidth is lower. We are on 4 CPU cores. It also costs about 2 GB of extra memory, and Ornith already peaked at 9.33 GiB against the runner's 16 GB.
+
+Done when: the `--help` answer is recorded; and either Gemma has a completed server arm with and without the head, or there is a written note saying the pinned build cannot do it and what a build bump would cost.
 
 ### T2 - Write the dossiers for the models that have numbers
 
@@ -294,19 +354,54 @@ Expect the determinism gate to get noisier and do not treat that as a regression
 
 Done when: whichever steps the owner approved have shipped, each as its own commit, with the schema version stamps and read-side migrations CLAUDE.md section 11 requires for step 3.
 
-### T6 - Decide what to do about the CPU lottery. BLOCKED ON THE OWNER.
+### T6 - Keep drawing runs and infer from the data. THE OWNER HAS RULED.
 
-Section 5 has the three options with their costs. The owner asked for more Ornith runs; the advisor recommends a paired bench instead. Put both in front of the owner in one message with the costs named, and include the free measurement first: `gh run view <id> --json jobs` on the five runs already done gives the real runner-minute cost of a bench job, which nobody has recorded.
+The engine advisor recommended a paired bench and argued that repeating solo runs estimates a fleet mix rather than a model. **The owner overruled him on 2026-09-15**, in these words: *"i disagree with carmack - since we dont control the cpu lot, the only option we have is to keeping drawing and infer from the data."*
 
-Done when: the owner has chosen, and either the extra runs are dispatched or the paired bench is designed.
+That ruling stands and is not to be relitigated (CLAUDE.md section 0). The reasoning behind it is sound on its own terms: we do not control which processor a run lands on, we never will, and a distribution of draws is real information about what this project actually gets from GitHub. A paired bench answers a cleaner question but it is not the only thing worth knowing.
 
-### T7 - Merge what is ready
+What to do:
+
+1. Dispatch further solo bench runs for each candidate and for the incumbent. The owner asked specifically for "a couple more" for Ornith. Do not stop at a mean - **record every draw with its processor name**, because the distribution is the finding, not the average.
+2. Report a **median** rather than a mean, since a small sample over a few machine types has no reason to be symmetric, and say how many draws each processor contributed.
+3. Never print a cross-model comparison without the processor beside each number (Guardrail #10).
+
+The advisor's objection is recorded here rather than acted on, because a later reader deserves it: a mean over three unknown-weight machine types moves when GitHub rotates hardware and tells nobody, so any fleet number this produces carries a date and expires. Write that sentence next to the number rather than dropping it.
+
+The paired bench remains a good idea nobody has rejected - it is simply not what the owner asked for first. If it is ever picked up, the one caveat to remember is that the weights cache key is one model's digest today, so a two-model job needs a key covering both or it thrashes against the 10 GB ceiling.
+
+Done when: each model has at least three recorded draws, the plan's measurement table carries every draw with its processor, and the write-up quotes a median with its sample size and date.
+
+### T7 - Decide what to do about `measure.yml` and `validate.yml`, and fix the drift either way. TWO REAL DEFECTS HERE.
+
+The owner asked: *"why do we need two pipelines `measure.yml` and `validate.yml` aren't they having purpose to exist separately or can be gated in the same that can be config driven?"*
+
+The architecture advisor read both files on 2026-09-15 and answered: **they do not need to be two files for the reason you would expect, but merging them is the wrong fix.** Two things genuinely force them apart. `validate.yml` carries `concurrency: group: validate` at workflow level - push that down to job level and the eight-shard matrix serialises against itself; leave it where it is inside a merged file and every bench dispatch queues behind a qualification run. And size: the two are 1,411 and 446 lines, and [`TODO/20260914-27-pipeline-observability-plan.md`](20260914-27-pipeline-observability-plan.md) already rejected extending `measure.yml` on length grounds.
+
+His recommendation is a **composite action** rather than a reusable workflow, because a reusable workflow replaces whole jobs and cannot inject steps into `qualify`, which must fan out by shard and then run gates. A composite action injects steps into an existing job, which is the shape needed. It would hold: resolving the candidate from its models file, the weights cache and llama.cpp fetch, the digest verification, the scratch config copy, and the health check. Roughly 200 lines removed, one new `.github/actions/llama-candidate/action.yml`, correction level 3. No dispatch URL or documentation reference changes, because both files keep their names and inputs.
+
+**Two defects he found on the way matter more than the refactor, and they should be fixed first whatever the owner decides about the structure.** He is explicit that if only one thing gets done, it is these - twenty lines against two hundred.
+
+| id | Defect | What it means |
+| --- | --- | --- |
+| D1 | `measure.yml` verifies the weights by SHA-256 only. `validate.yml` also checks the entry's declared `byte_count` | The stricter check exists and one arm does not use it |
+| D2 | **`measure.yml`'s health check never asserts which model answered.** `validate.yml` polls `/v1/models` and asserts the served alias; `measure.yml` just waits for a 200 | A bench can measure a server answering under a different alias and file the numbers under the candidate. That is a Guardrail #10 failure - the number would not be about the model it names |
+
+D2 is the serious one. There is also a third, smaller finding: the two workflows keep **two separate five-gigabyte cache entries for identical bytes**, keyed `bench-<sha>-<build>` and `qualify-<sha>-<build>`, against a 10 GB ceiling that [`docs/reference/ci-caches.md`](../docs/reference/ci-caches.md) records as having about 1.4 GB of headroom.
+
+The advisor's objection to his own recommendation, recorded so it is not lost: the drift is already partly caught by a test - `backend/tests/workflows/test_model_server_jobs.py` carries the line "the arm that drifted was the one nobody diffed - `validate.yml`" - so extraction buys less than it looks, and a composite action is a third file a reader must open.
+
+Smallest first step he names: extract only the scratch-config block, which is already byte-identical between the two files, so the extraction cannot change behaviour. It ships alone, reverts alone, and proves the mechanism.
+
+Done when: D1 and D2 are fixed with tests, and the owner has ruled on whether the composite action gets built.
+
+### T8 - Merge what is ready
 
 #736 (`docs/distil-plan-28`) and #737 (`feat/two-candidate-models`) are both MERGEABLE.
 
 Re-check mergeability between merges - a stale CLEAN is how a bad merge lands. `gh pr merge --squash --delete-branch` often exits 1 from inside a worktree *while having merged*; read `gh pr view <n> --json state,mergedAt` rather than trusting the exit code. Remove the worktree before merging so the branch delete does not fail.
 
-### T8 - The smaller things this session found and did not fix
+### T9 - The smaller things this session found and did not fix
 
 - **`digest.yml` validates draft fields loosely.** It uses `if value and value.split() != [value]`, which lets an entry declare a draft head with a missing digest and then download it unchecked. The two bench workflows now refuse that. Production has the looser check. One-line fix, its own commit.
 - **`model_unreachable` is a misleading failure code** for a server that answered with an error. It maps from `HTTPError`. Worth splitting so a decode failure does not read as a network failure.
@@ -327,3 +422,4 @@ Re-check mergeability between merges - a stale CLEAN is how a bad merge lands. `
 - [`docs/architecture/summarize/model-boundary.md`](../docs/architecture/summarize/model-boundary.md) - the models entry, the draft head, and which arms fetch it.
 - [`docs/architecture/sources/trust-boundary.md`](../docs/architecture/sources/trust-boundary.md) - the turn-marker families the sanitizer strips.
 - [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) - what may and may not grade a summary.
+- <https://unsloth.ai/docs/models/mtp> - the publisher's guide to running an MTP head under llama.cpp. It names `--spec-type draft-mtp`, the `--spec-draft-n-max` starting point, the memory cost and the build the flag needs. Read it before theorising about task T1.
