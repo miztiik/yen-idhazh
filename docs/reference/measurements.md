@@ -862,6 +862,58 @@ level cannot move a logit, so digesting it would have invalidated every earlier
 work identity on the day somebody turned the logging up - which is what
 `n_threads_batch` was refused for on the other side of the same argument.
 
+## What the pinned llama-server will say about its own slots, 2026-09-15
+
+**All three of the empty slot columns are answerable, and all three arrive in
+the reply the summarizer already reads.** `slot_id`, `kv_tokens_at_start` and
+`prefix_shared_with_previous` had sat on `ItemHealthRow` with nothing writing
+them, because nobody had asked the server whether it could supply them.
+
+Read from **build `b10598-56db501e7`** - the build `LLAMA_CPP_BUILD` pins -
+started with the flags `idhazh.llm.server.server_argv` emits (`-np 1`,
+`--no-context-shift`, `-lv 4`, `--metrics`, `--no-warmup`). Two runs of
+`python backend/utilities/slot_probe.py --repeats 3`, six pairs of calls,
+byte-identical output both times, so the spread is zero.
+
+| Column | What fills it | Where it arrives |
+| --- | --- | --- |
+| `slot_id` | `id_slot` | `/completions` reply, top level |
+| `kv_tokens_at_start` | `tokens_cached`, which is what the slot holds when the reply is written and therefore what it holds when the next item starts | `/completions` reply, top level |
+| `prefix_shared_with_previous` | `timings.cache_n` above zero | `/completions` reply, inside `timings` |
+
+**The cost is zero extra requests.** `/completions` is the route the two-call
+summarizer already posts to, and its reply carries all three. `/slots` is a
+second source and a worse one: it is enabled by default, `/props` reports
+`endpoint_slots` as `true`, and after one completion it answers with `id`,
+`id_task`, `is_processing`, `n_ctx`, `n_prompt_tokens`,
+`n_prompt_tokens_cache`, `n_prompt_tokens_processed`, `next_token`, `params` and
+`speculative` - but reading it costs one request an item for numbers the reply
+already had. A slot that has held no task answers with four of those ten, which
+is why the probe asks it after a completion and not before.
+
+**Two of the three are worth less than they look, and that is the finding.**
+`n_parallel` is 1 in every committed model entry, so there is one slot and
+`id_slot` read `0` on all six calls: `slot_id` would be a constant column, 12,277
+copies of one digit. And `timings.cache_n` is already recorded, as
+`cached_tokens` - so `prefix_shared_with_previous` is a boolean restating a
+number the ledger holds, which is the shape Guardrail #10 calls a reading
+written twice. `kv_tokens_at_start` is the one that says something new: it is
+what the slot held *before* this item, where `cached_tokens` is what this item
+reused, and the two differ exactly when the cache held something and the prompt
+could not use it.
+
+**What this did not settle: the platform.** CI installs the Linux asset and this
+was read from the same tag's Windows CPU asset, because the pinned Linux binary
+needs a Linux host. The reply is built by `tools/server/server-task.cpp` at that
+tag, which is one file for both, and the field list here matches that file line
+for line. Running `slot_probe.py` inside a job that already stands a server up -
+`validate.yml` or `idhazh-pipeline-tests.yaml` - closes the gap for the price of
+one step.
+
+**Nothing here is a decision to fill the columns.** Whether a constant column
+and a restated one earn their bytes is the next question, and this reading is
+what lets it be asked with numbers.
+
 ## How much of a day is the same story twice, 2026-09-06
 
 **At its worst a committed day carries 3.74 percent of its items as a story a
@@ -1089,6 +1141,38 @@ for every row for ever. The reasoning sits beside `migrate_header` in
 A first pass without warm-up read the same operation at 107.66 us and 74.81 us
 inside one process, 44 percent apart. That spread was the shared box and cold
 caches, not the code. Quote 42.85.
+
+## What compressing the telemetry takes, against re-encoding it, 2026-09-15
+
+**Compression takes 9.6 times what ordinal encoding takes, off the same store,
+and costs no readability.** Re-encoding every closed-vocabulary column as an
+integer saves 369,855 bytes of `state/item-health/`. Compressing the same files
+saves 3,551,430.
+
+`gzip` at level 9 with `mtime=0`, **CPython 3.14.2**, three repeats per file,
+identical output each time - the transform is deterministic, so the spread is
+zero by construction rather than by luck. A byte count belongs to no machine, so
+the runtime is the provenance and the box is not named. Retake it with
+`python -c "import gzip,pathlib;b=pathlib.Path('<file>').read_bytes();print(len(b),len(gzip.compress(b,9,mtime=0)))"`.
+
+| Subject | On disk | Compressed | Saved |
+| --- | ---: | ---: | ---: |
+| `state/item-health/`, 23 day files, 12,277 rows | 5,194,794 | 1,643,364 | 3,551,430, **68.4 percent** |
+| its largest day, `2026/09/03.csv` | 288,766 | 93,063 | 195,703, 67.8 percent |
+| `frontend/public/telemetry/2026-09.csv`, the month the console fetches | 1,186,543 | 254,252 | 932,291, 78.6 percent |
+| all seven published projections, 12 files | 8,726,606 | 2,006,164 | 6,720,442, **77.0 percent** |
+
+**The "about 80 percent" this replaces was an estimate and it was close**: 77.0
+percent measured across the published projections, 79.5 percent across
+`telemetry/` alone. The estimate of "11 times the ordinal" was the one that
+moved - it is 9.6 times. Neither correction changes the ordering: compression is
+still most of the file where the ordinal is a fifteenth of it, it needs no
+legend shipped beside the data, and `grep failed` over a committed day keeps
+working. An ordinal taken first would be re-encoded when compression lands.
+
+**One published file gets bigger.** `span-rollup/` is 67 bytes and gzips to 77,
+because the header costs more than the payload. Any switch has to leave a file
+alone when compressing it does not pay.
 
 ## Inference throughput
 
