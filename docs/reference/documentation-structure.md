@@ -285,6 +285,23 @@ than a measurement (Guardrail #10), which is enough to compare pages and not eno
 quote anywhere else. Run it before a docs pass to pick the page, and after one to
 see what moved.
 
+**`--changed` narrows it to the pages one change touched, and adds their rank.**
+
+```text
+python backend/utilities/doc_load.py --changed docs/concepts/config.md
+```
+
+Rank is the row's place among every page by weight, and it is the one number the
+whole-tree table cannot tell you about your own page: whether the section you
+just added made a heavy page heavier. A path the standard does not govern is
+skipped in silence, because the caller is usually a CI step handing over
+whatever the diff listed.
+
+That caller is the `docs` job in `ci.yml`, which writes these rows into the run
+summary of any change that touched a page. It gates nothing and can fail
+nothing - it exists because the rule is that the page you add to pays first, and
+a rule whose input nobody sees is a rule nobody runs.
+
 ### `docs/` is the memory
 
 Everything a future contributor or agent needs is written here, in a file that

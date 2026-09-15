@@ -97,6 +97,54 @@ jobs:
           fi
           echo "playwright=$version" >> "$GITHUB_OUTPUT"
 
+  # A documentation change prints the rows for the pages it touched into the run
+  # summary, so the numbers reach the person reviewing rather than only the
+  # person who went looking for them. The standard's rule is that the page you
+  # add to pays first, and a rule nobody can see the input to is a rule nobody
+  # runs.
+  #
+  # It gates nothing and it can fail nothing. `doc_load.py` sets no threshold,
+  # this job asserts none, and a range it cannot resolve answers "no pages".
+  # That is deliberate: a line limit is met by starting a second file, so the
+  # only thing worth automating here is putting the number in front of a person.
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        env:
+          # The same two the selector reads: a pull request names its range and
+          # a push names its own.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: .github/scripts/changed-docs.sh >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v7
+        if: steps.changed.outputs.any == 'true'
+        with:
+          python-version: '3.12'
+
+      - name: What the pages this change touched now cost a reader
+        if: steps.changed.outputs.any == 'true'
+        env:
+          # Through the environment rather than into the script body: a branch
+          # names its own files, and a filename is not trusted enough to become
+          # shell (CLAUDE.md Guardrail #11).
+          PATHS: ${{ steps.changed.outputs.paths }}
+        run: |
+          set -euo pipefail
+          {
+            echo '### Documentation load'
+            echo
+            echo '```text'
+            python backend/utilities/doc_load.py --changed $PATHS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   gates:
     needs: scope
     runs-on: ubuntu-latest

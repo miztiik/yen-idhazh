@@ -74,6 +74,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_desk_field",
         "test_desk_knobs",
         "test_discover",
+        "test_doc_load",
         "test_elements",
         "test_embed",
         "test_eval_ledger",
