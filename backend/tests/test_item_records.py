@@ -14,26 +14,55 @@ import logging
 from pathlib import Path
 
 import pytest
+from conftest import CONFIG_DIR, FIXTURES_DIR
+from pydantic import ValidationError
 
-from idhazh import capture, itemrecord, telemetry
+from idhazh import capture, config, telemetry
+from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import CallCost, CallKind
-from idhazh.contracts.item_health import ItemHealthRow, ItemStage
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.run_plan import PlannedItem, TimeSource
+from idhazh.telemetry import events
+from idhazh.telemetry.record import NAMED_STAGE_MS, Flags, ItemRecorder, shard_done
 
 
-def recorder(
-    handler: logging.Handler | None = None, **flags: object
-) -> itemrecord.ItemRecorder:
+def recorder(handler: logging.Handler | None = None, **flags: object) -> ItemRecorder:
     """One recorder on a logger of the test's own, with a clock it owns."""
-    log = logging.getLogger(f"test.itemrecord.{id(handler)}")
+    log = logging.getLogger(f"test.record.{id(handler)}")
     log.handlers = [handler] if handler is not None else []
     log.setLevel(logging.INFO)
     log.propagate = False
-    return itemrecord.ItemRecorder(
-        run_id="34852763827",
-        flags=itemrecord.Flags(**flags),  # type: ignore[arg-type]
+    return ItemRecorder(
+        run_id="2026-09-15-1",
+        flags=Flags(**flags),  # type: ignore[arg-type]
         now=lambda: "2026-09-15T06:00:00Z",
         log=log,
     )
+
+
+def settled(subject: ItemRecorder, **cells: object) -> ItemRecorder:
+    """Note the cells no census row can be built without, plus the test's own.
+
+    Nine identity columns and the two that say how the item ended. `close`
+    returns the row itself now, so a recorder that was never told which item
+    stopped where has nothing to return - which is the point, and is why a test
+    about the clock still has to say this much.
+    """
+    subject.note(
+        **{
+            "date": "2026-09-15",
+            "run_id": "2026-09-15-1",
+            "item_id": "ai-01",
+            "url_key": "f" * 64,
+            "canonical_url": "https://example.com/one",
+            "vertical": "ai",
+            "source_id": "example",
+            "stage": ItemStage.PUBLISH.value,
+            "outcome": ItemOutcome.OK.value,
+            **cells,
+        }
+    )
+    return subject
 
 
 class Lines(logging.Handler):
@@ -58,8 +87,9 @@ def test_a_completion_record_carries_every_column_the_census_row_declares() -> N
     the one worth finding.
     """
     lines = Lines()
-    subject = recorder(lines)
-    subject.note(item_id="ai-01", shard=0, fetch_ms=900, extract_ms=120, summarize_ms=475890)
+    subject = settled(
+        recorder(lines), fetch_ms=900, extract_ms=120, summarize_ms=475890, shard=0
+    )
 
     subject.done()
 
@@ -67,7 +97,134 @@ def test_a_completion_record_carries_every_column_the_census_row_declares() -> N
     for column in ItemHealthRow.csv_columns():
         assert column in record, f"the record does not carry {column}"
     assert record["name"] == "item.done"
-    assert record["run"] == "34852763827"
+    assert record["run"] == "2026-09-15-1"
+
+
+def _planned(article: Article) -> PlannedItem:
+    """The plan entry the ranker would have written for this article.
+
+    Built from the article rather than restated, so the two cannot disagree
+    about which item this is, and every ranking term carries a distinct value -
+    a term left at its default proves nothing about the term beside it.
+    """
+    return PlannedItem(
+        item_id=article.item_id,
+        url_key=article.url_key,
+        source_url=article.source_url,
+        canonical_url=article.canonical_url,
+        source_id=article.source_id,
+        tier=article.tier,
+        source_form=article.source_form,
+        vertical=article.vertical,
+        title=article.title,
+        published_at=article.fetched_at,
+        time_source=TimeSource.FEED,
+        carried_by=3,
+        watchlist_hit=True,
+        on_front_page=True,
+        rank_score=0.71,
+        authority_score=0.62,
+        tier_score=0.90,
+        feed_weight=0.55,
+        feed_reliability=0.97,
+        carriage_step=0.12,
+        watchlist_bonus=0.08,
+        lens_bonus=0.04,
+        recency_bonus=0.31,
+    )
+
+
+def test_every_cell_the_stage_hands_over_arrives_on_the_row() -> None:
+    """Nothing a stage records is dropped between the cell and the column.
+
+    One item, driven from a canary article this test builds - fixed in size,
+    and carrying injected text no committed row may ever have produced
+    (`CLAUDE.md` section 13, Guardrail #12). The cells are the work stage's own
+    three builders rather than a list restated here, so a cell added there is
+    covered the same day it lands.
+
+    **It cannot settle whether a cell is right.** Only that every cell handed to
+    the recorder reaches the row equal to what went in - which is the property
+    that was missing while `close` returned a mapping: about 53 of these were
+    computed on every item and dropped with nothing raising anywhere.
+    """
+    from idhazh.stages import work
+    from utilities import build_canary_day
+
+    settings = config.load(CONFIG_DIR)
+    canary = build_canary_day.canaries(FIXTURES_DIR / "canaries")[0]
+    article = build_canary_day.article_for(0, canary, build_canary_day.SCORED[0])
+    handed: dict[str, object] = {
+        "date": "2026-09-15",
+        "run_id": "2026-09-15-1",
+        "item_started_at": "2026-09-15T06:00:00Z",
+        **work._shard_cells(settings, shard=2, shard_item_count=8),
+        **work._planned_cells(_planned(article), index=0),
+        **work._article_cells(article),
+        "stage": ItemStage.PUBLISH.value,
+        "outcome": ItemOutcome.OK.value,
+    }
+    subject = recorder()
+    subject.note(**handed)
+
+    row = subject.close()
+
+    lost = [
+        name for name, given in handed.items() if given is not None and getattr(row, name) is None
+    ]
+    assert lost == [], f"the row dropped a cell it was handed: {lost}"
+    # `model_quantisation` is the one cell that cannot arrive as it was handed:
+    # the config spells it `Q4_K_M` and the column takes a lowercase token, so
+    # the column folds it on the way in. That is the column working rather than
+    # a cell lost - and naming it here is what keeps a second one from joining
+    # it unnoticed.
+    changed = [name for name, given in handed.items() if getattr(row, name) != given]
+    assert changed == ["model_quantisation"]
+    assert row.model_quantisation == str(handed["model_quantisation"]).lower()
+    assert len(handed) > 40, "the stage hands over more than a handful, and this proves it"
+
+
+def test_a_call_slot_with_numbers_and_no_kind_is_half_a_call() -> None:
+    """The test that would have caught the absent cell the pair could not be built without.
+
+    `ItemHealthRow` holds a slot to filling whole or not at all, so five numbers
+    under `label_*` and no `label_kind` is a row nothing can build - and while
+    `close` handed back a mapping, that was a row nobody tried to build. Both
+    calls are driven through the work stage's own cell builder.
+    """
+    from idhazh.llm.server import Completion
+    from idhazh.stages.two_calls import _call_cells
+
+    label = Completion(
+        content="{}", prompt_tokens=1497, completion_tokens=205,
+        prefill_ms=214122, decode_ms=88795, cached_tokens=0,
+    )
+    answer = Completion(
+        content="{}", prompt_tokens=2389, completion_tokens=567,
+        prefill_ms=186750, decode_ms=292626, cached_tokens=1493,
+    )
+    pair = _call_cells("label", CallKind.LABEL, label) | _call_cells(
+        "summary", CallKind.SUMMARIZE_AND_PLAN, answer
+    )
+
+    row = settled(
+        recorder(),
+        model_calls=2,
+        prefill_ms=label.prefill_ms + answer.prefill_ms,
+        decode_ms=label.decode_ms + answer.decode_ms,
+        input_tokens=label.prompt_tokens + answer.prompt_tokens,
+        output_tokens=label.completion_tokens + answer.completion_tokens,
+        cached_tokens=label.cached_tokens + answer.cached_tokens,
+        **pair,
+    ).close()
+
+    assert row.label_kind is CallKind.LABEL
+    assert row.summary_kind is CallKind.SUMMARIZE_AND_PLAN
+    assert row.summary_cache_pct == 62.49, "the second call reuses what the first read cold"
+
+    without_the_kind = {name: value for name, value in pair.items() if name != "label_kind"}
+    with pytest.raises(ValidationError, match="recorded whole or not at all"):
+        settled(recorder(), model_calls=2, **without_the_kind).close()
 
 
 def test_the_gap_is_the_item_minus_the_stages_that_named_themselves() -> None:
@@ -77,15 +234,16 @@ def test_the_gap_is_the_item_minus_the_stages_that_named_themselves() -> None:
     four named stages are subtracted from the item's own wall clock and what is
     left is whatever the stage did between them.
     """
-    subject = recorder()
-    subject.note(fetch_ms=900, extract_ms=120, summarize_ms=475890, faithfulness_ms=1400)
+    subject = settled(
+        recorder(), fetch_ms=900, extract_ms=120, summarize_ms=475890, faithfulness_ms=1400
+    )
 
-    cells = subject.close()
+    row = subject.close()
 
-    total = cells["item_total_ms"]
+    total = row.item_total_ms
     assert isinstance(total, int)
     named = 900 + 120 + 475890 + 1400
-    assert cells["stage_gap_ms"] == total - named
+    assert row.stage_gap_ms == total - named
 
 
 def test_the_split_of_the_model_stage_is_not_subtracted_twice() -> None:
@@ -94,17 +252,16 @@ def test_the_split_of_the_model_stage_is_not_subtracted_twice() -> None:
     Counting them as well would charge the model stage twice and drive the gap
     hundreds of thousands of milliseconds negative on every ordinary item.
     """
-    assert "label_ms" not in itemrecord.NAMED_STAGE_MS
-    assert "summary_ms" not in itemrecord.NAMED_STAGE_MS
+    assert "label_ms" not in NAMED_STAGE_MS
+    assert "summary_ms" not in NAMED_STAGE_MS
 
-    subject = recorder()
-    subject.note(summarize_ms=475890, label_ms=97879, summary_ms=378011)
+    subject = settled(recorder(), summarize_ms=475890, label_ms=97879, summary_ms=378011)
 
-    cells = subject.close()
+    row = subject.close()
 
-    total = cells["item_total_ms"]
+    total = row.item_total_ms
     assert isinstance(total, int)
-    assert cells["stage_gap_ms"] == total - 475890
+    assert row.stage_gap_ms == total - 475890
 
 
 def test_a_cell_name_no_column_declares_is_refused_at_the_call_site() -> None:
@@ -118,7 +275,7 @@ def test_a_cell_name_no_column_declares_is_refused_at_the_call_site() -> None:
 def test_a_nested_event_name_cannot_be_written_as_a_flat_record() -> None:
     """Two shapes, one vocabulary, and the name decides which - checkably."""
     with pytest.raises(ValueError, match="nested event"):
-        telemetry.record(
+        events.record(
             ts="2026-09-15T06:00:00Z",
             src=ItemStage.SUMMARIZE,
             run="r",
@@ -162,27 +319,26 @@ def test_turning_the_item_lines_off_stops_the_record_and_not_the_clock() -> None
     stopped the arithmetic would change behaviour rather than volume.
     """
     lines = Lines()
-    subject = recorder(lines, item_lines=False, stage_lines=False)
-    subject.note(fetch_ms=900)
+    subject = settled(recorder(lines, item_lines=False, stage_lines=False), fetch_ms=900)
 
-    cells = subject.done()
+    row = subject.done()
 
     assert lines.said == []
-    assert isinstance(cells["item_total_ms"], int)
+    assert isinstance(row.item_total_ms, int)
 
 
 def test_the_shard_record_counts_failures_by_code_and_names_one_item() -> None:
     """The question asked of a finished shard is which code moved, not which items."""
     lines = Lines()
-    log = logging.getLogger("test.itemrecord.shard")
+    log = logging.getLogger("test.record.shard")
     log.handlers = [lines]
     log.setLevel(logging.INFO)
     log.propagate = False
 
-    itemrecord.shard_done(
-        run_id="34852763827",
+    shard_done(
+        run_id="2026-09-15-1",
         shard=1,
-        flags=itemrecord.Flags(),
+        flags=Flags(),
         now=lambda: "2026-09-15T06:00:00Z",
         log=log,
         items=80,
@@ -201,15 +357,15 @@ def test_the_slowest_item_is_addressed_by_url_and_never_by_its_title() -> None:
     """A title is fetched text and a log line is read by a person (Guardrail #11)."""
     from idhazh.stages.work import _slowest
 
+    def costing(item_id: str, ms: int, url: str, source: str) -> ItemHealthRow:
+        """One finished row at a stated cost - the recorder's own clock cannot be told."""
+        row = settled(recorder(), item_id=item_id, canonical_url=url, source_id=source).close()
+        return row.model_copy(update={"item_total_ms": ms})
+
     worst = _slowest(
         [
-            {"item_id": "ai-01", "item_total_ms": 900, "canonical_url": "https://a/1"},
-            {
-                "item_id": "ai-07",
-                "item_total_ms": 475890,
-                "canonical_url": "https://b/7",
-                "source_id": "b",
-            },
+            costing("ai-01", 900, "https://a/1", "a"),
+            costing("ai-07", 475890, "https://b/7", "b"),
         ]
     )
 
@@ -225,8 +381,13 @@ def test_the_slowest_item_is_addressed_by_url_and_never_by_its_title() -> None:
 def test_a_record_is_one_line_whatever_the_text_it_carries() -> None:
     """A record that wrapped would need a multi-line parser to read one item back."""
     lines = Lines()
-    subject = recorder(lines)
-    subject.note(detail="the reply did not hold its shape\nand said so over two lines")
+    subject = settled(
+        recorder(lines),
+        stage=ItemStage.SUMMARIZE.value,
+        outcome=ItemOutcome.FAILED.value,
+        code="bad_shape",
+        detail="the reply did not hold its shape\nand said so over two lines",
+    )
 
     subject.done()
 

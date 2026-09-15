@@ -18,7 +18,6 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.public_telemetry import GAP_NAMED_STAGES, PublicTelemetryRow
-from idhazh.itemrecord import NAMED_STAGE_MS
 from idhazh.publish_telemetry import (
     DEFAULT_PUBLIC_ROOT,
     FORBIDDEN_COLUMNS,
@@ -30,6 +29,7 @@ from idhazh.publish_telemetry import (
     shard_relpath,
 )
 from idhazh.stages.assemble import stage_assemble
+from idhazh.telemetry.record import NAMED_STAGE_MS
 
 
 def _row(**overrides: object) -> ItemHealthRow:

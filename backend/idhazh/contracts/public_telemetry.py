@@ -62,10 +62,10 @@ PublicItemKey = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 #: two are a split of `summarize_ms`, so counting them here would charge the
 #: model stage twice and drive the gap negative on every item.
 #:
-#: A second copy of `idhazh.itemrecord.NAMED_STAGE_MS`, which is what writes the
-#: cell. Contracts are the bottom of the dependency graph and may not import the
-#: module that fills them, so the two lists are held equal by a test rather than
-#: by an import.
+#: A second copy of `idhazh.telemetry.record.NAMED_STAGE_MS`, which is what
+#: writes the cell. Contracts are the bottom of the dependency graph and may not
+#: import the module that fills them, so the two lists are held equal by a test
+#: rather than by an import.
 GAP_NAMED_STAGES: Final = ("fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms")
 
 

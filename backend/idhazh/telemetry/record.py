@@ -12,6 +12,11 @@ whole instrument exists to end, so `note` refuses a key neither vocabulary
 holds and a typo at a call site fails loudly rather than minting a cell nobody
 reads.
 
+**`close` hands back the row itself.** The names alone were not enough: a loose
+mapping let about 53 of these cells be computed on every item and thrown away
+with nothing raising, because the row the ledger keeps was built somewhere else
+out of two payloads that cannot carry them.
+
 **A recorder is opened per item and nothing here outlives the article it was
 opened for.** It is mutable for that reason: the work stage learns these cells
 in the order the pipeline produces them, and a frozen shape would mean
@@ -27,9 +32,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Final
 
-from idhazh import telemetry
-from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.observability import LoggingConfig
+from idhazh.telemetry import events
 
 #: The stages `stage_gap_ms` subtracts from the item's own wall clock. Four, and
 #: they tile the item without overlapping: `label_ms` and `summary_ms` are a
@@ -121,7 +126,7 @@ class ItemRecorder:
         place to forget, which is how the first one came to cover the log line
         and not the ledger row.
         """
-        unknown = sorted(set(cells) - telemetry.RECORD_CELLS)
+        unknown = sorted(set(cells) - events.RECORD_CELLS)
         if unknown:
             raise ValueError(f"a record cell names no column: {', '.join(unknown)}")
         self._cells.update(cells)
@@ -139,13 +144,13 @@ class ItemRecorder:
         shard has to find every item, and an item that skipped a stage is
         exactly the one worth finding.
         """
-        return {name: self._cells.get(name) for name in telemetry.CENSUS_CELLS}
+        return {name: self._cells.get(name) for name in events.CENSUS_CELLS}
 
     def _emit(
-        self, name: telemetry.EventName, src: ItemStage, cells: Mapping[str, object]
+        self, name: events.EventName, src: ItemStage, cells: Mapping[str, object]
     ) -> None:
         self._log.info(
-            telemetry.record(ts=self._now(), src=src, run=self._run_id, name=name, cells=cells)
+            events.record(ts=self._now(), src=src, run=self._run_id, name=name, cells=cells)
         )
 
     def _addressed(self, **extra: object) -> dict[str, object]:
@@ -161,14 +166,14 @@ class ItemRecorder:
         """Say which item is in flight, so a killed shard names the one it died on."""
         if not self._flags.item_lines:
             return
-        self._emit(telemetry.EventName.ITEM_START, ItemStage.FETCH, self.cells())
+        self._emit(events.EventName.ITEM_START, ItemStage.FETCH, self.cells())
 
     def stage_done(self, stage: ItemStage, ms: int) -> None:
         """Say a named stage ended. The completion record arrives only if the item does."""
         if not self._flags.stage_lines:
             return
         self._emit(
-            telemetry.EventName.STAGE_DONE,
+            events.EventName.STAGE_DONE,
             stage,
             self._addressed(stage=stage.value, waited_s=round(ms / 1000, 3)),
         )
@@ -186,7 +191,7 @@ class ItemRecorder:
     def waiting(self, waited_s: float) -> None:
         """Say the model call now in flight is still in flight, and for how long."""
         self._emit(
-            telemetry.EventName.MODEL_WAITING,
+            events.EventName.MODEL_WAITING,
             ItemStage.SUMMARIZE,
             self._addressed(call=self._in_flight, waited_s=waited_s),
         )
@@ -202,7 +207,7 @@ class ItemRecorder:
         if not self._flags.stage_lines:
             return
         self._emit(
-            telemetry.EventName.STAGE_DONE,
+            events.EventName.STAGE_DONE,
             ItemStage.SUMMARIZE,
             self._addressed(stage=ItemStage.SUMMARIZE.value, call=call, **dict(cells)),
         )
@@ -220,11 +225,22 @@ class ItemRecorder:
         """
         self._parked_ms += max(ms, 0)
 
-    def close(self) -> dict[str, object]:
-        """Seal the item's clock and return its cells.
+    def close(self) -> ItemHealthRow:
+        """Seal the item's clock and return the item's census row, validated.
 
         `item_total_ms` and `stage_gap_ms` are computed here rather than at the
         call site, so they cannot be filled by two subtractions that disagree.
+
+        **The return is the contract and not a mapping, and that is the whole of
+        this method.** About 53 of these cells were computed on every item and
+        dropped with no type error anywhere, because the census row was rebuilt
+        somewhere else out of two payloads that cannot carry them. A row built
+        here is a row every cell was checked against its own column in.
+
+        **A cell this refuses is a producer that named the wrong column**, which
+        is a defect in the stage rather than a fact about the item, so it raises
+        rather than degrading: an item that cannot say where it stopped has
+        nothing to record.
         """
         total = int((time.monotonic() - self._started) * 1000) - self._parked_ms
         named = sum(
@@ -232,26 +248,29 @@ class ItemRecorder:
             for name in NAMED_STAGE_MS
             if isinstance(value := self._cells.get(name), int)
         )
+        self._cells["version"] = ItemHealthRow.schema_version()
         self._cells["item_ended_at"] = self._now()
         self._cells["item_total_ms"] = total
         self._cells["stage_gap_ms"] = total - named
-        return self.cells()
+        return ItemHealthRow.model_validate(self.cells())
 
-    def done(self) -> dict[str, object]:
+    def done(self) -> ItemHealthRow:
         """Say the item ended - for a failure exactly as for a success."""
-        cells = self.close()
+        row = self.close()
         if self._flags.item_lines:
-            self._emit(telemetry.EventName.ITEM_DONE, ItemStage.PUBLISH, cells)
-        return cells
+            self._emit(events.EventName.ITEM_DONE, ItemStage.PUBLISH, self.cells())
+        return row
 
-    def abandoned(self, why: str) -> dict[str, object]:
+    def abandoned(self, why: str) -> ItemHealthRow:
         """Say the shard bound killed this item mid-flight."""
-        cells = self.close()
+        row = self.close()
         if self._flags.item_lines:
             self._emit(
-                telemetry.EventName.ITEM_ABANDONED, ItemStage.PUBLISH, {**cells, "detail": why}
+                events.EventName.ITEM_ABANDONED,
+                ItemStage.PUBLISH,
+                {**self.cells(), "detail": why},
             )
-        return cells
+        return row
 
 
 def shard_done(
@@ -274,11 +293,11 @@ def shard_done(
     if not flags.item_lines:
         return
     log.info(
-        telemetry.record(
+        events.record(
             ts=now(),
             src=ItemStage.PUBLISH,
             run=run_id,
-            name=telemetry.EventName.SHARD_DONE,
+            name=events.EventName.SHARD_DONE,
             cells={
                 "shard": shard,
                 "items": items,
