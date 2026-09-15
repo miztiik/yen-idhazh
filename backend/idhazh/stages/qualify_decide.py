@@ -22,7 +22,7 @@ from idhazh.contracts.validation_row import (
     ValidationRow,
     ValidationVerdict,
 )
-from idhazh.evals import golden, qualify, validation, writer
+from idhazh.evals import golden, qualification_summary, qualify, validation, writer
 from idhazh.stages import common
 from idhazh.stages.common import LOG
 
@@ -91,6 +91,10 @@ def stage_qualify_decide(
         ),
     )
     assemble.write_atomic(common.QUALIFICATION_ROOT / "report.json", report.to_json())
+    assemble.write_atomic(
+        common.QUALIFICATION_ROOT / "report.md",
+        qualification_summary.render_report(report),
+    )
 
     mean_hhem = (
         sum(score.hhem for score in frozen.scores) / len(frozen.scores) if frozen.scores else 0.0

@@ -31,7 +31,7 @@ from idhazh.contracts.qualification import (
 )
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.evals import metrics, qualify
+from idhazh.evals import metrics, qualification_summary, qualify
 from idhazh.evals.hhem import (
     HHEM_REVISION,
     HHEM_SCORER_ID,
@@ -438,6 +438,10 @@ def stage_qualify(
         elapsed_seconds=time.monotonic() - started,
     )
     assemble.write_atomic(common.QUALIFICATION_ROOT / f"shard-{shard}.json", result.to_json())
+    assemble.write_atomic(
+        common.QUALIFICATION_ROOT / f"shard-{shard}.md",
+        qualification_summary.render_shard(result),
+    )
     LOG.info(
         "qualification shard done shard=%s frozen=%s calls=%s scored=%s minutes=%.1f",
         shard,
