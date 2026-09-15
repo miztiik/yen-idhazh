@@ -23,6 +23,8 @@ from idhazh.contracts.call_cost import COST_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import (
     CALL_SLOTS,
+    UNPRINTABLE,
+    UNSPECIFIED,
     FailureCode,
     ItemHealthDetail,
     ItemHealthRow,
@@ -167,13 +169,6 @@ CENSUS_CELLS: Final[tuple[str, ...]] = ItemHealthRow.csv_columns()
 _CENSUS_COLUMN_TYPES: Final[Mapping[str, Any]] = {
     name: field_column(field) for name, field in ItemHealthRow.model_fields.items()
 }
-
-#: What a failure detail that folded away to nothing records, and what a recorded
-#: cell that did the same records. Neither is an empty string: a cell that
-#: reached the fold had something to say, and a column with `min_length=1` would
-#: refuse the emptiness and take the row reporting the fault with it.
-UNSPECIFIED: Final = "unspecified failure"
-UNPRINTABLE: Final = "unprintable"
 
 #: Every key a flat record may carry. The census row's columns, plus the ten
 #: above. Derived rather than written out, so a column added to the ledger is
