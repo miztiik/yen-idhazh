@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-15",
+  "extract_ms": 96,
+  "fetch_ms": 1840,
+  "item_id": "ai-0123456789abcdef",
+  "item_total_ms": 486000,
+  "label_ms": 18400,
+  "plan_ms": 12,
+  "publish_ms": 31,
+  "residual_ms": 49427,
+  "run_id": "2026-09-15-34941020965",
+  "score_ms": 2194,
+  "shard": 2,
+  "start_offset_ms": 41200,
+  "summary_ms": 402300,
+  "version": "2026-09-15",
+  "visual_plan_ms": 11700
+}

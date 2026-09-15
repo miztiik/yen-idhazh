@@ -46,6 +46,21 @@ two of them open a day payload of hundreds of kilobytes to take one integer out
 of it. `itemHealthRows` reads the census the telemetry shard already projects,
 so a second projection of it would be two schemas for one row.
 
+### A thirteenth shape is declared, and nothing writes it yet
+
+`run-timeline-row` is the run timeline: one row an item, placed on the run's own
+clock. It is not in the table above because that table lists what a console read
+resolves to today, and this resolves to nothing - the shape landed ahead of its
+producer on purpose, so the writers produce what the chart reads rather than a
+shape the chart has to migrate. It is named here so the next person reading this
+page as the register of published shapes does not mint a second one.
+
+What it holds and why it holds it is
+[`run-timeline.md`](run-timeline.md). Two things about it belong here: it is
+**published whole**, because nothing on it identifies a page, and it has no
+`state/` counterpart yet, because where the rows land is the writer's decision
+and is the same columns either way.
+
 ## What may not cross
 
 A projection cuts named cells out of a wider ledger row, and the list of what it
