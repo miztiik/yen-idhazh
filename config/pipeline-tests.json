@@ -5,7 +5,7 @@
     {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 131072,"n_parallel": 2}
   ],
   "articles_a_dispatch": 2,
-  "budget_minutes": 45,
+  "budget_minutes": 140,
   "candidates": [
     {"source_id": "ai2-blog","title": "How Goodfire used Ai2's open post-training stack to trace unwanted model behavior","url": "https://allenai.org/blog/goodfire-olmo"},
     {"source_id": "deepmind-blog","title": "AlphaGenome Atlas: Molecular predictions for 9 Billion human DNA variants","url": "https://deepmind.google/blog/alphagenome-atlas-a-predictive-map-of-every-possible-dna-letter-change-in-the-human-genome"},

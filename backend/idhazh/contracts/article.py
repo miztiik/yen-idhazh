@@ -48,11 +48,36 @@ class ArticleStatus(StrEnum):
     ROBOTS_DENIED = "robots_denied"
 
 
+class TitleSource(StrEnum):
+    """Which stranger's string the published headline came from.
+
+    Both are untrusted and both are cleaned by the same rule, so this records
+    provenance for an operator rather than a level of trust.
+    """
+
+    FEED = "feed"
+    PAGE = "page"
+
+
 class Article(Contract):
     """The Extract stage's output payload, one per item."""
 
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-15T06:19",
+            change="Added title_source: feed or page, the headline's provenance.",
+            why=(
+                "Extract now falls back to the page's own headline when the feed "
+                "carried none, so a published title has two possible origins and an "
+                "operator reading a payload could not tell them apart. Both strings "
+                "are untrusted and both pass clean_title, so this is provenance and "
+                "never a level of trust. Additive and optional: null is a failed "
+                "payload, which publishes no headline, or an ok payload written "
+                "before the field existed, and every payload on disk still reads "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-15",
             change="failure_code may now carry no_title.",
@@ -243,6 +268,16 @@ class Article(Contract):
     rank_score: float = Field(ge=0.0)
 
     title: UntrustedLine | None = None
+    title_source: TitleSource | None = Field(
+        default=None,
+        description=(
+            "Where `title` came from: the feed entry, or the fetched page's own "
+            "metadata when the feed carried none. Provenance, never trust - both are "
+            "a stranger's string and both pass the same cleaner. Null on a failed "
+            "payload, which publishes no headline, and on an ok payload written "
+            "before the field existed."
+        ),
+    )
     text: str | None = Field(default=None, description="Sanitized text. Never republished.")
     word_count: int = Field(default=0, ge=0, description="Words in `text`, after the cap.")
     source_word_count: int | None = Field(
@@ -304,8 +339,11 @@ class Article(Contract):
                 FailureCode.BOILERPLATE,
             }:
                 raise ValueError("an ok article carries only a recorded extract signal")
-        elif self.failure_detail is None:
-            raise ValueError("a failed article must record why")
+        else:
+            if self.failure_detail is None:
+                raise ValueError("a failed article must record why")
+            if self.title_source is not None:
+                raise ValueError("a failed article publishes no headline, so it names no source")
         if (
             self.failure_code is not None
             and ItemStage.EXTRACT not in FAILURE_CODE_STAGES[self.failure_code]

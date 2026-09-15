@@ -53,6 +53,7 @@ def failed_article(status: ArticleStatus, detail: str) -> Article:
     payload.update(
         {
             "title": item().title or "Fixture title",
+            "title_source": None,
             "text": None,
             "word_count": 0,
             "token_count": 0,
