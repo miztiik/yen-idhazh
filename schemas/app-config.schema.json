@@ -12,6 +12,13 @@
         },
         "same_story": {
           "$ref": "#/$defs/SameStoryConfig"
+        },
+        "same_story_window_hours": {
+          "default": 36.0,
+          "description": "How far apart two stories may have appeared and still be one story. A story that breaks at 23:00 and is picked up at 07:00 is one story, and a day boundary is an accident of the calendar rather than a fact about the news - so the window is hours between the two stories' own times, not which day each was published on. 36 hours covers an evening break picked up the next morning and refuses a genuine follow-up two days later. It is an ESTIMATE: what would overturn it is the age gap of the cross-day pairs a person marks as one story. The window is also what bounds the read - the pass loads only the earlier days it can still reach, so the cost is set by this number and never by how much archive exists (Guardrail #12). 0 keeps the pass inside one published day, which is what it did before this knob existed, and is the revert.",
+          "minimum": 0.0,
+          "title": "Same Story Window Hours",
+          "type": "number"
         }
       },
       "title": "AssembleConfig",
@@ -2043,6 +2050,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "assemble.same_story_window_hours, additive, default 36.",
+      "version": "2026-09-16T18:00",
+      "why": "A story that breaks at 23:00 and is picked up at 07:00 is one story."
+    },
+    {
       "change": "ui.lead_rank_weight and ui.lead_also_covered_weight, additive.",
       "version": "2026-09-16T16:00",
       "why": "The leading block is a weighted score now, so every term needs a knob."
@@ -2056,11 +2068,6 @@
       "change": "run.safety_ceiling_per_day, additive, default 400.",
       "version": "2026-09-16T14:00",
       "why": "The per-run cap bounds a worker's timeout; it never bounded the day."
-    },
-    {
-      "change": "ui.draw_same_story, additive, default true.",
-      "version": "2026-09-16T13:00",
-      "why": "The page folds a group into one card, and this is the one-edit revert."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2135,7 +2142,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-16T16:00",
+      "default": "2026-09-16T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2146,5 +2153,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-16T16:00"
+  "version": "2026-09-16T18:00"
 }
