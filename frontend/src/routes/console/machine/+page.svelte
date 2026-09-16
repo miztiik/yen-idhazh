@@ -35,6 +35,7 @@
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
 	import SpanPanel from './SpanPanel.svelte';
+	import RunTimelinePanel from './RunTimelinePanel.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import {
@@ -534,6 +535,14 @@
 		wide
 	>
 		<SpanPanel breakdown={data.spanBreakdown} />
+	</Panel>
+
+	<Panel
+		title="Where the run's time went, item by item"
+		note="Every item of the newest timed run, placed where its own work began on the run's clock and split into the steps that timed themselves. The panel above folds the same seconds per shard; this is the only one that can say which article was being read. A wide staircase is a run that queued; a solid block is a run that worked in parallel."
+		wide
+	>
+		<RunTimelinePanel view={data.runTimeline} />
 	</Panel>
 
 	<Panel

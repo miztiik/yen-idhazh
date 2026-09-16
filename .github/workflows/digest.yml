@@ -1131,6 +1131,7 @@ jobs:
             frontend/public/day-metrics
             frontend/public/machine
             frontend/public/span-rollup
+            frontend/public/run-timeline
             state/published
             state/scores
             state/score-index
@@ -1149,7 +1150,8 @@ jobs:
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index
           frontend/public/source-health.json frontend/public/console
           frontend/public/run-days frontend/public/day-metrics
-          frontend/public/machine frontend/public/span-rollup state corpus
+          frontend/public/machine frontend/public/span-rollup
+          frontend/public/run-timeline state corpus
 
       # After the day is committed and never before it. The fold deletes a
       # committed file, so it may only run once the thing it might collide with

@@ -1230,6 +1230,15 @@ The spread collapsed against the laptop: stddev on the runner is 0.0-0.2 tok/s
 where the laptop showed up to 4.49. A shared laptop with thermal throttling was
 measuring its own scheduler as much as the model.
 
+**That spread is inside one run, and it is not the spread between two.** Four
+dispatches of one model on machines all reporting AMD EPYC 7763 each reported a
+decode spread under 0.1 tok/s, and then disagreed with each other by 0.86 - 8.8
+percent. So a tight figure here does not license comparing it with a figure from
+another run, and a difference under 8.8 percent has to be measured with both
+cases inside one job. Every draw, with the four processors GitHub has handed us
+and what each is worth, is
+[benchmarks/the-processor-lottery.md](benchmarks/the-processor-lottery.md).
+
 **The 8B is 1.8x slower to decode, not 3.3x.** The laptop's 3.3x was the
 headline number behind "the 8B may not fit". On real hardware the gap is roughly
 half that, and the 8B fits comfortably.

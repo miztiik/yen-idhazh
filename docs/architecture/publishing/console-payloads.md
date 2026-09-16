@@ -12,7 +12,7 @@ shell-and-fetch migration that made the console fetch them is where it
 stops. The producer landing first is deliberate: a consumer written
 against a payload nobody has written is a consumer written against a guess.
 
-## The ten
+## The eleven
 
 Every path below is under `frontend/public/`. Every schema is under `schemas/`.
 
@@ -27,6 +27,7 @@ Every path below is under `frontend/public/`. Every schema is under `schemas/`.
 | Day metrics | `payload.ts` `dayMetrics` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
 | Machine counters | `runtime-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `runtime-counters-row` |
 | Span rollup | `span-rollup.ts` `loadSpanRollup` | `span-rollup/<YYYY-MM>.csv` | `span-rollup-row` |
+| Run timeline | `run-timeline.ts` `loadRunTimeline` | `run-timeline/<YYYY-MM>.csv` | `run-timeline-row` |
 | Source health | `payload.ts` `sourceHealthView` | `source-health.json` | `source-health-view` |
 
 **Two datasets left this table on 2026-09-16.** `scores/<YYYY-MM>.csv` and
@@ -45,27 +46,46 @@ staged into `frontend/static/` and never reaches the build. A
 `page_weight.payload_ceilings_bytes` key naming it would therefore match nothing
 and fail the bundle gate.
 
-**Ten datasets, seven schemas.** Three console reads answer off the run-day row
+**Eleven datasets, eight schemas.** Three console reads answer off the run-day row
 and two off the telemetry shard. That is not a shortcut: `loadManifests`,
 `publishedItems` and `publishedCharts` share a key, a window and a producer, and
 two of them open a day payload of hundreds of kilobytes to take one integer out
 of it. `itemHealthRows` reads the census the telemetry shard already projects,
 so a second projection of it would be two schemas for one row.
 
-### A thirteenth shape is declared, and nothing writes it yet
+### The run timeline is a second cut of the census, and that is the point
+
+`run-timeline/<YYYY-MM>.csv` is projected from `state/item-health/`, which the
+telemetry shard beside it also projects. It is not the two-schemas-for-one-row
+case the paragraph above refuses: the telemetry shard is the census narrowed for
+a browser and keyed by item, and this is the census **re-filed against a clock**
+and keyed by run. Six of its durations are the census's own numbers under the
+census's own names, and the two that are not - `start_offset_ms` and
+`residual_ms` - are arithmetic no ledger holds. One account of each measurement,
+filed twice, with the census as the source
+([`run-timeline.md`](run-timeline.md)).
+
+It keeps two months where every other series keeps fourteen, and
+`observability.public_run_timeline_keep_months` is the knob. No window preset
+reaches it - the panel draws one run and names it - so a third month would
+publish the widest row this project writes to answer a question nobody can ask.
+That is also why it is the one published series absent from
+`ObservabilityConfig.full_grain_months`, which exists to stop a console window
+outliving the shard it selects.
+
+### A thirteenth shape is declared, and it is written now
 
 `run-timeline-row` is the run timeline: one row an item, placed on the run's own
-clock. It is not in the table above because that table lists what a console read
-resolves to today, and this resolves to nothing - the shape landed ahead of its
-producer on purpose, so the writers produce what the chart reads rather than a
-shape the chart has to migrate. It is named here so the next person reading this
-page as the register of published shapes does not mint a second one.
+clock. It landed ahead of its producer on purpose, so the writers produce what
+the chart reads rather than a shape the chart has to migrate, and it sat in the
+table above's place as a declared shape with no writer until 2026-09-16.
+`run_timeline.py` is that writer and the row above is the dataset.
 
 What it holds and why it holds it is
 [`run-timeline.md`](run-timeline.md). Two things about it belong here: it is
 **published whole**, because nothing on it identifies a page, and it has no
-`state/` counterpart yet, because where the rows land is the writer's decision
-and is the same columns either way.
+`state/` counterpart, because the row is derivable from one month of census day
+files and a committed ledger would be a third copy of numbers git already holds.
 
 ## What may not cross
 
@@ -96,7 +116,7 @@ another road.
 
 ## The producers
 
-Five modules under `backend/idhazh/telemetry/publish/`, one dataset each. None
+Six modules under `backend/idhazh/telemetry/publish/`, one dataset each. None
 of them spells a path, a write rule or a prune of its own: `series.py` owns
 those and every producer obeys the same three rules from the same place.
 
@@ -115,6 +135,7 @@ day the run is publishing, and every projection's body stays in its own module
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |
 | `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
+| `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` |
 
 `scores.py` and `feed_health.py` were two more rows of that table until
 2026-09-16. They folded a month of `state/scores/` and `state/feed-health/` into
@@ -122,16 +143,15 @@ day the run is publishing, and every projection's body stays in its own module
 drifts from its ledger unwatched - so both modules went and `PROJECTIONS` is two
 rows shorter.
 
-`public_telemetry.py` is the sixth and it predates this page. It keeps its own
+`public_telemetry.py` is the seventh and it predates this page. It keeps its own
 path helper because `retention.prune_telemetry` deletes a shard through the same
 function that writes one, and two spellings of `<month>.csv` would delete a
 month nobody published and leave the published one behind.
 
-`source_health.py` is the seventh. It writes `source-health.json`, the one entry
+`source_health.py` is the eighth. It writes `source-health.json`, the one entry
 in the table above that nothing fetches, and it sits here rather than beside the
 digest because a feed's reliability is an observation about the run and not a
 product surface.
-
 ### The three rules
 
 **One month per run.** The run knows which month it appended to, so the daily

@@ -1,6 +1,6 @@
 # Models
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 One row a model. Each row points at that model's **dossier** - the page holding
 that model's identity and its one current reading of every quantity, with the
 hardware that took it, the date and the spread.
@@ -16,9 +16,13 @@ neither may be adopted: a bench says how fast, and only the qualification says
 whether the writing is good enough to publish.
 
 **A number on one dossier may not be divided by a number on another.** GitHub
-places each job where it likes, and these three pages carry readings from at
-least two processor families - EPYC 7763 and EPYC 9V74. Every table says which
-machine took it, and a comparison that ignores that is measuring the fleet.
+places each job where it likes, and thirteen bench dispatches have landed on four
+different processors - EPYC 7763, EPYC 9V45, EPYC 9V74 and Intel Xeon Platinum
+8573C. The same weights read 3.7 times faster on the fastest of those than on the
+slowest, which is far more than any gap between these three models. Every table
+says which machine took it, and a comparison that ignores that is measuring the
+fleet, not the model. What each machine is worth:
+[benchmarks/the-processor-lottery.md](benchmarks/the-processor-lottery.md).
 
 ## What the status word means
 

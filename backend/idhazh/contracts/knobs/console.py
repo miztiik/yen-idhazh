@@ -181,6 +181,20 @@ class ConsoleConfig(Model):
             "`console.feed_rows`."
         ),
     )
+    timeline_bars: int = Field(
+        default=120,
+        ge=1,
+        description=(
+            "How many items the run timeline draws as bars before it states the tail in "
+            "one sentence. The bars are in start order, so the first this many show the "
+            "shape of the run - a staircase or a block - which is what the panel is for. "
+            "Measured 2026-09-16 over the committed census, a day holds 349 to 465 rows, "
+            "and a bar a row would put a thousand spans in a prerendered document for a "
+            "queue whose shape is settled in its first minute. It is a cap on the "
+            "DRAWING and never on the arithmetic: every figure the panel prints is over "
+            "the whole run."
+        ),
+    )
     chart_rule_days: int = Field(
         default=14,
         ge=1,
