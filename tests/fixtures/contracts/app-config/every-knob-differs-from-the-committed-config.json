@@ -218,6 +218,9 @@
     }
   },
   "placement": {
+    "freshness_decay_at_scale": 0.25,
+    "freshness_offset_hours": 3.0,
+    "freshness_scale_hours": 12.0,
     "head_items": 24,
     "head_no_repeat": 12,
     "max_desk_in_head": 7

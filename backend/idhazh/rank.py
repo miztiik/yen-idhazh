@@ -80,7 +80,8 @@ def _at(stamp: str) -> datetime:
     return datetime.strptime(stamp, _STAMP).replace(tzinfo=UTC)
 
 
-def _hours(later: str, earlier: str) -> float:
+def hours_between(later: str, earlier: str) -> float:
+    """Hours from one stamp to another. Public because `placement` reads the same clock."""
     return (_at(later) - _at(earlier)).total_seconds() / 3600.0
 
 
@@ -141,7 +142,7 @@ def appeared_at(
     nothing can tell them apart, and a page that prints the time cannot say
     whose it is.
     """
-    if published_at is not None and _hours(published_at, now) <= max_future_hours:
+    if published_at is not None and hours_between(published_at, now) <= max_future_hours:
         return Appearance(published_at, TimeSource.FEED)
     if first_seen_at is not None:
         return Appearance(first_seen_at, TimeSource.FIRST_SEEN)
@@ -156,7 +157,7 @@ def too_old(at: str | None, *, now: str, config: CollectConfig) -> bool:
     """
     if at is None:
         return False
-    return _hours(now, at) > config.max_age_hours
+    return hours_between(now, at) > config.max_age_hours
 
 
 def recency_bonus(at: str | None, *, now: str, config: CollectConfig) -> float:
@@ -167,7 +168,7 @@ def recency_bonus(at: str | None, *, now: str, config: CollectConfig) -> float:
     """
     if at is None:
         return 0.0
-    hours = max(0.0, _hours(now, at))
+    hours = max(0.0, hours_between(now, at))
     decay: float = 0.5 ** (hours / config.recency_half_life_hours)
     return config.recency_weight * decay
 

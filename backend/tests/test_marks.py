@@ -85,6 +85,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_extraction_health",
         "test_feed_health_shards",
         "test_frame_knobs",
+        "test_freshness_curve",
         "test_frozen_days",
         "test_gate_lock",
         "test_grader_length_bias",

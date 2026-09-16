@@ -177,16 +177,22 @@ class AssembleConfig(Model):
 
 
 class PlacementConfig(Model):
-    """The frame a person sets over the head of the published day.
+    """The frame a person sets over the head of the published day, and what age does to it.
 
     Nobody reads this digest before it publishes and it publishes five times a
     day, so a standing editorial decision can only reach a reader as arithmetic
-    that runs without one. These three numbers are that decision. The rule they
+    that runs without one. These six numbers are that decision. The rule they
     express and the measurements behind them are in docs/concepts/placement.md.
 
     Every cap here displaces and none of them shortens: a story a cap holds out
     of the head keeps its place in the day, lower down. A reader cannot see what
     was left out, so leaving something out is the one thing a frame may not buy.
+
+    The three `freshness_` numbers are not caps and take nothing away either.
+    They are one curve, read when the page is drawn rather than when the story
+    was planned, and they decide where a story that has been running all day
+    sits against one that broke an hour ago. `placement.freshness_multiplier`
+    owns the arithmetic.
     """
 
     head_items: int = Field(
@@ -229,6 +235,51 @@ class PlacementConfig(Model):
             "biggest feed in the first ten ran from 3 to 8, so this is load-bearing "
             "rather than decorative. 0 switches the feed rule off and leaves the desk "
             "cap alone."
+        ),
+    )
+
+    freshness_offset_hours: float = Field(
+        default=6.0,
+        ge=0.0,
+        description=(
+            "How many hours a story keeps its whole score before age counts against it "
+            "at all. A flat shoulder rather than a curve that starts falling at minute "
+            "one: a story nothing has had time to answer yet should not be marked down "
+            "for being new. 6 hours is an ESTIMATE and not a measurement - the day "
+            "publishes five times, so 6 hours is about one publishing cycle, which is "
+            "the shortest shoulder that lets a story reach the next run at full value. "
+            "What would overturn it is the published age of the stories that actually "
+            "led each committed day. 0 removes the shoulder, and age starts counting "
+            "from the minute a story appeared."
+        ),
+    )
+    freshness_scale_hours: float = Field(
+        default=24.0,
+        gt=0.0,
+        description=(
+            "How far past the shoulder a story has to be before it is worth "
+            "freshness_decay_at_scale of what it was. Read the two as one sentence: at "
+            "this many hours past the shoulder, a story keeps that much of its score. "
+            "The width of the curve is derived from those two numbers rather than "
+            "typed, so a person sets a sentence they can read instead of a variance "
+            "nobody can picture. 24 hours is collect.max_age_hours, the age past which "
+            "a story may not be added to the day at all, so the shipped pair says a "
+            "story that has been running for a whole admission window past its "
+            "shoulder is worth half."
+        ),
+    )
+    freshness_decay_at_scale: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "What a story is worth freshness_scale_hours past the shoulder, as a share "
+            "of what it was worth inside it. 0.5 is half, the same word "
+            "collect.recency_half_life_hours already uses at plan time, so an operator "
+            "reads one vocabulary rather than two. Exactly 1.0 switches the whole "
+            "curve off: every story scores 1.0 at every age and the leading block is "
+            "ordered the way it was before the curve existed. That is the revert, and "
+            "it is one edit to one line."
         ),
     )
 

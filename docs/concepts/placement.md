@@ -1,6 +1,6 @@
 # Placement
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 Where a story goes in the published day, and why it sits above the one below
 it.
@@ -75,6 +75,16 @@ before any of this runs. What may be admitted is
 [freshness.md](../architecture/sources/freshness.md); everything below is the
 order of what passed.
 
+**Age is read a second time when the block at the top of the page is chosen, and
+only there.** The number above is worked out once, at the run that found the
+story, and it never changes afterwards - so a story found at 02:20 was still
+being treated as this morning's news at seven in the evening. The block at the
+top of the page is chosen across the whole day and rebuilt at every run, so it
+asks again: how old is this story right now? A story keeps all of its number for
+the first few hours and then keeps less of it, smoothly. The stream below the
+block does not ask, because a stream that re-ordered itself through the day
+would move a story a reader had already read.
+
 ### Three stages, and only the first two run
 
 | Stage | Where it runs | When | What it decides |
@@ -86,8 +96,11 @@ order of what passed.
 **Stage 1 knows nothing about the article.** It has the feed, the link, the
 headline and the time of publication, and nothing else - which is why a re-run
 over the same feeds produces the same list. Stage 2 runs once the day is
-finished and adds one step for a subject several sources named, to choose the
-block at the top of the page.
+finished, adds one step for a subject several sources named, and multiplies the
+result by what the story's age is worth at that hour, to choose the block at the
+top of the page.
+**Stage 2 is the only part of the order that reads a clock**, and
+`backend/idhazh/placement.py` carries the reason beside the code.
 **The exact formula is
 [discovery.md](../architecture/sources/discovery.md#ranking-is-arithmetic-not-judgement),
 in the code block it already carries, and it is not repeated here.** That page
@@ -116,6 +129,9 @@ quietly going stale.
 | The days of record that reliability reads | `collect.reliability_window_days` | 30 |
 | A subject several sources named, in stage 2 | `ui.lead_shared_subject_weight` | 0.2 |
 | Sources that have to name it before it counts | `ui.lead_cluster_floor` | 3 |
+| Hours a story keeps its whole number before age counts, in stage 2 | `placement.freshness_offset_hours` | 6.0 |
+| Hours past that at which it is worth the share below | `placement.freshness_scale_hours` | 24.0 |
+| What it is worth by then, as a share of what it was | `placement.freshness_decay_at_scale` | 0.5 |
 
 Only `collect.max_age_hours` decides admission. Every other row decides order.
 
@@ -148,6 +164,7 @@ flowchart LR
   s1["stage 1: rank.score<br/>before the article is read"] --> order["one order inside what a run added"]
   s1 --> s2["stage 2: leading_stories<br/>after the read"]
   subject["a subject several sources named"] --> s2
+  now["how old the story is NOW"] --> s2
   order --> frame["the frame: desk cap, no feed twice"]
   frame --> page["the published day"]
   s2 --> page
@@ -155,10 +172,17 @@ flowchart LR
   loop -.-> lens
 ```
 
-Every solid edge points forward, and a signal is read exactly once. **The dashed
-pair is the only loop in the diagram, and nothing builds it today**: it would
-let a lens weight move on what the day did, which is the one place this design
-could start optimising against its own output.
+Every solid edge points forward. **The dashed pair is the only loop in the
+diagram, and nothing builds it today**: it would let a lens weight move on what
+the day did, which is the one place this design could start optimising against
+its own output.
+
+**Age is the one signal read twice, and the two readings answer different
+questions.** `how old the story is` is asked once, at the run that found the
+story, and it is part of deciding which stories get a slot in the day at all.
+`how old the story is NOW` is asked again every time the block is chosen, and it
+decides where a story that already has a slot sits at the top of the page.
+Nothing else on this diagram is read more than once.
 
 **An eighth signal fed stage 1 until 2026-09-13** - an aggregator's front-page
 vote. It is still collected and still published on the story; it is no longer an
@@ -752,6 +776,58 @@ half-life is what would, and this row's scope named 18 hours, so it could not be
 touched here. Named in
 [TODO/20260910-25-placement-plan.md](../../TODO/20260910-25-placement-plan.md)
 section 18 as a gap nobody owns.
+
+### Age is read again when the block is chosen, and nowhere else (2026-09-16)
+
+**The gap above had a second half nobody had named.** A flat term at plan time
+is one problem. The other is that the number is worked out once and then stored,
+so a story found at 02:20 carries its 02:20 freshness for the rest of the day.
+By the evening run it is sixteen hours old, it still holds the whole bonus it
+earned that morning, and it outranks something that broke an hour ago.
+
+**The block at the top of the page now multiplies each candidate by what its age
+is worth at that moment.** The curve is flat for `placement.freshness_offset_hours`
+and then falls smoothly, reaching `placement.freshness_decay_at_scale` of its
+value `placement.freshness_scale_hours` after the flat part ends. The width is
+worked out from those two numbers rather than typed in, so a person sets a
+sentence they can read. `placement.freshness_multiplier` is the whole of it.
+
+**Why the block and not the stream.** The block is the only order taken across
+the whole day, so it is the only place where a story found at 02:20 and one
+found at 18:20 are ever compared - two run blocks never compete in the stream.
+And the stream may not read a clock at all: the same day placed again at a later
+hour would come back in a different order inside a block a reader has already
+read, which is the rule [one order inside what a run added](#one-order-inside-what-a-run-added)
+exists to hold.
+
+**Why this curve and not the two obvious alternatives.** A power law of the
+`(score) / (hours + 2)^1.8` shape has the same flat-start idea in its `+ 2` and
+is simpler, but its tail never really ends - a week-old story keeps a visible
+share of its number, and this digest publishes a day at a time. The plain
+half-life already used at plan time has no flat part at all, so it cuts hardest
+in the first hour, which is the opposite of what a digest wants. The curve with
+a flat shoulder says both things: nothing inside the shoulder is marked down,
+and past it the fall is smooth and finite.
+
+**It multiplies rather than adding, and that is load-bearing.** A multiplier
+keeps the shape of how good a story is and moves where that sits in time. A term
+that added would let a fresh but worthless story outrank a strong one, which is
+the one failure this ordering exists to refuse.
+
+**The two readings of age are not double counting.** The plan-time bonus decides
+which stories get a slot at all - it orders the pool the safety ceilings cut.
+The read-time curve decides where a story that already has a slot sits on the
+page. They answer different questions over different populations.
+
+**What the numbers are, and what would move them.** The three are ESTIMATES and
+none is measured. 6 hours is about one publishing cycle, which is the shortest
+flat part that lets a story reach the next run at full value; 24 hours is
+`collect.max_age_hours`, so the shipped pair says a story running a whole
+admission window past its shoulder is worth half. What would overturn them is
+the published age of the stories that actually led each committed day, which
+nobody has read yet. `placement.freshness_decay_at_scale` set to exactly 1.0
+switches the whole curve off and restores the order this block had before, which
+is the revert and is one edit to one line.
 
 ### The desk cap is 5, and it was set on what the reader is guaranteed (2026-09-13)
 

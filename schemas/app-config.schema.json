@@ -1288,8 +1288,30 @@
     },
     "PlacementConfig": {
       "additionalProperties": false,
-      "description": "The frame a person sets over the head of the published day.\n\nNobody reads this digest before it publishes and it publishes five times a\nday, so a standing editorial decision can only reach a reader as arithmetic\nthat runs without one. These three numbers are that decision. The rule they\nexpress and the measurements behind them are in docs/concepts/placement.md.\n\nEvery cap here displaces and none of them shortens: a story a cap holds out\nof the head keeps its place in the day, lower down. A reader cannot see what\nwas left out, so leaving something out is the one thing a frame may not buy.",
+      "description": "The frame a person sets over the head of the published day, and what age does to it.\n\nNobody reads this digest before it publishes and it publishes five times a\nday, so a standing editorial decision can only reach a reader as arithmetic\nthat runs without one. These six numbers are that decision. The rule they\nexpress and the measurements behind them are in docs/concepts/placement.md.\n\nEvery cap here displaces and none of them shortens: a story a cap holds out\nof the head keeps its place in the day, lower down. A reader cannot see what\nwas left out, so leaving something out is the one thing a frame may not buy.\n\nThe three `freshness_` numbers are not caps and take nothing away either.\nThey are one curve, read when the page is drawn rather than when the story\nwas planned, and they decide where a story that has been running all day\nsits against one that broke an hour ago. `placement.freshness_multiplier`\nowns the arithmetic.",
       "properties": {
+        "freshness_decay_at_scale": {
+          "default": 0.5,
+          "description": "What a story is worth freshness_scale_hours past the shoulder, as a share of what it was worth inside it. 0.5 is half, the same word collect.recency_half_life_hours already uses at plan time, so an operator reads one vocabulary rather than two. Exactly 1.0 switches the whole curve off: every story scores 1.0 at every age and the leading block is ordered the way it was before the curve existed. That is the revert, and it is one edit to one line.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Freshness Decay At Scale",
+          "type": "number"
+        },
+        "freshness_offset_hours": {
+          "default": 6.0,
+          "description": "How many hours a story keeps its whole score before age counts against it at all. A flat shoulder rather than a curve that starts falling at minute one: a story nothing has had time to answer yet should not be marked down for being new. 6 hours is an ESTIMATE and not a measurement - the day publishes five times, so 6 hours is about one publishing cycle, which is the shortest shoulder that lets a story reach the next run at full value. What would overturn it is the published age of the stories that actually led each committed day. 0 removes the shoulder, and age starts counting from the minute a story appeared.",
+          "minimum": 0.0,
+          "title": "Freshness Offset Hours",
+          "type": "number"
+        },
+        "freshness_scale_hours": {
+          "default": 24.0,
+          "description": "How far past the shoulder a story has to be before it is worth freshness_decay_at_scale of what it was. Read the two as one sentence: at this many hours past the shoulder, a story keeps that much of its score. The width of the curve is derived from those two numbers rather than typed, so a person sets a sentence they can read instead of a variance nobody can picture. 24 hours is collect.max_age_hours, the age past which a story may not be added to the day at all, so the shipped pair says a story that has been running for a whole admission window past its shoulder is worth half.",
+          "exclusiveMinimum": 0.0,
+          "title": "Freshness Scale Hours",
+          "type": "number"
+        },
         "head_items": {
           "default": 20,
           "description": "How many of the day's first stories the frame governs. A COUNT and never a share: what a reader sees before deciding whether to scroll does not grow with the day, and a share of a 731-story day is a head nobody reaches (Jony, 2026-09-11). The stream pages at twelve, so 20 is the cold load plus one page action. Past this slot the order is the score's alone. 0 switches the frame off and publishes the score's order whole.",
@@ -2007,6 +2029,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "placement gained three freshness knobs, additive, the curve on.",
+      "version": "2026-09-16T15:00",
+      "why": "A story planned at 02:20 held its morning freshness against the evening."
+    },
+    {
       "change": "run.safety_ceiling_per_day, additive, default 400.",
       "version": "2026-09-16T14:00",
       "why": "The per-run cap bounds a worker's timeout; it never bounded the day."
@@ -2020,11 +2047,6 @@
       "change": "assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
       "version": "2026-09-16T12:00",
       "why": "One cosine cannot be reweighted; a composite with a floor on it can."
-    },
-    {
-      "change": "observability lost the two published ages for scores and feed-health.",
-      "version": "2026-09-16",
-      "why": "The mirrors they pruned are gone; no console route ever fetched either."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2099,7 +2121,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-16T14:00",
+      "default": "2026-09-16T15:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2110,5 +2132,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-16T14:00"
+  "version": "2026-09-16T15:00"
 }
