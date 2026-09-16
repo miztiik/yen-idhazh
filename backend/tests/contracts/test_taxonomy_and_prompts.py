@@ -21,7 +21,7 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.runtime_counters import SERIES, WORK_JOB, RuntimeCountersRow
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
-from idhazh.publish_telemetry import PUBLIC_COLUMNS
+from idhazh.telemetry.publish.public_telemetry import PUBLIC_COLUMNS
 
 from ._fixtures import (
     DOC_ITEM_HEALTH,
@@ -181,7 +181,7 @@ def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None
     names = tuple(re.findall(r"'([^']+)'", declared.group(1)))
     assert names, "TELEMETRY_COLUMNS matched but held no column names"
     assert names == PUBLIC_COLUMNS[: len(names)], (
-        "series.ts and publish_telemetry.py disagree about the telemetry header: "
+        "series.ts and public_telemetry.py disagree about the telemetry header: "
         f"the console reads {list(names)}, the writer writes "
         f"{list(PUBLIC_COLUMNS[: len(names)])} in those positions"
     )
@@ -327,7 +327,7 @@ def test_the_census_refuses_a_stage_an_item_cannot_stop_at(stage: ItemStage) -> 
 
     An item whose picture failed still reaches the digest. A `visual` row here
     would say it did not, and would take one off the `publish` count that
-    `publish_day_metrics` and the console read off this same file.
+    `day_metrics` and the console read off this same file.
 
     Parametrized over whatever is not terminal rather than over `visual`, so the
     next stage name added for a log line or a clock arrives here already asked
@@ -758,38 +758,6 @@ def test_the_python_high_water_mark_is_the_highest_the_sampler_saw() -> None:
     assert row.peak_rss_bytes == 9_500_000 * 1024
 
 
-def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_writes_instead() -> (
-    None
-):
-    """The Oracle for `cgroup_peak_bytes`: its producer is a step in this repository.
-
-    llama-server does not report this and no capture of it can, because the file
-    is the kernel's. What can be checked is that the reader and the one step that
-    writes the file agree about the line, and that the word that step writes when
-    the kernel file is missing leaves the cell empty rather than raising.
-    `/sys/fs/cgroup/memory.peak` has measured absent on a GitHub-hosted runner
-    every time this project has looked, so `unavailable` is the case to expect.
-    """
-    workflow = read_text(REPO_ROOT / ".github" / "workflows" / "digest.yml")
-    assert "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" in workflow
-    assert "cgroup_memory_peak_bytes=unavailable" in workflow
-
-    def read(memory_peak: str) -> RuntimeCountersRow:
-        return RuntimeCountersRow.from_metrics_text(
-            "",
-            date="2026-09-08",
-            run_id="2026-09-08-1",
-            shard=0,
-            shards=4,
-            scraped_at="2026-09-08T00:01:00Z",
-            memory_peak=memory_peak,
-        )
-
-    assert read("cgroup_memory_peak_bytes=15032385536\n").cgroup_peak_bytes == 15032385536
-    assert read("cgroup_memory_peak_bytes=unavailable\n").cgroup_peak_bytes is None
-    assert read("").cgroup_peak_bytes is None
-
-
 def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_names() -> None:
     """The Oracle for the widening: every old row re-reads, and the bytes account for themselves.
 
@@ -872,7 +840,7 @@ def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() ->
         # that renames one leaves the cell empty rather than reporting a load
         # that took no time.
         server_log="0.00.011.682 I srv    load_model: opening weights\n",
-        memory_peak="cgroup_memory_peak_bytes=unavailable\n",
+        cgroup_peak_bytes=None,
     )
     cells = row.csv_row()
 

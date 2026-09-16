@@ -19,6 +19,13 @@ publishes still keeps what it measured.
 
 That last one is a repair, not a stage. Nothing schedules it.
 
+    idhazh telemetry <subcommand>   read or republish one day's instrument
+
+`telemetry` is the one verb whose line is `<verb> <subcommand> ...` rather than
+`<verb> --flags`. Its subcommands belong to the package that owns the
+instrument, so `idhazh.telemetry.cli` parses them and this file hands over the
+rest of the line unread.
+
 Each stage is a module under `idhazh.stages`, and this router imports the
 module rather than the names inside it. So `cli.stage_work` does not resolve,
 and the only way to a stage is the module that defines it. A router that also
@@ -35,6 +42,7 @@ import sys
 from collections.abc import Sequence
 from datetime import date as date_type
 from pathlib import Path
+from typing import Final
 
 from idhazh import (
     assemble,
@@ -61,7 +69,6 @@ from idhazh.stages import (
 from idhazh.stages import (
     backfill_vectors,
     common,
-    counters,
     decide,
     dedupe_ledgers,
     harvest,
@@ -80,10 +87,48 @@ from idhazh.stages import (
 from idhazh.stages import (
     plan as plan_stage,
 )
+from idhazh.telemetry import (
+    cli as telemetry_cli,
+)
+from idhazh.telemetry import (
+    host,
+)
 
 
 def _today() -> str:
     return assemble.utc_now()[:10]
+
+
+#: Every verb this router accepts, and the whole of what `--help` lists. Named
+#: here rather than inline so that the workflows can be held against it: a
+#: workflow step spelling a verb this tuple does not carry is a run that dies
+#: mid-pipeline, and the only way to catch that before the runner does is to
+#: read both sides.
+STAGES: Final[tuple[str, ...]] = (
+    "plan",
+    "shards",
+    "work",
+    "record",
+    "counters",
+    "assemble",
+    "harvest",
+    "dedupe-ledgers",
+    "rebuild-score-index",
+    "prune-stamp",
+    "prune-state",
+    "run",
+    "validate",
+    "decide",
+    "qualify",
+    "qualify-canaries",
+    "qualify-decide",
+    "backfill-vectors",
+    "site-weight",
+    "validate-days",
+    # Listed so `--help` names every verb, and never parsed: `main` hands the
+    # line to the telemetry package before this parser is built.
+    telemetry_cli.VERB,
+)
 
 
 def shard_count(items: int, *, run: RunConfig) -> int:
@@ -192,32 +237,23 @@ def _scores_this_run(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    words = list(sys.argv[1:]) if argv is None else list(argv)
+    if words and words[0] == telemetry_cli.VERB:
+        # The one verb whose rest-of-line belongs to somebody else. Its
+        # subcommands are the telemetry package's own surface, so handing over
+        # here is what keeps this file a router: the alternative is a second
+        # positional that every other verb would also have to carry.
+        #
+        # The roots come from here because this file is where they are resolved
+        # for every other verb. The committed tree is the one an operator means;
+        # a trial run's swap below is deliberately not applied, because the
+        # question `telemetry show` answers is about the day that published.
+        return telemetry_cli.main(
+            words[1:], state_root=common.STATE_ROOT, digest_root=common.PUBLIC_ROOT
+        )
+
     parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
-    parser.add_argument(
-        "stage",
-        choices=(
-            "plan",
-            "shards",
-            "work",
-            "record",
-            "counters",
-            "assemble",
-            "harvest",
-            "dedupe-ledgers",
-            "rebuild-score-index",
-            "prune-stamp",
-            "prune-state",
-            "run",
-            "validate",
-            "decide",
-            "qualify",
-            "qualify-canaries",
-            "qualify-decide",
-            "backfill-vectors",
-            "site-weight",
-            "validate-days",
-        ),
-    )
+    parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--commit", default="0" * 40)
@@ -318,9 +354,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--cpu-model",
         default="",
         help=(
-            "The host's /proc/cpuinfo `model name` line. `ubuntu-latest` names the "
-            "runner image, not the processor, and this project has measured a 3.1x "
-            "throughput swing between hosts."
+            "The host's /proc/cpuinfo `model name` line, read before the checkout exists. "
+            "`ubuntu-latest` names the runner image, not the processor, and this project "
+            "has measured a 3.1x throughput swing between hosts. Empty and the stage reads "
+            "the same file itself."
         ),
     )
     parser.add_argument(
@@ -654,14 +691,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage == "counters":
-        counters.stage_counters(
+        host.stage_counters(
             common._load_plan(date),
+            state_root=common.STATE_ROOT,
             metrics_path=args.counters_file,
             shard=args.shard,
             shards=args.shards,
             job=args.job,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
-            cpu_model=args.cpu_model,
+            cpu_model_reported=args.cpu_model,
             cpu_stat_at_start=args.cpu_stat_at_start,
             cpu_stat_at_end=args.cpu_stat_at_end,
             rss_samples_path=args.rss_samples_file,

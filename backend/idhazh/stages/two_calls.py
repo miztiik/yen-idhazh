@@ -28,7 +28,6 @@ from idhazh import (
     capture,
     config,
     elements,
-    itemrecord,
     summarize,
     telemetry,
     visual_planner,
@@ -57,17 +56,34 @@ from idhazh.stages.common import (
     _run_dir,
     silent_tracer,
 )
+from idhazh.telemetry.record import Flags, ItemRecorder
 from idhazh.visual_validator import validate_plan
 
 
-def _call_cells(slot: str, reply: Completion) -> dict[str, Any]:
+def _call_cells(slot: str, kind: CallKind, reply: Completion, *, wall_ms: int) -> dict[str, Any]:
     """One model call's numbers, under the slot's own column names.
 
-    Six the server reported, one wall clock, two rates and a cache share. The
-    rates are derived here rather than left to whoever reads the row, because a
-    reader deriving them is a reader who has to know which milliseconds go with
-    which token count - and the regression this exists to catch is exactly a
-    decode rate moving while a wall clock stayed put.
+    Six the server reported, one wall clock, two rates and a cache share, under
+    the kind of call that spent them. **The kind is passed rather than read off
+    the slot**: a slot says which call ran first and only the kind says what it
+    was. It also fills or the census row cannot be built - `ItemHealthRow` holds
+    a slot to filling whole or not at all, and a slot with five numbers and no
+    kind is half a call.
+
+    **`{slot}_ms` is our own stopwatch around the request, and the wait is in
+    it.** It used to be `prefill_ms + decode_ms`, which is a column that agrees
+    with its two neighbours by construction and therefore measures nothing they
+    do not: subtracting them from it gave zero on every row, so a server that
+    made an item queue read exactly like a server that answered at once. What
+    the subtraction gives now is the wait - transport, JSON, and any time the
+    server spent that its own `timings` block does not name.
+
+    The rates are derived here rather than left to whoever reads the row,
+    because a reader deriving them is a reader who has to know which
+    milliseconds go with which token count - and the regression this exists to
+    catch is exactly a decode rate moving while a wall clock stayed put. They
+    are taken over the server's own two clocks and not over `wall_ms`: a rate
+    that charges the queue to the decoder reads as a slow model.
 
     **The prefill rate counts only the tokens the server really evaluated.**
     Dividing the whole prompt by the prefill clock counts a cache hit as work
@@ -81,13 +97,14 @@ def _call_cells(slot: str, reply: Completion) -> dict[str, Any]:
     cached = min(reply.cached_tokens, reply.prompt_tokens)
     evaluated = reply.prompt_tokens - cached
     return {
+        f"{slot}_kind": kind.value,
         f"{slot}_prefill_ms": reply.prefill_ms,
         f"{slot}_decode_ms": reply.decode_ms,
         f"{slot}_input_tokens": reply.prompt_tokens,
         f"{slot}_output_tokens": reply.completion_tokens,
         f"{slot}_cached_tokens": cached,
         f"{slot}_finish_reason": reply.finish_reason,
-        f"{slot}_ms": reply.prefill_ms + reply.decode_ms,
+        f"{slot}_ms": wall_ms,
         f"{slot}_cache_pct": (
             round(100 * cached / reply.prompt_tokens, 2) if reply.prompt_tokens else None
         ),
@@ -264,7 +281,7 @@ class _Progress:
 _NodeBody = Callable[[dag.CallNode], "_TwoCalls | None"]
 
 
-def _silent_recorder() -> itemrecord.ItemRecorder:
+def _silent_recorder() -> ItemRecorder:
     """A recorder that collects cells and emits nothing.
 
     `two_calls_one_item` is called directly by tests and by the canary runner,
@@ -272,9 +289,9 @@ def _silent_recorder() -> itemrecord.ItemRecorder:
     than a null object, so the same code path runs and there is no second
     implementation to keep in step (Guardrail #7).
     """
-    return itemrecord.ItemRecorder(
+    return ItemRecorder(
         run_id="",
-        flags=itemrecord.Flags(
+        flags=Flags(
             item_lines=False,
             stage_lines=False,
             waiting_heartbeat_seconds=0,
@@ -333,7 +350,7 @@ def _split_cells(split: calls.DecodeSplit | None) -> dict[str, Any]:
 
 
 def _kept_call(
-    recorder: itemrecord.ItemRecorder,
+    recorder: ItemRecorder,
     date: str,
     article: Article,
     *,
@@ -364,7 +381,7 @@ def _kept_call(
         write=assemble.write_atomic,
         cost=None if reply is None else _cost(kind, reply),
         decode_split=None if split is None else split._asdict(),
-        finish_reason="" if reply is None else reply.finish_reason,
+        finish_reason="" if reply is None else reply.finish_reason or "",
         about=capture.About(
             canonical_url=str(article.canonical_url),
             source_id=article.source_id,
@@ -382,7 +399,7 @@ def two_calls_one_item(
     endpoint: str = DEFAULT_ENDPOINT,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
-    recorder: itemrecord.ItemRecorder | None = None,
+    recorder: ItemRecorder | None = None,
 ) -> _TwoCalls:
     """One article read once, labelled, summarized and drawn - in two adjacent calls.
 
@@ -506,6 +523,10 @@ def two_calls_one_item(
                 span.set(telemetry.AttrKey.PROMPT_DIGEST, first_digest)
                 span.set(telemetry.AttrKey.PROMPT_CHARS, len(rendered))
             kept.calling("label")
+            # The stopwatch starts before the request and stops when the reply
+            # is in hand, so the wait is inside it. The server's own two clocks
+            # are recorded beside it and the difference is what they cannot say.
+            asked_at = time.monotonic()
             one, no_reply = _ask_the_model(
                 first,
                 article,
@@ -518,6 +539,7 @@ def two_calls_one_item(
                 turns=model.turns,
                 max_think_tokens=inference.max_think_tokens,
             )
+            label_ms = int((time.monotonic() - asked_at) * 1000)
             if one is None:
                 _kept_call(
                     kept,
@@ -530,7 +552,7 @@ def two_calls_one_item(
                 )
                 return failed(no_reply)
             so_far.one = one
-            kept.note(**_call_cells("label", one))
+            kept.note(**_call_cells("label", CallKind.LABEL, one, wall_ms=label_ms))
             _kept_call(
                 kept,
                 date,
@@ -599,6 +621,7 @@ def two_calls_one_item(
                 second_rendered = str(second["prompt"])
                 span.set(telemetry.AttrKey.PROMPT_CHARS, len(second_rendered))
             kept.calling("summary")
+            asked_at = time.monotonic()
             two, no_reply = _ask_the_model(
                 second,
                 article,
@@ -611,6 +634,7 @@ def two_calls_one_item(
                 turns=model.turns,
                 max_think_tokens=inference.max_think_tokens,
             )
+            summary_ms = int((time.monotonic() - asked_at) * 1000)
             if two is None:
                 _kept_call(
                     kept,
@@ -626,7 +650,7 @@ def two_calls_one_item(
             split = calls.split_the_decode(two)
             kept.note(
                 run_visual_decision=so_far.wants_a_plan,
-                **_call_cells("summary", two),
+                **_call_cells("summary", CallKind.SUMMARIZE_AND_PLAN, two, wall_ms=summary_ms),
                 **_split_cells(split),
             )
             _kept_call(
@@ -731,7 +755,7 @@ def _decide_the_visual(
     stamp: Mapping[str, str],
     wants_a_plan: bool,
     run_id: str | None,
-    recorder: itemrecord.ItemRecorder | None = None,
+    recorder: ItemRecorder | None = None,
 ) -> VisualDecision:
     """Which of the routes to a picture, or to none, this reply took.
 

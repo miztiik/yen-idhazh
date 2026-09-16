@@ -83,6 +83,11 @@ class AppConfig(Contract):
             why="The page folds a group into one card, and this is the one-edit revert.",
         ),
         ChangelogEntry(
+            version="2026-09-16",
+            change="observability lost the two published ages for scores and feed-health.",
+            why="The mirrors they pruned are gone; no console route ever fetched either.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T23:30",
             change="run.qualify_on_the_production_path, additive, default true.",
             why="A candidate is only qualified on the path production actually runs.",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-15T22:10",
             change="run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
             why="A worker killed at its timeout uploads nothing, so the items are lost.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T22:00",
-            change="run.trial_state_dirname and retention.trial_state_days, both additive.",
-            why="A trial run needs its own state tree, and that tree needs an expiry.",
         ),
         ChangelogEntry(
             version="2026-08-21",

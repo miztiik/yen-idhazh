@@ -4,6 +4,13 @@ A log line and a span are evidence that something happened; the item-health row
 is the record of it. This builds that row for every planned item, including the
 ones nothing ever reached, so a day's count and its denominator come off one
 pass over one plan.
+
+**`census_row` is the door, and `classify_item` is what it falls back to.** The
+work stage seals a validated row per item and leaves it beside the article and
+the summary (`record.persist`), so where that file exists the census IS that
+row - 58 columns the two payloads cannot carry come off it, and nothing is
+derived a second time. Where the file does not exist, nothing sealed a row for
+that item and `classify_item` rebuilds what the payloads can say.
 """
 
 from __future__ import annotations
@@ -13,7 +20,7 @@ from typing import Any, Final
 
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import fit_cell
-from idhazh.contracts.call_cost import COST_FIELDS, CallCost
+from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import (
     CALL_SLOTS,
@@ -93,6 +100,61 @@ def detail_cell(text: str) -> str:
     return fit_cell(cleaned, column=ItemHealthDetail, absent=UNSPECIFIED)
 
 
+#: The three cells a preferred row still takes from the census, and the whole
+#: reason preferring is not simply returning the recorded row. They come off
+#: `elements.extraction_health`, a pass over the article payload behind two
+#: config sections that the work stage does not run - so a shard's row leaves
+#: them empty and the stage that has the payload supplies them. Read off the
+#: tuple itself rather than written out, so a fourth cell arrives here the day
+#: it is added rather than being forgotten.
+EXTRACTION_CELLS: Final[tuple[str, ...]] = ExtractionHealth._fields
+
+
+def census_row(
+    *,
+    recorded: ItemHealthRow | None,
+    planned: PlannedItem,
+    article: Article | None,
+    summary: Summary | None,
+    date: str,
+    run_id: str,
+    shard: int | None = None,
+    extraction: ExtractionHealth | None = None,
+) -> ItemHealthRow:
+    """The row a day keeps for this item: the one its shard sealed, or a rebuild.
+
+    **A recorded row wins, and it wins whole.** The work stage validated 113
+    cells for this item and left them on disk (`record.persist`); the article and
+    the summary payloads between them carry 40. Rebuilding from the payloads when
+    the shard's own row is right there is how 58 columns came to be computed on
+    every item and thrown away.
+
+    `extraction` is overlaid rather than preferred because it is the one thing
+    the shard did not measure - see `EXTRACTION_CELLS`. Nothing else on a
+    recorded row is touched: `shard` in particular is the worker's own number and
+    not the caller's, which is why assemble's rows now name the machine that ran
+    the item instead of leaving the cell empty.
+
+    `recorded` is `None` for an item no shard sealed a row for - most of the plan
+    on a run that died before its workers finished, and every item on a run that
+    planned more than it reached. That item still needs a census line, so
+    `classify_item` builds what the payloads can say (decision 2, plan 32 row 6).
+    """
+    if recorded is None:
+        return classify_item(
+            planned=planned,
+            article=article,
+            summary=summary,
+            date=date,
+            run_id=run_id,
+            shard=shard,
+            extraction=extraction,
+        )
+    if extraction is None:
+        return recorded
+    return ItemHealthRow.model_validate(recorded.model_dump() | extraction._asdict())
+
+
 def classify_item(
     *,
     planned: PlannedItem,
@@ -102,9 +164,15 @@ def classify_item(
     run_id: str,
     shard: int | None = None,
     extraction: ExtractionHealth | None = None,
-    recovered: bool | None = None,
 ) -> ItemHealthRow:
     """Return the one terminal row for this planned item in this run.
+
+    **The fallback, and only the fallback.** `census_row` calls it for an item no
+    shard sealed a row for; every item a shard did reach is that shard's own row.
+    So what this rebuilds is what the article and the summary payloads can say,
+    which is the 40 columns those two carry - and the answer to "why is this
+    column empty" for the rest is "no shard recorded this item", never "the
+    census dropped it".
 
     `shard` is the worker that produced the payloads, and it is optional because
     only one of the two callers has one. A worker knows its own number; assemble
@@ -118,12 +186,11 @@ def classify_item(
     recorded only for the items that published would make the extractor look
     healthiest on the days it failed most.
 
-    `recovered` says whether a cut reply had to be repaired before it parsed, and
-    it arrives as an argument for the same reason: the fact is recorded on the
-    visual decision, which is a third payload this function is not handed. It
-    rides every branch that could carry one, because a recovery that saved the
-    summary and a recovery that saved nothing are both readings of the same
-    budget - and only the caller knows which payload it opened.
+    **`recovered` is not here, and its absence is the point.** The fact is
+    recorded where it happens - the second call notes it on the item's own record
+    - so a row rebuilt here can only be a row no call was ever made for, and a
+    second derivation of it from the picture's refusal reason was two readings of
+    one number (plan 32 row 6).
     """
     if article is None:
         return _row(
@@ -132,21 +199,19 @@ def classify_item(
             run_id=run_id,
             shard=shard,
             extraction=extraction,
-            recovered=recovered,
             stage=ItemStage.PLAN,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.NOT_ATTEMPTED,
         )
 
     if article.status is not ArticleStatus.OK:
-        code, stage, status, detail = _classify_article(article)
+        code, stage, status, detail = classify_article(article)
         return _row(
             planned=planned,
             date=date,
             run_id=run_id,
             shard=shard,
             extraction=extraction,
-            recovered=recovered,
             stage=stage,
             outcome=ItemOutcome.FAILED,
             code=code,
@@ -166,8 +231,7 @@ def classify_item(
                 run_id=run_id,
                 shard=shard,
                 extraction=extraction,
-                recovered=recovered,
-                stage=ItemStage.PUBLISH,
+                    stage=ItemStage.PUBLISH,
                 outcome=ItemOutcome.OK,
                 code=article.failure_code,
                 source_chars=len(article.text or ""),
@@ -181,7 +245,6 @@ def classify_item(
             run_id=run_id,
             shard=shard,
             extraction=extraction,
-            recovered=recovered,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.UNKNOWN,
@@ -203,7 +266,6 @@ def classify_item(
             run_id=run_id,
             shard=shard,
             extraction=extraction,
-            recovered=recovered,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=code,
@@ -233,7 +295,6 @@ def classify_item(
         run_id=run_id,
         shard=shard,
         extraction=extraction,
-        recovered=recovered,
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
         code=article.failure_code,
@@ -261,12 +322,17 @@ def _flatten_calls(calls: tuple[CallCost | None, CallCost | None]) -> dict[str, 
     cannot nest, and `Summary` describes the five numbers once - so this is the
     single place the two shapes meet, rather than a second copy of the
     vocabulary in the writer.
+
+    `DERIVED_FIELDS` ride along because a rate nobody records is a rate every
+    reader works out for itself, and two dividers drift. They are `CallCost`'s
+    own arithmetic rather than this function's, so the cells a rebuilt row
+    carries and the cells the shard sealed are the same numbers by construction.
     """
     cells: dict[str, Any] = {"model_calls": None}
     recorded = 0
     for slot, call in zip(CALL_SLOTS, calls, strict=True):
         cells[f"{slot}_kind"] = None if call is None else call.kind
-        for field in COST_FIELDS:
+        for field in (*COST_FIELDS, *DERIVED_FIELDS):
             cells[f"{slot}_{field}"] = None if call is None else getattr(call, field)
         recorded += call is not None
     if recorded:
@@ -299,7 +365,6 @@ def _row(
     source_words_before_cap: int | None = None,
     truncation_cap_tokens: int | None = None,
     extraction: ExtractionHealth | None = None,
-    recovered: bool | None = None,
     calls: tuple[CallCost | None, CallCost | None] = (None, None),
 ) -> ItemHealthRow:
     return ItemHealthRow(
@@ -333,12 +398,22 @@ def _row(
         span_integrity=extraction.span_integrity if extraction is not None else None,
         elements_found=extraction.elements_found if extraction is not None else None,
         element_class=extraction.element_class if extraction is not None else None,
-        recovered=recovered,
         **_flatten_calls(calls),
     )
 
 
-def _classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | None, str | None]:
+def classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | None, str | None]:
+    """Which failure ended this article, at which stage, and what says so.
+
+    Public because the work stage records the same verdict on the item's own
+    record while the run is going, and a second derivation there named `extract`
+    for every article whatever had really failed - so a fetch code landed on an
+    extract row, a pairing `ItemHealthRow` refuses.
+
+    The fourth value is a detail to use only where the failure is untyped: a
+    row carrying `unknown` has to say something, and the caller's own text is
+    the better sentence wherever there is one.
+    """
     detail = article.failure_detail or ""
     if article.status is ArticleStatus.EXTRACT_FAILED:
         if article.failure_code is not None:

@@ -150,7 +150,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
-from idhazh import day_partition, ledger, month_partition, publish_telemetry, telemetry
+from idhazh import day_partition, ledger, month_partition, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -161,6 +161,7 @@ from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow, band_of
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
+from idhazh.telemetry.publish import public_telemetry
 
 BYTES_PER_MB: Final = 1024 * 1024
 
@@ -791,20 +792,6 @@ def _expired_public_copies(public_root: Path | None, boundary: str) -> tuple[str
     return tuple(copy.stem for copy in month_shards(public_root) if copy.stem < boundary)
 
 
-def _drop_empty_day_dirs(day: Path) -> None:
-    """Remove the month and year directory a deleted day file leaves behind.
-
-    Not tidiness: `day_partition.day_files` walks every year and month directory
-    it finds, so a prune that left them would make the walk cost more each year
-    while deleting the rows that walk exists to read.
-    """
-    for directory in (day.parent, day.parent.parent):
-        try:
-            directory.rmdir()
-        except OSError:
-            return
-
-
 def prune_telemetry(
     state_dir: Path,
     config: ObservabilityConfig,
@@ -870,19 +857,19 @@ def prune_telemetry(
             )
         for day in days:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
         # Only a copy below its own configured age, so the set deleted is exactly
         # the set named above and never a month the published tree still owes a
         # reader.
         if public_root is not None and month in public_deleted:
-            publish_telemetry.shard_path(public_root, month).unlink(missing_ok=True)
+            public_telemetry.shard_path(public_root, month).unlink(missing_ok=True)
 
     # Whatever the loop above did not reach. On the scheduled path this is empty:
     # every copy below the boundary has a shard beside it, and the pair went
     # together. It is not empty after a run that stopped between the two.
     if public_root is not None and not dry_run:
         for stem in public_deleted:
-            publish_telemetry.shard_path(public_root, stem).unlink(missing_ok=True)
+            public_telemetry.shard_path(public_root, stem).unlink(missing_ok=True)
 
     hard_deleted: list[str] = []
     if config.item_health_aggregate_keep_months is not None:
@@ -1106,7 +1093,7 @@ def prune_feed_health(
             freed += day.stat().st_size
             if not dry_run:
                 day.unlink()
-                _drop_empty_day_dirs(day)
+                day_partition.drop_empty_day_dirs(day)
 
     return FeedHealthPruneResult(
         deleted=tuple(deleted),
@@ -1204,7 +1191,7 @@ def prune_seen(
         freed += day.stat().st_size
         if not dry_run:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
 
     return SeenPruneResult(
         deleted=tuple(deleted),
@@ -1281,7 +1268,7 @@ def prune_counterfactual_scores(
         freed += day.stat().st_size
         if not dry_run:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
 
     return CounterfactualPruneResult(
         deleted=tuple(deleted),
@@ -1539,7 +1526,7 @@ def prune_scores(
         )
         for day in days:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
 
     hard_deleted: list[str] = []
     if config.score_archive_keep_months is not None:

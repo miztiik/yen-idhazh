@@ -11,7 +11,8 @@ from typing import cast
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh import ledger, publish_console, publish_telemetry
+from idhazh import ledger
+from idhazh.telemetry.publish import public_telemetry, series
 
 from ._harness import (
     COMMIT_STAGED_PATHS,
@@ -161,7 +162,7 @@ def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
     """
     staged = COMMIT_STAGED_PATHS["fold"]
 
-    assert publish_telemetry.PUBLIC_TELEMETRY_DIRNAME in "/".join(staged)
+    assert public_telemetry.PUBLIC_TELEMETRY_DIRNAME in "/".join(staged)
     assert "frontend/public/telemetry" in staged
     for relative in staged:
         assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
@@ -239,15 +240,19 @@ def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
 
     Every path the step names is asked of the working tree, so a root added to
     the list without a committed file in it fails here rather than on the runner.
-    The console payload roots are the seven that gained a producer on
-    2026-09-09: each ships with the shard the producer wrote, which is the same
-    pattern `state/feed-retirements.csv` takes.
+    The console payload roots are the five that still have a producer: each ships
+    with the shard the producer wrote, which is the same pattern
+    `state/feed-retirements.csv` takes. `scores` and `feed-health` were two more
+    until 2026-09-16, and they are why the list is derived from
+    `series.PUBLISHED_ROOTS` rather than written out here - a root deleted in one
+    place has to leave the staging call in the same commit, or the next run's
+    `git add` aborts and takes every sibling ledger with it.
     """
     for relative in CORPUS_SEED:
         assert (REPO_ROOT / relative).is_file(), f"{relative} must be committed, even when empty"
     for relative in COMMIT_STAGED_PATHS["assemble"]:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-    for dirname in publish_console.PUBLISHED_ROOTS:
+    for dirname in series.PUBLISHED_ROOTS:
         root = REPO_ROOT / "frontend" / "public" / dirname
         assert root.is_dir(), f"frontend/public/{dirname} must be in a fresh checkout"
         committed = subprocess.run(

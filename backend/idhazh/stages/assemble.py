@@ -9,22 +9,7 @@ from __future__ import annotations
 from datetime import date as date_type
 from pathlib import Path
 
-from idhazh import (
-    assemble,
-    config,
-    ledger,
-    publish_console_band,
-    publish_day_metrics,
-    publish_feed_health,
-    publish_machine,
-    publish_run_days,
-    publish_scores,
-    publish_source_health,
-    publish_span_rollup,
-    publish_telemetry,
-    rank,
-    telemetry,
-)
+from idhazh import assemble, config, ledger, rank, telemetry
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
@@ -47,9 +32,9 @@ from idhazh.stages.common import (
     _item_payloads,
     _load_day,
     _load_manifest,
-    _recovered,
     _run_dir,
 )
+from idhazh.telemetry.publish import day_metrics, dispatch, source_health
 
 
 def _index_root() -> Path:
@@ -59,7 +44,7 @@ def _index_root() -> Path:
     when a caller moves the days. A test that redirects `PUBLIC_ROOT` at a
     temporary tree used to leave this pointing at the repository, so the suite
     rebuilt the committed shard out of fixture days - which is how the shard on
-    `main` came to name one item no published day holds. `publish_telemetry` is
+    `main` came to name one item no published day holds. `public_telemetry` is
     passed its root the same way and for the same reason.
     """
     return common.PUBLIC_ROOT.parent / "assist" / "index"
@@ -159,15 +144,20 @@ def stage_assemble(
     summaries: list[Summary] = []
     rows = []
     decisions: list[VisualDecision] = []
+    # Every planned item's census row. A shard that reached the item sealed the
+    # row itself and left it beside the payloads, so this prefers that row: it
+    # carries 113 cells where the article and the summary between them carry 40,
+    # and it names the worker that ran the item. The rebuild is what an item no
+    # shard reached gets, which is what keeps the denominator in this file.
     item_health_rows = [
-        telemetry.classify_item(
+        telemetry.census_row(
+            recorded=payload.recorded,
             planned=payload.planned,
             article=payload.article,
             summary=payload.summary,
             date=plan.date,
             run_id=run_id,
             extraction=_extraction_health(payload.article, settings),
-            recovered=_recovered(payload.decision_path),
         )
         for payload in _item_payloads(plan, items_dir)
     ]
@@ -295,114 +285,35 @@ def stage_assemble(
     landed = writer.append(common.STATE_ROOT, rows)
     published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
     item_health = ledger.append_item_health(common.STATE_ROOT, plan.date, item_health_rows)
-    publish_telemetry.publish(
+    # Every projection of the instrument, in the one order `dispatch` names. It
+    # runs after the ledgers this stage appended and reads those files rather
+    # than anything in memory here, so a run that failed to append publishes the
+    # record as it stands rather than as it hoped.
+    #
+    # The label vectors are read here rather than inside a producer, so a stale
+    # file fails the run at the place the config is read and never half way
+    # through a record. Absent is not stale: a checkout without the file records
+    # no label similarity and publishes exactly as before.
+    instrument = dispatch.publish_all(
         state_root=common.STATE_ROOT,
-        public_root=common.PUBLIC_ROOT.parent / "telemetry",
+        digest_root=common.PUBLIC_ROOT,
+        date=plan.date,
         # The run appended to one month, so that is the only one that can have
         # changed. Every other shard is rebuilt only if it is missing.
-        months={plan.date[:7]},
-    )
-    # Written after the ledgers this run appended, and from those files rather
-    # than from anything in memory here: the view is a projection of the
-    # committed record, so a run that failed to append has to publish the record
-    # as it stands rather than as it hoped.
-    source_health = publish_source_health.publish(
-        sources=settings.sources,
-        taxonomy=settings.taxonomy,
-        collect=settings.app.collect,
-        date=plan.date,
+        month=assemble.month_of(plan.date),
+        # The day this run publishes, not the wall clock. A run that crosses
+        # midnight UTC would otherwise prune against one month and write into
+        # another.
+        today=date_type.fromisoformat(plan.date),
         run_id=run_id,
         generated_at=generated_at,
-        state_root=common.STATE_ROOT,
-        path=common.PUBLIC_ROOT.parent / publish_source_health.PUBLIC_FILENAME,
-    )
-    # Written last, and from the ledgers this stage has already appended rather
-    # than from anything in memory: the record is a projection of the committed
-    # day, so a correction reads the whole day across every run. One writer at
-    # the publication step, never a second stage (Fowler).
-    #
-    # The label vectors are read here rather than inside the producer, so a
-    # stale file fails the run at the place the config is read and never half
-    # way through a record. Absent is not stale: a checkout without the file
-    # records no label similarity and publishes exactly as before.
-    publish_day_metrics.publish(
-        state_root=common.STATE_ROOT,
-        date=plan.date,
         day=day,
         manifest=manifest,
+        settings=settings,
         taxonomy_vectors=assemble.read_taxonomy_vectors(config.REPO_ROOT, settings.taxonomy),
     )
-    # The console's own payloads, in dependency order and never before it. Each
-    # writes the one month this run appended to and prunes its directory to its
-    # own `observability.public_*_keep_months`, so none of them grows with the
-    # archive (Guardrail #12). The band is last because it reads the run-day shards
-    # the line above it wrote - deriving it from the day payloads instead would
-    # be the walk those shards exist to remove.
-    month = assemble.month_of(plan.date)
-    # The day this run publishes, not the wall clock. A run that crosses midnight
-    # UTC would otherwise prune against one month and write into another.
-    today = date_type.fromisoformat(plan.date)
-    observability = settings.app.observability
-    publish_scores.publish(
-        state_root=common.STATE_ROOT,
-        digest_root=common.PUBLIC_ROOT,
-        keep_months=observability.public_scores_keep_months,
-        today=today,
-        months={month},
-        ensure_month=month,
-    )
-    publish_feed_health.publish(
-        state_root=common.STATE_ROOT,
-        digest_root=common.PUBLIC_ROOT,
-        keep_months=observability.public_feed_health_keep_months,
-        today=today,
-        months={month},
-        ensure_month=month,
-    )
-    publish_machine.publish(
-        state_root=common.STATE_ROOT,
-        digest_root=common.PUBLIC_ROOT,
-        keep_months=observability.public_machine_keep_months,
-        today=today,
-        months={month},
-        ensure_month=month,
-    )
-    publish_span_rollup.publish(
-        state_root=common.STATE_ROOT,
-        digest_root=common.PUBLIC_ROOT,
-        keep_months=observability.public_span_rollup_keep_months,
-        today=today,
-        months={month},
-        ensure_month=month,
-    )
-    publish_day_metrics.publish_public(
-        state_root=common.STATE_ROOT,
-        digest_root=common.PUBLIC_ROOT,
-        keep_months=observability.public_day_metrics_keep_months,
-        today=today,
-        months={month},
-        ensure_month=month,
-    )
-    publish_run_days.publish(
-        digest_root=common.PUBLIC_ROOT,
-        keep_months=observability.public_run_days_keep_months,
-        today=today,
-        months={month},
-        ensure_month=month,
-    )
-    publish_console_band.publish(
-        state_root=common.STATE_ROOT,
-        digest_root=common.PUBLIC_ROOT,
-        generated_at=generated_at,
-        today=today,
-        console=settings.appearance.console,
-        run=settings.app.run,
-        collect=settings.app.collect,
-        # Already folded above, so the Voices route costs no second read.
-        sources=source_health.sources,
-    )
-    yield_alarm = publish_source_health.yield_alarm(
-        source_health,
+    yield_alarm = source_health.yield_alarm(
+        instrument.sources,
         alarm_point=settings.app.collect.source_yield_alarm_point,
         min_decisions=settings.app.collect.source_yield_alarm_min_decisions,
     )
@@ -415,7 +326,7 @@ def stage_assemble(
     _report_nothing_published(day, plan)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
-        "search_index=%s/%s day_metrics=%s",
+        "search_index=%s/%s day_metrics=%s projections=%s",
         plan.date,
         len(day.items),
         day.partial,
@@ -424,7 +335,8 @@ def stage_assemble(
         item_health,
         len(index.entries),
         index.vector_bytes // index.dimensions,
-        publish_day_metrics.day_metrics_relpath(plan.date),
+        day_metrics.day_metrics_relpath(plan.date),
+        ",".join(instrument.dispatched),
     )
     return day
 

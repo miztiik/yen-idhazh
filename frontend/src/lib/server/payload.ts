@@ -490,9 +490,8 @@ export function readCsv(path: string): CsvTable {
  * oldest first and hands back one table. Pass `-1` to read every day, and say
  * beside the call why (`docs/concepts/growing-reads.md`).
  *
- * The mirror under `frontend/public/scores/` stays monthly and this is not it -
- * a `state/` store files by what a run writes, a published mirror by what a
- * browser fetches (`docs/concepts/partitions.md`).
+ * There is no published mirror of this ledger. `frontend/public/scores/` was one
+ * until 2026-09-16 and no route ever fetched it, so it went with its producer.
  */
 export function evalRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
 	return readDayShards(join(STATE_ROOT, 'scores'), days);
@@ -613,7 +612,7 @@ export function itemHealthForDay(
  * re-count them by walking the whole score ledger. All three count the day's
  * *distinct published* items, never score-ledger rows: the ledger dedupes by
  * measurement, so one item re-scored under a new stamp keeps both rows, and a
- * run may score an item it then drops (`backend/idhazh/publish_day_metrics.py`).
+ * run may score an item it then drops (`backend/idhazh/telemetry/publish/day_metrics.py`).
  * The measurement distributions the console draws still read every row - only
  * these per-item counts join the published set, so only these are read here. The
  * whole record shape is `schemas/day-metrics.schema.json`; this is the slice the

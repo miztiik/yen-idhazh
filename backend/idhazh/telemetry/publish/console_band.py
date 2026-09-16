@@ -26,7 +26,7 @@ owns it, never re-derived from a wider one:
 - the model facts come from one day's item-health shard and that day's own
   day-metrics record, each keyed to the newest day the manifests hold;
 - the machine facts come from `state/runtime-counters.csv`, whose growing read
-  `publish_machine` declares.
+  `machine` declares.
 
 Every read is covered by the widest span `console.window_presets` offers, which
 is the furthest back any panel on any route can draw. The span comes from
@@ -45,18 +45,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import (
-    discover,
-    ledger,
-    publish_console,
-    publish_day_metrics,
-    publish_feed_health,
-    publish_machine,
-    publish_run_days,
-    publish_scores,
-    publish_span_rollup,
-    publish_telemetry,
-)
+from idhazh import discover, ledger
 from idhazh.contracts.console_band import (
     BandRun,
     BandSize,
@@ -76,6 +65,14 @@ from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import month_files
+from idhazh.telemetry.publish import (
+    day_metrics,
+    machine,
+    public_telemetry,
+    run_days,
+    series,
+    span_rollup,
+)
 
 #: The 1 GB Pages ceiling (`CLAUDE.md` Guardrail #2). A constant and not a knob, for
 #: the reason `retention.py` gives for its own copy: it is a property of the
@@ -168,17 +165,17 @@ __all__ = [
     "read_band",
 ]
 
-BAND_RELPATH: Final = publish_console.relpath(
-    publish_console.CONSOLE_DIRNAME, publish_console.BAND_FILENAME
+BAND_RELPATH: Final = series.relpath(
+    series.CONSOLE_DIRNAME, series.BAND_FILENAME
 )
 
 
 def band_path(digest_root: Path) -> Path:
     """`frontend/public/console/band.json`, derived from the digest root."""
     return (
-        publish_console.console_root(digest_root)
-        / publish_console.CONSOLE_DIRNAME
-        / publish_console.BAND_FILENAME
+        series.console_root(digest_root)
+        / series.CONSOLE_DIRNAME
+        / series.BAND_FILENAME
     )
 
 
@@ -1206,13 +1203,13 @@ def publish(
     """
     widest = max(console.window_presets)
     months = months_a_window_can_touch(widest)
-    day_root = publish_console.series_root(digest_root, publish_run_days.DIRNAME)
-    available = publish_console.published_months(
-        digest_root, publish_run_days.DIRNAME, publish_run_days.SUFFIX
+    day_root = series.series_root(digest_root, run_days.DIRNAME)
+    available = series.published_months(
+        digest_root, run_days.DIRNAME, run_days.SUFFIX
     )
     days: list[PublicRunDay] = []
     for month in available[-months:]:
-        days.extend(publish_run_days.read_shard(day_root / f"{month}{publish_run_days.SUFFIX}"))
+        days.extend(run_days.read_shard(day_root / f"{month}{run_days.SUFFIX}"))
     days.sort(key=lambda row: row.date)
     newest_date = days[-1].date if days else None
     # The window is anchored on the newest day found and never on today: a clock
@@ -1223,11 +1220,11 @@ def publish(
     health_rows = (
         []
         if newest_date is None
-        else publish_day_metrics.read_health_rows(state_root, newest_date)
+        else day_metrics.read_health_rows(state_root, newest_date)
     )
     record = None
     if newest_date is not None:
-        record_path = publish_day_metrics.day_metrics_path(state_root, newest_date)
+        record_path = day_metrics.day_metrics_path(state_root, newest_date)
         if record_path.is_file():
             record = DayMetrics.read(record_path)
     counters = _counter_rows(state_root, months=months, anchor=anchor)
@@ -1249,7 +1246,7 @@ def publish(
     )
     target = band_path(digest_root)
     payload = band.to_json().encode("utf-8")
-    return target if publish_console.write_if_changed(target, payload) else None
+    return target if series.write_if_changed(target, payload) else None
 
 
 def _within(day: str, anchor: str, window_days: int) -> bool:
@@ -1261,23 +1258,21 @@ def _within(day: str, anchor: str, window_days: int) -> bool:
 
 #: Every month series the console asks for by name, as (directory, suffix).
 #:
-#: Telemetry is not here. It predates `publish_console` and owns its own root,
-#: which the canary keeps under `state/` rather than beside these six - so it is
+#: Telemetry is not here. It predates `series` and owns its own root,
+#: which the canary keeps under `state/` rather than beside these four - so it is
 #: a parameter of `fetchable_months` instead of a row of this table.
 FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
-    (publish_scores.DIRNAME, publish_scores.SUFFIX),
-    (publish_feed_health.DIRNAME, publish_feed_health.SUFFIX),
-    (publish_run_days.DIRNAME, publish_run_days.SUFFIX),
-    (publish_day_metrics.PUBLIC_DIRNAME, publish_day_metrics.PUBLIC_SUFFIX),
-    (publish_machine.DIRNAME, publish_machine.SUFFIX),
-    (publish_span_rollup.DIRNAME, publish_span_rollup.SUFFIX),
+    (run_days.DIRNAME, run_days.SUFFIX),
+    (day_metrics.PUBLIC_DIRNAME, day_metrics.PUBLIC_SUFFIX),
+    (machine.DIRNAME, machine.SUFFIX),
+    (span_rollup.DIRNAME, span_rollup.SUFFIX),
 )
 
 
 def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> list[str]:
     """Every month a shard the console fetches exists for, oldest first.
 
-    The union across all seven series and not the run-day months alone. A
+    The union across all five series and not the run-day months alone. A
     console that took one series for the list would never ask for a month the
     others hold on their own - and they can differ, because each is pruned by
     its own `observability.public_*_keep_months` and the canary's telemetry is
@@ -1286,21 +1281,21 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
     Telemetry is the one that matters most: the console holds no row until a
     telemetry shard lands, so a month missing from this list is a month of the
     page that never fills. It is a parameter because it predates
-    `publish_console` and owns its own root - the canary keeps it under
+    `series` and owns its own root - the canary keeps it under
     `state/`. Unnamed, it is looked for beside the digest root like the other
-    six, which is where the real tree has it. It is never taken from
-    `publish_telemetry`'s module default: a tree under test would then answer
+    four, which is where the real tree has it. It is never taken from
+    `public_telemetry`'s module default: a tree under test would then answer
     with the repository's own months.
 
-    Seven directory listings and no file opened, and each directory is bounded
+    Five directory listings and no file opened, and each directory is bounded
     by its own retention knob, so this costs the same on any size of archive
     (`CLAUDE.md` Guardrail #12).
     """
     found: set[str] = set()
     for dirname, suffix in FETCHED_SERIES:
-        found.update(publish_console.published_months(digest_root, dirname, suffix))
-    shards = telemetry_root or publish_console.series_root(
-        digest_root, publish_telemetry.PUBLIC_TELEMETRY_DIRNAME
+        found.update(series.published_months(digest_root, dirname, suffix))
+    shards = telemetry_root or series.series_root(
+        digest_root, public_telemetry.PUBLIC_TELEMETRY_DIRNAME
     )
     found.update(path.stem for path in month_files(shards, ".csv"))
     return sorted(found)
@@ -1314,24 +1309,24 @@ def _counter_rows(
     Raw rather than through `RuntimeCountersRow`, because refusing a run is the
     band's whole point here: a row that will not validate is one of the two
     servers this has to notice, and validating it away would silently drop the
-    evidence. The growing read behind it is `publish_machine`'s and is declared
+    evidence. The growing read behind it is `machine`'s and is declared
     there.
 
     The job is read off the cell rather than through the contract, for that same
     reason, and a row whose cell is missing or empty is kept - it is exactly the
     malformed row this band exists to report, and dropping it would make the
-    band quiet about the thing it was built for. `publish_machine.PUBLISHED_JOB`
+    band quiet about the thing it was built for. `machine.PUBLISHED_JOB`
     says why the other job's rows are not this series.
     """
     source = ledger.runtime_counters_path(state_root)
     if not source.is_file():
         return []
-    oldest = publish_console.oldest_month_kept(date.fromisoformat(anchor), months)
+    oldest = series.oldest_month_kept(date.fromisoformat(anchor), months)
     with source.open("r", encoding="utf-8", newline="") as handle:
         return [
             row
             for row in csv.DictReader(handle)
             if (row.get("date") or "")[:7] >= oldest
-            and (row.get("job") or publish_machine.PUBLISHED_JOB)
-            == publish_machine.PUBLISHED_JOB
+            and (row.get("job") or machine.PUBLISHED_JOB)
+            == machine.PUBLISHED_JOB
         ]

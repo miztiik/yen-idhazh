@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -20,7 +20,9 @@ growing its own store.
 `state/item-health/<YYYY>/<MM>/<DD>.csv`. One row is written for each planned
 item on each run, whether the item succeeds or fails. Two stages write it: a
 worker commits the rows for its own items as each one settles, and Assemble
-writes the whole day's census afterwards.
+writes the whole day's census afterwards. A worker also leaves its own copy of
+the row beside the item's other payloads, which is
+[the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
 The row carries 113 columns. `ItemHealthRow.csv_columns` in
 `backend/idhazh/contracts/item_health.py` is the list, and this page does not
@@ -235,6 +237,62 @@ any row whose article payload predates `Article.source_word_count` (2026-08-26).
 Empty means the run never measured it. Nothing recomputes it later, because the
 body it would have to count is gone.
 
+## The row on the shard, before the ledger has it
+
+`backend/var/run/<date>/items/<item_id>.health.json`. The work stage writes it
+the moment the recorder seals an item, through `telemetry.record.persist`, with
+the same temp-file-then-rename every per-item payload uses. The payload is
+`ItemHealthRow` and nothing else, so there is no second shape to version.
+
+**It exists because the row used to die with the shard.** The recorder validates
+all 113 cells an item at a time, and until 2026-09-15 the only place they went
+was a log line - a CI artifact with its own expiry. The durable row was rebuilt
+afterwards from the article and the summary payloads, which between them cannot
+carry most of those cells, so a cell the shard measured correctly still reached
+this ledger empty.
+
+**It travels on the artifact the other payloads already travel on.** A shard
+uploads `items-<shard>` rooted at the whole items directory and assemble
+downloads `items-*` back into the same place, so no workflow step names this
+file and none had to change for it to arrive.
+`tests/workflows/test_worker_ledgers.py` holds both sides to the directory,
+because narrowing either one to a list of suffixes would strand the next payload
+on the runner that wrote it without failing anything.
+
+**What it costs**: 3,103 to 3,119 bytes an item, mean 3,111 over the five items
+of the committed fixture plan (Windows 11, Python 3.14.2, 2026-09-16). One shard
+is `run.shard_size` items, five today, so a shard carries about 15.6 KB of it -
+0.003 percent of the 500 MB artifact ceiling - and a run at the 80-item
+`run.safety_ceiling_per_run` carries about 249 KB. None of it is committed and
+none of it is published: `backend/var/` is run scratch, and this ledger under
+`state/` is still the durable copy.
+
+**The census reads it, and prefers it.** `telemetry.census_row` is the door both
+writers go through. Where this file exists the committed row IS this row, cell
+for cell; where it does not, `telemetry.classify_item` rebuilds what the article
+and the summary payloads can say. Preferring the file took the fixture day from
+40 filled columns to 71, and the three cells it does not cover are named in the
+next paragraph. The file is also still the evidence a reader can open when a
+committed row and a shard's log disagree.
+
+**Three cells are laid over it rather than taken from it**: `span_integrity`,
+`elements_found` and `element_class`. The work stage does not measure them - the
+element count is taken after the summary is accepted, by the stage that is about
+to publish - so the census supplies its own reading for those three and takes
+everything else from the shard. The list is read off `ExtractionHealth._fields`
+rather than written out, so a fourth cell joins it the day it is added.
+
+**What preferring it costs.** A committed row grew by 206.8 bytes on the fixture
+day (Windows 11, Python 3.14.2, 2026-09-16; five items, 3,495 to 4,529 bytes over
+the five). Against a published day's `state/` - 480 item-health rows at the
+median, 18.7 percent of the 28.2 MB tree measured on 2026-09-16 - that is
+8.1 percent more `state/` a day, and the fixture cannot reach 18 of the columns
+a real run fills, so the production figure is an estimate of 15 to 17 percent.
+The estimate is what a per-cell width from `state/runtime-counters.csv` and the
+published `rank_score` widths give; a measurement on the first real day replaces
+it. Plan 32's decision 3 priced this at 3.2 percent before the columns were
+counted, which was about three times low.
+
 ## Which worker wrote the row
 
 A run splits into as many as eight `work` jobs, each on its own disposable
@@ -251,12 +309,16 @@ run. The worst was run `2026-08-27-2`, where eight shards ranged from 9.75 to
 disappears, and until this column existed pooling was the only read available -
 so a slow day and a slow machine looked the same.
 
-Only a worker writes it. `stages.record.stage_record` stamps its own number on every row
-it files, which is the one moment the number is known. `stages.assemble.stage_assemble` runs
-once for the whole day, so the census rows it adds - the items no worker reached
-- leave the cell empty rather than naming a machine that may never have started.
-An empty cell means no worker claimed the row, and it is also what every row
-written before 2026-08-30 holds. **It is never shard 0.**
+Only a worker knows it. `stages.work` reads the number once a shard and notes it
+on every item it seals, so the cell travels with the row in
+`<item_id>.health.json` and reaches the ledger through whichever writer files it
+first. `stages.record.stage_record` runs per shard and
+`stages.assemble.stage_assemble` runs once for the whole day, and since
+2026-09-16 that difference no longer shows in this column: both prefer the
+sealed row, so assemble's rows name the machine that ran the item rather than
+leaving the cell empty. An empty cell means no worker sealed a row for the item
+- it was planned and never reached - and it is also what every row written
+before 2026-08-30 holds. **It is never shard 0.**
 
 `shard` is not in the published projection
 ([../publishing/telemetry-series.md](../publishing/telemetry-series.md)). Which
@@ -632,6 +694,17 @@ What a reader loses: the exact characters. A Cyrillic headline quoted inside a
 refusal message reads as `?` in the ledger. The trade is one `?` against a
 missing row, and `backend/tests/contracts/test_cell_shapes.py` holds it.
 
+**The fold does not reach a column whose vocabulary is ours.** `time_source`
+says which clock a story's time came off, and the three answers - `feed`,
+`first_seen`, `unknown` - are minted in this repository rather than read off
+somebody's page. So the column is the `TimeSource` enum and not a token shaped
+like one: a producer selects a member, and a fourth spelling is refused at the
+boundary instead of being folded into a legal-looking cell nobody declared.
+Folding here would keep the row and lose the answer, which is the opposite trade
+to `detail`. A reader loses nothing by it, because there was never a foreign
+value in this column to rescue. `backend/tests/contracts/test_closed_vocabularies.py`
+holds that.
+
 ## Design rationale
 
 A failure-only file cannot produce a rate. The ledger writes successes and
@@ -685,7 +758,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is never committed and expires, so a longer retention delays the loss rather than preventing it. The committed row is what a later run and the console read. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |
-| Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `publish_day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |
+| Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |
 
 ## See also
 

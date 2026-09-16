@@ -36,14 +36,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 5 | 12 | 9 |
-| [20260915-32-telemetry-package-plan.md](20260915-32-telemetry-package-plan.md) | 16 | 1 | 15 | 3 |
+| [20260915-32-telemetry-package-plan.md](20260915-32-telemetry-package-plan.md) | 16 | 7 | 9 | 4 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 43
+## Ready now - 44
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -94,8 +94,9 @@ section 3 is where it is answered.
 | #1 | 32 | A | The shape the timeline reads, settled first | - |
 | #2 | 32 | A | Where every one of the 113 columns comes from | - |
 | #3 | 32 | A | The package exists and re-exports | - |
+| #7 | 32 | E | Six columns that are arithmetic over filled ones | 6 |
 
-## Waiting on another row - 63
+## Waiting on another row - 56
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -150,18 +151,11 @@ section 3 is where it is answered.
 | #11 | 29 | - | The lead is a weighted score, and the page says how | 10 is PENDING |
 | #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING; 14 is PENDING |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 is PENDING |
-| #4 | 32 | B | The recorder moves in and returns a validated row | 3 is PENDING |
-| #5 | 32 | C | The work stage persists what it recorded | 1 is PENDING; 4 is PENDING |
-| #6 | 32 | D | The census prefers the persisted row | 5 is PENDING |
-| #7 | 32 | E | Six columns that are arithmetic over filled ones | 6 is PENDING |
-| #8 | 32 | E | The label call's own clock and both finish reasons | 6 is PENDING |
-| #9 | 32 | B | The host sampler moves in | 3 is PENDING |
 | #10 | 32 | B | Nine publishers become one dispatcher | 3 is PENDING |
 | #11 | 32 | F | `idhazh telemetry` and its subcommands | 3 is PENDING; 10 is PENDING |
 | #12 | 32 | G | `telemetry prune` takes a target and a range | 11 is PENDING |
 | #13 | 32 | B | A closed vocabulary is an enum | 2 is PENDING |
-| #14 | 32 | H | The run timeline draws | 1 is PENDING; 7 is PENDING; 8 is PENDING |
-| #15 | 32 | F | The two published mirrors nothing reads are deleted | 10 is PENDING |
+| #14 | 32 | H | The run timeline draws | 1 is PENDING; 7 is PENDING |
 
 ## Finished - 18 plans with no live row
 

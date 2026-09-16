@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -8,7 +8,98 @@ This page is the concept-tier statement of the logging doctrine in `CLAUDE.md` s
 
 The code is [`backend/idhazh/telemetry/`](../../backend/idhazh/telemetry/), and its modules are this page's sections: `events.py` for the log line, `spans.py` for the span tree, `sinks.py` for where a span goes, `rollup.py` for the committed fold, `traces.py` for where a committed trace lands, and `census.py` for the item-level census.
 
-## One event, one payload, one log line
+## The instrument on one picture
+
+Twelve modules, one question each. The diagram is the package's shape: what a
+stage hands the instrument, which module answers for it, where the answer lands
+on disk, and which of those a reader's browser ever fetches.
+
+```mermaid
+flowchart TD
+  subgraph stages["the pipeline - a stage emits, it does not decide where things land"]
+    collect["collect"]
+    extract["extract"]
+    work["work: summarize, classify, visuals"]
+    assemble["assemble"]
+  end
+
+  collect --> events
+  extract --> events
+  work --> events
+  assemble --> events
+  work --> record
+
+  subgraph pkg["backend/idhazh/telemetry/ - one module, one question"]
+    events["events.py<br/>which line does a stage log?"]
+    spans["spans.py<br/>how does a span open, nest, close?"]
+    sinks["sinks.py<br/>where does a finished span go?"]
+    record["record.py<br/>every cell of one item's census row"]
+    census["census.py<br/>what was one item's terminal state?"]
+    rollup["rollup.py<br/>what does one shard's span tree total?"]
+    traces["traces.py<br/>where does a committed trace live?"]
+    inventory["inventory.py<br/>what does the instrument hold for one day?"]
+    health["source_health.py<br/>which addresses may a run ask?"]
+    republish["republish.py<br/>how does a finished day publish again?"]
+    cli["cli.py<br/>which subcommand runs?"]
+  end
+
+  events --> stderr["stderr, captured by the Actions run<br/>THAT is the log store - no sink, no beacon"]
+  events --> spans --> sinks
+  sinks --> traces
+  sinks --> rollup
+  record --> census
+
+  census --> ih["state/item-health/ (day)"]
+  rollup --> sr["state/span-rollup/ (day)"]
+  traces --> tr["state/traces/ (day)"]
+  health --> fh["state/feed-health/ (day)"]
+
+  subgraph state["state/ - committed, append-only, day-sharded"]
+    ih
+    sr
+    tr
+    fh
+    other["day-metrics/ and scores/ and published/ and seen/<br/>runtime-counters.csv and day-validations.csv"]
+  end
+
+  state --> inventory
+  inventory --> republish
+  republish --> pub
+
+  subgraph pub["frontend/public/ - static, fetched at runtime"]
+    telem["telemetry/"]
+    cons["console/"]
+    dm["day-metrics/"]
+    fhp["feed-health/"]
+    rd["run-days/"]
+  end
+
+  pub --> op["the operator console.<br/>A reader's digest never fetches any of it"]
+
+  health -.->|"reads committed events<br/>and nothing else"| collect
+```
+
+**Four things the picture is deliberate about.**
+
+**A stage emits; it never chooses a file.** Every arrow out of the pipeline lands
+on `events.py` or `record.py`, and where the answer is written is the
+instrument's decision. That is why a stage can be read without knowing the
+storage layout.
+
+**The log store is the Actions run.** `events.py` writes structured records to
+stderr and nothing uploads them anywhere (CLAUDE.md section 1b). Anything a
+later run needs is a committed artefact or a ledger row, never a log line.
+
+**`source_health.py` is the one loop on the diagram, and it is drawn dashed for
+a reason.** It decides which addresses a run may ask, and it decides that from
+committed events and nothing else - so the instrument feeds the pipeline, but
+only through what is already on disk, never through live state.
+
+**`ledger.py` and `retention.py` are not on this picture, and that is the
+ruling.** They are storage and ageing, 3,341 lines between them. Folding storage
+under a package named for observation would make it the file every change
+touches; the split is what keeps each module answering one question.
+
 
 The pipeline is event-driven: a stage consumes one validated payload and emits another ([pipeline-loop.md](pipeline-loop.md)). The logging rule falls straight out of that - **a stage logs the same structured envelope it emits.** There is no second, prettier, human-oriented log format that can disagree with the persisted record about what happened.
 
@@ -55,7 +146,7 @@ Added 2026-09-15. A 5x model-time regression ran for six days unnoticed: nothing
 - `item.abandoned` - the shard ended before this item ran.
 - `shard.done` - the shard's totals, its failures counted by code, and its slowest item.
 
-**A flat record is one line of `{ envelope } | { cells }` with no nesting, and the cells are `ItemHealthRow`'s own column names.** That is the whole design: `grep` and `jq` both work on it without a path expression, and a field called one thing in the log and another in the census is impossible because the vocabulary is derived from the row rather than restated. `telemetry.record` refuses a cell name the row does not declare, so a typo fails the run rather than minting a field nobody reads.
+**A flat record is one line of `{ envelope } | { cells }` with no nesting, and the cells are `ItemHealthRow`'s own column names.** That is the whole design: `grep` and `jq` both work on it without a path expression, and a field called one thing in the log and another in the census is impossible because the vocabulary is derived from the row rather than restated. `telemetry.events.record` refuses a cell name the row does not declare, so a typo fails the run rather than minting a field nobody reads.
 
 Ten cells are not census columns: `stage`, `call` and `waited_s` say which record this is, `items`, `failures` and `slowest` are the shard's totals, and `prompt_sha256`, `prompt_chars`, `reply_chars` and `captured` say what crossed the wire. **`prompt_sha256` is the one fact here the census row cannot hold**, because putting it there needs `Summary` widened too - the assemble stage builds the row from the summary payload and the summary carries no prompt digest.
 
@@ -150,7 +241,9 @@ planned item as `ok` or `failed`, with a closed `FailureCode` vocabulary. A log
 line is evidence that the event happened; the ledger row is the record a later
 run or dashboard reads.
 
-Two stages write that census, and one row identity keeps them from disagreeing.
+Two stages write that census. One row identity keeps them from writing it
+twice, and since 2026-09-16 both build the row from the same file, so they
+cannot disagree about what it says.
 
 A worker commits the rows for its own items as soon as each one settles. Until
 it did, a shard's verdicts left the runner only inside a run artifact that
@@ -161,6 +254,17 @@ the day worth measuring.
 Assemble then writes the whole day's census, including a `not_attempted` row for
 every planned item no article payload arrived for. That keeps the denominator in
 the same file as the failure count.
+
+**The row comes off the shard that did the work.** A worker validates 113 cells
+an item at a time and seals them beside the article and the summary, so both
+writers read that file and prefer it. What a rebuild can say is only what those
+two payloads carry: on the committed fixture day, 40 of the 113 columns against
+71. The 31 columns in the gap are the ones nothing downstream could ever recover
+- which machine ran the item, what its two model calls cost, how long it waited
+for the server - because the only process that could see them ended when the
+shard did. The rebuild stays for the item no shard sealed a row for: a worker
+that died mid-item still owes the day a census line, and that line says what the
+payloads can say and no more.
 
 **A row is one planned item on one run**: `(date, run_id, item_id)`. The ledger
 filters on that identity before it writes, so assemble's copy of a row the worker
@@ -179,6 +283,45 @@ when only the first existed.
 A worker records only items that have settled. An item whose summary payload is
 simply not written yet was interrupted, not failed, and assemble classifies it
 later once the difference no longer matters.
+
+## What the machine was doing
+
+A throughput number with no machine beside it is not a measurement (Guardrail
+#10), so ten cells of the census row are about the host rather than the item:
+the processor, the runner label, how busy that processor was across the item,
+the one-minute load, three memory readings and what the kernel counted against
+the job's memory limit.
+
+`backend/idhazh/telemetry/host.py` is the only thing that reads them, and it
+reads them for two consumers at two grains.
+
+| Consumer | Grain | The question it answers |
+| --- | --- | --- |
+| the item row | one item | did this item meet a noisy neighbour? |
+| `state/runtime-counters.csv` | one shard | what did the whole job cost, and does the census's own clock agree with the server's? |
+
+**They stay two stores on purpose.** The counters row is the independent check on
+the census's own timings, and a check folded into the thing it checks stops
+being a check.
+
+**The item row records the sample taken while that item ran, never the shard's
+average.** An average says nothing about the item that was slow, which is the
+whole question these cells exist to answer.
+
+Three column names appear on both rows, and **two of the three are supposed to
+differ**. `cpu_busy_pct` is one item's window on the item row and the whole
+job's - cache restore and weight load included - on the shard row.
+`cgroup_peak_bytes` is a high-water mark read at two different instants.
+`cpu_model` is the third and it is not like the others: a processor does not
+change inside a job, so two different answers would mean the host had been read
+twice. Both rows take it from one `host_facts` call.
+
+Every source is one local file read, and a reading that cannot be taken records
+empty rather than failing the item. `/sys/fs/cgroup/memory.peak` has measured
+absent on every GitHub-hosted runner this project has probed, so that cell is
+usually empty in CI and always empty on a developer machine - a fact about the
+instrument, not about the job. What one sample costs is in
+[measurements.md](../reference/measurements.md).
 
 ## The visual ledger, and the eight terms that outlive it
 
@@ -260,13 +403,13 @@ Thirteen stores under `state/` is not thirteen designs. It is six grains, and th
 
 **Age is the second reason a store keeps its own file.** `item-health` is a fourteen-month census, `seen` is a ninety-day lookup, `published` is an unbounded membership test. Fold stores with different windows together and exactly one window survives: keep ninety days and the census dies, keep fourteen months and a ninety-day lookup pays for fourteen. Estimated 2026-09-15 from today's rate held forward: folding `seen` into the census would take it from a flat 34 MB to about 162 MB, for a read that never looks past day 90.
 
-**What is consolidated is the write path, not the row.** One constructor per grain, one append, one read, one fold, one projector. Where a second constructor already exists for the same grain it is a defect rather than a design: `ItemRecorder` computes about 53 of the census columns and discards them, which is why 70 of item-health's 113 columns are empty on every committed row.
+**What is consolidated is the write path, not the row.** One constructor per grain, one append, one read, one fold, one projector. Where a second constructor already exists for the same grain it is a defect rather than a design, and the item grain has two. `telemetry/record.py` fills about 53 of the census columns as the work stage learns them and closes into a validated `ItemHealthRow`; `telemetry/census.py` builds the row again afterwards out of the article and the summary payloads, which carry none of those cells. Nothing keeps the recorder's row, so 70 of item-health's 113 columns are empty on every committed row and the second constructor is the one whose answer lands.
 
 **The ladder is day, month, year, and each rung answers a different question.** Day files, because a day is the unit a prune deletes and the unit a window fetches - both stay cheap only while the file boundary is the day boundary. Month folds at `observability.item_health_full_grain_months`, because a trend over a year does not need every item. Year is unbuilt and stays unbuilt until a month fold is too big to read, which at kilobytes a month it is not.
 
 **The published mirror is a redaction step, not a copy.** `state/` is committed and never published; `frontend/public/` is published and never holds a ledger. Between them sits a projection that drops the columns a reader may not have - `PublicTelemetryRow` exists to strip 77 of them. Calling the published copy pollution mistakes the safety control for the leak. What it costs is 8.8 MB of a 39.2 MB site, under 1 percent of the 1 GB cap, and it is bounded: `public_telemetry_keep_months` deletes a published month in the same pass that folds its source, so the mirror plateaus rather than grows. The site reaches its cap on pictures and stories, not on telemetry.
 
-**A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` are 6.3 MB that no console route fetches. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes.
+**A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` were 6,455,733 bytes that no console route fetched, and on 2026-09-16 they went with their two projections. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes. The ledgers under `state/scores/` and `state/feed-health/` stay - they are the record, and the console reads them at build time.
 
 ### What folds, what does not, and the test that decides
 
@@ -301,10 +444,9 @@ There is a second reason, and it bites in production rather than in year two. A 
 | --- | --- | --- |
 | Fill the census columns the run already computes | 58 of the 70 empty columns, from values the process holds and discards | Nothing blocking. The cost is one commit, not a measurement |
 | Fold `visual-prunes` and `runtime-counters` into one run-grain ledger | one store and one writer instead of three | whether the month fold can carry two row shapes without a second fold path |
-| Move the three flat files to day trees | a prune that deletes a day instead of rewriting a file | the one-time migration's cost, and whether any reader assumes a single file |
+| Move the three flat files to day trees | a store `idhazh telemetry prune` can reach, since that command takes a day file out and has no way to rewrite a row out of a flat one ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16)) | the one-time migration's cost, and whether any reader assumes a single file |
 | Compress the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606, 77.0 percent**, with no new dependency ([../reference/measurements.md](../reference/measurements.md#what-compressing-the-telemetry-takes-against-re-encoding-it-2026-09-15)) | whether every console fetch path handles the encoding. One build settles it. `span-rollup/` is 67 bytes and gzips to 77, so a switch has to leave a file alone where compressing it does not pay |
 | Re-encode every closed-vocabulary column as an ordinal integer | **measured 2026-09-15: 369,855 bytes of `state/item-health/`, 7.1 percent** - a ninth of what compressing the same files takes, and it costs a legend shipped beside the data and `grep failed` over a committed day | nothing. It is priced and deferred: compression is taken first, and an ordinal taken first would be re-encoded when compression lands |
-| Retire the two published mirrors nothing reads | 6.3 MB and two projections to keep working | whether anything outside this repository fetches them. Unknowable; the cost of being wrong is one re-publish |
 | A query engine over a rolling month index, in the browser | one fetch instead of a month of rows | the engine's wire size. The month it would replace is no longer an estimate: `telemetry/2026-09.csv` is 1,186,543 bytes and gzips to 254,252 |
 | A year rung on the fold ladder | a shape for year-over-year | nothing, until a month fold is too big to read. At kilobytes a month it is not |
 
@@ -353,7 +495,8 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | Committing a raw span as a record | A fourth account of the same run, free to disagree with the other three. A *derived* fold that restates nothing is the committed rollup above; a raw span stays evidence under `backend/var/`. | Fowler, 2026-08-30 |
 | Reproducing the nesting on the host with the SDK's own context managers | It works, and it costs a second code path for a sink that is opt-in and untestable here (no test touches the network, Guardrail #7). The file sink keeps the exact tree; the host gets one trace per item with the parent named. | Carmack, 2026-08-30 |
 | One ledger at item grain, every other store folded into it | Three stores key on something that was never an item - a feed that returned nothing, an address nobody planned, a candidate the ranker refused - so no item row can hold their facts. Three more carry a different retention, and a merged store keeps one window and loses the rest. The write path consolidates; the row does not. | Fowler and Carmack, 2026-09-15 |
-| Taking telemetry off the published site to save the size budget | It is under 1 percent of the cap and already plateaus at its retention, and there is no server - so removing it leaves the console with nothing to fetch and no month control. The projection is also the redaction step that strips 77 columns from the ledger. What can go is the 6.3 MB no route reads. | Carmack and Susan, 2026-09-15 |
+| Taking telemetry off the published site to save the size budget | It is under 1 percent of the cap and already plateaus at its retention, and there is no server - so removing it leaves the console with nothing to fetch and no month control. The projection is also the redaction step that strips 77 columns from the ledger. What could go was the 6,455,733 bytes no route read, and that went on 2026-09-16. | Carmack and Susan, 2026-09-15 |
+| Keeping `scores/` and `feed-health/` published in case somebody fetches them | Searched the built bundle on 2026-09-16 - 357 emitted files, 70 of them client chunks - and no chunk a browser loads names either path. The cost of being wrong is one re-publish; the cost of keeping them was two projections maintained for nobody, drifting unwatched from the ledgers they mirrored. | Susan, 2026-09-16 |
 | A query engine shipped to the browser over a rolling month index | The engine is 2 to 10 MB over the wire against a published month that gzips to 254,252 bytes, measured 2026-09-15 - 8 to 39 times what it saves. It costs more than it saves until a month passes about 50 MB, which the per-run item ceiling forbids. Compress the projection instead. | Carmack, 2026-09-15 |
 | A year rung on the fold ladder, built now | A month fold is kilobytes. A rung that folds nothing anybody struggles to read is a store to keep working for no question. | Fowler, 2026-09-15 |
 

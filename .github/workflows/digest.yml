@@ -722,7 +722,7 @@ jobs:
       # what it commits, so it carries none of the refresh settings.
       #
       # Appending the same row twice is the one thing that would make this worse
-      # than the loss it fixes, because `publish_telemetry` copies every row into
+      # than the loss it fixes, because `public_telemetry` copies every row into
       # the file the console reads. Each of the three ledgers keys a row -
       # `ledger.append_item_health` by run and item, `evals.writer.append` by
       # observation, `ledger.append_runtime_counters` by run and shard - so
@@ -1127,8 +1127,6 @@ jobs:
             frontend/public/assist/index
             frontend/public/source-health.json
             frontend/public/console
-            frontend/public/scores
-            frontend/public/feed-health
             frontend/public/run-days
             frontend/public/day-metrics
             frontend/public/machine
@@ -1149,8 +1147,8 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index
-          frontend/public/source-health.json frontend/public/console frontend/public/scores
-          frontend/public/feed-health frontend/public/run-days frontend/public/day-metrics
+          frontend/public/source-health.json frontend/public/console
+          frontend/public/run-days frontend/public/day-metrics
           frontend/public/machine frontend/public/span-rollup state corpus
 
       # After the day is committed and never before it. The fold deletes a

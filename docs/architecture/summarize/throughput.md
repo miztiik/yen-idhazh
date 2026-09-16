@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -128,7 +128,7 @@ An item is read by more than one model call, so from 2026-09-12 `Summary`,
 `state/item-health/` and the published projection record the five cost numbers
 per call as well as for the item. **The five flat cells are the sum over the
 calls the row records**, which is what keeps every reader that pools them -
-`publish_day_metrics`, `publish_console_band`, `backend/utilities/reconcile_prefill.py`
+`day_metrics`, `console_band`, `backend/utilities/reconcile_prefill.py`
 and the console's own rates - correct with no edit of its own on the day a
 second call starts being recorded. The contract refuses a row where they are
 not, so the property is enforced rather than described.
@@ -182,6 +182,27 @@ against a median call of 122,432 ms**, and **0 of the 2,317 are negative**
 ([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#our-stopwatch-and-the-servers-own-clocks-agree-to-0066-percent)).
 So a slow day is the model and not the client, and there is no unnamed third
 phase hiding inside `summarize_ms`.
+
+**Since 2026-09-16 each call has that same pair, and the wait is the
+subtraction.** `label_ms` and `summary_ms` are a stopwatch opened before their
+own request and stopped when the reply is in hand, so `label_ms` minus
+`label_prefill_ms` minus `label_decode_ms` is what the server did not claim for
+that call: transport, and any time it spent queuing the request without saying
+so. Until this row both columns were `prefill_ms + decode_ms` for their slot -
+a column that agrees with its two neighbours by construction, so the
+subtraction gave zero on every row ever written and a server that made an item
+wait read exactly like a server that answered at once. The item-level residual
+above could not stand in for it: one number over a pair of calls cannot say
+which of the two waited.
+
+**The rates are still taken over the server's own clocks, and `model_wait_ms`
+is still the item-level residual.** A decode rate charged the queue would read
+as a slower model, which is the misattribution the split exists to prevent, so
+`label_decode_tokens_per_s` divides by `label_decode_ms` and never by
+`label_ms`. `model_wait_ms` subtracts the four per-call prefill and decode
+cells from `summarize_ms` for the same reason: it is named for the wait, and
+subtracting the two stopwatches instead would leave it holding this process's
+own render, parse and draw under a name that says model.
 
 Measurements, with hardware and date, are in
 [`../../reference/measurements.md`](../../reference/measurements.md).

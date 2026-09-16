@@ -12,6 +12,18 @@ whole instrument exists to end, so `note` refuses a key neither vocabulary
 holds and a typo at a call site fails loudly rather than minting a cell nobody
 reads.
 
+**`close` hands back the row itself.** The names alone were not enough: a loose
+mapping let about 53 of these cells be computed on every item and thrown away
+with nothing raising, because the row the ledger keeps was built somewhere else
+out of two payloads that cannot carry them.
+
+**`persist` is what stops the row dying with the shard.** A validated row that
+reaches only a log line reaches only a CI artifact, so the value is written
+beside the article and the summary the same item produced, under the name every
+other per-item payload is filed under. `recorded_row` is the other half: the
+census reads that file back and prefers it to rebuilding the row from two
+payloads that between them cannot carry most of these cells.
+
 **A recorder is opened per item and nothing here outlives the article it was
 opened for.** It is mutable for that reason: the work stage learns these cells
 in the order the pipeline produces them, and a frozen shape would mean
@@ -25,11 +37,24 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
-from idhazh import telemetry
-from idhazh.contracts.item_health import ItemStage
+from idhazh.assemble import write_atomic
+from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.observability import LoggingConfig
+from idhazh.telemetry import events
+
+#: This module's own logger, for the one thing it says on its own account: a
+#: recorded payload it could not read. Every other line here is emitted through
+#: the logger its caller handed the recorder.
+LOG: Final = logging.getLogger("idhazh")
+
+#: What one item's recorded row is filed as, beside the article and the summary
+#: it describes, under `backend/var/run/<date>/items/`. The payload is
+#: `ItemHealthRow` itself, so nothing new is declared and nothing is migrated -
+#: the file is the row the recorder already validated (CLAUDE.md section 11).
+HEALTH_SUFFIX: Final = ".health.json"
 
 #: The stages `stage_gap_ms` subtracts from the item's own wall clock. Four, and
 #: they tile the item without overlapping: `label_ms` and `summary_ms` are a
@@ -121,7 +146,7 @@ class ItemRecorder:
         place to forget, which is how the first one came to cover the log line
         and not the ledger row.
         """
-        unknown = sorted(set(cells) - telemetry.RECORD_CELLS)
+        unknown = sorted(set(cells) - events.RECORD_CELLS)
         if unknown:
             raise ValueError(f"a record cell names no column: {', '.join(unknown)}")
         self._cells.update(cells)
@@ -139,13 +164,13 @@ class ItemRecorder:
         shard has to find every item, and an item that skipped a stage is
         exactly the one worth finding.
         """
-        return {name: self._cells.get(name) for name in telemetry.CENSUS_CELLS}
+        return {name: self._cells.get(name) for name in events.CENSUS_CELLS}
 
     def _emit(
-        self, name: telemetry.EventName, src: ItemStage, cells: Mapping[str, object]
+        self, name: events.EventName, src: ItemStage, cells: Mapping[str, object]
     ) -> None:
         self._log.info(
-            telemetry.record(ts=self._now(), src=src, run=self._run_id, name=name, cells=cells)
+            events.record(ts=self._now(), src=src, run=self._run_id, name=name, cells=cells)
         )
 
     def _addressed(self, **extra: object) -> dict[str, object]:
@@ -161,14 +186,14 @@ class ItemRecorder:
         """Say which item is in flight, so a killed shard names the one it died on."""
         if not self._flags.item_lines:
             return
-        self._emit(telemetry.EventName.ITEM_START, ItemStage.FETCH, self.cells())
+        self._emit(events.EventName.ITEM_START, ItemStage.FETCH, self.cells())
 
     def stage_done(self, stage: ItemStage, ms: int) -> None:
         """Say a named stage ended. The completion record arrives only if the item does."""
         if not self._flags.stage_lines:
             return
         self._emit(
-            telemetry.EventName.STAGE_DONE,
+            events.EventName.STAGE_DONE,
             stage,
             self._addressed(stage=stage.value, waited_s=round(ms / 1000, 3)),
         )
@@ -186,7 +211,7 @@ class ItemRecorder:
     def waiting(self, waited_s: float) -> None:
         """Say the model call now in flight is still in flight, and for how long."""
         self._emit(
-            telemetry.EventName.MODEL_WAITING,
+            events.EventName.MODEL_WAITING,
             ItemStage.SUMMARIZE,
             self._addressed(call=self._in_flight, waited_s=waited_s),
         )
@@ -202,7 +227,7 @@ class ItemRecorder:
         if not self._flags.stage_lines:
             return
         self._emit(
-            telemetry.EventName.STAGE_DONE,
+            events.EventName.STAGE_DONE,
             ItemStage.SUMMARIZE,
             self._addressed(stage=ItemStage.SUMMARIZE.value, call=call, **dict(cells)),
         )
@@ -220,11 +245,22 @@ class ItemRecorder:
         """
         self._parked_ms += max(ms, 0)
 
-    def close(self) -> dict[str, object]:
-        """Seal the item's clock and return its cells.
+    def close(self) -> ItemHealthRow:
+        """Seal the item's clock and return the item's census row, validated.
 
         `item_total_ms` and `stage_gap_ms` are computed here rather than at the
         call site, so they cannot be filled by two subtractions that disagree.
+
+        **The return is the contract and not a mapping, and that is the whole of
+        this method.** About 53 of these cells were computed on every item and
+        dropped with no type error anywhere, because the census row was rebuilt
+        somewhere else out of two payloads that cannot carry them. A row built
+        here is a row every cell was checked against its own column in.
+
+        **A cell this refuses is a producer that named the wrong column**, which
+        is a defect in the stage rather than a fact about the item, so it raises
+        rather than degrading: an item that cannot say where it stopped has
+        nothing to record.
         """
         total = int((time.monotonic() - self._started) * 1000) - self._parked_ms
         named = sum(
@@ -232,26 +268,84 @@ class ItemRecorder:
             for name in NAMED_STAGE_MS
             if isinstance(value := self._cells.get(name), int)
         )
+        self._cells["version"] = ItemHealthRow.schema_version()
         self._cells["item_ended_at"] = self._now()
         self._cells["item_total_ms"] = total
         self._cells["stage_gap_ms"] = total - named
-        return self.cells()
+        return ItemHealthRow.model_validate(self.cells())
 
-    def done(self) -> dict[str, object]:
+    def done(self) -> ItemHealthRow:
         """Say the item ended - for a failure exactly as for a success."""
-        cells = self.close()
+        row = self.close()
         if self._flags.item_lines:
-            self._emit(telemetry.EventName.ITEM_DONE, ItemStage.PUBLISH, cells)
-        return cells
+            self._emit(events.EventName.ITEM_DONE, ItemStage.PUBLISH, self.cells())
+        return row
 
-    def abandoned(self, why: str) -> dict[str, object]:
+    def abandoned(self, why: str) -> ItemHealthRow:
         """Say the shard bound killed this item mid-flight."""
-        cells = self.close()
+        row = self.close()
         if self._flags.item_lines:
             self._emit(
-                telemetry.EventName.ITEM_ABANDONED, ItemStage.PUBLISH, {**cells, "detail": why}
+                events.EventName.ITEM_ABANDONED,
+                ItemStage.PUBLISH,
+                {**self.cells(), "detail": why},
             )
-        return cells
+        return row
+
+
+def persist(items_dir: Path, row: ItemHealthRow) -> Path:
+    """Leave one item's recorded row where it outlives the process that recorded it.
+
+    **The row was validated and then dropped.** `close` hands back every cell the
+    work stage learned, the log line carries them, and the log is a CI artifact
+    kept for days - so the census the ledger keeps was rebuilt somewhere else out
+    of the article and the summary payloads, which between them cannot carry 70
+    of the 113 columns. This is the file that makes the value survive the shard.
+
+    **The payload is `ItemHealthRow` and nothing else**, so there is no second
+    shape to version, to migrate or to keep in step (CLAUDE.md section 11).
+
+    It lands beside `<item_id>.article.json` and `<item_id>.summary.json` because
+    that directory is what a work shard uploads and what assemble downloads: a
+    store of its own would need a second artifact, and a commit of its own would
+    be one commit an item.
+
+    Temp-file-plus-rename, like every other per-item payload (CLAUDE.md section
+    1a), so a shard killed mid-write leaves a whole file or no file.
+    """
+    path = items_dir / f"{row.item_id}{HEALTH_SUFFIX}"
+    write_atomic(path, row.to_json())
+    return path
+
+
+def recorded_row(items_dir: Path, item_id: str) -> ItemHealthRow | None:
+    """The row this item's shard sealed, or nothing where no shard sealed one.
+
+    The read side of `persist`, and it lives beside it so one module knows the
+    filename. A caller asks for an item and gets the row or nothing; where it
+    gets nothing it rebuilds the row from the payloads instead
+    (`census.census_row`).
+
+    **Nothing here is the file's absence.** A shard writes this the moment it
+    seals an item, so an item with no file is an item no shard reached - which
+    is most of the plan on a run that died, and is exactly what the census's
+    fallback exists to record.
+
+    **A file that will not open is nothing too, and that is a degrade rather
+    than a raise** (CLAUDE.md section 1a). A half-written or unreadable payload
+    costs the run the 58 cells only the shard could know; letting it raise would
+    cost the run the whole day's census. The stage counts what it rebuilt and
+    logs the count, so a shard whose rows all came back unreadable is a number
+    an operator can see rather than a silence.
+    """
+    path = items_dir / f"{item_id}{HEALTH_SUFFIX}"
+    if not path.exists():
+        return None
+    try:
+        return ItemHealthRow.read(path)
+    except (OSError, ValueError):
+        LOG.warning("a recorded item-health payload would not read path=%s", path)
+        return None
 
 
 def shard_done(
@@ -274,11 +368,11 @@ def shard_done(
     if not flags.item_lines:
         return
     log.info(
-        telemetry.record(
+        events.record(
             ts=now(),
             src=ItemStage.PUBLISH,
             run=run_id,
-            name=telemetry.EventName.SHARD_DONE,
+            name=events.EventName.SHARD_DONE,
             cells={
                 "shard": shard,
                 "items": items,

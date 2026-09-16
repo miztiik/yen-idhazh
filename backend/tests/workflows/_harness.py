@@ -23,8 +23,8 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import publish_console
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
+from idhazh.telemetry.publish import series
 
 WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
 
@@ -629,8 +629,6 @@ COMMIT_STAGED_PATHS: Final = {
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
         "frontend/public/console",
-        "frontend/public/scores",
-        "frontend/public/feed-health",
         "frontend/public/run-days",
         "frontend/public/day-metrics",
         "frontend/public/machine",
@@ -698,12 +696,12 @@ REVIEW_ARTIFACT: Final = "review"
 CORPUS_SEED: Final = ("corpus/corpus.jsonl", "corpus/corpus.meta.json", "corpus/holdout.txt")
 
 # One committed file per console payload root, read off the working tree rather
-# than listed here: the roots are named in `publish_console` and every one of
+# than listed here: the roots are named in `series` and every one of
 # them ships with whatever its producer wrote, so a second list would be a
 # second thing to keep in step. Seven directory listings, once a session.
 CONSOLE_SEED: Final = tuple(
     f"frontend/public/{dirname}/{path.name}"
-    for dirname in publish_console.PUBLISHED_ROOTS
+    for dirname in series.PUBLISHED_ROOTS
     for path in sorted((REPO_ROOT / "frontend" / "public" / dirname).glob("*"))
     if path.is_file()
 )
@@ -811,8 +809,6 @@ COMMIT_REFRESH_PATHS: Final = {
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
         "frontend/public/console",
-        "frontend/public/scores",
-        "frontend/public/feed-health",
         "frontend/public/run-days",
         "frontend/public/day-metrics",
         "frontend/public/machine",

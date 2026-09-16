@@ -26,14 +26,15 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, publish_console
+from idhazh import assemble
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.visual_decision import VisualKind, VisualState
+from idhazh.telemetry.publish import series
 
-DIRNAME: Final = publish_console.RUN_DAYS_DIRNAME
+DIRNAME: Final = series.RUN_DAYS_DIRNAME
 SUFFIX: Final = ".json"
 
 __all__ = [
@@ -51,12 +52,12 @@ __all__ = [
 
 def shard_path(digest_root: Path, month: str) -> Path:
     """The browser's copy of one month of day rows."""
-    return publish_console.month_path(digest_root, DIRNAME, month, SUFFIX)
+    return series.month_path(digest_root, DIRNAME, month, SUFFIX)
 
 
 def shard_relpath(month: str) -> str:
     """`frontend/public/run-days/<YYYY-MM>.json` - the POSIX form, for a log line."""
-    return publish_console.relpath(DIRNAME, f"{month}{SUFFIX}")
+    return series.relpath(DIRNAME, f"{month}{SUFFIX}")
 
 
 def months_published(digest_root: Path) -> list[str]:
@@ -189,7 +190,7 @@ def publish(
         text = canonical_json([row.model_dump(mode="json") for row in rows])
         return text.encode("utf-8")
 
-    return publish_console.publish_series(
+    return series.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,

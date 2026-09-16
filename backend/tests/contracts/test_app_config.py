@@ -874,22 +874,16 @@ def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
         "feed_health_keep_months",
         "scores_full_grain_months",
         "public_telemetry_keep_months",
-        "public_scores_keep_months",
-        "public_feed_health_keep_months",
         "public_run_days_keep_months",
         "public_day_metrics_keep_months",
         "public_machine_keep_months",
         "public_span_rollup_keep_months",
     }
-    # Three published payloads are held equal to the ledger they project, so
+    # One published payload is held equal to the ledger it projects, so
     # lowering either half has to lower both to reach the shortness check.
     paired = {
         "item_health_full_grain_months": "public_telemetry_keep_months",
         "public_telemetry_keep_months": "item_health_full_grain_months",
-        "scores_full_grain_months": "public_scores_keep_months",
-        "public_scores_keep_months": "scores_full_grain_months",
-        "feed_health_keep_months": "public_feed_health_keep_months",
-        "public_feed_health_keep_months": "feed_health_keep_months",
     }
     for name, months in fresh.full_grain_months().items():
         assert months >= shards, f"observability.{name} is shorter than a console read"

@@ -43,15 +43,14 @@ See
 `state/feed-health/<YYYY>/<MM>/<DD>.csv` answers "is this source still
 working?" One row per feed per run, read through `HEALTH_WINDOW_DAYS`. It files
 by day, because a run writes one day and taking a day back is one `rm`. The
-console reads it a month at a time through the published projection, which stays
-monthly: `publish_feed_health.publish` folds a month from that month's day
-files.
+console reads these day files directly at build time; there is no published
+mirror, and the one that existed until 2026-09-16 was never fetched.
 
 `state/item-health/<YYYY>/<MM>/<DD>.csv` answers "what did every planned item
 do?" One row per planned item per run - the fastest-growing of the four. It
 files by day, because a run writes one day and taking a day back is one `rm`.
 The console reads it a month at a time through the published projection, which
-stays monthly: `publish_telemetry.publish` folds a month from that month's day
+stays monthly: `public_telemetry.publish` folds a month from that month's day
 files.
 
 `state/runtime-counters.csv` answers "what did the model server itself count?"
@@ -311,9 +310,8 @@ def health_path(state_dir: Path, date: str) -> Path:
     A day rather than a month, for the reason `item_health_path` gives: a run
     writes one day, two runs collide on a file only when they are the same day,
     and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which `merge=union` cannot express. The mirror under
-    `frontend/public/feed-health/` stays monthly, because its grain follows what
-    a browser fetches - see `docs/concepts/partitions.md`.
+    which `merge=union` cannot express. Nothing mirrors this store into
+    `frontend/public/`.
     """
     return state_dir / HEALTH_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
@@ -983,7 +981,7 @@ def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]
     writers. The `work` job commits a row the moment its item settles, so the
     rows survive a run that dies before it publishes; `stage_assemble` then
     writes the whole day's census, which covers the same items again. A repeat is
-    not free: `publish_telemetry` copies every row into the file the console
+    not free: `public_telemetry` copies every row into the file the console
     reads, so one duplicated row is one item counted twice on the dashboard.
 
     `merge=union` on the shard cannot help - it keeps the lines from both sides,
@@ -1373,6 +1371,15 @@ def repeated_keys(path: Path, key: tuple[str, ...]) -> dict[tuple[str, ...], int
 def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
     """Every row of one full-grain partition. Empty for a day never written."""
     return [ItemHealthRow.from_csv_row(row) for row in _read_rows(path)]
+
+
+def load_span_rollup_shard(path: Path) -> list[SpanRollupRow]:
+    """Every row of one month's span rollup. Empty for a month never written.
+
+    A month rather than a day, because that is the grain the rollup is sharded
+    at. A caller asking about one date filters on `date` after reading.
+    """
+    return [SpanRollupRow.from_csv_row(row) for row in _read_rows(path)]
 
 
 def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[ItemHealthRow]:

@@ -82,9 +82,8 @@ def ledger_path(state_dir: Path, date: str) -> Path:
     A day rather than a month, for the reason `ledger.published_path` gives: a
     run writes one day, two runs collide on a file only when they are the same
     day, and taking a day back is one `rm` rather than an edit inside a shared
-    shard, which `merge=union` cannot express. The mirror under
-    `frontend/public/scores/` stays monthly, because its grain follows what a
-    browser fetches - see `docs/concepts/partitions.md`.
+    shard, which `merge=union` cannot express. Nothing mirrors this store into
+    `frontend/public/`.
 
     A caller passes the directory and the date and never the file name, so a
     second writer - the canary fixture builder is one - cannot spell the layout
@@ -276,24 +275,8 @@ def refresh_index(state_dir: Path) -> int:
         date = day_partition.date_of(path)
         if date not in live and date[:7] in archived:
             path.unlink()
-            _drop_empty_day_dirs(path)
+            day_partition.drop_empty_day_dirs(path)
     return written
-
-
-def _drop_empty_day_dirs(day: Path) -> None:
-    """Remove the month and year directory a deleted index day leaves behind.
-
-    The twin of `retention._drop_empty_day_dirs`, and spelled here because
-    `retention` imports this module rather than the other way round. Not
-    tidiness: `day_partition.day_files` walks every directory it finds, so a drop
-    that left them would make the walk cost more each year while deleting the
-    rows that walk exists to read.
-    """
-    for directory in (day.parent, day.parent.parent):
-        try:
-            directory.rmdir()
-        except OSError:
-            return
 
 
 class IndexDrift(NamedTuple):

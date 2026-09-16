@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-16
 
 What may be deleted, when, and what bounds every collection a run appends to.
 Unpublishing a day, the state tree's own ceilings, and the score shards that
@@ -239,6 +239,105 @@ The aggregate is kept forever by default. `observability.item_health_aggregate_k
 | Any slice the cohort key does not name | The shard's own SHA-256 and row count |
 
 Authority: Andre, under Guardrail #10 - a claim about an archived month has to be one the archive can still support.
+
+## A named prune: one store, one range of days (2026-09-16)
+
+Everything above is the scheduled half - a window in `config/` decides, and a
+day goes when it ages out of it. `idhazh telemetry prune` is the other half. A
+person names the store and the two days, and nothing else decides anything:
+
+```
+idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
+```
+
+It exists for the case a window cannot express - a day published in error, a run
+that wrote rows nobody wants kept, a source that asked to be removed. It carries
+no threshold of its own and may not grow one, for the reason the unpublish
+design above gives: a number in the source that decides what to delete is the
+defect, whatever the number is.
+
+**It reports and removes nothing until it is told twice.** `--dry-run` is on by
+default and `--no-dry-run` is the second word. That is the `idhazh prune-state`
+precedent, taken for the same reason and not a new one: `.github/workflows/prune.yml`
+squashes and force-pushes `main` on a schedule, so a state file deleted here
+stops being recoverable from history once that prune passes over the range
+([../../../CLAUDE.md](../../../CLAUDE.md) section 8). What a dry run prints is
+every path, one a line, rather than a count - the list is the thing a person
+reads before typing the second word, and a count says a deletion happened and
+nothing about what it took.
+
+**`--target` names a store and is never a path.** The vocabulary is closed, and
+a word outside it is refused with the whole list rather than resolved against
+the file system, so there is no argument on this command a path could travel
+through. That is Guardrail #11 applied at the sharpest point it has: a deletion
+primitive pointed at the repository is the one accident nobody can undo.
+
+| `--target` | Bounded on a schedule by |
+| --- | --- |
+| `counterfactual-scores` | nothing today |
+| `feed-health` | `observability.feed_health_keep_months` |
+| `item-health` | `observability.item_health_full_grain_months` |
+| `score-index` | `observability.scores_full_grain_months` |
+| `scores` | `observability.scores_full_grain_months` |
+| `visual-prunes` | nothing today - it is bounded by arithmetic, above |
+
+The rule that decides membership is one line: a store files
+`<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two below. The word an
+operator types **is** the directory name under `state/`, taken from the module
+that owns the store rather than spelled again, so a store that is renamed
+renames its target with it (Guardrail #6).
+
+**`state/day-metrics/` and `state/traces/` are day-shaped and deliberately
+outside it.** They file `<DD>.json` and `<DD>-<run>-<shard>.jsonl`, which
+`day_partition.day_files` refuses, and a second walker inside the prune would be
+a second answer to what a day file is. Bringing either in means teaching that
+one walker its suffix, which is where the question belongs.
+
+**`published` and `seen` are refused by name, with the reason attached.** Not
+forgetting is their whole job. `state/published/` is the guard against
+publishing one story twice and has no window at all - `collect.published_window_days`
+is `-1`, so every row in it is a row that must never be deleted, and a store
+that forgets cannot be that guard. `state/seen/` is what the planner remembers
+having already seen, so removing a day from it lets the next run rediscover
+every address it holds, which turns one operator command into a loop - the same
+argument the unpublish design above already makes for the same store. They are
+refused rather than left off the list because a store missing from a vocabulary
+reads as an oversight, and somebody who typed one of them is holding a real
+question whose answer is why the answer is no.
+
+**Both ends of the range are named.** `--since 2026-08-24 --until 2026-08-26` is
+three days and `--since X --until X` is one. That is the arithmetic
+`day_partition.days_in_window` already uses, where a cover of `n` days returns
+`n + 1` dates, and the two agree on purpose.
+
+**`scores` and `score-index` are one pair.** `evals.writer` refuses a repeat
+measurement by reading the index rather than the rows, so a range taken out of
+one and left in the other puts the two out of step: an index whose rows are gone
+refuses a measurement nothing can produce, and rows whose index is gone are
+re-measurable as if new. Prune both over the same range, or repair afterwards
+with `idhazh rebuild-score-index --month <YYYY-MM>`, which checks its own result
+both ways. The dry run is where that is caught, which is the second reason it is
+the default.
+
+**Atomic per store, through the rename the rest of this tree writes with.**
+Every selected file is moved into a scratch directory beside the stores - one
+rename each, on the same file system, because a cross-device move is a copy and
+neither atomic nor cheap - and only once every one has moved is that directory
+removed. A rename that fails part way puts back the ones already moved and
+raises, so the tree is exactly as it was found. The alternative is a loop of
+unlink calls, which cannot be undone: a prune that deleted three day files and
+then raised would leave an archive nobody can reason about, and the whole point
+of this shape is that no run can end there. The month and year directories a
+deleted day empties go with it, through the same `day_partition.drop_empty_day_dirs`
+the scheduled prune and the score archive use.
+
+**What the tests settle and what they cannot.** `backend/tests/retention/test_prune_range.py`
+drives a built tree and asserts the bijection both ways - every day inside the
+range went, and every day outside it is still there with the same SHA-256 - plus
+a move failed on the third of four leaving the tree byte-identical, and both
+refusals. What no test here can settle is what the SCHEDULED prune should
+delete: that is a window in `config/`, it is a person's decision, and this
+command deliberately has no opinion about it.
 
 ## `state/scores/` became a directory, and that bounds nothing on its own (2026-08-31)
 
