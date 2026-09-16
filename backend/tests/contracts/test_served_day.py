@@ -11,7 +11,12 @@ from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.digest_day import DigestItem, DigestVisual
-from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
+from idhazh.contracts.digest_view import (
+    COVERAGE_NAMES_MAX,
+    DigestView,
+    DigestViewItem,
+    DigestViewVisual,
+)
 
 from ._fixtures import (
     RANKING_SIGNAL,
@@ -41,6 +46,59 @@ def projector_version() -> str:
     return match.group(1)
 
 
+def projector_number(name: str) -> int:
+    match = re.search(rf"export const {name} = (\d+);", read_text(PROJECT_TS))
+    assert match, f"{name} is no longer a number literal in project.ts"
+    return int(match.group(1))
+
+
+def a_group(
+    *members: tuple[str, str, float | None],
+    anchor: str | None = None,
+) -> list[dict[str, Any]]:
+    """A day of stories, some of them one story, built rather than looked for.
+
+    The committed archive holds groups, and every one of them is an accident of
+    what the sources ran that morning: none of them is four outlets on one story
+    with one outlet running it twice, which is the case the rules below are for.
+    Built here, the awkward shape is the point (`CLAUDE.md` section 13).
+
+    Each member is `(item_id, source_name, rank_score)`. The first is the anchor
+    unless `anchor` names another, and every other member points at it.
+    """
+    keeper = anchor if anchor is not None else members[0][0]
+    return [
+        {
+            "item_id": item_id,
+            "vertical": item_id.split("-")[0],
+            "title": f"Story {item_id}",
+            "summary": f"A summary of {item_id}.",
+            "band": "high",
+            "truncated": False,
+            "source_name": source_name,
+            "source_id": source_name.lower(),
+            "source_kind": "reporting",
+            "source_url": f"https://{source_name.lower()}.test/{item_id}",
+            "rank_score": rank,
+            "introduced_by_run": 1,
+            "lenses": [],
+            "key_points": [f"{item_id} happened."],
+            "same_story_as": None if item_id == keeper else keeper,
+            "also_covered_by": None,
+        }
+        for item_id, source_name, rank in members
+    ]
+
+
+def stacks(items: list[dict[str, Any]]) -> dict[str, list[tuple[str, str]]]:
+    """Every story's publisher stack, as `(outlet, item id)` pairs."""
+    view = DigestView.project({"items": items})
+    return {
+        item.item_id: [(one.source_name, one.item_id) for one in item.covered_by]
+        for item in view.items
+    }
+
+
 def without_description(shape: dict[str, Any]) -> dict[str, Any]:
     """The same field, minus the prose.
 
@@ -61,6 +119,86 @@ def test_the_projector_writes_exactly_the_shape_the_contract_names() -> None:
     assert set(projector_array("ITEM_FIELDS")) == set(DigestViewItem.model_fields)
     assert set(projector_array("VISUAL_FIELDS")) == set(DigestViewVisual.model_fields)
     assert set(projector_array("DAY_FIELDS")) | {"version"} == set(DigestView.model_fields)
+    # The one number on the served item rather than a name on it. A cap the two
+    # languages disagreed about would write a payload longer than its own schema
+    # allows, which the contract refuses at read time on the reader's device.
+    assert projector_number("COVERAGE_NAMES_MAX") == COVERAGE_NAMES_MAX
+
+
+def test_a_folded_story_is_named_by_the_card_that_folds_it() -> None:
+    """The fold's whole recovery path: the anchor says who else ran the story.
+
+    One entry per OTHER OUTLET, strongest first, and every entry carries that
+    outlet's own item id - which is the address the page links to, so a reader who
+    wanted that newsroom's telling reaches it in one click.
+    """
+    day = a_group(("ai-01", "Alpha", 0.9), ("ai-02", "Beta", 0.7), ("ai-03", "Gamma", 0.8))
+    found = stacks(day)
+
+    assert found["ai-01"] == [("Gamma", "ai-03"), ("Beta", "ai-02")]
+    # And it is true from every member's point of view, because a card is drawn
+    # for a member whenever the fold is off or the reader's own address named it.
+    assert found["ai-02"] == [("Alpha", "ai-01"), ("Gamma", "ai-03")]
+    assert found["ai-03"] == [("Alpha", "ai-01"), ("Beta", "ai-02")]
+
+
+def test_a_story_no_group_holds_is_named_by_nobody() -> None:
+    day = [
+        *a_group(("ai-01", "Alpha", 0.9), ("ai-02", "Beta", 0.7)),
+        *a_group(("world-01", "Alpha", 0.5)),
+    ]
+    assert stacks(day)["world-01"] == []
+
+
+def test_a_story_naming_an_anchor_this_day_does_not_hold_is_named_by_nobody() -> None:
+    """The page cannot draw a card that is not here, so neither may the stack.
+
+    It is reachable: a run appends, so a day can carry a story whose anchor was
+    published under a retention window that has since dropped it.
+    """
+    day = a_group(("ai-02", "Beta", 0.7), ("ai-03", "Gamma", 0.8), anchor="ai-99")
+    assert stacks(day) == {"ai-02": [], "ai-03": []}
+
+
+def test_one_outlet_running_a_story_twice_is_named_once() -> None:
+    """The names and the count have to agree, or the card contradicts itself.
+
+    `also_covered_by` counts mastheads. A stack naming pieces would print three
+    newsrooms under a sentence saying two, and the strongest of an outlet's two
+    pieces is the one a reader should be sent to.
+    """
+    day = a_group(
+        ("ai-01", "Alpha", 0.9),
+        ("ai-02", "Beta", 0.4),
+        ("ai-03", "Beta", 0.8),
+    )
+    assert stacks(day)["ai-01"] == [("Beta", "ai-03")]
+
+
+def test_the_stack_stops_at_the_cap_and_the_count_carries_the_rest() -> None:
+    day = a_group(
+        ("ai-01", "Alpha", 0.9),
+        ("ai-02", "Beta", 0.8),
+        ("ai-03", "Gamma", 0.7),
+        ("ai-04", "Delta", 0.6),
+        ("ai-05", "Epsilon", 0.5),
+    )
+    named = stacks(day)["ai-01"]
+    assert len(named) == COVERAGE_NAMES_MAX
+    assert named == [("Beta", "ai-02"), ("Gamma", "ai-03"), ("Delta", "ai-04")]
+
+
+def test_an_unscored_story_is_named_last_rather_than_named_first() -> None:
+    """Null is unknown, never 0, and never the top of the stack either."""
+    day = a_group(("ai-01", "Alpha", 0.9), ("ai-02", "Beta", None), ("ai-03", "Gamma", 0.1))
+    assert stacks(day)["ai-01"] == [("Gamma", "ai-03"), ("Beta", "ai-02")]
+
+
+def test_two_stories_tying_on_score_are_ordered_by_address() -> None:
+    """A total order, so the projector in the other language sorts the same day
+    the same way - and two builds of one day agree."""
+    day = a_group(("ai-01", "Alpha", 0.5), ("ai-03", "Gamma", 0.5), ("ai-02", "Beta", 0.5))
+    assert stacks(day)["ai-01"] == [("Beta", "ai-02"), ("Gamma", "ai-03")]
 
 
 def test_the_block_this_projection_exists_to_drop_can_never_be_served() -> None:
@@ -106,13 +244,26 @@ def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
     a name the published item already has, with the same type and the same
     bounds - so a page reading the fetched file and a page reading the committed
     one cannot disagree about what they read.
+
+    **`covered_by` is the one name the projector derives rather than copies**, and
+    it is named here rather than excused in a comment: it is the day's grouping
+    read back as publisher names, so there is nothing on the committed item for it
+    to narrow. Every other name still has to be a copy, which is what keeps the
+    exception one name wide instead of a door.
     """
     published = DigestItem.model_json_schema()["properties"]
     served = DigestViewItem.model_json_schema()["properties"]
+    derived = {"covered_by"}
 
-    assert set(served) < set(published), "the served item names a field the published one does not"
+    assert derived < set(served), "the derived name is no longer on the served item"
+    assert not (derived & set(published)), (
+        "covered_by is on the committed item now, so the projector should copy it"
+    )
+    assert set(served) - derived < set(published), (
+        "the served item names a field the published one does not"
+    )
     for name, shape in served.items():
-        if name == "visual":
+        if name == "visual" or name in derived:
             continue
         assert without_description(shape) == without_description(published[name]), name
 

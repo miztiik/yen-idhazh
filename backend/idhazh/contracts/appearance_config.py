@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16T00:40",
+            change="digest.draw_same_story, additive, default true.",
+            why="The page folds a group into one card, and this is the one-edit revert.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T10:00",
             change="console.chart_arm_rule_days, console.chart_arm_minutes_target.",
             why="`arm` came from benchmarking and reads as a limb on a reader-facing page.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-13",
             change="digest.lead_shared_subject_weight is reworded and keeps its value of 0.2.",
             why="Carriage became a flat step, so the bound this sits under stopped multiplying.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12",
-            change="frame.zone_time_rem is REMOVED, and so are its bounds.",
-            why="The day's time rail is deleted.",
         ),
         ChangelogEntry(
             version="2026-08-29",

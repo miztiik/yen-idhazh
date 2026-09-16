@@ -144,6 +144,14 @@ export interface DigestItem {
 	 * A collapsed item is still in the payload, still has its anchor and still has
 	 * its archive entry - it is not drawn, not removed. */
 	same_story_as?: string | null;
+	/** Which other newsrooms ran this story, by name, strongest first.
+	 *
+	 * Derived by the projector rather than carried by the committed day, so it is
+	 * absent on a committed payload read straight off disk and present on every
+	 * served day. Absent and empty both mean no publisher stack is drawn. Capped,
+	 * so it is never the whole of `also_covered_by` - the card prints the
+	 * difference as a remainder. */
+	covered_by?: DigestCoverage[] | null;
 	/** The topic the day publishes this story under, absent on every day published
 	 * before 2026-09-12. `vertical` is the word the carrying feed declares about
 	 * itself and is what `item_id` is addressed from; this is where the story is
@@ -161,6 +169,17 @@ export interface DigestItem {
 	 * `deskCount` and the page filter all answer for the topic a story is filed
 	 * under, and this is placement data the backend reads. */
 	secondary_desk?: string | null;
+}
+
+/** One other newsroom that ran the same story, and the way in to its piece.
+ *
+ * The link is to OUR page for that piece, never straight out to the publisher: a
+ * reader who wanted the publisher's version is one more click away, and a reader
+ * who wanted ours has not lost it. Mirrors `DigestCoverage` in
+ * `backend/idhazh/contracts/digest_view.py`. */
+export interface DigestCoverage {
+	source_name: string;
+	item_id: string;
 }
 
 export interface DigestRunRef {
@@ -240,7 +259,7 @@ export interface DigestDay {
  * committed tree and never reaches a browser. */
 export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
 
-/** One item as the served day carries it - twenty-three of the published item's
+/** One item as the served day carries it - twenty-five of the published item's
  * fields, every one with a renderer.
  *
  * Derived from `DigestItem` rather than restated, so a field cannot mean one
@@ -249,8 +268,10 @@ export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
  * contract: `schemas/digest-view.schema.json`, from
  * `backend/idhazh/contracts/digest_view.py`.
  *
- * `same_story_as` is on `DigestItem` and not here: no page draws a group as one
- * item yet.
+ * `same_story_as` joined the list on 2026-09-16, when the page started folding a
+ * group into one card. `covered_by` joined with it and is the one name here the
+ * committed day does not carry: the projector derives it from the grouping the
+ * day already recorded.
  *
  * Every optional field is optional for the same reason it is on `DigestItem`:
  * a day published before it existed has no value for it, and **absent and null
@@ -278,6 +299,8 @@ export type DigestViewItem = Pick<
 	| 'on_front_page'
 	| 'rank_score'
 	| 'also_covered_by'
+	| 'same_story_as'
+	| 'covered_by'
 	| 'introduced_by_run'
 	| 'lenses'
 	| 'key_points'

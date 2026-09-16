@@ -209,8 +209,8 @@ function hold(date: string, entry: HeldDay): void {
  * `TypeError` the first time a reader types - a page that broke on an action
  * rather than on arrival, which is the worst shape this failure has.
  *
- * It is deliberately not a schema. A browser validating twenty-three fields
- * would need a validator on the reading path (Guardrail #1, Guardrail #8), and the
+ * It is deliberately not a schema. A browser validating every field a served
+ * item carries would need a validator on the reading path (Guardrail #1, Guardrail #8), and the
  * contract is checked where it can be checked properly: `idhazh validate-days`
  * opens every story of every committed day in CI and before every publish.
  */

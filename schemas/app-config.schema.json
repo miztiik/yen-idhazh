@@ -1702,6 +1702,12 @@
           "title": "Desk Thin Max",
           "type": "integer"
         },
+        "draw_same_story": {
+          "default": true,
+          "description": "Whether the page folds a group of the same story into one card. On, a story that names another as its story is not drawn as its own card, and the anchor's card carries a stack of publisher names that link to it. Off, every story is drawn on its own card and the stack is not drawn - which is exactly the page as it was before 2026-09-16. Nothing is unpublished either way: a folded story keeps its address, its archive entry and its month search entry (docs/architecture/publishing/layout.md). Retire it when the grouping's false-merge rate has been measured on a published day and the Editor has accepted it; until then it is the revert path, and one config edit puts every story back on its own card.",
+          "title": "Draw Same Story",
+          "type": "boolean"
+        },
         "filter_min_chars": {
           "default": 2,
           "description": "How many characters a reader types before an in-place filter narrows a list. It binds the day page and the archive, which share one panel. Two rather than one because one letter narrows nothing: a single letter matches most story titles and the commonest matches almost all of them, where a two-letter pair matches a small fraction. A first keystroke that redraws the page and removes almost nothing is work the reader watches for no answer. Over 8 the field stops narrowing anything a reader would think to type.",
@@ -1994,6 +2000,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "ui.draw_same_story, additive, default true.",
+      "version": "2026-09-16T13:00",
+      "why": "The page folds a group into one card, and this is the one-edit revert."
+    },
+    {
       "change": "assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
       "version": "2026-09-16T12:00",
       "why": "One cosine cannot be reweighted; a composite with a floor on it can."
@@ -2007,11 +2018,6 @@
       "change": "run.qualify_on_the_production_path, additive, default true.",
       "version": "2026-09-15T23:30",
       "why": "A candidate is only qualified on the path production actually runs."
-    },
-    {
-      "change": "run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
-      "version": "2026-09-15T22:10",
-      "why": "A worker killed at its timeout uploads nothing, so the items are lost."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2086,7 +2092,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-16T12:00",
+      "default": "2026-09-16T13:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2097,5 +2103,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-16T12:00"
+  "version": "2026-09-16T13:00"
 }

@@ -15,16 +15,20 @@
 	 * The way out sits at the trailing edge, so it lands in the same place on
 	 * every item however long the sentences beside it run.
 	 */
-	import type { DigestItem } from '$lib/payload/types';
+	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
 	import ConfidenceChip from './ConfidenceChip.svelte';
 	import ReadAloud from './ReadAloud.svelte';
 	import SourceLink from './SourceLink.svelte';
 
 	let {
 		item,
+		stack = [],
 		onRead
 	}: {
 		item: DigestItem;
+		/** The other newsrooms that ran this story, as links this page can reach.
+		 * Empty where a card stands alone, and then the count below prints instead. */
+		stack?: DigestCoverage[];
 		onRead?: () => void;
 	} = $props();
 
@@ -56,6 +60,17 @@
 		return `Also covered by ${count} other sources today.`;
 	}
 	const coverageLine = $derived(coverage(item.also_covered_by));
+	/** How many other outlets the stack does not name.
+	 *
+	 * The stack is capped and it drops a name this page cannot reach, so the count
+	 * and the names part company and the difference is owed to the reader - a card
+	 * saying two newsrooms on a story five carried is a wrong number, which is the
+	 * one thing this whole block exists to avoid. `also_covered_by` is the count and
+	 * it is whole, so the subtraction is the honest remainder. Never below zero: on
+	 * a day published before the count existed it is null, and a stack of two would
+	 * otherwise print "and -2 more".
+	 */
+	const more = $derived(Math.max((item.also_covered_by ?? stack.length) - stack.length, 0));
 </script>
 
 <div
@@ -64,8 +79,28 @@
 >
 	<!-- Two sentences, then the two controls. The coverage line comes first
 	     because it is about the story and the confidence line is about what we
-	     wrote, and that is the order a reader needs them in. -->
-	{#if coverageLine}
+	     wrote, and that is the order a reader needs them in.
+
+	     Names where the page has them, and the bare count where it does not. They
+	     answer different questions - who ran it, and how many did - and the names
+	     are the more useful answer, so the count only prints where no name can be
+	     linked. Every name is a link to OUR page for that newsroom's piece: our
+	     summary of it, and its own way out to the original. A reader who wanted the
+	     publisher's version is one more click away and a reader who wanted ours has
+	     not lost it. -->
+	{#if stack.length > 0}
+		<span class="stack" data-item-stack={stack.length}>
+			<span class="stack-label">Also covered by</span>
+			{#each stack as other (other.item_id)}
+				<a class="pill" href="#{other.item_id}" data-coverage-pill={other.item_id}>
+					{other.source_name}
+				</a>
+			{/each}
+			{#if more > 0}
+				<span class="stack-more" data-coverage-more={more}>and {more} more</span>
+			{/if}
+		</span>
+	{:else if coverageLine}
 		<span class="text-text-tertiary" data-item-coverage>{coverageLine}</span>
 	{/if}
 
@@ -77,6 +112,42 @@
 </div>
 
 <style>
+	/* The stack reads as one sentence with the mastheads set in it, so it wraps as
+	   one thing and keeps its own rhythm inside the footer's flex row. */
+	.stack {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		color: var(--color-text-tertiary);
+	}
+
+	.stack-label,
+	.stack-more {
+		color: var(--color-text-tertiary);
+	}
+
+	/* A masthead, not a button. The hairline is what says it is a thing you can
+	   press; the surface is the card's own, so a row of them does not become a row
+	   of blocks under a summary. The tap target is the footer's line height plus
+	   this padding, which is what a name beside a name can afford - the two
+	   controls at the trailing edge are where the 44px targets are. */
+	.pill {
+		display: inline-flex;
+		align-items: center;
+		padding: var(--space-1) var(--space-2);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-full);
+		color: var(--color-text-secondary);
+		line-height: var(--leading-xs);
+	}
+
+	.pill:hover,
+	.pill:focus-visible {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+
 	/* Pinned rather than merely last: on an item whose two sentences are short
 	   the link would otherwise float in the middle of the line, and a reader
 	   scanning a page of items is looking for it in one place. */

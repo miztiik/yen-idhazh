@@ -301,6 +301,7 @@
     "archive_recent_days": 14,
     "archive_window_days": 21,
     "desk_thin_max": 12,
+    "draw_same_story": true,
     "filter_min_chars": 3,
     "items_per_topic": 5,
     "lead_cluster_floor": 2,
