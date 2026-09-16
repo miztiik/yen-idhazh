@@ -507,6 +507,16 @@ jobs:
             echo "${{ needs.plan.outputs.draft_sha256 }}  backend/models/${{ needs.plan.outputs.draft_file }}" | sha256sum --check
           fi
 
+      # Before the server, on purpose: the bandwidth probe wants a gigabyte and an
+      # idle machine, and once llama-server holds the memory it has neither.
+      - name: What machine this job drew
+        run: |
+          set -euo pipefail
+          python -m idhazh fingerprint \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard ${{ matrix.shard }} \
+            --job work
+
       - name: Start the model
         env:
           LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.summarize_file }}
