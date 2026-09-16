@@ -8,7 +8,98 @@ This page is the concept-tier statement of the logging doctrine in `CLAUDE.md` s
 
 The code is [`backend/idhazh/telemetry/`](../../backend/idhazh/telemetry/), and its modules are this page's sections: `events.py` for the log line, `spans.py` for the span tree, `sinks.py` for where a span goes, `rollup.py` for the committed fold, `traces.py` for where a committed trace lands, and `census.py` for the item-level census.
 
-## One event, one payload, one log line
+## The instrument on one picture
+
+Twelve modules, one question each. The diagram is the package's shape: what a
+stage hands the instrument, which module answers for it, where the answer lands
+on disk, and which of those a reader's browser ever fetches.
+
+```mermaid
+flowchart TD
+  subgraph stages["the pipeline - a stage emits, it does not decide where things land"]
+    collect["collect"]
+    extract["extract"]
+    work["work: summarize, classify, visuals"]
+    assemble["assemble"]
+  end
+
+  collect --> events
+  extract --> events
+  work --> events
+  assemble --> events
+  work --> record
+
+  subgraph pkg["backend/idhazh/telemetry/ - one module, one question"]
+    events["events.py<br/>which line does a stage log?"]
+    spans["spans.py<br/>how does a span open, nest, close?"]
+    sinks["sinks.py<br/>where does a finished span go?"]
+    record["record.py<br/>every cell of one item's census row"]
+    census["census.py<br/>what was one item's terminal state?"]
+    rollup["rollup.py<br/>what does one shard's span tree total?"]
+    traces["traces.py<br/>where does a committed trace live?"]
+    inventory["inventory.py<br/>what does the instrument hold for one day?"]
+    health["source_health.py<br/>which addresses may a run ask?"]
+    republish["republish.py<br/>how does a finished day publish again?"]
+    cli["cli.py<br/>which subcommand runs?"]
+  end
+
+  events --> stderr["stderr, captured by the Actions run<br/>THAT is the log store - no sink, no beacon"]
+  events --> spans --> sinks
+  sinks --> traces
+  sinks --> rollup
+  record --> census
+
+  census --> ih["state/item-health/ (day)"]
+  rollup --> sr["state/span-rollup/ (day)"]
+  traces --> tr["state/traces/ (day)"]
+  health --> fh["state/feed-health/ (day)"]
+
+  subgraph state["state/ - committed, append-only, day-sharded"]
+    ih
+    sr
+    tr
+    fh
+    other["day-metrics/ and scores/ and published/ and seen/<br/>runtime-counters.csv and day-validations.csv"]
+  end
+
+  state --> inventory
+  inventory --> republish
+  republish --> pub
+
+  subgraph pub["frontend/public/ - static, fetched at runtime"]
+    telem["telemetry/"]
+    cons["console/"]
+    dm["day-metrics/"]
+    fhp["feed-health/"]
+    rd["run-days/"]
+  end
+
+  pub --> op["the operator console.<br/>A reader's digest never fetches any of it"]
+
+  health -.->|"reads committed events<br/>and nothing else"| collect
+```
+
+**Four things the picture is deliberate about.**
+
+**A stage emits; it never chooses a file.** Every arrow out of the pipeline lands
+on `events.py` or `record.py`, and where the answer is written is the
+instrument's decision. That is why a stage can be read without knowing the
+storage layout.
+
+**The log store is the Actions run.** `events.py` writes structured records to
+stderr and nothing uploads them anywhere (CLAUDE.md section 1b). Anything a
+later run needs is a committed artefact or a ledger row, never a log line.
+
+**`source_health.py` is the one loop on the diagram, and it is drawn dashed for
+a reason.** It decides which addresses a run may ask, and it decides that from
+committed events and nothing else - so the instrument feeds the pipeline, but
+only through what is already on disk, never through live state.
+
+**`ledger.py` and `retention.py` are not on this picture, and that is the
+ruling.** They are storage and ageing, 3,341 lines between them. Folding storage
+under a package named for observation would make it the file every change
+touches; the split is what keeps each module answering one question.
+
 
 The pipeline is event-driven: a stage consumes one validated payload and emits another ([pipeline-loop.md](pipeline-loop.md)). The logging rule falls straight out of that - **a stage logs the same structured envelope it emits.** There is no second, prettier, human-oriented log format that can disagree with the persisted record about what happened.
 
