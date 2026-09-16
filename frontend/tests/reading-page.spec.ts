@@ -778,6 +778,8 @@ test.describe('one card, and every publisher on it is a way in', () => {
 	const ANCHOR = 'ai-01';
 	const MEMBERS = ['ai-02', 'ai-03'];
 	const ALONE = 'world-01';
+	/** A story no outlet matched TODAY, which one outlet ran the evening before. */
+	const PICKED_UP = 'world-02';
 
 	/** One committed story, carrying what the card and the projector read. */
 	function story(
@@ -821,12 +823,12 @@ test.describe('one card, and every publisher on it is a way in', () => {
 		date: FOLD_DAY,
 		generated_at: '2026-01-03T10:00:00Z',
 		partial: false,
-		items_planned: 4,
+		items_planned: 5,
 		items_failed: 0,
 		runs: [{ n: 1, at: '2026-01-03T10:00:00Z', items_added: 4 }],
 		verticals: [
 			{ id: 'ai', display_name: 'AI', count: 3, desk_count: 3 },
-			{ id: 'world', display_name: 'World', count: 1, desk_count: 1 }
+			{ id: 'world', display_name: 'World', count: 2, desk_count: 2 }
 		],
 		// One lead on the anchor and one on a story the anchor folds. The second is
 		// what says which of the two wins, and the fold does: a folded story is not
@@ -839,7 +841,18 @@ test.describe('one card, and every publisher on it is a way in', () => {
 			story(ANCHOR, 'Alpha', 0.9, null),
 			story(MEMBERS[0], 'Beta', 0.7, ANCHOR),
 			story(MEMBERS[1], 'Gamma', 0.8, ANCHOR),
-			{ ...story(ALONE, 'Delta', 0.4, null), also_covered_by: 0 }
+			{ ...story(ALONE, 'Delta', 0.4, null), also_covered_by: 0 },
+			{
+				...story(PICKED_UP, 'Zeta', 0.3, null),
+				also_covered_by: 0,
+				also_ran_earlier: [
+					{
+						date: '2026-01-02',
+						item_id: 'world-9999999999',
+						source_name: 'Epsilon'
+					}
+				]
+			}
 		]
 	};
 
@@ -872,7 +885,12 @@ test.describe('one card, and every publisher on it is a way in', () => {
 		// payload and never from the page, so this is what says a folded story keeps
 		// its archive entry and its search entry. The fold is a drawing decision.
 		const served = JSON.parse(SERVED) as { items: { item_id: string; same_story_as?: string }[] };
-		expect(served.items.map((item) => item.item_id)).toEqual([ANCHOR, ...MEMBERS, ALONE]);
+		expect(served.items.map((item) => item.item_id)).toEqual([
+			ANCHOR,
+			...MEMBERS,
+			ALONE,
+			PICKED_UP
+		]);
 		for (const member of MEMBERS) {
 			const item = served.items.find((one) => one.item_id === member);
 			expect(item?.same_story_as, `${member} lost the story it names`).toBe(ANCHOR);
@@ -883,7 +901,11 @@ test.describe('one card, and every publisher on it is a way in', () => {
 		await openFolded(page);
 
 		const ids = await drawn(page);
-		expect(ids, 'the page did not fold the group into one card').toEqual([ANCHOR, ALONE]);
+		expect(ids, 'the page did not fold the group into one card').toEqual([
+			ANCHOR,
+			ALONE,
+			PICKED_UP
+		]);
 		expect(
 			ids.filter((id) => id === ANCHOR).length,
 			'the anchor was drawn more than once'
@@ -918,6 +940,30 @@ test.describe('one card, and every publisher on it is a way in', () => {
 			page.locator(`article.item[id="${ALONE}"] [data-item-stack]`),
 			'a story on its own was given a publisher stack'
 		).toHaveCount(0);
+	});
+
+	test('a newsroom that ran it yesterday is a name in the same stack, dated', async ({ page }) => {
+		// The window past midnight, as a reader meets it. The story keeps its own
+		// card - a cross-day match folds nothing, because a fold onto a card this
+		// page does not hold is a fold onto nothing - and what it gains is one more
+		// name, saying which day and pointing at that day's page.
+		await openFolded(page);
+
+		const earlier = page.locator(`article.item[id="${PICKED_UP}"] [data-earlier-pill]`);
+		await expect(earlier, 'the earlier telling is not named').toHaveCount(1);
+		await expect(earlier, 'the name does not say which day it ran').toContainText('Epsilon');
+		await expect(earlier).toContainText('yesterday');
+		expect(
+			await earlier.getAttribute('href'),
+			'an earlier name does not link to the day that holds it'
+		).toBe('/2026/01/02/#world-9999999999');
+
+		// And the story it is on is still drawn, which is the whole difference
+		// between a name and a fold.
+		await expect(
+			page.locator(`article.item[id="${PICKED_UP}"]`),
+			'a cross-day match folded the story away'
+		).toHaveCount(1);
 	});
 
 	// One test per folded story rather than one loop over both, because a second

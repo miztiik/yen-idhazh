@@ -140,6 +140,25 @@ class AssembleConfig(Model):
 
     same_story: SameStoryConfig = Field(default_factory=SameStoryConfig)
 
+    same_story_window_hours: float = Field(
+        default=36.0,
+        ge=0.0,
+        description=(
+            "How far apart two stories may have appeared and still be one story. A "
+            "story that breaks at 23:00 and is picked up at 07:00 is one story, and a "
+            "day boundary is an accident of the calendar rather than a fact about the "
+            "news - so the window is hours between the two stories' own times, not "
+            "which day each was published on. 36 hours covers an evening break picked "
+            "up the next morning and refuses a genuine follow-up two days later. It "
+            "is an ESTIMATE: what would overturn it is the age gap of the cross-day "
+            "pairs a person marks as one story. The window is also what bounds the "
+            "read - the pass loads only the earlier days it can still reach, so the "
+            "cost is set by this number and never by how much archive exists "
+            "(Guardrail #12). 0 keeps the pass inside one published day, which is "
+            "what it did before this knob existed, and is the revert."
+        ),
+    )
+
     group_identical_titles: bool = Field(
         default=True,
         description=(

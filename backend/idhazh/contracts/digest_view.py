@@ -70,7 +70,13 @@ from idhazh.contracts.base import (
     Url,
     compact_json,
 )
-from idhazh.contracts.digest_day import DigestLead, DigestRunRef, DigestVerticalRef
+from idhazh.contracts.digest_day import (
+    EARLIER_OUTLETS_MAX,
+    DigestLead,
+    DigestRunRef,
+    DigestVerticalRef,
+    EarlierStory,
+)
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.taxonomy import SourceKind
@@ -308,6 +314,18 @@ class DigestViewItem(Model):
             "outlets there are, and the card prints the difference as a remainder."
         ),
     )
+    also_ran_earlier: tuple[EarlierStory, ...] = Field(
+        default=(),
+        max_length=EARLIER_OUTLETS_MAX,
+        description=(
+            "Which newsrooms ran this same story on an EARLIER published day. Copied "
+            "straight off the committed item rather than derived here, because this "
+            "projection can only see one day and a name it would have to fetch from "
+            "another day is a name it would silently drop. Each entry is one more name "
+            "in the card's stack, pointing at that day's page rather than at an anchor "
+            "on this one. It folds nothing: the story keeps its own card."
+        ),
+    )
 
     @model_validator(mode="after")
     def _item_id_is_addressed_by_vertical(self) -> Self:
@@ -440,6 +458,10 @@ class DigestView(Contract):
                 else None
             )
             item_view["covered_by"] = covered.get(str(item.get("item_id")), [])
+            # Absent on every day published before 2026-09-16, and an absent list
+            # is an empty one rather than a null - the field is a list of names
+            # and null is not one.
+            item_view["also_ran_earlier"] = item.get("also_ran_earlier") or []
             items.append(item_view)
         return cls.model_validate({**served, "items": items})
 
