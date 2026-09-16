@@ -36,7 +36,7 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
 
     **`date` names the run, and that is the whole cover.** A run appends only to
     the file its own date routes to, so a repeat the merge left can only be in a
-    file this run wrote - and the ordinary pass reads six files whether the
+    file this run wrote - and the ordinary pass reads eight files whether the
     archive holds one day or a thousand. It used to glob every feed-health shard,
     every item-health partition and every score shard, which charged each run for
     every month the pipeline had ever recorded and found nothing, because a

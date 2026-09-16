@@ -19,6 +19,7 @@ is [the processor lottery](benchmarks/the-processor-lottery.md).
 | Producer | `idhazh fingerprint`, through `backend/idhazh/telemetry/silicon.py` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
+| Committed | **from 2026-09-16.** The work job's commit step stages `state/host-fingerprint`; every row taken before that date was deleted with its runner |
 | Published to a reader | **no.** Operator surface only |
 
 **It is finer grained than `state/runtime-counters.csv` and it is partitioned
@@ -153,6 +154,39 @@ even when a vendor changes how it spells a name.
 but it holds a set rather than one value, and a CSV cell holds a scalar. A joined
 string keeps one column; the cost is that a reader of the schema cannot see the
 closed set and has to open the contract.
+
+## Design rationale
+
+**Nothing staged this ledger until 2026-09-16, so there is no history to query
+before that date.** The probe ran on every work shard, wrote its row into the
+runner's own checkout, and no commit step named the path - so the file went with
+the runner. `git ls-files state/host-fingerprint*` returned nothing at all, which
+is the proof and also why nobody noticed: the instrument reported success, the
+log line printed the machine, and the store stayed empty. Three things changed
+together: the work job's commit step stages `state/host-fingerprint`, a
+header-only day file is committed so `git add` under `set -euo pipefail` cannot
+abort that step on a fresh clone, and assemble's refresh set names the path so a
+lost push race hands it back to the tip rather than union-merging two copies.
+Authority: Carmack, 2026-09-16.
+
+**The guard that would have caught this was scoped to one source file.** A test
+already compares the ledgers a stage writes against the paths its job stages, and
+it reads `stages/work.py`. The probe is not there - it runs from `cli.py` as its
+own subcommand, early, because the bandwidth reading wants an idle host. So the
+guard was correct and blind at the same time. A second guard now reads
+`telemetry/silicon.py` the same way. **Scoping a drift guard to a file rather
+than to a question is what let a second writer through**, and the two guards are
+kept as two rather than merged, because each names the source it protects in the
+message it fails with.
+
+**A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
+is the registry the post-merge pass walks, and this ledger was not in it - which
+cost nothing while nothing was committed and would have cost a double-counted
+machine the moment something was. A job runs on one machine, so two rows under
+one `(date, run_id, job, shard)` are one machine written down twice, and the
+fleet distribution is the one question this record exists to answer. The first
+row wins; there is nothing to choose between two attempts that read the same
+host. Authority: Fowler, 2026-09-16.
 
 ## See also
 
