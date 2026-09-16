@@ -35,7 +35,7 @@ JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 SCHEMA_VERSION_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$"
 DATE_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}$"
 # `<YYYY>-<MM>`: a shard period. The same stem `frontend/public/telemetry/` and
-# `frontend/public/scores/` already file by, so a payload that names its own
+# the other published series already file by, so a payload that names its own
 # month spells it the one way the directories do. It named `state/seen/` until
 # 2026-09-13, when that ledger moved to day files - a published mirror's grain
 # follows what a browser fetches and a ledger's follows what a run writes, so

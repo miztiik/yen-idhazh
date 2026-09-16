@@ -82,10 +82,8 @@ from idhazh.render.write import write_bytes_atomic
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
-    feed_health,
     machine,
     run_days,
-    scores,
     source_health,
     span_rollup,
 )
@@ -1131,14 +1129,12 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     months = {month_of(date) for date in [*earlier_days(), DATE]}
     keep = len(months) + 1
     # Where `build-canary.mjs` puts the projection, which is not where the real
-    # tree puts it: the canary keeps telemetry under `state/` and the six other
+    # tree puts it: the canary keeps telemetry under `state/` and the four other
     # series beside the digest. The band needs it by name because its months
-    # list is the union across all seven.
+    # list is the union across all five.
     telemetry_root = state_root / "telemetry"
     written = 0
     for producer in (
-        scores,
-        feed_health,
         machine,
         span_rollup,
     ):

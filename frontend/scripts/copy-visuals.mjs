@@ -207,16 +207,17 @@ stageIndexes();
 // `console/band.json` by `console/+layout.ts` at build time, and
 // `telemetry/<month>.csv` on mount - and both are capped by
 // `page_weight.payload_ceilings_bytes`, which `bundle-gate.mjs` reads off this
-// staged tree. The other five are staged and served and nothing asks for them
+// staged tree. The other four are staged and served and nothing asks for them
 // yet: a payload written but never served is the half of the change that cannot
 // be tested, and the staging rule is the same one the day payloads already take.
+// `scores` and `feed-health` were two more until 2026-09-16, and they are the
+// reason that sentence has a limit: nothing ever asked, so the producers and the
+// 6.3 MB they staged went.
 const CONSOLE_SERIES = [
 	// The band is one file, not a month series, and it is named rather than
 	// pattern-matched: it is the first thing the console asks for, so a typo in
 	// a pattern would leave the page with no verdict and no error.
 	{ dirname: 'console', keep: (name) => name === 'band.json' },
-	{ dirname: 'scores', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) },
-	{ dirname: 'feed-health', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) },
 	{ dirname: 'run-days', keep: (name) => /^\d{4}-\d{2}\.json$/.test(name) },
 	{ dirname: 'day-metrics', keep: (name) => /^\d{4}-\d{2}\.json$/.test(name) },
 	{ dirname: 'machine', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) },

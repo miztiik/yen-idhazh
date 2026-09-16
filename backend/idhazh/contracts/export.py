@@ -33,8 +33,6 @@ from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-from idhazh.contracts.public_eval import PublicEvalRow
-from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.qualification import (
@@ -95,8 +93,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     ModelsConfig,
     ObservationIndexRow,
     PipelineTestsConfig,
-    PublicEvalRow,
-    PublicFeedRow,
     PublicRunDay,
     PublicTelemetryRow,
     QualificationReport,

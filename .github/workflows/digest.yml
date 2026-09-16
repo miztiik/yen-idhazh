@@ -1127,8 +1127,6 @@ jobs:
             frontend/public/assist/index
             frontend/public/source-health.json
             frontend/public/console
-            frontend/public/scores
-            frontend/public/feed-health
             frontend/public/run-days
             frontend/public/day-metrics
             frontend/public/machine
@@ -1149,8 +1147,8 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index
-          frontend/public/source-health.json frontend/public/console frontend/public/scores
-          frontend/public/feed-health frontend/public/run-days frontend/public/day-metrics
+          frontend/public/source-health.json frontend/public/console
+          frontend/public/run-days frontend/public/day-metrics
           frontend/public/machine frontend/public/span-rollup state corpus
 
       # After the day is committed and never before it. The fold deletes a

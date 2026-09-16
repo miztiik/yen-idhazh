@@ -67,11 +67,9 @@ from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import month_files
 from idhazh.telemetry.publish import (
     day_metrics,
-    feed_health,
     machine,
     public_telemetry,
     run_days,
-    scores,
     series,
     span_rollup,
 )
@@ -1261,11 +1259,9 @@ def _within(day: str, anchor: str, window_days: int) -> bool:
 #: Every month series the console asks for by name, as (directory, suffix).
 #:
 #: Telemetry is not here. It predates `series` and owns its own root,
-#: which the canary keeps under `state/` rather than beside these six - so it is
+#: which the canary keeps under `state/` rather than beside these four - so it is
 #: a parameter of `fetchable_months` instead of a row of this table.
 FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
-    (scores.DIRNAME, scores.SUFFIX),
-    (feed_health.DIRNAME, feed_health.SUFFIX),
     (run_days.DIRNAME, run_days.SUFFIX),
     (day_metrics.PUBLIC_DIRNAME, day_metrics.PUBLIC_SUFFIX),
     (machine.DIRNAME, machine.SUFFIX),
@@ -1276,7 +1272,7 @@ FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
 def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> list[str]:
     """Every month a shard the console fetches exists for, oldest first.
 
-    The union across all seven series and not the run-day months alone. A
+    The union across all five series and not the run-day months alone. A
     console that took one series for the list would never ask for a month the
     others hold on their own - and they can differ, because each is pruned by
     its own `observability.public_*_keep_months` and the canary's telemetry is
@@ -1287,11 +1283,11 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
     page that never fills. It is a parameter because it predates
     `series` and owns its own root - the canary keeps it under
     `state/`. Unnamed, it is looked for beside the digest root like the other
-    six, which is where the real tree has it. It is never taken from
+    four, which is where the real tree has it. It is never taken from
     `public_telemetry`'s module default: a tree under test would then answer
     with the repository's own months.
 
-    Seven directory listings and no file opened, and each directory is bounded
+    Five directory listings and no file opened, and each directory is bounded
     by its own retention knob, so this costs the same on any size of archive
     (`CLAUDE.md` Guardrail #12).
     """

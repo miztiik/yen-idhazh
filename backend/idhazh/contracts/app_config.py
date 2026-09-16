@@ -78,6 +78,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16",
+            change="observability lost the two published ages for scores and feed-health.",
+            why="The mirrors they pruned are gone; no console route ever fetched either.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T23:30",
             change="run.qualify_on_the_production_path, additive, default true.",
             why="A candidate is only qualified on the path production actually runs.",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-15T22:00",
             change="run.trial_state_dirname and retention.trial_state_days, both additive.",
             why="A trial run needs its own state tree, and that tree needs an expiry.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T20:00",
-            change="The embedded failure vocabulary gained model_refused.",
-            why="It follows item-health-row, where the vocabulary is declared.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -451,8 +451,9 @@ branch on and after the cutover contributes no identity on any day the archive
 holds. The pipeline has not published since `inputs` started being written. The
 commit that dropped `pipeline_fingerprint` from nine contracts therefore left it
 on `EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build
-time and hands to this module - rather than on `PublicEvalRow`, which nothing
-under `frontend/src/` opens. Dropping it would have made this panel report that
+time and hands to this module - rather than on the published projection of that
+ledger, which nothing under `frontend/src/` opened and which was deleted on
+2026-09-16. Dropping it would have made this panel report that
 nothing moved across nine days on which something did, which is a wrong answer
 where the whole design asks for a missing one.
 
