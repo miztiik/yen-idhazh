@@ -10,6 +10,11 @@ touch, then hands `publish_all` exactly the inputs that call takes. There is one
 dispatcher and this is not a second one - both entries walk the same
 `PROJECTIONS` tuple, in the same order, once each.
 
+Outside `publish/` on purpose. That package is one dispatcher and the ten
+projections it routes to, and a module in it that is not a projection is a
+payload no run writes. This file is a caller of the dispatcher, which is what
+`stages/assemble.py` is too, and neither of them lives in there.
+
 Reading the day back is what makes this bounded. One date names one directory
 and one month, so the work does not grow with the archive (Guardrail #12).
 """
@@ -26,7 +31,7 @@ from idhazh.contracts.run_manifest import RunManifest
 from idhazh.telemetry.publish.dispatch import Published, publish_all
 
 
-def replay_day(
+def republish_day(
     *,
     state_root: Path,
     digest_root: Path,
@@ -37,9 +42,8 @@ def replay_day(
     """Dispatch every projection again for one published day.
 
     The run identity comes off the manifest rather than off the clock. A day's
-    last run is the one that wrote the payloads in the directory, so replaying
-    against a fresh run id would file this publication under a run that never
-    happened.
+    last run is the one that wrote the payloads in the directory, so publishing
+    against a fresh run id would file this under a run that never happened.
     """
     target = day_dir(digest_root, date)
     day = DigestDay.read(target / "digest.json")

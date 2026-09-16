@@ -2,8 +2,8 @@
 
 Routing only. Every subcommand's body is in the module that owns its question
 (CLAUDE.md section 1a): `inventory.py` reads what one day recorded, and
-`publish/replay.py` writes one day's projections again. Nothing in this file
-opens a payload, derives a store path or counts a row.
+`republish.py` writes one day's projections again. Nothing in this file opens a
+payload, derives a store path or counts a row.
 
     idhazh telemetry show    --date <d>   which instrument files that day has
     idhazh telemetry census  --date <d>   how that day's items ended
@@ -33,8 +33,7 @@ from typing import Final
 
 from idhazh import config
 from idhazh.assemble import day_dir, utc_now
-from idhazh.telemetry import inventory
-from idhazh.telemetry.publish import replay
+from idhazh.telemetry import inventory, republish
 
 #: The word that reaches this router. `idhazh/cli.py` holds it in one place -
 #: the verb it lists and the verb it hands over on are the same string.
@@ -124,7 +123,7 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
                 f"the instrument for: no digest.json under "
                 f"{target.relative_to(digest).as_posix()}"
             )
-        published = replay.replay_day(
+        published = republish.republish_day(
             state_root=state,
             digest_root=digest,
             date=date,
