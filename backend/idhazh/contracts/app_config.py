@@ -78,9 +78,14 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-16T14:00",
+            version="2026-09-16T15:00",
             change="placement gained three freshness knobs, additive, the curve on.",
             why="A story planned at 02:20 held its morning freshness against the evening.",
+        ),
+        ChangelogEntry(
+            version="2026-09-16T13:00",
+            change="ui.draw_same_story, additive, default true.",
+            why="The page folds a group into one card, and this is the one-edit revert.",
         ),
         ChangelogEntry(
             version="2026-09-16T12:00",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-16",
             change="observability lost the two published ages for scores and feed-health.",
             why="The mirrors they pruned are gone; no console route ever fetched either.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T23:30",
-            change="run.qualify_on_the_production_path, additive, default true.",
-            why="A candidate is only qualified on the path production actually runs.",
         ),
         ChangelogEntry(
             version="2026-08-21",

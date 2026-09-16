@@ -22,6 +22,30 @@
       "title": "ConfidenceBand",
       "type": "string"
     },
+    "DigestCoverage": {
+      "additionalProperties": false,
+      "description": "One other newsroom that ran the same story, and the way in to its piece.\n\nThe link is to OUR page for that piece - our summary of it, and its own\n`Read the original` - never straight out to the publisher. A reader who\nwanted the publisher's version is one more click away and a reader who\nwanted ours has not lost it.",
+      "properties": {
+        "item_id": {
+          "description": "That newsroom's own story, which still has its address.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "source_name": {
+          "description": "The masthead, as the card prints it.",
+          "minLength": 1,
+          "title": "Source Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_name",
+        "item_id"
+      ],
+      "title": "DigestCoverage",
+      "type": "object"
+    },
     "DigestLead": {
       "additionalProperties": false,
       "description": "One of the day's leading stories, and the one sentence saying why it leads.\n\nThe story itself stays in `items` in the published order, so the block adds\na way in and removes nothing. Nothing here carries a position: a number\nbeside a story implies a score we would then owe the reader an explanation\nfor.",
@@ -172,7 +196,7 @@
             }
           ],
           "default": null,
-          "description": "How many other OUTLETS carried the same story today - a masthead, not a feed, so an outlet with four feeds counts once. 1 or more prints 'Also covered by N other sources today.' 0 and null both print nothing: null means the day recorded no answer, and 0 stopped printing 'Only one of our sources carried this.' on 2026-09-14 because the pass finds far too little of the day's duplication for that sentence to be true. See docs/architecture/publishing/layout.md.",
+          "description": "How many other OUTLETS carried the same story today - a masthead, not a feed, so an outlet with four feeds counts once. It is the count and `covered_by` is the names, and the two answer different questions: this one is whole where the names are capped, so the card prints the difference as a remainder. On a card with no stack, 1 or more prints 'Also covered by N other sources today.' 0 and null both print nothing: null means the day recorded no answer, and 0 stopped printing 'Only one of our sources carried this.' on 2026-09-14 because the pass finds far too little of the day's duplication for that sentence to be true. See docs/architecture/publishing/layout.md.",
           "title": "Also Covered By"
         },
         "band": {
@@ -203,6 +227,15 @@
           "default": null,
           "description": "How many feeds carried this one address. Null is unknown, never 1.",
           "title": "Carried By"
+        },
+        "covered_by": {
+          "description": "Which other newsrooms ran this story, by name, strongest first. Empty on a story the day grouped with nothing, and empty on a day published before the pass existed - both mean the page draws no publisher stack. It is capped, so it is never the whole of the count: `also_covered_by` is how many other outlets there are, and the card prints the difference as a remainder.",
+          "items": {
+            "$ref": "#/$defs/DigestCoverage"
+          },
+          "maxItems": 3,
+          "title": "Covered By",
+          "type": "array"
         },
         "desk": {
           "anyOf": [
@@ -297,6 +330,20 @@
           "default": null,
           "description": "Our sentence explaining a source limitation, never a badge.",
           "title": "Reader Note"
+        },
+        "same_story_as": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The item the page draws this story on, null on the one that is drawn. It was on the committed item and off the wire until 2026-09-16, because no page folded a group and a field with no renderer does not earn the wire. The page folds now: a story naming another is not drawn as its own card. It is not removed - it keeps its address, its archive entry and its month search entry, and the anchor's card links to it by name.",
+          "title": "Same Story As"
         },
         "source_id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -476,6 +523,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added DigestViewItem.same_story_as and .covered_by.",
+      "version": "2026-09-16T00:40",
+      "why": "The page folds a group into one card, which has to name the other outlets."
+    },
+    {
       "change": "DigestViewVisual.path became data_path.",
       "version": "2026-09-13T22:30",
       "why": "The reader's browser draws the chart from the marks, so no SVG is published."
@@ -489,11 +541,6 @@
       "change": "Added DigestViewItem.desk, so a served item says which topic it sat under.",
       "version": "2026-09-12T06:56",
       "why": "A browser fetches this copy, and the reading page groups stories by desk."
-    },
-    {
-      "change": "lenses on a served item is a list of Slug rather than of the closed LensId.",
-      "version": "2026-09-12T03:55",
-      "why": "A browser fetches this, so the closed enum was a second copy of the taxonomy."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -624,7 +671,7 @@
       "title": "Runs"
     },
     "version": {
-      "default": "2026-09-13T22:30",
+      "default": "2026-09-16T00:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -651,5 +698,5 @@
   ],
   "title": "DigestView",
   "type": "object",
-  "version": "2026-09-13T22:30"
+  "version": "2026-09-16T00:40"
 }

@@ -385,3 +385,39 @@ export function orderByTime(items: DigestItem[]): DigestItem[] {
 		return left.item_id < right.item_id ? -1 : left.item_id > right.item_id ? 1 : 0;
 	});
 }
+
+/** The stories this page folds behind another story's card.
+ *
+ * A story that names another as its story is not drawn as its own card. The
+ * anchor draws one card and prints the other newsrooms by name, each name a link
+ * to the story folded behind it.
+ *
+ * **Three stories are never folded, and each exclusion is the difference between
+ * a fold and the bug that pulled the collapse the first time.**
+ *
+ * - `keep` - the story the reader's own address named. `/<date>/#<item id>` is a
+ *   published address, so a folded story whose address resolved to nothing would
+ *   be unreachable through every route while its address still existed. Unfolded,
+ *   the pager reaches it, the browser focuses it, and a publisher name is a link
+ *   that lands.
+ * - A story whose anchor is not in `items`. On a topic page the two halves of a
+ *   group can sit on different desks, and folding a story behind a card this page
+ *   does not draw would take it off the page with nothing to find it by.
+ * - Every story, when `draw` is false. That is the revert path, and it is
+ *   `ui.draw_same_story`.
+ */
+export function foldedMembers(
+	items: readonly DigestItem[],
+	draw: boolean,
+	keep: string
+): Set<string> {
+	const folded = new Set<string>();
+	if (!draw) return folded;
+	const present = new Set(items.map((item) => item.item_id));
+	for (const item of items) {
+		const anchor = item.same_story_as;
+		if (!anchor || item.item_id === keep) continue;
+		if (present.has(anchor)) folded.add(item.item_id);
+	}
+	return folded;
+}
