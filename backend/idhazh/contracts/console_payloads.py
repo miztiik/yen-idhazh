@@ -1,6 +1,6 @@
 """Every dataset the console fetches, and what may not cross with it.
 
-The console reads twelve datasets. Two were already published, one had a
+The console reads ten datasets. Two were already published, one had a
 projection, and the other nine were read out of `state/` at build time and
 inlined - so the list of what the console needs lived nowhere, and a producer, a
 consumer and a gate each had to work it out again. This module is that list, as
@@ -23,8 +23,6 @@ from typing import Final
 
 from idhazh.contracts import (
     console_band,
-    public_eval,
-    public_feed_health,
     public_run_day,
     public_telemetry,
 )
@@ -55,7 +53,7 @@ class ConsolePayload:
     why: str
 
 
-#: The twelve, in the order a cold load needs them.
+#: The ten, in the order a cold load needs them.
 #:
 #: The band is first because every route carries it and nothing else can be
 #: asked for until its months list has landed. The rest are month or day shards
@@ -90,20 +88,6 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
             "from the census and not from the projection, span_integrity and "
             "elements_found, arrive on the day-metrics payload instead."
         ),
-    ),
-    ConsolePayload(
-        reader="payload.ts evalRows()",
-        published_to="frontend/public/scores/<YYYY-MM>.csv",
-        contract=public_eval.PublicEvalRow,
-        forbidden=public_eval.FORBIDDEN_COLUMNS,
-        why="One scored attempt: faithfulness, coverage, the counterweights and the band.",
-    ),
-    ConsolePayload(
-        reader="payload.ts feedResults()",
-        published_to="frontend/public/feed-health/<YYYY-MM>.csv",
-        contract=public_feed_health.PublicFeedRow,
-        forbidden=public_feed_health.FORBIDDEN_COLUMNS,
-        why="One feed read per run: whether a source answered, and our own reason when it did not.",
     ),
     ConsolePayload(
         reader="payload.ts loadManifests()",

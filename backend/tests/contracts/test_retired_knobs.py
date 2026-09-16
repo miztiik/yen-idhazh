@@ -34,7 +34,21 @@ def test_a_config_still_carrying_a_removed_knob_is_refused_by_name() -> None:
         assert f"{block}.{removed}" in str(raised.value)
 
 
-def test_the_removed_names_are_the_three_this_row_retired() -> None:
+def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> None:
+    """The two published mirrors were deleted, so there is nowhere to send the number.
+
+    `refuse_a_removed_knob` reads an empty replacement as "gone and nothing
+    replaces it". Pointing at `scores_full_grain_months` would be worse than
+    silence: that knob governs `state/scores/`, which is still there, so an
+    operator would move their number onto a live ledger's age.
+    """
+    for removed in ("public_scores_keep_months", "public_feed_health_keep_months"):
+        with pytest.raises(ValidationError, match="nothing replaces it") as raised:
+            ObservabilityConfig.model_validate({removed: 13})
+        assert f"observability.{removed}" in str(raised.value)
+
+
+def test_the_removed_names_are_the_five_these_rows_retired() -> None:
     """The map is what the refusal message reads, so it is the map that is asserted."""
     assert dict(SUPERSEDED_COLLECT_NAMES) == {
         "quarantine_after_failures": "availability_strikes_before_rest"
@@ -42,6 +56,8 @@ def test_the_removed_names_are_the_three_this_row_retired() -> None:
     assert dict(SUPERSEDED_RETENTION_NAMES) == {
         "keep_months": "item_health_full_grain_months",
         "hard_delete_after_months": "item_health_aggregate_keep_months",
+        "public_scores_keep_months": "",
+        "public_feed_health_keep_months": "",
     }
 
 
