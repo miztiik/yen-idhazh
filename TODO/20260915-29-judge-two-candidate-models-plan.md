@@ -22,7 +22,7 @@ So nothing raised in the session that produced this plan falls off the end.
 | C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | **shipped, #764.** `samples-{shard}.json`, worst faithfulness first, its own artifact |
 | C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | **shipped, #765 #769 #773.** All three steps |
 | C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | **shipped, #769** as `run.trial_state_dirname`, a named directory rather than a fixed one |
-| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **drawing.** Four solo runs dispatched on 2026-09-15: Gemma `35011547415`, Ornith `35011557915`, incumbent `35011568497`, Gemma `no_draft` `35011578538` |
+| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **shipped, #809 #814.** It is a lottery per JOB: nine of twelve dispatches split across two processors inside one run. Six machine types recorded, the spread is 3.7x, and every job now records its own silicon |
 | C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | **shipped, #760.** The oracle found a third workflow, so six server starts assert the served alias where two did |
 | C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | **shipped, #762.** The scratch-config block only, as the smallest first step |
 | C14 | Merge the two ready pull requests | task T9 | shipped |
@@ -33,7 +33,11 @@ So nothing raised in the session that produced this plan falls off the end.
 | C19 | The GitHub cache is GitHub's to manage, not ours | task T8 | owner ruled 2026-09-15 |
 | C20 | **The bench refetches article text on every repeat, so any long run can be refused** | task T1, and it blocked T6 | **shipped, #778.** The agreeing repeats are timed and named; a `no_draft` case and a dispatchable repeat count came with it |
 
-**Every row has landed except C11, and C11 is not code.** T6 is the one open item, and it is drawing: four solo runs are in flight and the finding is the distribution they land in.
+**Every row has landed.** What the drawing found is in
+[docs/reference/benchmarks/the-processor-lottery.md](../docs/reference/benchmarks/the-processor-lottery.md),
+which owns the question from here; drawing continues because the distribution is
+the finding, and each new draw now records its own machine rather than needing a
+person to read an artifact.
 
 ## 0. What this project is, and the five minutes of reading you owe
 
@@ -440,19 +444,48 @@ The advisor's objection is recorded here rather than acted on, because a later r
 
 The paired bench remains a good idea nobody has rejected - it is simply not what the owner asked for first. If it is ever picked up, the one thing to remember is that the weights cache key is one model's digest today, so a two-model job needs a key naming both.
 
-#### Where this stands, 2026-09-15
+#### Where this stands, 2026-09-16: SHIPPED
 
-**Unblocked and not started. It is the only row of this plan still open, and what it needs is a decision to spend runner time.**
+**The drawing happened, and it found something the ruling did not anticipate.**
 
-The harness is ready. #778 stopped a publisher's edit refusing a finished run, so a draw now produces a reading instead of an exit code. Every draw already records its processor, so step 1's requirement is met by the artifact rather than by anybody remembering.
+Twelve dispatches gave 24 job placements across **six** processor types, not the
+three anybody expected. The finding that matters most is not the spread - it is
+that **placement is per JOB, not per run**. Nine of the twelve dispatches split
+across two different processors inside one run: same commit, same dispatch,
+seconds apart. On 2026-09-15 four dispatches inside 18 seconds produced eight
+placements across four machine types.
 
-**One thing the ruling did not anticipate, and it is worth knowing before the next draw.** The two dispatches this session measured the between-run spread by accident: the same `llama-bench` decode test, the same weights, two machines both reporting EPYC 7763, differed by **8.8 percent**. So a solo draw is a reading of a machine as much as of a model, which is the advisor's objection with a number attached rather than a new argument. It does not overturn the ruling - the distribution is still real information - but it does set the bar a difference has to clear before it means anything, and any solo comparison under about 9 percent should be read as silence.
+That settles the "is it really a lottery" question the owner asked on 2026-09-16.
+It is, from our side, and no probe-then-gate trick can beat it: the expensive job
+is a different job and draws again.
 
-**The draft-head question is the one case where the paired shape is now cheap.** Both configurations open the same weights file, so there is no second download and the cache key problem above does not arise. `runtime_candidate=no_draft` runs it in one job. That is a different question from the fleet distribution the owner asked for, and it does not replace it.
+**The spread is worth more than any model difference.** The same weights read 3.7
+times faster on the best machine than the worst. Prefill and decode do not rank
+the machines the same way - the Xeon 8573C reads Qwen3.5 3.9 times faster and
+writes it 35 percent slower - so "the fast runner" is not a thing.
 
-What a draw costs: about 70 minutes a repeat on the machines measured so far, so a solo draw at 3 repeats is roughly 3.5 hours of one runner, and a paired draw at 2 repeats is roughly 4.5 hours.
+**Where it lives now.** The question moved to its own record,
+[docs/reference/benchmarks/the-processor-lottery.md](../docs/reference/benchmarks/the-processor-lottery.md),
+which carries every draw with its processor, what each host reports about itself
+from `lscpu` rather than from a codename, six named hypotheses each with the
+measurement that would settle it, and what could be done about the lottery with
+what each option costs. The model dossiers carry their own draws.
 
-Done when: each model has at least three recorded draws, the plan's measurement table carries every draw with its processor, and the write-up quotes a median with its sample size and date.
+**And the recording is no longer manual.** #814 made every job write what silicon
+it drew - family, model, stepping, instruction-set flags, cache, memory
+bandwidth, uptime and the platform's own name for the machine size - into
+`state/host-fingerprint/`, behind `observability.host_fingerprint`. Step 1 of
+this task used to be met "by the artifact rather than by anybody remembering";
+now it is met by a committed row a query can read.
+
+**One defect the drawing exposed.** `readings.json` stamped one processor for a
+whole dossier, taken from the `llm` job, while the wall-clock and memory readings
+on the same page come from the `runtime` job - a different machine in nine of
+twelve runs. The Gemma dossier named the wrong processor for its paired
+draft-head case and is corrected.
+
+Done, and drawing continues: the distribution is the finding, so it never has a
+last draw. What ends is the need for a person to read an artifact to get one.
 
 ### T7 - Fix two defects the bench has today. UNBLOCKED, AND THE MOST VALUABLE SMALL THING HERE.
 
