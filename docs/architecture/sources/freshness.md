@@ -246,6 +246,18 @@ jobs both have to finish ([../../concepts/config.md](../../concepts/config.md)).
 What it is *for* has changed, and this paragraph is the record of that change
 rather than a quiet re-derivation.
 
+## What sizes a day
+
+`run.safety_ceiling_per_run` could never answer this, and it was doing it badly. **The day runs five times.** Anybody reading `80` and picturing an 80-item day is wrong by a factor of five - a number a person set at 80 publishes about 400.
+
+So there are two ceilings and each one answers its own question. `run.safety_ceiling_per_run` (80) is what one run may hand the workers, and what it protects is the worker: it sizes the worst case a shard has to finish, and a worker killed at `run.shard_timeout_minutes` uploads nothing. `run.safety_ceiling_per_day` (400) is what the whole day may publish, across every run of it.
+
+**Both are guardrails, not rules.** They only ever refuse. Neither chooses content, ranks it, or reorders it - they bound how much the content-picker may hand over, and a day under its ceiling is untouched. When the day ceiling binds, it drops the weakest of what **this** run planned, on the same rank order the run ceiling uses. It never reaches back into a day that has already published; that day is finished.
+
+What it counts is what earlier runs of this date actually put in front of a reader, read off the item-health shard for the date. A run that planned an item and then failed to publish it costs the day nothing.
+
+The committed pair is `80` and `400`, which is five runs at the run ceiling. That is the arithmetic of the design that already ships, so turning the day ceiling on changes no day that has ever been published and only refuses a runaway. **Lowering it is an editorial decision about how long a day should be**, and it is the owner's to make, not this page's.
+
 ## How much of a day one publication may be
 
 `max_per_source` counts a desk in a run. A feed is configured against exactly
@@ -439,8 +451,9 @@ configuration change had already moved.
 **The real cause is named here and fixed nowhere.** `rank.plan_vertical` orders
 candidates and then admits all of them - `_take` refuses only what
 `max_per_source` (2) refuses. **There is no score floor anywhere in the
-pipeline.** The only other bound is `run.safety_ceiling_per_run`, and that guard
-is already inside the working range rather than above it: the plan job on
+pipeline.** The other bounds are `run.safety_ceiling_per_run` and
+`run.safety_ceiling_per_day`, and both are guardrails that refuse without
+choosing: the plan job on
 2026-08-25 logged `safety ceiling reached planned=221 ceiling=200`, so what
 decided the size of that run was the crash guard and not the score
 ([../../reference/measurements.md](../../reference/measurements.md)). A budget

@@ -82,7 +82,7 @@ which is the same family.
 | 5 | Draw the collapse, with a publisher stack that links | - | B | PENDING | - | - | - |
 | 6 | Retire the four hosts that serve one page | - | B | DONE | - | - | - |
 | 7 | One outlet never runs the identical piece twice | - | B | PENDING | - | - | - |
-| 8 | A ceiling on the day, beside the ceiling on a run | - | B | PENDING | - | - | - |
+| 8 | A ceiling on the day, beside the ceiling on a run | - | B | DONE | - | - | p29-r8 |
 | 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
 | 10 | A story that has been running ranks below one that broke today | - | C | PENDING | - | - | - |
 | 11 | The lead is a weighted score, and the page says how | 10 | C | PENDING | - | - | - |

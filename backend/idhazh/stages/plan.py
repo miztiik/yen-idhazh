@@ -296,6 +296,11 @@ def stage_plan(
     items = _dedupe_planned_items(items)
     items = _record_plan_duplicates(items, embedder=embedder, leads=leads, collect=collect)
     items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
+    items = _within_day_ceiling(
+        items,
+        published_today=sum(day_carried.values()),
+        ceiling=settings.app.run.safety_ceiling_per_day,
+    )
 
     # How much of the day one feed may hold is a share, and a share needs the
     # day's size. The day is what earlier runs published plus what this run is
@@ -340,6 +345,11 @@ def stage_plan(
         capped = _dedupe_planned_items(capped)
         capped = _record_plan_duplicates(capped, embedder=embedder, leads=leads, collect=collect)
         capped = _within_ceiling(capped, ceiling=settings.app.run.safety_ceiling_per_run)
+        capped = _within_day_ceiling(
+            capped,
+            published_today=sum(day_carried.values()),
+            ceiling=settings.app.run.safety_ceiling_per_day,
+        )
         if len(capped) < len(items):
             LOG.warning(
                 "day source ceiling cost the day a story short=%s planned=%s ceiling=%s",
@@ -638,23 +648,64 @@ def _first_sights(
 
 
 def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedItem]:
-    """What sizes a run. Measured 2026-08-25 and since, it fires on every one.
+    """What one run may hand the workers, and nothing more.
 
     It drops the lowest-scoring stories across every vertical rather than
     truncating the list, so a mis-parsed feed costs the weakest items and not
     whichever vertical happened to sort last.
 
-    It was written as a crash guard and supply overtook it: `items_planned` has
-    equalled the ceiling on every run since, first at 200 and now at 160. It is
-    the cap whatever it is called, and
-    `docs/architecture/sources/freshness.md` says so rather than leaving the
-    name to imply otherwise.
+    **A guardrail, not a rule.** It only ever refuses: it chooses no content,
+    ranks nothing and reorders nothing, and a run under it is untouched. What it
+    protects is the worker - this number sizes the worst case a work shard has to
+    finish, and a worker killed at `run.shard_timeout_minutes` uploads nothing.
+
+    It cannot bound the day, because the day runs five times.
+    `_within_day_ceiling` is the one that does.
     """
     if len(items) <= ceiling:
         return items
     ranked = sorted(items, key=lambda item: (-item.rank_score, item.item_id))[:ceiling]
     keep = {item.item_id for item in ranked}
     LOG.warning("safety ceiling reached planned=%s ceiling=%s", len(items), ceiling)
+    return [item for item in items if item.item_id in keep]
+
+
+def _within_day_ceiling(
+    items: list[PlannedItem], *, published_today: int, ceiling: int
+) -> list[PlannedItem]:
+    """What the whole day may publish, across every run of it.
+
+    Its neighbour above bounds one run, and a person reading `80` and picturing
+    an 80-item day is wrong by a factor of five - five runs at 80 publish about
+    400. Two different things needed bounding and one knob was doing both badly.
+
+    **A guardrail, not a rule**, on the same terms: it refuses and does nothing
+    else. `published_today` is what earlier runs of this date actually put in
+    front of a reader, so a run that planned and failed costs the day nothing,
+    and a day under the ceiling is untouched.
+
+    It drops the weakest of what THIS run planned. It never reaches back into a
+    published day - that day is finished.
+    """
+    room = ceiling - published_today
+    if len(items) <= room:
+        return items
+    if room <= 0:
+        LOG.warning(
+            "day ceiling reached, this run publishes nothing published=%s ceiling=%s",
+            published_today,
+            ceiling,
+        )
+        return []
+    ranked = sorted(items, key=lambda item: (-item.rank_score, item.item_id))[:room]
+    keep = {item.item_id for item in ranked}
+    LOG.warning(
+        "day ceiling reached published=%s planning=%s room=%s ceiling=%s",
+        published_today,
+        len(items),
+        room,
+        ceiling,
+    )
     return [item for item in items if item.item_id in keep]
 
 
