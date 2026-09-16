@@ -51,6 +51,10 @@ pytestmark = pytest.mark.workflow
 
 DRIFT_WORKFLOW: Final = REPO_ROOT / ".github" / "workflows" / "drift.yml"
 COMPARE_STEP: Final = "Compare the windows"
+
+#: The module that step calls. Read rather than copied, so a second copy cannot
+#: pass its own tests while the shipped one exits 0 on an empty window.
+REVIEW_MODULE: Final = "backend/utilities/drift_report.py"
 #: The five cells the review reads out of the eval ledger. A row carries about
 #: forty; `csv.DictReader` hands the program a mapping, so a fixture that names
 #: these five exercises every line of it.
@@ -456,16 +460,15 @@ def compare_step() -> dict[str, object]:
 
 
 def review_program() -> str:
-    """The exact bytes the workflow pipes into `python -`.
+    """The exact bytes the step runs, read from the module it calls.
 
-    Extracted rather than copied. A second copy of this program would pass its
-    own tests forever while the shipped one exited 0 on an empty window.
+    Read rather than copied. A second copy would pass its own tests forever
+    while the shipped one exited 0 on an empty window.
     """
     script = compare_step()["run"]
     assert isinstance(script, str)
-    match = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
-    assert match is not None, "the review step must carry an inline program"
-    return match.group(1)
+    assert REVIEW_MODULE in script, "the review step no longer calls the module this drives"
+    return read_text(REPO_ROOT / REVIEW_MODULE)
 
 
 def scheduled_windows() -> dict[str, str]:
@@ -526,12 +529,20 @@ def write_rows(directory: Path, records: list[dict[str, str]]) -> None:
 
 
 def review(directory: Path) -> subprocess.CompletedProcess[str]:
+    windows = scheduled_windows()
     return subprocess.run(
-        [sys.executable, "-c", review_program()],
+        [
+            sys.executable,
+            str(REPO_ROOT / REVIEW_MODULE),
+            "--recent-days",
+            windows["RECENT_DAYS"],
+            "--baseline-days",
+            windows["BASELINE_DAYS"],
+        ],
         cwd=directory,
         env={
             **os.environ,
-            **scheduled_windows(),
+            "PYTHONPATH": str(REPO_ROOT / "backend"),
             "GITHUB_SERVER_URL": "https://github.com",
             "GITHUB_REPOSITORY": "example/repository",
             "GITHUB_RUN_ID": "123",
@@ -554,7 +565,6 @@ def test_the_review_reads_its_floor_from_config() -> None:
     assert "config = load().app.drift" in program
     assert "from idhazh.config import load" in program
     assert enough() >= 1
-
 
 @pytest.mark.parametrize(
     ("recent", "baseline", "empty"),
