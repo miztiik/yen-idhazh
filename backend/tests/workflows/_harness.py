@@ -23,6 +23,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
+from idhazh import ledger
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
 
@@ -345,6 +346,21 @@ BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
 
 BENCH_CONFIG_STEP: Final = "Build the candidate config"
 
+#: Where a bench run's ledgers go. `run.trial_state_dirname` moves the state root
+#: for every stage of that run, so one input on the action below puts the whole
+#: bench under here and nothing of it beside the production rows.
+#:
+#: Owner decision, 2026-09-16. A bench is dispatched ad hoc, many times a day,
+#: against unmerged branches; a bench row in the ledger the console reads would
+#: mean every panel filtering by job for ever. The cost of the split is a join
+#: whenever somebody asks what machines GitHub has given us across both, and
+#: that is paid once, there, rather than on every read.
+BENCH_TRIAL_STATE: Final = "pipeline-tests"
+
+BENCH_LEDGER_ROOT: Final = f"state/{BENCH_TRIAL_STATE}"
+
+BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
+
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is
@@ -563,11 +579,23 @@ COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
 
 COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 
+# Which workflow each label's step lives in. `bench` is the only one outside the
+# daily run: `measure.yml` is dispatched by hand, many times a day, and since
+# 2026-09-17 it pushes the machine it drew.
+COMMIT_WORKFLOWS: Final = {
+    "plan": "digest.yml",
+    "work": "digest.yml",
+    "assemble": "digest.yml",
+    "fold": "digest.yml",
+    "bench": "measure.yml",
+}
+
 COMMIT_JOBS: Final = {
     "plan": "plan",
     "work": "work",
     "assemble": "assemble",
     "fold": "assemble",
+    "bench": BENCH_SERVER_JOB,
 }
 
 COMMIT_STEPS: Final = {
@@ -575,6 +603,7 @@ COMMIT_STEPS: Final = {
     "work": "Commit what this shard measured",
     "assemble": "Commit the day",
     "fold": "Commit the folded telemetry",
+    "bench": "Commit the machine this bench drew",
 }
 
 COMMIT_BASE_ENV: Final = frozenset(
@@ -597,14 +626,23 @@ COMMIT_SCRIPT_ENV: Final = {
     "assemble": COMMIT_BASE_ENV
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
     "fold": COMMIT_BASE_ENV,
+    # No settling command, and that is a property rather than an omission. The
+    # bench row is keyed on the GitHub run id, which no second dispatch can
+    # reproduce, so there is no repeat for a post-merge pass to drop.
+    "bench": COMMIT_BASE_ENV,
 }
 
 COMMIT_STAGED_PATHS: Final = {
+    # `state/host-fingerprint` joined on 2026-09-17 with this job's own probe.
+    # The work job has staged the directory since 2026-09-16; this job wrote no
+    # row into it at all until now, so the machine a run planned on was never
+    # recorded anywhere.
     "plan": [
         "state/seen",
         "state/feed-health",
         "state/feed-retirements.csv",
         "state/counterfactual-scores",
+        "state/host-fingerprint",
     ],
     # `state/score-index` is beside `state/scores` because it is the record of
     # what those rows are, and the writer reads it instead of them. A shard
@@ -650,6 +688,14 @@ COMMIT_STAGED_PATHS: Final = {
     # browser's copy of a folded month, and `git add` records a removal only for
     # a path it is handed. That directory IS in every checkout.
     "fold": ["state", "frontend/public/telemetry"],
+    # Under the trial root and nowhere near the production ledger. A bench runs
+    # many times a day against unmerged branches, so one of its rows beside the
+    # rows the console reads would mean every panel filtering by job for ever.
+    #
+    # The fingerprint directory alone, not `state/pipeline-tests` whole: the
+    # sweep's item-health, scores and traces land under the same trial root
+    # because the whole state root moved, and nothing reads them back.
+    "bench": [f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}"],
 }
 
 # The step that folds an out-of-window month before the step above commits it.
@@ -728,6 +774,25 @@ COUNTERS_JOB_FLAG: Final = "--job"
 
 COUNTERS_JOBS: Final = {"work": "work"}
 
+# Every job that records the machine it drew, and the `--job` value it files
+# under. All three of them since 2026-09-17: a run is only as fast as its
+# slowest job, and until that day only the middle one said what processor it was
+# on, so the two jobs either side cost time nobody could attribute.
+#
+# One step name across all three, because it answers one question in each.
+FINGERPRINT_STEP: Final = "What machine this job drew"
+
+FINGERPRINT_COMMAND: Final = "python -m idhazh fingerprint"
+
+FINGERPRINT_JOB_FLAG: Final = "--job"
+
+FINGERPRINT_JOBS: Final = {"plan": "plan", "work": "work", "assemble": "assemble"}
+
+# The bench draws a machine too, and it says so in its own words because its row
+# goes somewhere else. `measure.yml` is dispatched by hand against unmerged
+# branches, so its rows live under the trial root.
+FINGERPRINT_BENCH_JOB: Final = "runtime"
+
 # The two-row fixture the reader is driven over: one `work` row and one
 # `visuals` row, sharing a date, a run and a shard index. Fixed in size, and it
 # carries a case the committed ledger has never held (Guardrail #12). The
@@ -795,6 +860,10 @@ SUBSTITUTED_SHARD: Final = "3"
 
 SUBSTITUTED_SHARDS: Final = "8"
 
+#: The dispatch input the bench commit message names, so a reader of `main` can
+#: see which candidate a machine was drawn for.
+SUBSTITUTED_CANDIDATE: Final = "candidate"
+
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
@@ -802,6 +871,7 @@ EXPRESSION_VALUES: Final = {
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
     "github.sha": SUBSTITUTED_SHA,
     "matrix.shard": SUBSTITUTED_SHARD,
+    "inputs.runtime_candidate": SUBSTITUTED_CANDIDATE,
 }
 
 # What assemble hands back to origin's tip before it rebuilds. The day's own
@@ -1553,8 +1623,8 @@ def _substitute(text: str) -> str:
 
 
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
-    """The paths and the strings one daily commit step hands the shared script."""
-    workflow = _load_workflows()["digest.yml"]
+    """The paths and the strings one commit step hands the shared script."""
+    workflow = _load_workflows()[COMMIT_WORKFLOWS[label]]
     job_name = COMMIT_JOBS[label]
     step = _step(workflow, job_name, "name", COMMIT_STEPS[label])
     command = shlex.split(_script(step, f"job {job_name} commit step {label}"))

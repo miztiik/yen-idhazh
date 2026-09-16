@@ -236,6 +236,25 @@ jobs:
           python -m idhazh plan
           --date "${{ steps.decide.outputs.date }}"
           --execution "${{ github.run_id }}"
+
+      # Every job draws its own runner, so every job records the one it drew. A
+      # run is only as fast as its slowest job, and until now only `work` said
+      # what machine it was on - so the two jobs either side of it cost time
+      # nobody could attribute to a processor.
+      #
+      # After the plan and not before it: the probe files its row under the
+      # run's own id, and the plan is where that id is written. Before the
+      # fan-out, because nothing heavy has started - the feed reads are done and
+      # the bandwidth probe wants a gigabyte and an idle machine, which is the
+      # same reason it sits ahead of the model server in `work`.
+      - name: What machine this job drew
+        run: |
+          set -euo pipefail
+          python -m idhazh fingerprint \
+            --date "${{ steps.decide.outputs.date }}" \
+            --shard 0 \
+            --job plan
+
       # The day decides the fan-out, so this runs after the plan rather than
       # beside the date. `run.shard_size` is what one worker is sized to carry,
       # so a small day spends fewer jobs and restores the weights fewer times
@@ -294,6 +313,10 @@ jobs:
       # when the run has no rows - so neither a fresh clone nor a quiet run can
       # make this the missing path that aborts the step.
       #
+      # `state/host-fingerprint` is the fifth, added 2026-09-17 with the step
+      # above. The work job has staged it since 2026-09-16; this job wrote no row
+      # at all until now, so a run's plan machine was never recorded anywhere.
+      #
       # `append_health` settles the day file it wrote, but against the checkout,
       # which is frozen at the commit this run was triggered at - so a SECOND
       # ATTEMPT at this same plan cannot see the rows the first attempt pushed
@@ -319,7 +342,7 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/seen state/feed-health state/feed-retirements.csv
-          state/counterfactual-scores
+          state/counterfactual-scores state/host-fingerprint
 
       - uses: actions/upload-artifact@v7
         with:
@@ -1015,6 +1038,25 @@ jobs:
         with:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      # The third job that draws its own runner, and the last one to say so. It
+      # sits straight after the plan arrives and before anything else runs: the
+      # probe reads the plan for the run's id, and the bandwidth reading wants a
+      # gigabyte and an idle machine, which this job stops having the moment it
+      # starts embedding a day and building a site.
+      #
+      # `if: always()` on the job means this runs on a bad day too, which is the
+      # day worth measuring. `continue-on-error` for the reason the ledger steps
+      # below carry it: what this job owes a reader is the published day, and a
+      # probe must never be what costs one.
+      - name: What machine this job drew
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python -m idhazh fingerprint \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard 0 \
+            --job assemble
 
       - uses: actions/download-artifact@v8
         with:

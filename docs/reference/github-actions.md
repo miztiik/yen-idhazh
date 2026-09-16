@@ -1,8 +1,15 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
+
+**Two workflows push to `main`.** `digest.yml` does it on every run. `measure.yml`
+does it from 2026-09-17, and only from the `runtime` job, and only the machine
+that job drew - one row under `state/pipeline-tests/host-fingerprint/`. Nothing
+else in `measure.yml` writes anything back; every other job uploads an artifact
+and the runner takes the rest with it. The permission is raised on that one job
+rather than at workflow level, so the others still cannot.
 
 ## Trigger reference
 
@@ -288,10 +295,11 @@ The rollback rule for the truncation cap reads that clock, and until 2026-08-29
 the only place it existed was the jobs API, which drops a job record when the run
 ages out ([../archive/measurements-2026-08.md](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)).
 
-### The three commit steps push through a rebase, and the one that can rebuild rebuilds
+### The commit steps push through a rebase, and the one that can rebuild rebuilds
 
 The plan job, each work shard and the assemble job commit, then push in a loop of
-three attempts. All of them run one script,
+three attempts. From 2026-09-17 the bench's `runtime` job does too. All of them
+run one script,
 [`.github/scripts/commit-and-push.sh`](../../.github/scripts/commit-and-push.sh).
 Two copies of the loop were a loop no test could execute.
 
@@ -540,7 +548,9 @@ flowchart TB
 
 **One form field, because the file already holds the answer.** Both dispatches take `candidate_models_file` and nothing else about the candidate. Every fact a run needs - the repository, the 40-character commit, the GGUF filename, its SHA-256, its byte count, the alias the server answers to, the quantisation - is written in `config/models/<name>.json`, and a form that asked for them again was a second copy that could disagree with the first. It could bench one set of bytes and adopt another with every gate green. Leave the field empty and the run re-measures whatever `config/idhazh.json` currently points at, which is how the bench is checked against the page it reproduces.
 
-**The scratch config differs from the committed tree in one line.** Both workflows copy `config/`, move `models_file`, and change nothing else - so every control the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
+**The scratch config differs from the committed tree in the line an adoption moves.** Both workflows copy `config/`, move `models_file`, and change no control - so every setting the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
+
+**The bench copy carries one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench passes `pipeline-tests`, so every ledger the dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads. `Model validation` and the budget retake pass nothing and build exactly the copy they always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
 
 Each Measurements dispatch selects exactly one target:
 
