@@ -1,6 +1,6 @@
 # Gemma-4-E4B-it-qat-UD-Q4_K_XL
 
-**Last Updated**: 2026-09-16T12:00
+**Last Updated**: 2026-09-16
 **Status: evaluated.** It has been benched and it has never served a published
 item. `evaluated` is one of three words a dossier's status line may hold -
 `evaluated`, `incumbent`, `superseded` - and this line is the only place this
@@ -87,20 +87,20 @@ this model, so every draw is below with the machine that took it (owner ruling,
 
 | Processor | Draws | Prefill, 730 | Prefill, 1,800 | Prefill, 4,850 | Decode, 250 |
 | --- | --- | --- | --- | --- | --- |
-| AMD EPYC 7763 64-Core | 4 | 20.466 to 20.564 | 20.137 to 20.228 | 19.532 to 19.622 | 9.676 to 10.532 |
-| AMD EPYC 9V45 96-Core | 2 | 74.637 to 75.453 | 73.033 to 74.926 | 69.929 to 71.377 | 15.516 to 15.744 |
+| AMD EPYC 7763 64-Core | 6 | 20.433 to 20.564 | 20.137 to 20.228 | 19.532 to 19.622 | 9.676 to 10.532 |
+| AMD EPYC 9V45 96-Core | 3 | 73.595 to 75.453 | 72.198 to 74.926 | 68.082 to 71.377 | 15.014 to 15.744 |
 | Intel Xeon Platinum 8573C | 1 | 59.322 +/- 0.348 | 55.483 +/- 0.238 | 51.433 +/- 0.174 | 10.212 +/- 0.019 |
 
 All figures are tokens a second. A row with more than one draw shows the range
 across them; the one-draw row shows that draw's own spread.
 
-**Which machine a run draws is worth more than any model choice.** Reading is 3.7
-times faster on the 9V45 than on the 7763 - the same weights, the same build, the
-same prompt. **So no figure on this page may be compared with a figure on another
-model's page unless both carry the same processor.**
+**Which machine a run draws is worth more than any model choice.** The prefill
+median is 3.6 times higher on the 9V45 than on the 7763 - the same weights, the
+same build, the same prompt. **So no figure on this page may be compared with a
+figure on another model's page unless both carry the same processor.**
 
-Two rows are worth reading twice. **Prefill on the 7763 repeats to within half a
-percent across four draws, and decode on the same four spans 8.8 percent** - so a
+Two rows are worth reading twice. **Prefill on the 7763 repeats to within 0.6
+percent across six draws, and decode on the same six spans 8.8 percent** - so a
 decode difference under 8.8 percent cannot be shown by comparing two runs. And
 the Xeon reads 2.9 times faster than the 7763 while decoding at the same speed,
 which is why a fast runner is not a thing.
