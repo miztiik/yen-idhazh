@@ -1,7 +1,11 @@
 {
   "assemble": {
-    "duplicate_similarity_min": 0.94,
-    "group_identical_titles": false
+    "group_identical_titles": false,
+    "same_story": {
+      "cosine_weight": 0.8,
+      "floor_min": 0.91,
+      "key_point_weight": 0.2
+    }
   },
   "assist": {
     "eval_corpus_through": "2026-08-26",
