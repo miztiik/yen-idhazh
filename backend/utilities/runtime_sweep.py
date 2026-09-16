@@ -170,6 +170,18 @@ def collect(date: str, label: str, repeat: int) -> Collected:
 
     `sources` is a digest of the article as extracted rather than of the page,
     so it moves when a publisher edits the text and not when they change an ad.
+
+    Each item carries the words the candidate wrote, not only a digest of them.
+    A digest proves two candidates disagreed; it never says how, so four sweeps
+    have now shown a difference nobody could read. Five articles of our own
+    prose is a small thing to carry and it is the only thing here a person can
+    actually judge.
+
+    The text is our own summary of an untrusted page, and it stays data
+    (CLAUDE.md Guardrail #11): it is written into one JSON artifact under
+    `ROOT`, and no caller turns it into a shell argument, a path or a URL. It is
+    a bench artifact and reaches no reader - nothing in this module writes into
+    the published tree.
     """
     items_dir = RUN_ROOT / date / "items"
     articles = sorted(items_dir.glob("*.article.json"))
@@ -200,6 +212,9 @@ def collect(date: str, label: str, repeat: int) -> Collected:
             {
                 "item_id": data["item_id"],
                 "output_digest": data["output_digest"],
+                "title": data["title"],
+                "summary": data["summary"],
+                "key_points": data["key_points"],
                 **{
                     key: data[key]
                     for key in (

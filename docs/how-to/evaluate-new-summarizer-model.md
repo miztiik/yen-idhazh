@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -274,7 +274,9 @@ the process:
 real fetches, real summaries over a fixed five-article corpus:
 
 - `runtime-summary.json`: per-repeat startup, work and per-item timings, the
- resident-set samples, and the input and output drift verdicts;
+ resident-set samples, the input and output drift verdicts, and **the summary
+ each candidate wrote** - title, summary and key points, beside the digest of
+ each;
 - `cache-state.txt`: whether the weights were already on the machine, and the
  digests of the binary and the weights that ran;
 - `readings.json`: every quantity the page carries, machine-readable; and
@@ -282,8 +284,29 @@ real fetches, real summaries over a fixed five-article corpus:
  `docs/reference/models/<model>.md`. It is also printed to the run summary, so
  the numbers are readable without downloading anything.
 
+**The summary text is in the artifact from 2026-09-17, and it is the only
+evidence here a person can judge directly.** Until then the sweep kept the output
+digest and the token counts and threw the prose away, so four dispatches proved
+that a candidate wrote something different and left nothing to read. Owner
+approval, 2026-09-16. Five articles times the repeats times two candidates is
+about 29 KB of text at the median and 59 KB at the worst article this project has
+published, against a 500 MB artifact ceiling - so it needs no retention knob and
+has none.
+
+**It is a bench artifact and it reaches no reader.** Nothing writes it into the
+published tree; it is our own words about a source, and it stays a value in one
+JSON file rather than an argument, a path or a URL (Guardrail #11).
+
 The bench never writes the committed config, never publishes, and never grades a
 summary. It says how fast, not how good.
+
+**One thing a bench dispatch does commit, from 2026-09-17: the machine it drew.**
+One row lands on `main` under
+`state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, and nothing else
+from the dispatch is written back. A bench reading is about a machine, and until
+that date the processor it ran on expired with the artifact. The rows are kept
+apart from the daily run's for the reason on
+[../reference/host-metrics.md](../reference/host-metrics.md#design-rationale).
 
 Two readings are cold on purpose. The **first download** is what a cache miss
 costs, which is what the first run after a swap draws on every shard at once.

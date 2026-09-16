@@ -55,6 +55,11 @@ class HostFingerprintRow(Contract):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17",
+            change="Widened `job` to every workflow job that draws its own machine.",
+            why="A run whose slowest job is unmeasured is a run whose cost nobody can attribute.",
+        ),
+        ChangelogEntry(
             version="2026-09-16",
             change="Initial shape: the silicon a job drew, its instruction set and its bandwidth.",
             why="Throughput moved 3.7x by machine and nothing recorded which machine.",
@@ -64,7 +69,11 @@ class HostFingerprintRow(Contract):
     date: DateStamp
     run_id: RunId
     job: ServerJob = Field(
-        default=WORK_JOB, description="The workflow job that drew this machine."
+        default=WORK_JOB,
+        description=(
+            "The workflow job that drew this machine. Every job that draws its own "
+            "runner writes one row, because a run is only as fast as its slowest job."
+        ),
     )
     shard: int = Field(
         ge=0, description="The shard within that job. A single-shard job writes 0."

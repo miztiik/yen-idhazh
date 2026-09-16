@@ -409,6 +409,12 @@ jobs:
     needs: [models, llm]
     runs-on: ubuntu-latest
     timeout-minutes: 330
+    # The one job in this workflow that pushes, and it pushes exactly one thing:
+    # the machine it drew, under `state/pipeline-tests/`. Every other job here
+    # reads the repository and writes nothing back, which is why the permission
+    # is raised on this job rather than at workflow level.
+    permissions:
+      contents: write
     env:
       CANDIDATE_REPO: ${{ needs.models.outputs.candidate_repo }}
       CANDIDATE_REVISION: ${{ needs.models.outputs.candidate_revision }}
@@ -537,20 +543,52 @@ jobs:
           } | tee backend/var/runtime-sweep/cache-state.txt
 
       # Why the copy differs in one line and nothing else is written down once,
-      # in the action.
+      # in the action. The second input is the exception and it is not a control
+      # on the measurement: a bench is a run that exercises production's code
+      # path and must not be readable as a production day, so `cli` moves this
+      # run's whole state root onto `state/pipeline-tests/`.
       - name: Build the candidate config
         uses: ./.github/actions/candidate-config
         with:
           models_file: ${{ needs.models.outputs.candidate_models_file }}
+          trial_state: pipeline-tests
 
+      # `--execution` is the GitHub run id for the reason digest.yml gives: two
+      # dispatches on one day would otherwise compute the same run id, and the
+      # machine record is keyed on it - so the second dispatch's host would read
+      # as a repeat of the first and be settled away. Nothing else here reads a
+      # run id.
       - name: Build fixed five-article corpus
         run: |
           set -euo pipefail
           DATE=$(date -u +%F)
           export RUNTIME_DATE="$DATE"
           echo "RUNTIME_DATE=$DATE" >> "$GITHUB_ENV"
-          python -m idhazh plan --date "$DATE" --cap 5
+          python -m idhazh plan --date "$DATE" --cap 5 --execution "${{ github.run_id }}"
           python3 backend/utilities/runtime_sweep.py freeze-corpus --date "$DATE"
+
+      # A bench reading is about a machine, and until now the bench recorded
+      # which processor it drew in one line of a JSON summary that expires with
+      # the artifact. This is the same probe the digest jobs run, filed the same
+      # way, and it is the only row this workflow commits.
+      #
+      # It goes through the candidate config, which is what puts the row under
+      # `state/pipeline-tests/` rather than beside the production rows. A bench
+      # is dispatched many times a day against unmerged branches; mixing those
+      # rows into the ledger the console reads would mean every panel filtering
+      # by job for ever.
+      #
+      # After the corpus step because the probe reads the plan that step wrote,
+      # and before the sweep because the bandwidth reading wants a gigabyte and
+      # an idle machine - the same order the `work` job uses around its server.
+      - name: What machine this bench drew
+        run: |
+          set -euo pipefail
+          python -m idhazh fingerprint \
+            --config backend/var/candidate-config \
+            --date "$RUNTIME_DATE" \
+            --shard 0 \
+            --job runtime
 
       - name: Measure runtime candidate
         env:
@@ -593,6 +631,35 @@ jobs:
             --dossier backend/var/runtime-sweep/dossier.md \
             --readings backend/var/runtime-sweep/readings.json
           cat backend/var/runtime-sweep/dossier.md >> "$GITHUB_STEP_SUMMARY"
+
+      # THE ONE THING THIS WORKFLOW PUSHES. Every other step here uploads an
+      # artifact and the runner takes the rest with it; this commits one row -
+      # the machine this dispatch drew - to `main`.
+      #
+      # `state/pipeline-tests/host-fingerprint` and nothing wider. The sweep's
+      # own item-health, scores and traces land under the same trial root
+      # because the whole state root moved, but nothing reads them back and
+      # committing them would grow the repository for no reader (Guardrail #12).
+      #
+      # No `DROP_REPEATED_ROWS_COMMAND`, and that is a property rather than an
+      # omission: the row is keyed on the run id, the run id is `github.run_id`,
+      # and no second dispatch can reproduce one. There is no repeat for a
+      # post-merge pass to settle.
+      #
+      # `if: always()` because a bench that failed its verdict still drew a
+      # machine, and that is the dispatch worth having the record of.
+      # `continue-on-error` because a lost push must not turn a five-hour
+      # measurement into a red run.
+      - name: Commit the machine this bench drew
+        if: always()
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: "bench: the machine ${{ inputs.runtime_candidate }} drew"
+          NOTHING_STAGED_MESSAGE: "no machine recorded"
+          PUSH_FAILED_MESSAGE: "could not push the bench host record after three attempts"
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          state/pipeline-tests/host-fingerprint
 
       - name: Upload runtime sweep
         if: always()

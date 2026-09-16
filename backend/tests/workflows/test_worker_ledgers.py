@@ -18,6 +18,10 @@ from ._harness import (
     COMMIT_REFRESH_PATHS,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
+    FINGERPRINT_COMMAND,
+    FINGERPRINT_JOB_FLAG,
+    FINGERPRINT_JOBS,
+    FINGERPRINT_STEP,
     FOLD_STEP,
     HARVEST_STEP,
     RECORD_COMMAND,
@@ -213,7 +217,11 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     # then publishes with no picture. The review tree joins it one rung further
     # out again: nothing downloads it, no gate reads it, and it is built after
     # the day is committed - so the most a failure costs is one day's contact
-    # sheet, and the next run builds its own.
+    # sheet, and the next run builds its own. The assemble job's own machine
+    # probe is the newest: a run whose cost nobody can attribute is worse than a
+    # run with one host row missing, but not worse than a day that never
+    # published - and this job runs `if: always()`, so it is the one that has to
+    # survive a bad day.
     tolerant = {
         (job_name, step.get("name") or step.get("uses"))
         for job_name in _mapping(workflow.get("jobs"), "jobs")
@@ -223,6 +231,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     assert tolerant == {
         *(("work", name) for name in WORK_LEDGER_STEPS),
         ("assemble", "actions/download-artifact@v8"),
+        ("assemble", FINGERPRINT_STEP),
         ("assemble", HARVEST_STEP),
         ("assemble", FOLD_STEP),
         ("assemble", REVIEW_STEP),
@@ -339,18 +348,23 @@ FINGERPRINT_STAGE_APPENDS: Final = {
     "append_host_fingerprint": "state/host-fingerprint",
 }
 
+#: Which label commits the rows each job's probe writes. `plan` and `work`
+#: commit their own; `assemble` has no ledger step of its own and its machine
+#: row travels in the `state` it stages whole with the day.
+FINGERPRINT_COMMITTERS: Final = {"plan": "plan", "work": "work", "assemble": "assemble"}
 
-def test_every_ledger_the_fingerprint_stage_appends_to_is_staged_by_the_work_job() -> None:
+
+def test_every_job_that_records_a_machine_commits_the_row_it_wrote() -> None:
     """A machine nobody recorded cannot be counted next month.
 
     The probe runs early on purpose - the bandwidth reading wants an idle host -
     so it sits in a step of its own rather than inside `stage_work`, and the
     guard above reads `work.py`. That is the whole reason this one exists: two
-    writers, two source files, one staged list, and a shape that already failed
-    silently once.
+    source files, one staged list, and a shape that already failed silently once.
 
-    Read out of the stage's own source rather than spelled here, so a second
-    ledger added to the probe fails this instead of dying with the runner.
+    Read out of the stage's own source and out of the workflow rather than
+    spelled here, so a second ledger added to the probe, or a fourth job that
+    runs it, fails this instead of dying with the runner.
     """
     source = read_text(REPO_ROOT / "backend" / "idhazh" / "telemetry" / "silicon.py")
     called = set(re.findall(r"\bledger\.(append_[a-z_]+)\(", source))
@@ -359,13 +373,50 @@ def test_every_ledger_the_fingerprint_stage_appends_to_is_staged_by_the_work_job
     assert called <= set(FINGERPRINT_STAGE_APPENDS), (
         f"the fingerprint stage writes {sorted(called - set(FINGERPRINT_STAGE_APPENDS))}, "
         "which this test cannot say a staged path for. Add it to "
-        "FINGERPRINT_STAGE_APPENDS, and to the work job's commit step."
+        "FINGERPRINT_STAGE_APPENDS, and to the commit step of every job that probes."
     )
-    staged = set(COMMIT_STAGED_PATHS["work"])
-    for helper in sorted(called):
-        assert FINGERPRINT_STAGE_APPENDS[helper] in staged, (
-            f"stage_fingerprint calls {helper} but the work job never stages "
-            f"{FINGERPRINT_STAGE_APPENDS[helper]}, so the rows die with the runner"
+
+    workflow = _load_workflows()["digest.yml"]
+    probing = {
+        job_name
+        for job_name in _mapping(workflow.get("jobs"), "jobs")
+        for step in _steps(workflow, job_name)
+        if step.get("name") == FINGERPRINT_STEP
+    }
+    assert probing == set(FINGERPRINT_JOBS), (
+        f"{sorted(probing)} record a machine but {sorted(FINGERPRINT_JOBS)} were expected - "
+        "every job that draws a runner records it, so add the new one here and "
+        "make sure its commit step stages the ledger"
+    )
+
+    for job_name in sorted(probing):
+        staged = set(COMMIT_STAGED_PATHS[FINGERPRINT_COMMITTERS[job_name]])
+        for helper in sorted(called):
+            relative = FINGERPRINT_STAGE_APPENDS[helper]
+            covered = relative in staged or any(
+                relative.startswith(f"{path}/") or relative == path for path in staged
+            )
+            assert covered, (
+                f"the {job_name} job records a machine but nothing it stages covers "
+                f"{relative}, so the row dies with the runner"
+            )
+
+
+def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
+    """A row that cannot name its job is a row nobody can group by.
+
+    The column is an enum and the value is the job's own id in this file, so a
+    step that drifts from its job id writes a row that reads as another job's.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    for job_name, expected in sorted(FINGERPRINT_JOBS.items()):
+        step = _step(workflow, job_name, "name", FINGERPRINT_STEP)
+        script = _script(step, f"job {job_name} fingerprint step")
+        assert FINGERPRINT_COMMAND in script, f"{job_name} must run {FINGERPRINT_COMMAND}"
+        words = shlex.split(_substitute(script))
+        flag = words.index(FINGERPRINT_JOB_FLAG)
+        assert words[flag + 1] == expected, (
+            f"the {job_name} job files its machine as {words[flag + 1]}, not {expected}"
         )
 
 

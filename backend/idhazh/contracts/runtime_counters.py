@@ -2,9 +2,9 @@
 
 `state/runtime-counters.csv`. One row per job per shard per run. The `work` job
 appends one for each of its shards just after it commits the rows its items
-earned, and the `visuals` job appends one for the planner server it ran. `job`
-is the cell that says which of them wrote a row, and every other cell is
-unreadable without it - the two jobs serve different weights.
+earned. `job` is the cell that says which job wrote a row, and every other cell
+is unreadable without it - two jobs serve different weights. `digest.yml` also
+ran a `visuals` job until 2026-09-13, and six committed rows carry that value.
 
 **What one row covers.** Both `llamacpp:` figures are cumulative for the server
 process, and a shard starts one llama-server and keeps it for the whole job. So
@@ -118,13 +118,28 @@ class ServerJob(StrEnum):
 
     Ours to name, so it is a closed set. Every other identifier on a host row is
     a string the machine chose and cannot be one - see
-    `docs/reference/host-metrics.md`. Both values here already sit in the
-    committed ledger; refusing anything else is what stops a typo becoming a
-    third job nobody can group by.
+    `docs/reference/host-metrics.md`. Refusing anything else is what stops a typo
+    becoming a job nobody can group by.
+
+    Every value is a job's own id in its workflow file, lowercase, so a reader
+    goes from a row to the steps that wrote it with no lookup table in between.
+    A display name would drift from the thing it identifies.
+
+    **`visuals` is here for the rows and not for a job.** `digest.yml` ran one
+    until 2026-09-13, when the small model, its job and its flag were retired
+    together. Six committed counters rows still carry the value, and a member
+    with no producer left is the only thing that can read them back.
     """
 
+    # digest.yml, in the order a run reaches them.
+    PLAN = "plan"
     WORK = "work"
+    ASSEMBLE = "assemble"
+    # Retired from digest.yml on 2026-09-13. Kept for the six rows above.
     VISUALS = "visuals"
+    # measure.yml. The bench job that runs the real work stage over a fixed
+    # five-article corpus, and the one measurement job that writes a run plan.
+    RUNTIME = "runtime"
 
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
@@ -227,6 +242,11 @@ class RuntimeCountersRow(Contract):
     __schema_stem__: ClassVar[str] = "runtime-counters-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17",
+            change="Widened `job` to every workflow job that records a machine.",
+            why="One enum names the jobs; a job with no server still draws a host.",
+        ),
+        ChangelogEntry(
             version="2026-09-12",
             change="Appended `job`, the workflow job that wrote the row, defaulted to `work`.",
             why="Every row came from one job, so a second job's rows would have been unreadable.",
@@ -243,11 +263,6 @@ class RuntimeCountersRow(Contract):
         ),
         ChangelogEntry(
             version="2026-08-29",
-            change="Appended `job_seconds`, the shard job's own clock up to this scrape.",
-            why="A cap reverts on the slowest work job, and nothing recorded that clock.",
-        ),
-        ChangelogEntry(
-            version="2026-08-27",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
@@ -404,10 +419,13 @@ class RuntimeCountersRow(Contract):
     job: ServerJob = Field(
         default=WORK_JOB,
         description=(
-            "The workflow job that wrote this row. Two jobs stand a model server up and "
-            "they serve different weights - `work` the summarizer, `visuals` the visual "
-            "planner - so a rate pooled across both describes no model, and every other "
-            "cell here is unreadable without this one. It is the last column rather "
+            "The workflow job that wrote this row. Two jobs stood a model server up and "
+            "they served different weights - `work` the summarizer, `visuals` the visual "
+            "planner until that job was retired - so a rate pooled across both describes "
+            "no model, and every other cell here is unreadable without this one. The "
+            "vocabulary is wider than this column's writers because one enum names every "
+            "job that records a machine; only a job that stands a server up writes here. "
+            "It is the last column rather "
             "than a fourth identity cell so the migration that put it on every "
             "committed row is one appended cell a line, and nothing reading this file "
             "by position moves. An empty cell is refused rather than defaulted: a row "

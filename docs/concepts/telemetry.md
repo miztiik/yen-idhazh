@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -334,7 +334,9 @@ lottery](../reference/benchmarks/the-processor-lottery.md)).
 
 So there is a third grain: **one row a job**, in
 `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, holding what the host reports
-about its own silicon plus a memory-bandwidth probe.
+about its own silicon plus a memory-bandwidth probe. A bench dispatch writes the
+same shape into `state/pipeline-tests/host-fingerprint/`, apart from the rows the
+console reads.
 
 **Why a third grain rather than more columns on the two rows above.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
@@ -342,9 +344,12 @@ store the same answer a hundred times a day and say nothing new; the job grain
 stores it once. The two tables share the key `date`, `run_id`, `job`, `shard`, so
 the key is the join and no column is duplicated to make it work.
 
-**It is read once, early, before the model server starts.** The bandwidth probe
-wants a gigabyte and a quiet machine, and a probe taken after the server is up
-would measure the server. `idhazh fingerprint` is its own stage for that reason.
+**It is read once, early, before the job's heaviest step.** The bandwidth probe
+wants a gigabyte and a quiet machine, so it runs ahead of the model server in
+`work` and ahead of the embeddings and the site build in `assemble`; a probe
+taken after either would measure that step rather than the host. `idhazh
+fingerprint` is its own stage for that reason. Every job that draws a runner runs
+it, from 2026-09-17: a run is only as fast as its slowest job.
 
 **Nothing on this record reaches a reader.** It is an operator surface, and the
 published telemetry projection does not carry it.

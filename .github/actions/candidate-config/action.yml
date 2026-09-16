@@ -5,12 +5,23 @@ inputs:
   models_file:
     description: 'Models file under config/, for example models/gemma-4-e4b-qat.json.'
     required: true
+  trial_state:
+    description: >-
+      Where this run''s ledgers go under `state/`, as `run.trial_state_dirname`.
+      Empty keeps the committed value, which is production.
+    required: false
+    default: ''
 
 # The committed config still names the incumbent, and a measurement does not
 # edit it. The scratch copy differs in ONE LINE - `models_file` - and nothing
 # else, so every control the run holds fixed (prompt, schema, sampler, context,
 # threads, truncation cap) is the committed one by construction, and a candidate
 # is measured through the exact line a swap would later move.
+#
+# `trial_state` is the one exception and it is not a control. It says where the
+# run's own ledgers land, not what the run measures, and it is empty unless a
+# caller asks - so `Model validation` and the budget retake build exactly the
+# copy they always did.
 #
 # Nothing is transplanted onto the entry. The bench once overwrote the
 # incumbent's `inference` and `turns` digests with the candidate's, which
@@ -28,10 +39,12 @@ runs:
     - shell: bash
       env:
         CANDIDATE_MODELS_FILE: ${{ inputs.models_file }}
+        CANDIDATE_TRIAL_STATE: ${{ inputs.trial_state }}
       run: |
         set -euo pipefail
         mkdir -p backend/var
         rm -rf backend/var/candidate-config
         cp -a config backend/var/candidate-config
           python3 backend/utilities/candidate_pointer.py \
-            --models-file "$CANDIDATE_MODELS_FILE"
+            --models-file "$CANDIDATE_MODELS_FILE" \
+            --trial-state "$CANDIDATE_TRIAL_STATE"

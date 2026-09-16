@@ -1,10 +1,13 @@
 {
   "$defs": {
     "ServerJob": {
-      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Both values here already sit in the\ncommitted ledger; refusing anything else is what stops a typo becoming a\nthird job nobody can group by.",
+      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Refusing anything else is what stops a typo\nbecoming a job nobody can group by.\n\nEvery value is a job's own id in its workflow file, lowercase, so a reader\ngoes from a row to the steps that wrote it with no lookup table in between.\nA display name would drift from the thing it identifies.\n\n**`visuals` is here for the rows and not for a job.** `digest.yml` ran one\nuntil 2026-09-13, when the small model, its job and its flag were retired\ntogether. Six committed counters rows still carry the value, and a member\nwith no producer left is the only thing that can read them back.",
       "enum": [
+        "plan",
         "work",
-        "visuals"
+        "assemble",
+        "visuals",
+        "runtime"
       ],
       "title": "ServerJob",
       "type": "string"
@@ -14,6 +17,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Widened `job` to every workflow job that records a machine.",
+      "version": "2026-09-17",
+      "why": "One enum names the jobs; a job with no server still draws a host."
+    },
     {
       "change": "Appended `job`, the workflow job that wrote the row, defaulted to `work`.",
       "version": "2026-09-12",
@@ -30,13 +38,8 @@
       "why": "The row said what the server counted, never whether the host was saturated."
     },
     {
-      "change": "Appended `job_seconds`, the shard job's own clock up to this scrape.",
-      "version": "2026-08-29",
-      "why": "A cap reverts on the slowest work job, and nothing recorded that clock."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
-      "version": "2026-08-27",
+      "version": "2026-08-29",
       "why": "A changelog says what moved lately; git is the archive."
     }
   ],
@@ -94,7 +97,7 @@
     "job": {
       "$ref": "#/$defs/ServerJob",
       "default": "work",
-      "description": "The workflow job that wrote this row. Two jobs stand a model server up and they serve different weights - `work` the summarizer, `visuals` the visual planner - so a rate pooled across both describes no model, and every other cell here is unreadable without this one. It is the last column rather than a fourth identity cell so the migration that put it on every committed row is one appended cell a line, and nothing reading this file by position moves. An empty cell is refused rather than defaulted: a row that cannot say which job wrote it proves nothing."
+      "description": "The workflow job that wrote this row. Two jobs stood a model server up and they served different weights - `work` the summarizer, `visuals` the visual planner until that job was retired - so a rate pooled across both describes no model, and every other cell here is unreadable without this one. The vocabulary is wider than this column's writers because one enum names every job that records a machine; only a job that stands a server up writes here. It is the last column rather than a fourth identity cell so the migration that put it on every committed row is one appended cell a line, and nothing reading this file by position moves. An empty cell is refused rather than defaulted: a row that cannot say which job wrote it proves nothing."
     },
     "job_seconds": {
       "anyOf": [
@@ -302,7 +305,7 @@
       "title": "Tokens Predicted Total"
     },
     "version": {
-      "default": "2026-09-12",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -317,5 +320,5 @@
   ],
   "title": "RuntimeCountersRow",
   "type": "object",
-  "version": "2026-09-12"
+  "version": "2026-09-17"
 }
