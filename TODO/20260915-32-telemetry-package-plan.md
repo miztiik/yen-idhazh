@@ -23,7 +23,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | --- | --- | --- |
 | `ledger.py`, `retention.py`, `day_partition.py`, `month_partition.py` moving into the package | 3,341 lines stay outside the owner of the thing they store. A reader looking for "where does a row land" still opens two trees | A measurement that a change to one of them required a change inside `telemetry/` in the same commit, twice |
 | `frontend/public/digest/` and `frontend/public/assist/` producers | they stay outside the package, which is correct - they are the product, not the instrument. Costs nothing unless somebody later reads the package name as "everything that writes a file" | Never. This is a boundary, not a backlog item |
-| The three server-slot columns (`slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous`) | 3 of 113 stay empty and prefix reuse stays unmeasurable per item | **answered by row 16, 2026-09-15: build `b10598-56db501e7` carries all three on the `/completions` reply the summarizer already reads** - `id_slot`, `tokens_cached` and `timings.cache_n`, at no extra request. What is left is a decision, not a reading: `slot_id` is a constant at `-np 1` and `timings.cache_n` is already filed as `cached_tokens`, so only `kv_tokens_at_start` says anything new |
+| The three server-slot columns (`slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous`) | nothing, any more - they came back IN. Row 16 read the pinned build `b10598-56db501e7` and found all three on the `/completions` reply the summarizer already posts to, at no extra request; row 17 filled them | **brought in by owner decision, 2026-09-16**, over a recommendation to leave two of them empty because `slot_id` is a constant at `-np 1` and `prefix_shared_with_previous` restates `cached_tokens`. Whether a column is wanted is a product question, not a measurement (CLAUDE.md section 0) |
 | Re-encoding any column value | 369,855 bytes stay on disk - 7.1 percent of the store. Measured 2026-09-15: every closed-vocabulary column written as an ordinal integer costs 58,567 bytes against 428,422 today. `version` alone is 148,774 bytes of 13 repeated date stamps | it is row 16's measurement that defers this, not a refusal. **Measured 2026-09-15: compressing the same files saves 3,551,430 bytes, 68.4 percent of the store and 9.6 times the ordinal**, with no readability cost, so it is taken first and this is re-priced after |
 | Compressing the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606 stay uncompressed, 77.0 percent**. The site is at 39.2 MB of a 1 GB cap, so nothing binds | one build proving every console fetch path handles the encoding |
 | A year rung on the fold ladder | year-over-year has no shape | a month fold that is too big to read. At kilobytes a month it is not |
@@ -50,6 +50,14 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 14 | The run timeline draws | 1, 7, 8 | H | DONE | p32r14 | - | - |
 | 15 | The two published mirrors nothing reads are deleted | 10 | F | DONE | p32r15 | - | - |
 | 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
+| 17 | The last three columns carry the item's first call | 6, 16 | I | DONE | p32slots | - | - |
+
+**Row 17 is a follow-on, and its authority is the owner rather than this plan.**
+Row 16 measured and then recommended leaving two of the three empty. The owner
+overruled that on 2026-09-16 and ruled all three filled, which supersedes an
+agent recommendation (CLAUDE.md section 0). It mints no field - all three were
+already declared, so ESCALATE trigger 1 does not fire - and `UNFILLED` in
+`backend/tests/test_telemetry.py` is now empty.
 
 **Every row has landed.** Rows 1, 2, 3, 7, 10, 11, 12 and 13 still read PENDING
 here on 2026-09-16 while their work was merged; row 14 was the last one open and
@@ -57,13 +65,14 @@ re-checked the table against the tree rather than against the queue. What it
 checked, row by row: `contracts/run_timeline.py` and its schema (1), the 113-column
 provenance in `docs/architecture/sources/item-health.md` (2), the
 `backend/idhazh/telemetry/` package (3), an `UNFILLED` ratchet naming exactly
-three columns, which is the 110-of-113 count row 7 was written to reach (7),
+three columns, which is the 110-of-113 count row 7 was written to reach (7) -
+row 17 has since emptied that ratchet -
 `publish/dispatch.py` and its `PROJECTIONS` tuple (10), `telemetry/cli.py` (11),
 `telemetry/prune.py` (12), and five `StrEnum` vocabularies on `ItemHealthRow`
 (13). A reckoner that lags the tree is a cache that went stale, not a queue of
 work.
 
-**Column arithmetic.** 43 of 113 carry a value in the committed archive, which is history and moves a day at a time. Row 6 is the one that changes what a new day carries: the census reads the row the shard sealed instead of rebuilding it, which takes the committed fixture day from 40 to 71 of 113. The 18 the fixture cannot reach - a real host sampler, a real ranker score - fill on a production run. Row 7 fills 6 more. **Row 8 filled none: measured on 2026-09-16, all three of its columns already had a producer, and what it fixed is that two of them were the wrong number and the third was a coercion** (section 9). The count stands at 110 of 113 with row 7, the last three are row 16's question, and `UNFILLED` in `backend/tests/test_telemetry.py` is the ratchet that names them.
+**Column arithmetic.** 43 of 113 carry a value in the committed archive, which is history and moves a day at a time. Row 6 is the one that changes what a new day carries: the census reads the row the shard sealed instead of rebuilding it, which takes the committed fixture day from 40 to 71 of 113. The 18 the fixture cannot reach - a real host sampler, a real ranker score - fill on a production run. Row 7 fills 6 more. **Row 8 filled none: measured on 2026-09-16, all three of its columns already had a producer, and what it fixed is that two of them were the wrong number and the third was a coercion** (section 9). Row 7 took the count to 110 of 113 and row 17 took it to **113 of 113**, so `UNFILLED` in `backend/tests/test_telemetry.py` names nothing and the ratchet reads "no column of this row is empty on the way through" with no exceptions to read past.
 
 ## Section 1a - What every row delivers, without being asked
 
@@ -86,6 +95,7 @@ flowchart TB
     subgraph stages["backend/idhazh/stages/ - the producers"]
         plan_s["plan"]
         work_s["work"]
+        two_calls_s["two_calls<br/>the label call, then<br/>summarize-and-plan"]
         record_s["record"]
         assemble_s["assemble"]
     end
@@ -134,6 +144,8 @@ flowchart TB
     console["console routes<br/>+ the run timeline, row 14"]
 
     work_s -->|"cells"| record_m
+    work_s --> two_calls_s
+    two_calls_s -->|"per-call cells, and the<br/>item's three slot facts<br/>off its FIRST reply"| record_m
     work_s --> spans
     work_s -->|"one host_facts a shard,<br/>one Watch an item"| host
     plan_s --> events
@@ -169,6 +181,16 @@ flowchart TB
 ```
 
 Green is new in this plan. Everything else is a move, not a rewrite.
+
+**A second edge was missing, and row 17 is what found it.** The diagram drew
+every cell reaching the recorder from `work`, which has not been true since the
+two-call sequence moved into `stages/two_calls.py` on 2026-09-15. Every per-call
+cell is written there, and so are the three the item carries about its
+prefix-cache slot - read off the model reply by `llm/server.parse_completion`
+and carried onto the row by `_call_cells`. `llm/` is not drawn because this
+diagram is the telemetry package and its producers; what each of the three
+columns means, and why the row carries the first call and not the second, is
+[`docs/architecture/summarize/model-boundary.md`](../docs/architecture/summarize/model-boundary.md).
 
 **One edge moved when row 14 landed, and the correction is worth stating.** The
 diagram used to draw `RunTimelineRow` feeding the dispatcher, as if the contract
