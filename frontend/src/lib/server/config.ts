@@ -194,8 +194,9 @@ export interface ConsoleConfig {
 	band_outlier_rows: number;
 	/** How many sources the Summaries route ranks by the summaries its checker
 	 * doubted, before the tail sentence. */
-	doubt_rows: number;
-	/** The span the chart retirement rule is stated over. Under it the
+	doubt_rows: number;		/** How many items the run timeline draws as bars, in start order, before the
+		 * tail sentence. A cap on the drawing and never on the arithmetic. */
+		timeline_bars: number;	/** The span the chart retirement rule is stated over. Under it the
 	 * section prints the rule's own span and no median. */
 	chart_rule_days: number;
 	/** Router minutes per published chart that retires chart drawing. */
@@ -383,6 +384,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	feed_rows: 10,
 	band_outlier_rows: 10,
 	doubt_rows: 10,
+	timeline_bars: 120,
 	chart_rule_days: 14,
 	chart_minutes_target: 6,
 	chart_coverage_pct: 5

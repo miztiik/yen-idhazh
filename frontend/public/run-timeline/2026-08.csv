@@ -1,0 +1,1 @@
+version,date,run_id,shard,item_id,start_offset_ms,item_total_ms,plan_ms,fetch_ms,extract_ms,label_ms,summary_ms,visual_plan_ms,score_ms,publish_ms,residual_ms

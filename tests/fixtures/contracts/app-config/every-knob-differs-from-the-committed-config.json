@@ -82,6 +82,7 @@
     "pan_days": 3,
     "shimmer_after_ms": 400,
     "source_rows": 4,
+    "timeline_bars": 60,
     "today_anchor": "centre",
     "window_presets": [
       7,
@@ -184,6 +185,7 @@
     "public_day_metrics_keep_months": 21,
     "public_machine_keep_months": 22,
     "public_run_days_keep_months": 19,
+    "public_run_timeline_keep_months": 5,
     "public_span_rollup_keep_months": 23,
     "public_telemetry_keep_months": 18,
     "runtime_counters_scrape": false,

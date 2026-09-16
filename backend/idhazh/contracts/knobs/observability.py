@@ -378,6 +378,19 @@ class ObservabilityConfig(Model):
             "on the same argument as the item-health copy above."
         ),
     )
+    public_run_timeline_keep_months: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "How long frontend/public/run-timeline/ keeps a published shard. Two, not "
+            "fourteen, and it is the one published series no window preset can reach: "
+            "the panel draws ONE run and names it, so a month older than the newest "
+            "buys nothing a reader can select. The second month is there so a run on "
+            "the first of a month still has the day before it. At roughly a kilobyte "
+            "per item this is the widest published row we write, so keeping it at the "
+            "console's window would publish megabytes nothing fetches."
+        ),
+    )
     cost_currency: str = Field(
         default="USD",
         pattern=r"^[A-Z]{3}$",

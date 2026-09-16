@@ -459,6 +459,13 @@
           "title": "Source Rows",
           "type": "integer"
         },
+        "timeline_bars": {
+          "default": 120,
+          "description": "How many items the run timeline draws as bars before it states the tail in one sentence. The bars are in start order, so the first this many show the shape of the run - a staircase or a block - which is what the panel is for. Measured 2026-09-16 over the committed census, a day holds 349 to 465 rows, and a bar a row would put a thousand spans in a prerendered document for a queue whose shape is settled in its first minute. It is a cap on the DRAWING and never on the arithmetic: every figure the panel prints is over the whole run.",
+          "minimum": 1,
+          "title": "Timeline Bars",
+          "type": "integer"
+        },
         "today_anchor": {
           "$ref": "#/$defs/TodayAnchor",
           "default": "right",
@@ -1129,6 +1136,13 @@
           "description": "How long frontend/public/run-days/ keeps a month of day rows. Fourteen because the console reaches 367 inclusive days and those days can fall in fourteen month shards, which is the same reason feed_health_keep_months is fourteen. It has no state ledger to be paired with: the source is the committed day payloads themselves, whose retention is the archive's, and this row is a reduction of two of them to counts.",
           "minimum": 1,
           "title": "Public Run Days Keep Months",
+          "type": "integer"
+        },
+        "public_run_timeline_keep_months": {
+          "default": 2,
+          "description": "How long frontend/public/run-timeline/ keeps a published shard. Two, not fourteen, and it is the one published series no window preset can reach: the panel draws ONE run and names it, so a month older than the newest buys nothing a reader can select. The second month is there so a run on the first of a month still has the day before it. At roughly a kilobyte per item this is the widest published row we write, so keeping it at the console's window would publish megabytes nothing fetches.",
+          "minimum": 1,
+          "title": "Public Run Timeline Keep Months",
           "type": "integer"
         },
         "public_span_rollup_keep_months": {
