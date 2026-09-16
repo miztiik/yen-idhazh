@@ -21,11 +21,13 @@ class LogLevel(StrEnum):
 
 
 #: The `observability` names this block used to carry, and the knob that governs
-#: the same store now.
+#: the same store now. An empty value means the store itself is gone.
 SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "keep_months": "item_health_full_grain_months",
         "hard_delete_after_months": "item_health_aggregate_keep_months",
+        "public_scores_keep_months": "",
+        "public_feed_health_keep_months": "",
     }
 )
 
@@ -334,25 +336,6 @@ class ObservabilityConfig(Model):
             "source month with no published copy is a window the console cannot draw."
         ),
     )
-    public_scores_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/scores/ keeps a published shard. It must EQUAL "
-            "scores_full_grain_months, on the same argument public_telemetry_keep_months "
-            "makes about its own source: the projection is the browser's copy of the "
-            "eval ledger, so any other pair leaves either a published month nothing can "
-            "check against its source or a window the console's model panels cannot draw."
-        ),
-    )
-    public_feed_health_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/feed-health/ keeps a published shard. It must "
-            "EQUAL feed_health_keep_months for the same reason."
-        ),
-    )
     public_run_days_keep_months: int = Field(
         default=14,
         ge=1,
@@ -435,12 +418,19 @@ class ObservabilityConfig(Model):
     @model_validator(mode="before")
     @classmethod
     def _refuse_a_removed_knob(cls, data: Any) -> Any:
-        """Fail a config that still names `keep_months` or `hard_delete_after_months`.
+        """Fail a config that still names one of the four retired ages.
 
-        Those two governed `state/item-health/` and nothing else, while three
-        other stores had no age at all. They were read and dropped for a day so
-        the rows that spend the new ages could land one at a time; now that every
-        reader has moved, a file still spelling one is refused by name.
+        `keep_months` and `hard_delete_after_months` governed `state/item-health/`
+        and nothing else, while three other stores had no age at all. They were
+        read and dropped for a day so the rows that spend the new ages could land
+        one at a time; now that every reader has moved, a file still spelling one
+        is refused by name.
+
+        `public_scores_keep_months` and `public_feed_health_keep_months` are the
+        other two, and they have no successor because the trees they bounded are
+        gone. They pruned published copies of `state/scores/` and
+        `state/feed-health/` that nothing ever fetched; the ledgers stay and keep
+        their own ages.
 
         Refused rather than ignored, and refused rather than carried forward. The
         old value was set against a check that could not answer the question - it
@@ -466,8 +456,6 @@ class ObservabilityConfig(Model):
                 "feed_health_keep_months": self.feed_health_keep_months,
                 "scores_full_grain_months": self.scores_full_grain_months,
                 "public_telemetry_keep_months": self.public_telemetry_keep_months,
-                "public_scores_keep_months": self.public_scores_keep_months,
-                "public_feed_health_keep_months": self.public_feed_health_keep_months,
                 "public_run_days_keep_months": self.public_run_days_keep_months,
                 "public_day_metrics_keep_months": self.public_day_metrics_keep_months,
                 "public_machine_keep_months": self.public_machine_keep_months,
@@ -511,15 +499,14 @@ class ObservabilityConfig(Model):
     def _the_published_copy_lasts_as_long_as_its_source(self) -> Self:
         """A projection and the ledger it projects age together.
 
-        The other three published payloads have no state ledger of their own and
-        so appear in no pair here - `public_run_days`, `public_day_metrics` and
-        `public_machine` are bounded by their own knob and by
+        `public_telemetry` is the only pair left. The other four published
+        payloads have no state ledger of their own and so appear in no pair here -
+        `public_run_days`, `public_day_metrics`, `public_machine` and
+        `public_span_rollup` are bounded by their own knob and by
         `refuse_windows_shorter_than`.
         """
         for published, source in (
             ("public_telemetry_keep_months", "item_health_full_grain_months"),
-            ("public_scores_keep_months", "scores_full_grain_months"),
-            ("public_feed_health_keep_months", "feed_health_keep_months"),
         ):
             if getattr(self, published) != getattr(self, source):
                 raise ValueError(

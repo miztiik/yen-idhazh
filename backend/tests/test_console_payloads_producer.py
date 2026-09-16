@@ -1,4 +1,4 @@
-"""The seven console payload producers, driven from a built fixture.
+"""The five console payload producers, driven from a built fixture.
 
 Every fixture here is **built**, never read out of the committed tree: the
 archive offers a handful of distinct cases however far it grows, and a test that
@@ -29,8 +29,6 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.public_eval import PublicEvalRow
-from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.run_manifest import (
     ModelRole,
     ModelUse,
@@ -51,10 +49,8 @@ from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
     dispatch,
-    feed_health,
     machine,
     run_days,
-    scores,
     series,
     span_rollup,
 )
@@ -372,12 +368,6 @@ def opened(tmp_path: Path) -> Iterator[list[str]]:
 
 
 def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
-    scores.publish(
-        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
-    )
-    feed_health.publish(
-        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
-    )
     machine.publish(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
@@ -422,12 +412,12 @@ def test_the_first_run_reads_every_month_and_the_second_writes_nothing(
 ) -> None:
     """Byte equality, not a timestamp: a re-derived month is not rewritten."""
     state, digest = tree
-    first = scores.publish(
+    first = machine.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
     )
     assert len(first) == len(MONTHS)
 
-    again = scores.publish(
+    again = machine.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
     )
 
@@ -443,12 +433,12 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
     console asking for it would get a 404 it cannot tell from a broken deploy.
     """
     state, digest = tree
-    scores.publish(
+    machine.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
     )
-    scores.shard_path(digest, MONTHS[0]).unlink()
+    machine.shard_path(digest, MONTHS[0]).unlink()
 
-    written = scores.publish(
+    written = machine.publish(
         state_root=state, digest_root=digest, keep_months=20, today=TODAY, months={NEWEST}
     )
 
@@ -461,8 +451,6 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
 @pytest.mark.parametrize(
     ("dirname", "suffix"),
     [
-        (scores.DIRNAME, ".csv"),
-        (feed_health.DIRNAME, ".csv"),
         (machine.DIRNAME, ".csv"),
         (span_rollup.DIRNAME, ".csv"),
         (day_metrics.PUBLIC_DIRNAME, ".json"),
@@ -487,42 +475,10 @@ def test_a_knob_below_one_month_would_delete_the_month_being_written(
 ) -> None:
     _state, digest = tree
     with pytest.raises(ValueError, match="fewer than one month"):
-        series.prune_months(digest, "scores", ".csv", keep_months=0, today=TODAY)
+        series.prune_months(digest, "machine", ".csv", keep_months=0, today=TODAY)
 
 
 # --- the trust boundary ------------------------------------------------------
-
-
-def test_the_score_projection_drops_the_address_and_the_fetched_title(
-    tree: tuple[Path, Path],
-) -> None:
-    """`url_key` and `source_url` identify the page rather than the measurement,
-    and `title` is fetched text (Guardrail #11)."""
-    state, digest = tree
-    _publish_all(state, digest, months=None)
-
-    shard = scores.shard_path(digest, NEWEST)
-    with shard.open("r", encoding="utf-8", newline="") as handle:
-        header = tuple(csv.DictReader(handle).fieldnames or ())
-
-    assert header == PublicEvalRow.csv_columns()
-    assert not (scores.FORBIDDEN_COLUMNS & set(header))
-    assert scores.read_shard(shard)[0].item_id == "energy-01"
-
-
-def test_the_feed_projection_drops_the_hashed_address_and_keeps_our_own_reason(
-    tree: tuple[Path, Path],
-) -> None:
-    state, digest = tree
-    _publish_all(state, digest, months=None)
-
-    rows = feed_health.read_shard(feed_health.shard_path(digest, NEWEST))
-
-    assert "endpoint_key" not in PublicFeedRow.csv_columns()
-    assert {row.feed_id for row in rows} == {"grid-news", "wire-co"}
-    assert [row.detail for row in rows if row.feed_id == "wire-co"] == [
-        "our own one-line reason"
-    ]
 
 
 def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path]) -> None:
@@ -532,7 +488,6 @@ def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path])
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    assert len(scores.read_shard(scores.shard_path(digest, NEWEST))) == 1
     assert len(span_rollup.read_shard(span_rollup.shard_path(digest, NEWEST))) == 1
     assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
     assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1

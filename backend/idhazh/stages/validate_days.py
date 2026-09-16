@@ -27,11 +27,9 @@ from idhazh.stages.common import LOG, published_days
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
-    feed_health,
     machine,
     public_telemetry,
     run_days,
-    scores,
     series,
     span_rollup,
 )
@@ -430,7 +428,7 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
     takes on a change that can move a contract - and reading everything is the
     point of that case, because a contract change can invalidate any file.
 
-    Six of the seven directories are trimmed on every assemble by
+    Four of the five directories are trimmed on every assemble by
     `series.prune_months`, so the sweep opens at most their own
     `public_*_keep_months` files. `telemetry` is the exception and says so here
     rather than in a sentence that would be wrong: its deletion lives in
@@ -445,8 +443,6 @@ def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
     """
     faults: list[str] = []
     readers: tuple[tuple[str, str, Callable[[Path], object]], ...] = (
-        (scores.DIRNAME, scores.SUFFIX, scores.read_shard),
-        (feed_health.DIRNAME, feed_health.SUFFIX, feed_health.read_shard),
         (machine.DIRNAME, machine.SUFFIX, machine.read_shard),
         (span_rollup.DIRNAME, span_rollup.SUFFIX, span_rollup.read_shard),
         (
