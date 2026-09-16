@@ -149,7 +149,7 @@ def event(
     what stops a second emitter shipping a second shape.
     """
     if name in FLAT_RECORDS:
-        raise ValueError(f"{name.value} is a flat record; call telemetry.record")
+        raise ValueError(f"{name.value} is a flat record; call telemetry.events.record")
     return json.dumps(
         {
             "ts": ts,
@@ -186,8 +186,8 @@ def record(
     **Every key is a column name `ItemHealthRow` already declares**, apart from
     the handful this module names below. A field called one thing in the log and
     another in the ledger is the drift this instrument exists to end, so the
-    caller builds its cells through `idhazh.itemrecord` and this function refuses
-    a key neither vocabulary holds.
+    caller builds its cells through `idhazh.telemetry.record` and this function
+    refuses a key neither vocabulary holds.
 
     Values are JSON scalars. Nothing fetched reaches here: the keys are a closed
     set and none of them is the article's own words (Guardrail #11).

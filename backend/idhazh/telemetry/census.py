@@ -139,7 +139,7 @@ def classify_item(
         )
 
     if article.status is not ArticleStatus.OK:
-        code, stage, status, detail = _classify_article(article)
+        code, stage, status, detail = classify_article(article)
         return _row(
             planned=planned,
             date=date,
@@ -338,7 +338,18 @@ def _row(
     )
 
 
-def _classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | None, str | None]:
+def classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | None, str | None]:
+    """Which failure ended this article, at which stage, and what says so.
+
+    Public because the work stage records the same verdict on the item's own
+    record while the run is going, and a second derivation there named `extract`
+    for every article whatever had really failed - so a fetch code landed on an
+    extract row, a pairing `ItemHealthRow` refuses.
+
+    The fourth value is a detail to use only where the failure is untyped: a
+    row carrying `unknown` has to say something, and the caller's own text is
+    the better sentence wherever there is one.
+    """
     detail = article.failure_detail or ""
     if article.status is ArticleStatus.EXTRACT_FAILED:
         if article.failure_code is not None:

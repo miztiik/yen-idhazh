@@ -20,9 +20,14 @@ from __future__ import annotations
 # `FLAT_RECORDS`, `INSTRUMENT_CELLS`, `AttrValue` and `refuse_text` - each of
 # which still lives in the module that owns it. REMOVAL CONDITION: a name here
 # goes the day its last caller outside `idhazh/telemetry/` goes, which for the
-# recorder, the spans and the sinks is the row that moves `itemrecord.py` and
-# `stages/work.py` in. A re-export that outlives its cut-over is a second name
-# for everything (Guardrail #6).
+# spans and the sinks is the row that moves `stages/work.py` in. A re-export
+# that outlives its cut-over is a second name for everything (Guardrail #6).
+#
+# **`record` is the one pre-split name that is not here.** `record.py` owns one
+# item's row (plan 32 row 4), and Python binds a submodule onto its package, so
+# re-exporting a function under the same name gives `telemetry.record` two
+# meanings decided by import order. The function is `telemetry.events.record`,
+# which is where it has always been defined.
 from idhazh.telemetry.census import (
     classify_item,
     detail_cell,
@@ -35,7 +40,6 @@ from idhazh.telemetry.events import (
     EventLevel,
     EventName,
     event,
-    record,
 )
 from idhazh.telemetry.rollup import roll_up_spans
 from idhazh.telemetry.sinks import (
@@ -95,7 +99,6 @@ __all__ = [
     "is_final",
     "item_attributes",
     "langfuse_sink",
-    "record",
     "roll_up_spans",
     "summary_attributes",
     "trace_date",

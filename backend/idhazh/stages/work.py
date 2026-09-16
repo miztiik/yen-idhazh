@@ -17,7 +17,6 @@ from idhazh import (
     config,
     extract,
     fingerprint,
-    itemrecord,
     ledger,
     machine,
     summarize,
@@ -28,9 +27,9 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.item_health import FailureCode, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
-from idhazh.contracts.summary import SummaryStatus
+from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
 from idhazh.evals import evidence, metrics, score
 from idhazh.evals.hhem import (
@@ -61,6 +60,8 @@ from idhazh.stages.common import (
     shard_of,
 )
 from idhazh.stages.two_calls import two_calls_one_item
+from idhazh.telemetry import census
+from idhazh.telemetry.record import Flags, ItemRecorder, shard_done
 
 
 def _evidence_dir(date: str) -> Path:
@@ -115,7 +116,7 @@ class _FetchedWorkItem(NamedTuple):
     #: model loop runs in a different order from the fetch loop, so an item's
     #: cells have to travel with the item rather than sitting in a list the
     #: second loop indexes by position.
-    recorder: itemrecord.ItemRecorder
+    recorder: ItemRecorder
 
 
 def _summarize_band_sort_key(work: _FetchedWorkItem, settings: config.Settings) -> tuple[int, int]:
@@ -212,7 +213,7 @@ def _ms(cell: object) -> int:
     return cell if isinstance(cell, int) else 0
 
 
-def _heartbeat(recorder: itemrecord.ItemRecorder) -> Callable[[float], None]:
+def _heartbeat(recorder: ItemRecorder) -> Callable[[float], None]:
     """The tick this item's watch calls while a model call is in flight.
 
     A function that closes over one recorder rather than a lambda in the loop,
@@ -227,7 +228,35 @@ def _heartbeat(recorder: itemrecord.ItemRecorder) -> Callable[[float], None]:
     return tick
 
 
-def _slowest(finished: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _failure_code(summary: Summary) -> FailureCode:
+    """The code a refused summary is filed under, and never nothing.
+
+    `unknown` where the stage left its own refusal untyped. A failed row with no
+    code at all is a row the census cannot be built from, and it is also the
+    least useful thing a failure can say to the person reading it.
+    """
+    return summary.failure_code or FailureCode.UNKNOWN
+
+
+def _failure_detail(recorder: ItemRecorder, summary: Summary) -> str | None:
+    """What a refused item says about itself, narrowest answer first.
+
+    The shape failure already named the field and the rule it broke, so its
+    detail beats the generic message sitting behind it. An untyped refusal has
+    to say something either way - `unknown` with an empty detail is a row the
+    census refuses - so the last answer names the fault as an untyped one.
+    """
+    recorded = recorder.get("detail")
+    if isinstance(recorded, str) and recorded:
+        return recorded
+    if summary.failure_detail:
+        return telemetry.detail_cell(summary.failure_detail)
+    if _failure_code(summary) is FailureCode.UNKNOWN:
+        return telemetry.detail_cell("summary failure was not typed")
+    return None
+
+
+def _slowest(finished: list[ItemHealthRow]) -> dict[str, Any] | None:
     """The item that cost the shard most, and enough to find it again.
 
     Four cells and not the row: a shard record carrying 113 columns of one item
@@ -238,15 +267,14 @@ def _slowest(finished: list[dict[str, Any]]) -> dict[str, Any] | None:
     fetched text and a log line is read by a person, which is the one place
     untrusted text most wants to be believed (Guardrail #11).
     """
-    timed_items = [cells for cells in finished if isinstance(cells.get("item_total_ms"), int)]
-    if not timed_items:
+    if not finished:
         return None
-    worst = max(timed_items, key=lambda cells: int(cells["item_total_ms"]))
+    worst = max(finished, key=lambda row: row.item_total_ms or 0)
     return {
-        "item_id": worst.get("item_id"),
-        "canonical_url": worst.get("canonical_url"),
-        "source_id": worst.get("source_id"),
-        "item_total_ms": worst.get("item_total_ms"),
+        "item_id": worst.item_id,
+        "canonical_url": worst.canonical_url,
+        "source_id": worst.source_id,
+        "item_total_ms": worst.item_total_ms,
     }
 
 
@@ -308,18 +336,18 @@ def stage_work(
         len(mine),
         model.id,
     )
-    flags = itemrecord.Flags.of(settings.app.logging)
+    flags = Flags.of(settings.app.logging)
     # Read once per shard and noted on every item. The process table scan and
     # the CPU model read are each a few file opens; doing them per item would be
     # 80 scans for an answer that cannot change inside a shard.
     server_pid = machine.llama_server_pid()
     shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine))
     failures: dict[str, int] = {}
-    finished: list[dict[str, Any]] = []
+    finished: list[ItemHealthRow] = []
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
         started = time.monotonic()
-        recorder = itemrecord.ItemRecorder(
+        recorder = ItemRecorder(
             run_id=plan.run_id, flags=flags, now=assemble.utc_now, log=LOG
         )
         recorder.note(
@@ -354,17 +382,23 @@ def stage_work(
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
+            # The census's own reading of this article rather than a second one
+            # here. This branch named `extract` whatever had really failed, so a
+            # fetch code landed on an extract row - a pairing the census row
+            # refuses - and an article with no typed code left the record saying
+            # an item failed for no reason at all.
+            code, stopped_at, http_status, untyped = census.classify_article(article)
             recorder.note(
-                stage=ItemStage.EXTRACT.value,
+                stage=stopped_at.value,
                 outcome=ItemOutcome.FAILED.value,
-                code=article.failure_code.value if article.failure_code else None,
+                code=code.value,
+                http_status=http_status,
                 detail=telemetry.detail_cell(article.failure_detail)
                 if article.failure_detail
-                else None,
+                else untyped,
             )
             finished.append(recorder.done())
-            code = str(recorder.get("code") or FailureCode.UNKNOWN.value)
-            failures[code] = failures.get(code, 0) + 1
+            failures[code.value] = failures.get(code.value, 0) + 1
             continue
         ready.append(
             _FetchedWorkItem(
@@ -459,32 +493,29 @@ def stage_work(
                 }
             )
             assemble.write_atomic(items_dir / f"{item.item_id}.summary.json", summary.to_json())
+            published = summary.status is SummaryStatus.OK
+            # A call that never returned is absent on both sides rather than
+            # zero: the census row holds the flat five to the sum over the slots
+            # it records, so a total beside no recorded call is a row that
+            # cannot be built at all.
+            spent = [call for call in (summary.call_1, summary.call_2) if call is not None]
             recorder.note(
                 summary_words=len((summary.summary or "").split()),
-                model_calls=2 if summary.call_2 is not None else 1,
+                model_calls=len(spent) or None,
                 stage=ItemStage.SUMMARIZE.value,
-                outcome=(
-                    ItemOutcome.OK.value
-                    if summary.status is SummaryStatus.OK
-                    else ItemOutcome.FAILED.value
-                ),
-                code=summary.failure_code.value if summary.failure_code else None,
+                outcome=(ItemOutcome.OK if published else ItemOutcome.FAILED).value,
+                code=None if published else _failure_code(summary).value,
                 # The shape failure already wrote a detail naming the field and
                 # the rule; the summary's own is the generic one behind it. The
-                # narrower answer wins, and an item that did not fail carries
-                # neither - `detail_cell("")` is the string "unspecified
-                # failure", which on a passing row reads as a failure nobody had.
-                detail=recorder.get("detail")
-                or (
-                    telemetry.detail_cell(summary.failure_detail)
-                    if summary.failure_detail
-                    else None
-                ),
-                prefill_ms=summary.prefill_ms,
-                decode_ms=summary.decode_ms,
-                input_tokens=summary.input_tokens,
-                output_tokens=summary.output_tokens,
-                cached_tokens=summary.cached_tokens,
+                # narrower answer wins, and an item that published carries
+                # neither - a detail on an `ok` row reads as a failure nobody
+                # had, which is why the census row refuses one.
+                detail=None if published else _failure_detail(recorder, summary),
+                prefill_ms=summary.prefill_ms if spent else None,
+                decode_ms=summary.decode_ms if spent else None,
+                input_tokens=summary.input_tokens if spent else None,
+                output_tokens=summary.output_tokens if spent else None,
+                cached_tokens=summary.cached_tokens if spent else None,
             )
             if decision is not None:
                 assemble.write_atomic(
@@ -501,8 +532,8 @@ def stage_work(
             if summary.status is not SummaryStatus.OK or scorer is None:
                 recorder.note(**watch.close().cells())
                 finished.append(recorder.done())
-                code = str(recorder.get("code") or FailureCode.UNKNOWN.value)
-                failures[code] = failures.get(code, 0) + 1
+                tally = str(recorder.get("code") or FailureCode.UNKNOWN.value)
+                failures[tally] = failures.get(tally, 0) + 1
                 continue
 
             seen = article.text or ""
@@ -590,7 +621,7 @@ def stage_work(
             )
             work.recorder.abandoned("the shard ran out of its own clock before this item ran")
             failures["abandoned"] = failures.get("abandoned", 0) + 1
-    itemrecord.shard_done(
+    shard_done(
         run_id=plan.run_id,
         shard=shard,
         flags=flags,
