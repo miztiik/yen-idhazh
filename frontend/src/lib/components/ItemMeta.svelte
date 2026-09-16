@@ -71,6 +71,41 @@
 	 * otherwise print "and -2 more".
 	 */
 	const more = $derived(Math.max((item.also_covered_by ?? stack.length) - stack.length, 0));
+
+	/** The newsrooms that ran this same story on an EARLIER day.
+	 *
+	 * Straight off the item rather than worked out here: the page holds one day,
+	 * so a name from another day is one it cannot look up. They join the same
+	 * stack, because the reader's question is the same question - who else ran
+	 * this - and two stacks would make them answer it twice.
+	 *
+	 * Each one says the day out loud. An undated name beside today's names would
+	 * read as "this ran twice today", which is the false sentence this row exists
+	 * to stop, and the date is also what the link goes to.
+	 */
+	const earlier = $derived(item.also_ran_earlier ?? []);
+
+	/** `Friday` inside the week, the plain date past it.
+	 *
+	 * A weekday is how a person says a day two mornings ago. Past six days it
+	 * stops being one - `Tuesday` could be last week or the week before - so the
+	 * date takes over, which is the same rule the rail above the title follows.
+	 */
+	function whenItRan(date: string): string {
+		const then = new Date(`${date}T00:00:00Z`);
+		if (Number.isNaN(then.getTime())) return date;
+		const today = new Date(`${item.published_at ?? date}`);
+		const days = Math.round((today.getTime() - then.getTime()) / 86_400_000);
+		if (days === 1) return 'yesterday';
+		if (days > 1 && days < 7) {
+			return then.toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
+		}
+		return then.toLocaleDateString('en-GB', {
+			day: 'numeric',
+			month: 'short',
+			timeZone: 'UTC'
+		});
+	}
 </script>
 
 <div
@@ -88,12 +123,22 @@
 	     summary of it, and its own way out to the original. A reader who wanted the
 	     publisher's version is one more click away and a reader who wanted ours has
 	     not lost it. -->
-	{#if stack.length > 0}
+	{#if stack.length > 0 || earlier.length > 0}
 		<span class="stack" data-item-stack={stack.length}>
 			<span class="stack-label">Also covered by</span>
 			{#each stack as other (other.item_id)}
 				<a class="pill" href="#{other.item_id}" data-coverage-pill={other.item_id}>
 					{other.source_name}
+				</a>
+			{/each}
+			{#each earlier as ran (ran.item_id)}
+				<a
+					class="pill"
+					href="/{ran.date.replaceAll('-', '/')}/#{ran.item_id}"
+					data-earlier-pill={ran.item_id}
+				>
+					{ran.source_name}
+					<span class="pill-when">{whenItRan(ran.date)}</span>
 				</a>
 			{/each}
 			{#if more > 0}
@@ -146,6 +191,16 @@
 	.pill:focus-visible {
 		border-color: var(--color-accent);
 		color: var(--color-accent);
+	}
+
+	/* The day inside the pill, set one step down so the masthead still reads as
+	   the name. Without it a pill for another day would look like one for this
+	   day, and telling a reader a story ran twice today is the false sentence
+	   this whole block exists to avoid. */
+	.pill-when {
+		margin-inline-start: var(--space-1);
+		color: var(--color-text-tertiary);
+		font-size: var(--text-xs);
 	}
 
 	/* Pinned rather than merely last: on an item whose two sentences are short

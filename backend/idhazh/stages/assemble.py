@@ -6,7 +6,9 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
+import math
 from datetime import date as date_type
+from datetime import timedelta
 from pathlib import Path
 
 from idhazh import assemble, config, ledger, rank, telemetry
@@ -48,6 +50,41 @@ def _index_root() -> Path:
     passed its root the same way and for the same reason.
     """
     return common.PUBLIC_ROOT.parent / "assist" / "index"
+
+
+def _earlier_days(date: str, *, window_hours: float) -> list[assemble.EarlierDay]:
+    """The published days the same-story window can still reach, newest first.
+
+    **Guardrail #12 declaration.** This read is bounded by the window and never
+    by the archive. The count is `ceil(window_hours / 24)` days - one at the
+    36-hour default - so it is the same work on the thousandth day as on the
+    third, and raising the window is the only thing that can make it more. Each
+    day is one `digest.json` already on disk, opened once.
+
+    A bounded fixture cannot answer the question this read asks, which is the
+    other half of the declaration: the question is whether a story published
+    this morning is the story an EARLIER PUBLISHED DAY already carried, and only
+    that day's own payload holds the vectors to answer it. A day the pass cannot
+    see is a duplicate the reader gets.
+
+    A day that is not on disk is a quiet miss rather than a failure: the
+    archive starts somewhere, and a run near that start reads fewer days than
+    the window allows.
+    """
+    if window_hours <= 0.0:
+        return []
+    today = date_type.fromisoformat(date)
+    reach = math.ceil(window_hours / 24.0)
+    found: list[assemble.EarlierDay] = []
+    for back in range(1, reach + 1):
+        stem = (today - timedelta(days=back)).isoformat()
+        day = _load_day(assemble.day_dir(common.PUBLIC_ROOT, stem) / "digest.json")
+        if day is None:
+            continue
+        found.append(
+            assemble.EarlierDay(date=stem, items=day.items, embeddings=day.embeddings)
+        )
+    return found
 
 
 def _recorded_inputs(items_dir: Path) -> PipelineInputs | None:
@@ -236,6 +273,10 @@ def stage_assemble(
         placement=settings.app.placement,
         same_story=settings.app.assemble.same_story,
         group_identical_titles=settings.app.assemble.group_identical_titles,
+        same_story_window_hours=settings.app.assemble.same_story_window_hours,
+        earlier_days=_earlier_days(
+            plan.date, window_hours=settings.app.assemble.same_story_window_hours
+        ),
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 

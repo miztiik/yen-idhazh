@@ -28,11 +28,13 @@ from datetime import date as date_type
 from itertools import combinations
 from operator import mul
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final, Literal
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import (
+    EARLIER_OUTLETS_MAX,
     DigestDay,
     DigestEmbeddings,
     DigestItem,
@@ -40,6 +42,7 @@ from idhazh.contracts.digest_day import (
     DigestRunRef,
     DigestVerticalRef,
     DigestVisual,
+    EarlierStory,
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.fingerprint import PipelineInputs
@@ -73,7 +76,7 @@ from idhazh.embed import (
     to_base64,
 )
 from idhazh.placement import desk_bounds, freshness_multiplier, place, secondary_desk_of
-from idhazh.rank import desk_of, desks_below_floor
+from idhazh.rank import desk_of, desks_below_floor, hours_between
 from idhazh.tag import tags
 
 LOG: Final = logging.getLogger("idhazh")
@@ -853,6 +856,12 @@ class _DayScoring:
     A day of 431 items is about 93,000 pairs, so anything derived from an item
     rather than from a pair is derived here: reducing a key-point list at every
     pair would do the same work two hundred times over.
+
+    `earlier` and `window_hours` are what let a story that broke last night join
+    a group formed this morning. They bind only a pair that crosses a day
+    boundary - a pair inside one published day is scored exactly as it was
+    before the window existed, which is what makes a window of 0 an exact
+    revert rather than an approximate one.
     """
 
     vectors: Mapping[str, array[int]]
@@ -860,13 +869,34 @@ class _DayScoring:
     keys: Mapping[str, StoryKey]
     points: Mapping[str, frozenset[str]]
     knobs: SameStoryConfig
+    #: When each story says it appeared. Null where nothing dated it.
+    appeared: Mapping[str, str | None] = MappingProxyType({})
+    #: The ids that belong to an earlier published day, and so may only pair
+    #: inside the window.
+    earlier: frozenset[str] = frozenset()
+    #: How far apart two stories may have appeared and still be one story.
+    window_hours: float = 0.0
+
+    def inside_the_window(self, left: str, right: str) -> bool:
+        """Whether this pair is close enough in time to be one story.
+
+        Only ever asked of a pair that crosses a day boundary. A story nothing
+        dated cannot be placed in time, so it is refused rather than guessed -
+        the same answer `rank.too_old` gives, for the same reason.
+        """
+        at, other = self.appeared.get(left), self.appeared.get(right)
+        if at is None or other is None:
+            return False
+        return abs(hours_between(at, other)) <= self.window_hours
 
 
 def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
     """Score two items as one story, or refuse the pair outright.
 
-    Three steps, and the order is the rule. **A clash of numbers refuses**, and
-    nothing below it can overturn that. **Two matching reduced headlines join**
+    Four steps, and the order is the rule. **A pair that crosses a published day
+    is refused unless it is inside the window**, which is what bounds how far
+    back the pass can reach. **A clash of numbers refuses**, and nothing below it
+    can overturn that. **Two matching reduced headlines join**
     at 1.0 without the weights being consulted: our own summariser wrote both,
     off two different articles, so two that survive the reduction identical are
     our own desk saying twice what the story is. **Everything else is scored**
@@ -883,6 +913,8 @@ def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
     thought of a pair the headline joined - which is the measurement that put
     the headline rule above the cosine in the first place.
     """
+    if (left in day.earlier or right in day.earlier) and not day.inside_the_window(left, right):
+        return None
     key, other = day.keys.get(left), day.keys.get(right)
     if _numbers_clash(key, other):
         return None
@@ -959,12 +991,28 @@ def _log_groups(clusters: Sequence[Sequence[str]], day: _DayScoring) -> None:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class EarlierDay:
+    """One published day the window can still reach, and what it carries.
+
+    **This is read and never written.** A day that has published is finished:
+    the pass places today's stories against it and records the match on today's
+    item only.
+    """
+
+    date: str
+    items: Sequence[DigestItem]
+    embeddings: DigestEmbeddings | None
+
+
 def collapse_same_story(
     items: Sequence[DigestItem],
     embeddings: DigestEmbeddings | None,
     *,
     same_story: SameStoryConfig | None = None,
     group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
+    window_hours: float = 0.0,
+    earlier: Sequence[EarlierDay] = (),
 ) -> list[DigestItem]:
     """Group the day on what it already carries, and keep the strongest.
 
@@ -1013,34 +1061,73 @@ def collapse_same_story(
     and are two different documents. The same holds for a headline: one desk
     running one title on two days is a recurring slot, and the across-sources
     rule is what keeps this pass away from it.
+
+    **The window is what lets it reach past midnight, and what bounds the read.**
+    A story that breaks at 23:00 and is picked up at 07:00 is one story, and a
+    day boundary is an accident of the calendar. `earlier` carries only the
+    published days `window_hours` can still reach - the caller works out which,
+    and at 36 hours that is one - so the cost is set by the window rather than
+    by how much archive exists (Guardrail #12). At `window_hours` of 0 nothing
+    earlier is read at all and the pass is exactly the same-day one it was.
+
+    **A match on an earlier day is recorded on today's item only, and it folds
+    nothing.** A published day is finished. Today's story keeps its card and its
+    place in the order; what it gains is `also_ran_earlier`, which the card
+    prints as one more name in its `Also covered by` stack, linking to that
+    day's page. `same_story_as` stays what it always was - this day's own
+    anchor - because folding today's page onto a card it does not hold would
+    leave the reader with nothing to open. Two stories from earlier days are
+    never grouped with each other.
     """
     if embeddings is None or not embeddings.vectors:
         return list(items)
 
     knobs = same_story or SameStoryConfig()
+    today = {item.item_id for item in items}
     by_id = {item.item_id: item for item in items}
+    blocks: list[tuple[str | None, Sequence[DigestItem], DigestEmbeddings | None]] = [
+        (None, items, embeddings)
+    ]
+    if window_hours > 0.0:
+        blocks.extend((day.date, day.items, day.embeddings) for day in earlier)
+    day_of: dict[str, str | None] = dict.fromkeys(today)
+    for date, block, _ in blocks:
+        if date is None:
+            continue
+        for item in block:
+            # An address published twice is one story, and the newer copy is the
+            # one this run is deciding about. The earlier day keeps its own copy
+            # either way; nothing here ever writes to it.
+            if item.item_id in by_id:
+                continue
+            by_id[item.item_id] = item
+            day_of[item.item_id] = date
+
     keys: dict[str, StoryKey] = {}
     if group_identical_titles:
-        for item in items:
-            key = story_key(item.title)
+        for item_id, held in by_id.items():
+            key = story_key(held.title)
             if key is not None:
-                keys[item.item_id] = key
+                keys[item_id] = key
     vectors: dict[str, array[int]] = {}
     norms: dict[str, float] = {}
-    for item_id, encoded in embeddings.vectors.items():
-        if item_id not in by_id:
+    for date, _block, block_vectors in blocks:
+        if block_vectors is None:
             continue
-        raw = _vector_bytes(encoded, embeddings.dimensions)
-        if raw is None:
-            LOG.warning(
-                "item %s stores a vector that is not %s bytes wide, so it is not "
-                "grouped with anything",
-                item_id,
-                embeddings.dimensions,
-            )
-            continue
-        vectors[item_id] = array("b", raw)
-        norms[item_id] = _norm(vectors[item_id])
+        for item_id, encoded in block_vectors.vectors.items():
+            if day_of.get(item_id, "missing") != date or item_id in vectors:
+                continue
+            raw = _vector_bytes(encoded, block_vectors.dimensions)
+            if raw is None:
+                LOG.warning(
+                    "item %s stores a vector that is not %s bytes wide, so it is not "
+                    "grouped with anything",
+                    item_id,
+                    block_vectors.dimensions,
+                )
+                continue
+            vectors[item_id] = array("b", raw)
+            norms[item_id] = _norm(vectors[item_id])
 
     day = _DayScoring(
         vectors=vectors,
@@ -1048,9 +1135,19 @@ def collapse_same_story(
         keys=keys,
         points={item_id: _key_point_words(by_id[item_id]) for item_id in vectors},
         knobs=knobs,
+        appeared={item_id: by_id[item_id].published_at for item_id in vectors},
+        earlier=frozenset(item_id for item_id in vectors if item_id not in today),
+        window_hours=window_hours,
     )
 
-    clusters: list[list[str]] = []
+    # Every story from an earlier day starts as a group of its own, and nothing
+    # ever joins two of those together. A published day is finished: this pass
+    # may read it to place today's stories against it, and may not re-decide
+    # what it already grouped.
+    clusters: list[list[str]] = [
+        [held.item_id]
+        for held in sorted((by_id[item_id] for item_id in day.earlier), key=_strength_order)
+    ]
     for item in sorted((one for one in items if one.item_id in vectors), key=_strength_order):
         joined: list[str] | None = None
         best = knobs.floor_min
@@ -1070,15 +1167,37 @@ def collapse_same_story(
         else:
             joined.append(item.item_id)
 
+    # An earlier story nothing joined is not a group; it is yesterday's page.
+    clusters = [cluster for cluster in clusters if len(cluster) > 1 or cluster[0] in today]
     _log_groups(clusters, day)
 
     keeper: dict[str, str | None] = {}
     covered: dict[str, int] = {}
+    ran_earlier: dict[str, tuple[EarlierStory, ...]] = {}
     for cluster in clusters:
-        outlets = {outlet_of(by_id[member]) for member in cluster}
-        for position, member in enumerate(cluster):
-            keeper[member] = None if position == 0 else cluster[0]
+        mine = [member for member in cluster if member in today]
+        before = [member for member in cluster if member not in today]
+        outlets = {outlet_of(by_id[member]) for member in mine}
+        for position, member in enumerate(mine):
+            # The anchor is this day's strongest telling and never an earlier
+            # one. A card the page does not hold is a fold onto nothing.
+            keeper[member] = None if position == 0 else mine[0]
             covered[member] = len(outlets - {outlet_of(by_id[member])})
+            seen = {outlet_of(by_id[member])}
+            earlier_names: list[EarlierStory] = []
+            for other in before:
+                outlet = outlet_of(by_id[other])
+                if outlet in seen:
+                    continue
+                seen.add(outlet)
+                earlier_names.append(
+                    EarlierStory(
+                        date=str(day_of[other]),
+                        item_id=other,
+                        source_name=by_id[other].source_name,
+                    )
+                )
+            ran_earlier[member] = tuple(earlier_names[:EARLIER_OUTLETS_MAX])
 
     return [
         item
@@ -1087,6 +1206,7 @@ def collapse_same_story(
             update={
                 "also_covered_by": covered[item.item_id],
                 "same_story_as": keeper[item.item_id],
+                "also_ran_earlier": ran_earlier[item.item_id],
             }
         )
         for item in items
@@ -1737,6 +1857,8 @@ def build_day(
     placement: PlacementConfig | None = None,
     same_story: SameStoryConfig | None = None,
     group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
+    same_story_window_hours: float = 0.0,
+    earlier_days: Sequence[EarlierDay] = (),
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
 
@@ -1802,6 +1924,8 @@ def build_day(
         merged,
         same_story=same_story,
         group_identical_titles=group_identical_titles,
+        window_hours=same_story_window_hours,
+        earlier=earlier_days,
     )
     frame = placement or PlacementConfig()
     combined = place(
