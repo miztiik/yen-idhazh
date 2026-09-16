@@ -222,6 +222,7 @@
   },
   "run": {
     "max_parallel": 4,
+    "safety_ceiling_per_day": 400,
     "safety_ceiling_per_run": 80,
     "shard_size": 5,
     "shard_timeout_minutes": 200,

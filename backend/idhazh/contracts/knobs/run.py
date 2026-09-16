@@ -17,16 +17,32 @@ class RunConfig(Model):
         default=80,
         ge=1,
         description=(
-            "What sizes a run. It began as a crash guard against a mis-parsed feed and "
-            "supply overtook it: items_planned has been exactly this number on every run "
-            "since 2026-08-25, so it is the cap whatever it is called. Owner decision, "
-            "2026-09-05: it comes down to 80 from 160 - the day publishes half as many "
-            "stories, and the gain is that those 80 slots go to articles worth reading "
-            "rather than to a second copy of one already chosen or to a feed that has "
-            "been publishing badly. It is an editorial choice about the day now, not a "
-            "crash guard. It is also what sizes the worst case a work shard and the "
-            "route stage have to finish - a smaller run makes a smaller worst case - and "
-            "a worker killed at run.shard_timeout_minutes uploads nothing."
+            "What one run may hand the workers. It protects a worker from its own "
+            "timeout: this number sizes the worst case a work shard and the route "
+            "stage have to finish, and a worker killed at run.shard_timeout_minutes "
+            "uploads nothing, so the items it held are lost. It is a guardrail and it "
+            "only ever refuses - it never chooses content, ranks it, or reorders it. "
+            "It began as a crash guard against a mis-parsed feed and supply overtook "
+            "it: items_planned has been exactly this number on every run since "
+            "2026-08-25. Owner decision, 2026-09-05: 80, down from 160. What it is "
+            "NOT is a bound on the day - the day runs five times, so 80 here publishes "
+            "about 400. safety_ceiling_per_day is the one that answers that."
+        ),
+    )
+    safety_ceiling_per_day: int = Field(
+        default=400,
+        ge=1,
+        description=(
+            "What the whole day may publish, across every run of it. The per-run "
+            "ceiling could never answer this: the day runs five times, so anybody "
+            "reading 80 and picturing an 80-item day is wrong by a factor of five. "
+            "A guardrail like its neighbour - it only ever refuses, and a day under it "
+            "is untouched. It counts what earlier runs of this date actually put in "
+            "front of a reader, so a run that failed to publish costs the day nothing. "
+            "The default is the arithmetic of the design that already ships - five "
+            "runs at safety_ceiling_per_run - so turning it on changes no day that has "
+            "ever been published and only refuses a runaway. Lowering it is an "
+            "editorial decision about how long a day should be, and it is the owner's."
         ),
     )
     shard_size: int = Field(
