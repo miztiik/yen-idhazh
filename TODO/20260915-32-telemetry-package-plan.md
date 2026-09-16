@@ -89,9 +89,11 @@ flowchart TB
         host["host.py<br/>cpu, memory, runner"]
         feeds["source_health.py<br/>is this feed worth asking"]
         prune_m["prune.py<br/>target + range, atomic"]
+        inventory["inventory.py<br/>what one day recorded"]
         cli_m["cli.py<br/>idhazh telemetry ..."]
         subgraph pub["publish/ - one dispatcher, ten projections"]
             dispatch["dispatch.py<br/>PROJECTIONS, in order"]
+            replay["replay.py<br/>one published day, again"]
             rule["series.py<br/>path, write-if-changed, prune"]
             proj["public_telemetry, scores, feed_health,<br/>day_metrics, machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
         end
@@ -144,14 +146,23 @@ flowchart TB
     proj --> ptel & pspan & pcon & ptime
     ptel & pspan & ptime --> console
     prune_m -.->|"--target --since --until"| state
-    cli_m --> prune_m & dispatch & rollup
+    ih & sr --> inventory
+    replay --> dispatch
+    cli_m --> prune_m & inventory & replay
 
     classDef gone fill:#3a1f1f,stroke:#a33,color:#eee
     classDef new fill:#1f3a2a,stroke:#3a7,color:#eee
-    class rtr,ptime,prune_m,cli_m,dispatch new
+    class rtr,ptime,prune_m,cli_m,inventory,replay,dispatch new
 ```
 
 Green is new in this plan. Everything else is a move, not a rewrite.
+
+**What the command line reaches, and what it does not.** `cli.py` routes and
+nothing else: `show`, `census` and `rollup` read one day through `inventory.py`,
+`publish` writes one day again through `replay.py`, and row 12 adds `prune`.
+`rollup.py` is not on that path - it folds spans a run is still holding in
+memory, so a subcommand asked about a finished day reads the committed shard
+instead.
 
 **What leaves.** `backend/idhazh/telemetry.py`, `itemrecord.py`, `machine.py`,
 `stages/counters.py` and the ten modules row 10 moved - nine `publish_*.py` and
