@@ -4,19 +4,14 @@
       "additionalProperties": false,
       "description": "What the published day does with the items a run finished.\n\nIts own group rather than a knob under `assist`, because `AppearanceConfig`\nimports `AssistConfig` whole: a threshold the pipeline applies once at build\ntime would then also land in `config/appearance.json`, where it has no\nreader and no meaning.",
       "properties": {
-        "duplicate_similarity_min": {
-          "default": 0.94,
-          "description": "How alike two of a day's items have to be before they are one story. Cosine over the vectors the day already carries, and EVERY pair inside a group has to clear it - not only each item against the one it joined. NOT comparable to assist.similarity_floor: that one scores a reader's query against an item and this one scores two items against each other, so the two distributions are different shapes. Set by hand labels rather than by taste. Every group the pass forms over the eleven committed days was read and marked same-story or not, measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over 3,978 items: at 0.93 one group of thirty is two different stories - Ontario's pushback against the lake renaming, merged into Google doing the renaming, at 0.9317 - and at 0.94 all twenty-two groups are one story each. The rule is the first round hundredth above the highest-scoring pair a person marked as two stories, which leaves a margin of 0.0083. That margin is thin, and the way to widen it is more labels rather than a higher number. Raising this costs missed duplicates, which a reader sees as the same story twice; lowering it costs a false merge, which is a story that never ran, so the two errors are not equal and this number leans high.",
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Duplicate Similarity Min",
-          "type": "number"
-        },
         "group_identical_titles": {
           "default": true,
-          "description": "Whether two of a day's items are one story when their published headlines say the same thing - compatibility-normalised, casefolded, and with everything that is not a letter or a digit turned into a space. The words must match exactly; the numbers only have to agree to the coarser of the two precisions they were written with, so `$12.9 billion` and `$12.93 billion` are one acquisition while `25 percent` and `50 percent` are two different figures. This is a second way into a group beside duplicate_similarity_min, never a replacement: every pair inside a group still has to clear one of the two, and an item with no vector is still never grouped. It exists because the cosine is taken over `title. summary`, and the summary is our own prose about ONE article and is most of that string, so two honest tellings of one story are pulled apart by the part that is guaranteed to differ. Measured 2026-09-14 on a developer machine / Python 3.14.2 over the twenty-five committed days and 9,353 items: fifty-three cross-source pairs share a headline, their cosine has a median of 0.9177 against a floor of 0.94, and the highest-scoring pair a person marked as TWO stories sits at 0.9317 - above that median, so no threshold separates the two populations and lowering duplicate_similarity_min cannot fix this. Turning this off restores the vector-only rule, which is the revert path an operator has if a shared headline ever turns out to be two stories. Ruled by Andre and the Editor, 2026-09-14, and the rounding tolerance by the owner the same day; the reasoning is in docs/architecture/publishing/layout.md.",
+          "description": "Whether two of a day's items are one story when their published headlines say the same thing - compatibility-normalised, casefolded, and with everything that is not a letter or a digit turned into a space. The words must match exactly; the numbers only have to agree to the coarser of the two precisions they were written with, so `$12.9 billion` and `$12.93 billion` are one acquisition while `25 percent` and `50 percent` are two different figures. This is a second way into a group beside same_story.floor_min, never a replacement: every pair inside a group still has to clear one of the two, and an item with no vector is still never grouped. It exists because the cosine is taken over `title. summary`, and the summary is our own prose about ONE article and is most of that string, so two honest tellings of one story are pulled apart by the part that is guaranteed to differ. Measured 2026-09-14 on a developer machine / Python 3.14.2 over the twenty-five committed days and 9,353 items: fifty-three cross-source pairs share a headline, their cosine has a median of 0.9177 against a floor of 0.94, and the highest-scoring pair a person marked as TWO stories sits at 0.9317 - above that median, so no threshold separates the two populations and lowering same_story.floor_min cannot fix this. Turning this off restores the vector-only rule, which is the revert path an operator has if a shared headline ever turns out to be two stories. Ruled by Andre and the Editor, 2026-09-14, and the rounding tolerance by the owner the same day; the reasoning is in docs/architecture/publishing/layout.md.",
           "title": "Group Identical Titles",
           "type": "boolean"
+        },
+        "same_story": {
+          "$ref": "#/$defs/SameStoryConfig"
         }
       },
       "title": "AssembleConfig",
@@ -180,7 +175,7 @@
         },
         "dedup_similarity_min": {
           "default": 0.94,
-          "description": "How alike two of a day's planned stories have to be, by cosine over the headline-and-lead vectors the plan builds, before they are recorded as one story carried at two addresses. The same number and the same reason as assemble.duplicate_similarity_min: set by hand labels at 0.94, the first round hundredth above the highest-scoring pair a person marked as two stories. The plan pass reuses it rather than minting a second threshold for the same question one stage earlier. Raising it misses duplicates; lowering it risks folding two stories into one, so it leans high.",
+          "description": "How alike two of a day's planned stories have to be, by cosine over the headline-and-lead vectors the plan builds, before they are recorded as one story carried at two addresses. The same number and the same reason as assemble.same_story.floor_min: set by hand labels at 0.94, the first round hundredth above the highest-scoring pair a person marked as two stories. The plan pass reuses it rather than minting a second threshold for the same question one stage earlier. This one stays a bare cosine, because the plan has no summary and no key points yet - the terms the assemble composite adds do not exist a stage earlier. Raising it misses duplicates; lowering it risks folding two stories into one, so it leans high.",
           "maximum": 1.0,
           "minimum": 0.0,
           "title": "Dedup Similarity Min",
@@ -1469,6 +1464,38 @@
       "title": "RunConfig",
       "type": "object"
     },
+    "SameStoryConfig": {
+      "additionalProperties": false,
+      "description": "How alike two of a day's items have to be before they are one story.\n\nOne score, and the score is a weighted sum of terms that each run 0 to 1.\nNested rather than three flat knobs under `assemble` because the weights\ncarry an invariant ACROSS them - they sum to 1.0 - and a knob whose legal\nvalue depends on another knob's value belongs in the model where a validator\ncan see both.\n\n**The sum-to-one rule is what keeps the floor meaning something.** The floor\nis a number on the same 0-to-1 scale as every term, so a person reading\n`config/idhazh.json` can compare the floor against a term without first\nworking out what the weights add up to. Let them sum to 1.3 and the floor\nsilently becomes easier to clear every time a weight moves, which is the\nfailure this model exists to make impossible.\n\nIt ships with all the weight on the cosine, which is exactly what the pass\nscored before this model existed. The weights are fitted against hand labels\nin a later change; until then this is a rewrite that changes no published\ngroup rather than a retune.",
+      "properties": {
+        "cosine_weight": {
+          "default": 1.0,
+          "description": "How much of the score is the cosine between the two vectors the day already carries. 1.0 ships, which is the whole score and is what the pass used before the composite existed - so the composite lands changing no published group, and the weights move against labels rather than against taste. It is the strongest single term measured so far: it separates 97.4 percent of the labelled pairs. NOT comparable to assist.similarity_floor, which scores a reader's query against an item rather than two items against each other, so the two distributions are different shapes.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Cosine Weight",
+          "type": "number"
+        },
+        "floor_min": {
+          "default": 0.94,
+          "description": "What the weighted score has to reach before two items are one story, and EVERY pair inside a group has to reach it - not only each item against the one it joined. On the same 0-to-1 scale as every term, because the weights sum to 1.0. Set by hand labels rather than by taste. Every group the pass forms over the eleven committed days was read and marked same-story or not, measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over 3,978 items: at 0.93 one group of thirty is two different stories - Ontario's pushback against the lake renaming, merged into Google doing the renaming, at 0.9317 - and at 0.94 all twenty-two groups are one story each. The rule is the first round hundredth above the highest-scoring pair a person marked as two stories, which leaves a margin of 0.0083. That margin is thin, and the way to widen it is more labels rather than a higher number. Raising this costs missed duplicates, which a reader sees as the same story twice; lowering it costs a false merge, which is a story that never ran, so the two errors are not equal and this number leans high. It was measured against the cosine alone, which is what the shipped weights still score.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Floor Min",
+          "type": "number"
+        },
+        "key_point_weight": {
+          "default": 0.0,
+          "description": "How much of the score is the share of words the two items' key points have in common - the words of both lists reduced the way a headline is reduced, then what they share over what they have between them. 0.0 ships, so the term is computed and logged and carries no weight yet: the composite is a rewrite first and a retune second. It is the only term beside the cosine whose different-story pairs stay below its same-story pairs with room to spare - a 99th percentile of 0.0962 against a same-story median of 0.2419, so the two populations barely touch - which is why it is the second term rather than one of several.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Key Point Weight",
+          "type": "number"
+        }
+      },
+      "title": "SameStoryConfig",
+      "type": "object"
+    },
     "SummarizeConfig": {
       "additionalProperties": false,
       "description": "What the prompt asks the model for, and what the pipeline accepts back.\n\nA prompt is a request and a gate is a rule. Asking for a tighter range than\nwe accept is what stops a two-word miss from losing a story, so the ask\n(`bands`) and the tolerance around it (`length_policy`) both live here,\nwhere an operator editing one can see the other.\n\nThe allowance is derived from the band rather than applied flat to all five\nrungs, so it can see which band an item is in. No length outcome except\n`length_policy.absolute_floor_words` drops an item: a reply outside the\ntolerance is still a story, and deleting it would cost the day a story to\npunish the model for rounding.\n\nEvery band and title number here is substituted into the prompt text at\nrender time, so the prompt cannot drift from the bounds the pipeline enforces\n(Guardrail #6). `key_point_restatement_ceiling` is the one value that is not asked\nfor: it is a post-parse check `to_summary` runs on what the model returned,\nand it lives here because the count it protects - the band's key_points_min -\ndoes too.",
@@ -1954,6 +1981,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
+      "version": "2026-09-16T12:00",
+      "why": "One cosine cannot be reweighted; a composite with a floor on it can."
+    },
+    {
       "change": "observability lost the two published ages for scores and feed-health.",
       "version": "2026-09-16",
       "why": "The mirrors they pruned are gone; no console route ever fetched either."
@@ -1967,11 +1999,6 @@
       "change": "run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
       "version": "2026-09-15T22:10",
       "why": "A worker killed at its timeout uploads nothing, so the items are lost."
-    },
-    {
-      "change": "run.trial_state_dirname and retention.trial_state_days, both additive.",
-      "version": "2026-09-15T22:00",
-      "why": "A trial run needs its own state tree, and that tree needs an expiry."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2046,7 +2073,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-16",
+      "default": "2026-09-16T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2057,5 +2084,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-16"
+  "version": "2026-09-16T12:00"
 }

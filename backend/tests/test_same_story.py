@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from array import array
 from base64 import b64decode
 from typing import Any, Final
@@ -31,9 +32,16 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
-from idhazh.assemble import collapse_same_story, cosine_int8, numbers_agree, story_key
+from idhazh.assemble import (
+    collapse_same_story,
+    cosine_int8,
+    key_point_overlap,
+    numbers_agree,
+    story_key,
+)
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings, DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.knobs.placement import AssembleConfig, SameStoryConfig
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, cosine, from_base64, to_base64
 
 #: The day the labels below were read off. Closed, so its payload cannot move.
@@ -91,7 +99,17 @@ def labelled_day() -> tuple[list[DigestItem], DigestEmbeddings]:
 
 def committed_threshold() -> float:
     """What `config/idhazh.json` ships, never a number written out again here."""
-    return config.load(CONFIG_DIR).app.assemble.duplicate_similarity_min
+    return config.load(CONFIG_DIR).app.assemble.same_story.floor_min
+
+
+def at(floor: float) -> SameStoryConfig:
+    """The shipped weights with the floor moved, so a test names one number.
+
+    Every test below is about what the pass groups rather than about how the
+    terms are weighted, and the shipped weights put the whole score on the
+    cosine - so a test that names a floor is naming the cosine it wants.
+    """
+    return SameStoryConfig(floor_min=floor)
 
 
 def groups_of(items: list[DigestItem]) -> dict[str, list[str]]:
@@ -100,6 +118,14 @@ def groups_of(items: list[DigestItem]) -> dict[str, list[str]]:
         if item.same_story_as is not None:
             found.setdefault(item.same_story_as, []).append(item.item_id)
     return found
+
+
+#: Digits spelled as letters, so a built item's default headline carries no
+#: figure. `Story world-01` and `Story world-02` reduce to the same words around
+#: two different numbers, which is exactly what `_numbers_clash` refuses - so
+#: without this every pair of built items is vetoed and this module cannot test
+#: grouping at all. The ids stay distinct, so the headlines do too.
+_NO_FIGURES: Final = str.maketrans("0123456789", "abcdefghij")
 
 
 def unit(degrees: float) -> str:
@@ -127,16 +153,17 @@ def item(
     run: int = 1,
     title: str | None = None,
     outlet: str | None = None,
+    points: list[str] | None = None,
 ) -> DigestItem:
     return DigestItem(
         item_id=item_id,
         vertical=item_id.rsplit("-", 1)[0],
-        title=title if title is not None else f"Story {item_id}",
+        title=title if title is not None else f"Story {item_id.translate(_NO_FIGURES)}",
         source_url=f"https://example.test/{item_id}",
         source_id=source,
         source_name=outlet if outlet is not None else source.title(),
         summary="A summary long enough to be a summary.",
-        key_points=["One point."],
+        key_points=points if points is not None else ["One point."],
         band=ConfidenceBand.HIGH,
         rank_score=score,
         introduced_by_run=run,
@@ -176,7 +203,7 @@ def test_two_sources_carrying_one_story_leave_the_strongest_drawn() -> None:
         item("world-02", source="paper", score=9.0),
     ]
     stamped = collapse_same_story(
-        items, block({"world-01": unit(0), "world-02": unit(0)}), similarity_min=0.9
+        items, block({"world-01": unit(0), "world-02": unit(0)}), same_story=at(0.9)
     )
 
     assert groups_of(stamped) == {"world-02": ["world-01"]}, "the higher rank_score is kept"
@@ -193,7 +220,7 @@ def test_nothing_is_unpublished() -> None:
     """
     items = [item(f"world-0{n}", source="wire" if n % 2 else "paper") for n in range(1, 7)]
     stamped = collapse_same_story(
-        items, block({one.item_id: unit(0) for one in items}), similarity_min=0.9
+        items, block({one.item_id: unit(0) for one in items}), same_story=at(0.9)
     )
 
     assert [one.item_id for one in stamped] == [one.item_id for one in items]
@@ -212,7 +239,7 @@ def test_one_outlet_publishing_twice_is_not_a_group() -> None:
     """
     items = [item("world-01", source="wire", score=1.0), item("world-02", source="wire", score=9.0)]
     stamped = collapse_same_story(
-        items, block({"world-01": unit(0), "world-02": unit(0)}), similarity_min=0.9
+        items, block({"world-01": unit(0), "world-02": unit(0)}), same_story=at(0.9)
     )
 
     assert groups_of(stamped) == {}
@@ -234,7 +261,7 @@ def test_a_group_never_chains_through_its_middle() -> None:
     ]
     vectors = {"world-01": unit(0), "world-02": unit(18), "world-03": unit(36)}
     # 0.9518, 0.9501 and 0.8084 for the three pairs, in that order.
-    stamped = collapse_same_story(items, block(vectors), similarity_min=0.93)
+    stamped = collapse_same_story(items, block(vectors), same_story=at(0.93))
 
     assert groups_of(stamped) == {"world-01": ["world-02"]}
     assert [one.also_covered_by for one in stamped] == [1, 1, 0]
@@ -250,7 +277,7 @@ def test_the_count_is_of_other_sources_and_not_of_other_items() -> None:
     stamped = collapse_same_story(
         items,
         block({one.item_id: unit(0) for one in items}),
-        similarity_min=0.9,
+        same_story=at(0.9),
     )
 
     assert groups_of(stamped) == {"world-01": ["world-02", "world-03"]}
@@ -286,7 +313,7 @@ def test_two_sources_with_one_headline_are_one_story_below_the_threshold() -> No
         committed_threshold()
     ), "the case is only a test of the headline if the vectors cannot form this group"
 
-    stamped = collapse_same_story(items, block(vectors), similarity_min=committed_threshold())
+    stamped = collapse_same_story(items, block(vectors), same_story=at(committed_threshold()))
 
     assert groups_of(stamped) == {"world-02": ["world-01"]}, "the higher rank_score is kept"
     assert [one.also_covered_by for one in stamped] == [1, 1]
@@ -307,7 +334,7 @@ def test_a_headline_one_word_apart_is_not_a_story_below_the_threshold() -> None:
     stamped = collapse_same_story(
         items,
         block({"world-01": unit(0), "world-02": unit(_APART)}),
-        similarity_min=committed_threshold(),
+        same_story=at(committed_threshold()),
     )
 
     assert groups_of(stamped) == {}
@@ -332,7 +359,7 @@ def test_a_headline_does_not_chain_a_group_through_its_middle() -> None:
     assert cosine(from_base64(vectors["world-02"]), from_base64(vectors["world-03"])) > 0.94
     assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-03"])) < 0.94
 
-    stamped = collapse_same_story(items, block(vectors), similarity_min=0.94)
+    stamped = collapse_same_story(items, block(vectors), same_story=at(0.94))
 
     assert groups_of(stamped) == {"world-01": ["world-02"]}
     assert [one.also_covered_by for one in stamped] == [1, 1, 0]
@@ -353,7 +380,7 @@ def test_one_outlet_running_one_headline_twice_is_still_not_a_group() -> None:
     stamped = collapse_same_story(
         items,
         block({"world-01": unit(0), "world-02": unit(_APART)}),
-        similarity_min=0.94,
+        same_story=at(0.94),
     )
 
     assert groups_of(stamped) == {}
@@ -385,7 +412,7 @@ def test_two_desks_rounding_one_price_are_one_group() -> None:
         committed_threshold()
     ), "the case is only a test of the headline if the vectors cannot form this group"
 
-    stamped = collapse_same_story(items, block(vectors), similarity_min=committed_threshold())
+    stamped = collapse_same_story(items, block(vectors), same_story=at(committed_threshold()))
 
     assert groups_of(stamped) == {"business-02": ["business-01"]}
     assert [one.also_covered_by for one in stamped] == [1, 1]
@@ -400,7 +427,7 @@ def test_two_desks_printing_different_figures_are_two_groups() -> None:
     stamped = collapse_same_story(
         items,
         block({"business-01": unit(0), "business-02": unit(_APART)}),
-        similarity_min=committed_threshold(),
+        same_story=at(committed_threshold()),
     )
 
     assert groups_of(stamped) == {}
@@ -435,7 +462,7 @@ def test_one_outlet_on_two_of_its_own_feeds_is_not_a_group() -> None:
     stamped = collapse_same_story(
         items,
         block({"world-01": unit(0), "world-02": unit(_APART)}),
-        similarity_min=committed_threshold(),
+        same_story=at(committed_threshold()),
     )
 
     assert groups_of(stamped) == {}
@@ -468,7 +495,7 @@ def test_two_mastheads_of_one_owner_are_two_sources() -> None:
     stamped = collapse_same_story(
         items,
         block({"world-01": unit(0), "world-02": unit(_APART)}),
-        similarity_min=committed_threshold(),
+        same_story=at(committed_threshold()),
     )
 
     assert groups_of(stamped) == {"world-02": ["world-01"]}
@@ -483,11 +510,11 @@ def test_turning_the_joiner_off_restores_the_vector_only_rule() -> None:
     ]
     vectors = block({"world-01": unit(0), "world-02": unit(_APART)})
 
-    assert groups_of(collapse_same_story(items, vectors, similarity_min=0.94)) != {}
+    assert groups_of(collapse_same_story(items, vectors, same_story=at(0.94))) != {}
     assert (
         groups_of(
             collapse_same_story(
-                items, vectors, similarity_min=0.94, group_identical_titles=False
+                items, vectors, same_story=at(0.94), group_identical_titles=False
             )
         )
         == {}
@@ -500,7 +527,7 @@ def test_turning_the_joiner_off_restores_the_vector_only_rule() -> None:
 def test_a_day_with_no_vectors_says_it_does_not_know() -> None:
     """Null, never 0. A day whose encoder never ran carried no claim either way."""
     items = [item("world-01", source="wire"), item("world-02", source="paper")]
-    stamped = collapse_same_story(items, None, similarity_min=0.9)
+    stamped = collapse_same_story(items, None, same_story=at(0.9))
 
     assert [one.also_covered_by for one in stamped] == [None, None]
     assert [one.same_story_as for one in stamped] == [None, None]
@@ -514,7 +541,7 @@ def test_an_item_without_a_vector_says_it_does_not_know() -> None:
         item("world-03", source="agency", score=1.0),
     ]
     stamped = collapse_same_story(
-        items, block({"world-01": unit(0), "world-02": unit(0)}), similarity_min=0.9
+        items, block({"world-01": unit(0), "world-02": unit(0)}), same_story=at(0.9)
     )
 
     assert [one.also_covered_by for one in stamped] == [1, 1, None]
@@ -525,7 +552,7 @@ def test_a_vector_of_the_wrong_width_is_not_grouped() -> None:
     """A short vector would score against a prefix of its rival and mean nothing."""
     items = [item("world-01", source="wire", score=9.0), item("world-02", source="paper")]
     vectors = {"world-01": unit(0), "world-02": to_base64([1.0] + [0.0] * (DIMENSIONS - 1))[:8]}
-    stamped = collapse_same_story(items, block(vectors), similarity_min=0.9)
+    stamped = collapse_same_story(items, block(vectors), same_story=at(0.9))
 
     assert [one.also_covered_by for one in stamped] == [0, None]
 
@@ -542,7 +569,7 @@ def test_an_item_without_a_vector_is_not_grouped_by_its_headline_either() -> Non
         item("world-01", source="wire", score=9.0, title="Ferry capsizes off Cyprus"),
         item("world-02", source="paper", score=1.0, title="Ferry capsizes off Cyprus"),
     ]
-    stamped = collapse_same_story(items, block({"world-01": unit(0)}), similarity_min=0.94)
+    stamped = collapse_same_story(items, block({"world-01": unit(0)}), same_story=at(0.94))
 
     assert [one.also_covered_by for one in stamped] == [0, None]
     assert [one.same_story_as for one in stamped] == [None, None]
@@ -561,7 +588,7 @@ def test_two_items_nobody_could_title_are_not_one_story() -> None:
     stamped = collapse_same_story(
         items,
         block({"world-01": unit(0), "world-02": unit(_APART)}),
-        similarity_min=0.94,
+        same_story=at(0.94),
     )
 
     assert groups_of(stamped) == {}
@@ -698,6 +725,201 @@ def test_a_headline_with_one_number_is_never_one_with_two() -> None:
     assert not one_headline("Deal worth $5 billion agreed", "Deal worth $5 billion agreed by 3")
 
 
+# --- the composite score ----------------------------------------------------
+
+
+def test_every_term_runs_zero_to_one() -> None:
+    """Both terms sit on the floor's scale, or the floor means nothing.
+
+    The cosine is bounded by construction. The key-point term is not, and a
+    ratio written the wrong way round is how it would break - so it is driven
+    from both ends and from a case whose answer is arithmetic rather than a
+    round number.
+    """
+    ash = frozenset({"ash", "jakarta", "flights"})
+    assert key_point_overlap(ash, ash) == 1.0
+    assert key_point_overlap(ash, frozenset({"budget", "session"})) == 0.0
+    assert key_point_overlap(ash, frozenset()) == 0.0, "no words is no evidence, not a match"
+    assert key_point_overlap(frozenset(), frozenset()) == 0.0
+    assert key_point_overlap(frozenset({"a", "b"}), frozenset({"b", "c"})) == pytest.approx(1 / 3)
+    for other in (frozenset({"ash"}), frozenset({"ash", "smoke", "java", "masks"})):
+        assert 0.0 <= key_point_overlap(ash, other) <= 1.0
+
+
+@pytest.mark.parametrize(
+    ("cosine_weight", "key_point_weight"),
+    [(1.0, 0.5), (0.5, 0.0), (0.0, 0.0), (0.7, 0.4)],
+)
+def test_weights_that_do_not_sum_to_one_are_refused(
+    cosine_weight: float, key_point_weight: float
+) -> None:
+    """A score off 0 to 1 cannot be compared against a floor on 0 to 1.
+
+    The failure this refuses is silent rather than loud: weights that sum to
+    1.5 push every pair up, the floor stops meaning what the labels measured,
+    and the day publishes a merge nobody chose.
+    """
+    with pytest.raises(ValueError, match=re.escape("must sum to 1.0")):
+        SameStoryConfig(cosine_weight=cosine_weight, key_point_weight=key_point_weight)
+
+
+def test_a_split_written_in_decimal_is_accepted() -> None:
+    """0.7 and 0.3 add up to 0.9999999999999999 in binary, and are a legal split.
+
+    Exact equality against 1.0 would refuse a pair of numbers a person would
+    reasonably write, which is why the check carries a tolerance.
+    """
+    knobs = SameStoryConfig(cosine_weight=0.7, key_point_weight=0.3)
+
+    assert (knobs.cosine_weight, knobs.key_point_weight) == (0.7, 0.3)
+
+
+def test_the_shipped_weights_put_the_whole_score_on_the_cosine() -> None:
+    """The composite ships scoring exactly what the single floor scored.
+
+    The row's own claim, as an assertion. A pair whose key points have nothing
+    in common still groups at its cosine alone, so no published day can move
+    until a person moves the weights.
+    """
+    shipped = config.load(CONFIG_DIR).app.assemble.same_story
+    assert (shipped.cosine_weight, shipped.key_point_weight) == (1.0, 0.0)
+
+    items = [
+        item("world-01", source="wire", points=["Ash closed the airport."]),
+        item("india-02", source="paper", points=["Nothing whatever in common."]),
+    ]
+    vectors = block({"world-01": unit(0), "india-02": unit(18)})
+
+    assert groups_of(collapse_same_story(items, vectors, same_story=at(0.94))) != {}
+    assert groups_of(collapse_same_story(items, vectors, same_story=at(0.96))) == {}
+
+
+@pytest.mark.parametrize(
+    ("left_title", "right_title", "floor", "grouped", "why"),
+    [
+        (
+            "Union Budget 2025 clears the house",
+            "Union Budget 2026 clears the house",
+            0.9,
+            False,
+            "a clash of figures refuses a pair the vectors score above the floor",
+        ),
+        (
+            "Ash closes the airport",
+            "Ash closes the airport",
+            0.99,
+            True,
+            "one headline joins a pair the score would leave apart",
+        ),
+        (
+            "Ash closes the airport",
+            "Smoke shuts the runway",
+            0.99,
+            False,
+            "everything else is scored, and this pair does not reach the floor",
+        ),
+    ],
+)
+def test_the_three_steps_run_in_the_order_the_rule_states(
+    left_title: str, right_title: str, floor: float, grouped: bool, why: str
+) -> None:
+    """Veto, then headline, then score - and each outranks the one below it.
+
+    One pair of vectors throughout, scoring 0.9511, so the only thing that
+    moves between the three rows is the headline. The veto has to beat a score
+    above the floor, and the headline has to beat a score below it; nothing
+    else in this module states both halves against the same evidence.
+    """
+    items = [
+        item("india-01", source="wire", title=left_title),
+        item("world-02", source="paper", title=right_title),
+    ]
+    vectors = block({"india-01": unit(0), "world-02": unit(18)})
+
+    assert bool(groups_of(collapse_same_story(items, vectors, same_story=at(floor)))) is grouped, why
+
+
+def test_one_headline_carrying_a_figure_the_other_omits_is_scored_not_refused() -> None:
+    """Two desks choosing differently about a headline are not two facts.
+
+    On 2026-09-06 the BBC ran `Anak Krakatau eruption suspends flights at
+    Jakarta airport` and Mint ran the same words with `300 flights` in them.
+    A veto on any unmatched figure refuses that pair, and it is one story - the
+    single group over the twenty-six committed days that the broader rule would
+    have broken, measured 2026-09-16. So the pair is neither refused nor joined
+    at 1.0. It is scored, which is what it was before the veto existed, and the
+    second floor below is what proves the difference.
+    """
+    bare = "Anak Krakatau eruption suspends flights at Jakarta airport"
+    figure = "Anak Krakatau eruption suspends 300 flights at Jakarta airport"
+    items = [
+        item("world-01", source="wire", title=bare),
+        item("india-02", source="paper", title=figure),
+    ]
+    vectors = block({"world-01": unit(0), "india-02": unit(18)})
+
+    assert groups_of(collapse_same_story(items, vectors, same_story=at(0.94))) != {}
+    assert groups_of(collapse_same_story(items, vectors, same_story=at(0.96))) == {}
+
+
+def test_the_veto_reads_the_headline_and_goes_when_the_headline_rule_goes() -> None:
+    """Turning the joiner off restores the vector-only rule, veto included.
+
+    The clash is read off the same reduced headline the joiner is, so an
+    operator who switches the joiner off gets the pass exactly as it scored
+    before either existed. Asserted rather than left to be noticed, because a
+    revert path that quietly keeps half of what it reverts is worse than none.
+    """
+    items = [
+        item("india-01", source="wire", title="Union Budget 2025 clears the house"),
+        item("world-02", source="paper", title="Union Budget 2026 clears the house"),
+    ]
+    vectors = block({"india-01": unit(0), "world-02": unit(0)})
+
+    assert groups_of(collapse_same_story(items, vectors, same_story=at(0.9))) == {}
+    assert (
+        groups_of(
+            collapse_same_story(
+                items, vectors, same_story=at(0.9), group_identical_titles=False
+            )
+        )
+        != {}
+    )
+
+
+def test_the_second_term_can_carry_a_group_the_cosine_alone_cannot() -> None:
+    """The key-point term reaches the arithmetic, not only the log line.
+
+    It ships at weight 0.0, so this is the only place the repository proves the
+    weights are wired at all. Half and half over a pair scoring 0.9511 on the
+    vectors and word-for-word on its key points: the cosine alone leaves them
+    apart at a floor of 0.96, and the pair clears it once the second term is
+    weighted.
+    """
+    shared = ["Ash from the volcano closed the airport."]
+    items = [
+        item("world-01", source="wire", points=shared),
+        item("india-02", source="paper", points=shared),
+    ]
+    vectors = block({"world-01": unit(0), "india-02": unit(18)})
+    cosine_only = SameStoryConfig(cosine_weight=1.0, key_point_weight=0.0, floor_min=0.96)
+    both = SameStoryConfig(cosine_weight=0.5, key_point_weight=0.5, floor_min=0.96)
+
+    assert groups_of(collapse_same_story(items, vectors, same_story=cosine_only)) == {}
+    assert groups_of(collapse_same_story(items, vectors, same_story=both)) != {}
+
+
+def test_a_config_still_spelling_the_old_floor_is_refused_by_name() -> None:
+    """0.94 of a cosine and 0.94 of a composite are not the same quantity.
+
+    So the old knob is refused rather than aliased: a silent alias carries a
+    number somebody measured against one rule forward into another, and the
+    operator never finds out.
+    """
+    with pytest.raises(ValueError, match=re.escape("assemble.same_story.floor_min")):
+        AssembleConfig.model_validate({"duplicate_similarity_min": 0.94})
+
+
 # --- the oracle: a hand-labelled day ---------------------------------------
 
 
@@ -710,7 +932,7 @@ def test_the_oracle_every_group_on_the_labelled_day_is_one_story() -> None:
     number.
     """
     items, embeddings = labelled_day()
-    stamped = collapse_same_story(items, embeddings, similarity_min=committed_threshold())
+    stamped = collapse_same_story(items, embeddings, same_story=at(committed_threshold()))
 
     assert groups_of(stamped) == LABELLED_GROUPS
 
@@ -740,7 +962,7 @@ def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
 def test_the_labelled_day_keeps_every_item_it_published() -> None:
     """Nothing is unpublished, counted on the oracle day rather than argued."""
     items, embeddings = labelled_day()
-    stamped = collapse_same_story(items, embeddings, similarity_min=committed_threshold())
+    stamped = collapse_same_story(items, embeddings, same_story=at(committed_threshold()))
 
     assert len(stamped) == len(items)
     assert [one.item_id for one in stamped] == [one.item_id for one in items]

@@ -2,11 +2,131 @@
 
 from __future__ import annotations
 
-from typing import Self
+import math
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, Final, Self
 
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import Model
+from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+
+#: The knobs `assemble` used to carry, and where each one went. Spelled as a
+#: whole path because the floor moved down a level rather than changing its
+#: name, and an operator sent to `assemble.floor_min` is sent to a key that does
+#: not exist.
+SUPERSEDED_ASSEMBLE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {"duplicate_similarity_min": "assemble.same_story.floor_min"}
+)
+
+#: How close a set of weights has to get to 1.0 to count as summing to 1.0. Not
+#: exact equality: 0.7 and 0.3 are two numbers a person would write and their
+#: binary sum is 0.9999999999999999, so exact equality refuses a split nothing
+#: is wrong with. A billionth is far below any weight worth setting.
+_WEIGHTS_TOLERANCE: Final = 1e-9
+
+
+class SameStoryConfig(Model):
+    """How alike two of a day's items have to be before they are one story.
+
+    One score, and the score is a weighted sum of terms that each run 0 to 1.
+    Nested rather than three flat knobs under `assemble` because the weights
+    carry an invariant ACROSS them - they sum to 1.0 - and a knob whose legal
+    value depends on another knob's value belongs in the model where a validator
+    can see both.
+
+    **The sum-to-one rule is what keeps the floor meaning something.** The floor
+    is a number on the same 0-to-1 scale as every term, so a person reading
+    `config/idhazh.json` can compare the floor against a term without first
+    working out what the weights add up to. Let them sum to 1.3 and the floor
+    silently becomes easier to clear every time a weight moves, which is the
+    failure this model exists to make impossible.
+
+    It ships with all the weight on the cosine, which is exactly what the pass
+    scored before this model existed. The weights are fitted against hand labels
+    in a later change; until then this is a rewrite that changes no published
+    group rather than a retune.
+    """
+
+    cosine_weight: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How much of the score is the cosine between the two vectors the day "
+            "already carries. 1.0 ships, which is the whole score and is what the pass "
+            "used before the composite existed - so the composite lands changing no "
+            "published group, and the weights move against labels rather than against "
+            "taste. It is the strongest single term measured so far: it separates 97.4 "
+            "percent of the labelled pairs. NOT comparable to assist.similarity_floor, "
+            "which scores a reader's query against an item rather than two items "
+            "against each other, so the two distributions are different shapes."
+        ),
+    )
+    key_point_weight: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How much of the score is the share of words the two items' key points "
+            "have in common - the words of both lists reduced the way a headline is "
+            "reduced, then what they share over what they have between them. 0.0 "
+            "ships, so the term is computed and logged and carries no weight yet: the "
+            "composite is a rewrite first and a retune second. It is the only term "
+            "beside the cosine whose different-story pairs stay below its same-story "
+            "pairs with room to spare - a 99th percentile of 0.0962 against a "
+            "same-story median of 0.2419, so the two populations barely touch - which "
+            "is why it is the second term rather than one of several."
+        ),
+    )
+    floor_min: float = Field(
+        default=0.94,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "What the weighted score has to reach before two items are one story, and "
+            "EVERY pair inside a group has to reach it - not only each item against "
+            "the one it joined. On the same 0-to-1 scale as every term, because the "
+            "weights sum to 1.0. Set by hand labels rather than by taste. Every group "
+            "the pass forms over the eleven committed days was read and marked "
+            "same-story or not, measured 2026-09-01 on Intel Core i7-1265U / Windows "
+            "11 / Python 3.14.2 over 3,978 items: at 0.93 one group of thirty is two "
+            "different stories - Ontario's pushback against the lake renaming, merged "
+            "into Google doing the renaming, at 0.9317 - and at 0.94 all twenty-two "
+            "groups are one story each. The rule is the first round hundredth above "
+            "the highest-scoring pair a person marked as two stories, which leaves a "
+            "margin of 0.0083. That margin is thin, and the way to widen it is more "
+            "labels rather than a higher number. Raising this costs missed duplicates, "
+            "which a reader sees as the same story twice; lowering it costs a false "
+            "merge, which is a story that never ran, so the two errors are not equal "
+            "and this number leans high. It was measured against the cosine alone, "
+            "which is what the shipped weights still score."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _the_weights_sum_to_one(self) -> Self:
+        """A score that is not on 0 to 1 cannot be compared against a floor on 0 to 1.
+
+        Checked here rather than left to whoever edits the file, because the
+        failure is silent: weights that sum to 1.3 push every pair up, the floor
+        stops meaning what the labels measured, and the day publishes a merge
+        nobody chose. Nothing downstream re-checks it.
+        """
+        weights = {
+            "cosine_weight": self.cosine_weight,
+            "key_point_weight": self.key_point_weight,
+        }
+        total = math.fsum(weights.values())
+        if not math.isclose(total, 1.0, abs_tol=_WEIGHTS_TOLERANCE):
+            spelled = ", ".join(f"{name}={value}" for name, value in weights.items())
+            raise ValueError(
+                f"the same_story weights must sum to 1.0, and these sum to {total} "
+                f"({spelled}). Every term runs 0 to 1, so the weights are what keep "
+                "the score on the same scale as floor_min"
+            )
+        return self
 
 
 class AssembleConfig(Model):
@@ -18,31 +138,7 @@ class AssembleConfig(Model):
     reader and no meaning.
     """
 
-    duplicate_similarity_min: float = Field(
-        default=0.94,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "How alike two of a day's items have to be before they are one story. "
-            "Cosine over the vectors the day already carries, and EVERY pair inside a "
-            "group has to clear it - not only each item against the one it joined. "
-            "NOT comparable to assist.similarity_floor: that one scores a reader's "
-            "query against an item and this one scores two items against each other, "
-            "so the two distributions are different shapes. Set by hand labels rather "
-            "than by taste. Every group the pass forms over the eleven committed days "
-            "was read and marked same-story or not, measured 2026-09-01 on Intel Core "
-            "i7-1265U / Windows 11 / Python 3.14.2 over 3,978 items: at 0.93 one group "
-            "of thirty is two different stories - Ontario's pushback against the lake "
-            "renaming, merged into Google doing the renaming, at 0.9317 - and at 0.94 "
-            "all twenty-two groups are one story each. The rule is the first round "
-            "hundredth above the highest-scoring pair a person marked as two stories, "
-            "which leaves a margin of 0.0083. That margin is thin, and the way to widen "
-            "it is more labels rather than a higher number. Raising this costs missed "
-            "duplicates, which a reader sees as the same story twice; lowering it costs "
-            "a false merge, which is a story that never ran, so the two errors are not "
-            "equal and this number leans high."
-        ),
-    )
+    same_story: SameStoryConfig = Field(default_factory=SameStoryConfig)
 
     group_identical_titles: bool = Field(
         default=True,
@@ -54,7 +150,7 @@ class AssembleConfig(Model):
             "two precisions they were written with, so `$12.9 billion` and `$12.93 "
             "billion` are one acquisition while `25 percent` and `50 percent` are two "
             "different figures. This is a second way into a group beside "
-            "duplicate_similarity_min, never a replacement: every pair inside a group "
+            "same_story.floor_min, never a replacement: every pair inside a group "
             "still has to clear one of the two, and an item with no vector is still "
             "never grouped. It exists because the cosine is taken over `title. "
             "summary`, and the summary is our own prose about ONE article and is most "
@@ -65,7 +161,7 @@ class AssembleConfig(Model):
             "pairs share a headline, their cosine has a median of 0.9177 against a "
             "floor of 0.94, and the highest-scoring pair a person marked as TWO stories "
             "sits at 0.9317 - above that median, so no threshold separates the two "
-            "populations and lowering duplicate_similarity_min cannot fix this. Turning "
+            "populations and lowering same_story.floor_min cannot fix this. Turning "
             "this off restores the vector-only rule, which is the revert path an "
             "operator has if a shared headline ever turns out to be two stories. Ruled "
             "by Andre and the Editor, 2026-09-14, and the rounding tolerance by the "
@@ -73,6 +169,11 @@ class AssembleConfig(Model):
             "docs/architecture/publishing/layout.md."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_a_removed_knob(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("assemble", data, SUPERSEDED_ASSEMBLE_NAMES)
 
 
 class PlacementConfig(Model):

@@ -343,11 +343,13 @@ class CollectConfig(Model):
             "How alike two of a day's planned stories have to be, by cosine over the "
             "headline-and-lead vectors the plan builds, before they are recorded as one "
             "story carried at two addresses. The same number and the same reason as "
-            "assemble.duplicate_similarity_min: set by hand labels at 0.94, the first "
+            "assemble.same_story.floor_min: set by hand labels at 0.94, the first "
             "round hundredth above the highest-scoring pair a person marked as two "
             "stories. The plan pass reuses "
             "it rather than minting a second threshold for the same question one stage "
-            "earlier. Raising it misses duplicates; lowering it risks folding two "
+            "earlier. This one stays a bare cosine, because the plan has no summary and "
+            "no key points yet - the terms the assemble composite adds do not exist a "
+            "stage earlier. Raising it misses duplicates; lowering it risks folding two "
             "stories into one, so it leans high."
         ),
     )

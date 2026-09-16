@@ -25,6 +25,7 @@ from collections.abc import Container, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
+from itertools import combinations
 from operator import mul
 from pathlib import Path
 from typing import Final, Literal
@@ -43,7 +44,7 @@ from idhazh.contracts.digest_day import (
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, TimeSource
-from idhazh.contracts.knobs.placement import AssembleConfig, PlacementConfig
+from idhazh.contracts.knobs.placement import AssembleConfig, PlacementConfig, SameStoryConfig
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
@@ -84,9 +85,6 @@ INDEX_ROOT: Final = Path("frontend/public/assist/index")
 #: the `config/taxonomy.json` it is derived from, and `state/` is what a run
 #: appends (CLAUDE.md section 3).
 TAXONOMY_VECTORS_RELPATH: Final = "config/taxonomy-vectors.bin"
-#: The threshold a run uses when nobody configured one, read off the contract so
-#: the number exists once. The knob is `assemble.duplicate_similarity_min`.
-DUPLICATE_SIMILARITY_MIN: Final = AssembleConfig().duplicate_similarity_min
 #: Whether the second joiner runs when nobody configured one, read off the
 #: contract so the default exists once. The knob is
 #: `assemble.group_identical_titles`.
@@ -747,70 +745,221 @@ def outlet_of(item: DigestItem) -> str:
     return item.source_name
 
 
-def _pair_fit(
-    left: str,
-    right: str,
-    vectors: dict[str, array[int]],
-    norms: dict[str, float],
-    keys: Mapping[str, StoryKey],
-) -> float:
-    """How strongly two items read as one story, on a 0 to 1 scale.
+def key_point_overlap(left: frozenset[str], right: frozenset[str]) -> float:
+    """What share of their key-point words two items have between them, 0 to 1.
 
-    One published headline, reduced by `story_key`, is the strongest evidence
-    this pass has and scores 1.0 without the encoder being consulted. Our own
-    summariser wrote both of those headlines, off two different articles, so
-    two that survive the reduction identical are our own desk saying twice what
-    the story is. Everything else is the cosine over the vectors the day
-    already carries.
+    Shared words over the words they have between them, reduced exactly the way
+    a headline is reduced so one rule owns what counts as a word. It is a term
+    in the score rather than a rule of its own: two tellings of one story name
+    the same people, places and figures in their key points, and two different
+    stories on one subject share the subject and little else.
+
+    Zero when either item has no words left after the reduction, which is what
+    a key-point list of punctuation reduces to. That is the honest answer for a
+    term - no evidence rather than a match - because the floor is what decides
+    and a term may not decide on its own.
+
+    The size of the union is counted rather than built. A day of 731 items asks
+    this a few million times, and building the second set doubles the work for a
+    number two additions already give.
+    """
+    if not left or not right:
+        return 0.0
+    shared = len(left & right)
+    return shared / (len(left) + len(right) - shared)
+
+
+def _key_point_words(item: DigestItem) -> frozenset[str]:
+    """One item's key points as a set of reduced words, computed once per day."""
+    return frozenset(_reduce(" ".join(item.key_points)).split())
+
+
+def _numbers_clash(left: StoryKey | None, right: StoryKey | None) -> bool:
+    """Do two headlines say the same words about two different figures?
+
+    The one case this refuses outright: the words reduce identically, both
+    headlines carry the same count of figures, and a figure does not agree at
+    the coarser of the two precisions it was written with. `Budget 2025` and
+    `Budget 2026` are two years, `25 percent` and `50 percent` are two figures,
+    and no amount of similarity anywhere else makes them one story.
+
+    **A hard veto rather than a negative term**, because it fires on none of the
+    labelled same-story pairs - zero of 67 - and a signal with no false
+    positives is a rule rather than evidence. Written as a weight it would sit
+    in a sum, where a high enough score outvotes it; and a high score is exactly
+    what a pair of headlines differing in one digit has, so the sum would lose
+    the one case the veto exists for.
+
+    **One headline carrying a figure the other leaves out is not a clash.** That
+    is two desks choosing differently about a headline, not two desks reporting
+    different facts, and it is a real pair: on 2026-09-06 the BBC ran `Anak
+    Krakatau eruption suspends flights at Jakarta airport` and Mint ran the same
+    words with `300 flights` in them. Vetoing that pair is the one thing this
+    rewrite measurably broke before the count check was added. It still cannot
+    JOIN at 1.0 - `story_key` refuses an unmatched figure before any value is
+    compared - so it is scored on its terms like any other pair.
+
+    Two headlines whose words differ are not a clash either. They are two
+    headlines, and the composite below scores them.
+    """
+    if left is None or right is None:
+        return False
+    if left.shape != right.shape:
+        return False
+    if len(left.numbers) != len(right.numbers):
+        return False
+    return not numbers_agree(left.numbers, right.numbers)
+
+
+def _headlines_match(left: StoryKey | None, right: StoryKey | None) -> bool:
+    """Do two published headlines say the same thing?
+
+    The words have to reduce identically AND every figure in them has to agree,
+    which `story_key` defines and `numbers_agree` decides. Deliberately stricter
+    than the veto above is broad: a pair where one headline carries a figure the
+    other leaves out is neither a match nor a clash, so it falls through to the
+    score like any ordinary pair.
 
     An item with no key - untitled, or a headline that reduces to nothing - is
     never equal to anything, including another item with no key.
     """
-    key = keys.get(left)
-    other = keys.get(right)
-    if key is not None and other is not None and key.shape == other.shape:
-        if numbers_agree(key.numbers, other.numbers):
-            return 1.0
-    return cosine_int8(
-        vectors[left],
-        vectors[right],
-        left_norm=norms[left],
-        right_norm=norms[right],
+    if left is None or right is None:
+        return False
+    return left.shape == right.shape and numbers_agree(left.numbers, right.numbers)
+
+
+@dataclass(frozen=True)
+class _Terms:
+    """What one pair scored, term by term, so a log line can say what carried it."""
+
+    #: The cosine between the two vectors the day already carries.
+    cosine: float
+    #: The share of key-point words the two items have between them.
+    key_points: float
+    #: Whether their reduced headlines are the same, which joins them outright.
+    headline: bool
+    #: The weighted score the floor is applied to.
+    score: float
+
+
+@dataclass(frozen=True)
+class _DayScoring:
+    """Everything the score reads, built once for the day rather than per pair.
+
+    A day of 431 items is about 93,000 pairs, so anything derived from an item
+    rather than from a pair is derived here: reducing a key-point list at every
+    pair would do the same work two hundred times over.
+    """
+
+    vectors: Mapping[str, array[int]]
+    norms: Mapping[str, float]
+    keys: Mapping[str, StoryKey]
+    points: Mapping[str, frozenset[str]]
+    knobs: SameStoryConfig
+
+
+def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
+    """Score two items as one story, or refuse the pair outright.
+
+    Three steps, and the order is the rule. **A clash of numbers refuses**, and
+    nothing below it can overturn that. **Two matching reduced headlines join**
+    at 1.0 without the weights being consulted: our own summariser wrote both,
+    off two different articles, so two that survive the reduction identical are
+    our own desk saying twice what the story is. **Everything else is scored**
+    by the weighted sum of the terms, each of which runs 0 to 1 and whose
+    weights sum to 1.0, so the score is on the same scale as the floor.
+
+    A pair where one headline carries a figure the other leaves out is neither
+    refused nor joined. It is scored, which is what it was before the veto
+    existed.
+
+    The cosine is computed even when the headline rule carries the pair. It
+    costs one dot product on the 53 cross-source pairs a day that share a
+    headline, and it is what lets the log line below say what the encoder
+    thought of a pair the headline joined - which is the measurement that put
+    the headline rule above the cosine in the first place.
+    """
+    key, other = day.keys.get(left), day.keys.get(right)
+    if _numbers_clash(key, other):
+        return None
+    cosine = cosine_int8(
+        day.vectors[left],
+        day.vectors[right],
+        left_norm=day.norms[left],
+        right_norm=day.norms[right],
     )
+    points = key_point_overlap(day.points[left], day.points[right])
+    headline = _headlines_match(key, other)
+    score = (
+        1.0
+        if headline
+        else day.knobs.cosine_weight * cosine + day.knobs.key_point_weight * points
+    )
+    return _Terms(cosine=cosine, key_points=points, headline=headline, score=score)
 
 
-def _group_fit(
-    cluster: Sequence[str],
-    item_id: str,
-    vectors: dict[str, array[int]],
-    norms: dict[str, float],
-    keys: Mapping[str, StoryKey],
-    floor: float,
-) -> float | None:
+def _group_fit(cluster: Sequence[str], item_id: str, day: _DayScoring) -> float | None:
     """How well this item fits the whole group, or nothing if it does not.
 
-    Every pair inside a group clears the threshold, not only each item against
-    the one it joined. Single-link grouping chains - A is the same story as B
-    and B as C, while A and C are two different stories - and a chained group is
+    Every pair inside a group clears the floor, not only each item against the
+    one it joined. Single-link grouping chains - A is the same story as B and B
+    as C, while A and C are two different stories - and a chained group is
     exactly the false merge this pass may not make. The all-pairs rule is what
     holds once there are two ways in: a shared headline is transitive on its
-    own and a cosine is not, so their union is not either, and single-link over
+    own and a score is not, so their union is not either, and single-link over
     that union would chain through whichever of the two happened to fire.
+
+    One refused pair refuses the whole group, which is the same rule as the
+    floor and for the same reason.
     """
     weakest = 1.0
     for member in cluster:
-        score = _pair_fit(item_id, member, vectors, norms, keys)
-        if score < floor:
+        terms = _pair_terms(item_id, member, day)
+        if terms is None or terms.score < day.knobs.floor_min:
             return None
-        weakest = min(weakest, score)
+        weakest = min(weakest, terms.score)
     return weakest
+
+
+def _log_groups(clusters: Sequence[Sequence[str]], day: _DayScoring) -> None:
+    """What carried each group, one line per group (section 1b).
+
+    The weakest pair, because the weakest pair is the one the floor tested - a
+    group is only as strong as the pair that nearly refused it. Roughly 84
+    groups a day, so a person reading a run's log can see whether the headline
+    rule or the vectors are doing the work, and see it without re-running
+    anything.
+    """
+    for cluster in clusters:
+        if len(cluster) < 2:
+            continue
+        scored = [
+            (terms.score, terms, left, right)
+            for left, right in combinations(cluster, 2)
+            if (terms := _pair_terms(left, right, day)) is not None
+        ]
+        if not scored:
+            continue
+        _, terms, left, right = min(scored, key=lambda entry: entry[0])
+        LOG.info(
+            "same story group=%s members=%s carried_by=%s score=%.4f cosine=%.4f "
+            "key_points=%.4f weakest_pair=%s,%s",
+            cluster[0],
+            len(cluster),
+            "headline" if terms.headline else "score",
+            terms.score,
+            terms.cosine,
+            terms.key_points,
+            left,
+            right,
+        )
 
 
 def collapse_same_story(
     items: Sequence[DigestItem],
     embeddings: DigestEmbeddings | None,
     *,
-    similarity_min: float = DUPLICATE_SIMILARITY_MIN,
+    same_story: SameStoryConfig | None = None,
     group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
 ) -> list[DigestItem]:
     """Group the day on what it already carries, and keep the strongest.
@@ -820,18 +969,22 @@ def collapse_same_story(
     view draws instead, and every item in a group carries the count of other
     sources so the sentence on it is true whichever one is on screen.
 
-    Two items are one story when their published headlines reduce to the same
-    key, or when the vectors the day carries score above `similarity_min`.
-    Either way **every pair inside a group has to clear the bar**. The headline
-    is the load-bearing one: the vector is built from `title. summary`, the
-    summary is our own prose about ONE article and is 87 percent of what the
-    encoder reads - a median 16 tokens of headline in a median 121, measured
-    2026-09-14 - so two honest tellings of one story are pulled apart by the
-    part that is guaranteed to differ. Measured the same day, the cosine over
-    fifty-three
-    cross-source pairs that share a headline has a median of 0.9177, which is
-    below a pair a person marked as two different stories - so no threshold
-    separates them and the text is what was wrong.
+    **Three steps decide a pair, and the order is the rule.** A clash of numbers
+    inside two otherwise identical headlines refuses the pair outright. Two
+    headlines that reduce identically are one story. Everything else is scored
+    by `same_story`, a weighted sum of terms that each run 0 to 1 and whose
+    weights sum to 1.0, against `same_story.floor_min`. Either way **every pair
+    inside a group has to clear the floor**.
+
+    The headline is the load-bearing evidence rather than the vector: the
+    vector is built from `title. summary`, the summary is our own prose about
+    ONE article and is 87 percent of what the encoder reads - a median 16
+    tokens of headline in a median 121, measured 2026-09-14 - so two honest
+    tellings of one story are pulled apart by the part that is guaranteed to
+    differ. Measured the same day, the cosine over fifty-three cross-source
+    pairs that share a headline has a median of 0.9177, which is below a pair a
+    person marked as two different stories - so no threshold separates them and
+    the text is what was wrong.
 
     Two headlines match on their words exactly and on their numbers to the
     coarser precision of the two, so a desk rounding a figure does not cost the
@@ -860,6 +1013,7 @@ def collapse_same_story(
     if embeddings is None or not embeddings.vectors:
         return list(items)
 
+    knobs = same_story or SameStoryConfig()
     by_id = {item.item_id: item for item in items}
     keys: dict[str, StoryKey] = {}
     if group_identical_titles:
@@ -884,16 +1038,24 @@ def collapse_same_story(
         vectors[item_id] = array("b", raw)
         norms[item_id] = _norm(vectors[item_id])
 
+    day = _DayScoring(
+        vectors=vectors,
+        norms=norms,
+        keys=keys,
+        points={item_id: _key_point_words(by_id[item_id]) for item_id in vectors},
+        knobs=knobs,
+    )
+
     clusters: list[list[str]] = []
     for item in sorted((one for one in items if one.item_id in vectors), key=_strength_order):
         joined: list[str] | None = None
-        best = similarity_min
+        best = knobs.floor_min
         for cluster in clusters:
             # A group is across outlets, so one outlet's second piece never
             # forms a group on its own and never joins a group it is alone in.
             if all(outlet_of(by_id[member]) == outlet_of(item) for member in cluster):
                 continue
-            fit = _group_fit(cluster, item.item_id, vectors, norms, keys, similarity_min)
+            fit = _group_fit(cluster, item.item_id, day)
             # `>` after the first candidate, so a tie goes to the group that
             # formed first - which is the one built round the stronger story,
             # because the walk is in strength order.
@@ -903,6 +1065,8 @@ def collapse_same_story(
             clusters.append([item.item_id])
         else:
             joined.append(item.item_id)
+
+    _log_groups(clusters, day)
 
     keeper: dict[str, str | None] = {}
     covered: dict[str, int] = {}
@@ -1513,7 +1677,7 @@ def build_day(
     watchlist: Watchlist | None = None,
     ui: UiConfig | None = None,
     placement: PlacementConfig | None = None,
-    duplicate_similarity_min: float = DUPLICATE_SIMILARITY_MIN,
+    same_story: SameStoryConfig | None = None,
     group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
@@ -1578,7 +1742,7 @@ def build_day(
     combined = collapse_same_story(
         combined,
         merged,
-        similarity_min=duplicate_similarity_min,
+        same_story=same_story,
         group_identical_titles=group_identical_titles,
     )
     combined = place(

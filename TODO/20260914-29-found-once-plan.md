@@ -88,7 +88,7 @@ which is the same family.
 | 11 | The lead is a weighted score, and the page says how | 10 | C | PENDING | - | - | - |
 | 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
 | 13 | The chrome ledger: a host that repeats itself is caught | - | C | PENDING | - | - | - |
-| 14 | The composite score, proving it changed nothing | - | C | PENDING | - | - | - |
+| 14 | The composite score, proving it changed nothing | - | C | DONE | - | - | - |
 | 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
 | 16 | Refuse boilerplate, on a week of evidence | 13 | D | PENDING | - | - | - |
 | 17 | Does a short extraction publish at all | - | D | PENDING | - | - | - |

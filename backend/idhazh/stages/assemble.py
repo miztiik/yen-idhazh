@@ -234,7 +234,7 @@ def stage_assemble(
         watchlist=settings.watchlist,
         ui=settings.app.ui,
         placement=settings.app.placement,
-        duplicate_similarity_min=settings.app.assemble.duplicate_similarity_min,
+        same_story=settings.app.assemble.same_story,
         group_identical_titles=settings.app.assemble.group_identical_titles,
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
