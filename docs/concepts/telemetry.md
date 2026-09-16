@@ -193,6 +193,45 @@ A worker records only items that have settled. An item whose summary payload is
 simply not written yet was interrupted, not failed, and assemble classifies it
 later once the difference no longer matters.
 
+## What the machine was doing
+
+A throughput number with no machine beside it is not a measurement (Guardrail
+#10), so ten cells of the census row are about the host rather than the item:
+the processor, the runner label, how busy that processor was across the item,
+the one-minute load, three memory readings and what the kernel counted against
+the job's memory limit.
+
+`backend/idhazh/telemetry/host.py` is the only thing that reads them, and it
+reads them for two consumers at two grains.
+
+| Consumer | Grain | The question it answers |
+| --- | --- | --- |
+| the item row | one item | did this item meet a noisy neighbour? |
+| `state/runtime-counters.csv` | one shard | what did the whole job cost, and does the census's own clock agree with the server's? |
+
+**They stay two stores on purpose.** The counters row is the independent check on
+the census's own timings, and a check folded into the thing it checks stops
+being a check.
+
+**The item row records the sample taken while that item ran, never the shard's
+average.** An average says nothing about the item that was slow, which is the
+whole question these cells exist to answer.
+
+Three column names appear on both rows, and **two of the three are supposed to
+differ**. `cpu_busy_pct` is one item's window on the item row and the whole
+job's - cache restore and weight load included - on the shard row.
+`cgroup_peak_bytes` is a high-water mark read at two different instants.
+`cpu_model` is the third and it is not like the others: a processor does not
+change inside a job, so two different answers would mean the host had been read
+twice. Both rows take it from one `host_facts` call.
+
+Every source is one local file read, and a reading that cannot be taken records
+empty rather than failing the item. `/sys/fs/cgroup/memory.peak` has measured
+absent on every GitHub-hosted runner this project has probed, so that cell is
+usually empty in CI and always empty on a developer machine - a fact about the
+instrument, not about the job. What one sample costs is in
+[measurements.md](../reference/measurements.md).
+
 ## The visual ledger, and the eight terms that outlive it
 
 `state/visuals/<YYYY-MM>.csv` is the third committed record here: one row per
@@ -279,7 +318,7 @@ Thirteen stores under `state/` is not thirteen designs. It is six grains, and th
 
 **The published mirror is a redaction step, not a copy.** `state/` is committed and never published; `frontend/public/` is published and never holds a ledger. Between them sits a projection that drops the columns a reader may not have - `PublicTelemetryRow` exists to strip 77 of them. Calling the published copy pollution mistakes the safety control for the leak. What it costs is 8.8 MB of a 39.2 MB site, under 1 percent of the 1 GB cap, and it is bounded: `public_telemetry_keep_months` deletes a published month in the same pass that folds its source, so the mirror plateaus rather than grows. The site reaches its cap on pictures and stories, not on telemetry.
 
-**A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` are 6.3 MB that no console route fetches. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes.
+**A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` were 6,455,733 bytes that no console route fetched, and on 2026-09-16 they went with their two projections. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes. The ledgers under `state/scores/` and `state/feed-health/` stay - they are the record, and the console reads them at build time.
 
 ### What folds, what does not, and the test that decides
 
@@ -317,7 +356,6 @@ There is a second reason, and it bites in production rather than in year two. A 
 | Move the three flat files to day trees | a store `idhazh telemetry prune` can reach, since that command takes a day file out and has no way to rewrite a row out of a flat one ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16)) | the one-time migration's cost, and whether any reader assumes a single file |
 | Compress the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606, 77.0 percent**, with no new dependency ([../reference/measurements.md](../reference/measurements.md#what-compressing-the-telemetry-takes-against-re-encoding-it-2026-09-15)) | whether every console fetch path handles the encoding. One build settles it. `span-rollup/` is 67 bytes and gzips to 77, so a switch has to leave a file alone where compressing it does not pay |
 | Re-encode every closed-vocabulary column as an ordinal integer | **measured 2026-09-15: 369,855 bytes of `state/item-health/`, 7.1 percent** - a ninth of what compressing the same files takes, and it costs a legend shipped beside the data and `grep failed` over a committed day | nothing. It is priced and deferred: compression is taken first, and an ordinal taken first would be re-encoded when compression lands |
-| Retire the two published mirrors nothing reads | 6.3 MB and two projections to keep working | whether anything outside this repository fetches them. Unknowable; the cost of being wrong is one re-publish |
 | A query engine over a rolling month index, in the browser | one fetch instead of a month of rows | the engine's wire size. The month it would replace is no longer an estimate: `telemetry/2026-09.csv` is 1,186,543 bytes and gzips to 254,252 |
 | A year rung on the fold ladder | a shape for year-over-year | nothing, until a month fold is too big to read. At kilobytes a month it is not |
 
@@ -366,7 +404,8 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | Committing a raw span as a record | A fourth account of the same run, free to disagree with the other three. A *derived* fold that restates nothing is the committed rollup above; a raw span stays evidence under `backend/var/`. | Fowler, 2026-08-30 |
 | Reproducing the nesting on the host with the SDK's own context managers | It works, and it costs a second code path for a sink that is opt-in and untestable here (no test touches the network, Guardrail #7). The file sink keeps the exact tree; the host gets one trace per item with the parent named. | Carmack, 2026-08-30 |
 | One ledger at item grain, every other store folded into it | Three stores key on something that was never an item - a feed that returned nothing, an address nobody planned, a candidate the ranker refused - so no item row can hold their facts. Three more carry a different retention, and a merged store keeps one window and loses the rest. The write path consolidates; the row does not. | Fowler and Carmack, 2026-09-15 |
-| Taking telemetry off the published site to save the size budget | It is under 1 percent of the cap and already plateaus at its retention, and there is no server - so removing it leaves the console with nothing to fetch and no month control. The projection is also the redaction step that strips 77 columns from the ledger. What can go is the 6.3 MB no route reads. | Carmack and Susan, 2026-09-15 |
+| Taking telemetry off the published site to save the size budget | It is under 1 percent of the cap and already plateaus at its retention, and there is no server - so removing it leaves the console with nothing to fetch and no month control. The projection is also the redaction step that strips 77 columns from the ledger. What could go was the 6,455,733 bytes no route read, and that went on 2026-09-16. | Carmack and Susan, 2026-09-15 |
+| Keeping `scores/` and `feed-health/` published in case somebody fetches them | Searched the built bundle on 2026-09-16 - 357 emitted files, 70 of them client chunks - and no chunk a browser loads names either path. The cost of being wrong is one re-publish; the cost of keeping them was two projections maintained for nobody, drifting unwatched from the ledgers they mirrored. | Susan, 2026-09-16 |
 | A query engine shipped to the browser over a rolling month index | The engine is 2 to 10 MB over the wire against a published month that gzips to 254,252 bytes, measured 2026-09-15 - 8 to 39 times what it saves. It costs more than it saves until a month passes about 50 MB, which the per-run item ceiling forbids. Compress the projection instead. | Carmack, 2026-09-15 |
 | A year rung on the fold ladder, built now | A month fold is kilobytes. A rung that folds nothing anybody struggles to read is a store to keep working for no question. | Fowler, 2026-09-15 |
 

@@ -800,12 +800,17 @@ is not what bounds them:
 | Published copy | Age | Paired with |
 | --- | --- | --- |
 | `frontend/public/telemetry/` | `public_telemetry_keep_months` (14) | `item_health_full_grain_months` |
-| `frontend/public/scores/` | `public_scores_keep_months` (14) | `scores_full_grain_months` |
-| `frontend/public/feed-health/` | `public_feed_health_keep_months` (14) | `feed_health_keep_months` |
 | `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
 | `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
 | `frontend/public/machine/` | `public_machine_keep_months` (14) | nothing - the source is one appended CSV, so the copy is where a month boundary first exists |
 | `frontend/public/span-rollup/` | `public_span_rollup_keep_months` (14) | nothing |
+
+**Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
+`public_feed_health_keep_months` bounded published copies of `state/scores/` and
+`state/feed-health/` that no console route ever fetched, so the trees went and
+the two knobs with them. A config file still spelling either is refused by name
+rather than ignored, and it is sent nowhere: the two ledgers above keep their
+own ages, which is a different number for a different store.
 
 **Two more ages sit outside this block**, because each is a read cover first and
 a cleanup age second: `observability.trace_window_days` bounds `state/traces/`,

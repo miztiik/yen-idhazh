@@ -204,7 +204,7 @@ def test_the_walk_reaches_every_csv_contract() -> None:
     """The walk finding nothing would make every test below vacuously green."""
     models = _csv_contracts()
 
-    assert len(models) >= 20, f"only {len(models)} CSV contracts found; the walk is broken"
+    assert len(models) >= 19, f"only {len(models)} CSV contracts found; the walk is broken"
     assert len(_foldable_columns()) >= 20, "no constrained string columns found; the walk is broken"
     assert len(_self_folding_columns()) >= 10, "no self-folding columns found; the walk is broken"
 

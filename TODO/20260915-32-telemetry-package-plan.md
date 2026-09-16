@@ -42,13 +42,13 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 6 | The census prefers the persisted row | 5 | D | PENDING | - | - | - |
 | 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
 | 8 | The label call's own clock and both finish reasons | 6 | E | PENDING | - | - | - |
-| 9 | The host sampler moves in | 3 | B | PENDING | - | - | - |
+| 9 | The host sampler moves in | 3 | B | DONE | p32r9 | - | - |
 | 10 | Nine publishers become one dispatcher | 3 | B | PENDING | - | - | - |
 | 11 | `idhazh telemetry` and its subcommands | 3, 10 | F | PENDING | - | - | - |
 | 12 | `telemetry prune` takes a target and a range | 11 | G | PENDING | - | - | - |
 | 13 | A closed vocabulary is an enum | 2 | B | PENDING | - | - | - |
 | 14 | The run timeline draws | 1, 7, 8 | H | PENDING | - | - | - |
-| 15 | The two published mirrors nothing reads are deleted | 10 | F | PENDING | - | - | - |
+| 15 | The two published mirrors nothing reads are deleted | 10 | F | DONE | p32r15 | - | - |
 | 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
 
 **Column arithmetic.** 43 of 113 carry a value today; `telemetry._row` names 31 fields and `_flatten_calls` adds the call cells, 44 written of which one is always empty. Row 6 fills 58, row 7 fills 6, row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question.
@@ -86,16 +86,16 @@ flowchart TB
         sinks["sinks.py<br/>null, file, fan-out, host"]
         traces_m["traces.py<br/>where a committed trace lands"]
         rollup["rollup.py<br/>roll_up_spans"]
-        host["host.py<br/>cpu, memory, runner"]
+        host["host.py<br/>cpu, memory, runner<br/>+ the counters stage"]
         feeds["source_health.py<br/>is this feed worth asking"]
         prune_m["prune.py<br/>target + range, atomic"]
         inventory["inventory.py<br/>what one day recorded"]
         republish["republish.py<br/>one published day, again"]
         cli_m["cli.py<br/>idhazh telemetry ..."]
-        subgraph pub["publish/ - one dispatcher, ten projections"]
+        subgraph pub["publish/ - one dispatcher, eight projections"]
             dispatch["dispatch.py<br/>PROJECTIONS, in order"]
             rule["series.py<br/>path, write-if-changed, prune"]
-            proj["public_telemetry, scores, feed_health,<br/>day_metrics, machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
+            proj["public_telemetry, day_metrics,<br/>machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
         end
     end
 
@@ -123,7 +123,7 @@ flowchart TB
 
     work_s -->|"cells"| record_m
     work_s --> spans
-    work_s --> host
+    work_s -->|"one host_facts a shard,<br/>one Watch an item"| host
     plan_s --> events
     record_m -->|"validated row"| ihr
     record_m -->|"items/*.health.json"| record_s
@@ -136,7 +136,8 @@ flowchart TB
     sinks --> tr
     spans --> rollup
     rollup --> srr --> sr
-    host --> rc
+    host -->|"ten cells"| ihr
+    host -->|"one row a shard"| rc
     ih --> dispatch
     sr --> dispatch
     rc --> dispatch
@@ -170,7 +171,7 @@ dispatcher is what `stages/assemble.py` is too.
 `stages/counters.py` and the ten modules row 10 moved - nine `publish_*.py` and
 `source_health.py` - are deleted by the row that moves them, not left beside
 their replacement. `frontend/public/scores/` and `frontend/public/feed-health/`
-are deleted by row 15.
+are deleted by row 15. `machine.py` and `stages/counters.py` went on 2026-09-16.
 
 
 ---
@@ -389,10 +390,12 @@ are deleted by row 15.
 ## Section 10 - Row #9 - The host sampler moves in
 
 - **Scope:** `machine.py` and `stages/counters.py` become `telemetry/host.py`, and the six host columns plus `cpu_busy_pct` and `cgroup_peak_bytes` reach the item row.
+- **What the row did, 2026-09-16.** All ten host columns reach the item row a shard leaves on disk, and a test drives a real work stage against a built `/proc` to prove it rather than waiting for CI to fill the cells. Three names changed on the way in, each against a collision inside one package: `machine.Span` is `HostCells`, because `telemetry.Span` is a node of the trace tree two modules away; `machine.Reading` is `HostReading`; and the sampler is `host.py` rather than `machine.py`, which leaves `telemetry/publish/machine.py` the only `machine` in the tree. **One duplicate reader went as well**: `contracts.runtime_counters._cgroup_peak_bytes` parsed the kernel peak file that `host` also opens, so `from_metrics_text` now takes the number instead of the text and the contract stops parsing a host file. `stage_counters` takes its `state_root` as an argument rather than importing `stages.common`, so the instrument does not import the producers. **Measured, 2026-09-16**: one sample is 0.7 ms and a whole item is 3.0 ms against a median 475,890 ms item - and dropping a `/proc/cpuinfo` read the first cut took per item cut the tail 25 percent ([measurements.md](../docs/reference/measurements.md)).
 - **Files touched:**
   - `backend/idhazh/telemetry/host.py` (moved from `backend/idhazh/machine.py` and `backend/idhazh/stages/counters.py`)
   - `backend/idhazh/stages/work.py`
-  - `backend/idhazh/publish_machine.py`
+  - `backend/idhazh/cli.py`
+  - `backend/idhazh/contracts/runtime_counters.py`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows backend/tests/test_telemetry.py`. CI runs the full suite.
 - **Oracle:** the host columns on an item row and the same-named columns on that shard's `runtime-counters` row are read from one sampler call, so they cannot disagree. It cannot settle whether the sample is representative of the item's whole run.
 - **Decisions:**
@@ -401,6 +404,7 @@ are deleted by row 15.
 | --- | --- | --- |
 | 1 | One sampler, two consumers. `runtime-counters` stays a separate store at shard grain because it is the independent check on the census's timings | Carmack |
 | 2 | The item row records the sample taken while that item ran, not the shard's average. An average tells you nothing about the item that was slow | Carmack |
+| 3 | Equality holds for `cpu_model` and never for `cpu_busy_pct`. A processor does not change inside a job, so two answers means the host was read twice; a busy share over one item and a busy share over a whole job are different windows and are meant to disagree. Shipped 2026-09-16 | Carmack |
 
 - **Rejected alternatives:**
 
@@ -563,12 +567,21 @@ are deleted by row 15.
 ## Section 16 - Row #15 - The two published mirrors nothing reads are deleted
 
 - **Scope:** `frontend/public/scores/` and `frontend/public/feed-health/` are removed, with their projections.
+- **What the row did, 2026-09-16.** The premise held. The built bundle was searched rather than the source - 357 emitted files, of which 70 are the client chunks a browser downloads - and **no client chunk names either path**. Every hit was `join(STATE_ROOT, "scores")` or `join(STATE_ROOT, "feed-health")` in a server chunk, which is the build-time read of the ledgers that stay, plus SvelteKit's static-asset manifest listing the files because they had been staged. **6,455,733 bytes went, not the 6.3 MB measured on 2026-09-15** - the two trees had grown a day. **The removal reached further than the four files this row listed.** `PublicEvalRow` and `PublicFeedRow` existed only to shape these two projections, so both contracts, both generated schemas and both contract fixtures went with them; `console_band.FETCHED_SERIES` and `validate_days._console_payload_faults` each lost two rows; `build_canary_day` lost two producers; and **two retention knobs went**, `public_scores_keep_months` and `public_feed_health_keep_months`, refused by name from now on with no successor named, because the ledgers their partners govern are still there.
 - **Files touched:**
-  - `backend/idhazh/telemetry/publish/`
-  - `.github/workflows/digest.yml`
-  - `backend/tests/workflows/test_staged_paths.py`
-  - `docs/concepts/telemetry.md`
-- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows`. CI runs `site` and `browser`.
+  - `backend/idhazh/telemetry/publish/{scores,feed_health}.py` (**deleted**)
+  - `backend/idhazh/telemetry/publish/{dispatch,console_band}.py`
+  - `backend/idhazh/contracts/{public_eval,public_feed_health}.py` (**deleted**)
+  - `schemas/{public-eval,public-feed-health}.schema.json` (**deleted**)
+  - `tests/fixtures/contracts/{public-eval,public-feed-health}/` (**deleted**)
+  - `frontend/public/{scores,feed-health}/` (**deleted**)
+  - `backend/idhazh/contracts/{console_payloads,export,app_config,base}.py`, `backend/idhazh/contracts/knobs/observability.py`, `schemas/app-config.schema.json`
+  - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/{ledger,evals/writer}.py`
+  - `backend/utilities/build_canary_day.py`
+  - `config/idhazh.json`, `.github/workflows/digest.yml`, `frontend/scripts/copy-visuals.mjs`, `frontend/src/lib/server/payload.ts`
+  - `backend/tests/workflows/_harness.py`, `backend/tests/test_console_payloads_producer.py`, `backend/tests/contracts/{_config,test_app_config,test_retired_knobs,test_stamped_boundary}.py`
+  - `docs/concepts/{telemetry,config,adaptive-pruning,partitions}.md`, `docs/architecture/publishing/{console-payloads,console-charts}.md`
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests`. CI runs `site` and `browser`.
 - **Oracle:** no route under `frontend/src/` fetches either path, asserted by search over the built bundle rather than over the source. It cannot settle whether something outside this repository fetches them.
 - **Decisions:**
 
