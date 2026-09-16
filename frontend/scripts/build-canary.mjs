@@ -191,8 +191,50 @@ function writeItemHealthCanary() {
 			source_words_before_cap: cut?.[2],
 			...extraction(id),
 			...perCall(model, calls),
-			...clock(id, [fetchMs, extractMs, summarizeMs], model, calls)
+			...clock(rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, calls)
 		});
+
+	/** Where each shard is up to, in whole seconds from its run's own start.
+	 *
+	 * A shard works its items one after another, so an item begins when the item
+	 * before it on that shard ended. Keying the seat by run AND shard is what makes
+	 * two bars legitimately overlap on the clock - the state the timeline's `shard`
+	 * column exists to tell apart from a contradiction - and it is what gives the
+	 * chart a staircase to draw instead of a column of bars all starting at zero.
+	 */
+	const seats = new Map();
+
+	/** One item's place on its run's clock: which shard, which seat, and when.
+	 *
+	 * Fixture, like every other millisecond of the stage clock here. The run this
+	 * canary was taken from predates the item clock, so there is no start time to
+	 * read off it - and a chart that places items on a clock is a chart no test can
+	 * reach without one.
+	 *
+	 * The two shards start three seconds apart, and each one leaves a two-second
+	 * gap between items: that gap is the overhead between items the span rollup
+	 * calls `unattributed_ms`, so the two panels on this page tell the same story
+	 * about the same kind of time.
+	 */
+	const place = (rowDate, run, id, totalMs, waitMs) => {
+		const spread = [...id].reduce((total, letter) => total + letter.charCodeAt(0), 0);
+		const shard = spread % 2;
+		const key = `${rowDate}-${run}-${shard}`;
+		const seat = seats.get(key) ?? { at: shard * 3, index: 0 };
+		// Second precision, because the census records a timestamp to the second and
+		// a fixture that carried more would be inventing a clock the pipeline has not
+		// got.
+		const spent = Math.ceil((waitMs + totalMs) / 1000);
+		seats.set(key, { at: seat.at + spent + 2, index: seat.index + 1 });
+		const stamp = (seconds) =>
+			new Date(Date.parse(`${rowDate}T06:00:00Z`) + seconds * 1000).toISOString().slice(0, 19) + 'Z';
+		return {
+			shard,
+			item_index: seat.index,
+			item_started_at: stamp(seat.at),
+			item_ended_at: stamp(seat.at + spent)
+		};
+	};
 
 	/** The item's own clock, the per-call rates, and what it ran on.
 	 *
@@ -221,7 +263,7 @@ function writeItemHealthCanary() {
 	 * `cpu_model` is the processor the shard counters below already name, so one
 	 * page cannot say the run drew two different machines.
 	 */
-	const clock = (id, [fetchMs, extractMs, summarizeMs], model, calls) => {
+	const clock = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, calls) => {
 		const spread = [...id].reduce((total, letter) => total + letter.charCodeAt(0), 0);
 		const faithfulness = 20 + (spread % 40);
 		const gap = 60 + (spread % 120);
@@ -233,11 +275,14 @@ function writeItemHealthCanary() {
 		const labelMs = label && wire > 0 ? Math.round((summarizeMs * (label[1] + label[2])) / wire) : '';
 		const summaryMs = summary ? summarizeMs - labelMs : '';
 		const planMs = summary ? Math.round(summaryMs * 0.18) : '';
+		const totalMs = fetchMs + extractMs + summarizeMs + faithfulness + gap;
+		const waitMs = spread % 900;
 		return {
-			queue_wait_ms: spread % 900,
+			...place(rowDate, run, id, totalMs, waitMs),
+			queue_wait_ms: waitMs,
 			faithfulness_ms: faithfulness,
 			model_wait_ms: Math.round(summarizeMs * 0.02),
-			item_total_ms: fetchMs + extractMs + summarizeMs + faithfulness + gap,
+			item_total_ms: totalMs,
 			stage_gap_ms: gap,
 			label_ms: labelMs,
 			summary_ms: summaryMs,
@@ -306,7 +351,12 @@ function writeItemHealthCanary() {
 	/** An item the extractor threw away. Not a failure: dropping a page that is
 	 * not an article is the job, so the row is `ok` and the failed-item list
 	 * stays empty. It fetched and it parsed, so those two stages have a number.
-	 * The model never saw it, so summarize has none. */
+	 * The model never saw it, so summarize has none.
+	 *
+	 * It carries an item clock all the same, because it really did occupy a shard
+	 * for as long as it took. That is the state the run timeline draws as a short
+	 * bar with two steps on it and the rest unaccounted - the case the contract
+	 * names when it says an absent step is not a zero. */
 	const dropped = (rowDate, run, id, code, chars, words, fetchMs, extractMs) =>
 		line({
 			...item(rowDate, run, id),
@@ -316,7 +366,11 @@ function writeItemHealthCanary() {
 			source_chars: chars,
 			source_words: words,
 			fetch_ms: fetchMs,
-			extract_ms: extractMs
+			extract_ms: extractMs,
+			...place(rowDate, run, id, fetchMs + extractMs + 40, 0),
+			queue_wait_ms: 0,
+			item_total_ms: fetchMs + extractMs + 40,
+			stage_gap_ms: 40
 		});
 
 	/** What the cap cost each source, so the source table has a table to draw.
@@ -443,7 +497,17 @@ function writeItemHealthCanary() {
 	 */
 	function tailRows(rowDate, run, model) {
 		return model.map((summarizeMs, index) =>
-			published(rowDate, run, `tail-${run}-${index}`, [120, 20, summarizeMs], ['', '', '', '', ''])
+			published(
+				rowDate,
+				run,
+				// Two digits, because an item id ends in a number the pipeline minted
+				// and `ItemId` refuses a single digit. The run timeline validates every
+				// row it publishes through that contract, so a loose fixture id is a
+				// publish failure rather than a cosmetic one.
+				`tail-${run}-${String(index).padStart(2, '0')}`,
+				[120, 20, summarizeMs],
+				['', '', '', '', '']
+			)
 		);
 	}
 
@@ -460,9 +524,9 @@ function writeItemHealthCanary() {
 		// fetch,extract,summarize | prefill,decode,input,output,cached
 		published(earlier, 1, 'ai-01', [120, 20, 610], [53309, 40210, 1497, 215, 900]),
 		published(earlier, 1, 'ai-02', [210, 30, 720], [77778, 43436, 1765, 230, 900]),
-		// The one item whose cost is split by call, so the projection's per-call
-		// cells reach a page at all. Its totals are the same measured numbers the
-		// other rows carry; only the split beside them is a fixture. The two
+		// An earlier day's item whose cost is split by call, so the projection's
+		// per-call cells reach a page at all. Its totals are the same measured numbers
+		// the other rows carry; only the split beside them is a fixture. The two
 		// cached_tokens are 0 and 900 - a first call that read its prompt cold and a
 		// second that was answered from the cache, which one folded cell cannot say.
 		published(earlier, 1, 'ai-03', [260, 35, 780], [63586, 50753, 1608, 270, 900], undefined, [
@@ -480,7 +544,25 @@ function writeItemHealthCanary() {
 		// 800 the day's split by cut printed the same second as the day itself, so
 		// a table that never split at all read the same. It sits either side of
 		// this day's summarize median, so the median does not move.
-		published(date, 2, 'ai-04', [300, 40, 4200], [82146, 33203, 1337, 189, 383], [12800, 1923, 2612]),
+		//
+		// It carries the newest run's per-call split as well, and that is what puts
+		// a fully accounted bar on the run timeline: without a split, a row's whole
+		// model call falls into the residual, and a panel demonstrated on nothing but
+		// hollow bars is a panel nobody can tell from a broken one. The two calls add
+		// up to the folded totals beside them cell by cell, which the contract
+		// requires and `perCall` re-checks.
+		published(
+			date,
+			2,
+			'ai-04',
+			[300, 40, 4200],
+			[82146, 33203, 1337, 189, 383],
+			[12800, 1923, 2612],
+			[
+				['label', 20000, 8000, 437, 40, 0],
+				['summarize_and_plan', 62146, 25203, 900, 149, 383]
+			]
+		),
 		// A whole page parsed, then thrown away for boilerplate. It makes the
 		// newest day a partly timed one for summarize: four items of five. Its
 		// fetch and extract are that day's own medians, so neither median moves

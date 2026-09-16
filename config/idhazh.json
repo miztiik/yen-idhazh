@@ -173,6 +173,7 @@
     "public_day_metrics_keep_months": 14,
     "public_machine_keep_months": 14,
     "public_run_days_keep_months": 14,
+    "public_run_timeline_keep_months": 2,
     "public_span_rollup_keep_months": 14,
     "public_telemetry_keep_months": 14,
     "runtime_counters_scrape": true,
