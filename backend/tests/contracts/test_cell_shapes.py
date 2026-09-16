@@ -204,7 +204,7 @@ def test_the_walk_reaches_every_csv_contract() -> None:
     """The walk finding nothing would make every test below vacuously green."""
     models = _csv_contracts()
 
-    assert len(models) >= 20, f"only {len(models)} CSV contracts found; the walk is broken"
+    assert len(models) >= 19, f"only {len(models)} CSV contracts found; the walk is broken"
     assert len(_foldable_columns()) >= 20, "no constrained string columns found; the walk is broken"
     assert len(_self_folding_columns()) >= 10, "no self-folding columns found; the walk is broken"
 
@@ -429,11 +429,12 @@ def test_the_recorder_passes_a_stage_cell_through_untouched() -> None:
     value, and it was one rule over the wrong value before: the fold lived here
     and the census row was built somewhere that never called it.
     """
-    from idhazh import itemrecord, telemetry
+    from idhazh import telemetry
+    from idhazh.telemetry.record import Flags, ItemRecorder
 
-    recorder = itemrecord.ItemRecorder(
+    recorder = ItemRecorder(
         run_id="2026-09-15-1",
-        flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+        flags=Flags(item_lines=False, stage_lines=False),
         now=lambda: "2026-09-15T00:00:00Z",
         log=logging.getLogger("test"),
     )
@@ -471,12 +472,12 @@ def test_the_recorder_leaves_a_minted_identity_alone() -> None:
     at nothing. `test_a_row_built_by_hand_still_refuses_a_crooked_identity` is
     the other half: the log line keeps the value, and the ledger row raises.
     """
-    from idhazh import itemrecord
+    from idhazh.telemetry.record import Flags, ItemRecorder
 
     crooked = "NOT an item id \u2014 at all"
-    recorder = itemrecord.ItemRecorder(
+    recorder = ItemRecorder(
         run_id="2026-09-15-1",
-        flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+        flags=Flags(item_lines=False, stage_lines=False),
         now=lambda: "2026-09-15T00:00:00Z",
         log=logging.getLogger("test"),
     )

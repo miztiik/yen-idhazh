@@ -1112,13 +1112,6 @@
           "title": "Public Day Metrics Keep Months",
           "type": "integer"
         },
-        "public_feed_health_keep_months": {
-          "default": 14,
-          "description": "How long frontend/public/feed-health/ keeps a published shard. It must EQUAL feed_health_keep_months for the same reason.",
-          "minimum": 1,
-          "title": "Public Feed Health Keep Months",
-          "type": "integer"
-        },
         "public_machine_keep_months": {
           "default": 14,
           "description": "How long frontend/public/machine/ keeps a month of runtime counters. Fourteen on the same argument. The source is one appended CSV rather than a shard directory, so the published copy is where the month boundary is first drawn and this is the only age it has.",
@@ -1131,13 +1124,6 @@
           "description": "How long frontend/public/run-days/ keeps a month of day rows. Fourteen because the console reaches 367 inclusive days and those days can fall in fourteen month shards, which is the same reason feed_health_keep_months is fourteen. It has no state ledger to be paired with: the source is the committed day payloads themselves, whose retention is the archive's, and this row is a reduction of two of them to counts.",
           "minimum": 1,
           "title": "Public Run Days Keep Months",
-          "type": "integer"
-        },
-        "public_scores_keep_months": {
-          "default": 14,
-          "description": "How long frontend/public/scores/ keeps a published shard. It must EQUAL scores_full_grain_months, on the same argument public_telemetry_keep_months makes about its own source: the projection is the browser's copy of the eval ledger, so any other pair leaves either a published month nothing can check against its source or a window the console's model panels cannot draw.",
-          "minimum": 1,
-          "title": "Public Scores Keep Months",
           "type": "integer"
         },
         "public_span_rollup_keep_months": {
@@ -1982,8 +1968,13 @@
   "changelog": [
     {
       "change": "assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
-      "version": "2026-09-16",
+      "version": "2026-09-16T12:00",
       "why": "One cosine cannot be reweighted; a composite with a floor on it can."
+    },
+    {
+      "change": "observability lost the two published ages for scores and feed-health.",
+      "version": "2026-09-16",
+      "why": "The mirrors they pruned are gone; no console route ever fetched either."
     },
     {
       "change": "run.qualify_on_the_production_path, additive, default true.",
@@ -1994,11 +1985,6 @@
       "change": "run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
       "version": "2026-09-15T22:10",
       "why": "A worker killed at its timeout uploads nothing, so the items are lost."
-    },
-    {
-      "change": "run.trial_state_dirname and retention.trial_state_days, both additive.",
-      "version": "2026-09-15T22:00",
-      "why": "A trial run needs its own state tree, and that tree needs an expiry."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2073,7 +2059,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-16",
+      "default": "2026-09-16T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2084,5 +2070,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-16"
+  "version": "2026-09-16T12:00"
 }

@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-16
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -142,9 +142,22 @@ the whole committed tree.
 
 ## Reading a run that went wrong
 
+`idhazh telemetry` is the read side of a finished run. Every subcommand is
+bounded by the days it is handed - four of them read one date, and `prune` works
+over the range it is given - so none of them gets slower as the archive grows:
+
+```
+python -m idhazh telemetry show   --date 2026-09-15  # which instrument files that day has
+python -m idhazh telemetry census --date 2026-09-15  # how that day's items ended
+python -m idhazh telemetry rollup --date 2026-09-15  # how long that day's spans took
+```
+
+`census` is the fastest way in: it counts the day's items by stage, outcome and
+failure code, which is the same answer as filtering the census shard by hand.
+
 Every planned item has a census row in `state/item-health/<YYYY>/<MM>/<DD>.csv`.
-Start there, because that ledger is committed and keeps the denominator next to
-the failure count:
+Open it directly when you need a column `census` does not fold, because that
+ledger is committed and keeps the denominator next to the failure count:
 
 1. Open the current month shard.
 2. Filter by `date` and `run_id`.
@@ -163,6 +176,33 @@ next layer of evidence while the local run still exists:
 Logs go to stderr and nowhere else. There is no log service and no runtime call
 home ([../../CLAUDE.md](../../CLAUDE.md) section 1b). A log is evidence; the
 census row is the record.
+
+When the day itself is fine but its console projections are not - a projection
+added after that day published, or a shard lost to a race - write them again
+from the day already on disk:
+
+```
+python -m idhazh telemetry publish --date 2026-09-15
+```
+
+That walks the same route `assemble` walks, in the same order, reading the day's
+own `digest.json` and `run.json` rather than the run payloads under
+`backend/var/`, which a local run does not keep. It refuses a date that tree has
+never published, because there would be nothing to publish the instrument for.
+
+When a run wrote instrument rows nobody wants kept, delete them by naming the
+store and the two days. Both ends are named, so this is three days:
+
+```
+python -m idhazh telemetry prune --target item-health --since 2026-09-13 --until 2026-09-15
+```
+
+It prints every file a live run would remove and removes nothing until you add
+`--no-dry-run`. `--target` takes the name of a store and never a path, and
+`published` and `seen` are refused by name - forgetting is the one thing those
+two may not do. Which stores it accepts, why those two are refused, and what
+makes it safe to stop half way is
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16).
 
 ## Three things that will bite
 

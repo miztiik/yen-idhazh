@@ -111,6 +111,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
+      "version": "2026-09-16",
+      "why": "A clock that was its two neighbours summed could not see a wait."
+    },
+    {
       "change": "time_source is typed TimeSource rather than a lowercase token.",
       "version": "2026-09-15T22:50",
       "why": "A closed set the pipeline mints is one a producer selects from, never spells."
@@ -124,11 +129,6 @@
       "change": "failure_code may now carry model_refused.",
       "version": "2026-09-15T20:00",
       "why": "model_unreachable was doing two jobs."
-    },
-    {
-      "change": "Three columns keep their names and change what they mean.",
-      "version": "2026-09-15T19:40",
-      "why": "Queue wait now sits outside the item total rather than inside it."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -656,7 +656,7 @@
         }
       ],
       "default": null,
-      "description": "Why the label decode stopped, as the server reported it - stop, length, and whatever else the runtime mints. A token and not an enum: the vocabulary belongs to llama-server rather than to this project, and a row that could not be written because the runtime added a reason would lose the whole item over a label.",
+      "description": "Why the label decode stopped, as the server reported it - stop, length, and whatever else the runtime mints. A token and not an enum: the vocabulary belongs to llama-server rather than to this project, and a row that could not be written because the runtime added a reason would lose the whole item over a label. Null where the reply named no reason at all, which is not the same fact as a clean stop.",
       "title": "Label Finish Reason"
     },
     "label_input_tokens": {
@@ -695,7 +695,7 @@
         }
       ],
       "default": null,
-      "description": "Wall time of the label call, prefill and decode together.",
+      "description": "Wall time of the label call: our own stopwatch around the request, so the wait is inside it. Subtract label_prefill_ms and label_decode_ms to get what the server did not claim for itself - transport, and any queue.",
       "title": "Label Ms"
     },
     "label_output_tokens": {
@@ -1358,7 +1358,7 @@
         }
       ],
       "default": null,
-      "description": "Why the summarize-and-plan decode stopped.",
+      "description": "Why the summarize-and-plan decode stopped, on the same terms.",
       "title": "Summary Finish Reason"
     },
     "summary_input_tokens": {
@@ -1397,7 +1397,7 @@
         }
       ],
       "default": null,
-      "description": "Wall time of the summarize-and-plan call, prefill and decode together.",
+      "description": "Wall time of the summarize-and-plan call, on the same stopwatch.",
       "title": "Summary Ms"
     },
     "summary_output_tokens": {
@@ -1524,7 +1524,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15T22:50",
+      "default": "2026-09-16",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1615,5 +1615,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-15T22:50"
+  "version": "2026-09-16"
 }

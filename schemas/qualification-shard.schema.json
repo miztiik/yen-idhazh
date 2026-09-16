@@ -260,10 +260,18 @@
           "title": "Failure Code"
         },
         "finish_reason": {
-          "description": "How the decode ended. Over a pair, `length` where either call met its budget, because an item cut anywhere is a cut item.",
-          "minLength": 1,
-          "title": "Finish Reason",
-          "type": "string"
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the decode ended. Over a pair, `length` where either call met its budget, because an item cut anywhere is a cut item. Null where the server named no reason at all, which the gate reads as not-clean for the same arithmetic that reads `length` that way - it is not `stop`.",
+          "title": "Finish Reason"
         },
         "fits_context_predicted": {
           "description": "What `summarize.fits_context` said before the call.",
@@ -330,7 +338,6 @@
         "item_id",
         "repeat",
         "ok",
-        "finish_reason",
         "reasoning_channel_used",
         "think_block_words",
         "schema_valid",
@@ -606,6 +613,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "An observation's finish_reason is nullable.",
+      "version": "2026-09-16",
+      "why": "A reply that named no reason no longer reaches this row as a clean stop."
+    },
+    {
       "change": "Added calls_per_item, defaulting to 1.",
       "version": "2026-09-15T23:30",
       "why": "Qualification can now run the call path the digest runs, which calls twice."
@@ -619,11 +631,6 @@
       "change": "Removed pipeline_fingerprint.",
       "version": "2026-09-13T22:00",
       "why": "`inputs` beside it records the same controls by name."
-    },
-    {
-      "change": "A shard and a report carry `inputs`, the recorded input manifest.",
-      "version": "2026-09-12T21:00",
-      "why": "Two candidates are only comparable when the run records what it held still."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -735,7 +742,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-09-15T23:30",
+      "default": "2026-09-16",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -756,5 +763,5 @@
   ],
   "title": "QualificationShard",
   "type": "object",
-  "version": "2026-09-15T23:30"
+  "version": "2026-09-16"
 }

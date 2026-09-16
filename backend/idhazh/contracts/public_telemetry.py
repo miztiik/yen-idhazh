@@ -62,10 +62,10 @@ PublicItemKey = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 #: two are a split of `summarize_ms`, so counting them here would charge the
 #: model stage twice and drive the gap negative on every item.
 #:
-#: A second copy of `idhazh.itemrecord.NAMED_STAGE_MS`, which is what writes the
-#: cell. Contracts are the bottom of the dependency graph and may not import the
-#: module that fills them, so the two lists are held equal by a test rather than
-#: by an import.
+#: A second copy of `idhazh.telemetry.record.NAMED_STAGE_MS`, which is what
+#: writes the cell. Contracts are the bottom of the dependency graph and may not
+#: import the module that fills them, so the two lists are held equal by a test
+#: rather than by an import.
 GAP_NAMED_STAGES: Final = ("fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms")
 
 
@@ -74,6 +74,11 @@ class PublicTelemetryRow(Contract):
 
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-16",
+            change="label_ms and summary_ms keep their names and change what they measure.",
+            why="Each is now a stopwatch around its own request rather than the server's sum.",
+        ),
         ChangelogEntry(
             version="2026-09-15T22:10",
             change="FailureCode gained model_timed_out and shard_out_of_time.",
@@ -88,11 +93,6 @@ class PublicTelemetryRow(Contract):
             version="2026-09-15T19:40",
             change="Four columns keep their names and change what they mean.",
             why="Queue wait now sits outside the item total rather than inside it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T08:20",
-            change="Appended seventeen nullable cells.",
-            why="The census records far more columns than this projection was publishing.",
         ),
         ChangelogEntry(
             version="2026-09-02",
@@ -253,16 +253,17 @@ class PublicTelemetryRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Wall time of the label call, prefill and decode together. It is a slice of "
-            "summarize_ms, never an addition to it."
+            "Wall time of the label call, on our own stopwatch around the request. It "
+            "is a slice of summarize_ms, never an addition to it, and label_prefill_ms "
+            "plus label_decode_ms taken off it is the part the server did not claim."
         ),
     )
     summary_ms: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "Wall time of the summarize-and-plan call, prefill and decode together. The "
-            "other slice of summarize_ms."
+            "Wall time of the summarize-and-plan call, on the same stopwatch. The other "
+            "slice of summarize_ms."
         ),
     )
     visual_plan_ms: int | None = Field(

@@ -1,6 +1,6 @@
 # Plan 32 - one telemetry package, and the 113 columns land
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 **Level**: 5 (persisted contracts, a package boundary, and the published operator surface)
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
@@ -37,21 +37,21 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 1 | The shape the timeline reads, settled first | - | A | PENDING | - | - | - |
 | 2 | Where every one of the 113 columns comes from | - | A | PENDING | - | - | - |
 | 3 | The package exists and re-exports | - | A | PENDING | - | - | - |
-| 4 | The recorder moves in and returns a validated row | 3 | B | PENDING | - | - | - |
-| 5 | The work stage persists what it recorded | 1, 4 | C | PENDING | - | - | - |
-| 6 | The census prefers the persisted row | 5 | D | PENDING | - | - | - |
+| 4 | The recorder moves in and returns a validated row | 3 | B | DONE | p32r4 | - | - |
+| 5 | The work stage persists what it recorded | 1, 4 | C | DONE | p32r5 | - | - |
+| 6 | The census prefers the persisted row | 5 | D | DONE | p32r6 | - | - |
 | 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
-| 8 | The label call's own clock and both finish reasons | 6 | E | PENDING | - | - | - |
-| 9 | The host sampler moves in | 3 | B | PENDING | - | - | - |
+| 8 | The label call's own clock and both finish reasons | 6 | E | DONE | p32r8 | - | - |
+| 9 | The host sampler moves in | 3 | B | DONE | p32r9 | - | - |
 | 10 | Nine publishers become one dispatcher | 3 | B | PENDING | - | - | - |
 | 11 | `idhazh telemetry` and its subcommands | 3, 10 | F | PENDING | - | - | - |
 | 12 | `telemetry prune` takes a target and a range | 11 | G | PENDING | - | - | - |
 | 13 | A closed vocabulary is an enum | 2 | B | PENDING | - | - | - |
 | 14 | The run timeline draws | 1, 7, 8 | H | PENDING | - | - | - |
-| 15 | The two published mirrors nothing reads are deleted | 10 | F | PENDING | - | - | - |
+| 15 | The two published mirrors nothing reads are deleted | 10 | F | DONE | p32r15 | - | - |
 | 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
 
-**Column arithmetic.** 43 of 113 carry a value today; `telemetry._row` names 31 fields and `_flatten_calls` adds the call cells, 44 written of which one is always empty. Row 6 fills 58, row 7 fills 6, row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question.
+**Column arithmetic.** 43 of 113 carry a value in the committed archive, which is history and moves a day at a time. Row 6 is the one that changes what a new day carries: the census reads the row the shard sealed instead of rebuilding it, which takes the committed fixture day from 40 to 71 of 113. The 18 the fixture cannot reach - a real host sampler, a real ranker score - fill on a production run. Row 7 fills 6 more. **Row 8 filled none: measured on 2026-09-16, all three of its columns already had a producer, and what it fixed is that two of them were the wrong number and the third was a coercion** (section 9). The count stands at 110 of 113 with row 7, the last three are row 16's question, and `UNFILLED` in `backend/tests/test_telemetry.py` is the ratchet that names them.
 
 ## Section 1a - What every row delivers, without being asked
 
@@ -81,19 +81,21 @@ flowchart TB
     subgraph tel["backend/idhazh/telemetry/ - the instrument"]
         events["events.py<br/>one envelope, one log line"]
         record_m["record.py<br/>ItemRecorder -> ItemHealthRow"]
-        census["census.py<br/>classify_item, the fallback"]
+        census["census.py<br/>census_row the door,<br/>classify_item the fallback"]
         spans["spans.py<br/>the span tree"]
         sinks["sinks.py<br/>null, file, fan-out, host"]
         traces_m["traces.py<br/>where a committed trace lands"]
         rollup["rollup.py<br/>roll_up_spans"]
-        host["host.py<br/>cpu, memory, runner"]
+        host["host.py<br/>cpu, memory, runner<br/>+ the counters stage"]
         feeds["source_health.py<br/>is this feed worth asking"]
         prune_m["prune.py<br/>target + range, atomic"]
+        inventory["inventory.py<br/>what one day recorded"]
+        republish["republish.py<br/>one published day, again"]
         cli_m["cli.py<br/>idhazh telemetry ..."]
-        subgraph pub["publish/ - one dispatcher, ten projections"]
+        subgraph pub["publish/ - one dispatcher, eight projections"]
             dispatch["dispatch.py<br/>PROJECTIONS, in order"]
             rule["series.py<br/>path, write-if-changed, prune"]
-            proj["public_telemetry, scores, feed_health,<br/>day_metrics, machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
+            proj["public_telemetry, day_metrics,<br/>machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
         end
     end
 
@@ -121,7 +123,7 @@ flowchart TB
 
     work_s -->|"cells"| record_m
     work_s --> spans
-    work_s --> host
+    work_s -->|"one host_facts a shard,<br/>one Watch an item"| host
     plan_s --> events
     record_m -->|"validated row"| ihr
     record_m -->|"items/*.health.json"| record_s
@@ -134,7 +136,8 @@ flowchart TB
     sinks --> tr
     spans --> rollup
     rollup --> srr --> sr
-    host --> rc
+    host -->|"ten cells"| ihr
+    host -->|"one row a shard"| rc
     ih --> dispatch
     sr --> dispatch
     rc --> dispatch
@@ -144,20 +147,31 @@ flowchart TB
     proj --> ptel & pspan & pcon & ptime
     ptel & pspan & ptime --> console
     prune_m -.->|"--target --since --until"| state
-    cli_m --> prune_m & dispatch & rollup
+    ih & sr --> inventory
+    republish --> dispatch
+    cli_m --> prune_m & inventory & republish
 
     classDef gone fill:#3a1f1f,stroke:#a33,color:#eee
     classDef new fill:#1f3a2a,stroke:#3a7,color:#eee
-    class rtr,ptime,prune_m,cli_m,dispatch new
+    class rtr,ptime,prune_m,cli_m,inventory,republish,dispatch new
 ```
 
 Green is new in this plan. Everything else is a move, not a rewrite.
+
+**What the command line reaches, and what it does not.** `cli.py` routes and
+nothing else: `show`, `census` and `rollup` read one day through `inventory.py`,
+`publish` writes one day again through `republish.py`, and row 12 adds `prune`.
+`rollup.py` is not on that path - it folds spans a run is still holding in
+memory, so a subcommand asked about a finished day reads the committed shard
+instead. `republish.py` sits beside `publish/` rather than inside it: that
+package is the dispatcher and the projections it routes to, and a caller of the
+dispatcher is what `stages/assemble.py` is too.
 
 **What leaves.** `backend/idhazh/telemetry.py`, `itemrecord.py`, `machine.py`,
 `stages/counters.py` and the ten modules row 10 moved - nine `publish_*.py` and
 `source_health.py` - are deleted by the row that moves them, not left beside
 their replacement. `frontend/public/scores/` and `frontend/public/feed-health/`
-are deleted by row 15.
+are deleted by row 15. `machine.py` and `stages/counters.py` went on 2026-09-16.
 
 
 ---
@@ -259,6 +273,9 @@ are deleted by row 15.
 | 1 | `close()` returns the contract type. A loose dict is what let 53 cells be computed and discarded without a type error | Fowler |
 | 2 | `_slowest` in `stages/work.py` reads the typed row. It is the only consumer today and it stays working | Fowler |
 | 3 | The test drives the canary day, not the committed archive. Fixed cost and it can carry a case the archive never produced (section 13) | Fowler |
+| 4 | The work stage's own terminal cells move to `census.classify_article`, because a row it could not build is a row `close()` raises on. The branch named `extract` whatever had really failed, so a fetch code landed on an extract row - a pairing `ItemHealthRow` refuses - and an article with no typed code recorded a failure with no reason. Shipped 2026-09-15 | Fowler |
+| 5 | `telemetry.record` is now the MODULE and no longer the serializer. Python binds a submodule onto its package, so a function re-exported under the same name means one word with two meanings decided by import order. The function keeps its home at `telemetry.events.record`; nothing outside the package called it. Shipped 2026-09-15 | Fowler |
+| 6 | Each call slot records its `kind` beside its five numbers. The census row holds a slot to filling whole or not at all, so five numbers and no kind was half a call and no row at all | Fowler |
 
 - **Rejected alternatives:**
 
@@ -274,8 +291,9 @@ are deleted by row 15.
 - **Files touched:**
   - `backend/idhazh/stages/work.py`
   - `backend/idhazh/telemetry/record.py`
-  - `.github/workflows/digest.yml` (the artifact the shard uploads)
+  - `backend/tests/pipeline/test_work_health_payload.py`
   - `backend/tests/workflows/test_worker_ledgers.py`
+  - `.github/workflows/digest.yml` - **checked and left alone.** The `items-<shard>` upload is rooted at the whole items directory and assemble downloads `items-*` back into the same place, so the payload travels with no YAML edit. A test now holds both sides to the directory, because narrowing either one to a list of suffixes would strand the next payload silently.
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows backend/tests/pipeline`. CI runs the full suite plus `whole-day`.
 - **Oracle:** one item driven through the work stage leaves a `.health.json` whose every non-null cell equals the recorder's, and the ratchet from PR #777 confirms every store the stage writes is staged by the job. It cannot settle what assemble does with the file - that is row 6.
 - **Decisions:**
@@ -297,12 +315,16 @@ are deleted by row 15.
 
 ## Section 7 - Row #6 - The census prefers the persisted row
 
-- **Scope:** `stage_record` and `stage_assemble` read `<item_id>.health.json` and prefer it over rebuilding from the two payloads, with `classify_item` as the fallback for an item that has none. 58 columns start carrying values.
+- **Scope:** `stage_record` and `stage_assemble` read `<item_id>.health.json` and prefer it over rebuilding from the two payloads, with `classify_item` as the fallback for an item that has none. 31 columns start carrying values on the fixture day, 40 to 71 of 113; the estimate of 58 was taken before the payloads were counted.
 - **Files touched:**
   - `backend/idhazh/telemetry/census.py`
+  - `backend/idhazh/telemetry/record.py`
+  - `backend/idhazh/telemetry/__init__.py`
   - `backend/idhazh/stages/record.py`
   - `backend/idhazh/stages/assemble.py`
+  - `backend/idhazh/stages/common.py`
   - `backend/tests/test_telemetry.py`
+  - `backend/tests/pipeline/test_census_prefers_the_record.py`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests` in full - this row changes the row every later gate reads. CI runs the full suite plus `whole-day`.
 - **Oracle:** a unit ratchet asserting every column of `ItemHealthRow.csv_columns()` is either named by a production writer or listed in a declared frozen set with a written reason. Pure code, no fixture, cannot age out. It cannot settle that a written value is the right value.
 - **Decisions:**
@@ -311,7 +333,7 @@ are deleted by row 15.
 | --- | --- | --- |
 | 1 | `ledger.append_item_health` keeps the FIRST row for a key, so the write order is asserted rather than assumed | Fowler |
 | 2 | The fallback stays. An item whose worker died has no persisted row and still needs a census line | Fowler |
-| 3 | `state/` growing about 3.2 percent on a published day is accepted. Measured: +70.5 bytes a row, +37.5 KB a day against a 1.19 MB daily commit | Carmack |
+| 3 | `state/` growing on a published day is accepted. Priced at 3.2 percent before the columns were counted; measured at +206.8 bytes a row, 8.1 percent of a published day's `state/` on the fixture day and an estimated 15 to 17 percent in production. Under the 25 percent escalate trigger | Carmack |
 
 - **Rejected alternatives:**
 
@@ -348,6 +370,7 @@ are deleted by row 15.
 ## Section 9 - Row #8 - The label call's own clock and both finish reasons
 
 - **Scope:** `label_ms`, `label_finish_reason` and `summary_finish_reason` are recorded at the call site. `summary_ms` already has a producer and is wired in row 6.
+- **What the row did, 2026-09-16.** **None of the three columns was empty**, so the row filled nothing and corrected everything. `_call_cells` in `stages/two_calls.py` has written all three since the pair landed, which is why the ratchet named three columns and not six. Two of the three were the wrong number: `label_ms` and `summary_ms` were `prefill_ms + decode_ms` for their own slot, which is rejected alternative 1 below, shipped. A column that agrees with its two neighbours by construction gives zero when they are subtracted from it, on every row ever written, so a server that made an item queue read exactly like one that answered at once. Both are now a stopwatch opened before the request and stopped when the reply is in hand, and the wait is `label_ms - label_prefill_ms - label_decode_ms`. The third was coerced a layer upstream: `parse_completion` read an absent `finish_reason` as `stop` on the chat route, and folded every `stop_type` that was not `limit` into `stop` on the rendered-completion route. An absence is now null, `eos` and `word` still translate to `stop`, and a word this build does not know is carried through as the server wrote it. **`model_wait_ms` keeps its meaning**: it subtracts the four per-call prefill and decode cells rather than the two stopwatches, because it is named for the wait and the other subtraction would leave it holding this process's own render, parse and draw.
 - **Files touched:**
   - `backend/idhazh/classify/calls.py`
   - `backend/idhazh/stages/two_calls.py`
@@ -372,10 +395,12 @@ are deleted by row 15.
 ## Section 10 - Row #9 - The host sampler moves in
 
 - **Scope:** `machine.py` and `stages/counters.py` become `telemetry/host.py`, and the six host columns plus `cpu_busy_pct` and `cgroup_peak_bytes` reach the item row.
+- **What the row did, 2026-09-16.** All ten host columns reach the item row a shard leaves on disk, and a test drives a real work stage against a built `/proc` to prove it rather than waiting for CI to fill the cells. Three names changed on the way in, each against a collision inside one package: `machine.Span` is `HostCells`, because `telemetry.Span` is a node of the trace tree two modules away; `machine.Reading` is `HostReading`; and the sampler is `host.py` rather than `machine.py`, which leaves `telemetry/publish/machine.py` the only `machine` in the tree. **One duplicate reader went as well**: `contracts.runtime_counters._cgroup_peak_bytes` parsed the kernel peak file that `host` also opens, so `from_metrics_text` now takes the number instead of the text and the contract stops parsing a host file. `stage_counters` takes its `state_root` as an argument rather than importing `stages.common`, so the instrument does not import the producers. **Measured, 2026-09-16**: one sample is 0.7 ms and a whole item is 3.0 ms against a median 475,890 ms item - and dropping a `/proc/cpuinfo` read the first cut took per item cut the tail 25 percent ([measurements.md](../docs/reference/measurements.md)).
 - **Files touched:**
   - `backend/idhazh/telemetry/host.py` (moved from `backend/idhazh/machine.py` and `backend/idhazh/stages/counters.py`)
   - `backend/idhazh/stages/work.py`
-  - `backend/idhazh/publish_machine.py`
+  - `backend/idhazh/cli.py`
+  - `backend/idhazh/contracts/runtime_counters.py`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows backend/tests/test_telemetry.py`. CI runs the full suite.
 - **Oracle:** the host columns on an item row and the same-named columns on that shard's `runtime-counters` row are read from one sampler call, so they cannot disagree. It cannot settle whether the sample is representative of the item's whole run.
 - **Decisions:**
@@ -384,6 +409,7 @@ are deleted by row 15.
 | --- | --- | --- |
 | 1 | One sampler, two consumers. `runtime-counters` stays a separate store at shard grain because it is the independent check on the census's timings | Carmack |
 | 2 | The item row records the sample taken while that item ran, not the shard's average. An average tells you nothing about the item that was slow | Carmack |
+| 3 | Equality holds for `cpu_model` and never for `cpu_busy_pct`. A processor does not change inside a job, so two answers means the host was read twice; a busy share over one item and a busy share over a whole job are different windows and are meant to disagree. Shipped 2026-09-16 | Carmack |
 
 - **Rejected alternatives:**
 
@@ -451,8 +477,27 @@ are deleted by row 15.
 - **Scope:** `idhazh telemetry prune --target <store> --since <date> --until <date>`, atomic per store, reusing the retention machinery `stages/prune_state.py` already holds.
 - **Files touched:**
   - `backend/idhazh/telemetry/prune.py` (new)
-  - `backend/idhazh/stages/prune_state.py`
+  - `backend/idhazh/telemetry/cli.py`
+  - `backend/idhazh/day_partition.py`
+  - `backend/idhazh/retention.py`
+  - `backend/idhazh/evals/writer.py`
+  - `backend/tests/retention/test_prune_range.py` (new)
+  - `backend/tests/workflows/test_telemetry_cli.py`
   - `docs/architecture/publishing/retention.md`
+  - `docs/concepts/telemetry.md`
+  - `docs/how-to/run-the-pipeline.md`
+
+  **`backend/idhazh/stages/prune_state.py` was listed here and is not touched.**
+  It is the scheduled prune's entry point and the machinery this row reuses is
+  underneath it, not in it: `day_partition.day_files` for the walk and
+  `day_partition.date_of` for the selection. The one piece that was NOT shared
+  is now: `_drop_empty_day_dirs` existed in two private copies, in `retention`
+  and in `evals.writer`, and the second one said in its own docstring that it
+  was a twin forced by the import direction. It is one function on
+  `day_partition` from 2026-09-16 and both copies are deleted, which is why
+  those three modules appear above. `retention` cannot be imported from the
+  telemetry package at all - it imports `idhazh.telemetry` and
+  `idhazh.telemetry.publish` - so a shared helper had to move below both.
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/retention`. CI runs the full suite.
 - **Oracle:** a prune over a built tree deletes exactly the day files inside the range and leaves every sibling byte-identical, and a prune that fails part way leaves the tree as it found it. It cannot settle what the scheduled prune should delete - that stays a config decision.
 - **Decisions:**
@@ -527,12 +572,21 @@ are deleted by row 15.
 ## Section 16 - Row #15 - The two published mirrors nothing reads are deleted
 
 - **Scope:** `frontend/public/scores/` and `frontend/public/feed-health/` are removed, with their projections.
+- **What the row did, 2026-09-16.** The premise held. The built bundle was searched rather than the source - 357 emitted files, of which 70 are the client chunks a browser downloads - and **no client chunk names either path**. Every hit was `join(STATE_ROOT, "scores")` or `join(STATE_ROOT, "feed-health")` in a server chunk, which is the build-time read of the ledgers that stay, plus SvelteKit's static-asset manifest listing the files because they had been staged. **6,455,733 bytes went, not the 6.3 MB measured on 2026-09-15** - the two trees had grown a day. **The removal reached further than the four files this row listed.** `PublicEvalRow` and `PublicFeedRow` existed only to shape these two projections, so both contracts, both generated schemas and both contract fixtures went with them; `console_band.FETCHED_SERIES` and `validate_days._console_payload_faults` each lost two rows; `build_canary_day` lost two producers; and **two retention knobs went**, `public_scores_keep_months` and `public_feed_health_keep_months`, refused by name from now on with no successor named, because the ledgers their partners govern are still there.
 - **Files touched:**
-  - `backend/idhazh/telemetry/publish/`
-  - `.github/workflows/digest.yml`
-  - `backend/tests/workflows/test_staged_paths.py`
-  - `docs/concepts/telemetry.md`
-- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows`. CI runs `site` and `browser`.
+  - `backend/idhazh/telemetry/publish/{scores,feed_health}.py` (**deleted**)
+  - `backend/idhazh/telemetry/publish/{dispatch,console_band}.py`
+  - `backend/idhazh/contracts/{public_eval,public_feed_health}.py` (**deleted**)
+  - `schemas/{public-eval,public-feed-health}.schema.json` (**deleted**)
+  - `tests/fixtures/contracts/{public-eval,public-feed-health}/` (**deleted**)
+  - `frontend/public/{scores,feed-health}/` (**deleted**)
+  - `backend/idhazh/contracts/{console_payloads,export,app_config,base}.py`, `backend/idhazh/contracts/knobs/observability.py`, `schemas/app-config.schema.json`
+  - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/{ledger,evals/writer}.py`
+  - `backend/utilities/build_canary_day.py`
+  - `config/idhazh.json`, `.github/workflows/digest.yml`, `frontend/scripts/copy-visuals.mjs`, `frontend/src/lib/server/payload.ts`
+  - `backend/tests/workflows/_harness.py`, `backend/tests/test_console_payloads_producer.py`, `backend/tests/contracts/{_config,test_app_config,test_retired_knobs,test_stamped_boundary}.py`
+  - `docs/concepts/{telemetry,config,adaptive-pruning,partitions}.md`, `docs/architecture/publishing/{console-payloads,console-charts}.md`
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests`. CI runs `site` and `browser`.
 - **Oracle:** no route under `frontend/src/` fetches either path, asserted by search over the built bundle rather than over the source. It cannot settle whether something outside this repository fetches them.
 - **Decisions:**
 

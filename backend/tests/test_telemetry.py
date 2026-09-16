@@ -10,22 +10,25 @@ import csv
 import json
 import logging
 import re
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import date
+from enum import Enum
 from pathlib import Path
-from typing import Final
+from typing import Annotated, Any, Final, get_args, get_origin
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
-from pydantic import TypeAdapter, ValidationError
+from pydantic import StringConstraints, TypeAdapter, ValidationError
 
 from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import column_bounds, derive_url_key, field_column
-from idhazh.contracts.call_cost import CallCost, CallKind
+from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import (
     UNSPECIFIED,
+    ElementClass,
     FailureCode,
     ItemHealthDetail,
     ItemHealthRow,
@@ -35,9 +38,11 @@ from idhazh.contracts.item_health import (
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
+from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
 from idhazh.llm.server import Completion, parse_completion
 from idhazh.stages.common import _log_no_reply
+from idhazh.telemetry.census import EXTRACTION_CELLS
 
 
 def plan() -> RunPlan:
@@ -501,6 +506,195 @@ def test_a_summarize_failure_carries_stage_timings() -> None:
     assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (321, 54, 987)
 
 
+# --- The census door, and the ratchet on it --------------------------------
+#
+# `census_row` prefers the row a shard sealed. The tests below are the guard on
+# that preference: one that the door carries every cell the shard recorded, and
+# one that names, column by column, what nothing writes yet.
+
+#: A value for each string column the row constrains by pattern. Keyed on the
+#: pattern rather than the column, so a column that joins an existing family is
+#: filled the day it lands, and a column in a NEW family raises here by name
+#: instead of arriving empty and unnoticed.
+_BY_PATTERN: Final[Mapping[str, str]] = {
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$": "2026-08-21T06:00:00Z",
+    r"^[a-z0-9][a-z0-9_.+-]*$": "fixture",
+    r"^[ -~]+$": "a value this column accepts",
+}
+
+#: A value for each plain column, by its own declared type.
+_BY_TYPE: Final[Mapping[type, object]] = {bool: True, int: 1, float: 1.0, str: "fixture"}
+
+#: Every column no production writer fills today, and the reason each one is
+#: empty. A column leaves this map in the commit that starts filling it; a
+#: column that arrives with no writer has to be argued for here rather than
+#: landing empty and unread. The ratchet below asserts this map exactly, so it
+#: cannot drift in either direction.
+UNFILLED: Final[Mapping[str, str]] = {
+    "slot_id": "the server's own prefix-cache slot, which llama-server does not report per call",
+    "kv_tokens_at_start": "the cache depth a call began at, which no response field carries",
+    "prefix_shared_with_previous": "whether two calls shared a prefix, inferred from the two above",
+}
+
+
+def _a_cell(name: str, annotation: Any) -> Any:
+    """A value this column accepts, read off the column's own declared type.
+
+    Nothing here is keyed on a column name, so a column added to the contract is
+    filled by whichever branch its type lands in. A type no branch knows raises
+    and names the column, which is the whole point.
+    """
+    inner = next((arg for arg in get_args(annotation) if arg is not type(None)), annotation)
+    if get_origin(inner) is Annotated:
+        base, *metadata = get_args(inner)
+        constraint = next((meta for meta in metadata if isinstance(meta, StringConstraints)), None)
+        pattern = constraint.pattern if constraint is not None else None
+        if pattern is not None:
+            if not isinstance(pattern, str) or pattern not in _BY_PATTERN:
+                raise AssertionError(f"{name} constrains its text a way this test cannot fill")
+            return _BY_PATTERN[pattern]
+    else:
+        base = inner
+    if isinstance(base, type) and issubclass(base, Enum):
+        return next(iter(base))
+    if base not in _BY_TYPE:
+        raise AssertionError(f"{name} is typed a way this test cannot fill: {base}")
+    return _BY_TYPE[base]
+
+
+def a_recorded_row(**overrides: Any) -> ItemHealthRow:
+    """The row a shard seals for an item, with every column it can carry filled.
+
+    The identity cells come from the run-plan fixture so they agree with each
+    other. The state cells are pinned because the contract pairs them: a row
+    carries `http_status` only where it stopped at the fetch, and a failure code
+    only where the stage it names can fail that way. The two call slots are
+    filled whole with the flat cells equal to their sum, which is what
+    `_a_recorded_call_is_recorded_whole` asks for. Everything else is filled
+    from its own declared type by `_a_cell`.
+    """
+    planned = item()
+    cells: dict[str, Any] = {
+        name: _a_cell(name, field.annotation)
+        for name, field in ItemHealthRow.model_fields.items()
+        if name not in UNFILLED
+    }
+    cells.update(
+        version=ItemHealthRow.schema_version(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+        item_id=planned.item_id,
+        url_key=planned.url_key,
+        canonical_url=planned.canonical_url,
+        vertical=planned.vertical,
+        source_id=planned.source_id,
+        stage=ItemStage.FETCH,
+        outcome=ItemOutcome.FAILED,
+        code=FailureCode.HTTP_CLIENT_ERROR,
+        http_status=404,
+        model_calls=2,
+        prefill_ms=2,
+        decode_ms=2,
+        input_tokens=2,
+        output_tokens=2,
+        cached_tokens=2,
+    )
+    cells.update(overrides)
+    return ItemHealthRow.model_validate(cells)
+
+
+def test_no_census_column_is_silently_unowned() -> None:
+    """The ratchet: every column is filled on the way through, or named as empty.
+
+    It cannot settle that a written value is the RIGHT value - only that no
+    column is silently unowned. A cell that is present and wrong passes here and
+    is caught by the test that owns the quantity.
+
+    Two ways to fail, which is why the assertion is an exact equality. A column
+    the shard records that the census drops fails on the left: that was the
+    defect this row closes, when the census rebuilt from two payloads that
+    between them could say 43 of 113 things. A column nothing writes and nobody
+    declared fails on the right, naming itself.
+    """
+    recorded = a_recorded_row()
+
+    carried = telemetry.census_row(
+        recorded=recorded,
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+        extraction=ExtractionHealth(
+            span_integrity=True, elements_found=3, element_class=ElementClass.CHARTABLE
+        ),
+    )
+
+    empty = {name for name in ItemHealthRow.csv_columns() if getattr(carried, name) is None}
+    assert empty == set(UNFILLED)
+    assert set(UNFILLED) <= set(ItemHealthRow.csv_columns())
+    assert set(UNFILLED).isdisjoint(EXTRACTION_CELLS)
+
+
+def test_the_census_prefers_the_recorded_row_and_overlays_only_the_extraction_cells() -> None:
+    """The shard's row wins cell for cell, except the three the census measures.
+
+    The extraction cells are the one thing the work stage does not seal - it
+    counts elements after the summary is written - so they are laid over the
+    recorded row rather than derived a second time.
+    """
+    recorded = a_recorded_row(elements_found=3, element_class=ElementClass.CHARTABLE)
+    overlay = ExtractionHealth(span_integrity=False, elements_found=None, element_class=None)
+
+    carried = telemetry.census_row(
+        recorded=recorded,
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+        extraction=overlay,
+    )
+
+    moved = {
+        name
+        for name in ItemHealthRow.csv_columns()
+        if getattr(carried, name) != getattr(recorded, name)
+    }
+    assert moved == set(EXTRACTION_CELLS)
+    assert (carried.span_integrity, carried.elements_found, carried.element_class) == (
+        False,
+        None,
+        None,
+    )
+
+
+def test_an_item_whose_shard_sealed_nothing_is_rebuilt_from_its_payloads() -> None:
+    """The fallback stays: an item whose worker died still needs a census line.
+
+    Nothing wrote a row for it, so there is nothing to prefer, and the row the
+    census builds says what the two payloads can say and no more.
+    """
+    rebuilt = telemetry.census_row(
+        recorded=None,
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert rebuilt == telemetry.classify_item(
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+    assert rebuilt.stage is ItemStage.PUBLISH
+    assert rebuilt.cpu_model is None
+
+
 def test_a_sixteen_column_item_health_row_reads_as_unmeasured() -> None:
     old = ItemHealthRow(
         version="2026-08-23",
@@ -703,6 +897,121 @@ def test_the_census_row_says_which_call_each_number_came_from() -> None:
     cells = row.csv_row()
     assert cells["label_kind"] == "label"
     assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_a_rebuilt_row_carries_the_six_cells_that_are_arithmetic() -> None:
+    """The six columns a row the shard never sealed used to leave empty.
+
+    Every one of them is arithmetic over five cells the row already carries, so
+    the cost of leaving them blank is not the number - it is that each reader
+    works it out again, and the readers then disagree. All 12,437 committed rows
+    carry these six empty, which is the whole reason the row exists.
+
+    The numbers are chosen so the prefill rate tells one convention from the
+    other: 1,224 prompt tokens in 6.2 seconds is 197.42 a second over the whole
+    prompt, and 8.39 over the 52 the server had not already read.
+    """
+    calls = (
+        CallCost(
+            kind=CallKind.LABEL,
+            prefill_ms=500,
+            decode_ms=1_250,
+            input_tokens=1_000,
+            output_tokens=41,
+            cached_tokens=175,
+        ),
+        CallCost(
+            kind=CallKind.SUMMARIZE_AND_PLAN,
+            prefill_ms=6_200,
+            decode_ms=3_300,
+            input_tokens=1_224,
+            output_tokens=193,
+            cached_tokens=1_172,
+        ),
+    )
+    totals = {field: sum(getattr(call, field) for call in calls) for field in COST_FIELDS}
+    split = summary().model_copy(update={"call_1": calls[0], "call_2": calls[1], **totals})
+
+    row = telemetry.classify_item(
+        planned=item(), date=plan().date, run_id="2026-08-21-1", article=article(), summary=split
+    )
+
+    assert row.label_cache_pct == 17.5
+    assert row.summary_cache_pct == 95.75
+    assert row.label_prefill_tokens_per_s == 1650.0, "825 tokens evaluated in half a second"
+    assert row.summary_prefill_tokens_per_s == 8.39, "52 tokens evaluated, not 1,224"
+    assert row.label_decode_tokens_per_s == 32.8
+    assert row.summary_decode_tokens_per_s == 58.48
+
+    cells = row.csv_row()
+    assert cells["summary_prefill_tokens_per_s"] == "8.39"
+    assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_a_call_with_no_clock_to_divide_by_writes_null_and_not_zero() -> None:
+    """A rate of zero claims the model produced nothing in measurable time.
+
+    That is a different statement from "this call reports no clock", and it is
+    the difference between a skipped row and a zero dragging down every average
+    that reads the column. The share of the prompt that was cached still lands,
+    because that denominator is there.
+    """
+    no_clock = CallCost(
+        kind=CallKind.LABEL,
+        prefill_ms=0,
+        decode_ms=0,
+        input_tokens=900,
+        output_tokens=12,
+        cached_tokens=300,
+    )
+    totals = {field: getattr(no_clock, field) for field in COST_FIELDS}
+    split = summary().model_copy(update={"call_1": no_clock, "call_2": None, **totals})
+
+    row = telemetry.classify_item(
+        planned=item(), date=plan().date, run_id="2026-08-21-1", article=article(), summary=split
+    )
+
+    assert row.model_calls == 1
+    assert row.label_cache_pct == 33.33, "the share is answerable, the rates are not"
+    assert row.label_prefill_tokens_per_s is None
+    assert row.label_decode_tokens_per_s is None
+    assert row.csv_row()["label_prefill_tokens_per_s"] == ""
+
+
+def test_both_writers_of_the_six_reach_the_same_arithmetic() -> None:
+    """The test that would have caught the second divider.
+
+    Two places fill these cells - the work stage as the call returns, and the
+    census when it rebuilds a row from the payloads - and a rate written two
+    ways is two rates. The work stage's own cell builder is driven here against
+    the contract's properties on the same five numbers, so the day one of them
+    changes denominator is the day this goes red rather than the day an operator
+    notices one day's column reads three times the next.
+    """
+    from idhazh.stages.two_calls import _call_cells
+
+    reply = Completion(
+        content="{}",
+        prompt_tokens=1_224,
+        completion_tokens=193,
+        prefill_ms=6_200,
+        decode_ms=3_300,
+        cached_tokens=1_172,
+    )
+    same = CallCost(
+        kind=CallKind.SUMMARIZE_AND_PLAN,
+        prefill_ms=reply.prefill_ms,
+        decode_ms=reply.decode_ms,
+        input_tokens=reply.prompt_tokens,
+        output_tokens=reply.completion_tokens,
+        cached_tokens=reply.cached_tokens,
+    )
+    written = _call_cells("summary", CallKind.SUMMARIZE_AND_PLAN, reply, wall_ms=9_700)
+
+    assert {field: written[f"summary_{field}"] for field in DERIVED_FIELDS} == {
+        field: getattr(same, field) for field in DERIVED_FIELDS
+    }
+    assert same.prefill_tokens_per_s == 8.39, "both of them over the evaluated tokens"
 
 
 def test_a_refused_reply_reaches_the_census_row_with_what_it_cost() -> None:

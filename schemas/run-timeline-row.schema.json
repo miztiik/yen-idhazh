@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Steps 4 and 5 are a stopwatch around each request, not the server's sum.",
+      "version": "2026-09-16",
+      "why": "It follows item-health-row, where both columns are written."
+    },
+    {
       "change": "Initial shape: one row an item, an offset, eight steps and the residual.",
       "version": "2026-09-15",
       "why": "Contracts before logic - the writers and the chart need one fixed shape first."
@@ -67,7 +72,7 @@
         }
       ],
       "default": null,
-      "description": "Step 4. The label call, prefill and decode together, as the census spells it.",
+      "description": "Step 4. The label call, on the stopwatch the census spells `label_ms`.",
       "title": "Label Ms"
     },
     "plan_ms": {
@@ -145,11 +150,11 @@
         }
       ],
       "default": null,
-      "description": "Step 5. The summarize-and-plan call, prefill and decode together, as the census spells it.",
+      "description": "Step 5. The summarize-and-plan call, on the stopwatch the census spells `summary_ms`.",
       "title": "Summary Ms"
     },
     "version": {
-      "default": "2026-09-15",
+      "default": "2026-09-16",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -180,5 +185,5 @@
   ],
   "title": "RunTimelineRow",
   "type": "object",
-  "version": "2026-09-15"
+  "version": "2026-09-16"
 }
