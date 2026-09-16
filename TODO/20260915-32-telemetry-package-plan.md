@@ -89,6 +89,8 @@ flowchart TB
         host["host.py<br/>cpu, memory, runner"]
         feeds["source_health.py<br/>is this feed worth asking"]
         prune_m["prune.py<br/>target + range, atomic"]
+        inventory["inventory.py<br/>what one day recorded"]
+        republish["republish.py<br/>one published day, again"]
         cli_m["cli.py<br/>idhazh telemetry ..."]
         subgraph pub["publish/ - one dispatcher, ten projections"]
             dispatch["dispatch.py<br/>PROJECTIONS, in order"]
@@ -144,14 +146,25 @@ flowchart TB
     proj --> ptel & pspan & pcon & ptime
     ptel & pspan & ptime --> console
     prune_m -.->|"--target --since --until"| state
-    cli_m --> prune_m & dispatch & rollup
+    ih & sr --> inventory
+    republish --> dispatch
+    cli_m --> prune_m & inventory & republish
 
     classDef gone fill:#3a1f1f,stroke:#a33,color:#eee
     classDef new fill:#1f3a2a,stroke:#3a7,color:#eee
-    class rtr,ptime,prune_m,cli_m,dispatch new
+    class rtr,ptime,prune_m,cli_m,inventory,republish,dispatch new
 ```
 
 Green is new in this plan. Everything else is a move, not a rewrite.
+
+**What the command line reaches, and what it does not.** `cli.py` routes and
+nothing else: `show`, `census` and `rollup` read one day through `inventory.py`,
+`publish` writes one day again through `republish.py`, and row 12 adds `prune`.
+`rollup.py` is not on that path - it folds spans a run is still holding in
+memory, so a subcommand asked about a finished day reads the committed shard
+instead. `republish.py` sits beside `publish/` rather than inside it: that
+package is the dispatcher and the projections it routes to, and a caller of the
+dispatcher is what `stages/assemble.py` is too.
 
 **What leaves.** `backend/idhazh/telemetry.py`, `itemrecord.py`, `machine.py`,
 `stages/counters.py` and the ten modules row 10 moved - nine `publish_*.py` and
