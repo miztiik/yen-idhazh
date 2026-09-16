@@ -150,7 +150,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
-from idhazh import day_partition, ledger, month_partition, publish_telemetry, telemetry
+from idhazh import day_partition, ledger, month_partition, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -161,6 +161,7 @@ from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow, band_of
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
+from idhazh.telemetry.publish import public_telemetry
 
 BYTES_PER_MB: Final = 1024 * 1024
 
@@ -875,14 +876,14 @@ def prune_telemetry(
         # the set named above and never a month the published tree still owes a
         # reader.
         if public_root is not None and month in public_deleted:
-            publish_telemetry.shard_path(public_root, month).unlink(missing_ok=True)
+            public_telemetry.shard_path(public_root, month).unlink(missing_ok=True)
 
     # Whatever the loop above did not reach. On the scheduled path this is empty:
     # every copy below the boundary has a shard beside it, and the pair went
     # together. It is not empty after a run that stopped between the two.
     if public_root is not None and not dry_run:
         for stem in public_deleted:
-            publish_telemetry.shard_path(public_root, stem).unlink(missing_ok=True)
+            public_telemetry.shard_path(public_root, stem).unlink(missing_ok=True)
 
     hard_deleted: list[str] = []
     if config.item_health_aggregate_keep_months is not None:

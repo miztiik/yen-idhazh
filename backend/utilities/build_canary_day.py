@@ -33,17 +33,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import (
-    config,
-    publish_console_band,
-    publish_day_metrics,
-    publish_feed_health,
-    publish_machine,
-    publish_run_days,
-    publish_scores,
-    publish_source_health,
-    publish_span_rollup,
-)
+from idhazh import config
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -67,13 +57,12 @@ from idhazh.contracts.feed_health import (
     derive_endpoint_key,
 )
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
-from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
-from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
@@ -90,6 +79,16 @@ from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
+from idhazh.telemetry.publish import (
+    console_band,
+    day_metrics,
+    feed_health,
+    machine,
+    run_days,
+    scores,
+    source_health,
+    span_rollup,
+)
 
 CANARY_DIR = Path("tests/fixtures/canaries")
 DATE = "2026-08-20"
@@ -1071,12 +1070,12 @@ def _census_rows() -> list[ItemHealthRow]:
 def source_health_view() -> SourceHealthView:
     """The canary's source-health view, folded but not written.
 
-    Two callers want it and neither should fold it twice: `source_health`
+    Two callers want it and neither should fold it twice: `write_source_health`
     writes it beside the digest, and `console_payloads` hands its rows to the
     band so the Voices label carries a worst state on the canary as it does on
     the real tree.
     """
-    return publish_source_health.build(
+    return source_health.build(
         feeds=_feed_defs(),
         collect=config.load().app.collect,
         health=_health_rows(),
@@ -1090,7 +1089,7 @@ def source_health_view() -> SourceHealthView:
     )
 
 
-def source_health(target: Path) -> int:
+def write_source_health(target: Path) -> int:
     """Write the canary's source-health view through the fold the pipeline uses.
 
     Seven sources cover every state a page has to draw: permission allowed,
@@ -1098,7 +1097,7 @@ def source_health(target: Path) -> int:
     retired address; and a publishing record too short to read as a rate.
     """
     view = source_health_view()
-    path = target / publish_source_health.PUBLIC_FILENAME
+    path = target / source_health.PUBLIC_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(view.to_json(), encoding="utf-8", newline="\n")
     return len(view.sources)
@@ -1138,10 +1137,10 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     telemetry_root = state_root / "telemetry"
     written = 0
     for producer in (
-        publish_scores,
-        publish_feed_health,
-        publish_machine,
-        publish_span_rollup,
+        scores,
+        feed_health,
+        machine,
+        span_rollup,
     ):
         written += len(
             producer.publish(
@@ -1154,7 +1153,7 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
             )
         )
     written += len(
-        publish_day_metrics.publish_public(
+        day_metrics.publish_public(
             state_root=state_root,
             digest_root=digest_root,
             keep_months=keep,
@@ -1164,7 +1163,7 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
         )
     )
     written += len(
-        publish_run_days.publish(
+        run_days.publish(
             digest_root=digest_root,
             keep_months=keep,
             today=today,
@@ -1172,7 +1171,7 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
             ensure_month=month_of(DATE),
         )
     )
-    band = publish_console_band.publish(
+    band = console_band.publish(
         state_root=state_root,
         digest_root=digest_root,
         generated_at=f"{DATE}T06:20:00Z",
@@ -1264,7 +1263,7 @@ def score_rows(items: Sequence[DigestItem], evaluation: EvaluationConfig) -> lis
     ]
 
 
-def scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfig) -> int:
+def append_scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfig) -> int:
     """Append the day's rows through the writer the pipeline appends with.
 
     Not a CSV written by hand: the contract validates every field, the writer
@@ -1312,19 +1311,19 @@ def main() -> int:
     day = build(args.out, evaluation, visuals)
     runs = manifest(args.out, len(day.items))
     checks = health(args.state)
-    census = source_health(args.out.parent)
-    scored = scores(args.state, day.items, evaluation)
+    census = write_source_health(args.out.parent)
+    scored = append_scores(args.state, day.items, evaluation)
     # The day record the console now reads its per-day counts back from, written
     # by the same producer the pipeline's publication step calls - one writer, so
     # the fixture record is built exactly as a real one is (Fowler). The attack
-    # day's score rows are on disk from `scores(...)` above; this date's
+    # day's score rows are on disk from `append_scores(...)` above; this date's
     # item-health is owned by `build-canary.mjs` and is not written yet, so the
     # record carries no throughput and no stage timing - neither of which the
     # console reads from it. The distinct-published counts it does read are
     # settled from the day payload and those score rows, and on this fixture every
     # scored item was published exactly once, so they equal the ledger counts and
     # the console draws the same numbers the record and the rows both hold.
-    metrics_path = publish_day_metrics.publish(
+    metrics_path = day_metrics.publish(
         state_root=args.state,
         date=DATE,
         day=day,
@@ -1353,7 +1352,7 @@ def main() -> int:
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
     print(
-        f"wrote {(args.out.parent / publish_source_health.PUBLIC_FILENAME).as_posix()}: "
+        f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"
     )
     print(f"wrote {writer.ledger_path(args.state, DATE).as_posix()}: {scored} scored items")

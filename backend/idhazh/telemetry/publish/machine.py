@@ -30,11 +30,12 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger, publish_console
+from idhazh import ledger
 from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow
+from idhazh.telemetry.publish import series
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = RuntimeCountersRow.csv_columns()
-DIRNAME: Final = publish_console.MACHINE_DIRNAME
+DIRNAME: Final = series.MACHINE_DIRNAME
 SUFFIX: Final = ".csv"
 #: The one job this series is about. The `visuals` job writes counters rows too
 #: from 2026-09-12, and they belong in `state/` rather than here: the Machine
@@ -59,12 +60,12 @@ __all__ = [
 
 def shard_path(digest_root: Path, month: str) -> Path:
     """The browser's copy of one month of counters."""
-    return publish_console.month_path(digest_root, DIRNAME, month, SUFFIX)
+    return series.month_path(digest_root, DIRNAME, month, SUFFIX)
 
 
 def shard_relpath(month: str) -> str:
     """`frontend/public/machine/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return publish_console.relpath(DIRNAME, f"{month}{SUFFIX}")
+    return series.relpath(DIRNAME, f"{month}{SUFFIX}")
 
 
 def months_on_file(
@@ -124,14 +125,14 @@ def publish(
     ensure_month: str | None = None,
 ) -> list[Path]:
     """Write a published counters shard for each month that changed."""
-    oldest = publish_console.oldest_month_kept(today, keep_months)
+    oldest = series.oldest_month_kept(today, keep_months)
     buckets = months_on_file(state_root, oldest_month=oldest)
 
     def encode(month: str) -> bytes:
         rows = buckets.get(month, [])
-        return publish_console.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
+        return series.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
 
-    return publish_console.publish_series(
+    return series.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,

@@ -87,11 +87,13 @@ flowchart TB
         traces_m["traces.py<br/>where a committed trace lands"]
         rollup["rollup.py<br/>roll_up_spans"]
         host["host.py<br/>cpu, memory, runner"]
+        feeds["source_health.py<br/>is this feed worth asking"]
         prune_m["prune.py<br/>target + range, atomic"]
         cli_m["cli.py<br/>idhazh telemetry ..."]
-        subgraph pub["publish/ - one dispatcher, nine projections"]
-            dispatch["dispatch.py"]
-            proj["telemetry, scores, feed_health,<br/>day_metrics, machine, run_days,<br/>span_rollup, console, console_band,<br/>source_health"]
+        subgraph pub["publish/ - one dispatcher, ten projections"]
+            dispatch["dispatch.py<br/>PROJECTIONS, in order"]
+            rule["series.py<br/>path, write-if-changed, prune"]
+            proj["public_telemetry, scores, feed_health,<br/>day_metrics, machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
         end
     end
 
@@ -138,6 +140,7 @@ flowchart TB
     rc --> dispatch
     rtr --> dispatch
     dispatch --> proj
+    proj --> rule
     proj --> ptel & pspan & pcon & ptime
     ptel & pspan & ptime --> console
     prune_m -.->|"--target --since --until"| state
@@ -150,7 +153,11 @@ flowchart TB
 
 Green is new in this plan. Everything else is a move, not a rewrite.
 
-**What leaves.** `backend/idhazh/telemetry.py`, `itemrecord.py`, `machine.py`, `stages/counters.py` and nine `publish_*.py` modules are deleted by the row that moves them, not left beside their replacement. `frontend/public/scores/` and `frontend/public/feed-health/` are deleted by row 15.
+**What leaves.** `backend/idhazh/telemetry.py`, `itemrecord.py`, `machine.py`,
+`stages/counters.py` and the ten modules row 10 moved - nine `publish_*.py` and
+`source_health.py` - are deleted by the row that moves them, not left beside
+their replacement. `frontend/public/scores/` and `frontend/public/feed-health/`
+are deleted by row 15.
 
 
 ---
@@ -392,6 +399,7 @@ Green is new in this plan. Everything else is a move, not a rewrite.
 ## Section 11 - Row #10 - Nine publishers become one dispatcher
 
 - **Scope:** `publish_telemetry.py`, `publish_scores.py`, `publish_feed_health.py`, `publish_day_metrics.py`, `publish_machine.py`, `publish_run_days.py`, `publish_span_rollup.py`, `publish_console.py` and `publish_source_health.py` move under `telemetry/publish/` behind one dispatcher. The row 3 re-exports are deleted.
+- **What the row did, 2026-09-16.** Eleven modules moved, not nine: `publish_console_band.py` by decision 1, and `source_health.py` by decision 2 - the reducer landed at `telemetry/source_health.py` rather than in `publish/`, because it says which feed is worth asking and writes nothing. The `publish_` prefix came off every publisher, and three of the new names were chosen against a collision rather than off the diagram: `publish_console.py` is `series.py`, because `publish_console_band.publish` takes a `console` parameter; `publish_telemetry.py` is `public_telemetry.py`, because `retention.py` imports `telemetry` as well; `publish_machine.py` is `machine.py` and shares that basename with the host sampler until row 9 moves the sampler to `telemetry/host.py`. **Five of the 37 re-exports went, not all of them**: `DEGRADED_BUT_DONE`, `FLAT_RECORDS`, `INSTRUMENT_CELLS`, `AttrValue` and `refuse_text` had no caller outside the package. The other 32 are still reached from `stages/`, `utilities/` and the tests, so the removal condition moved to the rows that move those callers.
 - **Files touched:**
   - `backend/idhazh/telemetry/publish/` (new tree; nine modules moved in)
   - `backend/idhazh/telemetry/__init__.py`

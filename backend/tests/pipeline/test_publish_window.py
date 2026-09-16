@@ -16,9 +16,9 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FetchOutcome
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.run_manifest import RunManifest
-from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
+from idhazh.contracts.run_plan import RunPlan, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
@@ -464,7 +464,7 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
 ) -> None:
     """The Oracle, second half: two writers, one row per item per run.
 
-    A repeat is not free. `publish_telemetry` copies every row into the file the
+    A repeat is not free. `public_telemetry` copies every row into the file the
     console reads, and `merge=union` keeps the lines from both sides rather than
     collapsing them - so a second copy is one item counted twice on the
     dashboard, forever, in a ledger that cannot correct a row.

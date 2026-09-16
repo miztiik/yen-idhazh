@@ -632,6 +632,17 @@ What a reader loses: the exact characters. A Cyrillic headline quoted inside a
 refusal message reads as `?` in the ledger. The trade is one `?` against a
 missing row, and `backend/tests/contracts/test_cell_shapes.py` holds it.
 
+**The fold does not reach a column whose vocabulary is ours.** `time_source`
+says which clock a story's time came off, and the three answers - `feed`,
+`first_seen`, `unknown` - are minted in this repository rather than read off
+somebody's page. So the column is the `TimeSource` enum and not a token shaped
+like one: a producer selects a member, and a fourth spelling is refused at the
+boundary instead of being folded into a legal-looking cell nobody declared.
+Folding here would keep the row and lose the answer, which is the opposite trade
+to `detail`. A reader loses nothing by it, because there was never a foreign
+value in this column to rescue. `backend/tests/contracts/test_closed_vocabularies.py`
+holds that.
+
 ## Design rationale
 
 A failure-only file cannot produce a rate. The ledger writes successes and
@@ -685,7 +696,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is never committed and expires, so a longer retention delays the loss rather than preventing it. The committed row is what a later run and the console read. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |
-| Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `publish_day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |
+| Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |
 
 ## See also
 

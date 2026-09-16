@@ -3,7 +3,10 @@
 `docs/concepts/telemetry.md` owns the concept, and these modules are that page's
 own sections: which line a stage logs, how a span opens and nests, where a
 finished span goes, what a shard's tree totals, where a committed trace lives,
-and what one item's terminal state was.
+what one item's terminal state was, and which feed is still worth asking.
+
+`publish/` holds the other half - every projection of those observations a run
+writes, behind the one dispatcher that names their order.
 
 The package owns who fills a row, never what the row is. Every shape it produces
 is declared in `idhazh.contracts` (Guardrail #3).
@@ -12,18 +15,20 @@ is declared in `idhazh.contracts` (Guardrail #3).
 from __future__ import annotations
 
 # Re-exported so that no caller outside this package had to change when
-# `telemetry.py` became `telemetry/` (plan 32 row 3). REMOVAL CONDITION: this
-# block is deleted by plan 32 row 10, once every caller is inside the package's
-# own tree and imports the module that owns the name it uses. A re-export that
-# outlives its cut-over is a second name for everything (Guardrail #6).
+# `telemetry.py` became `telemetry/` (plan 32 row 3). Plan 32 row 10 cut the
+# five names no caller outside the package ever reached - `DEGRADED_BUT_DONE`,
+# `FLAT_RECORDS`, `INSTRUMENT_CELLS`, `AttrValue` and `refuse_text` - each of
+# which still lives in the module that owns it. REMOVAL CONDITION: a name here
+# goes the day its last caller outside `idhazh/telemetry/` goes, which for the
+# spans and the sinks is the row that moves `stages/work.py` in. A re-export
+# that outlives its cut-over is a second name for everything (Guardrail #6).
 #
 # **`record` is the one pre-split name that is not here.** `record.py` owns one
-# item's row, and Python binds a submodule onto its package, so re-exporting a
-# function under the same name gives `telemetry.record` two meanings decided by
-# import order. The function is `telemetry.events.record`, which is where it has
-# always been defined.
+# item's row (plan 32 row 4), and Python binds a submodule onto its package, so
+# re-exporting a function under the same name gives `telemetry.record` two
+# meanings decided by import order. The function is `telemetry.events.record`,
+# which is where it has always been defined.
 from idhazh.telemetry.census import (
-    DEGRADED_BUT_DONE,
     classify_item,
     detail_cell,
     is_final,
@@ -31,8 +36,6 @@ from idhazh.telemetry.census import (
 from idhazh.telemetry.events import (
     CENSUS_CELLS,
     ENVELOPE_VERSION,
-    FLAT_RECORDS,
-    INSTRUMENT_CELLS,
     RECORD_CELLS,
     EventLevel,
     EventName,
@@ -45,12 +48,10 @@ from idhazh.telemetry.sinks import (
     FileSink,
     NullSink,
     langfuse_sink,
-    refuse_text,
 )
 from idhazh.telemetry.spans import (
     MAX_ATTRIBUTE_CHARS,
     AttrKey,
-    AttrValue,
     OpenSpan,
     Span,
     SpanKind,
@@ -71,15 +72,11 @@ from idhazh.telemetry.traces import (
 
 __all__ = [
     "CENSUS_CELLS",
-    "DEGRADED_BUT_DONE",
     "ENVELOPE_VERSION",
-    "FLAT_RECORDS",
-    "INSTRUMENT_CELLS",
     "MAX_ATTRIBUTE_CHARS",
     "RECORD_CELLS",
     "TRACES_DIRNAME",
     "AttrKey",
-    "AttrValue",
     "CollectingSink",
     "EventLevel",
     "EventName",
@@ -102,7 +99,6 @@ __all__ = [
     "is_final",
     "item_attributes",
     "langfuse_sink",
-    "refuse_text",
     "roll_up_spans",
     "summary_attributes",
     "trace_date",

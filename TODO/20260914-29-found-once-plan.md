@@ -1,6 +1,6 @@
 # Plan 29 - the same story, found once
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-16
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision. Current project behaviour belongs in `docs/` (Guardrail #4).
@@ -80,7 +80,7 @@ which is the same family.
 | 3 | Measure: title signal against the committed days | - | A | DONE | - | #782 | - |
 | 4 | Correct the token-share number defect 22 shipped | - | A | DONE | - | #785 | - |
 | 5 | Draw the collapse, with a publisher stack that links | - | B | PENDING | - | - | - |
-| 6 | Retire the four hosts that serve one page | - | B | PENDING | - | - | - |
+| 6 | Retire the four hosts that serve one page | - | B | DONE | - | - | - |
 | 7 | One outlet never runs the identical piece twice | - | B | PENDING | - | - | - |
 | 8 | A ceiling on the day, beside the ceiling on a run | - | B | PENDING | - | - | - |
 | 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
@@ -283,24 +283,56 @@ instead of on the page. That is the trade the owner took on 2026-09-14.
 
 ## Row #6 - retire the four hosts that serve one page
 
-**Intent.** Four feeds do not publish articles. They publish one template with a
-different URL each time, and we have been summarising it.
+**Intent.** Three of these four feeds do not publish articles. They publish one
+template with a different URL each time, and we have been summarising it. The
+fourth, `energymonitor`, does publish articles, and the count below is what
+found that out.
 
-**What was measured, 2026-09-15.** Found from recorded outcomes only -
-`source_id` and body length - never by matching words in a body.
+**What was measured, 2026-09-16.** Found from recorded outcomes only - the
+`code`, `source_words` and `source_chars` cells on `state/item-health/**` -
+never by matching words in a body. 23 day shards, 12,357 rows, 2026-08-24 to
+2026-09-15. Cross-checked against the committed digest tree, which holds 26 days
+to the same end date and 9,554 published cards.
 
-| Feed | Body chars | Items | Words | Signal recorded today |
-| --- | ---: | ---: | ---: | --- |
-| `lemonde-en` | 209 | 166 | ~32 | `too_short` |
-| `offshore-wind` | 18 | 40 | ~3 | `not_prose` |
-| `climate-home` | 331 | 12 | ~51 | `not_prose` |
-| `energymonitor` | 398 | 6 | 61 | **none** - one word over `min_source_words` |
+| Feed | Rows | Items | Published cards | Median body words | Median body chars | What the rows say |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `lemonde-en` | 176 | 169 | 151 | 35 | 209 | `too_short` on 162 rows, `length_out_of_range` on 11. All 173 rows carrying a count say 35 words, and no other value appears. |
+| `offshore-wind` | 50 | 45 | 44 | 3 | 18 | `not_prose` on 39 rows. 5 rows carry 219 to 606 words, all on 2026-09-04. |
+| `climate-home` | 15 | 13 | 12 | 51 | 331 | `not_prose` on 12 rows. One row carries 2,340 words. |
+| `energymonitor` | 34 | 33 | 32 | 357 | 2,474 | **No failure code on 28 of 34 rows.** Those 28 carry 286 to 1,025 words, on 10 separate days. |
 
-206 of those 224 items became published cards, 2.2 percent of the 9,478 items
-published. The word counts for the first three are **estimates** derived from
-characters at Energy Monitor's own 6.5 characters a word; the reading that
-settles them is a count of `code` cells on `state/item-health/**` for those four
-`source_id` values, and the row takes it.
+260 items, 239 published cards, 2.50 percent of the 9,554 cards in the digest
+tree.
+
+**Three of the four had already gone quiet before this row ran.** The last item
+each one put in front of the ranker: `offshore-wind` 2026-09-04,
+`energymonitor` 2026-09-09, `climate-home` 2026-09-11. Feed health says all four
+answered every read to 2026-09-15, so this is the gap health cannot see - the
+door opens and nothing recent is behind it. `lemonde-en` alone ran to the last
+day.
+
+**The count corrects this row's own table, and one correction is material.**
+The estimates it replaces were derived from characters at 6.5 characters a word.
+`offshore-wind` at 3 words and `climate-home` at 51 were exact. `lemonde-en` was
+9 percent low - 32 estimated, 35 counted - which changes nothing. The item
+counts were each a little low: 166, 40 and 12 estimated against 169, 45 and 13
+counted.
+
+`energymonitor` was wrong in a way that inverts the finding. The row read 6
+items at 398 chars and 61 words and called the signal "none". Those 6 rows are
+real, and they are 6 rows out of 34. The other 28 carry no failure code and run
+286 to 1,025 words. **Energy Monitor served an article about four times in
+five, up to the day it went quiet.** The row's own subset was its failures, and
+a feed's failures always look like a template host, because that is what a
+failure is.
+
+**It was retired anyway, and the retirement stands on its own facts.** The row
+said to retire it and a worker decides nothing (`CLAUDE.md` section 0, section
+0d), and Energy Monitor has put nothing in front of the ranker since
+2026-09-09 either way. What is handed back is the reason: it was retired as a
+template host and it is not one. Un-retiring it is one `retired_on` field and
+one `status`. The `energy` desk went from 27 active feeds to 24 on this row
+against a floor of 21; putting Energy Monitor back takes it to 25.
 
 **Contract.**
 
@@ -311,14 +343,22 @@ settles them is a count of `code` cells on `state/item-health/**` for those four
 - **Nothing published is touched.** Their committed items keep their addresses,
   their archive entries and their search entries. A retired feed stops costing a
   request; it does not un-publish a story.
+- The `lemonde-en` candidate leaves `config/pipeline-tests.json`, which drops the
+  list from 24 to 23 against a floor of 20. A test dispatch resolves a
+  candidate's vertical and tier off the live feed list, so an orphan is a
+  `KeyError` 40 minutes in.
 
 **What the reader loses, stated.** Three of these are energy feeds and the desk
-is already thin. What the reader loses is nothing, because these four never
-delivered an article - but the coverage gap they were filling on paper is real
-and the row says so rather than letting it disappear quietly.
+is already thin. For three of the four the reader loses nothing, because they
+never delivered an article. For `energymonitor` the reader loses 32 cards over
+26 days - a little over one a day - and that is a real loss rather than a paper
+one, even though the feed had already stopped delivering them.
 
 **Oracle.** The four ids appear in `retired` and not in `feeds`; a collect run
 asks them for nothing. The existing retirement tests cover the shape.
+`test_the_address_list_can_still_answer_a_draw` now reads the live feed list
+rather than searching the file's text, which would find a retired id on the
+tombstone shelf and pass.
 
 ## Row #7 - one outlet never runs the identical piece twice
 

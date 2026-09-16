@@ -125,7 +125,7 @@ Which term of the score carried this item onto the page. The ranker computes eve
 | `tier` | SourceTier | `backend/idhazh/stages/work.py` | - | no |
 | `source_form` | SourceForm | `backend/idhazh/stages/work.py` | - | no |
 | `published_at` | str | `backend/idhazh/stages/work.py` | - | no |
-| `time_source` | str | `backend/idhazh/stages/work.py` | - | no |
+| `time_source` | TimeSource | `backend/idhazh/stages/work.py` | - | no |
 
 ### The article
 

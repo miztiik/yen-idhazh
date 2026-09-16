@@ -34,8 +34,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, NamedTuple
 
+from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.knobs.collect import CollectConfig
-from idhazh.contracts.run_plan import PlannedItem, TimeSource, VerticalPlan
+from idhazh.contracts.run_plan import PlannedItem, VerticalPlan
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
 from idhazh.embed import cosine

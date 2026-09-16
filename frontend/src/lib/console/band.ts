@@ -10,7 +10,7 @@
  * were computed here at build time from the committed ledger under `state/`,
  * which meant the console could only exist as a document a build had already
  * finished. The pipeline writes `console/band.json` now, so the derivation has
- * one home - `backend/idhazh/publish_console_band.py` - and this side maps the
+ * one home - `backend/idhazh/telemetry/publish/console_band.py` - and this side maps the
  * published shape onto the names the components already use. Two derivations of
  * one verdict is two verdicts.
  *
@@ -109,7 +109,7 @@ const HEALTHS: Health[] = ['green', 'amber', 'red'];
 
 /** The label, the address and the line under each, in strip order.
  *
- * The same words `publish_console_band.ROUTES` writes, so the fallback strip
+ * The same words `console_band.ROUTES` writes, so the fallback strip
  * and the published one cannot say different things about the same route.
  * `console-nav.spec.ts` types them out a third time on purpose - that copy is
  * what the owner chose and reading it from here would only prove the page

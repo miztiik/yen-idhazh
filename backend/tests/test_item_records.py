@@ -20,8 +20,8 @@ from pydantic import ValidationError
 from idhazh import capture, config, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import CallCost, CallKind
-from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
-from idhazh.contracts.run_plan import PlannedItem, TimeSource
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
+from idhazh.contracts.run_plan import PlannedItem
 from idhazh.telemetry import events
 from idhazh.telemetry.record import NAMED_STAGE_MS, Flags, ItemRecorder, shard_done
 

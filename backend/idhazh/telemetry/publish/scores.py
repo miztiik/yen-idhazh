@@ -13,7 +13,7 @@ day files, which is at most 31 opens.
 
 The shape is `PublicEvalRow` and the shape owns which cells may cross (Guardrail #3).
 What this module owns is *from what* a month is built. Where it sits, when it is
-written and how long it survives are `publish_console`'s, and every producer
+written and how long it survives are `series`'s, and every producer
 beside this one obeys the same three rules from the same place.
 """
 
@@ -25,12 +25,13 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_partition, publish_console
+from idhazh import day_partition
 from idhazh.contracts.public_eval import FORBIDDEN_COLUMNS, PublicEvalRow
 from idhazh.evals import writer as eval_writer
+from idhazh.telemetry.publish import series
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = PublicEvalRow.csv_columns()
-DIRNAME: Final = publish_console.SCORES_DIRNAME
+DIRNAME: Final = series.SCORES_DIRNAME
 SUFFIX: Final = ".csv"
 
 __all__ = [
@@ -48,12 +49,12 @@ __all__ = [
 
 def shard_path(digest_root: Path, month: str) -> Path:
     """The browser's copy of one score month."""
-    return publish_console.month_path(digest_root, DIRNAME, month, SUFFIX)
+    return series.month_path(digest_root, DIRNAME, month, SUFFIX)
 
 
 def shard_relpath(month: str) -> str:
     """`frontend/public/scores/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return publish_console.relpath(DIRNAME, f"{month}{SUFFIX}")
+    return series.relpath(DIRNAME, f"{month}{SUFFIX}")
 
 
 def project(source: Path) -> list[PublicEvalRow]:
@@ -101,9 +102,9 @@ def publish(
 
     def encode(month: str) -> bytes:
         rows = [row for day in by_month.get(month, ()) for row in project(day)]
-        return publish_console.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
+        return series.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
 
-    return publish_console.publish_series(
+    return series.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,
