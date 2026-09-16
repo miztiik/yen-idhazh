@@ -59,16 +59,24 @@ where it names each one. Up to six of them.
 
 "place_mentions" - the same shape, for a location the item names.
 
-"Quotes" - The one or two most impactful direct quotes from the item (preferring primary sources). 
-Include the Epistemic Status of each quote by defining its level of certainty: 
-Is it an absolute certainty (audio/written record), probabilistic likelihood (reported by a close contemporary), 
-or speculative hypothesis (attributed centuries later)?
-  "sentence_start_id" and "sentence_end_id" - the addresses of the first and
-  last sentence of the quote. The same address twice for a one-sentence quote.
-  "speaker" - who said it, in the item's own words. Empty if unnamed.
-  "attribution" and "hedge" - as above.
+For each list, return [] if nothing qualifies. Normally select one.
+Maximum two. Add a second only when omitting it would hide a central
+disagreement or a separate major point.
 
-"claims" - the same shape, for an assertion the item makes in its own voice.
+For each entry:
+  "sentence_start_id" and "sentence_end_id" - the source sentence
+  addresses. The same id twice for a one-sentence span.
+  "surface" - the shortest complete, continuous span, copied exactly.
+  Preserve negation, conditions, and uncertainty. For quotes, exclude
+  the reporter's wording and enclosing quotation marks. Keep the
+  quotation limit.
+  "speaker" - the matching entity_mentions.name for whoever made the
+  statement, not whoever it concerns. Empty if unnamed.
+  "attribution" - the source's certainty: an absolute certainty
+  (audio/written record), a probabilistic likelihood (reported by a
+  close contemporary), or a speculative hypothesis (attributed long
+  after the fact).
+  "hedge" - as defined above.
 
 "lede_sentence_ids" - the addresses of the one or two sentences that carry the
 item's main point.
