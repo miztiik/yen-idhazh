@@ -142,9 +142,9 @@ the whole committed tree.
 
 ## Reading a run that went wrong
 
-`idhazh telemetry` is the read side of a finished run. Every subcommand takes
-one date and answers about that date only, so none of them gets slower as the
-archive grows:
+`idhazh telemetry` is the read side of a finished run. Every subcommand is
+bounded by the days it is handed - four of them read one date, and `prune` works
+over the range it is given - so none of them gets slower as the archive grows:
 
 ```
 python -m idhazh telemetry show   --date 2026-09-15  # which instrument files that day has
@@ -189,6 +189,20 @@ That walks the same route `assemble` walks, in the same order, reading the day's
 own `digest.json` and `run.json` rather than the run payloads under
 `backend/var/`, which a local run does not keep. It refuses a date that tree has
 never published, because there would be nothing to publish the instrument for.
+
+When a run wrote instrument rows nobody wants kept, delete them by naming the
+store and the two days. Both ends are named, so this is three days:
+
+```
+python -m idhazh telemetry prune --target item-health --since 2026-09-13 --until 2026-09-15
+```
+
+It prints every file a live run would remove and removes nothing until you add
+`--no-dry-run`. `--target` takes the name of a store and never a path, and
+`published` and `seen` are refused by name - forgetting is the one thing those
+two may not do. Which stores it accepts, why those two are refused, and what
+makes it safe to stop half way is
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16).
 
 ## Three things that will bite
 

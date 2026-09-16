@@ -135,8 +135,15 @@ def test_every_telemetry_subcommand_runs_against_a_day(
 
     Driven off `SUBCOMMANDS` rather than a list here, so a subcommand added to
     the router without a body cannot pass this file by being left out of it.
+
+    A subcommand that takes flags of its own is driven with the ones it requires
+    and no others. `prune` is the first of those, and it runs on its own default:
+    a dry run over the built day, which names that day and removes nothing.
     """
     state_root, digest_root, date = _a_published_day(tmp_path)
+    extra = {
+        "prune": ["--target", ledger.ITEM_HEALTH_DIRNAME, "--since", date, "--until", date]
+    }
 
     exit_code = cli.main(
         [
@@ -148,11 +155,53 @@ def test_every_telemetry_subcommand_runs_against_a_day(
             str(state_root),
             "--digest-root",
             str(digest_root),
+            *extra.get(subcommand, []),
         ]
     )
 
     assert exit_code == 0
     assert date in capsys.readouterr().out, "a subcommand that printed nothing answered nothing"
+
+
+def test_a_prune_the_router_refuses_names_the_store_and_changes_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A refused target leaves the command line, not the file system.
+
+    Through `cli.main` rather than through `prune.prune_range`, because the two
+    can disagree: the body raises and the router has to turn that into a usage
+    error with the reason attached rather than a traceback. Exit 2 is what
+    argparse gives a command line nobody can act on, which is what this is.
+    """
+    state_root, digest_root, date = _a_published_day(tmp_path)
+    before = sorted(path.relative_to(state_root).as_posix() for path in state_root.rglob("*.csv"))
+
+    with pytest.raises(SystemExit) as exit_code:
+        cli.main(
+            [
+                telemetry_cli.VERB,
+                "prune",
+                "--date",
+                date,
+                "--state-root",
+                str(state_root),
+                "--digest-root",
+                str(digest_root),
+                "--target",
+                ledger.PUBLISHED_DIRNAME,
+                "--since",
+                date,
+                "--until",
+                date,
+            ]
+        )
+
+    assert exit_code.value.code == 2
+    assert ledger.PUBLISHED_DIRNAME in capsys.readouterr().err
+    assert (
+        sorted(path.relative_to(state_root).as_posix() for path in state_root.rglob("*.csv"))
+        == before
+    )
 
 
 def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
