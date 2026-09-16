@@ -8,6 +8,7 @@ changed a request body would have shipped looking like a rename.
 from __future__ import annotations
 
 import json
+import re
 from math import ceil
 from os.path import commonprefix
 from typing import Any
@@ -33,6 +34,7 @@ from idhazh.classify.calls import (
     CHARS_PER_WORD,
     LABEL_BUDGET_TOKENS,
     LABEL_PASS_VERSION,
+    LABEL_PROMPT_PATH,
     LABELS_MAX,
     MEASURED_REPLY_CHARACTERS,
     MEASURED_REPLY_TOKENS,
@@ -222,6 +224,33 @@ class TestThePromptBytes:
 
         assert label_call["prompt"] == read_text(RENDERED_LABEL)
         assert summarize_and_plan_call["prompt"] == read_text(RENDERED_SUMMARIZE_AND_PLAN)
+
+    def test_the_label_prompt_names_every_field_of_the_reply_and_no_other(self) -> None:
+        """The three byte oracles above say the prompt MOVED. This says it is wrong.
+
+        They are the same assertion from two distances, and the distance
+        matters: `RECAPTURE` rewrites all three fixtures in one command, so a
+        prompt edit that names a field the grammar has no room for goes green
+        the moment somebody takes the recipe at its word. That happened on
+        2026-09-16 - two commits renamed `quotes` to `Quotes`, dropped `claims`
+        and `keyphrases`, and asked for a `surface` and a certainty grade the
+        decoder cannot accept.
+
+        Constrained decoding is what makes it silent rather than loud.
+        `LabelReply` forbids extra keys, so an invented field never arrives as
+        an error; the probability mass behind it is renormalised onto the
+        tokens the grammar does allow, and a field the prompt stopped
+        describing is still emitted, unguided. Same failure
+        `test_the_last_line_is_read_off_the_grammar` names one call later.
+
+        Top level only. A nested name is a bigger regex for a hazard that has
+        not happened, and both real defects were at the left margin.
+        """
+        text = LABEL_PROMPT_PATH.read_text(encoding="utf-8")
+        named = set(re.findall(r'^"(\w+)" - ', text, re.MULTILINE))
+
+        assert label_system_prompt().startswith(text)
+        assert named == set(LabelReply.model_fields)
 
     def test_the_turn_markers_are_the_models_own(self) -> None:
         """Recorded from the server that applies them, not written from memory.
