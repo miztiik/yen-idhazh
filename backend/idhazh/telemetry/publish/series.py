@@ -3,10 +3,10 @@
 `backend/idhazh/contracts/console_payloads.py` says WHICH datasets the console
 fetches and what may not cross with each. This module says WHERE each one is
 written and HOW: one file per calendar month, written only when its bytes move,
-and deleted once it is past its own configured age. Seven producer modules sit
-on top of it - `scores`, `feed_health`, `run_days`,
-`day_metrics`, `machine`, `span_rollup` and
-`console_band` - and none of them spells a path or a prune of its own.
+and deleted once it is past its own configured age. Five producer modules sit
+on top of it - `run_days`, `day_metrics`, `machine`, `span_rollup` and
+`run_timeline` - plus `console_band`, which is one file rather than a series,
+and none of them spells a path or a prune of its own.
 
 **The root is derived, never spelled.** Every path here hangs off the digest
 root the caller hands in, the way `INDEX_ROOT` and `SOURCE_HEALTH_PATH` hang off
@@ -45,11 +45,12 @@ from idhazh.month_partition import month_files, oldest_month_kept
 CONSOLE_DIRNAME: Final = "console"
 BAND_FILENAME: Final = "band.json"
 
-#: The four month series, each the directory name under `frontend/public/`.
+#: The five month series, each the directory name under `frontend/public/`.
 RUN_DAYS_DIRNAME: Final = "run-days"
 DAY_METRICS_DIRNAME: Final = "day-metrics"
 MACHINE_DIRNAME: Final = "machine"
 SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
+RUN_TIMELINE_DIRNAME: Final = "run-timeline"
 
 #: Every root this module owns, with the suffix its month files take. The
 #: telemetry projection is not here: it predates this module and
@@ -62,6 +63,7 @@ MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
     (DAY_METRICS_DIRNAME, ".json"),
     (MACHINE_DIRNAME, ".csv"),
     (SPAN_ROLLUP_DIRNAME, ".csv"),
+    (RUN_TIMELINE_DIRNAME, ".csv"),
 )
 
 #: Every directory a fresh checkout must already hold, because
@@ -74,6 +76,7 @@ PUBLISHED_ROOTS: Final[tuple[str, ...]] = (
     DAY_METRICS_DIRNAME,
     MACHINE_DIRNAME,
     SPAN_ROLLUP_DIRNAME,
+    RUN_TIMELINE_DIRNAME,
 )
 
 __all__ = [
@@ -84,6 +87,7 @@ __all__ = [
     "MONTH_SERIES",
     "PUBLISHED_ROOTS",
     "RUN_DAYS_DIRNAME",
+    "RUN_TIMELINE_DIRNAME",
     "SPAN_ROLLUP_DIRNAME",
     "console_root",
     "encode_csv",

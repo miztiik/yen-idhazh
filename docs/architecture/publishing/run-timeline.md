@@ -1,11 +1,17 @@
 # The Run Timeline
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 **What shape does the run timeline have, and why that shape?** This page answers
-that one question. The chart it feeds does not exist yet and neither does the
-producer: the shape lands first so the writers produce what the chart reads
-rather than a shape the chart has to migrate (Guardrail #3).
+that one question. The shape landed before any producer so the writers produce
+what the chart reads rather than a shape the chart has to migrate (Guardrail #3);
+since 2026-09-16 both exist.
+[`backend/idhazh/telemetry/publish/run_timeline.py`](../../../backend/idhazh/telemetry/publish/run_timeline.py)
+is the writer and the panel on `/console/machine/` is the reader. **How it is
+drawn is not on this page** -
+[`../../concepts/console-design.md`](../../concepts/console-design.md) owns that,
+because a drawing is not a contract and a person arrives holding one question or
+the other.
 
 The machine-readable copy is `backend/idhazh/contracts/run_timeline.py`, and it
 is the one a build reads. The generated schema is
@@ -103,22 +109,51 @@ No address, no `url_key`, no title, no fetched text - only an item id the
 pipeline minted, a clock, and durations of our own work. So there is nothing to
 redact, and no second `public-run-timeline` shape to declare: this is published
 whole, the way `span-rollup-row`, `day-metrics` and `runtime-counters-row`
-already are. Where the rows land - a published mirror alone, or a committed
-ledger projected into one - is the writer's decision and is the same columns
-either way.
+already are. Where the rows land was left to the writer, and the writer chose a
+published mirror alone: every cell is either a census column or arithmetic over
+one, so a committed `state/run-timeline/` would be a third copy of numbers git
+already carries, and re-deriving a month costs one month of census day files.
+
+## Which cells a run can fill, and from where
+
+Six of the eight steps have a producer and two do not. The writer reads one
+ledger for all six - `state/item-health/` - and joins nothing.
+
+| Step | Census column it is filled from |
+| --- | --- |
+| `fetch_ms`, `extract_ms`, `label_ms`, `summary_ms`, `visual_plan_ms` | the column of the same name |
+| `score_ms` | `faithfulness_ms` |
+| `plan_ms`, `publish_ms` | nothing times either step; written empty |
+
+**Step 7 takes its NAME from `EvalRow.score_ms` and its VALUE from the census.**
+They are one stopwatch: `stages/work.py` times the scorers once and files that
+integer in both places. The census copy is the one that matters here because it
+is taken inside the item's own clock, so it is the copy `item_total_ms` already
+contains - and a residual is only honest when every step subtracted from a total
+was counted inside it. Reading the eval ledger instead would open a second file a
+day for a number already in the first.
+
+**A row with no clock produces no row.** An item the planner listed and no shard
+ever picked up has no start, no total and no shard. The contract says an absent
+row reads as never worked, which is exactly true of it.
+
+**The run's zero is the earliest item start in that run, not the manifest's.**
+The manifest's `started_at` is when the process began, and that covers collecting
+feeds and planning the day - work no item is charged for and no bar can draw. A
+zero there would push every bar right by one constant and make x=0 a moment the
+chart never shows.
 
 ## What this page does not settle
 
 **Whether the chart is readable.** How the eight steps are coloured, whether the
 residual drawn hollow is legible beside them, how many items fit on one screen,
 and what a negative residual looks like are all questions about a drawing, and a
-drawing is not a contract. The residual is drawn hollow and never tinted, because
-nobody has agreed how much overhead is too much and a colour would publish an
-alarm that does not exist - that much is settled; the rest is not.
-
-**Which cells a run can actually fill.** Six of the eight steps have a producer
-today and two do not. A column with no producer is null, and a chart drawn
-against it apologises rather than lying.
+drawing is not a contract. Every one of them was settled on 2026-09-16 in
+[`../../concepts/console-design.md`](../../concepts/console-design.md), which is
+where a person changing the panel arrives. The one clause that was settled here
+first, because it is a property of the column rather than of the drawing: the
+residual is drawn hollow and never tinted, since nobody has agreed how much
+overhead is too much and a colour would publish an alarm that does not exist.
 
 ## Design rationale
 
@@ -140,6 +175,9 @@ early is one file with no caller for as long as it takes the writers to arrive.
 
 - [`console-payloads.md`](console-payloads.md) - every dataset the operator
   console reads, its producer, and what may not cross the boundary.
+- [`../../concepts/console-design.md`](../../concepts/console-design.md) - how
+  the panel draws this shape: the ramp, the gutter, the axis and the two ways a
+  residual is drawn.
 - [`../contracts/schemas.md`](../contracts/schemas.md) - how a persisted shape is
   versioned, stamped and generated.
 - [`../../concepts/telemetry.md`](../../concepts/telemetry.md) - what the
